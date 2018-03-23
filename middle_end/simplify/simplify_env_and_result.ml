@@ -838,6 +838,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                       T.meet ~bias_towards:(use_env, param_ty)
                         (use_env, arg_ty)
                     in
+Format.eprintf "meet new equations:@ %a\n%!"
+  T.Equations.print new_equations;
                     let use_env = TE.add_equations use_env new_equations in
 Format.eprintf "New use_env after meet:@ %a\n%!"
   TE.print use_env;

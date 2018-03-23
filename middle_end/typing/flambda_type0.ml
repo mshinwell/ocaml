@@ -3485,11 +3485,18 @@ result
         let free_names_in_t =
           Name_occurrences.everything (free_names t)
         in
+        let names_free_in_equations =
+          Equations.fold equations_from_meet ~init:Name.Set.empty
+            ~f:(fun names_free_in_equations _name _scope_level t ->
+              let free_names = free_names_set t in
+              Name.Set.union free_names names_free_in_equations)
+        in
         let names_bound_by_equations =
           Equations.domain equations_from_meet
         in
         let required_to_close =
-          Name.Set.diff free_names_in_t names_bound_by_equations
+          Name.Set.diff (Name.Set.union free_names_in_t names_free_in_equations)
+            names_bound_by_equations
         in
         let equations_from_meet =
           Name.Set.fold (fun name equations_from_meet ->

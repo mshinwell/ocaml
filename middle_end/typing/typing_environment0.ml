@@ -605,10 +605,6 @@ end;
               T.print ty1
               T.print ty2
           end;
-          (* When joining (or meeting) environments, all free names in the
-              types in such environments must be in those environments
-              themselves, otherwise the well-formedness condition for
-              environments being closed would not be respected. *)
           let ty = join (env1, ty1) (env2, ty2) in
 (*
 Format.eprintf "JOIN %a and %a -> %a\n%!"
