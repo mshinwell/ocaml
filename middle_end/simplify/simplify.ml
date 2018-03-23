@@ -19,6 +19,13 @@
 module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
 
+module Expr = Flambda.Expr
+
+(*
+module K = Flambda_kind
+module Named = Flambda.Named
+*)
+
 (** Values of two types hold the information propagated during simplification:
     - [E.t] "environments", top-down, almost always called "env";
     - [R.t] "results", bottom-up approximately following the evaluation order,
@@ -45,7 +52,7 @@ let check_toplevel_simplification_result r expr ~continuation
           Term:\n@ %a"
         descr
         Continuation.Set.print bad_without_definitions
-        Flambda.Expr.print expr
+        Expr.print expr
     end;
     let continuation_definitions_with_uses =
       R.continuation_definitions_with_uses r
@@ -54,7 +61,7 @@ let check_toplevel_simplification_result r expr ~continuation
       Continuation.Map.keys continuation_definitions_with_uses
     in
     let defined_continuations =
-      Flambda.Expr.all_defined_continuations_toplevel expr
+      Expr.all_defined_continuations_toplevel expr
     in
     (* This is deliberately a strong condition. *)
     if not (Continuation.Set.equal defined_continuations_in_r
@@ -72,7 +79,7 @@ let check_toplevel_simplification_result r expr ~continuation
         Continuation.Set.print
         (Continuation.Set.diff defined_continuations
           defined_continuations_in_r)
-        Flambda.Expr.print expr
+        Expr.print expr
     end;
     (* CR mshinwell: The following could check the actual code in the
        continuation approximations matches the code in the term. *)
@@ -96,14 +103,14 @@ let check_toplevel_simplification_result r expr ~continuation
           (%a):@ \n%a\n"
         Continuation.Set.print all_handlers_in_continuation_approxs
         Continuation.Set.print defined_continuations
-        Flambda.Expr.print expr
+        Expr.print expr
     end;
     (* Checking the number of uses recorded in [r] is correct helps to catch
        bugs where, for example, some [Value_unknown] approximation for some
        argument of some continuation fails to be removed by a transformation
        that produces a more precise approximation (which can cause the
        join of the argument's approximations to remain at [Value_unknown]). *)
-    let counts = Flambda.Expr.count_continuation_uses_toplevel expr in
+    let counts = Expr.count_continuation_uses_toplevel expr in
     Continuation.Map.iter (fun cont (uses, _, _, _) ->
         let num_in_term =
           match Continuation.Map.find cont counts with
@@ -120,9 +127,25 @@ let check_toplevel_simplification_result r expr ~continuation
             num_in_term
             num_in_r
             Simplify_env_and_result.Result.Continuation_uses.print uses
-            Flambda.Expr.print expr
+            Expr.print expr
         end)
       continuation_definitions_with_uses
+(*
+    Expr.iter_lets expr
+      ~for_defining_expr:(fun var kind (named : Named.t) ->
+        match named with
+        | Simple _ ->
+          if not (K.is_phantom kind) then begin
+            Misc.fatal_errorf "[Simple] terms such as %a = %a should have \
+                been substituted out by simplification:@ %a"
+              Variable.print var
+              Named.print named
+              Expr.print expr
+          end
+        | _ -> ())
+      ~for_last_body:(fun _ -> ())
+      ~for_each_let:(fun _ -> ())
+*)
   end
 
 (* CR mshinwell: We should add a structure to record the types of bound names
@@ -219,7 +242,7 @@ let simplify_toplevel env r expr ~continuation ~continuation_params
      - the free continuations of [expr] must be at most the [continuation]
        and [exn_continuation] parameters. *)
   if !Clflags.flambda_invariant_checks then begin
-    let defined_conts = Flambda.Expr.all_defined_continuations_toplevel expr in
+    let defined_conts = Expr.all_defined_continuations_toplevel expr in
     let r_used = R.used_continuations r in
     let r_defined =
       Continuation.Map.keys (R.continuation_definitions_with_uses r)
@@ -232,12 +255,12 @@ let simplify_toplevel env r expr ~continuation ~continuation_params
           Continuation.Set.print bad
           descr
           descr'
-          Flambda.Expr.print expr
+          Expr.print expr
       end
     in
     check_defined r_used "the use information inside";
     check_defined r_defined "the defined-continuations information inside";
-    let free_conts = Flambda.Expr.free_continuations expr in
+    let free_conts = Expr.free_continuations expr in
     let bad_free_conts =
       Continuation.Set.diff free_conts
         (Continuation.Set.union
@@ -251,7 +274,7 @@ let simplify_toplevel env r expr ~continuation ~continuation_params
         Continuation.print continuation
         Continuation.print exn_continuation
         Continuation.Set.print free_conts
-        Flambda.Expr.print expr
+        Expr.print expr
     end
   end;
   expr, r, uses, lifted_constants

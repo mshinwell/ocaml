@@ -83,7 +83,7 @@ Format.eprintf "Simplifying let %a = %a\n%!"
       env
   in
   let new_kind = T.kind ty in
-  if not (Flambda_kind.compatible_allowing_phantom new_kind ~if_used_at:kind)
+  if not (K.compatible_allowing_phantom new_kind ~if_used_at:kind)
   then begin
     Misc.fatal_errorf "Kind error during simplification of [Let] binding \
         which yielded:@ %a :: %a <not compatible with %a> =@ %a"
@@ -946,7 +946,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
   let full_app_args, remaining_args = Misc.Stdlib.List.split_at arity args in
   let full_app_types, _ = Misc.Stdlib.List.split_at arity arg_tys in
   let func_var = Variable.create "full_apply" in
-  let func_var_kind = Flambda_kind.value () in
+  let func_var_kind = K.value () in
   let func_param =
     Flambda.Typed_parameter.create (Parameter.wrap func_var)
       (T.unknown func_var_kind)
@@ -1231,9 +1231,9 @@ and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
       : Expr.t * R.t =
   let callee_ty, _args_tys, apply, r = simplify_apply_shared env r apply in
   let callee_kind = (fun ty -> T.kind ty) callee_ty in
-  if not (Flambda_kind.is_value callee_kind) then begin
+  if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
-      Flambda_kind.print callee_kind
+      K.print callee_kind
       T.print callee_ty
   end;
   let obj, _obj_ty = simplify_name env obj in
@@ -1248,9 +1248,9 @@ and simplify_c_call env r apply ~alloc:_ ~param_arity:_ ~return_arity:_
       : Expr.t * R.t =
   let callee_ty, _args_tys, apply, r = simplify_apply_shared env r apply in
   let callee_kind = (fun ty -> T.kind ty) callee_ty in
-  if not (Flambda_kind.is_value callee_kind) then begin
+  if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "C call with callee of wrong kind %a: %a"
-      Flambda_kind.print callee_kind
+      K.print callee_kind
       T.print callee_ty
   end;
   Apply apply, r
@@ -1392,15 +1392,15 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
     let ty = T.unknown contents_kind in
     let body, r = simplify_expr (E.add_mutable env var ty) r body in
     let initial_value_kind = (fun ty -> T.kind ty) initial_value_ty in
-    if not (Flambda_kind.compatible initial_value_kind
+    if not (K.compatible initial_value_kind
         ~if_used_at:contents_kind)
     then begin
       Misc.fatal_errorf "Cannot put initial value %a of kind %a into \
           mutable variable %a of kind %a"
         Simple.print initial_value
-        Flambda_kind.print initial_value_kind
+        K.print initial_value_kind
         Mutable_variable.print var
-        Flambda_kind.print contents_kind
+        K.print contents_kind
     end;
     let expr : Expr.t =
       Let_mutable {

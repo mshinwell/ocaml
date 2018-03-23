@@ -64,7 +64,7 @@ let remove_parameters ~(handler : Flambda.Continuation_handler.t)
   let new_cont = Continuation.create () in
   let wrapper_handler : Flambda.Continuation_handler.t =
     { params = wrapper_params;
-      stub = false; (*true; *) (* XXX *)
+      stub = true;
       is_exn_handler = false;
       handler = Apply_cont (new_cont, None, wrapper_params_not_unused);
     }
