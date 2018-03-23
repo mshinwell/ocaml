@@ -101,10 +101,6 @@ end) = struct
     | Immutable of 'a
     | Mutable
 
-  type 'a or_unknown =
-    | Known of 'a
-    | Unknown
-
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
@@ -167,8 +163,8 @@ end) = struct
     | Blocks of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
   and blocks_and_tagged_immediates = {
-    immediates : immediate_case Immediate.Map.t or_unknown;
-    blocks : block_cases Tag.Map.t or_unknown;
+    immediates : immediate_case Immediate.Map.t Or_unknown.t;
+    blocks : block_cases Tag.Map.t Or_unknown.t;
     is_int : Name.t option;
     get_tag : Name.t option;
   }
@@ -300,6 +296,27 @@ end) = struct
         | Export_id id -> Export_id.print ppf id
     end)
   end
+
+  type changes = Neither | Left | Right | Both
+
+  let join_changes (changes1 : changes) (changes2 : changes) =
+    match changes1, changes2 with
+    | Neither, Neither -> Neither
+    | Neither, Left -> Left
+    | Neither, Right -> Right
+    | Neither, Both -> Both
+    | Left, Neither -> Left
+    | Left, Left -> Left
+    | Left, Right -> Both
+    | Left, Both -> Both
+    | Right, Neither -> Right
+    | Right, Left -> Both
+    | Right, Right -> Right
+    | Right, Both -> Both
+    | Both, Neither -> Both
+    | Both, Left -> Both
+    | Both, Right -> Both
+    | Both, Both -> Both
 end
 
 module type S = sig

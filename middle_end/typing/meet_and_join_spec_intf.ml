@@ -16,72 +16,41 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(** The signature of a module that specifies meet and join operations for
+    a particular kind of types. *)
 module type S = sig
-  type equations
   type typing_environment
+  type equations
+
   type flambda_type
+  type of_kind_foo
 
-  type t = equations
+  type 'a ty
 
-  val invariant : t -> unit
+  val kind : Flambda_kind.t
 
-  val create : unit -> t
+  val to_type : of_kind_foo ty -> flambda_type
 
-  val add
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
+  val force_to_kind : flambda_type -> of_kind_foo ty
 
-  val add_or_replace
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
+  val print_ty : Format.formatter -> of_kind_foo ty -> unit
 
-  val add_or_replace_meet
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val singleton
-     : resolver:(Export_id.t -> flambda_type option)
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val fold
-     : t
-    -> init:'a
-    -> f:('a -> Name.t -> Scope_level.t -> flambda_type -> 'a)
-    -> 'a
-
-  val domain : t -> Name.Set.t
-
-  val meet : resolver:(Export_id.t -> flambda_type option) -> t -> t -> t
-
-  val equal
-     : equal_type:(flambda_type -> flambda_type -> bool)
-    -> t
-    -> t
-    -> bool
-
-  val phys_equal : t -> t -> bool
-
-  val remove : t -> Name.t -> t
-
-  val to_typing_environment
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
+  val meet_of_kind_foo
+     : typing_environment
     -> typing_environment
+    -> of_kind_foo
+    -> of_kind_foo
+    -> (of_kind_foo * equations) Or_bottom.t
 
-  val print : Format.formatter -> t -> unit
+  (* If the supplied types are compatible, the join must be pushed inside
+     their structure, and [Ok] returned.  Otherwise [Unknown] must be
+     returned. *)
+  (* CR mshinwell: add comment about requirement for equivalence
+     relationness *)
+  val join_of_kind_foo
+     : typing_environment
+    -> typing_environment
+    -> of_kind_foo
+    -> of_kind_foo
+    -> of_kind_foo Or_unknown.t
 end

@@ -63,10 +63,6 @@ module type S = sig
     | Immutable of 'a
     | Mutable
 
-  type 'a or_unknown =
-    | Known of 'a
-    | Unknown
-
   type 'a or_alias = private
     | No_alias of 'a
     | Type of Export_id.t
@@ -163,10 +159,10 @@ module type S = sig
         Invariant: the map is always non-empty. *)
 
   and blocks_and_tagged_immediates = private {
-    immediates : immediate_case Immediate.Map.t or_unknown;
+    immediates : immediate_case Immediate.Map.t Or_unknown.t;
     (** Cases for constant constructors (in the case of variants) and
         arbitrary tagged immediates. *)
-    blocks : block_cases Tag.Map.t or_unknown;
+    blocks : block_cases Tag.Map.t Or_unknown.t;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
     is_int : Name.t option;

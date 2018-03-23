@@ -272,6 +272,7 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/set_of_closures_origin.cmo \
   middle_end/base_types/var_within_closure.cmo \
   middle_end/base_types/or_bottom.cmo \
+  middle_end/base_types/or_unknown.cmo \
   middle_end/base_types/name_occurrences.cmo
 
 MIDDLE_END_CODE_MOTION=\
@@ -318,6 +319,9 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/typing_environment0_intf.cmo \
   middle_end/typing/equations_intf.cmo \
   middle_end/typing/typing_environment0.cmo \
+  middle_end/typing/meet_and_join_intf.cmo \
+  middle_end/typing/meet_and_join_spec_intf.cmo \
+  middle_end/typing/meet_and_join_fabricated.cmo \
   middle_end/typing/flambda_type0.cmo \
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \

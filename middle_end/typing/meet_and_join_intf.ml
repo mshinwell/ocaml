@@ -17,71 +17,51 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
-  type equations
   type typing_environment
-  type flambda_type
+  type equations
 
-  type t = equations
+  type 'a ty
 
-  val invariant : t -> unit
+  type of_kind_foo
 
-  val create : unit -> t
-
-  val add
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val add_or_replace
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val add_or_replace_meet
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val singleton
-     : resolver:(Export_id.t -> flambda_type option)
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val fold
-     : t
-    -> init:'a
-    -> f:('a -> Name.t -> Scope_level.t -> flambda_type -> 'a)
-    -> 'a
-
-  val domain : t -> Name.Set.t
-
-  val meet : resolver:(Export_id.t -> flambda_type option) -> t -> t -> t
-
-  val equal
-     : equal_type:(flambda_type -> flambda_type -> bool)
-    -> t
-    -> t
-    -> bool
-
-  val phys_equal : t -> t -> bool
-
-  val remove : t -> Name.t -> t
-
-  val to_typing_environment
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
+  (* Least upper bound of two types of a particular kind. *)
+  val join_ty
+     : typing_environment
     -> typing_environment
+    -> of_kind_foo ty
+    -> of_kind_foo ty
+    -> of_kind_foo ty
 
-  val print : Format.formatter -> t -> unit
+  (* Greatest lower bound of two types of a particular kind. *)
+  val meet_ty
+     : typing_environment
+    -> typing_environment
+    -> of_kind_foo ty
+    -> of_kind_foo ty
+    -> of_kind_foo ty * equations
+end
+
+module type S_for_types = sig
+  type flambda_type
+  type t_in_context
+  type equations
+
+  val meet
+     : bias_towards:t_in_context
+    -> t_in_context
+    -> flambda_type * equations
+
+  val join : t_in_context -> t_in_context -> flambda_type
+
+  val meet_equations
+     : resolver:(Export_id.t -> flambda_type option)
+    -> equations
+    -> equations
+    -> equations
+
+  val join_equations
+     : resolver:(Export_id.t -> flambda_type option)
+    -> equations
+    -> equations
+    -> equations
 end
