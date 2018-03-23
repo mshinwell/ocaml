@@ -24,8 +24,6 @@ module Make (T : sig
     -> 'a ty_naked_number
     -> unit
 
-  val ty_is_obviously_bottom : 'a ty -> bool
-
   val force_to_kind_naked_immediate
      : t
     -> Immediate.Set.t of_kind_naked_number ty

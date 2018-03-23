@@ -30,8 +30,6 @@ module Make (T : sig
     -> 'a ty_naked_number
     -> unit
 
-  val ty_is_obviously_bottom : 'a ty -> bool
-
   val force_to_kind_naked_immediate
      : t
     -> Immediate.Set.t of_kind_naked_number ty
@@ -65,43 +63,6 @@ end) (Make_meet_and_join : functor
          with type typing_environment := T.typing_environment
          with type equations := T.equations
          with type 'a ty := 'a T.ty
-    end) (Meet_and_join_naked_immediate : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Immediate.Set.t T.of_kind_naked_number
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
-    end) (Meet_and_join_naked_float : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo :=
-          Numbers.Float_by_bit_pattern.Set.t T.of_kind_naked_number
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
-    end) (Meet_and_join_naked_int32 : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Numbers.Int32.Set.t T.of_kind_naked_number
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
-    end) (Meet_and_join_naked_int64 : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Numbers.Int64.Set.t T.of_kind_naked_number
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
-    end) (Meet_and_join_naked_nativeint : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Targetint.Set.t T.of_kind_naked_number
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
-    end) (Meet_and_join_fabricated : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := T.of_kind_fabricated
-        with type typing_environment := T.typing_environment
-        with type equations := T.equations
-        with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
         with type t_in_context := T.t_in_context

@@ -3929,6 +3929,7 @@ middle_end/typing/flambda_type0.cmo : middle_end/base_types/variable.cmi \
     utils/misc_color.cmi utils/misc.cmi \
     middle_end/typing/meet_and_join_value.cmi \
     middle_end/typing/meet_and_join_spec_intf.cmo \
+    middle_end/typing/meet_and_join_naked_number.cmi \
     middle_end/typing/meet_and_join_intf.cmo \
     middle_end/typing/meet_and_join_fabricated.cmi \
     middle_end/base_types/immediate.cmi middle_end/language/freshening.cmi \
@@ -3953,6 +3954,7 @@ middle_end/typing/flambda_type0.cmx : middle_end/base_types/variable.cmx \
     utils/misc_color.cmx utils/misc.cmx \
     middle_end/typing/meet_and_join_value.cmx \
     middle_end/typing/meet_and_join_spec_intf.cmx \
+    middle_end/typing/meet_and_join_naked_number.cmx \
     middle_end/typing/meet_and_join_intf.cmx \
     middle_end/typing/meet_and_join_fabricated.cmx \
     middle_end/base_types/immediate.cmx middle_end/language/freshening.cmx \

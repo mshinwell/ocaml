@@ -2168,22 +2168,69 @@ result
     (Meet_and_join)
     (Typing_environment0)
     (Equations)
-  and Meet_and_join_naked_immediate : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Real_meet_and_join_naked_number.Naked_immediate.Make (struct
-      include T
+  and Meet_and_join_naked_number : sig
+    (* CR mshinwell: Deal with this signature somehow *)
 
+    module Naked_immediate : sig
+      include Meet_and_join_intf.S
+        with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+        with type typing_environment := typing_environment
+        with type equations := equations
+        with type 'a ty := 'a ty
+    end
+
+    module Naked_float : sig
+      include Meet_and_join_intf.S
+        with type of_kind_foo :=
+          Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+        with type typing_environment := typing_environment
+        with type equations := equations
+        with type 'a ty := 'a ty
+    end
+
+    module Naked_int32 : sig
+      include Meet_and_join_intf.S
+        with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
+        with type typing_environment := typing_environment
+        with type equations := equations
+        with type 'a ty := 'a ty
+    end
+
+    module Naked_int64 : sig
+      include Meet_and_join_intf.S
+        with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
+        with type typing_environment := typing_environment
+        with type equations := equations
+        with type 'a ty := 'a ty
+    end
+
+    module Naked_nativeint : sig
+      include Meet_and_join_intf.S
+        with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+        with type typing_environment := typing_environment
+        with type equations := equations
+        with type 'a ty := 'a ty
+    end
+  end = Real_meet_and_join_naked_number.Make (struct
+      include T
+      let print_ty_naked_number = print_ty_naked_number
+      let force_to_kind_naked_immediate = force_to_kind_naked_immediate
+      let force_to_kind_naked_float = force_to_kind_naked_float
+      let force_to_kind_naked_int32 = force_to_kind_naked_int32
+      let force_to_kind_naked_int64 = force_to_kind_naked_int64
+      let force_to_kind_naked_nativeint = force_to_kind_naked_nativeint
     end)
     (Make_meet_and_join)
     (Meet_and_join)
     (Typing_environment0)
     (Equations)
+  and Meet_and_join_naked_immediate : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Meet_and_join_naked_number.Naked_immediate
   and Meet_and_join_naked_float : sig
     (* CR mshinwell: See if we can abstract these naked number cases some
        more? *)
@@ -2192,56 +2239,28 @@ result
       with type typing_environment := typing_environment
       with type equations := equations
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_naked_number.Naked_float.Make (struct
-      include T
-
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+  end = Meet_and_join_naked_number.Naked_float
   and Meet_and_join_naked_int32 : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Int32.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
       with type equations := equations
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_naked_number.Naked_int32.Make (struct
-      include T
-
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+  end = Meet_and_join_naked_number.Naked_int32
   and Meet_and_join_naked_int64 : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Int64.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
       with type equations := equations
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_naked_number.Naked_int64.Make (struct
-      include T
-
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+  end = Meet_and_join_naked_number.Naked_int64
   and Meet_and_join_naked_nativeint : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Targetint.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
       with type equations := equations
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_naked_number.Naked_nativeint.Make (struct
-      include T
-
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+  end = Meet_and_join_naked_number.Naked_nativeint
   and Meet_and_join_fabricated : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := of_kind_fabricated
@@ -2265,7 +2284,7 @@ result
     (Meet_and_join)
     (Typing_environment0)
     (Equations)
-  end and Typing_environment0 : sig
+  and Typing_environment0 : sig
     include Typing_environment0_intf.S
       with type typing_environment := typing_environment
       with type equations := equations
