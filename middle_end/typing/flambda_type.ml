@@ -106,7 +106,7 @@ let equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
   | Join _, _ -> false
 
 let equal_or_unknown equal_contents
-      (or_unknown1 : _ or_unknown) (or_unknown2 : _ or_unknown) =
+      (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t) =
   match or_unknown1, or_unknown2 with
   | Unknown, Unknown -> true
   | Known contents1, Known contents2 -> equal_contents contents1 contents2

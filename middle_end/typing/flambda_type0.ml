@@ -1665,7 +1665,7 @@ result
     -> sig
          include Meet_and_join_intf.S
            with type of_kind_foo := S.of_kind_foo
-           with type typing_environment := typing_environment
+           with type typing_environment := T.typing_environment
            with type equations := equations
            with type 'a ty := 'a ty
        end =

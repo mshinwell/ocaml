@@ -49,7 +49,7 @@ end) (Make_meet_and_join : functor
      end)
   -> sig
        include Meet_and_join_intf.S
-         with type of_kind_foo := T.of_kind_fabricated
+         with type of_kind_foo := S.of_kind_foo
          with type typing_environment := T.typing_environment
          with type equations := T.equations
          with type 'a ty := 'a T.ty
