@@ -1890,9 +1890,9 @@ result
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty * equations =
       let resolver = env1.resolver in
-      if env1 == env2 && or_alias1 == or_alias2 then
+      if env1 == env2 && or_alias1 == or_alias2 then begin
         or_alias1, Equations.create ()
-      else
+      end else begin
         let unknown_or_join1, canonical_name1 =
           Typing_environment0.
               resolve_aliases_and_squash_unresolved_names_on_ty'
@@ -1913,6 +1913,8 @@ result
             ~print_ty:S.print_ty
             or_alias2
         in
+        (* CR mshinwell: When meeting, restrict each environment first to the
+           free names in the corresponding type. *)
         match canonical_name1, canonical_name2 with
         | Some name1, Some name2 when Name.equal name1 name2 ->
           Equals name1, Equations.create ()
@@ -1973,6 +1975,7 @@ result
           end else begin
             No_alias unknown_or_join, equations_from_meet
           end
+      end
   end and Meet_and_join_value : sig
     include Meet_and_join
       with type of_kind_foo := of_kind_value
@@ -3402,6 +3405,8 @@ result
     let meet ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t)) : t * equations =
       if env1 == env2 && t1 == t2 then t1, Equations.create ()
       else begin
+        Typing_environment0.invariant env1;
+        Typing_environment0.invariant env2;
         ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
         let descr, equations_from_meet =
           match t1.descr, t2.descr with
@@ -3476,6 +3481,37 @@ result
           if t1.descr == descr then t1
           else if t2.descr == descr then t2
           else { t1 with descr; }
+        in
+        let free_names_in_t =
+          Name_occurrences.everything (free_names t)
+        in
+        let names_bound_by_equations =
+          Equations.domain equations_from_meet
+        in
+        let required_to_close =
+          Name.Set.diff free_names_in_t names_bound_by_equations
+        in
+        let equations_from_meet =
+          Name.Set.fold (fun name equations_from_meet ->
+              let level, ty =
+                match Name.Map.find name env1.names_to_types with
+                | exception Not_found ->
+                  begin match Name.Map.find name env2.names_to_types with
+                  | exception Not_found ->
+                    Misc.fatal_errorf "Cannot close returned type from meet \
+                        because of unbound name %a: %a"
+                      Name.print name
+                      print t
+                  | level, ty -> level, ty
+                  end
+                | level, ty -> level, ty
+              in
+              let kind = kind ty in
+              let ty = unknown kind in
+              Equations.add ~resolver:env1.resolver equations_from_meet
+                name level ty)
+            required_to_close
+            equations_from_meet
         in
         t, equations_from_meet
       end
@@ -3701,6 +3737,21 @@ result
       match typing_judgements with
       | None -> Typing_environment0.create ~resolver
       | Some typing_judgements -> typing_judgements
+
+    let domain { typing_judgements; } =
+      match typing_judgements with
+      | None -> Name.Set.empty
+      | Some typing_judgements ->
+        Name.Map.keys typing_judgements.names_to_types
+
+    let fold t ~init ~f =
+      match t.typing_judgements with
+      | None -> init
+      | Some typing_judgements ->
+        Name.Map.fold (fun name (level, ty) acc ->
+            f acc name level ty)
+          typing_judgements.names_to_types
+          init
   end
 
   let meet = Meet_and_join.meet

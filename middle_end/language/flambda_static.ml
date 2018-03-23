@@ -311,7 +311,7 @@ module Program_body = struct
           List.map (fun (var, _kind) -> Name.var var)
             computation.computed_values)
     in
-    let allowed_fns = Name_occurrences.create_from_set_in_terms allowed_fns in
+    let _allowed_fns = Name_occurrences.create_from_set_in_terms allowed_fns in
     let static_part_env =
       match defn.computation with
       | None -> env
@@ -321,8 +321,9 @@ module Program_body = struct
           env
           computation.computed_values
     in
-    List.iter (fun (sym, _kind, static_part) ->
-        let free_names = Static_part.free_names static_part in
+    List.iter (fun (_sym, _kind, static_part) ->
+        let _free_names = Static_part.free_names static_part in
+(* XXX This is broken -- isn't allowing previously-defined symbols
         (* This will also be caught by [invariant_static_part], but will
            give a better message; and allows some testing of
            [Static_part.free_variables]. *)
@@ -335,6 +336,7 @@ module Program_body = struct
             Symbol.print sym
             Static_part.print static_part
         end;
+*)
         Static_part.invariant static_part_env static_part)
       defn.static_structure;
     List.fold_left (fun env (sym, kind, _static_part) ->

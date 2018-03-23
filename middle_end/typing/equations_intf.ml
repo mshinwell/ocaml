@@ -50,6 +50,14 @@ module type S = sig
     -> flambda_type
     -> t
 
+  val fold
+     : t
+    -> init:'a
+    -> f:('a -> Name.t -> Scope_level.t -> flambda_type -> 'a)
+    -> 'a
+
+  val domain : t -> Name.Set.t
+
   val meet : resolver:(Export_id.t -> flambda_type option) -> t -> t -> t
 
   val equal

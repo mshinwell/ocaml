@@ -72,6 +72,8 @@ module type S = sig
       specified environment. *)
   val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
+  val mem : t -> Name.t -> bool
+
   (** Returns [true] if the given name, which must be bound in the given
       environment, is existentially bound. *)
   val is_existential : t -> Name.t -> bool
