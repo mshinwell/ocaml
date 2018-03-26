@@ -20,7 +20,7 @@
     a particular kind of types. *)
 module type S = sig
   type typing_environment
-  type equations
+  type env_extension
 
   type flambda_type
   type of_kind_foo
@@ -40,7 +40,7 @@ module type S = sig
     -> typing_environment
     -> of_kind_foo
     -> of_kind_foo
-    -> (of_kind_foo * equations) Or_bottom.t
+    -> (of_kind_foo * env_extension) Or_bottom.t
 
   (* If the supplied types are compatible, the join must be pushed inside
      their structure, and [Ok] returned.  Otherwise [Unknown] must be

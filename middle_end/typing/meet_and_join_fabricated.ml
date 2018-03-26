@@ -44,37 +44,37 @@ end) (Make_meet_and_join : functor
       include Meet_and_join_spec_intf.S
         with type flambda_type := T.flambda_type
         with type typing_environment := T.typing_environment
-        with type equations := T.equations
+        with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
      end)
   -> sig
        include Meet_and_join_intf.S
          with type of_kind_foo := S.of_kind_foo
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
     end) (Meet_and_join_value : sig
       include Meet_and_join_intf.S
         with type of_kind_foo := T.of_kind_value
         with type typing_environment := T.typing_environment
-        with type equations := T.equations
+        with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
         with type t_in_context := T.t_in_context
-        with type equations := T.equations
+        with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
-    end) (Typing_environment0 : sig
-      include Typing_environment0_intf.S
+    end) (Typing_env0 : sig
+      include Typing_env0_intf.S
         with type typing_environment := T.typing_environment
-        with type equations := T.equations
+        with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
         with type t_in_context := T.t_in_context
         with type 'a ty := 'a T.ty
         with type 'a unknown_or_join := 'a T.unknown_or_join
-    end) (Equations : sig
-      include Equations_intf.S
-        with type equations := T.equations
+    end) (Typing_env_extension : sig
+      include Typing_env_extension_intf.S
+        with type env_extension := T.env_extension
         with type typing_environment := T.typing_environment
         with type flambda_type := T.flambda_type
     end) =
@@ -83,12 +83,12 @@ struct
     include Meet_and_join_intf.S
       with type of_kind_foo := T.of_kind_fabricated
       with type typing_environment := T.typing_environment
-      with type equations := T.equations
+      with type env_extension := T.env_extension
       with type 'a ty := 'a T.ty
   end = Make_meet_and_join (struct
     open T
 
-    type equations = T.equations
+    type env_extension = T.env_extension
 
     type of_kind_foo = of_kind_fabricated
 
@@ -109,17 +109,17 @@ struct
        surrogate. *)
     let meet_closure env1 env2
           (closure1 : closure) (closure2 : closure)
-          : (closure * equations) Or_bottom.t =
+          : (closure * env_extension) Or_bottom.t =
       if env1 == env2 && closure1 == closure2 then begin
-        Ok (closure1, Equations.create ())
+        Ok (closure1, Typing_env_extension.create ())
       end else begin
         let resolver = env1.resolver in
         let cannot_prove_different ~params1 ~params2
               ~param_names1 ~param_names2 ~result1 ~result2
-              ~result_equations1 ~result_equations2 : _ Or_bottom.t =
+              ~result_env_extension1 ~result_env_extension2 : _ Or_bottom.t =
           let same_arity = List.compare_lengths params1 params2 = 0 in
           let same_num_results = List.compare_lengths result1 result2 = 0 in
-          let equations_from_meet = ref (Equations.create ()) in
+          let env_extension_from_meet = ref (Typing_env_extension.create ()) in
           let has_bottom params = List.exists is_obviously_bottom params in
           let params_changed = ref Neither in
           let params : _ Or_bottom.t =
@@ -127,7 +127,7 @@ struct
             else
               let params =
                 List.map2 (fun t1 t2 ->
-                    let t, new_equations_from_meet =
+                    let t, new_env_extension_from_meet =
                       Meet_and_join.meet ~bias_towards:(env1, t1) (env2, t2)
                     in
                     if not (t == t1) then begin
@@ -136,9 +136,9 @@ struct
                     if not (t == t2) then begin
                       params_changed := join_changes !params_changed Right
                     end;
-                    equations_from_meet :=
-                      Meet_and_join.meet_equations ~resolver
-                        new_equations_from_meet !equations_from_meet;
+                    env_extension_from_meet :=
+                      Meet_and_join.meet_env_extension ~resolver
+                        new_env_extension_from_meet !env_extension_from_meet;
                     t)
                   params1
                   params2
@@ -154,7 +154,7 @@ struct
                   let param_name = Parameter.name param in
                   (* CR mshinwell: This level shouldn't be hard-coded *)
                   let level = Scope_level.initial in
-                  Typing_environment0.add_or_replace_meet env
+                  Typing_env0.add_or_replace_meet env
                     param_name level param_ty)
                 env
                 param_names params
@@ -165,27 +165,27 @@ struct
             else
               let result =
                 List.map2 (fun t1 t2 ->
-                    let result_equations1 =
-                      Equations.to_typing_environment ~resolver:env1.resolver
-                       result_equations1
+                    let result_env_extension1 =
+                      Typing_env_extension.to_typing_environment ~resolver:env1.resolver
+                       result_env_extension1
                     in
-                    let result_equations2 =
-                      Equations.to_typing_environment ~resolver:env1.resolver
-                       result_equations2
+                    let result_env_extension2 =
+                      Typing_env_extension.to_typing_environment ~resolver:env1.resolver
+                       result_env_extension2
                     in
                     let result_env1 =
-                      Typing_environment0.meet
+                      Typing_env0.meet
                         (env_for_result env1 ~params:params1
                           ~param_names:param_names1)
-                        result_equations1
+                        result_env_extension1
                     in
                     let result_env2 =
-                      Typing_environment0.meet
+                      Typing_env0.meet
                         (env_for_result env2 ~params:params2
                           ~param_names:param_names2)
-                        result_equations2
+                        result_env_extension2
                     in
-                    let t, new_equations_from_meet =
+                    let t, new_env_extension_from_meet =
                       Meet_and_join.meet ~bias_towards:(result_env1, t1)
                         (result_env2, t2)
                     in
@@ -195,9 +195,9 @@ struct
                     if not (t == t2) then begin
                       result_changed := join_changes !result_changed Right
                     end;
-                    equations_from_meet :=
-                      Meet_and_join.meet_equations ~resolver
-                        new_equations_from_meet !equations_from_meet;
+                    env_extension_from_meet :=
+                      Meet_and_join.meet_env_extension ~resolver
+                        new_env_extension_from_meet !env_extension_from_meet;
                     t)
                   result1
                   result2
@@ -205,16 +205,16 @@ struct
               if has_bottom result then Bottom
               else Ok result
           in
-          let result_equations =
-            Meet_and_join.meet_equations ~resolver:env1.resolver
-              result_equations1 result_equations2
+          let result_env_extension =
+            Meet_and_join.meet_env_extension ~resolver:env1.resolver
+              result_env_extension1 result_env_extension2
           in
-          let result_equations_changed : changes =
+          let result_env_extension_changed : changes =
             let changed1 =
-              not (Equations.phys_equal result_equations1 result_equations)
+              not (Typing_env_extension.phys_equal result_env_extension1 result_env_extension)
             in
             let changed2 =
-              not (Equations.phys_equal result_equations2 result_equations)
+              not (Typing_env_extension.phys_equal result_env_extension2 result_env_extension)
             in
             match changed1, changed2 with
             | false, false -> Neither
@@ -226,9 +226,9 @@ struct
           | Ok params, Ok result ->
             let changed =
               join_changes !params_changed
-                (join_changes !result_changed result_equations_changed)
+                (join_changes !result_changed result_env_extension_changed)
             in
-            Ok (params, changed, result, result_equations, !equations_from_meet)
+            Ok (params, changed, result, result_env_extension, !env_extension_from_meet)
           | _, _ -> Bottom
         in
         let function_decls : _ Or_bottom.t =
@@ -244,12 +244,12 @@ struct
                 ~param_names2:(Some param_names2)
                 ~result1:inlinable1.result
                 ~result2:inlinable2.result
-                ~result_equations1:inlinable1.result_equations
-                ~result_equations2:inlinable2.result_equations
+                ~result_env_extension1:inlinable1.result_env_extension
+                ~result_env_extension2:inlinable2.result_env_extension
             in
             begin match result with
-            | Ok (params, changed, result, result_equations,
-                  equations_from_meet) ->
+            | Ok (params, changed, result, result_env_extension,
+                  env_extension_from_meet) ->
               (* [closure1.function_decls] and [closure2.function_decls] may be
                  different, but we cannot prove it.  We arbitrarily pick
                  [closure1.function_decls] to return, with parameter and result
@@ -261,31 +261,31 @@ struct
                   params
               in
               begin match changed with
-              | Neither -> Ok (closure1.function_decls, equations_from_meet)
-              | Left -> Ok (closure2.function_decls, equations_from_meet)
-              | Right -> Ok (closure1.function_decls, equations_from_meet)
+              | Neither -> Ok (closure1.function_decls, env_extension_from_meet)
+              | Left -> Ok (closure2.function_decls, env_extension_from_meet)
+              | Right -> Ok (closure1.function_decls, env_extension_from_meet)
               | Both ->
                 Ok (Inlinable { inlinable1 with
                   params;
                   result;
-                  result_equations;
-                }, equations_from_meet)
+                  result_env_extension;
+                }, env_extension_from_meet)
               end
             | Bottom ->
               (* [closure1] and [closure2] are definitely different. *)
               Bottom
             end
           | Non_inlinable None, Non_inlinable None ->
-            Ok (Non_inlinable None, Equations.create ())
+            Ok (Non_inlinable None, Typing_env_extension.create ())
           | Non_inlinable (Some non_inlinable), Non_inlinable None
           | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
             (* We can arbitrarily pick one side or the other: we choose the
                side which gives a more precise type. *)
-            Ok (Non_inlinable (Some non_inlinable), Equations.create ())
+            Ok (Non_inlinable (Some non_inlinable), Typing_env_extension.create ())
           | Non_inlinable None, Inlinable inlinable
           | Inlinable inlinable, Non_inlinable None ->
             (* Likewise. *)
-            Ok (Inlinable inlinable, Equations.create ())
+            Ok (Inlinable inlinable, Typing_env_extension.create ())
           | Non_inlinable (Some non_inlinable1),
               Non_inlinable (Some non_inlinable2) ->
             let result =
@@ -296,21 +296,21 @@ struct
                 ~param_names2:None
                 ~result1:non_inlinable1.result
                 ~result2:non_inlinable2.result
-                ~result_equations1:non_inlinable1.result_equations
-                ~result_equations2:non_inlinable2.result_equations
+                ~result_env_extension1:non_inlinable1.result_env_extension
+                ~result_env_extension2:non_inlinable2.result_env_extension
             in
             begin match result with
-            | Ok (params, _params_changed, result, result_equations,
-                  equations_from_meet) ->
+            | Ok (params, _params_changed, result, result_env_extension,
+                  env_extension_from_meet) ->
               let non_inlinable_function_decl =
                 { non_inlinable1 with
                   params;
                   result;
-                  result_equations;
+                  result_env_extension;
                 }
               in
               Ok (Non_inlinable (Some non_inlinable_function_decl),
-                equations_from_meet)
+                env_extension_from_meet)
             | Bottom ->
               Bottom
             end
@@ -326,12 +326,12 @@ struct
                 ~param_names2:None
                 ~result1:inlinable.result
                 ~result2:non_inlinable.result
-                ~result_equations1:inlinable.result_equations
-                ~result_equations2:non_inlinable.result_equations
+                ~result_env_extension1:inlinable.result_env_extension
+                ~result_env_extension2:non_inlinable.result_env_extension
             in
             begin match result with
-            | Ok (params, _params_changed, result, result_equations,
-                  equations_from_meet) ->
+            | Ok (params, _params_changed, result, result_env_extension,
+                  env_extension_from_meet) ->
               (* For the arbitrary choice, we pick the inlinable declaration,
                  since it gives more information. *)
               let params =
@@ -343,23 +343,23 @@ struct
                 { inlinable with
                   params;
                   result;
-                  result_equations;
+                  result_env_extension;
                 }
               in
-              Ok (Inlinable inlinable_function_decl, equations_from_meet)
+              Ok (Inlinable inlinable_function_decl, env_extension_from_meet)
             | Bottom ->
               Bottom
             end
         in
         match function_decls with
         | Bottom -> Bottom
-        | Ok (function_decls, equations_from_meet) ->
+        | Ok (function_decls, env_extension_from_meet) ->
           if function_decls == closure1.function_decls then
-            Ok (closure1, equations_from_meet)
+            Ok (closure1, env_extension_from_meet)
           else if function_decls == closure2.function_decls then
-            Ok (closure2, equations_from_meet)
+            Ok (closure2, env_extension_from_meet)
           else
-            Ok (({ function_decls; } : closure), equations_from_meet)
+            Ok (({ function_decls; } : closure), env_extension_from_meet)
       end
 
     let join_closure env1 env2
@@ -369,7 +369,7 @@ struct
         closure1
       end else begin
         let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
-              ~result_equations1 ~result_equations2
+              ~result_env_extension1 ~result_env_extension2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
           let same_arity =
             List.compare_lengths params1 params2 = 0
@@ -389,10 +389,10 @@ struct
             let result =
               List.map2 (fun t1 t2 ->
                   Meet_and_join.join
-                    (Equations.to_typing_environment ~resolver:env1.resolver
-                       result_equations1, t1)
-                    (Equations.to_typing_environment ~resolver:env2.resolver
-                       result_equations2, t2))
+                    (Typing_env_extension.to_typing_environment ~resolver:env1.resolver
+                       result_env_extension1, t1)
+                    (Typing_env_extension.to_typing_environment ~resolver:env2.resolver
+                       result_env_extension2, t2))
                 result1
                 result2
             in
@@ -403,14 +403,14 @@ struct
                 Some closure_id1
               | _, _ -> None
             in
-            let result_equations =
-              Meet_and_join.join_equations ~resolver:env1.resolver
-                result_equations1 result_equations2
+            let result_env_extension =
+              Meet_and_join.join_env_extension ~resolver:env1.resolver
+                result_env_extension1 result_env_extension2
             in
             let non_inlinable : non_inlinable_function_declarations =
               { params;
                 result;
-                result_equations;
+                result_env_extension;
                 direct_call_surrogate;
               }
             in
@@ -428,8 +428,8 @@ struct
               ~params2:non_inlinable2.params
               ~result1:non_inlinable1.result
               ~result2:non_inlinable2.result
-              ~result_equations1:non_inlinable1.result_equations
-              ~result_equations2:non_inlinable2.result_equations
+              ~result_env_extension1:non_inlinable1.result_env_extension
+              ~result_env_extension2:non_inlinable2.result_env_extension
               ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
               ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
           | Non_inlinable (Some non_inlinable), Inlinable inlinable
@@ -440,8 +440,8 @@ struct
               ~params2:non_inlinable.params
               ~result1:inlinable.result
               ~result2:non_inlinable.result
-              ~result_equations1:inlinable.result_equations
-              ~result_equations2:non_inlinable.result_equations
+              ~result_env_extension1:inlinable.result_env_extension
+              ~result_env_extension2:non_inlinable.result_env_extension
               ~direct_call_surrogate1:inlinable.direct_call_surrogate
               ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
           | Inlinable inlinable1, Inlinable inlinable2 ->
@@ -454,8 +454,8 @@ struct
                 ~params2
                 ~result1:inlinable1.result
                 ~result2:inlinable2.result
-                ~result_equations1:inlinable1.result_equations
-                ~result_equations2:inlinable2.result_equations
+                ~result_env_extension1:inlinable1.result_env_extension
+                ~result_env_extension2:inlinable2.result_env_extension
                 ~direct_call_surrogate1:inlinable1.direct_call_surrogate
                 ~direct_call_surrogate2:inlinable2.direct_call_surrogate
             end else begin
@@ -494,10 +494,10 @@ struct
               (* CR mshinwell: Add documentation for this -- the types provide
                  information about the calling context rather than the code of
                  the function. *)
-              let result_equations =
-                Meet_and_join.join_equations ~resolver:env1.resolver
-                  inlinable1.result_equations
-                  inlinable2.result_equations
+              let result_env_extension =
+                Meet_and_join.join_env_extension ~resolver:env1.resolver
+                  inlinable1.result_env_extension
+                  inlinable2.result_env_extension
               in
               let params =
                 List.map2 (fun (param1, t1) (param2, t2) ->
@@ -510,10 +510,10 @@ struct
               let result =
                 List.map2 (fun t1 t2 ->
                     Meet_and_join.join
-                      (Equations.to_typing_environment ~resolver:env1.resolver
-                         inlinable1.result_equations, t1)
-                      (Equations.to_typing_environment ~resolver:env2.resolver
-                         inlinable2.result_equations, t2))
+                      (Typing_env_extension.to_typing_environment ~resolver:env1.resolver
+                         inlinable1.result_env_extension, t1)
+                      (Typing_env_extension.to_typing_environment ~resolver:env2.resolver
+                         inlinable2.result_env_extension, t2))
                   inlinable1.result
                   inlinable2.result
               in
@@ -536,7 +536,7 @@ struct
                 body = inlinable1.body;
                 free_names_in_body = inlinable1.free_names_in_body;
                 result;
-                result_equations;
+                result_env_extension;
                 stub = inlinable1.stub;
                 dbg = inlinable1.dbg;
                 inline = inlinable1.inline;
@@ -554,25 +554,25 @@ struct
 
     let meet_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
-          : (set_of_closures * equations) Or_bottom.t =
+          : (set_of_closures * env_extension) Or_bottom.t =
       let resolver = env1.resolver in
-      let equations_from_meet = ref (Equations.create ()) in
+      let env_extension_from_meet = ref (Typing_env_extension.create ()) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
         match set1.closures, set2.closures with
         | Exactly closures1, Exactly closures2 ->
           let closures =
             Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_equations_from_meet =
+                let ty_fabricated, new_env_extension_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver
-                      new_equations_from_meet !equations_from_meet;
+                  env_extension_from_meet :=
+                    Meet_and_join.meet_env_extension ~resolver
+                      new_env_extension_from_meet !env_extension_from_meet;
                   Some ty_fabricated
                 end)
               closures1
@@ -600,15 +600,15 @@ struct
               match Closure_id.Map.find closure_id closures2 with
               | exception Not_found -> Some ty1
               | ty2 ->
-                let ty_fabricated, new_equations_from_meet =
+                let ty_fabricated, new_env_extension_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver
-                      new_equations_from_meet !equations_from_meet;
+                  env_extension_from_meet :=
+                    Meet_and_join.meet_env_extension ~resolver
+                      new_env_extension_from_meet !env_extension_from_meet;
                   Some ty_fabricated
                 end)
           in
@@ -616,16 +616,16 @@ struct
         | Open closures1, Open closures2 ->
           let closures =
             Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_equations_from_meet =
+                let ty_fabricated, new_env_extension_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   bottom_as_ty_fabricated ()
                 end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver
-                      new_equations_from_meet !equations_from_meet;
+                  env_extension_from_meet :=
+                    Meet_and_join.meet_env_extension ~resolver
+                      new_env_extension_from_meet !env_extension_from_meet;
                   ty_fabricated
                 end)
               closures1
@@ -638,16 +638,16 @@ struct
         | Exactly closure_elements1, Exactly closure_elements2 ->
           let closure_elements =
             Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
-                let ty_value, new_equations_from_meet =
+                let ty_value, new_env_extension_from_meet =
                   Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   None
                 end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver
-                      new_equations_from_meet !equations_from_meet;
+                  env_extension_from_meet :=
+                    Meet_and_join.meet_env_extension ~resolver
+                      new_env_extension_from_meet !env_extension_from_meet;
                   Some ty_value
                 end)
               closure_elements1
@@ -678,15 +678,15 @@ struct
                 with
                 | exception Not_found -> Some ty1
                 | ty2 ->
-                  let ty_value, new_equations_from_meet =
+                  let ty_value, new_env_extension_from_meet =
                     Meet_and_join_value.meet_ty env1 env2 ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_value then begin
                     None
                   end else begin
-                    equations_from_meet :=
-                      Meet_and_join.meet_equations ~resolver
-                        new_equations_from_meet !equations_from_meet;
+                    env_extension_from_meet :=
+                      Meet_and_join.meet_env_extension ~resolver
+                        new_env_extension_from_meet !env_extension_from_meet;
                     Some ty_value
                   end)
           in
@@ -694,16 +694,16 @@ struct
         | Open closure_elements1, Open closure_elements2 ->
           let closure_elements =
             Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
-                let ty_value, new_equations_from_meet =
+                let ty_value, new_env_extension_from_meet =
                   Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   bottom_as_ty_value ()
                 end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver new_equations_from_meet
-                      !equations_from_meet;
+                  env_extension_from_meet :=
+                    Meet_and_join.meet_env_extension ~resolver new_env_extension_from_meet
+                      !env_extension_from_meet;
                   ty_value
                 end)
               closure_elements1
@@ -716,17 +716,17 @@ struct
       | _ ->
         if closures == set1.closures
           && closure_elements == set1.closure_elements
-        then Ok (set1, !equations_from_meet)
+        then Ok (set1, !env_extension_from_meet)
         else if closures == set2.closures
           && closure_elements == set2.closure_elements
-        then Ok (set2, !equations_from_meet)
+        then Ok (set2, !env_extension_from_meet)
         else begin
           let set : set_of_closures =
             { closures;
               closure_elements;
             }
           in
-          Ok (set, !equations_from_meet)
+          Ok (set, !env_extension_from_meet)
         end
 
     let join_set_of_closures env1 env2
@@ -819,48 +819,48 @@ struct
 
     let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : (of_kind_fabricated * equations) Or_bottom.t =
+          : (of_kind_fabricated * env_extension) Or_bottom.t =
       let resolver = env1.resolver in
       match of_kind1, of_kind2 with
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.inter_merge
-            (fun ({ equations = equations1; } : discriminant_case)
-                  ({ equations = equations2; } : discriminant_case)
+            (fun ({ env_extension = env_extension1; } : discriminant_case)
+                  ({ env_extension = env_extension2; } : discriminant_case)
                   : discriminant_case ->
-              let equations =
-                Meet_and_join.meet_equations ~resolver
-                  equations1 equations2
+              let env_extension =
+                Meet_and_join.meet_env_extension ~resolver
+                  env_extension1 env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
-              { equations; })
+              { env_extension; })
             discriminants1
             discriminants2
         in
         begin match Discriminant.Map.get_singleton discriminants with
-        | None -> Ok (Discriminant discriminants, Equations.create ())
+        | None -> Ok (Discriminant discriminants, Typing_env_extension.create ())
         | Some (discriminant, discriminant_case) ->
-          let equations_from_meet = discriminant_case.equations in
+          let env_extension_from_meet = discriminant_case.env_extension in
           let discriminants =
             Discriminant.Map.singleton discriminant
-              ({ equations = Equations.create (); } : discriminant_case)
+              ({ env_extension = Typing_env_extension.create (); } : discriminant_case)
           in
-          Ok (Discriminant discriminants, equations_from_meet)
+          Ok (Discriminant discriminants, env_extension_from_meet)
         end
       | Set_of_closures set1, Set_of_closures set2 ->
         begin match meet_set_of_closures env1 env2 set1 set2 with
-        | Ok (set_of_closures, equations_from_meet) ->
-          if set_of_closures == set1 then Ok (of_kind1, equations_from_meet)
-          else if set_of_closures == set2 then Ok (of_kind2, equations_from_meet)
-          else Ok (Set_of_closures set_of_closures, equations_from_meet)
+        | Ok (set_of_closures, env_extension_from_meet) ->
+          if set_of_closures == set1 then Ok (of_kind1, env_extension_from_meet)
+          else if set_of_closures == set2 then Ok (of_kind2, env_extension_from_meet)
+          else Ok (Set_of_closures set_of_closures, env_extension_from_meet)
         | Bottom -> Bottom
         end
       | Closure closure1, Closure closure2 ->
         begin match meet_closure env1 env2 closure1 closure2 with
-        | Ok (closure, equations_from_meet) ->
-          if closure == closure1 then Ok (of_kind1, equations_from_meet)
-          else if closure == closure2 then Ok (of_kind2, equations_from_meet)
-          else Ok (Closure closure, equations_from_meet)
+        | Ok (closure, env_extension_from_meet) ->
+          if closure == closure1 then Ok (of_kind1, env_extension_from_meet)
+          else if closure == closure2 then Ok (of_kind2, env_extension_from_meet)
+          else Ok (Closure closure, env_extension_from_meet)
         | Bottom -> Bottom
         end
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
@@ -872,14 +872,14 @@ struct
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.union_merge
-            (fun ({ equations = equations1; } : discriminant_case)
-                  ({ equations = equations2; } : discriminant_case)
+            (fun ({ env_extension = env_extension1; } : discriminant_case)
+                  ({ env_extension = env_extension2; } : discriminant_case)
                   : discriminant_case ->
-              let equations =
-                Meet_and_join.join_equations ~resolver:env1.resolver
-                  equations1 equations2
+              let env_extension =
+                Meet_and_join.join_env_extension ~resolver:env1.resolver
+                  env_extension1 env_extension2
               in
-              { equations; })
+              { env_extension; })
             discriminants1
             discriminants2
         in

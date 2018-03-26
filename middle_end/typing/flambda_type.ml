@@ -186,15 +186,15 @@ and equal_of_kind_value (v1 : of_kind_value) (v2 : of_kind_value) =
   | (Blocks_and_tagged_immediates _ | Boxed_number _
       | Closures _ | String _), _ -> false
 
-and equal_immediate_case ({ equations = equations1; } : immediate_case)
-      ({ equations = equations2; } : immediate_case) =
-  equal_equations equations1 equations2
+and equal_immediate_case ({ env_extension = env_extension1; } : immediate_case)
+      ({ env_extension = env_extension2; } : immediate_case) =
+  equal_env_extension env_extension1 env_extension2
 
 and equal_singleton_block
-      ({ equations = equations1; fields = fields1; } : singleton_block)
-      ({ equations = equations2; fields = fields2; } : singleton_block)
+      ({ env_extension = env_extension1; fields = fields1; } : singleton_block)
+      ({ env_extension = env_extension2; fields = fields2; } : singleton_block)
       =
-  equal_equations equations1 equations2
+  equal_env_extension env_extension1 env_extension2
     && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
          fields1 fields2
 
@@ -228,7 +228,7 @@ and equal_function_declarations
       body = _;
       free_names_in_body = _;
       result = result1;
-      result_equations = result_equations1;
+      result_env_extension = result_env_extension1;
       stub = stub1;
       dbg = dbg1;
       inline = inline1;
@@ -249,7 +249,7 @@ and equal_function_declarations
       body = _;
       free_names_in_body = _;
       result = result2;
-      result_equations = result_equations2;
+      result_env_extension = result_env_extension2;
       stub = stub2;
       dbg = dbg2;
       inline = inline2;
@@ -269,7 +269,7 @@ and equal_function_declarations
         params1 params2
       && Code_id.equal code_id1 code_id2
       && Misc.Stdlib.List.equal equal result1 result2
-      && equal_equations result_equations1 result_equations2
+      && equal_env_extension result_env_extension1 result_env_extension2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2
       && Pervasives.compare inline1 inline2 = 0
@@ -288,19 +288,19 @@ and equal_function_declarations
   | Non_inlinable (Some {
       params = params1;
       result = result1;
-      result_equations = result_equations1;
+      result_env_extension = result_env_extension1;
       direct_call_surrogate = direct_call_surrogate1;
     }),
     Non_inlinable (Some {
       params = params2;
       result = result2;
-      result_equations = result_equations2;
+      result_env_extension = result_env_extension2;
       direct_call_surrogate = direct_call_surrogate2;
     }) ->
     Misc.Stdlib.List.equal (fun param1 param2 -> equal param1 param2)
         params1 params2
       && Misc.Stdlib.List.equal equal result1 result2
-      && equal_equations result_equations1 result_equations2
+      && equal_env_extension result_env_extension1 result_env_extension2
       && Misc.Stdlib.Option.equal Closure_id.equal
         direct_call_surrogate1 direct_call_surrogate2
   | Inlinable _, Non_inlinable _
@@ -330,9 +330,9 @@ fun of_kind_naked_number1 of_kind_naked_number2 ->
   | Int64 _, _ -> false
   | Nativeint _, _ -> false
 
-and equal_discriminant_case ({ equations = equations1; } : discriminant_case)
-      ({ equations = equations2; } : discriminant_case) =
-  equal_equations equations1 equations2
+and equal_discriminant_case ({ env_extension = env_extension1; } : discriminant_case)
+      ({ env_extension = env_extension2; } : discriminant_case) =
+  equal_env_extension env_extension1 env_extension2
 
 and equal_of_kind_fabricated (of_kind_fabricated1 : of_kind_fabricated)
       (of_kind_fabricated2 : of_kind_fabricated) =
@@ -361,12 +361,12 @@ and equal_closure ({ function_decls = function_decls1; } : closure)
       ({ function_decls = function_decls2; } : closure) =
   equal_function_declarations function_decls1 function_decls2
 
-and equal_equations equations1 equations2 =
-  Equations.equal ~equal_type:equal equations1 equations2
+and equal_env_extension env_extension1 env_extension2 =
+  Typing_env_extension.equal ~equal_type:equal env_extension1 env_extension2
 
 let strictly_more_precise (t_env, t) ~than:(than_env, than) =
   (* The [bias_towards] choice is arbitrary here. *)
-  let meet, _equations =
+  let meet, _env_extension =
     meet ~bias_towards:(t_env, t) (than_env, than)
   in
   not (equal than meet)
@@ -455,7 +455,7 @@ end = struct
       | Join _ -> Unknown
 
   let create env (t : flambda_type) : t * (Name.t option) =
-    let t, canonical_name = Typing_environment0.resolve_aliases (env, t) in
+    let t, canonical_name = Typing_env0.resolve_aliases (env, t) in
     let (descr : descr) =
       match t.descr with
       | Value ty_value ->
@@ -659,7 +659,7 @@ type reification_result =
   | Invalid
 
 let reify env ~allow_free_variables t : reification_result =
-  let t, canonical_name = Typing_environment0.resolve_aliases (env, t) in
+  let t, canonical_name = Typing_env0.resolve_aliases (env, t) in
 (*
 Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   canonical_name;
@@ -680,7 +680,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     let try_name () : reification_result =
       match canonical_name with
       | None -> Cannot_reify
-      | Some name when Typing_environment0.is_existential env name ->
+      | Some name when Typing_env0.is_existential env name ->
         Cannot_reify
       | Some name ->
         match name with
@@ -906,7 +906,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     | Fabricated (Ok (Discriminant discriminants)) ->
       begin match Discriminant.Map.get_singleton discriminants with
       | None -> try_name ()
-      | Some (discriminant, { equations = _; }) ->
+      | Some (discriminant, { env_extension = _; }) ->
         Term (Simple.discriminant discriminant, t)
       end
     | Fabricated Unknown -> try_name ()
@@ -944,7 +944,7 @@ let prove_tagged_immediate env t
   | Fabricated _ -> wrong_kind ()
 
 type tagged_immediate_as_discriminants_proof =
-  | By_discriminant of Equations.t Discriminant.Map.t
+  | By_discriminant of Typing_env_extension.t Discriminant.Map.t
   | Answer_given_by of Name.t
 
 let prove_tagged_immediate_as_discriminants env t
@@ -987,7 +987,7 @@ let prove_tagged_immediate_as_discriminants env t
                 match Discriminant.create imm with
                 | None -> bad_discriminant ()
                 | Some discr ->
-                  Discriminant.Map.add discr imm_case.equations by_discr)
+                  Discriminant.Map.add discr imm_case.env_extension by_discr)
               imms
               Discriminant.Map.empty
           in
@@ -1768,7 +1768,7 @@ Format.eprintf "SD check: %a vs %a\n%!" print t1 print t2;
         print t2
 
 let switch_arms env t ~arms =
-  let no_equations = Equations.create () in
+  let no_env_extension = Typing_env_extension.create () in
   let wrong_kind () =
     Misc.fatal_errorf
       "Wrong kind for something claimed to be a discriminant: %a"
@@ -1776,7 +1776,7 @@ let switch_arms env t ~arms =
   in
   let unknown () =
     Discriminant.Map.fold (fun arm cont result ->
-        Discriminant.Map.add arm (no_equations, cont) result)
+        Discriminant.Map.add arm (no_env_extension, cont) result)
       arms
       Discriminant.Map.empty
   in
@@ -1792,8 +1792,8 @@ let switch_arms env t ~arms =
       Discriminant.Map.fold (fun arm cont result ->
           match Discriminant.Map.find arm discriminant_map with
           | exception Not_found -> result
-          | { equations; } ->
-            Discriminant.Map.add arm (equations, cont) result)
+          | { env_extension; } ->
+            Discriminant.Map.add arm (env_extension, cont) result)
         arms
         Discriminant.Map.empty
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()
@@ -1835,8 +1835,8 @@ let prove_unboxable env ~unboxee_ty : unboxable_proof =
               | Proved _ty_naked_number -> Boxed_nativeint
               | Invalid | Unknown -> Cannot_unbox
 
-module Typing_environment = struct
-  include Typing_environment0
+module Typing_env = struct
+  include Typing_env0
 
   let diff t1 t2 = diff ~strictly_more_precise t1 t2
 end

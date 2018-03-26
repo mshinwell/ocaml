@@ -18,7 +18,7 @@
 
 module type S = sig
   type typing_environment
-  type equations
+  type env_extension
   type flambda_type
   type t_in_context
   type 'a ty
@@ -121,19 +121,19 @@ module type S = sig
 
   val aliases : t -> canonical_name:Name.t -> Name.Set.t
 
-  (** By using a [meet] operation add the given equations into the given
-      typing environment. *)
-  val add_equations : t -> equations -> t
-
-  (** Create an equations structure whose typing judgements are those of
+  (** By using a [meet] operation add the given environment extension into
       the given typing environment. *)
-  val to_equations : t -> equations
+  val add_env_extension : t -> env_extension -> t
+
+  (** Create an env_extension structure whose typing judgements are those of
+      the given typing environment. *)
+  val to_env_extension : t -> env_extension
 
   val diff
      : strictly_more_precise:(t_in_context -> than:t_in_context -> bool)
     -> t
     -> t
-    -> equations
+    -> env_extension
 
   val restrict_names_to_those_occurring_in_types
      : t

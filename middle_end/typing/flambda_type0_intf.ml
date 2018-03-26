@@ -76,7 +76,7 @@ module type S = sig
 
   type typing_environment
 
-  type equations
+  type env_extension
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
@@ -136,12 +136,12 @@ module type S = sig
     | String of String_info.Set.t
 
   and immediate_case = private {
-    equations : equations;
+    env_extension : env_extension;
   }
  
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
-    equations : equations;
+    env_extension : env_extension;
     (* CR mshinwell: We should note explicitly that these are logical fields
        (I think this only matters for float arrays on 32-bit targets) *)
     fields : t mutable_or_immutable array;
@@ -210,7 +210,7 @@ module type S = sig
     result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)
-    result_equations : equations;
+    result_env_extension : env_extension;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -231,7 +231,7 @@ module type S = sig
   and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
-    result_equations : equations;
+    result_env_extension : env_extension;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -239,7 +239,7 @@ module type S = sig
     | Non_inlinable of non_inlinable_function_declarations option
     | Inlinable of inlinable_function_declaration
 
-  (* CR mshinwell: should the closure types contain equations? *)
+  (* CR mshinwell: should the closure types contain env_extension? *)
 
   and closures_entry = private {
     set_of_closures : ty_fabricated;
@@ -262,7 +262,7 @@ module type S = sig
   (** Judgements known to hold if a particular value has been shown to match
       some discriminant. *)
   and discriminant_case = private {
-    equations : equations;
+    env_extension : env_extension;
   }
 
   and of_kind_fabricated = private
@@ -305,7 +305,7 @@ module type S = sig
     -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
-  module Typing_environment0 : sig
+  module Typing_env0 : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
         via the [resolver], required to import types from .cmx files (or
@@ -314,23 +314,23 @@ module type S = sig
         Typing environments must be closed.
     *)
 
-    include Typing_environment0_intf.S
+    include Typing_env0_intf.S
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type flambda_type := flambda_type
       with type t_in_context := t_in_context
   end
 
-  module Equations : sig
-    include Equations_intf.S
-      with type equations := equations
+  module Typing_env_extension : sig
+    include Typing_env_extension_intf.S
+      with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
   end
 
   (** Annotation for functions that may require examination of the current
       environment (in particular to resolve [Type] or [Equals] aliases). *)
-  type 'a type_accessor = Typing_environment0.t -> 'a
+  type 'a type_accessor = Typing_env0.t -> 'a
 
   (** Print a type to the given formatter. *)
   val print : Format.formatter -> t -> unit
@@ -416,7 +416,7 @@ module type S = sig
   (** A type representing a set of tagged immediates combined with typing
       judgements that will be used if the set contains, or is subsequently
       refined to contain, only a unique element. *)
-  val these_tagged_immediates_with_envs : equations Immediate.Map.t -> t
+  val these_tagged_immediates_with_envs : env_extension Immediate.Map.t -> t
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
@@ -454,14 +454,14 @@ module type S = sig
       a value of type [t]. *)
   val this_discriminant_as_ty_fabricated : Discriminant.t -> ty_fabricated
 
-  (** The given block discriminants coupled with the equations that hold if the
+  (** The given block discriminants coupled with the env_extension that hold if the
       corresponding block can be shown to have one of the discriminants. *)
-  val these_discriminants : equations Discriminant.Map.t -> t
+  val these_discriminants : env_extension Discriminant.Map.t -> t
 
   (** Like [these_discriminants], but returns the [ty_fabricated], rather than
       a value of type [t]. *)
   val these_discriminants_as_ty_fabricated
-     : equations Discriminant.Map.t
+     : env_extension Discriminant.Map.t
     -> ty_fabricated
 
   (** Any discriminant. *)
@@ -543,7 +543,7 @@ module type S = sig
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list
-    -> result_equations:equations
+    -> result_env_extension:env_extension
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -560,7 +560,7 @@ module type S = sig
   val create_non_inlinable_function_declaration
      : params:t list
     -> result:t list
-    -> result_equations:equations
+    -> result_env_extension:env_extension
     -> direct_call_surrogate:Closure_id.t option
     -> function_declarations
 
@@ -630,12 +630,10 @@ module type S = sig
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
 
-  (** Push judgements from the given equations down to the uppermost places in
+  (** Push judgements from the given env_extension down to the uppermost places in
       the type where such information can be hold (i.e. underneath tagged
-      immediate, block and tag maps).
-      Since a set of [equations] does not have to be closed, the caller must
-      provide an environment. *)
-  val add_equations : t_in_context -> Equations.t -> t
+      immediate, block and tag maps). *)
+  val add_env_extension : Typing_env_extension.t -> t
 
   (** Least upper bound of two types. *)
   val join : t_in_context -> t_in_context -> t
@@ -649,5 +647,5 @@ module type S = sig
   val meet
      : bias_towards:t_in_context
     -> t_in_context
-    -> t * Equations.t
+    -> t * Typing_env_extension.t
 end

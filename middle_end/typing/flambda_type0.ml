@@ -26,7 +26,7 @@ module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
-module Real_typing_environment0 = Typing_environment0
+module Real_typing_environment0 = Typing_env0
 module Real_meet_and_join_value = Meet_and_join_value
 module Real_meet_and_join_naked_number = Meet_and_join_naked_number
 module Real_meet_and_join_fabricated = Meet_and_join_fabricated
@@ -43,18 +43,18 @@ end) = struct
   let is_empty_typing_environment (env : typing_environment) =
     Name.Map.is_empty env.names_to_types
 
-  let is_empty_equations (equations : equations) =
-    match equations.typing_judgements with
+  let is_empty_env_extension (env_extension : env_extension) =
+    match env_extension.typing_judgements with
     | None -> true
     | Some typing_judgements ->
       is_empty_typing_environment typing_judgements
 
-  let create_equations () =
+  let create_env_extension () =
     { typing_judgements = None;
     }
 
-  let domain_equations (equations : equations) =
-    match equations.typing_judgements with
+  let domain_env_extension (env_extension : env_extension) =
+    match env_extension.typing_judgements with
     | None -> Name.Set.empty
     | Some typing_judgements -> Name.Map.keys typing_judgements.names_to_types
 
@@ -136,9 +136,9 @@ end) = struct
         print_ty_naked_number i
 
   let rec print_immediate_case ~cache ppf
-        ({ equations; } : immediate_case) =
-    Format.fprintf ppf "@[<hov 1>(equations@ %a)@]"
-      (print_equations_with_cache ~cache) equations
+        ({ env_extension; } : immediate_case) =
+    Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
+      (print_env_extension_with_cache ~cache) env_extension
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
@@ -147,15 +147,15 @@ end) = struct
         (print_mutable_or_immutable (print_with_cache ~cache)))
       (Array.to_list fields)
 
-  and print_singleton_block ~cache ppf { equations; fields; } =
-    let no_equations = is_empty_equations equations in
-    if no_equations then
+  and print_singleton_block ~cache ppf { env_extension; fields; } =
+    let no_env_extension = is_empty_env_extension env_extension in
+    if no_env_extension then
       print_fields ~cache ppf fields
     else
       Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(equations@ %a)@]@ \
+          @[<hov 1>(env_extension@ %a)@]@ \
           @[<hov 1>(fields@ %a)@])@]"
-        (print_equations_with_cache ~cache) equations
+        (print_env_extension_with_cache ~cache) env_extension
         (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Blocks { by_length; }) : block_cases) =
@@ -166,12 +166,12 @@ end) = struct
         (Targetint.OCaml.Map.print (print_singleton_block ~cache)) by_length
 
   and print_immediates ~cache ppf cases =
-    let no_equations =
-      Immediate.Map.for_all (fun _imm ({ equations; } : immediate_case) ->
-          is_empty_equations equations)
+    let no_env_extension =
+      Immediate.Map.for_all (fun _imm ({ env_extension; } : immediate_case) ->
+          is_empty_env_extension env_extension)
         cases
     in
-    if no_equations then
+    if no_env_extension then
       Immediate.Set.print ppf (Immediate.Map.keys cases)
     else
       Immediate.Map.print (print_immediate_case ~cache) ppf cases
@@ -192,8 +192,8 @@ end) = struct
           when Tag.Map.is_empty blocks
             && not (Immediate.Map.is_empty immediates)
             && Immediate.Map.for_all
-                 (fun _imm ({ equations; } : immediate_case) ->
-                   is_empty_equations equations)
+                 (fun _imm ({ env_extension; } : immediate_case) ->
+                   is_empty_env_extension env_extension)
                  immediates ->
         Format.fprintf ppf "@[%a@]"
           Immediate.Set.print (Immediate.Map.keys immediates)
@@ -259,7 +259,7 @@ end) = struct
           @[<hov 1>(body@ %a)@]@ \
           @[<hov 1>(free_names_in_body@ %a)@]@ \
           @[<hov 1>(result@ (%a))@]@ \
-          @[<hov 1>(result_equations@ (%a))@]@ \
+          @[<hov 1>(result_env_extension@ (%a))@]@ \
           @[<hov 1>(stub@ %b)@]@ \
           @[<hov 1>(dbg@ %a)@]@ \
           @[<hov 1>(inline@ %a)@]@ \
@@ -284,7 +284,7 @@ end) = struct
           (fun ppf ty ->
             Format.fprintf ppf "%a"
               print ty)) decl.result
-        (print_equations_with_cache ~cache) decl.result_equations
+        (print_env_extension_with_cache ~cache) decl.result_env_extension
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -341,20 +341,20 @@ end) = struct
     Format.fprintf ppf "@[<hov 1>(Closure (function_decls@ %a))@]"
       (print_function_declarations ~cache) closure.function_decls
 
-  and print_discriminant_case ~cache ppf ({ equations; } : discriminant_case) =
-    Format.fprintf ppf "@[<hov 1>(equations@ %a)@]"
-      (print_equations_with_cache ~cache) equations
+  and print_discriminant_case ~cache ppf ({ env_extension; } : discriminant_case) =
+    Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
+      (print_env_extension_with_cache ~cache) env_extension
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
     | Discriminant discriminant_map ->
-      let no_equations =
+      let no_env_extension =
         Discriminant.Map.for_all
-          (fun _ ({ equations; } : discriminant_case) ->
-            is_empty_equations equations)
+          (fun _ ({ env_extension; } : discriminant_case) ->
+            is_empty_env_extension env_extension)
           discriminant_map
       in
-      if not no_equations then
+      if not no_env_extension then
         Format.fprintf ppf "@[<hov 1>(Discriminant@ %a)@]"
           (Discriminant.Map.print (print_discriminant_case ~cache))
           discriminant_map
@@ -442,8 +442,8 @@ end) = struct
             Freshening.print existential_freshening
             (Name.Map.print Name.Set.print) canonical_names_to_aliases)
 
-  and print_equations_with_cache ~cache ppf equations =
-    match equations.typing_judgements with
+  and print_env_extension_with_cache ~cache ppf env_extension =
+    match env_extension.typing_judgements with
     | None -> Format.pp_print_string ppf "()"
     | Some typing_judgements ->
       print_typing_environment_with_cache ~cache ppf typing_judgements
@@ -452,7 +452,7 @@ end) = struct
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
       ppf env
 
-  let print_equations ppf { typing_judgements; } =
+  let print_env_extension ppf { typing_judgements; } =
     match typing_judgements with
     | None -> Format.pp_print_string ppf "()"
     | Some typing_judgements ->
@@ -499,7 +499,7 @@ end) = struct
               Targetint.OCaml.Map.fold
                 (fun _length (singleton : singleton_block) acc ->
                   let acc =
-                    free_names_of_equations singleton.equations acc
+                    free_names_of_env_extension singleton.env_extension acc
                   in
                   Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
                       match field with
@@ -516,7 +516,7 @@ end) = struct
         | Unknown -> acc
         | Known immediates ->
           Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
-              free_names_of_equations case.equations acc)
+              free_names_of_env_extension case.env_extension acc)
             immediates
             acc
       in
@@ -548,8 +548,8 @@ end) = struct
     match of_kind with
     | Discriminant discriminant_map ->
       Discriminant.Map.fold
-        (fun _discriminant ({ equations; } : discriminant_case) acc ->
-          free_names_of_equations equations acc)
+        (fun _discriminant ({ env_extension; } : discriminant_case) acc ->
+          free_names_of_env_extension env_extension acc)
         discriminant_map
         acc
     | Set_of_closures set ->
@@ -579,11 +579,11 @@ end) = struct
           Name.Set.empty
           decl.result
       in
-      let result_equations_domain = domain_equations decl.result_equations in
+      let result_env_extension_domain = domain_env_extension decl.result_env_extension in
       let acc =
         Name.Set.union acc
           (Name.Set.diff
-            (Name.Set.diff free_names_result result_equations_domain)
+            (Name.Set.diff free_names_result result_env_extension_domain)
             param_names)
       in
       List.fold_left (fun acc (_param, t) ->
@@ -615,7 +615,7 @@ end) = struct
     Name.Set.union free_names acc
 *)
 
-  and free_names_of_equations { typing_judgements; } acc =
+  and free_names_of_env_extension { typing_judgements; } acc =
     match typing_judgements with
     | None -> acc
     | Some typing_judgements ->
@@ -1201,7 +1201,7 @@ result
       let immediates =
         Immediate.Set.fold (fun imm map ->
             let case : immediate_case =
-              { equations = create_equations ();
+              { env_extension = create_env_extension ();
               }
             in
             Immediate.Map.add imm case map)
@@ -1228,8 +1228,8 @@ result
       bottom (K.value ())
     else
       let immediates =
-        Immediate.Map.map (fun equations : immediate_case ->
-            { equations; })
+        Immediate.Map.map (fun env_extension : immediate_case ->
+            { env_extension; })
           env_map
       in
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
@@ -1265,25 +1265,25 @@ result
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_discriminants_as_ty_fabricated discriminants_to_equations
+  let these_discriminants_as_ty_fabricated discriminants_to_env_extension
         : ty_fabricated =
     let discriminant_map =
-      Discriminant.Map.map (fun equations : discriminant_case ->
-          { equations; })
-        discriminants_to_equations
+      Discriminant.Map.map (fun env_extension : discriminant_case ->
+          { env_extension; })
+        discriminants_to_env_extension
     in
     No_alias (Join [Discriminant discriminant_map])
 
-  let these_discriminants discriminants_to_equations : t =
+  let these_discriminants discriminants_to_env_extension : t =
     { descr = Fabricated (
-        these_discriminants_as_ty_fabricated discriminants_to_equations);
+        these_discriminants_as_ty_fabricated discriminants_to_env_extension);
       phantom = None;
     }
 
   let this_discriminant_as_ty_fabricated discriminant =
     let discriminant_map =
       Discriminant.Map.singleton discriminant
-        ({ equations = create_equations (); } : discriminant_case)
+        ({ env_extension = create_env_extension (); } : discriminant_case)
     in
     No_alias (Join [Discriminant discriminant_map])
 
@@ -1342,7 +1342,7 @@ result
         (fun _index : _ mutable_or_immutable -> Mutable)
     in
     let singleton_block : singleton_block =
-      { equations = create_equations ();
+      { env_extension = create_env_extension ();
         fields;
       }
     in
@@ -1383,7 +1383,7 @@ result
           fields
       in
       let singleton_block : singleton_block =
-        { equations = create_equations ();
+        { env_extension = create_env_extension ();
           fields;
         }
       in
@@ -1429,7 +1429,7 @@ result
           fields
       in
       let singleton_block : singleton_block =
-        { equations = create_equations ();
+        { env_extension = create_env_extension ();
           fields;
         }
       in
@@ -1468,7 +1468,7 @@ result
           fields
       in
       let singleton_block : singleton_block =
-        { equations = create_equations ();
+        { env_extension = create_env_extension ();
           fields;
         }
       in
@@ -1573,7 +1573,7 @@ result
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param
-        ~params ~body ~result ~result_equations ~stub ~dbg ~inline
+        ~params ~body ~result ~result_env_extension ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
         ~my_closure : function_declarations =
     Inlinable {
@@ -1585,7 +1585,7 @@ result
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      result_equations;
+      result_env_extension;
       result;
       stub;
       dbg;
@@ -1599,12 +1599,12 @@ result
     }
 
   let create_non_inlinable_function_declaration ~params ~result
-        ~result_equations ~direct_call_surrogate
+        ~result_env_extension ~direct_call_surrogate
         : function_declarations =
     let decl : non_inlinable_function_declarations =
       { params;
         result;
-        result_equations;
+        result_env_extension;
         direct_call_surrogate;
       }
     in
@@ -1661,21 +1661,21 @@ result
          include Meet_and_join_spec_intf.S
            with type flambda_type := flambda_type
            with type typing_environment := typing_environment
-           with type equations := equations
+           with type env_extension := env_extension
            with type 'a ty := 'a ty
        end)
     -> sig
          include Meet_and_join_intf.S
            with type of_kind_foo := S.of_kind_foo
            with type typing_environment := T.typing_environment
-           with type equations := equations
+           with type env_extension := env_extension
            with type 'a ty := 'a ty
        end =
   functor (S : sig
     include Meet_and_join_spec_intf.S
       with type flambda_type := flambda_type
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end) -> struct
     let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
@@ -1730,7 +1730,7 @@ result
       if env1 == env2 && or_alias1 == or_alias2 then or_alias1
       else
         let unknown_or_join1, canonical_name1 =
-          Typing_environment0.
+          Typing_env0.
               resolve_aliases_and_squash_unresolved_names_on_ty'
             env1
             ~kind:S.kind
@@ -1740,7 +1740,7 @@ result
             or_alias1
         in
         let unknown_or_join2, canonical_name2 =
-          Typing_environment0.
+          Typing_env0.
               resolve_aliases_and_squash_unresolved_names_on_ty'
             env2
             ~kind:S.kind
@@ -1782,38 +1782,38 @@ result
     let rec meet_on_unknown_or_join env1 env2
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join * equations =
+          : S.of_kind_foo unknown_or_join * env_extension =
       let resolver = env1.resolver in
-      if env1 == env2 && ou1 == ou2 then ou1, Equations.create ()
+      if env1 == env2 && ou1 == ou2 then ou1, Typing_env_extension.create ()
       else
         match ou1, ou2 with
-        | Unknown, ou2 -> ou2, Equations.create ()
-        | ou1, Unknown -> ou1, Equations.create ()
+        | Unknown, ou2 -> ou2, Typing_env_extension.create ()
+        | ou1, Unknown -> ou1, Typing_env_extension.create ()
         | Join of_kind_foos1, Join of_kind_foos2 ->
-          let of_kind_foos, equations_from_meet =
+          let of_kind_foos, env_extension_from_meet =
             List.fold_left
-              (fun (of_kind_foos, equations_from_meet) of_kind_foo ->
-                let new_equations_from_meet = ref (Equations.create ()) in
+              (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
+                let new_env_extension_from_meet = ref (Typing_env_extension.create ()) in
                 let of_kind_foos =
                   Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                       let meet =
                         S.meet_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
                       in
                       match meet with
-                      | Ok (of_kind_foo, new_equations_from_meet') ->
-                        new_equations_from_meet :=
-                          Meet_and_join.meet_equations ~resolver
-                            new_equations_from_meet' !new_equations_from_meet;
+                      | Ok (of_kind_foo, new_env_extension_from_meet') ->
+                        new_env_extension_from_meet :=
+                          Meet_and_join.meet_env_extension ~resolver
+                            new_env_extension_from_meet' !new_env_extension_from_meet;
                         Some of_kind_foo
                       | Bottom -> None)
                     of_kind_foos
                 in
-                let equations_from_meet =
-                  Meet_and_join.meet_equations ~resolver
-                    equations_from_meet !new_equations_from_meet;
+                let env_extension_from_meet =
+                  Meet_and_join.meet_env_extension ~resolver
+                    env_extension_from_meet !new_env_extension_from_meet;
                 in
-                of_kind_foos, equations_from_meet)
-              (of_kind_foos2, Equations.create ())
+                of_kind_foos, env_extension_from_meet)
+              (of_kind_foos2, Typing_env_extension.create ())
               of_kind_foos1
           in
           let same_as input_of_kind_foos =
@@ -1822,20 +1822,20 @@ result
                      input_of_kind_foo == of_kind_foo)
                    input_of_kind_foos of_kind_foos
           in
-          if same_as of_kind_foos1 then ou1, equations_from_meet
-          else if same_as of_kind_foos2 then ou2, equations_from_meet
-          else Join of_kind_foos, equations_from_meet
+          if same_as of_kind_foos1 then ou1, env_extension_from_meet
+          else if same_as of_kind_foos2 then ou2, env_extension_from_meet
+          else Join of_kind_foos, env_extension_from_meet
 
     and meet_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty * equations =
+          : S.of_kind_foo ty * env_extension =
       let resolver = env1.resolver in
       if env1 == env2 && or_alias1 == or_alias2 then begin
-        or_alias1, Equations.create ()
+        or_alias1, Typing_env_extension.create ()
       end else begin
         let unknown_or_join1, canonical_name1 =
-          Typing_environment0.
+          Typing_env0.
               resolve_aliases_and_squash_unresolved_names_on_ty'
             env1
             ~kind:S.kind
@@ -1845,7 +1845,7 @@ result
             or_alias1
         in
         let unknown_or_join2, canonical_name2 =
-          Typing_environment0.
+          Typing_env0.
               resolve_aliases_and_squash_unresolved_names_on_ty'
             env2
             ~kind:S.kind
@@ -1858,141 +1858,141 @@ result
            free names in the corresponding type. *)
         match canonical_name1, canonical_name2 with
         | Some name1, Some name2 when Name.equal name1 name2 ->
-          Equals name1, Equations.create ()
+          Equals name1, Typing_env_extension.create ()
         | Some name1, Some name2 ->
           (* N.B. This needs to respect the [bias_towards] argument on the
              [meet] function exposed in the interface (below). *)
-          let level1 = Typing_environment0.scope_level env1 name1 in
-          let level2 = Typing_environment0.scope_level env2 name2 in
-          let meet_unknown_or_join, equations_from_meet =
+          let level1 = Typing_env0.scope_level env1 name1 in
+          let level2 = Typing_env0.scope_level env2 name2 in
+          let meet_unknown_or_join, env_extension_from_meet =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let equations_from_meet =
-            Equations.add_or_replace ~resolver equations_from_meet
+          let env_extension_from_meet =
+            Typing_env_extension.add_or_replace ~resolver env_extension_from_meet
               name1 level1 meet_ty
           in
-          let equations_from_meet =
-            Equations.add_or_replace ~resolver equations_from_meet
+          let env_extension_from_meet =
+            Typing_env_extension.add_or_replace ~resolver env_extension_from_meet
               name2 level2 (S.to_type (Equals name1))
           in
-          Equals name1, equations_from_meet
+          Equals name1, env_extension_from_meet
         | Some name1, None ->
-          let level1 = Typing_environment0.scope_level env1 name1 in
-          let meet_unknown_or_join, equations_from_meet =
+          let level1 = Typing_env0.scope_level env1 name1 in
+          let meet_unknown_or_join, env_extension_from_meet =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let equations_from_meet =
-            Equations.add_or_replace ~resolver equations_from_meet
+          let env_extension_from_meet =
+            Typing_env_extension.add_or_replace ~resolver env_extension_from_meet
               name1 level1 meet_ty
           in
-          Equals name1, equations_from_meet
+          Equals name1, env_extension_from_meet
         | None, Some name2 ->
-          let level2 = Typing_environment0.scope_level env2 name2 in
-          let meet_unknown_or_join, equations_from_meet =
+          let level2 = Typing_env0.scope_level env2 name2 in
+          let meet_unknown_or_join, env_extension_from_meet =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let equations_from_meet =
-            Equations.add_or_replace ~resolver equations_from_meet
+          let env_extension_from_meet =
+            Typing_env_extension.add_or_replace ~resolver env_extension_from_meet
               name2 level2 meet_ty
           in
-          Equals name2, equations_from_meet
+          Equals name2, env_extension_from_meet
         | None, None ->
-          let unknown_or_join, equations_from_meet =
+          let unknown_or_join, env_extension_from_meet =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           if unknown_or_join == unknown_or_join1 then begin
             assert (match or_alias1 with No_alias _ -> true | _ -> false);
-            or_alias1, equations_from_meet
+            or_alias1, env_extension_from_meet
           end else if unknown_or_join == unknown_or_join2 then begin
             assert (match or_alias2 with No_alias _ -> true | _ -> false);
-            or_alias2, equations_from_meet
+            or_alias2, env_extension_from_meet
           end else begin
-            No_alias unknown_or_join, equations_from_meet
+            No_alias unknown_or_join, env_extension_from_meet
           end
       end
   end and Meet_and_join : sig
     include Meet_and_join_intf.S_for_types
       with type t_in_context := t_in_context
-      with type equations := equations
+      with type env_extension := env_extension
       with type flambda_type := flambda_type
   end = struct
-    let meet ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t)) : t * equations =
-      if env1 == env2 && t1 == t2 then t1, Equations.create ()
+    let meet ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t)) : t * env_extension =
+      if env1 == env2 && t1 == t2 then t1, Typing_env_extension.create ()
       else begin
-        Typing_environment0.invariant env1;
-        Typing_environment0.invariant env2;
+        Typing_env0.invariant env1;
+        Typing_env0.invariant env2;
         ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
-        let descr, equations_from_meet =
+        let descr, env_extension_from_meet =
           match t1.descr, t2.descr with
           | Value ty_value1, Value ty_value2 ->
-            let ty_value, equations_from_meet =
+            let ty_value, env_extension_from_meet =
               Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
             in
-            if ty_value == ty_value1 then t1.descr, equations_from_meet
-            else if ty_value == ty_value2 then t2.descr, equations_from_meet
-            else Value ty_value, equations_from_meet
+            if ty_value == ty_value1 then t1.descr, env_extension_from_meet
+            else if ty_value == ty_value2 then t2.descr, env_extension_from_meet
+            else Value ty_value, env_extension_from_meet
           | Naked_number (ty_naked_number1, kind1),
               Naked_number (ty_naked_number2, kind2) ->
             let module N = K.Naked_number in
             begin match kind1, kind2 with
             | N.Naked_immediate, N.Naked_immediate ->
-              let ty_naked_number, equations_from_meet =
+              let ty_naked_number, env_extension_from_meet =
                 Meet_and_join_naked_immediate.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_immediate),
-                equations_from_meet
+                env_extension_from_meet
             | N.Naked_float, N.Naked_float ->
-              let ty_naked_number, equations_from_meet =
+              let ty_naked_number, env_extension_from_meet =
                 Meet_and_join_naked_float.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_float),
-                equations_from_meet
+                env_extension_from_meet
             | N.Naked_int32, N.Naked_int32 ->
-              let ty_naked_number, equations_from_meet =
+              let ty_naked_number, env_extension_from_meet =
                 Meet_and_join_naked_int32.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int32),
-                equations_from_meet
+                env_extension_from_meet
             | N.Naked_int64, N.Naked_int64 ->
-              let ty_naked_number, equations_from_meet =
+              let ty_naked_number, env_extension_from_meet =
                 Meet_and_join_naked_int64.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int64),
-                equations_from_meet
+                env_extension_from_meet
             | N.Naked_nativeint, N.Naked_nativeint ->
-              let ty_naked_number, equations_from_meet =
+              let ty_naked_number, env_extension_from_meet =
                 Meet_and_join_naked_nativeint.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_nativeint),
-                equations_from_meet
+                env_extension_from_meet
             | _, _ ->
               Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
                 print t1
                 print t2
             end
           | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-            let ty_fabricated, equations_from_meet =
+            let ty_fabricated, env_extension_from_meet =
               Meet_and_join_fabricated.meet_ty env1 env2
                 ty_fabricated1 ty_fabricated2
             in
             if ty_fabricated == ty_fabricated1 then
-              t1.descr, equations_from_meet
+              t1.descr, env_extension_from_meet
             else if ty_fabricated == ty_fabricated2 then
-              t2.descr, equations_from_meet
+              t2.descr, env_extension_from_meet
             else
-              Fabricated ty_fabricated, equations_from_meet
+              Fabricated ty_fabricated, env_extension_from_meet
           | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
               print t1
@@ -2006,21 +2006,21 @@ result
         let free_names_in_t =
           Name_occurrences.everything (free_names t)
         in
-        let names_free_in_equations =
-          Equations.fold equations_from_meet ~init:Name.Set.empty
-            ~f:(fun names_free_in_equations _name _scope_level t ->
+        let names_free_in_env_extension =
+          Typing_env_extension.fold env_extension_from_meet ~init:Name.Set.empty
+            ~f:(fun names_free_in_env_extension _name _scope_level t ->
               let free_names = free_names_set t in
-              Name.Set.union free_names names_free_in_equations)
+              Name.Set.union free_names names_free_in_env_extension)
         in
-        let names_bound_by_equations =
-          Equations.domain equations_from_meet
+        let names_bound_by_env_extension =
+          Typing_env_extension.domain env_extension_from_meet
         in
         let required_to_close =
-          Name.Set.diff (Name.Set.union free_names_in_t names_free_in_equations)
-            names_bound_by_equations
+          Name.Set.diff (Name.Set.union free_names_in_t names_free_in_env_extension)
+            names_bound_by_env_extension
         in
-        let equations_from_meet =
-          Name.Set.fold (fun name equations_from_meet ->
+        let env_extension_from_meet =
+          Name.Set.fold (fun name env_extension_from_meet ->
               let level, ty =
                 match Name.Map.find name env1.names_to_types with
                 | exception Not_found ->
@@ -2036,12 +2036,12 @@ result
               in
               let kind = kind ty in
               let ty = unknown kind in
-              Equations.add ~resolver:env1.resolver equations_from_meet
+              Typing_env_extension.add ~resolver:env1.resolver env_extension_from_meet
                 name level ty)
             required_to_close
-            equations_from_meet
+            env_extension_from_meet
         in
-        t, equations_from_meet
+        t, env_extension_from_meet
       end
 
     let join (env1, (t1 : t)) (env2, (t2 : t)) =
@@ -2112,11 +2112,11 @@ result
         { t1 with descr; }
       end
 
-    let meet_or_join_equations ~resolver ~meet_or_join
-          equations1 equations2 =
+    let meet_or_join_env_extension ~resolver ~meet_or_join
+          env_extension1 env_extension2 =
       let typing_judgements =
-        let env1 = Equations.to_typing_environment ~resolver equations1 in
-        let env2 = Equations.to_typing_environment ~resolver equations2 in
+        let env1 = Typing_env_extension.to_typing_environment ~resolver env_extension1 in
+        let env2 = Typing_env_extension.to_typing_environment ~resolver env_extension2 in
         meet_or_join env1 env2
       in
 (*
@@ -2138,18 +2138,18 @@ result
 *)
       { typing_judgements = Some typing_judgements; }
 
-    let meet_equations ~resolver equations1 equations2 =
-      meet_or_join_equations ~resolver ~meet_or_join:Typing_environment0.meet
-        equations1 equations2
+    let meet_env_extension ~resolver env_extension1 env_extension2 =
+      meet_or_join_env_extension ~resolver ~meet_or_join:Typing_env0.meet
+        env_extension1 env_extension2
 
-    let join_equations ~resolver equations1 equations2 =
-      meet_or_join_equations ~resolver ~meet_or_join:Typing_environment0.join
-        equations1 equations2
+    let join_env_extension ~resolver env_extension1 env_extension2 =
+      meet_or_join_env_extension ~resolver ~meet_or_join:Typing_env0.join
+        env_extension1 env_extension2
   end and Meet_and_join_value : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := of_kind_value
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Real_meet_and_join_value.Make (struct
       include T
@@ -2166,8 +2166,8 @@ result
     (Meet_and_join_naked_nativeint)
     (Meet_and_join_fabricated)
     (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+    (Typing_env0)
+    (Typing_env_extension)
   and Meet_and_join_naked_number : sig
     (* CR mshinwell: Deal with this signature somehow *)
 
@@ -2175,7 +2175,7 @@ result
       include Meet_and_join_intf.S
         with type of_kind_foo := Immediate.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
-        with type equations := equations
+        with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
 
@@ -2184,7 +2184,7 @@ result
         with type of_kind_foo :=
           Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
-        with type equations := equations
+        with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
 
@@ -2192,7 +2192,7 @@ result
       include Meet_and_join_intf.S
         with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
-        with type equations := equations
+        with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
 
@@ -2200,7 +2200,7 @@ result
       include Meet_and_join_intf.S
         with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
-        with type equations := equations
+        with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
 
@@ -2208,7 +2208,7 @@ result
       include Meet_and_join_intf.S
         with type of_kind_foo := Targetint.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
-        with type equations := equations
+        with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
   end = Real_meet_and_join_naked_number.Make (struct
@@ -2222,13 +2222,13 @@ result
     end)
     (Make_meet_and_join)
     (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
+    (Typing_env0)
+    (Typing_env_extension)
   and Meet_and_join_naked_immediate : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Immediate.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Meet_and_join_naked_number.Naked_immediate
   and Meet_and_join_naked_float : sig
@@ -2237,35 +2237,35 @@ result
     include Meet_and_join_intf.S
       with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Meet_and_join_naked_number.Naked_float
   and Meet_and_join_naked_int32 : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Int32.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Meet_and_join_naked_number.Naked_int32
   and Meet_and_join_naked_int64 : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Int64.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Meet_and_join_naked_number.Naked_int64
   and Meet_and_join_naked_nativeint : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := Targetint.Set.t of_kind_naked_number
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Meet_and_join_naked_number.Naked_nativeint
   and Meet_and_join_fabricated : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := of_kind_fabricated
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type 'a ty := 'a ty
   end = Real_meet_and_join_fabricated.Make (struct
       include T
@@ -2282,12 +2282,12 @@ result
     (Make_meet_and_join)
     (Meet_and_join_value)
     (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
-  and Typing_environment0 : sig
-    include Typing_environment0_intf.S
+    (Typing_env0)
+    (Typing_env_extension)
+  and Typing_env0 : sig
+    include Typing_env0_intf.S
       with type typing_environment := typing_environment
-      with type equations := equations
+      with type env_extension := env_extension
       with type flambda_type := flambda_type
       with type t_in_context := t_in_context
       with type 'a ty = 'a ty
@@ -2295,7 +2295,7 @@ result
   end = Real_typing_environment0.Make (struct
     include T
 
-    module Equations = Equations
+    module Typing_env_extension = Typing_env_extension
 
     let is_empty_typing_environment = is_empty_typing_environment
     let meet = Meet_and_join.meet
@@ -2309,28 +2309,28 @@ result
     let free_names = free_names
     let print_typing_environment = print_typing_environment
     let print = print
-  end) and Equations : sig
-    include Equations_intf.S
-      with type equations := equations
+  end) and Typing_env_extension : sig
+    include Typing_env_extension_intf.S
+      with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
   end = struct
-    type t = equations
+    type t = env_extension
 
-    let create = create_equations
+    let create = create_env_extension
 
-    let singleton_equations ~resolver name scope_level ty =
+    let singleton_env_extension ~resolver name scope_level ty =
       { typing_judgements =
-          Some (Typing_environment0.singleton0 ~resolver name scope_level ty
+          Some (Typing_env0.singleton0 ~resolver name scope_level ty
             ~must_be_closed:false);
       }
 
     let add_or_replace ~resolver t name scope_level ty =
       match t.typing_judgements with
-      | None -> singleton_equations ~resolver name scope_level ty
+      | None -> singleton_env_extension ~resolver name scope_level ty
       | Some typing_judgements ->
         { typing_judgements =
-            Some (Typing_environment0.add_or_replace typing_judgements name
+            Some (Typing_env0.add_or_replace typing_judgements name
               scope_level ty);
         }
 
@@ -2339,16 +2339,16 @@ result
       | None -> ()
       | Some typing_judgements ->
         assert (not typing_judgements.must_be_closed);
-        Typing_environment0.invariant typing_judgements
+        Typing_env0.invariant typing_judgements
 
-    let singleton = singleton_equations
+    let singleton = singleton_env_extension
 
     let add ~resolver t name scope_level ty =
       match t.typing_judgements with
       | None -> singleton ~resolver name scope_level ty
       | Some typing_judgements ->
         { typing_judgements =
-            Some (Typing_environment0.add typing_judgements name scope_level ty);
+            Some (Typing_env0.add typing_judgements name scope_level ty);
         }
 
     let add_or_replace_meet ~resolver t name scope_level ty =
@@ -2356,18 +2356,18 @@ result
       | None -> singleton ~resolver name scope_level ty
       | Some typing_judgements ->
         { typing_judgements =
-            Some (Typing_environment0.add_or_replace_meet typing_judgements
+            Some (Typing_env0.add_or_replace_meet typing_judgements
               name scope_level ty);
         }
 
-    let meet = Meet_and_join.meet_equations
+    let meet = Meet_and_join.meet_env_extension
 
     let equal ~equal_type
           { typing_judgements = typing_judgements1;
           }
           { typing_judgements = typing_judgements2;
           } =
-      Misc.Stdlib.Option.equal (Typing_environment0.equal ~equal_type)
+      Misc.Stdlib.Option.equal (Typing_env0.equal ~equal_type)
         typing_judgements1 typing_judgements2
 
     let phys_equal { typing_judgements = typing_judgements1; }
@@ -2377,22 +2377,22 @@ result
            | None, None -> true
            | None, Some _ | Some _, None -> false
            | Some env1, Some env2 ->
-             Typing_environment0.phys_equal env1 env2
+             Typing_env0.phys_equal env1 env2
 
-    let print = print_equations
+    let print = print_env_extension
 
     let remove ({ typing_judgements; } as t) name =
       match typing_judgements with
       | None -> t
       | Some typing_judgements ->
         let typing_judgements =
-          Typing_environment0.remove typing_judgements name
+          Typing_env0.remove typing_judgements name
         in
         { typing_judgements = Some typing_judgements; }
 
     let to_typing_environment ~resolver { typing_judgements; } =
       match typing_judgements with
-      | None -> Typing_environment0.create ~resolver
+      | None -> Typing_env0.create ~resolver
       | Some typing_judgements -> typing_judgements
 
     let domain { typing_judgements; } =
@@ -2417,8 +2417,8 @@ result
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
     Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
 
-  let add_equations (env, t) equations_to_add : t =
-    let t, _canonical_name = Typing_environment0.resolve_aliases (env, t) in
+  let add_env_extension (env, t) env_extension_to_add : t =
+    let t, _canonical_name = Typing_env0.resolve_aliases (env, t) in
     match t.descr with
     | Value (No_alias (Join of_kind_values)) ->
       let of_kind_values =
@@ -2447,11 +2447,11 @@ result
                             Targetint.OCaml.Map.map
                               (fun (block : singleton_block)
                                     : singleton_block ->
-                                let equations =
-                                  Equations.meet ~resolver:env.resolver
-                                    block.equations equations_to_add
+                                let env_extension =
+                                  Typing_env_extension.meet ~resolver:env.resolver
+                                    block.env_extension env_extension_to_add
                                 in
-                                { block with equations; })
+                                { block with env_extension; })
                               by_length
                           in
                           Blocks { by_length; })
@@ -2467,13 +2467,13 @@ result
                   else
                     let imm_map =
                       Immediate.Map.map
-                        (fun ({ equations; } : immediate_case)
+                        (fun ({ env_extension; } : immediate_case)
                               : immediate_case ->
-                          let equations =
-                            Equations.meet ~resolver:env.resolver
-                              equations equations_to_add
+                          let env_extension =
+                            Typing_env_extension.meet ~resolver:env.resolver
+                              env_extension env_extension_to_add
                           in
-                          { equations; })
+                          { env_extension; })
                         imm_map
                     in
                     Known imm_map
@@ -2497,13 +2497,13 @@ result
               else
                 let discriminant_map =
                   Discriminant.Map.map
-                    (fun ({ equations; } : discriminant_case)
+                    (fun ({ env_extension; } : discriminant_case)
                           : discriminant_case ->
-                      let equations =
-                        Equations.meet ~resolver:env.resolver
-                          equations equations_to_add
+                      let env_extension =
+                        Typing_env_extension.meet ~resolver:env.resolver
+                          env_extension env_extension_to_add
                       in
-                      { equations; })
+                      { env_extension; })
                     discriminant_map
                 in
                 Discriminant discriminant_map

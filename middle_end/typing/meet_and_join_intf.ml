@@ -18,7 +18,7 @@
 
 module type S = sig
   type typing_environment
-  type equations
+  type env_extension
 
   type 'a ty
 
@@ -38,30 +38,30 @@ module type S = sig
     -> typing_environment
     -> of_kind_foo ty
     -> of_kind_foo ty
-    -> of_kind_foo ty * equations
+    -> of_kind_foo ty * env_extension
 end
 
 module type S_for_types = sig
   type flambda_type
   type t_in_context
-  type equations
+  type env_extension
 
   val meet
      : bias_towards:t_in_context
     -> t_in_context
-    -> flambda_type * equations
+    -> flambda_type * env_extension
 
   val join : t_in_context -> t_in_context -> flambda_type
 
-  val meet_equations
+  val meet_env_extension
      : resolver:(Export_id.t -> flambda_type option)
-    -> equations
-    -> equations
-    -> equations
+    -> env_extension
+    -> env_extension
+    -> env_extension
 
-  val join_equations
+  val join_env_extension
      : resolver:(Export_id.t -> flambda_type option)
-    -> equations
-    -> equations
-    -> equations
+    -> env_extension
+    -> env_extension
+    -> env_extension
 end

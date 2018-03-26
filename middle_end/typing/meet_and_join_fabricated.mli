@@ -62,16 +62,16 @@ end) (Make_meet_and_join : functor
         with type t_in_context := T.t_in_context
         with type equations := T.equations
         with type flambda_type := T.flambda_type
-    end) (Typing_environment0 : sig
-      include Typing_environment0_intf.S
+    end) (Typing_env0 : sig
+      include Typing_env0_intf.S
         with type typing_environment := T.typing_environment
         with type equations := T.equations
         with type flambda_type := T.flambda_type
         with type t_in_context := T.t_in_context
         with type 'a ty := 'a T.ty
         with type 'a unknown_or_join := 'a T.unknown_or_join
-    end) (Equations : sig
-      include Equations_intf.S
+    end) (Typing_env_extension : sig
+      include Typing_env_extension_intf.S
         with type equations := T.equations
         with type typing_environment := T.typing_environment
         with type flambda_type := T.flambda_type

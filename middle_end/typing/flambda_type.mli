@@ -134,7 +134,7 @@ val unknown_proof : unit -> _ proof
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 type tagged_immediate_as_discriminants_proof = private
-  | By_discriminant of Equations.t Discriminant.Map.t
+  | By_discriminant of Typing_env_extension.t Discriminant.Map.t
   | Answer_given_by of Name.t
 
 val prove_tagged_immediate_as_discriminants
@@ -275,14 +275,14 @@ val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
 val switch_arms
    : (t
     -> arms:Continuation.t Discriminant.Map.t
-    -> (Equations.t * Continuation.t) Discriminant.Map.t)
+    -> (Typing_env_extension.t * Continuation.t) Discriminant.Map.t)
   type_accessor
 
-module Typing_environment : sig
-  include module type of struct include Typing_environment0 end
+module Typing_env : sig
+  include module type of struct include Typing_env0 end
 
   (** [diff t1 t2] returns judgements from the environment [t1] excepting any
       for which [t2] is known to specify an equally precise, or less precise,
       type. *)
-  val diff : t -> t -> Equations.t
+  val diff : t -> t -> Typing_env_extension.t
 end

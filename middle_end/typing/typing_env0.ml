@@ -43,8 +43,8 @@ module Make (T : sig
 
   val kind : flambda_type -> Flambda_kind.t
 
-  module Equations : Equations_intf.S
-    with type equations := equations
+  module Typing_env_extension : Typing_env_extension_intf.S
+    with type env_extension := env_extension
     with type typing_environment := typing_environment
     with type flambda_type := flambda_type
 
@@ -53,7 +53,7 @@ module Make (T : sig
   val meet
      : bias_towards:t_in_context
     -> t_in_context
-    -> t * Equations.t
+    -> t * Typing_env_extension.t
 
   val is_empty_typing_environment : typing_environment -> bool
 end) = struct
@@ -62,7 +62,7 @@ end) = struct
   open T
 
   type typing_environment = T.typing_environment
-  type equations = T.Equations.t
+  type env_extension = T.Typing_env_extension.t
   type flambda_type = T.flambda_type
   type t_in_context = T.t_in_context
   type 'a ty = 'a T.ty
@@ -513,9 +513,9 @@ end;
         levels_to_names;
       }
     in
-    let equations_from_meet, env =
+    let env_extension_from_meet, env =
       Name.Map.fold
-        (fun name (level1, ty1, level2, ty2) (equations_from_meet, env) ->
+        (fun name (level1, ty1, level2, ty2) (env_extension_from_meet, env) ->
           if not (Scope_level.equal level1 level2) then begin
             Misc.fatal_errorf "meet_typing_environment: \
                 Scope levels differ for %a:@ %a@ and@ %a@ \
@@ -528,15 +528,15 @@ end;
               print env1
               print env2
           end;
-          let meet_ty, new_equations_from_meet =
+          let meet_ty, new_env_extension_from_meet =
             meet ~bias_towards:(env1, ty1) (env2, ty2)
           in
-          let equations_from_meet =
-            Equations.meet ~resolver new_equations_from_meet equations_from_meet
+          let env_extension_from_meet =
+            Typing_env_extension.meet ~resolver new_env_extension_from_meet env_extension_from_meet
           in
 (*
           let env =
-            Equations.fold new_equations_from_meet ~init:env
+            Typing_env_extension.fold new_env_extension_from_meet ~init:env
               ~f:(fun env name level ty ->
                 let kind = kind ty in
                 let ty = unknown kind in
@@ -547,9 +547,9 @@ end;
           let env =
             add_or_replace_typing_environment' env name level1 meet_ty
           in
-          equations_from_meet, env)
+          env_extension_from_meet, env)
         names_to_types_in_both
-        (Equations.create (), proto_result_env)
+        (Typing_env_extension.create (), proto_result_env)
     in
     let existentials =
       Name.Set.union env1.existentials env2.existentials
@@ -567,11 +567,11 @@ end;
       }
     in
     invariant env;
-    let equations_from_meet =
-      Equations.to_typing_environment ~resolver:env.resolver
-        equations_from_meet
+    let env_extension_from_meet =
+      Typing_env_extension.to_typing_environment ~resolver:env.resolver
+        env_extension_from_meet
     in
-    meet_typing_environment env equations_from_meet
+    meet_typing_environment env env_extension_from_meet
 
   and meet_typing_environment env1 env2 =
     if env1 == env2 then env1
@@ -667,12 +667,12 @@ print ty;
       existential_freshening;
     }
 
-  let add_equations t equations =
-    let equations_as_env =
-      Equations.to_typing_environment ~resolver:t.resolver
-        equations
+  let add_env_extension t env_extension =
+    let env_extension_as_env =
+      Typing_env_extension.to_typing_environment ~resolver:t.resolver
+        env_extension
     in
-    meet_typing_environment t equations_as_env
+    meet_typing_environment t env_extension_as_env
 
   let replace_meet env name (ty_env, ty) =
     match Name.Map.find name env.names_to_types with
@@ -682,11 +682,11 @@ print ty;
         Name.print name
         print_typing_environment env
     | scope_level, existing_ty ->
-      let meet_ty, new_equations =
+      let meet_ty, new_env_extension =
         meet ~bias_towards:(env, existing_ty) (ty_env, ty)
       in
       let env = add_or_replace env name scope_level meet_ty in
-      add_equations env new_equations
+      add_env_extension env new_env_extension
 
   let add_or_replace_meet t name scope_level ty =
     match Name.Map.find name t.names_to_types with
@@ -803,7 +803,7 @@ print_typing_environment result;
     in
     Name_occurrences.create_from_set_in_terms domain
 
-  let to_equations t =
+  let to_env_extension t =
     let t =
       { t with
         must_be_closed = true;
@@ -860,7 +860,7 @@ print_typing_environment result;
       (Name_occurrences.create ())
       ts
 
-  let diff ~strictly_more_precise t1 t2 : equations =
+  let diff ~strictly_more_precise t1 t2 : env_extension =
     let names_to_types =
       Name.Map.filter (fun name (level1, ty1) ->
           match Name.Map.find name t2.names_to_types with

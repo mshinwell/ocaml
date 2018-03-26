@@ -151,11 +151,11 @@ end) = struct
     (* Environment extensions have an [option] type so that the information
        required to create a typing environment isn't required for various
        trivial functions such as [these_tagged_immediates]. *)
-    equations : equations;
+    env_extension : env_extension;
   }
  
   and singleton_block = {
-    equations : equations;
+    env_extension : env_extension;
     fields : t mutable_or_immutable array;
   }
 
@@ -194,7 +194,7 @@ end) = struct
     body : expr;
     free_names_in_body : Name_occurrences.t;
     result : t list;
-    result_equations : equations;
+    result_env_extension : env_extension;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -209,7 +209,7 @@ end) = struct
   and non_inlinable_function_declarations = {
     params : t list;
     result : t list;
-    result_equations : equations;
+    result_env_extension : env_extension;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -232,7 +232,7 @@ end) = struct
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and discriminant_case = {
-    equations : equations;
+    env_extension : env_extension;
   }
 
   and of_kind_fabricated =
@@ -250,7 +250,7 @@ end) = struct
   }
 
   and typing_environment = {
-    (* CR mshinwell: Once we're sure that [equations] being closed is the
+    (* CR mshinwell: Once we're sure that [env_extension] being closed is the
        right decision, remove [must_be_closed] *)
     must_be_closed : bool;
     resolver : (Export_id.t -> t option);
@@ -261,7 +261,7 @@ end) = struct
     existential_freshening : Freshening.t;
   }
 
-  and equations = {
+  and env_extension = {
     (* The "option" is so that we don't need to pass [resolver] to lots of
        the type-constructing functions. *)
     typing_judgements : typing_environment option;

@@ -17,11 +17,11 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
-  type equations
+  type env_extension
   type typing_environment
   type flambda_type
 
-  type t = equations
+  type t = env_extension
 
   val invariant : t -> unit
 
