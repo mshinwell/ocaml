@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T = Flambda_type
-module TE = Flambda_type.Typing_environment
+module TE = Flambda_type.Typing_env
 
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
@@ -192,9 +192,9 @@ end = struct
   let replace_typing_environment t typing_environment =
     { t with typing_environment; }
 
-  let extend_typing_environment t ~equations =
+  let extend_typing_environment t ~env_extension =
     let typing_environment =
-      T.Typing_environment.add_equations t.typing_environment equations
+      T.Typing_env.add_env_extension t.typing_environment env_extension
     in
     { t with typing_environment; }
 
@@ -834,13 +834,13 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
               let use_env, arg_tys_this_use_rev =
                 List.fold_left2
                   (fun (use_env, arg_tys_this_use_rev) param_ty arg_ty ->
-                    let arg_ty, new_equations =
+                    let arg_ty, new_env_extension =
                       T.meet ~bias_towards:(use_env, param_ty)
                         (use_env, arg_ty)
                     in
-Format.eprintf "meet new equations:@ %a\n%!"
-  T.Equations.print new_equations;
-                    let use_env = TE.add_equations use_env new_equations in
+Format.eprintf "meet new env_extension:@ %a\n%!"
+  T.Typing_env_extension.print new_env_extension;
+                    let use_env = TE.add_env_extension use_env new_env_extension in
 Format.eprintf "New use_env after meet:@ %a\n%!"
   TE.print use_env;
                     use_env, arg_ty :: arg_tys_this_use_rev)
@@ -889,16 +889,16 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                   in
                   Format.eprintf "Restricted env before diff:@ %a\n%!"
                     TE.print restricted_use_env;
-                  let equations = TE.diff restricted_use_env joined_env in
-                  Format.eprintf "Equations after diff:@ %a\n%!"
-                    T.Equations.print equations;
+                  let env_extension = TE.diff restricted_use_env joined_env in
+                  Format.eprintf "Typing_env_extension after diff:@ %a\n%!"
+                    T.Typing_env_extension.print env_extension;
                   (* XXX should take into account aliases of [param] too *)
                   let param = Flambda.Typed_parameter.name param in
-                  let equations = T.Equations.remove equations param in
-                  Format.eprintf "Final equations:@ %a\n%!"
-                    T.Equations.print equations;
+                  let env_extension = T.Typing_env_extension.remove env_extension param in
+                  Format.eprintf "Final env_extension:@ %a\n%!"
+                    T.Typing_env_extension.print env_extension;
                   let this_ty =
-                    T.add_equations (joined_env, this_ty) equations
+                    T.add_env_extension (joined_env, this_ty) env_extension
                   in
                   let joined_ty =
                     try T.join (joined_env, joined_ty) (use_env, this_ty)
@@ -1037,7 +1037,7 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
       inlining_threshold : Inlining_cost.Threshold.t option;
       benefit : Inlining_cost.Benefit.t;
       num_direct_applications : int;
-      equations : T.Equations.t;
+      env_extension : T.Typing_env_extension.t;
       newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants :
         (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
@@ -1051,7 +1051,7 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
-      equations = T.Equations.create ();
+      env_extension = T.Typing_env_extension.create ();
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
     }
@@ -1068,8 +1068,8 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      equations = T.Equations.meet ~resolver:t1.resolver
-        t1.equations t2.equations;
+      env_extension = T.Typing_env_extension.meet ~resolver:t1.resolver
+        t1.env_extension t2.env_extension;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
           t2.newly_imported_symbols;
@@ -1206,7 +1206,7 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
   let continuation_args_types' t cont ~arity ~freshening =
     let tys, _env =
       continuation_args_types t cont ~arity ~freshening
-        ~default_env:(T.Typing_environment.create ~resolver:t.resolver)
+        ~default_env:(T.Typing_env.create ~resolver:t.resolver)
     in
     tys
   
@@ -1364,29 +1364,29 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
   let num_direct_applications t =
     t.num_direct_applications
 
-  let clear_equations t =
+  let clear_env_extension t =
     { t with
-      equations = T.Equations.create ();
+      env_extension = T.Typing_env_extension.create ();
     }
 
   let add_or_meet_equation t name scope_level ty =
-    let equations =
-      T.Equations.add_or_replace_meet ~resolver:t.resolver
-        t.equations name scope_level ty
+    let env_extension =
+      T.Typing_env_extension.add_or_replace_meet ~resolver:t.resolver
+        t.env_extension name scope_level ty
     in
     { t with
-      equations;
+      env_extension;
     }
 
-  let add_or_meet_equations t equations =
-    let equations =
-      T.Equations.meet ~resolver:t.resolver t.equations equations
+  let add_or_meet_env_extension t env_extension =
+    let env_extension =
+      T.Typing_env_extension.meet ~resolver:t.resolver t.env_extension env_extension
     in
     { t with
-      equations;
+      env_extension;
     }
 
-  let get_equations t = t.equations
+  let get_env_extension t = t.env_extension
 
   (* CR mshinwell: There should be a function here which records the new
      imports in [newly_imported_symbols]. *)

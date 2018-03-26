@@ -120,13 +120,13 @@ let simplify_set_of_closures original_env r
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
           body, r, uses)
     in
-    let result, result_equations =
+    let result, result_env_extension =
       let default_env =
         List.fold_left (fun env param ->
             let var = Flambda.Typed_parameter.var param in
             let scope_level = E.continuation_scope_level original_env in
             let ty = Flambda.Typed_parameter.ty param in
-            T.Typing_environment.add env (Name.var var) scope_level ty)
+            T.Typing_env.add env (Name.var var) scope_level ty)
           (E.get_typing_environment original_env)
           return_cont_params
       in
@@ -137,10 +137,10 @@ let simplify_set_of_closures original_env r
           ~default_env
       in
       let result_env =
-        T.Typing_environment.restrict_names_to_those_occurring_in_types
+        T.Typing_env.restrict_names_to_those_occurring_in_types
           result_env result
       in
-      result, T.Typing_environment.to_equations result_env
+      result, T.Typing_env.to_env_extension result_env
     in
     let return_arity = List.map (fun ty -> T.kind ty) result in
     let inline : Flambda.inline_attribute =
@@ -200,7 +200,7 @@ let simplify_set_of_closures original_env r
         ~params
         ~body
         ~result
-        ~result_equations
+        ~result_env_extension
         ~stub:function_decl.stub
         ~dbg:function_decl.dbg
         ~inline
@@ -219,7 +219,7 @@ let simplify_set_of_closures original_env r
     in
 *)
     let r =
-      R.add_or_meet_equations r result_equations
+      R.add_or_meet_env_extension r result_env_extension
     in
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in

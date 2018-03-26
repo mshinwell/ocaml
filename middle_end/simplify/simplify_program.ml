@@ -85,7 +85,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           | Dynamically_computed var ->
             let ty = E.find_variable env var in
             let ty, canonical_name =
-              T.Typing_environment.resolve_aliases
+              T.Typing_env.resolve_aliases
                 (E.get_typing_environment env, ty)
             in
             let canonical_var =
@@ -317,13 +317,13 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
       (defn : Program_body.definition) =
   if !Clflags.flambda_invariant_checks then begin
     let typing_env = E.get_typing_environment env in
-    let domain = T.Typing_environment.domain typing_env in
+    let domain = T.Typing_env.domain typing_env in
     Name.Set.iter (fun (name : Name.t) ->
         match name with
         | Symbol _ -> ()
         | Var _ -> ()
 (* XXX Parameters appearing in return types fall foul of this
-          if not (T.Typing_environment.is_existential typing_env name)
+          if not (T.Typing_env.is_existential typing_env name)
           then begin
             Misc.fatal_errorf "No variable that is not existentially-bound@ \
                 should be in the environment when starting to simplify a@ \
@@ -396,7 +396,7 @@ Format.eprintf "TOPLEVEL:@ \n%a\n"
   Flambda.Expr.print expr;
 Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print default_env0;
-      let _args_types, equations =
+      let _args_types, env_extension =
         let default_env =
           (* CR mshinwell: move to auxiliary function; share with
              [Simplify_named] *)
@@ -406,7 +406,7 @@ Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
                 Scope_level.next (E.continuation_scope_level default_env0)
               in
               let ty = Flambda.Typed_parameter.ty param in
-              T.Typing_environment.add env (Name.var var) scope_level ty)
+              T.Typing_env.add env (Name.var var) scope_level ty)
             default_env
             return_cont_params
         in
@@ -427,7 +427,7 @@ Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
         end
       in
 Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
-  Continuation.print name T.Typing_environment.print equations;
+  Continuation.print name T.Typing_env.print env_extension;
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
@@ -435,7 +435,7 @@ Format.eprintf "Args for %a: %a\n%!"
 *)
       let env =
         E.extend_typing_environment default_env0
-          ~equations:(T.Typing_environment.to_equations equations)
+          ~env_extension:(T.Typing_env.to_env_extension env_extension)
       in
 (*
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
@@ -487,7 +487,7 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   in
   let typing_env = E.get_typing_environment env in
   let typing_env =
-    T.Typing_environment.cut typing_env
+    T.Typing_env.cut typing_env
       ~existential_if_defined_at_or_later_than:
         (Scope_level.next Scope_level.initial)
   in

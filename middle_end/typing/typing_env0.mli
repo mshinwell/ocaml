@@ -44,7 +44,7 @@ module Make (T : sig
   val kind : flambda_type -> Flambda_kind.t
 
   module Typing_env_extension : Typing_env_extension_intf.S
-    with type equations := equations
+    with type env_extension := env_extension
     with type typing_environment := typing_environment
     with type flambda_type := flambda_type
 
@@ -59,7 +59,7 @@ module Make (T : sig
 end) : sig
   include Typing_env0_intf.S
     with type typing_environment = T.typing_environment
-    with type equations = T.Typing_env_extension.t
+    with type env_extension = T.Typing_env_extension.t
     with type flambda_type = T.flambda_type
     with type t_in_context = T.t_in_context
     with type 'a ty = 'a T.ty

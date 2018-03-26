@@ -316,9 +316,9 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/allocated_const.cmo \
   middle_end/typing/flambda_type0_intf.cmo \
   middle_end/typing/flambda_type0_internal_intf.cmo \
-  middle_end/typing/typing_environment0_intf.cmo \
-  middle_end/typing/equations_intf.cmo \
-  middle_end/typing/typing_environment0.cmo \
+  middle_end/typing/typing_env0_intf.cmo \
+  middle_end/typing/typing_env_extension_intf.cmo \
+  middle_end/typing/typing_env0.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
   middle_end/typing/meet_and_join_naked_number.cmo \

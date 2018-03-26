@@ -32,68 +32,68 @@ end) (Make_meet_and_join : functor
       include Meet_and_join_spec_intf.S
         with type flambda_type := T.flambda_type
         with type typing_environment := T.typing_environment
-        with type equations := T.equations
+        with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
      end)
   -> sig
        include Meet_and_join_intf.S
          with type of_kind_foo := S.of_kind_foo
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_naked_immediate : sig
        include Meet_and_join_intf.S
          with type of_kind_foo := Immediate.Set.t T.of_kind_naked_number
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_naked_float : sig
        include Meet_and_join_intf.S
          with type of_kind_foo :=
            Numbers.Float_by_bit_pattern.Set.t T.of_kind_naked_number
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_naked_int32 : sig
        include Meet_and_join_intf.S
          with type of_kind_foo := Numbers.Int32.Set.t T.of_kind_naked_number
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_naked_int64 : sig
        include Meet_and_join_intf.S
          with type of_kind_foo := Numbers.Int64.Set.t T.of_kind_naked_number
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_naked_nativeint : sig
        include Meet_and_join_intf.S
          with type of_kind_foo := Targetint.Set.t T.of_kind_naked_number
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join_fabricated : sig
        include Meet_and_join_intf.S
          with type of_kind_foo := T.of_kind_fabricated
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
      end) (Meet_and_join : sig
        include Meet_and_join_intf.S_for_types
          with type t_in_context := T.t_in_context
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type flambda_type := T.flambda_type
      end) (Typing_env0 : sig
        include Typing_env0_intf.S
          with type typing_environment := T.typing_environment
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type flambda_type := T.flambda_type
          with type t_in_context := T.t_in_context
          with type 'a ty := 'a T.ty
          with type 'a unknown_or_join := 'a T.unknown_or_join
      end) (Typing_env_extension : sig
        include Typing_env_extension_intf.S
-         with type equations := T.equations
+         with type env_extension := T.env_extension
          with type typing_environment := T.typing_environment
          with type flambda_type := T.flambda_type
      end)
@@ -101,6 +101,6 @@ end) (Make_meet_and_join : functor
   include Meet_and_join_intf.S
     with type of_kind_foo := T.of_kind_value
     with type typing_environment := T.typing_environment
-    with type equations := T.equations
+    with type env_extension := T.env_extension
     with type 'a ty := 'a T.ty
 end

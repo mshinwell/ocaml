@@ -174,7 +174,7 @@ module type Env = sig
   val does_not_freshen : t -> Variable.t list -> bool
 *)
 
-  (* XXX to be turned into equations (including to primitives)
+  (* XXX to be turned into env_extension (including to primitives)
   (** Note that the given [bound_to] holds the given [projection]. *)
   val add_projection
      : t
@@ -190,16 +190,16 @@ module type Env = sig
     -> Variable.t option
   *)
 
-  val get_typing_environment : t -> Flambda_type.Typing_environment.t
+  val get_typing_environment : t -> Flambda_type.Typing_env.t
 
   val extend_typing_environment
      : t
-    -> equations:Flambda_type.Equations.t
+    -> env_extension:Flambda_type.Typing_env_extension.t
     -> t
 
   val replace_typing_environment
      : t
-    -> Flambda_type.Typing_environment.t
+    -> Flambda_type.Typing_env.t
     -> t
 
   (** Return the freshening that should be applied to variables when
@@ -424,8 +424,8 @@ module type Result = sig
        : t
       -> freshening:Freshening.t
       -> arity:Flambda_arity.t
-      -> default_env:Flambda_type.Typing_environment.t
-      -> Flambda_type.t list * Flambda_type.Typing_environment.t
+      -> default_env:Flambda_type.Typing_env.t
+      -> Flambda_type.t list * Flambda_type.Typing_env.t
   end
 
   module Continuation_usage_snapshot : sig
@@ -482,8 +482,8 @@ module type Result = sig
     -> Continuation.t
     -> arity:Flambda_arity.t
     -> freshening:Freshening.t
-    -> default_env:Flambda_type.Typing_environment.t
-    -> Flambda_type.t list * Flambda_type.Typing_environment.t
+    -> default_env:Flambda_type.Typing_env.t
+    -> Flambda_type.t list * Flambda_type.Typing_env.t
 
   (** Like [continuation_args_types'], except only returns the parameters'
       types, not the typing environment. *)
@@ -499,8 +499,8 @@ module type Result = sig
     -> Continuation.t
     -> arity:Flambda_arity.t
     -> freshening:Freshening.t
-    -> default_env:Flambda_type.Typing_environment.t
-    -> Flambda_type.t list * Flambda_type.Typing_environment.t
+    -> default_env:Flambda_type.Typing_env.t
+    -> Flambda_type.t list * Flambda_type.Typing_env.t
 
   (** Continuation usage information for use after examining the body of
       a [Let_cont] but before [define_continuation] has been called. *)
@@ -618,15 +618,15 @@ module type Result = sig
          Symbol.Map.t
 
   (* CR mshinwell: Should this be restructured so that [r] explicitly
-     contains an [Equations.t]? *)
+     contains an [Typing_env_extension.t]? *)
 
-  val clear_equations : t -> t
+  val clear_env_extension : t -> t
 
   val add_or_meet_equation : t -> Name.t -> Scope_level.t -> Flambda_type.t -> t
 
-  val add_or_meet_equations : t -> Flambda_type.Equations.t -> t
+  val add_or_meet_env_extension : t -> Flambda_type.Typing_env_extension.t -> t
 
-  val get_equations : t -> Flambda_type.Equations.t
+  val get_env_extension : t -> Flambda_type.Typing_env_extension.t
 
   val newly_imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

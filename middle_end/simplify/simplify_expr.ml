@@ -63,7 +63,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
      added to the "simplify newly-introduced let bindings" function, below *)
   (* CR mshinwell: Add one function in [R] called "local" to do all of
      these? *)
-  let r = R.clear_equations r in
+  let r = R.clear_env_extension r in
   let already_lifted_constants = R.get_lifted_constants r in
 Format.eprintf "Simplifying let %a = %a\n%!"
   Variable.print var
@@ -104,12 +104,12 @@ Format.eprintf "Simplifying let %a = %a\n%!"
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
   let env =
-    let new_equations = R.get_equations r in
+    let new_env_extension = R.get_env_extension r in
 (*
-    Format.eprintf "New equations:@ %a\n%!"
-      T.Equations.print new_equations;
+    Format.eprintf "New env_extension:@ %a\n%!"
+      T.Typing_env_extension.print new_env_extension;
 *)
-    E.extend_typing_environment env ~equations:new_equations
+    E.extend_typing_environment env ~env_extension:new_env_extension
   in
 (*
 Format.eprintf "Variable %a (previously: %a) bound to %a in env\n%!"
@@ -282,10 +282,10 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
       simplify_apply_cont env r cont ~trap_action:None ~args:[]
     | None ->
       let arms, r =
-        Discriminant.Map.fold (fun arm (equations, cont) (arms, r) ->
+        Discriminant.Map.fold (fun arm (env_extension, cont) (arms, r) ->
             let cont, r =
               let scrutinee_ty = T.this_discriminant arm in
-              let env = E.extend_typing_environment env ~equations in
+              let env = E.extend_typing_environment env ~env_extension in
               let env =
                 match scrutinee with
                 | Var scrutinee ->
@@ -344,8 +344,8 @@ let environment_for_let_cont_handler ~env _cont
       end;
 *)
 (*
-      let equations, ty =
-        let equations, ty =
+      let env_extension, ty =
+        let env_extension, ty =
           (* CR mshinwell: More thought required.  The order of arguments
              to [meet] is important: if there are two [Type_of]s, then the
              one from the first type is the one which sticks (as we want
@@ -356,9 +356,9 @@ let environment_for_let_cont_handler ~env _cont
             (E.get_typing_environment env, param_ty)
             (E.get_typing_environment env, arg_ty)
         in
-        equations, ty
+        env_extension, ty
       in
-      let env = E.extend_typing_environment env ~equations in
+      let env = E.extend_typing_environment env ~env_extension in
       let arg_ty =
         T.adjust_variables arg_ty ~f:(fun var : T.variable_adjustment ->
           Keep (Freshening.apply_variable freshening var))
@@ -424,7 +424,7 @@ Format.eprintf "simplify_let_cont_handler, params %a\n%!"
           Format.eprintf "Environment for %a:@ %a@ \nArg types:@ %a@ \n\
               Params:@ %a\n%!"
             Continuation.print cont
-            T.Typing_environment.print (E.get_typing_environment env)
+            T.Typing_env.print (E.get_typing_environment env)
             (Format.pp_print_list ~pp_sep:Format.pp_print_space
               Flambda.Typed_parameter.print) handler.params;
 *)
@@ -735,7 +735,7 @@ and simplify_let_cont env r ~body
     | None -> body, r
     | Some _handlers ->
       let new_env =
-        ref (T.Typing_environment.create ~resolver:(E.resolver env))
+        ref (T.Typing_env.create ~resolver:(E.resolver env))
       in
       let arg_tys =
         Continuation.Map.mapi (fun cont
@@ -752,7 +752,7 @@ and simplify_let_cont env r ~body
                 ~freshening:(E.freshening env)
                 ~default_env:(E.get_typing_environment env)
             in
-            new_env := T.Typing_environment.meet !new_env new_env';
+            new_env := T.Typing_env.meet !new_env new_env';
             arg_tys)
           original_handlers
       in

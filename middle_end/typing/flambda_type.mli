@@ -270,7 +270,7 @@ val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
 
 (** Given the type of a [Switch] scrutinee and the arms of the [Switch], return
     which cases may be taken together with, for each such case, the destination
-    continuation and any equations known to hold at the jump from the [Switch]
+    continuation and any env_extension known to hold at the jump from the [Switch]
     to that continuation. *)
 val switch_arms
    : (t

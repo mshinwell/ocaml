@@ -357,11 +357,11 @@ let simplify_is_int env r prim arg dbg ~result_var =
   | Unknown ->
     (* CR mshinwell: This should use the [result_var] as the [is_int] in a
        refined type of [arg]. *)
-    let no_equations = T.Equations.create () in
+    let no_env_extension = T.Typing_env_extension.create () in
     let all_results =
       T.these_discriminants (Discriminant.Map.of_list [
-        Discriminant.bool_false, no_equations;
-        Discriminant.bool_true, no_equations;
+        Discriminant.bool_false, no_env_extension;
+        Discriminant.bool_true, no_env_extension;
       ])
     in
     Reachable.reachable (original_term ()), all_results, r
@@ -378,8 +378,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
-    let discriminants_to_equations =
-      Tag.Map.fold (fun tag size discriminants_to_equations ->
+    let discriminants_to_env_extension =
+      Tag.Map.fold (fun tag size discriminants_to_env_extension ->
           (* CR mshinwell: think about this conversion *)
           let size = Targetint.OCaml.to_int size in
           let block_ty =
@@ -399,18 +399,18 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
             | Const _ | Discriminant _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
                  [Const] or [Discriminant] *)
-              T.Equations.create ()
+              T.Typing_env_extension.create ()
             | Name block ->
               let scope_level = E.scope_level_of_name env block in
-              T.Equations.singleton ~resolver:(E.resolver env)
+              T.Typing_env_extension.singleton ~resolver:(E.resolver env)
                 block scope_level block_ty
           in
           let discriminant = Discriminant.of_tag tag in
-          Discriminant.Map.add discriminant env discriminants_to_equations)
+          Discriminant.Map.add discriminant env discriminants_to_env_extension)
         tags_to_sizes
         Discriminant.Map.empty
     in
-    T.these_discriminants discriminants_to_equations
+    T.these_discriminants discriminants_to_env_extension
   in
   let r =
     match block with
