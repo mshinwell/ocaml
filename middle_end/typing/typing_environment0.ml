@@ -534,6 +534,7 @@ end;
           let equations_from_meet =
             Equations.meet ~resolver new_equations_from_meet equations_from_meet
           in
+(*
           let env =
             Equations.fold new_equations_from_meet ~init:env
               ~f:(fun env name level ty ->
@@ -542,6 +543,7 @@ end;
                 if Name.Map.mem name env.names_to_types then env
                 else add_or_replace_typing_environment' env name level ty)
           in
+*)
           let env =
             add_or_replace_typing_environment' env name level1 meet_ty
           in
