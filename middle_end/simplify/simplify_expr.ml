@@ -387,6 +387,9 @@ let rec simplify_let_cont_handler ~env ~r ~cont:_
   in
   r, handler
 
+(* CR mshinwell: We should not simplify recursive continuations with no
+   entry point -- could loop forever. *)
+
 and simplify_let_cont_handlers0 env r ~handlers
       ~(recursive : Flambda.recursive) ~freshening
       : Flambda.Let_cont_handlers.t option * R.t =

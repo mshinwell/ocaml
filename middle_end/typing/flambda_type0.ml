@@ -1923,7 +1923,8 @@ result
       with type env_extension := env_extension
       with type flambda_type := flambda_type
   end = struct
-    let meet ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t)) : t * env_extension =
+    let meet ~bound_name ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t))
+          : t * env_extension =
       if env1 == env2 && t1 == t2 then t1, Typing_env_extension.create ()
       else begin
         Typing_env0.invariant env1;
@@ -2016,7 +2017,8 @@ result
           Typing_env_extension.domain env_extension_from_meet
         in
         let required_to_close =
-          Name.Set.diff (Name.Set.union free_names_in_t names_free_in_env_extension)
+          Name.Set.diff
+            (Name.Set.union free_names_in_t names_free_in_env_extension)
             names_bound_by_env_extension
         in
         let env_extension_from_meet =
@@ -2036,11 +2038,25 @@ result
               in
               let kind = kind ty in
               let ty = unknown kind in
-              Typing_env_extension.add ~resolver:env1.resolver env_extension_from_meet
-                name level ty)
+              Typing_env_extension.add ~resolver:env1.resolver
+                env_extension_from_meet name level ty)
             required_to_close
             env_extension_from_meet
         in
+        let env_extension_domain =
+          Typing_env_extension.domain env_extension_from_meet
+        in
+        if Name.Set.mem bound_name env_extension_domain then begin
+          Misc.fatal_errorf "Meet of types bound to name %a is not allowed \
+              to generate equations on that same name:@ %a@ in env:@ %a,@ \
+              %a@ in env:@ %a,@ meet result@ %a"
+            Name.print bound_name
+            print t1
+            Typing_environment.print env1
+            print t2
+            Typing_environment.print env2
+            print t
+        end;
         t, env_extension_from_meet
       end
 
@@ -2309,7 +2325,8 @@ result
     let free_names = free_names
     let print_typing_environment = print_typing_environment
     let print = print
-  end) and Typing_env_extension : sig
+  end) (Meet_and_join)
+  and Typing_env_extension : sig
     include Typing_env_extension_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment

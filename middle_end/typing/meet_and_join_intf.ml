@@ -47,7 +47,8 @@ module type S_for_types = sig
   type env_extension
 
   val meet
-     : bias_towards:t_in_context
+     : bound_name:Name.t
+    -> bias_towards:t_in_context
     -> t_in_context
     -> flambda_type * env_extension
 

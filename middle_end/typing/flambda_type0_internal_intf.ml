@@ -249,14 +249,18 @@ end) = struct
     function_decls : function_declarations;
   }
 
+  (* CR mshinwell: rename "typing_environment" -> "typing_env" *)
+
+  and typing_environment_entry =
+    | Definition of t
+    | Equation of t
+    | CSE of Flambda_primitive.t
+
   and typing_environment = {
-    (* CR mshinwell: Once we're sure that [env_extension] being closed is the
-       right decision, remove [must_be_closed] *)
-    must_be_closed : bool;
     resolver : (Export_id.t -> t option);
     canonical_names_to_aliases : Name.Set.t Name.Map.t;
-    names_to_types : (Scope_level.t * t) Name.Map.t;
-    levels_to_names : Name.Set.t Scope_level.Map.t;
+    names_to_types : (Scope_level.With_sublevel.t * t) Name.Map.t;
+    levels_to_types : (Name.t * t) Scope_level.Sublevel.Map.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
@@ -264,6 +268,7 @@ end) = struct
   and env_extension = {
     (* The "option" is so that we don't need to pass [resolver] to lots of
        the type-constructing functions. *)
+    (* CR mshinwell: rename to typing_env or typing_environment *)
     typing_judgements : typing_environment option;
   }
 

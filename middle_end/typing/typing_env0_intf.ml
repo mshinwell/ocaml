@@ -20,6 +20,7 @@ module type S = sig
   type typing_environment
   type env_extension
   type flambda_type
+  (* CR mshinwell: rename t_in_context -> flambda_type_in_context *)
   type t_in_context
   type 'a ty
   type 'a unknown_or_join
@@ -73,6 +74,20 @@ module type S = sig
   val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
   val mem : t -> Name.t -> bool
+
+  (** Fold over entries of the typing environment.  The entries are passed
+      to [f] in order of increasing (level, sublevel) order (i.e. outermost
+      bindings first). *)
+  val fold
+     : t
+    -> init:'a
+    -> f:('a
+      -> Name.t
+      -> binding_type
+      -> Scope_level.With_sublevel.t
+      -> flambda_type
+      -> 'a)
+    -> 'a
 
   (** Returns [true] if the given name, which must be bound in the given
       environment, is existentially bound. *)
@@ -140,15 +155,6 @@ module type S = sig
     -> flambda_type list
     -> t
 
-  (** Follow chains of [Alias]es until either a [No_alias] type is reached
-      or a name cannot be resolved.
-
-      This function also returns the "canonical name" for the given type:
-      the furthest-away [Name.t] in any chain of aliases leading from the given
-      type.  (The chain may also involve [Export_id.t] links either before or
-      after any returned canonical name.) *)
-  val resolve_aliases : t_in_context -> flambda_type * (Name.t option)
-
   (** Return all names occurring in the type and all types referenced by it. *)
   val free_names_transitive : t -> flambda_type -> Name_occurrences.t
 
@@ -162,12 +168,31 @@ module type S = sig
     -> must_be_closed:bool
     -> t
 
+  (** Follow chains of [Alias]es until either a [No_alias] type is reached
+      or a name cannot be resolved.
+
+      This function also returns the "canonical name" for the given type:
+      the furthest-away [Name.t] in any chain of aliases leading from the given
+      type.  (The chain may also involve [Export_id.t] links either before or
+      after any returned canonical name.)
+
+      If this function is being used to resolve aliases for a type bound in
+      an environment, or similar, then the corresponding name of such binding
+      should be specified as [bound_name].  This enables the bound name to
+      be involved in checks for non-circularity.
+  *)
+  val resolve_aliases
+     : ?bound_name:Name.t
+    -> t_in_context
+    -> flambda_type * (Name.t option)
+
+  (** Like [resolve_aliases], except working on types statically known to be
+      of a particular kind, and returning an [unknown_or_join]. *)
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t
-    -> kind:Flambda_kind.t
+    -> ?bound_name:Name.t
     -> print_ty:(Format.formatter -> 'a ty -> unit)
     -> force_to_kind:(flambda_type -> 'a ty)
-    -> unknown:'b
     -> 'a ty
     -> 'a unknown_or_join * (Name.t option)
 
