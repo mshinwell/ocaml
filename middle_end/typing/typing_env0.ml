@@ -357,46 +357,50 @@ end) = struct
           print_typing_environment t
       | Equation _ | CSE _ -> ()
 
+  let rec invariant_for_new_equation t name level ty ~sense =
+    let existing_ty, _level = find t name in
+    let meet_ty, env_extension =
+      Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
+    in
+    let ty_must_be_strictly_more_precise, other_ty =
+      match sense with
+      | New_equation_must_be_more_precise -> ty, existing_ty
+      | Existing_equation_must_be_more_precise -> existing_ty, ty
+    in
+    let as_or_more_precise =
+      T.equal meet_ty ty_must_be_strictly_more_precise
+    in
+    let strictly_more_precise =
+      ty_as_or_more_precise && not (T.equal meet_ty other_ty)
+    in
+    if not ty_strictly_more_precise then
+      Misc.fatal_errorf "Cannot add equation %a = %a@ to this environment: \
+          as_or_more_precise %b,@ strictly_more_precise %b,@ meet_ty@ %a,@ \
+          existing_ty@ %a,@ sense@ %a.@  Env:@ %a"
+        Name.print name
+        T.print ty
+        ty_as_or_more_precise
+        ty_strictly_more_precise
+        T.print meet_ty
+        T.print existing_ty
+        print_sense sense
+        print_typing_environment t
+    end;
+    Typing_env_extension.iter env_extension
+      ~f:(fun name _binding_type level ty ->
+        let level = Scope_level.With_sublevel.level level in
+        invariant_for_any_new_binding t name level (Equation ty);
+        invariant_for_new_equation t name level ty
+          ~sense:Existing_equation_must_be_more_precise)
+
   let invariant_for_new_binding t name level
         (entry : typing_environment_entry) =
     invariant_for_any_new_binding t name level entry;
     match entry with
-    | Definition _ty -> ()
+    | Definition _ | CSE _ -> ()
     | Equation ty ->
-      let existing_ty, _level = find t name in
-      let meet_ty, env_extension =
-        Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
-      in
-      let ty_must_be_strictly_more_precise, other_ty =
-        match sense with
-        | New_equation_must_be_more_precise -> ty, existing_ty
-        | Existing_equation_must_be_more_precise -> existing_ty, ty
-      in
-      let as_or_more_precise =
-        T.equal meet_ty ty_must_be_strictly_more_precise
-      in
-      let strictly_more_precise =
-        ty_as_or_more_precise && not (T.equal meet_ty other_ty)
-      in
-      if not ty_strictly_more_precise then
-        Misc.fatal_errorf "Cannot add equation %a = %a@ to this environment: \
-            as_or_more_precise %b,@ strictly_more_precise %b,@ meet_ty@ %a,@ \
-            existing_ty@ %a,@ sense@ %a.@  Env:@ %a"
-          Name.print name
-          T.print ty
-          ty_as_or_more_precise
-          ty_strictly_more_precise
-          T.print meet_ty
-          T.print existing_ty
-          print_sense sense
-          print_typing_environment t
-      end;
-      Typing_env_extension.iter env_extension
-        ~f:(fun name _binding_type level ty ->
-          let level = Scope_level.With_sublevel.level level in
-          invariant_for_new_binding t name level (Equation ty)
-            ~sense:Existing_equation_must_be_more_precise)
-    | CSE _prim -> ()
+      invariant_for_new_equation t name level ty
+        ~sense:New_equation_must_be_more_precise
 
   let add t (name : Name.t) level ty =
     let binding : typing_environment_entry = Definition ty in
