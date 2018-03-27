@@ -61,6 +61,9 @@ end) (Meet_and_join : sig
     with type t_in_context := T.t_in_context
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
+end) (Type_equality : sig
+  include Type_equality_intf.S
+    with type flambda_type := T.flambda_type
 end) = struct
   type t = T.typing_environment
 
@@ -75,19 +78,39 @@ end) = struct
 
   type binding_type = Normal | Existential
 
-  let phys_equal env1 env2 =
+  let print = print_typing_environment
+
+  let fast_equal env1 env2 =
     env1 == env2
       || (Name.Map.is_empty env1.names_to_types
             && Name.Map.is_empty env2.names_to_types
             && Name.Map.is_empty env1.cse_to_names
             && Name.Map.is_empty env2.cse_to_names)
 
-  let print = print_typing_environment
+  let equal
+        ({ resolver = _;
+           names_to_types = names_to_types1;
+           levels_to_names = _;
+           existentials = existentials1;
+           existential_freshening = _;
+        } as t1)
+        ({ resolver = _;
+           names_to_types = names_to_types2;
+           levels_to_names = _;
+           existentials = existentials2;
+           existential_freshening = _;
+        } as t2) =
+    if fast_equal t1 t2 then true
+    else
+      let equal_scope_and_type (scope1, t1) (scope2, t2) =
+        Scope_level.equal scope1 scope2 && Type_equality.equal t1 t2
+      in
+      Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
+        && Name.Set.equal existentials1 existentials2
 
   let create ~resolver =
     let existential_freshening = Freshening.activate Freshening.empty in
     { resolver;
-      canonical_names_to_aliases = Name.Map.empty;
       names_to_types = Name.Map.empty;
       levels_to_names = Scope_level.With_sublevel.Map.empty;
       next_sublevel_by_level = Scope_level.Map.empty;
@@ -96,37 +119,6 @@ end) = struct
     }
 
   let create_using_resolver_from t = create ~resolver:t.resolver
-
-(*
-  let _add_alias_typing_environment env ~canonical_name ~alias =
-(* XXX This check is inconvenient for [r]
-    if not (Name.Map.mem canonical_name env.names_to_types) then begin
-      Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
-          canonical name is not bound in the environment: %a"
-        Name.print alias
-        Name.print canonical_name
-        print_typing_environment env
-    end;
-*)
-    let canonical_names_to_aliases =
-      Name.Map.update canonical_name (function
-          | None -> Some (Name.Set.singleton alias)
-          | Some aliases -> Some (Name.Set.add alias aliases))
-        env.canonical_names_to_aliases
-    in
-    { env with
-      canonical_names_to_aliases;
-    }
-
-  let aliases_typing_environment env ~canonical_name =
-    match Name.Map.find canonical_name env.canonical_names_to_aliases with
-    | exception Not_found ->
-      Misc.fatal_errorf "Cannot find aliases of canonical name %a which is \
-          not bound in the environment: %a"
-        Name.print canonical_name
-        print_typing_environment env
-    | aliases -> aliases
-*)
 
   type still_unresolved =
     | Resolved
@@ -277,6 +269,20 @@ end) = struct
       | Existential ->
    (* XXX     let ty = rename_variables t freshening in *)
         ty, Existential
+
+  let find_opt t name =
+    match Name.Map.find name t.names_to_types with
+    | exception Not_found -> None
+    | _scope_level, ty ->
+      let binding_type =
+        if Name.Set.mem name t.existentials then Existential
+        else Normal
+      in
+      match binding_type with
+      | Normal -> Some (ty, Normal)
+      | Existential ->
+   (* XXX     let ty = rename_variables t freshening in *)
+        Some (ty, Existential)
 
   let fold t ~init ~f =
     Scope_level.Map.fold (fun level by_sublevel acc ->
@@ -504,9 +510,7 @@ end) = struct
       Freshening.restrict_to_names t.existential_freshening allowed
     in
     let t =
-      { must_be_closed = t.must_be_closed;
-        resolver = t.resolver;
-        canonical_names_to_aliases = t.canonical_names_to_aliases;
+      { resolver = t.resolver;
         names_to_types;
         levels_to_names;
         existentials;
@@ -546,11 +550,6 @@ end) = struct
   let rec meet_typing_environment0 (env1 : typing_environment)
         (env2 : typing_environment) : typing_environment =
     let resolver = env1.resolver in
-    let canonical_names_to_aliases =
-      Name.Map.union_merge Name.Set.union
-        env1.canonical_names_to_aliases
-        env2.canonical_names_to_aliases
-    in
     let names_to_types_in_both =
       Name.Map.inter (fun (level1, ty1) (level2, ty2) ->
           Some (level1, ty1, level2, ty2))
@@ -628,9 +627,7 @@ end) = struct
     in
     let env =
       { env with
-        must_be_closed = env1.must_be_closed || env2.must_be_closed;
         resolver = env1.resolver;
-        canonical_names_to_aliases;
         existentials;
         existential_freshening;
       }
@@ -663,11 +660,6 @@ end) = struct
 
   let join_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) =
-    let canonical_names_to_aliases =
-      Name.Map.union_merge Name.Set.union
-        t1.canonical_names_to_aliases
-        t2.canonical_names_to_aliases
-    in
     let names_to_types =
       Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
           if not (Scope_level.equal level1 level2) then begin
@@ -728,7 +720,6 @@ print ty;
       t1.existential_freshening (* XXX *)
     in
     { resolver = t1.resolver;
-      canonical_names_to_aliases;
       names_to_types;
       levels_to_names;
       existentials;
@@ -741,41 +732,6 @@ print ty;
         env_extension
     in
     meet_typing_environment t t'
-
-  let replace_meet env name (ty_env, ty) =
-    match Name.Map.find name env.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "Cannot meet types for name %a which is unbound \
-          in the environment: %a"
-        Name.print name
-        print_typing_environment env
-    | scope_level, existing_ty ->
-      let meet_ty, new_env_extension =
-        meet ~bias_towards:(env, existing_ty) (ty_env, ty)
-      in
-      let env = add_or_replace env name scope_level meet_ty in
-      add_env_extension env new_env_extension
-
-  let add_or_replace_meet t name scope_level ty =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found -> add t name scope_level ty
-    | _ -> replace_meet t name (t, ty)
-      (* CR mshinwell: We need to think about this some more.  Is [ty]
-         supposed to only have free names in [t]? *)
-
-  let find_opt t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found -> None
-    | _scope_level, ty ->
-      let binding_type =
-        if Name.Set.mem name t.existentials then Existential
-        else Normal
-      in
-      match binding_type with
-      | Normal -> Some (ty, Normal)
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        Some (ty, Existential)
 
   let is_existential t name =
     let _ty, binding_type = find t name in
@@ -820,7 +776,6 @@ let result =
     (* XXX we actually need to rename in the domain of [names_to_types] *)
     { must_be_closed = t.must_be_closed;
       resolver = t.resolver;
-      canonical_names_to_aliases = t.canonical_names_to_aliases;
       names_to_types = t.names_to_types;
       levels_to_names = t.levels_to_names;
       existentials = Name.Set.union t.existentials new_existentials;
@@ -832,8 +787,6 @@ Format.eprintf "Result is: %a\n%!"
 print_typing_environment result;
 *)
     result
-
-  let aliases = aliases_typing_environment
 
   let restrict_to_names t allowed =
     let allowed = Name_occurrences.everything allowed in
@@ -871,41 +824,11 @@ print_typing_environment result;
     in
     Name_occurrences.create_from_set_in_terms domain
 
-  let to_env_extension t =
-    let t =
-      { t with
-        must_be_closed = true;
-      }
-    in
+  let to_env_extension t : env_extension =
     { typing_judgements = Some t;
     }
 
   let resolver t = t.resolver
-
-  let equal ~equal_type
-        ({ resolver = _;
-           canonical_names_to_aliases = canonical_names_to_aliases1;
-           names_to_types = names_to_types1;
-           levels_to_names = _;
-           existentials = existentials1;
-           existential_freshening = _;
-        } as t1)
-        ({ resolver = _;
-           canonical_names_to_aliases = canonical_names_to_aliases2;
-           names_to_types = names_to_types2;
-           levels_to_names = _;
-           existentials = existentials2;
-           existential_freshening = _;
-        } as t2) =
-    if t1 == t2 then true
-    else
-      let equal_scope_and_type (scope1, t1) (scope2, t2) =
-        Scope_level.equal scope1 scope2 && equal_type t1 t2
-      in
-      Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
-        && Name.Map.equal Name.Set.equal canonical_names_to_aliases1
-             canonical_names_to_aliases2
-        && Name.Set.equal existentials1 existentials2
 
   let free_names_transitive env t =
     let all_names = ref (Name_occurrences.create ()) in

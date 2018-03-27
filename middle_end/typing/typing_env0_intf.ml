@@ -27,53 +27,93 @@ module type S = sig
 
   type t = typing_environment
 
-  (** Whether a name bound by the environment is normally-accessible or
-      has been made existential (as a result of [cut], below). *)
-  type binding_type = Normal | Existential
-
+  (** Perform various invariant checks upon the given environment. *)
   val invariant : t -> unit
 
+  (** Print the given typing environment to a formatter. *)
+  val print : Format.formatter -> t -> unit
+
+  (** Equality on two environments. *)
+  val equal : t -> t -> bool
+
+  (** A sound but not complete equality function which is much faster than
+      [equal]. *)
+  val fast_equal : t -> t -> bool
+
+  (** Create an empty environment using the given [resolver] to locate the
+      definitions of export identifiers (e.g. by loading .cmx files). *)
   val create : resolver:(Export_id.t -> flambda_type option) -> t
 
+  (** As for [create] but takes the [resolver] from an existing
+      environment. *)
   val create_using_resolver_from : t -> t
 
-  val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
+  (** The export identifier resolver from the given environment. *)
+  val resolver : t -> (Export_id.t -> flambda_type option)
+
+  (** Returns [true] iff the given environment contains no bindings.
+      (An environment containing only existential bindings is not deemed
+      as empty.) *)
+  val is_empty : t -> bool
+
+  (** The names for which the given typing environment specifies a type
+      assignment.  (Note that [domain] returning an empty name occurrences
+      structure does not imply that [is_empty] holds; there may still be CSE
+      equations, which [domain] does not look at.) *)
+  val domain : t -> Name_occurrences.t
+
+  (** Define the type of a name, add a typing equation on a name, or add a
+      CSE equation on one or more names.  Names may not be redefined nor
+      equations added involving names that are undefined in the given
+      environment.  Neither definitions nor equations may introduce
+      circularities.  Added equations are not allowed to specify types for
+      (already-bound) names which are less precise than that which the
+      given environment knows already.  The specified scoping level, which
+      typically corresponds to continuation scoping, will be augmented by a
+      scoping sublevel computed by the environment. *)
+  val add : t -> Name.t -> Scope_level.t -> typing_environment_entry -> t
 
   (** The same as [add] on a newly-[create]d environment. *)
   val singleton
      : resolver:(Export_id.t -> flambda_type option)
     -> Name.t
     -> Scope_level.t
-    -> flambda_type
+    -> typing_environment_entry
     -> t
-
-  (** Refine the type of a name that is currently bound in the
-      environment.  (It is an error to call this function with a name that
-      is not bound in the given environment.) *)
-  val replace_meet : t -> Name.t -> t_in_context -> t
-
-  val add_or_replace_meet : t -> Name.t -> Scope_level.t -> flambda_type -> t
-
-  val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
   (** Ensure that a binding is not present in an environment.  This function 
       is idempotent. *)
   val remove : t -> Name.t -> t
 
-  (** Perform a lookup in a type environment.  It is an error to provide a
-      name which does not occur in the given environment. *)
-  val find : t -> Name.t -> flambda_type * binding_type
+  (** Determine the most precise type which the environment knows for the
+      given name. *)
+  val find_exn : t -> Name.t -> flambda_type * binding_type
 
+  (** As for [find] but returns the scoping level of the given name as well. *)
   val find_with_scope_level
      : t
     -> Name.t
-    -> flambda_type * Scope_level.t * binding_type
+    -> flambda_type * Scope_level.With_sublevel.t * binding_type
 
   (** Like [find], but returns [None] iff the given name is not in the
       specified environment. *)
   val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
-  val mem : t -> Name.t -> bool
+  (** The scoping level known for the given name, which must be bound by the
+      given environment. *)
+  val scope_level_exn : t -> Name.t -> Scope_level.t
+
+  (** Whether the given name is bound in the environment (either normally
+      or existentially). *)
+  val mem_exn : t -> Name.t -> bool
+
+  (** Returns [true] if the given name, which must be bound in the given
+      environment, is existentially bound. *)
+  val is_existential_exn : t -> Name.t -> bool
+
+  (** Whether a name bound by the environment is normally-accessible or
+      has been made existential (as a result of [cut], below). *)
+  type binding_type = Normal | Existential
 
   (** Fold over entries of the typing environment.  The entries are passed
       to [f] in order of increasing (level, sublevel) order (i.e. outermost
@@ -89,13 +129,15 @@ module type S = sig
       -> 'a)
     -> 'a
 
-  (** Returns [true] if the given name, which must be bound in the given
-      environment, is existentially bound. *)
-  val is_existential : t -> Name.t -> bool
+  (** Least upper bound of two typing environments.  The domain of the
+      resulting environment is the intersection of those supplied. *)
+  val join : t -> t -> t
 
-  (** The continuation scoping level at which the given name, which must
-      occur in the given typing context, was declared. *)
-  val scope_level : t -> Name.t -> Scope_level.t
+  (** Greatest lower bound of two typing environments.  The domain of the
+      resulting environment is the union of those supplied.  Any equations
+      deduced during the meet process will have been applied to the
+      returned environment. *)
+  val meet : t -> t -> t
 
   (** Rearrange the given typing environment so that names defined at or
       deeper than the given scope level are made existential.  This means
@@ -107,12 +149,6 @@ module type S = sig
     -> existential_if_defined_at_or_later_than:Scope_level.t
     -> t
 
-  (** Least upper bound of two typing environments. *)
-  val join : t -> t -> t
-
-  (** Greatest lower bound of two typing environments. *)
-  val meet : t -> t -> t
-
   (** Adjust the domain of the given typing environment so that it only
       mentions the names in the given name occurrences structure. *)
   val restrict_to_names : t -> Name_occurrences.t -> t
@@ -121,54 +157,45 @@ module type S = sig
       mentions names which are symbols, not variables. *)
   val restrict_to_symbols : t -> t
 
+  (** The equivalent of finding all free names in the given types and then
+      calling [restrict_to_names]. *)
+  val restrict_names_to_those_occurring_in_types
+     : t
+    -> flambda_type list
+    -> t
+
+  (** Like [restrict_to_names] except using a traditional filtering
+      predicate.  A name will only be kept if the predicate returns [true]
+      for the name. *)
   val filter : t -> f:(Name.t -> (Scope_level.t * flambda_type) -> bool) -> t
 
-  (** The names for which the given typing environment specifies a type
-      assignment. *)
-  val domain : t -> Name_occurrences.t
-
-  val is_empty : t -> bool
-
-  (** Print the given typing environment to a formatter. *)
-  val print : Format.formatter -> t -> unit
-
-  val resolver : t -> (Export_id.t -> flambda_type option)
-
-  val aliases : t -> canonical_name:Name.t -> Name.Set.t
-
-  (** By using a [meet] operation add the given environment extension into
-      the given typing environment. *)
+  (** Add the given environment extension into the given typing environment.
+      Internally, this is done by using the [meet] operation. *)
   val add_env_extension : t -> env_extension -> t
 
-  (** Create an env_extension structure whose typing judgements are those of
-      the given typing environment. *)
+  (** Create an env_extension structure containing the same information as
+      the given environment. *)
   val to_env_extension : t -> env_extension
 
+  (** [diff t1 t2] computes the environment whose bindings are those in
+      [t1] that:
+        - do not occur in [t2]; or
+        - do occur in [t2] but where [t1] specifies more precise information
+          (which for types, means closer to bottom).
+  *)
   val diff
      : strictly_more_precise:(t_in_context -> than:t_in_context -> bool)
     -> t
     -> t
     -> env_extension
 
-  val restrict_names_to_those_occurring_in_types
-     : t
-    -> flambda_type list
-    -> t
-
   (** Return all names occurring in the type and all types referenced by it. *)
   val free_names_transitive : t -> flambda_type -> Name_occurrences.t
 
+  (** The union of [free_names_transitive] across the given list of types. *)
   val free_names_transitive_list : t -> flambda_type list -> Name_occurrences.t
 
-  val singleton0
-     : resolver:(Export_id.t -> flambda_type option)
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> must_be_closed:bool
-    -> t
-
-  (** Follow chains of [Alias]es until either a [No_alias] type is reached
+  (** Follow chains of aliases until either a [No_alias] type is reached
       or a name cannot be resolved.
 
       This function also returns the "canonical name" for the given type:
@@ -195,12 +222,4 @@ module type S = sig
     -> force_to_kind:(flambda_type -> 'a ty)
     -> 'a ty
     -> 'a unknown_or_join * (Name.t option)
-
-  val equal
-     : equal_type:(flambda_type -> flambda_type -> bool)
-    -> t
-    -> t
-    -> bool
-
-  val phys_equal : t -> t -> bool
 end
