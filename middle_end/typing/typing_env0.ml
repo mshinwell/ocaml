@@ -565,122 +565,56 @@ end) = struct
 
   let meet_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) : typing_environment =
-    let resolver = t1.resolver in
-    let t =
-      Scope_level.Map.intersection_fold_and_remainder_fold
-        t1.levels_to_types t2.levels_to_types
-        ~init:(create ~resolver)
-        ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
-          Scope_level.Sublevel.intersection_fold_and_remainder
-            by_sublevel1 by_sublevel2
-            ~init:t
-            ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
-              assert (Name.equal name1 name2);
-              let level =
-                Scope_level.With_sublevel.create cont_level sublevel
-              in
-              let meet_ty, env_extension = meet (t1, ty1) (t2, ty2) in
-              let binding_type = binding_type t name1 in
-              let t =
-                add_with_binding_type t name binding_type level
-                  (Definition meet_ty)
-              in
-              Typing_env_extension.fold env_extension
-                ~init:t
-                ~f:(fun t name binding_type level ty ->
-                  let level = Scope_level.With_sublevel.level level in
-                  add_with_binding_type t name binding_type level
-                    (Equation ty)))
-            ~rem:(fun t t1_or_t2 sublevel (name, ty) ->
-              let binding_type = binding_type t1_or_t2 name in
-              add_with_binding_type t name binding_type cont_level
-                sublevel (Definition ty)))
-        ~rem:(fun t t1_or_t2 cont_level by_sublevel ->
-          Scope_level.Sublevel.fold (fun sublevel (name, ty) t ->
-              let binding_type = binding_type t1_or_t2 name in
-              add_with_binding_type t name binding_type cont_level
-                sublevel (Definition ty))
-            by_sublevel
-            t)
-    in
-
-
-
-
-
-
-        ~inter:(fun name (level1, ty1) (level2, ty2) ... ->
-          if not (Scope_level.equal level1 level2) then begin
-            Misc.fatal_errorf "Typing_env0.meet: \
-                Scope levels differ for %a:@ %a@ and@ %a.@ env1:@ %a@ env2:@ %a"
-              Name.print name
-              T.print ty1
-              T.print ty2
-              print t1
-              print t2
-          end;
-
-              invariant_for_any_new_binding t name level (Equation ty);
-              invariant_for_new_equation t name level ty
-                ~sense:Existing_equation_must_be_more_precise)
-
-
-
-    in
-
-
-
-
-
-    let levels_to_names =
-      Scope_level.Map.union_merge
-        (fun names1 names2 -> Name.Set.union names1 names2)
-        t1.levels_to_names
-        t2.levels_to_names
-    in
-    let proto_result_env =
-      { t1 with
-        names_to_types = names_to_types_only_in_one_env;
-        levels_to_names;
-      }
-    in
-    let env_extension_from_meet, env =
-      Name.Map.fold
-        (fun name (level1, ty1, level2, ty2) (env_extension_from_meet, env) ->
-          let env_extension_from_meet =
-            Typing_env_extension.meet ~resolver new_env_extension_from_meet env_extension_from_meet
-          in
-          let env =
-            add_or_replace' env name level1 meet_ty
-          in
-          env_extension_from_meet, env)
-        names_to_types_in_both
-        (Typing_env_extension.create (), proto_result_env)
-    in
-    let existentials =
-      Name.Set.union t1.existentials t2.existentials
-    in
-    let existential_freshening =
-      t1.existential_freshening (* XXX *)
-    in
-    let env =
-      { env with
-        resolver = t1.resolver;
-        existentials;
-        existential_freshening;
-      }
-    in
-    invariant env;
-    let env_extension_from_meet =
-      Typing_env_extension.to_typing_environment ~resolver:env.resolver
-        env_extension_from_meet
-    in
-    meet_typing_environment env env_extension_from_meet
-
-  and meet_typing_environment env1 env2 =
     if fast_equal env1 env2 then env1
     else if is_empty env1 then env2
     else if is_empty env2 then env1
+    else
+      let resolver = t1.resolver in
+      let t =
+        Scope_level.Map.intersection_fold_and_remainder_fold
+          t1.levels_to_types t2.levels_to_types
+          ~init:(create ~resolver)
+          ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
+            Scope_level.Sublevel.intersection_fold_and_remainder_fold
+              by_sublevel1 by_sublevel2
+              ~init:t
+              ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
+                assert (Name.equal name1 name2);
+                let meet_ty, env_extension = meet (t1, ty1) (t2, ty2) in
+                let binding_type = binding_type t name1 in
+                let t =
+                  add_with_binding_type t name binding_type
+                    cont_level sublevel (Definition meet_ty)
+                in
+                Typing_env_extension.fold env_extension
+                  ~init:t
+                  ~f:(fun t name binding_type cont_level sublevel ty ->
+                    add_with_binding_type t name binding_type
+                      cont_level sublevel (Equation ty)))
+              ~rem:(fun t t1_or_t2 sublevel (name, ty) ->
+                let binding_type = binding_type t1_or_t2 name in
+                add_with_binding_type t name binding_type
+                  cont_level sublevel (Definition ty)))
+          ~rem:(fun t t1_or_t2 cont_level by_sublevel ->
+            Scope_level.Sublevel.fold (fun sublevel (name, ty) t ->
+                let binding_type = binding_type t1_or_t2 name in
+                add_with_binding_type t name binding_type
+                  cont_level sublevel (Definition ty))
+              by_sublevel
+              t)
+      in
+      let existentials = Name.Set.union t1.existentials t2.existentials in
+      let existential_freshening = t1.existential_freshening (* XXX *) in
+      let t =
+        { t with
+          existentials;
+          existential_freshening;
+        }
+      in
+      invariant t;
+      t
+
+  and meet_typing_environment env1 env2 =
     else
       try
         meet_typing_environment0 env1 env2
