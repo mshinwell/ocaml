@@ -565,9 +565,9 @@ end) = struct
 
   let meet_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) : typing_environment =
-    if fast_equal env1 env2 then env1
-    else if is_empty env1 then env2
-    else if is_empty env2 then env1
+    if fast_equal t1 t2 then t1
+    else if is_empty t1 then t2
+    else if is_empty t2 then t1
     else
       let resolver = t1.resolver in
       let t =
@@ -603,32 +603,20 @@ end) = struct
               by_sublevel
               t)
       in
+      let cse_to_names =
+        ...
+      in
       let existentials = Name.Set.union t1.existentials t2.existentials in
       let existential_freshening = t1.existential_freshening (* XXX *) in
       let t =
         { t with
+          cse_to_names;
           existentials;
           existential_freshening;
         }
       in
       invariant t;
       t
-
-  and meet_typing_environment env1 env2 =
-    else
-      try
-        meet_typing_environment0 env1 env2
-      with Misc.Fatal_error -> begin
-        Format.eprintf "\n%sContext is: meeting two typing environments:%s\
-            @ %a\n\n%sand%s:@ %a\n"
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_typing_environment env1
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_typing_environment env2;
-        raise Misc.Fatal_error
-      end
 
   let join_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) =
