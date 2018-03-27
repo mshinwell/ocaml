@@ -87,6 +87,13 @@ module type Map = sig
     -> 'a t
     -> 'a t
 
+  val intersection_fold_and_remainder
+     : 'a t
+    -> 'a t
+    -> init:'b
+    -> inter:('b -> key -> 'a -> 'a -> 'a * 'b)
+    -> 'a t * 'b
+
   val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 
   val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t

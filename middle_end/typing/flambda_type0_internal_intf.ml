@@ -259,7 +259,7 @@ end) = struct
   and typing_environment = {
     resolver : (Export_id.t -> t option);
     names_to_types : (Scope_level.With_sublevel.t * t) Name.Map.t;
-    cse_to_names : Name.t Flambda_primitive.Map.t;
+    cse_to_names : Name.t Flambda_primitive.With_fixed_value.Map.t;
     levels_to_types : (Name.t * t) Scope_level.Sublevel.Map.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;

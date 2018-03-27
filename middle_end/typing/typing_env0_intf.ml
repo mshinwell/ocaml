@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** The interface of typing environments. *)
+
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
@@ -99,6 +101,11 @@ module type S = sig
       specified environment. *)
   val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
+  (** Return a name, if such is available, which may be substituted for the
+      given primitive in the fashion of CSE.  (This function checks if the
+      primitive is suitable for such an operation.) *)
+  val find_cse : t -> Flambda_primitive.t -> Name.t option
+
   (** The scoping level known for the given name, which must be bound by the
       given environment. *)
   val scope_level_exn : t -> Name.t -> Scope_level.t
@@ -139,11 +146,10 @@ module type S = sig
       returned environment. *)
   val meet : t -> t -> t
 
-  (** Rearrange the given typing environment so that names defined at or
-      deeper than the given scope level are made existential.  This means
-      that they may be referred to from types but may never occur normally
-      in terms (or be produced from a reification of a type, c.f.
-      [Flambda_type.reify], etc). *)
+  (** Rearrange the given environment so that names defined at or deeper than
+      the given scope level are made existential. This means that they may be
+      referred to from types but may never occur normally in terms (or be
+      produced from a reification of a type, c.f. [Flambda_type.reify], etc). *)
   val cut
      : t
     -> existential_if_defined_at_or_later_than:Scope_level.t

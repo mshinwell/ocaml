@@ -120,6 +120,16 @@ end) = struct
 
   let create_using_resolver_from t = create ~resolver:t.resolver
 
+  let resolver t = t.resolver
+
+  let is_empty t = Name.Map.is_empty t.names_to_types
+
+  let domain t =
+    let domain =
+      Name.Set.diff (Name.Map.keys t.names_to_types) t.existentials
+    in
+    Name_occurrences.create_from_set_in_terms domain
+
   type still_unresolved =
     | Resolved
     | Still_unresolved
@@ -253,15 +263,15 @@ end) = struct
         t.names_to_types
     end
 
-  let find env name =
-    match Name.Map.find name env.names_to_types with
+  let find_exn t name =
+    match Name.Map.find name t.names_to_types with
     | exception Not_found ->
       Misc.fatal_errorf "Cannot find %a in environment:@ %a"
         Name.print name
-        print_typing_environment env
+        print_typing_environment t
     | _scope_level, ty ->
       let binding_type =
-        if Name.Set.mem name env.existentials then Existential
+        if Name.Set.mem name t.existentials then Existential
         else Normal
       in
       match binding_type with
@@ -271,7 +281,7 @@ end) = struct
         ty, Existential
 
   let find_opt t name =
-    match Name.Map.find name t.names_to_types with
+    match find_exn t name with
     | exception Not_found -> None
     | _scope_level, ty ->
       let binding_type =
@@ -283,6 +293,14 @@ end) = struct
       | Existential ->
    (* XXX     let ty = rename_variables t freshening in *)
         Some (ty, Existential)
+
+  let find_cse t prim =
+    match Flambda_primitive.With_fixed_value.create prim with
+    | None -> None
+    | Some prim ->
+      match Flambda_primitive.With_fixed_value.Map.find t.cse_to_names prim with
+      | exception Not_found -> None
+      | name -> Some name
 
   let fold t ~init ~f =
     Scope_level.Map.fold (fun level by_sublevel acc ->
@@ -336,8 +354,8 @@ end) = struct
         (entry : typing_environment_entry) =
     let free_names =
       match entry with
-      | Definition ty | Equation ty -> free_names ty
-      | CSE prim -> Flambda_primitive.free_names prim
+      | Definition ty | Equation ty -> free_names_set ty
+      | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
     in
     if Name.Set.mem name free_names then begin
       Misc.fatal_errorf "Cannot add binding %a = %a@ as it would produce \
@@ -545,38 +563,83 @@ end) = struct
     let scope_level = scope_level t name in
     ty, scope_level, binding_type
 
-  (* CR mshinwell: Perhaps this function needs an iteration bound *)
-  (* XXX This logic needs to be used for join as well *)
-  let rec meet_typing_environment0 (env1 : typing_environment)
-        (env2 : typing_environment) : typing_environment =
-    let resolver = env1.resolver in
-    let names_to_types_in_both =
-      Name.Map.inter (fun (level1, ty1) (level2, ty2) ->
-          Some (level1, ty1, level2, ty2))
-        env1.names_to_types env2.names_to_types
+  let meet_typing_environment (t1 : typing_environment)
+        (t2 : typing_environment) : typing_environment =
+    let resolver = t1.resolver in
+    let t =
+      Scope_level.Map.intersection_fold_and_remainder_fold
+        t1.levels_to_types t2.levels_to_types
+        ~init:(create ~resolver)
+        ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
+          Scope_level.Sublevel.intersection_fold_and_remainder
+            by_sublevel1 by_sublevel2
+            ~init:t
+            ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
+              assert (Name.equal name1 name2);
+              let level =
+                Scope_level.With_sublevel.create cont_level sublevel
+              in
+              let meet_ty, env_extension = meet (t1, ty1) (t2, ty2) in
+              let binding_type = binding_type t name1 in
+              let t =
+                add_with_binding_type t name binding_type level
+                  (Definition meet_ty)
+              in
+              Typing_env_extension.fold env_extension
+                ~init:t
+                ~f:(fun t name binding_type level ty ->
+                  let level = Scope_level.With_sublevel.level level in
+                  add_with_binding_type t name binding_type level
+                    (Equation ty)))
+            ~rem:(fun t t1_or_t2 sublevel (name, ty) ->
+              let binding_type = binding_type t1_or_t2 name in
+              add_with_binding_type t name binding_type cont_level
+                sublevel (Definition ty)))
+        ~rem:(fun t t1_or_t2 cont_level by_sublevel ->
+          Scope_level.Sublevel.fold (fun sublevel (name, ty) t ->
+              let binding_type = binding_type t1_or_t2 name in
+              add_with_binding_type t name binding_type cont_level
+                sublevel (Definition ty))
+            by_sublevel
+            t)
     in
-    let names_to_types_only_in_env1 =
-      Name.Map.filter (fun name _ ->
-          not (Name.Map.mem name names_to_types_in_both))
-        env1.names_to_types
+
+
+
+
+
+
+        ~inter:(fun name (level1, ty1) (level2, ty2) ... ->
+          if not (Scope_level.equal level1 level2) then begin
+            Misc.fatal_errorf "Typing_env0.meet: \
+                Scope levels differ for %a:@ %a@ and@ %a.@ env1:@ %a@ env2:@ %a"
+              Name.print name
+              T.print ty1
+              T.print ty2
+              print t1
+              print t2
+          end;
+
+              invariant_for_any_new_binding t name level (Equation ty);
+              invariant_for_new_equation t name level ty
+                ~sense:Existing_equation_must_be_more_precise)
+
+
+
     in
-    let names_to_types_only_in_env2 =
-      Name.Map.filter (fun name _ ->
-          not (Name.Map.mem name names_to_types_in_both))
-        env2.names_to_types
-    in
-    let names_to_types_only_in_one_env =
-      Name.Map.disjoint_union names_to_types_only_in_env1
-        names_to_types_only_in_env2
-    in
+
+
+
+
+
     let levels_to_names =
       Scope_level.Map.union_merge
         (fun names1 names2 -> Name.Set.union names1 names2)
-        env1.levels_to_names
-        env2.levels_to_names
+        t1.levels_to_names
+        t2.levels_to_names
     in
     let proto_result_env =
-      { env1 with
+      { t1 with
         names_to_types = names_to_types_only_in_one_env;
         levels_to_names;
       }
@@ -584,34 +647,9 @@ end) = struct
     let env_extension_from_meet, env =
       Name.Map.fold
         (fun name (level1, ty1, level2, ty2) (env_extension_from_meet, env) ->
-          if not (Scope_level.equal level1 level2) then begin
-            Misc.fatal_errorf "meet_typing_environment: \
-                Scope levels differ for %a:@ %a@ and@ %a@ \
-                levels1:@ %a@ levels2:@ %a@ env1:@ %a@ env2:@ %a"
-              Name.print name
-              T.print ty1
-              T.print ty2
-              (Scope_level.Map.print Name.Set.print) env1.levels_to_names
-              (Scope_level.Map.print Name.Set.print) env2.levels_to_names
-              print env1
-              print env2
-          end;
-          let meet_ty, new_env_extension_from_meet =
-            meet ~bias_towards:(env1, ty1) (env2, ty2)
-          in
           let env_extension_from_meet =
             Typing_env_extension.meet ~resolver new_env_extension_from_meet env_extension_from_meet
           in
-(*
-          let env =
-            Typing_env_extension.fold new_env_extension_from_meet ~init:env
-              ~f:(fun env name level ty ->
-                let kind = kind ty in
-                let ty = unknown kind in
-                if Name.Map.mem name env.names_to_types then env
-                else add_or_replace' env name level ty)
-          in
-*)
           let env =
             add_or_replace' env name level1 meet_ty
           in
@@ -620,14 +658,14 @@ end) = struct
         (Typing_env_extension.create (), proto_result_env)
     in
     let existentials =
-      Name.Set.union env1.existentials env2.existentials
+      Name.Set.union t1.existentials t2.existentials
     in
     let existential_freshening =
-      env1.existential_freshening (* XXX *)
+      t1.existential_freshening (* XXX *)
     in
     let env =
       { env with
-        resolver = env1.resolver;
+        resolver = t1.resolver;
         existentials;
         existential_freshening;
       }
@@ -640,9 +678,9 @@ end) = struct
     meet_typing_environment env env_extension_from_meet
 
   and meet_typing_environment env1 env2 =
-    if env1 == env2 then env1
-    else if is_empty_typing_environment env1 then env2
-    else if is_empty_typing_environment env2 then env1
+    if fast_equal env1 env2 then env1
+    else if is_empty env1 then env2
+    else if is_empty env2 then env1
     else
       try
         meet_typing_environment0 env1 env2
@@ -660,71 +698,69 @@ end) = struct
 
   let join_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) =
-    let names_to_types =
-      Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
-          if not (Scope_level.equal level1 level2) then begin
-            Misc.fatal_errorf "join_typing_environment: \
-                Scope levels differ for:@ %a@ and:@ %a"
-              T.print ty1
-              T.print ty2
-          end;
-          let ty = join (t1, ty1) (t2, ty2) in
-(*
-Format.eprintf "JOIN %a and %a -> %a\n%!"
-print ty1
-print ty2
-print ty;
-*)
-          level1, ty)
-        t1.names_to_types
-        t2.names_to_types
-    in
-    let in_t1_only =
-      Name.Map.filter (fun name _ ->
-          not (Name.Map.mem name names_to_types))
-        t1.names_to_types
-    in
-    let in_t2_only =
-      Name.Map.filter (fun name _ ->
-          not (Name.Map.mem name names_to_types))
-        t2.names_to_types
-    in
-    let in_one_env_only =
-      Name.Map.disjoint_union in_t1_only in_t2_only
-    in
-    let names_to_types =
-      Name.Map.fold (fun name (scope_level, ty) names_to_types ->
-          let ty = unknown (kind ty) in
-          assert (not (Name.Map.mem name names_to_types));
-          Name.Map.add name (scope_level, ty) names_to_types)
-        in_one_env_only
-        names_to_types
-    in
-    let all_levels_to_names =
-      Scope_level.Map.union_merge
-        (fun names1 names2 -> Name.Set.union names1 names2)
-        t1.levels_to_names
-        t2.levels_to_names
-    in
-    let levels_to_names =
-      Scope_level.Map.map (fun names ->
-          Name.Set.filter (fun name ->
-              Name.Map.mem name names_to_types)
-            names)
-        all_levels_to_names
-    in
-    let existentials =
-      Name.Set.union t1.existentials t2.existentials
-    in
-    let existential_freshening =
-      t1.existential_freshening (* XXX *)
-    in
-    { resolver = t1.resolver;
-      names_to_types;
-      levels_to_names;
-      existentials;
-      existential_freshening;
-    }
+    if fast_equal env1 env2 then begin
+      env1
+    end else begin
+      let names_to_types =
+        Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
+            if not (Scope_level.equal level1 level2) then begin
+              Misc.fatal_errorf "join_typing_environment: \
+                  Scope levels differ for:@ %a@ and:@ %a"
+                T.print ty1
+                T.print ty2
+            end;
+            let ty = join (t1, ty1) (t2, ty2) in
+            level1, ty)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let in_t1_only =
+        Name.Map.filter (fun name _ ->
+            not (Name.Map.mem name names_to_types))
+          t1.names_to_types
+      in
+      let in_t2_only =
+        Name.Map.filter (fun name _ ->
+            not (Name.Map.mem name names_to_types))
+          t2.names_to_types
+      in
+      let in_one_env_only =
+        Name.Map.disjoint_union in_t1_only in_t2_only
+      in
+      let names_to_types =
+        Name.Map.fold (fun name (scope_level, ty) names_to_types ->
+            let ty = unknown (kind ty) in
+            assert (not (Name.Map.mem name names_to_types));
+            Name.Map.add name (scope_level, ty) names_to_types)
+          in_one_env_only
+          names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union_merge
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.map (fun names ->
+            Name.Set.filter (fun name ->
+                Name.Map.mem name names_to_types)
+              names)
+          all_levels_to_names
+      in
+      let existentials =
+        Name.Set.union t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        t1.existential_freshening (* XXX *)
+      in
+      { resolver = t1.resolver;
+        names_to_types;
+        levels_to_names;
+        existentials;
+        existential_freshening;
+      }
+    end
 
   let add_env_extension t env_extension =
     let t' =
@@ -733,8 +769,8 @@ print ty;
     in
     meet_typing_environment t t'
 
-  let is_existential t name =
-    let _ty, binding_type = find t name in
+  let is_existential_exn t name =
+    let _ty, binding_type = find_exn t name in
     match binding_type with
     | Normal -> false
     | Existential -> true
@@ -816,19 +852,9 @@ print_typing_environment result;
     in
     restrict_to_names0_typing_environment t allowed
 
-  let is_empty t = Name.Map.is_empty t.names_to_types
-
-  let domain t =
-    let domain =
-      Name.Set.diff (Name.Map.keys t.names_to_types) t.existentials
-    in
-    Name_occurrences.create_from_set_in_terms domain
-
   let to_env_extension t : env_extension =
     { typing_judgements = Some t;
     }
-
-  let resolver t = t.resolver
 
   let free_names_transitive env t =
     let all_names = ref (Name_occurrences.create ()) in

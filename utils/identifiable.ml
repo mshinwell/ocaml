@@ -67,6 +67,12 @@ module type Map = sig
     -> 'a t
     -> 'a t
     -> 'a t
+  val intersection_fold_and_remainder
+     : 'a t
+    -> 'a t
+    -> init:'b
+    -> inter:('b -> key -> 'a -> 'a -> 'a * 'b)
+    -> 'a t * 'b
   val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
   val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
   val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
@@ -195,6 +201,28 @@ module Make_map (T : Thing_no_hash) = struct
         | t2_elt -> add key (f t1_elt t2_elt) inter)
       t1
       empty
+
+  let intersection_fold_and_remainder t1 t2 ~init ~inter =
+    let in_both =
+      inter (fun datum1 datum2 -> Some (datum1, datum2)) t1 t2
+    in
+    let in_both, acc =
+      fold (fun name (datum1, datum2) (in_both, acc) ->
+          let datum, acc = inter acc name datum1 datum2 in
+          let in_both = add name datum in_both in
+          in_both, acc)
+        in_both
+        init
+    in
+    let only_in_t1 =
+      filter (fun name _ -> not (mem name in_both)) t1
+    in
+    let only_in_t2 =
+      filter (fun name _ -> not (mem name in_both)) t2
+    in
+    let remainder = disjoint_union only_in_t1 only_in_t2 in
+    let result = disjoint_union in_both remainder in
+    result, acc
 
   let rename m v =
     try find v m
