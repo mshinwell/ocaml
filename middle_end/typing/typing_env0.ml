@@ -75,6 +75,15 @@ end) = struct
 
   type binding_type = Normal | Existential
 
+  let phys_equal env1 env2 =
+    env1 == env2
+      || (Name.Map.is_empty env1.names_to_types
+            && Name.Map.is_empty env2.names_to_types
+            && Name.Map.is_empty env1.cse_to_names
+            && Name.Map.is_empty env2.cse_to_names)
+
+  let print = print_typing_environment
+
   let create ~resolver =
     let existential_freshening = Freshening.activate Freshening.empty in
     { resolver;
@@ -193,6 +202,9 @@ end) = struct
     | No_alias uoj -> uoj, canonical_name
     | Type _ | Equals _ -> Unknown, canonical_name
 
+  (* CR mshinwell: It should be explicit in the code (maybe an invariant
+     check on the end of this function) that if a canonical name is returned
+     then the original type was an [Equals] or a [Type]. *)
   (* CR mshinwell: rename env -> t, t -> ty *)
   let resolve_aliases ?bound_name (env, t) : flambda_type * (Name.t option) =
     match t.descr with
@@ -406,7 +418,7 @@ end) = struct
     match find_opt t name with
     | None -> None
     | Some (_level, ty) ->
-      let _ty, canonical_name = resolve_aliases (env, ty) in
+      let _ty, canonical_name = resolve_aliases (t, ty) in
       if Name.equal name canonical_name then begin
         Misc.fatal_errorf "Canonical name for %a is itself in environment:@ %a"
           Name.print name
@@ -414,118 +426,69 @@ end) = struct
       end;
       Some canonical_name
 
-  let add t (name : Name.t) cont_level ty =
-    let binding : typing_environment_entry = Definition ty in
-    invariant_for_new_binding t name level entry;
-    let canonical_name = canonical_name t name in
+  let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
+    invariant_for_new_binding t name level binding;
     let t, sublevel = allocate_sublevel t cont_level in
     let level = Scope_level.With_sublevel.create cont_level sublevel in
-    let names_to_types =
-      Name.Map.add name (level, ty) env.names_to_types
+    let redundant_possibly_cyclic_alias =
+      match binding with
+      | Definition _ | CSE _ -> false
+      | Equation ty ->
+        let _, canonical_name = resolve_aliases (t, ty) in
+        let canonical_name_for_t = canonical_name t name in
+        match canonical_name, canonical_name_for_t with
+        | Some canonical_name, Some canonical_name_for_t
+            when Name.equal canonical_name canonical_name_for_t -> true
+        | Some _, Some _ -> assert false (* XXX *)
+        | None, Some canonical_name_for_t
+            when Name.equal name canonical_name_for_t -> true
+        | None, Some _ | None, None | Some _, None -> false
     in
-    let levels_to_names =
-      Scope_level.Map.update cont_level
-        (function
-          | None ->
-            let by_sublevel =
-              Scope_level.Sublevel.Map.singleton sublevel (name, ty)
-            in
-            Some by_sublevel
-          | Some by_sublevel ->
-            assert (not (Scope_level.Sublevel.Map.mem sublevel by_sublevel));
-            Scope_level.Sublevel.Map.add sublevel (name, ty) by_sublevel)
-        t.levels_to_types
-    in
-    let t =
-
-
-
-
-      let normal_case ~name ~scope_level =
-        { env with
+    if redundant_possibly_cyclic_alias then begin
+      t
+    end else begin
+      let names_to_types =
+        match binding with
+        | Definition ty | Equation ty ->
+          Name.Map.add name (level, ty) t.names_to_types
+        | CSE _ -> t.names_to_types
+      in
+      let levels_to_names =
+        Scope_level.Map.update cont_level
+          (function
+            | None ->
+              let by_sublevel =
+                Scope_level.Sublevel.Map.singleton sublevel (name, ty)
+              in
+              Some by_sublevel
+            | Some by_sublevel ->
+              assert (not (Scope_level.Sublevel.Map.mem sublevel by_sublevel));
+              Scope_level.Sublevel.Map.add sublevel (name, ty) by_sublevel)
+          t.levels_to_types
+      in
+      let cse_to_names =
+        match binding with
+        | Definition _ | Equation _ -> t.cse_to_names
+        | CSE prim ->
+          match Flambda_primitive.Map.find prim t.cse_to_names with
+          | exception Not_found -> Flambda_primitive.Map.singleton prim name
+          | _name -> t.cse_to_names  (* Keep the furthest-out binding. *)
+      in
+      let t =
+        { t with
           names_to_types;
           levels_to_names;
+          cse_to_names;
         }
       in
-      match canonical_name, canonical_name_for_t with
-      | Some canonical_name, Some canonical_name_for_t
-          when Name.equal canonical_name canonical_name_for_t -> env
-      | Some _, Some _ -> assert false (* XXX *)
-      | None, Some canonical_name_for_t
-          when Name.equal name canonical_name_for_t -> env
-      | None, Some _
-      | None, None -> normal_case ~name ~scope_level
-      | Some canonical_name, None ->
-        let scope_level, _existing_ty =
-          Name.Map.find canonical_name env.names_to_types
-        in
-        normal_case ~name:canonical_name ~scope_level
+      invariant t;
+      t
+    end
 
+  let singleton ~resolver name scope_level binding =
+    add (create ~resolver) name scope_level binding
 
-    in
-    invariant t;
-    t
-
-(*
-let debug () =
-  match canonical_name, canonical_name_for_t with
-  | None, None -> ()
-  | _, _ ->
-    Format.eprintf "ADD/REPLACE %a : %a.  CN bound name = %a  \
-        CN new type = %a\n.  Existing env: %a%!"
-      Name.print name
-      T.print t
-      (Misc.Stdlib.Option.print Name.print) canonical_name
-      (Misc.Stdlib.Option.print Name.print) canonical_name_for_t
-      print_typing_environment env
-in
-begin match name with
-| Var var ->
-  Variable.debug_when_stamp_matches var ~stamp:21 ~f:debug;
-  Variable.debug_when_stamp_matches var ~stamp:30 ~f:debug
-| Symbol _ -> ()
-end;
-*)
-
-(* Alias map is currently unused
-    match resolve_aliases (env, t) with
-    | _t, None -> env
-    | _t, Some canonical_name ->
-      add_alias_typing_environment env ~canonical_name ~alias:name
-*)
-
-  (* CR mshinwell: We should add a comment here explaining where this can
-     be used and what it cannot be used for (e.g. changing a name's scope
-     level) *)
-  let add_or_replace env name scope_level t =
-    if !Clflags.flambda_invariant_checks then begin
-      invariant env;
-      let free_names = free_names_set t in
-      if Name.Set.mem name free_names then begin
-        Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause a \
-            direct circularity in a type.  Environment: %a"
-          Name.print name
-          print t
-          print_typing_environment env
-      end
-    end;
-    let t = add_or_replace' env name scope_level t in
-    invariant t;
-    t
-
-  let add_typing_environment env name scope_level ty =
-    match Name.Map.find name env.names_to_types with
-    | exception Not_found ->
-      add_or_replace env name scope_level ty
-    | _ty ->
-      Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
-        Name.print name
-        print_typing_environment env
-
-  let singleton ~resolver name scope_level ty =
-    add (create ~resolver) name scope_level ty
-
-  let restrict_to_names0_typing_environment t allowed =
+  let restrict_to_names t allowed =
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
@@ -563,13 +526,6 @@ end;
         print_typing_environment t;
       raise Misc.Fatal_error
     end
-
-  let phys_equal env1 env2 =
-    env1 == env2
-      || (Name.Map.is_empty env1.names_to_types
-            && Name.Map.is_empty env2.names_to_types)
-
-  let print = print_typing_environment
 
   let scope_level t name =
     match Name.Map.find name t.names_to_types with
