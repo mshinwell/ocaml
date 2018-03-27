@@ -358,7 +358,7 @@ end) = struct
       | Equation _ | CSE _ -> ()
 
   let rec invariant_for_new_equation t name level ty ~sense =
-    let existing_ty, _level = find t name in
+    let _level, existing_ty = find t name in
     let meet_ty, env_extension =
       Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
     in
@@ -402,32 +402,46 @@ end) = struct
       invariant_for_new_equation t name level ty
         ~sense:New_equation_must_be_more_precise
 
-  let add t (name : Name.t) level ty =
+  let canonical_name t name =
+    match find_opt t name with
+    | None -> None
+    | Some (_level, ty) ->
+      let _ty, canonical_name = resolve_aliases (env, ty) in
+      if Name.equal name canonical_name then begin
+        Misc.fatal_errorf "Canonical name for %a is itself in environment:@ %a"
+          Name.print name
+          print_typing_environment t
+      end;
+      Some canonical_name
+
+  let add t (name : Name.t) cont_level ty =
     let binding : typing_environment_entry = Definition ty in
     invariant_for_new_binding t name level entry;
-
-
-
+    let canonical_name = canonical_name t name in
+    let t, sublevel = allocate_sublevel t cont_level in
+    let level = Scope_level.With_sublevel.create cont_level sublevel in
+    let names_to_types =
+      Name.Map.add name (level, ty) env.names_to_types
+    in
+    let levels_to_names =
+      Scope_level.Map.update cont_level
+        (function
+          | None ->
+            let by_sublevel =
+              Scope_level.Sublevel.Map.singleton sublevel (name, ty)
+            in
+            Some by_sublevel
+          | Some by_sublevel ->
+            assert (not (Scope_level.Sublevel.Map.mem sublevel by_sublevel));
+            Scope_level.Sublevel.Map.add sublevel (name, ty) by_sublevel)
+        t.levels_to_types
+    in
     let t =
-      let canonical_name =
-        match Name.Map.find name env.names_to_types with
-        | exception Not_found -> None
-        | _level, t ->
-          let _t, canonical_name = resolve_aliases (env, t) in
-          canonical_name
-      in
-      let _t, canonical_name_for_t = resolve_aliases (env, t) in
+
+
+
+
       let normal_case ~name ~scope_level =
-        let names_to_types =
-          Name.Map.add name (scope_level, t) env.names_to_types
-        in
-        let levels_to_names =
-          Scope_level.Map.update scope_level
-            (function
-              | None -> Some (Name.Set.singleton name)
-              | Some by_sublevel -> Some (Name.Set.add name names))
-            env.levels_to_names
-        in
         { env with
           names_to_types;
           levels_to_names;
@@ -446,7 +460,10 @@ end) = struct
           Name.Map.find canonical_name env.names_to_types
         in
         normal_case ~name:canonical_name ~scope_level
+
+
     in
+    invariant t;
     t
 
 (*
@@ -505,11 +522,8 @@ end;
         Name.print name
         print_typing_environment env
 
-  let singleton0_typing_environment ~resolver name scope_level ty
-        ~must_be_closed =
-    add_typing_environment
-      (create ~resolver ~must_be_closed)
-      name scope_level ty
+  let singleton ~resolver name scope_level ty =
+    add (create ~resolver) name scope_level ty
 
   let restrict_to_names0_typing_environment t allowed =
     let names_to_types =
@@ -556,15 +570,6 @@ end;
             && Name.Map.is_empty env2.names_to_types)
 
   let print = print_typing_environment
-
-  let add_or_replace = add_or_replace
-
-  let add = add_typing_environment
-
-  let singleton0 = singleton0_typing_environment
-
-  let singleton ~resolver name scope_level ty =
-    singleton0 ~resolver name scope_level ty ~must_be_closed:true
 
   let scope_level t name =
     match Name.Map.find name t.names_to_types with

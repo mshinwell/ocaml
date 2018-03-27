@@ -260,6 +260,7 @@ end) = struct
     resolver : (Export_id.t -> t option);
     canonical_names_to_aliases : Name.Set.t Name.Map.t;
     names_to_types : (Scope_level.With_sublevel.t * t) Name.Map.t;
+    cse_to_names : Name.t Flambda_primitive.Map.t;
     levels_to_types : (Name.t * t) Scope_level.Sublevel.Map.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
