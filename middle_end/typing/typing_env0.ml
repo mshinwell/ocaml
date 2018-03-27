@@ -297,17 +297,110 @@ end) = struct
     in
     t, sublevel
 
-  let invariant_for_new_equation env name t =
-    let free_names = free_names t in
+  let min_level_for_new_binding t =
+    let all_levels = Scope_level.Map.keys t.levels_to_types in
+    match Scope_level.Set.max_elt_opt all_levels with
+    | None -> Scope_level.initial
+    | Some level -> level
+
+  type sense =
+    | New_equation_must_be_more_precise
+    | Existing_equation_must_be_more_precise
+
+  let print_sense ppf (sense : sense) =
+    match sense with
+    | New_equation_must_be_more_precise ->
+      Format.fprintf ppf "New_equation_must_be_more_precise"
+    | Existing_equation_must_be_more_precise ->
+      Format.fprintf ppf "Existing_equation_must_be_more_precise"
+
+  let invariant_for_any_new_binding t name level
+        (entry : typing_environment_entry) =
+    let free_names =
+      match entry with
+      | Definition ty | Equation ty -> free_names ty
+      | CSE prim -> Flambda_primitive.free_names prim
+    in
     if Name.Set.mem name free_names then begin
-      Misc.fatal_errorf "Cannot add equation %a = %a@ as it would induce \
+      Misc.fatal_errorf "Cannot add binding %a = %a@ as it would produce \
           a circular dependency"
-        Name.print 
+        Name.print name
+        print_typing_environment_entry entry
     end;
+    let min_level = min_level_for_new_binding t in
+    if Scope_level.(<) level min_level then begin
+      Misc.fatal_errorf "Cannot add binding %a = %a@ to this environment \
+          with scope level %a (minimum permitted level %a):@ %a"
+        Name.print name
+        print_typing_environment_entry entry
+        Scope_level.print level
+        Scope_level.print min_level
+        print_typing_environment t
+    end;
+    match find_opt t name with
+    | None ->
+      begin match entry with
+      | Definition _ | CSE _ -> ()
+      | Equation _ ->
+        Misc.fatal_errorf "Cannot add %a = %a@ for name undefined in \
+            environment:@ %a"
+          Name.print name
+          print_typing_environment_entry entry
+          print_typing_environment t
+      end
+    | Some _ ->
+      match entry with
+      | Definition _ ->
+        Misc.fatal_errorf "Cannot redefine %a = %a@ in environment:@ %a"
+          Name.print name
+          print_typing_environment_entry entry
+          print_typing_environment t
+      | Equation _ | CSE _ -> ()
 
+  let invariant_for_new_binding t name level
+        (entry : typing_environment_entry) =
+    invariant_for_any_new_binding t name level entry;
+    match entry with
+    | Definition _ty -> ()
+    | Equation ty ->
+      let existing_ty, _level = find t name in
+      let meet_ty, env_extension =
+        Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
+      in
+      let ty_must_be_strictly_more_precise, other_ty =
+        match sense with
+        | New_equation_must_be_more_precise -> ty, existing_ty
+        | Existing_equation_must_be_more_precise -> existing_ty, ty
+      in
+      let as_or_more_precise =
+        T.equal meet_ty ty_must_be_strictly_more_precise
+      in
+      let strictly_more_precise =
+        ty_as_or_more_precise && not (T.equal meet_ty other_ty)
+      in
+      if not ty_strictly_more_precise then
+        Misc.fatal_errorf "Cannot add equation %a = %a@ to this environment: \
+            as_or_more_precise %b,@ strictly_more_precise %b,@ meet_ty@ %a,@ \
+            existing_ty@ %a,@ sense@ %a.@  Env:@ %a"
+          Name.print name
+          T.print ty
+          ty_as_or_more_precise
+          ty_strictly_more_precise
+          T.print meet_ty
+          T.print existing_ty
+          print_sense sense
+          print_typing_environment t
+      end;
+      Typing_env_extension.iter env_extension
+        ~f:(fun name _binding_type level ty ->
+          let level = Scope_level.With_sublevel.level level in
+          invariant_for_new_binding t name level (Equation ty)
+            ~sense:Existing_equation_must_be_more_precise)
+    | CSE _prim -> ()
 
-
-  let add_or_replace' env (name : Name.t) scope_level t =
+  let add t (name : Name.t) level ty =
+    let binding : typing_environment_entry = Definition ty in
+    invariant_for_new_binding t name level entry;
 
 
 
