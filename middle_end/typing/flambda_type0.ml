@@ -30,6 +30,7 @@ module Real_typing_environment0 = Typing_env0
 module Real_meet_and_join_value = Meet_and_join_value
 module Real_meet_and_join_naked_number = Meet_and_join_naked_number
 module Real_meet_and_join_fabricated = Meet_and_join_fabricated
+module Real_type_equality = Type_equality
 
 module Make (Expr : sig
   type t
@@ -2436,7 +2437,7 @@ result
   end and Type_equality : sig
     include Type_equality_intf.S
       with type flambda_type := flambda_type
-  end = struct
+  end = Real_type_equality.Make (T)
 
   let meet = Meet_and_join.meet
   let join = Meet_and_join.join

@@ -261,6 +261,7 @@ end) = struct
     names_to_types : (Scope_level.With_sublevel.t * t) Name.Map.t;
     cse_to_names : Name.t Flambda_primitive.With_fixed_value.Map.t;
     levels_to_types : (Name.t * t) Scope_level.Sublevel.Map.t Scope_level.Map.t;
+    next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
@@ -359,7 +360,7 @@ module type S = sig
   val meet
      : bias_towards:t_in_context
     -> t_in_context
-    -> t * Typing_env_extension.t
+    -> t * env_extension
 
   val is_empty_typing_environment : typing_environment -> bool
 end

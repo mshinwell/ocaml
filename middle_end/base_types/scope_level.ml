@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017 OCamlPro SAS                                          *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,25 +14,73 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Numbers.Int
+module type S = sig
+  type t
 
-let for_symbols = 0
-let initial = for_symbols
+  include Identifiable.S with type t := t
 
-let next t =
-(*
-  if t < 0 then begin
-    Misc.fatal_error "Cannot increment scope level from [for_symbols]"
-  end;
-*)
-  t + 1
+  val initial : t
 
-let prev t =
-  if t <= initial then begin
-    Misc.fatal_error "Cannot decrement scope level past the initial level"
-  end;
-  t - 1
+  val prev : t -> t
+  val next : t -> t
 
-let (>=) (t1 : t) t2 = t1 >= t2
+  val (>=): t -> t -> bool
 
-let to_int t = t
+  val to_int : t -> int
+end
+
+module T0 = struct
+  include Numbers.Int
+
+  let for_symbols = 0
+  let initial = for_symbols
+
+  let next t =
+    t + 1
+
+  let prev t =
+    if t <= initial then begin
+      Misc.fatal_error "Cannot decrement continuation level past the \
+        initial level"
+    end;
+    t - 1
+
+  let (>=) (t1 : t) t2 = t1 >= t2
+
+  let to_int t = t
+end
+
+include T0
+
+module Sublevel = struct
+  include Numbers.Int
+
+  let for_symbols = 0
+  let initial = for_symbols
+
+  let next t =
+    t + 1
+
+  let prev t =
+    if t <= initial then begin
+      Misc.fatal_error "Cannot decrement sublevel past the initial level"
+    end;
+    t - 1
+
+  let (>=) (t1 : t) t2 = t1 >= t2
+
+  let to_int t = t
+end
+
+module With_sublevel = struct
+  type with_sublevel = t * Sublevel.t
+
+  type t = with_sublevel
+
+  let create level sublevel : t = level, sublevel
+
+  let level (level, _sublevel) = level
+  let sublevel (_level, sublevel) = sublevel
+
+  include Identifiable.Make_pair (T0) (Sublevel)
+end

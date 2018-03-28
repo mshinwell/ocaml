@@ -20,6 +20,7 @@
 
 module type S = sig
   type typing_environment
+  type typing_environment_entry
   type env_extension
   type flambda_type
   (* CR mshinwell: rename t_in_context -> flambda_type_in_context *)
@@ -87,6 +88,10 @@ module type S = sig
       is idempotent. *)
   val remove : t -> Name.t -> t
 
+  (** Whether a name bound by the environment is normally-accessible or
+      has been made existential (as a result of [cut], below). *)
+  type binding_type = Normal | Existential
+
   (** Determine the most precise type which the environment knows for the
       given name. *)
   val find_exn : t -> Name.t -> flambda_type * binding_type
@@ -117,10 +122,6 @@ module type S = sig
   (** Returns [true] if the given name, which must be bound in the given
       environment, is existentially bound. *)
   val is_existential_exn : t -> Name.t -> bool
-
-  (** Whether a name bound by the environment is normally-accessible or
-      has been made existential (as a result of [cut], below). *)
-  type binding_type = Normal | Existential
 
   (** Fold over entries of the typing environment.  The entries are passed
       to [f] in order of increasing (level, sublevel) order (i.e. outermost
