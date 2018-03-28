@@ -76,11 +76,21 @@ end) = struct
         } as t2) =
     if fast_equal t1 t2 then true
     else
-      let equal_scope_and_type (scope1, t1) (scope2, t2) =
-        Scope_level.With_sublevel.equal scope1 scope2
-          && Type_equality.equal t1 t2
+      let equal_entry (entry1 : typing_environment_entry0)
+            (entry2 : typing_environment_entry0) =
+        match entry1, entry2 with
+        | Definition ty1, Definition ty2 ->
+          Type_equality.equal ty1 ty2
+        | Equation ty1, Equation ty2 ->
+          Type_equality.equal ty1 ty2
+        | Definition _, Equation _
+        | Equation _, Definition _ -> false
       in
-      Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
+      let equal_scope_and_entry (scope1, entry1) (scope2, entry2) =
+        Scope_level.With_sublevel.equal scope1 scope2
+          && equal_entry entry1 entry2
+      in
+      Name.Map.equal equal_scope_and_entry names_to_types1 names_to_types2
         && Flambda_primitive.With_fixed_value.Map.equal Name.equal
              cse_to_names1 cse_to_names2
         && Name.Set.equal existentials1 existentials2
@@ -114,10 +124,14 @@ end) = struct
       Misc.fatal_errorf "Cannot find %a in environment:@ %a"
         Name.print name
         print_typing_environment t
-    | _scope_level, ty ->
+    | _scope_level, entry ->
       let binding_type =
         if Name.Set.mem name t.existentials then Existential
         else Normal
+      in
+      let ty =
+        match entry with
+        | Definition ty | Equation ty -> ty
       in
       match binding_type with
       | Normal -> ty, Normal
@@ -251,7 +265,11 @@ end) = struct
          the environment are only in one direction. *)
       ignore (Sys.opaque_identity (fold t ~init:Name.Set.empty
         ~f:(fun names_seen (name : Name.t) (binding_type : binding_type)
-                scope_level ty ->
+                scope_level entry ->
+          let ty =
+            match entry with
+            | Definition ty | Equation ty -> ty
+          in
           let free_names = T.free_names_set ty in
           if not (Name.Set.subset free_names names_seen) then begin
             Misc.fatal_errorf "Typing environment is not closed (%a free):@ %a"
@@ -272,7 +290,11 @@ end) = struct
           Name.Set.union free_names names_seen)) : Name.Set.t);
       (* Checking that alias resolution works also ensures there are no
          cycles via aliases. *)
-      Name.Map.iter (fun bound_name (_level, ty) ->
+      Name.Map.iter (fun bound_name (_level, entry) ->
+          let ty =
+            match (entry : typing_environment_entry0) with
+            | Definition ty | Equation ty -> ty
+          in
           ignore (Sys.opaque_identity (resolve_aliases ~bound_name (t, ty))))
         t.names_to_types
     end

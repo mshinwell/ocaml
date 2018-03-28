@@ -21,6 +21,7 @@
 module type S = sig
   type typing_environment
   type typing_environment_entry
+  type typing_environment_entry0
   type env_extension
   type flambda_type
   (* CR mshinwell: rename t_in_context -> flambda_type_in_context *)
@@ -133,7 +134,7 @@ module type S = sig
       -> Name.t
       -> binding_type
       -> Scope_level.With_sublevel.t
-      -> flambda_type
+      -> typing_environment_entry0
       -> 'a)
     -> 'a
 
@@ -143,7 +144,7 @@ module type S = sig
     -> f:(Name.t
       -> binding_type
       -> Scope_level.With_sublevel.t
-      -> flambda_type
+      -> typing_environment_entry0
       -> unit)
     -> unit
 

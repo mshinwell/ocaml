@@ -19,6 +19,7 @@
 module type S = sig
   type env_extension
   type typing_environment
+  type typing_environment_entry0
   type flambda_type
 
   type t = env_extension
@@ -51,7 +52,7 @@ module type S = sig
       -> Name.t
       -> binding_type
       -> Scope_level.With_sublevel.t
-      -> flambda_type
+      -> typing_environment_entry0
       -> 'a)
     -> 'a
 
@@ -60,7 +61,7 @@ module type S = sig
     -> f:(Name.t
       -> binding_type
       -> Scope_level.With_sublevel.t
-      -> flambda_type
+      -> typing_environment_entry0
       -> unit)
     -> unit
 
