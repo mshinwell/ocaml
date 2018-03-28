@@ -67,12 +67,33 @@ module type Map = sig
     -> 'a t
     -> 'a t
     -> 'a t
-  val intersection_fold_and_remainder
+  type 'a three_way_diff = private {
+    in_first_only : 'a t;
+    in_second_only : 'a t;
+    in_both : ('a * 'a) t;
+  }
+  val three_way_diff : 'a t -> 'a t -> 'a three_way_diff
+  type side = private
+    | Left
+    | Right
+  type 'a intersection_and_remainder = private {
+    intersection : ('a * 'a) t;
+    remainder : (side * 'a) t;
+  }
+  val intersection_and_remainder : 'a t -> 'a t -> 'a intersection_and_remainder
+  val fold_intersection
      : 'a t
     -> 'a t
     -> init:'b
-    -> inter:('b -> key -> 'a -> 'a -> 'a * 'b)
-    -> 'a t * 'b
+    -> inter:('b -> key -> 'a -> 'a -> 'b)
+    -> 'b
+  val fold_intersection_and_remainder
+     : 'a t
+    -> 'a t
+    -> init:'b
+    -> inter:('b -> key -> 'a -> 'a -> 'b)
+    -> rem:('b -> 'a t -> key -> 'a -> 'b)
+    -> 'b
   val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
   val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
   val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
@@ -201,28 +222,71 @@ module Make_map (T : Thing_no_hash) = struct
         | t2_elt -> add key (f t1_elt t2_elt) inter)
       t1
       empty
+    
+  type 'a three_way_diff = {
+    in_first_only : 'a t;
+    in_second_only : 'a t;
+    in_both : ('a * 'a) t;
+  }
 
-  let intersection_fold_and_remainder t1 t2 ~init ~inter =
+  let three_way_diff t1 t2 : _ three_way_diff =
     let in_both =
       inter (fun datum1 datum2 -> Some (datum1, datum2)) t1 t2
     in
-    let in_both, acc =
-      fold (fun name (datum1, datum2) (in_both, acc) ->
-          let datum, acc = inter acc name datum1 datum2 in
-          let in_both = add name datum in_both in
-          in_both, acc)
-        in_both
+    let in_first_only =
+      filter (fun key _ -> not (mem key in_both)) t1
+    in
+    let in_second_only =
+      filter (fun key _ -> not (mem key in_both)) t2
+    in
+    { in_first_only;
+      in_second_only;
+      in_both;
+    }
+
+  type side =
+    | Left
+    | Right
+
+  type 'a intersection_and_remainder = {
+    intersection : ('a * 'a) t;
+    remainder : (side * 'a) t;
+  }
+
+  let intersection_and_remainder t1 t2 : _ intersection_and_remainder =
+    let diff = three_way_diff t1 t2 in
+    let in_first_only =
+      map (fun datum -> Left, datum) diff.in_first_only
+    in
+    let in_second_only =
+      map (fun datum -> Right, datum) diff.in_second_only
+    in
+    { intersection = diff.in_both;
+      remainder = disjoint_union in_first_only in_second_only;
+    }
+
+  let fold_intersection t1 t2 ~init ~inter =
+    let intersection_and_remainder = intersection_and_remainder t1 t2 in
+    fold (fun key (datum1, datum2) acc -> inter acc key datum1 datum2)
+      intersection_and_remainder.intersection
+      init
+
+  let fold_intersection_and_remainder t1 t2 ~init ~inter ~rem =
+    let intersection_and_remainder = intersection_and_remainder t1 t2 in
+    let acc =
+      fold (fun key (datum1, datum2) acc -> inter acc key datum1 datum2)
+        intersection_and_remainder.intersection
         init
     in
-    let only_in_t1 =
-      filter (fun name _ -> not (mem name in_both)) t1
-    in
-    let only_in_t2 =
-      filter (fun name _ -> not (mem name in_both)) t2
-    in
-    let remainder = disjoint_union only_in_t1 only_in_t2 in
-    let result = disjoint_union in_both remainder in
-    result, acc
+    fold (fun key ((side : side), datum) acc ->
+        let t1_or_t2 =
+          match side with
+          | Left -> t1
+          | Right -> t2
+        in
+        rem acc t1_or_t2 key datum)
+      intersection_and_remainder.remainder
+      acc
 
   let rename m v =
     try find v m
