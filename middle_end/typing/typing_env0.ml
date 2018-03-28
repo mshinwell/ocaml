@@ -580,7 +580,9 @@ end) = struct
               ~init:t
               ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
                 assert (Name.equal name1 name2);
-                let meet_ty, env_extension = meet (t1, ty1) (t2, ty2) in
+                let meet_ty, env_extension =
+                  Meet_and_join.meet (t1, ty1) (t2, ty2)
+                in
                 let binding_type = binding_type t name1 in
                 let t =
                   add_with_binding_type t name binding_type
@@ -604,7 +606,14 @@ end) = struct
               t)
       in
       let cse_to_names =
-        ...
+        Flambda_primitive.With_fixed_value.Map.union_merge
+          (fun name1 name2 ->
+            let level1 = scope_level_exn t1 name1 in
+            let level2 = scope_level_exn t2 name2 in
+            (* Keep the outermost binding. *)
+            if Scope_level.With_sublevel.(>) level1 level2 then name2
+            else name1)
+          t1.cse_to_names t2.cse_to_names
       in
       let existentials = Name.Set.union t1.existentials t2.existentials in
       let existential_freshening = t1.existential_freshening (* XXX *) in
@@ -620,69 +629,54 @@ end) = struct
 
   let join_typing_environment (t1 : typing_environment)
         (t2 : typing_environment) =
-    if fast_equal env1 env2 then begin
-      env1
-    end else begin
-      let names_to_types =
-        Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
-            if not (Scope_level.equal level1 level2) then begin
-              Misc.fatal_errorf "join_typing_environment: \
-                  Scope levels differ for:@ %a@ and:@ %a"
-                T.print ty1
-                T.print ty2
-            end;
-            let ty = join (t1, ty1) (t2, ty2) in
-            level1, ty)
-          t1.names_to_types
-          t2.names_to_types
+    if fast_equal t1 t2 then t1
+    else if is_empty t1 then create_using_resolver_from t1
+    else if is_empty t2 then create_using_resolver_from t1
+    else
+      let t =
+        Scope_level.Map.intersection_fold
+          t1.levels_to_types t2.levels_to_types
+          ~init:(create ~resolver)
+          ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
+            Scope_level.Sublevel.intersection_fold
+              by_sublevel1 by_sublevel2
+              ~init:t
+              ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
+                assert (Name.equal name1 name2);
+                let join_ty =
+                  Meet_and_join.join (t1, ty1) (t2, ty2)
+                in
+                let binding_type = binding_type t name1 in
+                let t =
+                  add_with_binding_type t name binding_type
+                    cont_level sublevel (Definition join_ty)))
       in
-      let in_t1_only =
-        Name.Map.filter (fun name _ ->
-            not (Name.Map.mem name names_to_types))
-          t1.names_to_types
-      in
-      let in_t2_only =
-        Name.Map.filter (fun name _ ->
-            not (Name.Map.mem name names_to_types))
-          t2.names_to_types
-      in
-      let in_one_env_only =
-        Name.Map.disjoint_union in_t1_only in_t2_only
-      in
-      let names_to_types =
-        Name.Map.fold (fun name (scope_level, ty) names_to_types ->
-            let ty = unknown (kind ty) in
-            assert (not (Name.Map.mem name names_to_types));
-            Name.Map.add name (scope_level, ty) names_to_types)
-          in_one_env_only
-          names_to_types
-      in
-      let all_levels_to_names =
-        Scope_level.Map.union_merge
-          (fun names1 names2 -> Name.Set.union names1 names2)
-          t1.levels_to_names
-          t2.levels_to_names
-      in
-      let levels_to_names =
-        Scope_level.Map.map (fun names ->
-            Name.Set.filter (fun name ->
-                Name.Map.mem name names_to_types)
-              names)
-          all_levels_to_names
+      let cse_to_names =
+        Flambda_primitive.With_fixed_value.Map.inter_merge
+          (fun name1 name2 ->
+            let level1 = scope_level_exn t1 name1 in
+            let level2 = scope_level_exn t2 name2 in
+            (* Keep the outermost binding. *)
+            if Scope_level.With_sublevel.(>) level1 level2 then name2
+            else name1)
+          t1.cse_to_names t2.cse_to_names
       in
       let existentials =
-        Name.Set.union t1.existentials t2.existentials
+        Name.Set.filter (fun name -> Name.Map.mem name names_to_types)
+          Name.Set.union t1.existentials t2.existentials
       in
-      let existential_freshening =
-        t1.existential_freshening (* XXX *)
+      let existential_freshening = t1.existential_freshening (* XXX *) in
+      let t =
+        { t with
+          names_to_types;
+          cse_to_names;
+          levels_to_types;
+          existentials;
+          existential_freshening;
+        }
       in
-      { resolver = t1.resolver;
-        names_to_types;
-        levels_to_names;
-        existentials;
-        existential_freshening;
-      }
-    end
+      invariant t;
+      t
 
   let add_env_extension t env_extension =
     let t' =

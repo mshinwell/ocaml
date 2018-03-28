@@ -108,7 +108,7 @@ module type S = sig
 
   (** The scoping level known for the given name, which must be bound by the
       given environment. *)
-  val scope_level_exn : t -> Name.t -> Scope_level.t
+  val scope_level_exn : t -> Name.t -> Scope_level.With_sublevel.t
 
   (** Whether the given name is bound in the environment (either normally
       or existentially). *)
