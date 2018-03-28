@@ -318,13 +318,14 @@ let restrict_to_names t allowed =
         tbl.variables
     in
     let back_var =
-      Variable.Map.filter_map tbl.back_var ~f:(fun _new_var old_vars ->
-        let old_vars =
-          List.filter (fun var -> Name.Set.mem (Name.var var) allowed) old_vars
-        in
-        match old_vars with
-        | [] -> None
-        | _ -> Some old_vars)
+      Variable.Map.filter_map (fun _new_var old_vars ->
+          let old_vars =
+            List.filter (fun var -> Name.Set.mem (Name.var var) allowed) old_vars
+          in
+          match old_vars with
+          | [] -> None
+          | _ -> Some old_vars)
+        tbl.back_var
     in
     Active { tbl with
       variables;

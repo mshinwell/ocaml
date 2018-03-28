@@ -58,6 +58,26 @@ module type S =
     val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
+    val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
+    val of_list : (key * 'a) list -> 'a t
+    val diff : 'a t -> 'a t -> 'a t
+    val union_right : 'a t -> 'a t -> 'a t
+    val union_left : 'a t -> 'a t -> 'a t
+    val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+    val union_both
+       : ('a -> 'a)
+      -> ('a -> 'a -> 'a)
+      -> 'a t
+      -> 'a t
+      -> 'a t
+    val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
+    val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
+    val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+    val rename : key t -> key -> key
+    val map_keys : (key -> key) -> 'a t -> 'a t
+    val data : 'a t -> 'a list
+    val get_singleton : 'a t -> (key * 'a) option
+    val transpose_keys_and_data : key t -> key t
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
     val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
@@ -481,6 +501,93 @@ module Make(Ord: OrderedType) = struct
 
     let choose_opt = min_binding_opt
 
+    let diff t1 t2 =
+      filter (fun key _ -> not (mem key t2)) t1
+
+    let filter_map f t =
+      fold (fun id v map ->
+          match f id v with
+          | None -> map
+          | Some r -> add id r map) t empty
+
+    let of_list l =
+      List.fold_left (fun map (id, v) -> add id v map) empty l
+
+    let union_right m1 m2 =
+      merge (fun _id x y -> match x, y with
+          | None, None -> None
+          | None, Some v
+          | Some v, None
+          | Some _, Some v -> Some v)
+        m1 m2
+
+    let union_left m1 m2 = union_right m2 m1
+
+    let union_merge f m1 m2 =
+      let aux _ m1 m2 =
+        match m1, m2 with
+        | None, m | m, None -> m
+        | Some m1, Some m2 -> Some (f m1 m2)
+      in
+      merge aux m1 m2
+
+    let union_both f g m1 m2 =
+      let aux _ m1 m2 =
+        match m1, m2 with
+        | None, None -> None
+        | None, Some m | Some m, None -> Some (f m)
+        | Some m1, Some m2 -> Some (g m1 m2)
+      in
+      merge aux m1 m2
+
+    let inter f t1 t2 =
+      fold (fun key t1_elt inter ->
+          match find key t2 with
+          | exception Not_found -> inter
+          | t2_elt ->
+            match f t1_elt t2_elt with
+            | None -> inter
+            | Some elt -> add key elt inter)
+        t1
+        empty
+
+    let inter_merge f t1 t2 =
+      fold (fun key t1_elt inter ->
+          match find key t2 with
+          | exception Not_found -> inter
+          | t2_elt -> add key (f t1_elt t2_elt) inter)
+        t1
+        empty
+
+    let rename m v =
+      try find v m
+      with Not_found -> v
+
+    let map_keys f m =
+      of_list (List.map (fun (k, v) -> f k, v) (bindings m))
+
+    let data t = List.map snd (bindings t)
+
+    let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
+
+    let get_singleton t =
+      match bindings t with
+      | [key, value] -> Some (key, value)
+      | _ -> None
+
+    let for_all2_opt f t1 t2 =
+      (* CR mshinwell: Provide a proper implementation *)
+      if cardinal t1 <> cardinal t2 then None
+      else
+        let t1 = bindings t1 in
+        let t2 = bindings t2 in
+        let for_all2 =
+          List.for_all2 (fun (key1, datum1) (key2, datum2) ->
+              Ord.compare key1 key2 = 0 && f datum1 datum2)
+            t1 t2
+        in
+        Some for_all2
+
     let add_seq i m =
       Seq.fold_left (fun m (k,v) -> add k v m) m i
 
@@ -504,4 +611,124 @@ module Make(Ord: OrderedType) = struct
             end
       in
       seq_of_enum_ (aux low m End)
+end
+
+module type S_printable = sig
+  include S
+
+  val print
+     : ?before_key:string
+    -> ?after_key:string
+    -> (Format.formatter -> 'a -> unit)
+    -> Format.formatter
+    -> 'a t
+    -> unit
+
+  (** [disjoint_union m1 m2] contains all bindings from [m1] and
+      [m2]. If some binding is present in both and the associated
+      value is not equal, an exception is raised. *)
+  val disjoint_union
+     : ?eq:('a -> 'a -> bool)
+    -> ?print:(Format.formatter -> 'a -> unit)
+    -> 'a t
+    -> 'a t
+    -> 'a t
+
+  module Set_of_keys : Set.S_printable with type elt = key
+
+  val keys : 'a t -> Set_of_keys.t
+  val of_set : (key -> 'a) -> Set_of_keys.t -> 'a t
+  val transpose_keys_and_data_set : key t -> Set_of_keys.t t
+end
+
+module Make_printable (T : sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end) : S_printable with type key = T.t = struct
+  include Make (T)
+
+  let print ?(before_key = "") ?(after_key = "") f ppf t =
+    let print_binding ppf (id, v) =
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
+        before_key
+        T.print id
+        after_key
+        f v
+    in
+    let bindings = bindings t in
+    match bindings with
+    | [] -> Format.fprintf ppf "()"
+    | _ ->
+      Format.fprintf ppf "@[<hov 1>(%a)@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          print_binding) bindings
+
+  let disjoint_union ?eq ?print m1 m2 =
+    union (fun id v1 v2 ->
+        let ok = match eq with
+          | None -> false
+          | Some eq -> eq v1 v2
+        in
+        if not ok then
+          let err =
+            match print with
+            | None ->
+              Format.asprintf "Map.disjoint_union %a" T.print id
+            | Some print ->
+              Format.asprintf "Map.disjoint_union %a => %a <> %a"
+                T.print id print v1 print v2
+          in
+          failwith err
+        else Some v1)
+      m1 m2
+
+  module Set_of_keys = Set.Make_printable (T)
+
+  let keys t =
+    fold (fun k _ set -> Set_of_keys.add k set) t Set_of_keys.empty
+
+  let of_set f set =
+    Set_of_keys.fold (fun e map -> add e (f e) map) set empty
+
+  let transpose_keys_and_data_set map =
+    fold (fun k v m ->
+        let set =
+          match find v m with
+          | exception Not_found -> Set_of_keys.singleton k
+          | set -> Set_of_keys.add k set
+        in
+        add v set m)
+      map empty
+end
+
+module type With_set_arg = sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end
+
+module type With_set = sig
+  type t
+
+  include OrderedType with type t := t
+
+  val print : Format.formatter -> t -> unit
+
+  module T : With_set_arg with type t = t
+
+  module Set : Set.S_printable with type elt = t
+
+  module Map : S_printable
+    with type key = t
+    with module Set_of_keys = Set
+end
+
+module Make_with_set (T : With_set_arg) = struct
+  module T = T
+
+  let compare = T.compare
+  let print = T.print
+
+(*  module Set = Set.Make_printable (T)*)
+  module Map = Make_printable (T)
+  module Set = Map.Set_of_keys
 end

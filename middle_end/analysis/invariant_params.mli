@@ -65,7 +65,7 @@ end
 (*
 module Continuations : sig
   module Continuation_and_variable : sig
-    include Identifiable.S with type t = Continuation.t * Variable.t
+    include Hashtbl.With_map with type t = Continuation.t * Variable.t
   end
 
   val invariant_params_in_recursion

@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-include Identifiable.S
+include Hashtbl.With_map
 
 (* CR mshinwell for pchambart: These should be deleted, right?
    Hmm, except that in e.g. Flambda.make_closure_declaration we still have

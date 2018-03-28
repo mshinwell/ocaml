@@ -204,14 +204,14 @@ val min : t -> t -> t
 val max : t -> t -> t
 (** Returns the larger integer. *)
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 module Targetint_set = Set
 
 module Pair : sig
   type nonrec t = t * t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -294,14 +294,14 @@ module OCaml : sig
 
   (* CR mshinwell: Add an [Array] module *)
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 
   val set_of_targetint_set : Targetint_set.t -> Set.t
 
   module Pair : sig
     type nonrec t = t * t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -314,6 +314,6 @@ module OCaml : sig
     val ok : targetint_ocaml -> t
     val unknown : unit -> t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 end

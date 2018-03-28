@@ -84,6 +84,9 @@ module Hashtbl : sig
       val add_seq : 'a t -> (key * 'a) Seq.t -> unit
       val replace_seq : 'a t -> (key * 'a) Seq.t -> unit
       val of_seq : (key * 'a) Seq.t -> 'a t
+      val to_list : 'a t -> (key * 'a) list
+      val of_list : (key * 'a) list -> 'a t
+      val memoize : 'a t -> (key -> 'a) -> key -> 'a
     end
   module type SeededS =
     sig
@@ -114,6 +117,9 @@ module Hashtbl : sig
       val add_seq : 'a t -> (key * 'a) Seq.t -> unit
       val replace_seq : 'a t -> (key * 'a) Seq.t -> unit
       val of_seq : (key * 'a) Seq.t -> 'a t
+      val to_list : 'a t -> (key * 'a) list
+      val of_list : (key * 'a) list -> 'a t
+      val memoize : 'a t -> (key -> 'a) -> key -> 'a
     end
   module Make : functor (H : HashedType) -> S
     with type key = H.t
@@ -170,6 +176,26 @@ module Map : sig
       val find_last_opt : f:(key -> bool) -> 'a t -> (key * 'a) option
       val map : f:('a -> 'b) -> 'a t -> 'b t
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
+      val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
+      val of_list : (key * 'a) list -> 'a t
+      val diff : 'a t -> 'a t -> 'a t
+      val union_right : 'a t -> 'a t -> 'a t
+      val union_left : 'a t -> 'a t -> 'a t
+      val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+      val union_both
+         : ('a -> 'a)
+        -> ('a -> 'a -> 'a)
+        -> 'a t
+        -> 'a t
+        -> 'a t
+      val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
+      val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
+      val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+      val rename : key t -> key -> key
+      val map_keys : (key -> key) -> 'a t -> 'a t
+      val data : 'a t -> 'a list
+      val get_singleton : 'a t -> (key * 'a) option
+      val transpose_keys_and_data : key t -> key t
       val to_seq : 'a t -> (key * 'a) Seq.t
       val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
       val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
@@ -213,6 +239,7 @@ module Set : sig
       val max_elt_opt: t -> elt option
       val choose : t -> elt
       val choose_opt: t -> elt option
+      val get_singleton : t -> elt option
       val split: elt -> t -> t * bool * t
       val find: elt -> t -> elt
       val find_opt: elt -> t -> elt option

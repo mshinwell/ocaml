@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : ?current_compilation_unit:Compilation_unit.t -> string -> t
 val of_ident : Ident.t -> t

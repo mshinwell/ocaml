@@ -34,8 +34,6 @@ module T0 = struct
 
   let compare t1 t2 = TO.compare t1.value t2.value
 
-  let equal t1 t2 = TO.equal t1.value t2.value
-
   let hash t = TO.hash t.value
 
   let print ppf t =
@@ -60,20 +58,18 @@ module T0 = struct
 *)
 end
 
-module Self = Identifiable.Make (T0)
+module Self = Hashtbl.Make_with_map (T0)
 
 include Self
 
 module Pair = struct
-  include Identifiable.Make_pair (struct
+  include Hashtbl.Make_with_map_pair (struct
     type nonrec t = t
     include Self
   end) (struct
     type nonrec t = t
     include Self
   end)
-
-  type nonrec t = t * t
 end
 
 let cross_product = Pair.create_from_cross_product
@@ -191,7 +187,7 @@ module Or_unknown = struct
   let ok imm = Ok imm
   let unknown () = Unknown
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =
@@ -200,9 +196,6 @@ module Or_unknown = struct
       | Unknown, Ok _ -> 1
       | Unknown, Unknown -> 0
       | Ok imm1, Ok imm2 -> compare imm1 imm2
-
-    let equal t1 t2 =
-      compare t1 t2 = 0
 
     let hash t =
       match t with

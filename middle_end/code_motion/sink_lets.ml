@@ -110,13 +110,13 @@ end = struct
   let add_candidates_to_sink_from_handler_state t ~current_continuation
         ~handler_state ~except =
     let candidates_to_sink =
-      Variable.Map.filter_map handler_state.candidates_to_sink
-        ~f:(fun var sink_to ->
+      Variable.Map.filter_map (fun var sink_to ->
           if Variable.Set.mem var except then
             None
           else begin
             Some (current_continuation :: sink_to)
           end)
+        handler_state.candidates_to_sink
     in
     let candidates_to_sink =
       Variable.Map.union (fun _var sink_to1 sink_to2 ->

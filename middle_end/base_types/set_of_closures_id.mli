@@ -19,7 +19,7 @@
 (** An identifier, unique across the whole program, that identifies a set
     of closures (viz. [Set_of_closures]). *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : ?name:string -> Compilation_unit.t -> t
 val name : t -> string option

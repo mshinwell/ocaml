@@ -20,7 +20,7 @@
     in order to perform conditional control flow.  They form an abstraction
     around constant constructor indexes and block tags. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : Targetint.OCaml.t -> t option
 val create_exn : Targetint.OCaml.t -> t

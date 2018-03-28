@@ -24,7 +24,7 @@ type t = {
 
 type symbol = t
 
-module I = Identifiable.Make (struct
+module I = Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -35,10 +35,6 @@ module I = Identifiable.Make (struct
       let c = compare t1.hash t2.hash in
       if c <> 0 then c
       else Linkage_name.compare t1.label t2.label
-
-  let equal x y =
-    if x == y then true
-    else compare x y = 0
 
   let hash t = t.hash
 

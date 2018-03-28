@@ -20,7 +20,7 @@
     correspond to which pushtraps independently of which continuations the
     pushtraps have as their exception handlers. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : unit -> t
 

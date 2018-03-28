@@ -347,6 +347,11 @@ module type S =
 
     val of_seq : (key * 'a) Seq.t -> 'a t
     (** @since 4.07 *)
+
+    val to_list : 'a t -> (key * 'a) list
+    val of_list : (key * 'a) list -> 'a t
+
+    val memoize : 'a t -> (key -> 'a) -> key -> 'a
   end
 (** The output signature of the functor {!Hashtbl.Make}. *)
 
@@ -361,6 +366,32 @@ module Make (H : HashedType) : S with type key = H.t
     equality and hashing.  Since the hash function is not seeded,
     the [create] operation of the result structure always returns
     non-randomized hash tables. *)
+
+module type S_printable = sig
+  include S
+
+  val print
+     : ?before_key:string
+    -> ?after_key:string
+    -> (Format.formatter -> 'a -> unit)
+    -> Format.formatter
+    -> 'a t
+    -> unit
+
+  val map : 'a t -> ('a -> 'b) -> 'b t
+
+  module Map_from_keys : Map.S_printable with type key = key
+
+  val to_map : 'a t -> 'a Map_from_keys.t
+
+  val of_map : 'a Map_from_keys.t -> 'a t
+end
+
+module Make_printable (T : sig
+  include HashedType
+  val compare : t -> t -> int
+  val print : Format.formatter -> t -> unit
+end) : S_printable with type key = T.t
 
 module type SeededHashedType =
   sig
@@ -421,6 +452,10 @@ module type SeededS =
 
     val of_seq : (key * 'a) Seq.t -> 'a t
     (** @since 4.07 *)
+
+    val to_list : 'a t -> (key * 'a) list
+    val of_list : (key * 'a) list -> 'a t
+    val memoize : 'a t -> (key -> 'a) -> key -> 'a
   end
 (** The output signature of the functor {!Hashtbl.MakeSeeded}.
     @since 4.00.0 *)
@@ -439,6 +474,45 @@ module MakeSeeded (H : SeededHashedType) : SeededS with type key = H.t
     or if randomization is globally on (see {!Hashtbl.randomize}).
     @since 4.00.0 *)
 
+module type With_map_arg = sig
+  include Map.With_set_arg
+  val hash : t -> int
+end
+
+module type With_map = sig
+  type t
+
+  module T : With_map_arg with type t = t
+
+  val hash : T.t -> int
+  val equal : T.t -> T.t -> bool
+
+  include Map.With_set
+    with type t := T.t
+    with module T := T
+
+  module Tbl : S_printable
+    with type key = T.t
+    with module Map_from_keys := Map
+end
+
+module Make_with_map (T : With_map_arg) : sig
+  include With_map
+    with type t := T.t
+    with module T = T
+end
+
+module Pair_with_map_arg :
+  functor (T1 : With_map_arg) (T2 : With_map_arg) -> With_map_arg
+  with type t = T1.t * T2.t
+
+module Make_with_map_pair (T1 : With_map) (T2 : With_map) : sig
+  include With_map
+    with type t = T1.t * T2.t
+    with module T = Pair_with_map_arg (T1.T) (T2.T)
+
+  val create_from_cross_product : T1.Set.t -> T2.Set.t -> Set.t
+end
 
 (** {1 The polymorphic hash functions} *)
 

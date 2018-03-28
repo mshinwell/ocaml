@@ -71,13 +71,13 @@ module type S = sig
   val get_least_significant_16_bits_then_byte_swap : t -> t
   val swap_byte_endianness : t -> t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 
   module Targetint_set = Set
 
   module Pair : sig
     type nonrec t = t * t
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -130,14 +130,14 @@ module type S = sig
 
     val max : t -> t -> t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
 
     val set_of_targetint_set : Targetint_set.t -> Set.t
 
     module Pair : sig
       type nonrec t = t * t
 
-      include Identifiable.S with type t := t
+      include Hashtbl.With_map with type t := t
     end
 
     val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -150,7 +150,7 @@ module type S = sig
       val ok : targetint_ocaml -> t
       val unknown : unit -> t
 
-      include Identifiable.S with type t := t
+      include Hashtbl.With_map with type t := t
     end
   end
 end
@@ -183,10 +183,9 @@ module Int32 = struct
   let to_int64 = Int64.of_int32
   let repr x = Int32 x
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
     let compare = Int32.compare
-    let equal = Int32.equal
     let hash = Hashtbl.hash
     let print ppf t = Format.fprintf ppf "%ld" t
   end)
@@ -202,9 +201,9 @@ module Int32 = struct
   module Pair = struct
     type nonrec t = t * t
 
-    module T_pair = Identifiable.Pair (T) (T)
+    module T_pair = Hashtbl.Pair_with_map_arg (T) (T)
 
-    include Identifiable.Make (T_pair)
+    include Hashtbl.Make_with_map (T_pair)
   end
 
   let cross_product set1 set2 =
@@ -333,7 +332,7 @@ module Int32 = struct
       let ok imm = Ok imm
       let unknown () = Unknown
     
-      include Identifiable.Make (struct
+      include Hashtbl.Make_with_map (struct
         type nonrec t = t
     
         let compare t1 t2 =
@@ -342,9 +341,6 @@ module Int32 = struct
           | Unknown, Ok _ -> 1
           | Unknown, Unknown -> 0
           | Ok imm1, Ok imm2 -> compare imm1 imm2
-
-        let equal t1 t2 =
-          compare t1 t2 = 0
     
         let hash t =
           match t with
@@ -371,10 +367,9 @@ module Int64 = struct
   let to_int64 x = x
   let repr x = Int64 x
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
     let compare = Int64.compare
-    let equal = Int64.equal
     let hash = Hashtbl.hash
     let print ppf t = Format.fprintf ppf "%Ld" t
   end)
@@ -390,9 +385,9 @@ module Int64 = struct
   module Pair = struct
     type nonrec t = t * t
 
-    module T_pair = Identifiable.Pair (T) (T)
+    module T_pair = Hashtbl.Pair_with_map_arg (T) (T)
 
-    include Identifiable.Make (T_pair)
+    include Hashtbl.Make_with_map (T_pair)
   end
 
   let cross_product set1 set2 =
@@ -513,7 +508,7 @@ module Int64 = struct
       let ok imm = Ok imm
       let unknown () = Unknown
     
-      include Identifiable.Make (struct
+      include Hashtbl.Make_with_map (struct
         type nonrec t = t
     
         let compare t1 t2 =
@@ -523,9 +518,6 @@ module Int64 = struct
           | Unknown, Unknown -> 0
           | Ok imm1, Ok imm2 -> compare imm1 imm2
 
-        let equal t1 t2 =
-          compare t1 t2 = 0
-    
         let hash t =
           match t with
           | Ok imm -> Hashtbl.hash (0, hash imm)

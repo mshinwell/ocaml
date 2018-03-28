@@ -18,7 +18,7 @@
 
 (** Continuation variables. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : unit -> t
 
@@ -32,5 +32,5 @@ val reset : unit -> unit
 
 module With_args : sig
   type nonrec t = t * Variable.t list
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end

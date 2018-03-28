@@ -18,7 +18,7 @@
 
 (** Tags on runtime boxed values. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 type tag = t
 
@@ -63,7 +63,7 @@ module Scannable : sig
   val zero : t
   val object_tag : t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 val to_scannable_set : Set.t -> Scannable.Set.t
@@ -81,5 +81,5 @@ module Non_scannable : sig
   val to_int : t -> int
   val to_tag : t -> tag
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end

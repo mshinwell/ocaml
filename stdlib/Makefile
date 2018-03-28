@@ -39,14 +39,15 @@ OBJS=camlinternalFormatBasics.cmo stdlib.cmo $(OTHERS)
 OTHERS=$(P)seq.cmo $(P)list.cmo $(P)char.cmo $(P)uchar.cmo $(P)sys.cmo \
   $(P)bytes.cmo $(P)string.cmo \
   $(P)sort.cmo $(P)marshal.cmo $(P)obj.cmo $(P)float.cmo $(P)array.cmo \
+  $(P)buffer.cmo camlinternalFormat.cmo $(P)printf.cmo $(P)format.cmo \
+  $(P)set.cmo $(P)map.cmo \
   $(P)int32.cmo $(P)int64.cmo $(P)nativeint.cmo \
   $(P)lexing.cmo $(P)parsing.cmo \
-  $(P)set.cmo $(P)map.cmo $(P)stack.cmo $(P)queue.cmo \
+  $(P)stack.cmo $(P)queue.cmo \
   camlinternalLazy.cmo $(P)lazy.cmo $(P)stream.cmo \
-  $(P)buffer.cmo camlinternalFormat.cmo $(P)printf.cmo \
   $(P)arg.cmo $(P)printexc.cmo $(P)gc.cmo \
   $(P)digest.cmo $(P)random.cmo $(P)hashtbl.cmo $(P)weak.cmo \
-  $(P)format.cmo $(P)scanf.cmo $(P)callback.cmo \
+  $(P)scanf.cmo $(P)callback.cmo \
   camlinternalOO.cmo $(P)oo.cmo camlinternalMod.cmo \
   $(P)genlex.cmo $(P)ephemeron.cmo \
   $(P)filename.cmo $(P)complex.cmo \

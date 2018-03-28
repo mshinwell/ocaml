@@ -61,7 +61,7 @@ end) = struct
       size : Targetint.OCaml.t;
     }
 
-    include Identifiable.Make (struct
+    include Hashtbl.Make_with_map (struct
       type nonrec t = t
 
       let compare t1 t2 =
@@ -74,9 +74,6 @@ end) = struct
         in
         if c <> 0 then c
         else Pervasives.compare t1.size t2.size
-
-      let equal t1 t2 =
-        compare t1 t2 = 0
 
       let hash t = Hashtbl.hash t
 
@@ -285,7 +282,7 @@ end) = struct
       | Name of Name.t
       | Export_id of Export_id.t
 
-    include Identifiable.Make (struct
+    include Hashtbl.Make_with_map (struct
       type nonrec t = t
 
       let compare t1 t2 =
@@ -294,9 +291,6 @@ end) = struct
         | Export_id _, Name _ -> 1
         | Name name1, Name name2 -> Name.compare name1 name2
         | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
-
-      let equal t1 t2 =
-        compare t1 t2 = 0
  
       let hash t =
         match t with

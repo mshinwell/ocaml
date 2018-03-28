@@ -413,6 +413,20 @@ module GenHashTable = struct
       replace_seq tbl i;
       tbl
 
+    let to_list t =
+      fold (fun key datum elts -> (key, datum)::elts) t []
+
+    let of_list elts =
+      let t = create 42 in
+      List.iter (fun (key, datum) -> add t key datum) elts;
+      t
+
+    let memoize t f = fun key ->
+      try find t key with
+      | Not_found ->
+        let r = f key in
+        add t key r;
+        r
   end
 end
 

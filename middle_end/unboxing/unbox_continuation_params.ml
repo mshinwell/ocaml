@@ -21,8 +21,8 @@ module H = Unbox_one_variable.How_to_unbox
 (*module CAV = Invariant_params.Continuations.Continuation_and_variable*)
 
 let find_unboxings ~env ~continuation_uses ~handlers =
-  Continuation.Map.filter_map handlers
-    ~f:(fun cont (handler : Flambda.Continuation_handler.t) ->
+  Continuation.Map.filter_map
+    (fun cont (handler : Flambda.Continuation_handler.t) ->
       if handler.stub then
         None
       else
@@ -38,13 +38,14 @@ let find_unboxings ~env ~continuation_uses ~handlers =
               Variable.Map.of_list (List.combine params args_tys)
             in
             let unboxings =
-              Variable.Map.filter_map params_to_tys
-                ~f:(fun unboxee unboxee_ty ->
+              Variable.Map.filter_map (fun unboxee unboxee_ty ->
                   Unbox_one_variable.how_to_unbox ~env
                     ~unboxee ~unboxee_ty ~is_unbox_returns:false)
+                params_to_tys
             in
             if Variable.Map.is_empty unboxings then None
             else Some unboxings)
+    handlers
 
 (* CR mshinwell: If we get everything using [Unbox_one_variable] then
    this function should be able to move to [Invariant_params] *)

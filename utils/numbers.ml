@@ -14,12 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Int_base = Identifiable.Make (struct
+module Int_base = Hashtbl.Make_with_map (struct
   type t = int
 
   let compare x y = x - y
   let hash i = i
-  let equal (i : int) j = i = j
   let print = Format.pp_print_int
 end)
 
@@ -73,19 +72,16 @@ end
 module Float = struct
   type t = float
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type t = float
 
     let compare x y = Pervasives.compare x y
     let hash f = Hashtbl.hash f
-    let equal (i : float) j = i = j
     let print = Format.pp_print_float
   end)
 end
 
 module Float_by_bit_pattern = struct
-  type t = Int64.t
-
   let create f = Int64.bits_of_float f
 
   let of_bits bits = bits
@@ -101,28 +97,18 @@ module Float_by_bit_pattern = struct
     type t = Int64.t
 
     let compare = Int64.compare
-    let equal = Int64.equal
     let hash f = Hashtbl.hash f
     let print ppf t = Format.pp_print_float ppf (Int64.float_of_bits t)
   end
 
-  module Self = Identifiable.Make (T0)
-
+  include T0
+  
+  module Self = Hashtbl.Make_with_map (T0)
   include Self
-
-  (* CR mshinwell: Clean up this mess and provide a proper construction in
-     [Identifiable] *)
-  module Pair = struct
-    include Identifiable.Make_pair (struct
-      type nonrec t = t
-      include Self
-    end) (struct
-      type nonrec t = t
-      include Self
-    end)
-
-    type nonrec t = t * t
-  end
+        
+  module Pair = Hashtbl.Make_with_map_pair
+    (struct type nonrec t = t include Self end)
+    (struct type nonrec t = t include Self end)
 
   let cross_product = Pair.create_from_cross_product
 
@@ -165,25 +151,15 @@ module Int32 = struct
 
     let compare x y = Int32.compare x y
     let hash f = Hashtbl.hash f
-    let equal (i : Int32.t) j = i = j
     let print ppf t = Format.fprintf ppf "%ld" t
   end
 
-  module Self = Identifiable.Make (T0)
-
+  module Self = Hashtbl.Make_with_map (T0)
   include Self
-
-  module Pair = struct
-    include Identifiable.Make_pair (struct
-      type nonrec t = t
-      include Self
-    end) (struct
-      type nonrec t = t
-      include Self
-    end)
-
-    type nonrec t = t * t
-  end
+        
+  module Pair = Hashtbl.Make_with_map_pair
+    (struct type nonrec t = t include Self end)
+    (struct type nonrec t = t include Self end)
 
   let cross_product = Pair.create_from_cross_product
 end
@@ -198,40 +174,15 @@ module Int64 = struct
 
     let compare x y = Int64.compare x y
     let hash f = Hashtbl.hash f
-    let equal (i : Int64.t) j = i = j
     let print ppf t = Format.fprintf ppf "%Ld" t
   end
 
-  module Self = Identifiable.Make (T0)
-
+  module Self = Hashtbl.Make_with_map (T0)
   include Self
-
-  module Pair = struct
-    include Identifiable.Make_pair (struct
-      type nonrec t = t
-      include Self
-    end) (struct
-      type nonrec t = t
-      include Self
-    end)
-
-    type nonrec t = t * t
-  end
+        
+  module Pair = Hashtbl.Make_with_map_pair
+    (struct type nonrec t = t include Self end)
+    (struct type nonrec t = t include Self end)
 
   let cross_product = Pair.create_from_cross_product
-end
-
-module Nativeint = struct
-  include Nativeint
-
-  external swap_byte_endianness : t -> t = "%bswap_native"
-
-  include Identifiable.Make (struct
-    type t = Nativeint.t
-
-    let compare x y = Nativeint.compare x y
-    let hash f = Hashtbl.hash f
-    let equal (i : Nativeint.t) j = i = j
-    let print ppf t = Format.fprintf ppf "%nd" t
-  end)
 end

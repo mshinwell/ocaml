@@ -19,11 +19,10 @@
 type t = int
 type tag = t
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare = Numbers.Int.compare
-  let equal = Numbers.Int.equal
   let hash = Numbers.Int.hash
 
   let print ppf t =
@@ -71,7 +70,7 @@ let all_as_targetints =
 module Scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numbers.Int)
+  include Hashtbl.Make_with_map (Numbers.Int)
 
   let create tag =
     if tag < min_tag || tag >= Obj.no_scan_tag then None
@@ -111,7 +110,7 @@ let is_structured_block t =
 module Non_scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numbers.Int)
+  include Hashtbl.Make_with_map (Numbers.Int)
 
   let create tag =
     if tag < Obj.no_scan_tag then None

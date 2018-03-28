@@ -19,7 +19,7 @@
 module type S = sig
   type t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 
   val initial : t
 
@@ -31,8 +31,6 @@ module type S = sig
 
   val to_int : t -> int
 end
-
-include S
 
 val for_symbols : t
 

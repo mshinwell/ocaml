@@ -26,7 +26,7 @@
     The label must be globally unique: two compilation units linked in the
     same program must not share labels. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 type symbol = t
 

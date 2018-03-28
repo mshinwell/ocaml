@@ -47,8 +47,6 @@ let unique_toplevel_name i = i.name ^ "/" ^ string_of_int i.stamp
 
 let persistent i = (i.stamp = 0)
 
-let equal i1 i2 = i1.name = i2.name
-
 let same i1 i2 = i1 = i2
   (* Possibly more efficient version (with a real compiler, at least):
        if i1.stamp <> 0
@@ -243,12 +241,12 @@ let compare x y =
 
 let hash i = (Char.code i.name.[0]) lxor i.stamp
 
-let original_equal = equal
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
   let compare = compare
   let print = print
   let hash = hash
-  let equal = same
 end)
-let equal = original_equal
+
+let equal t1 t2 =
+  t1.name = t2.name

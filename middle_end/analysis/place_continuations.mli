@@ -22,7 +22,7 @@ module Placement : sig
     | After_let_cont of Continuation.Set.t
     | Just_inside_continuation of Continuation.t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 (** This function accepts an expression and a map [new_conts] associating sets

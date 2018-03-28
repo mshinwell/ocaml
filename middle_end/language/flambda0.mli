@@ -174,7 +174,7 @@ module Switch : sig
 
   val num_arms : t -> int
 
-  include Identifiable.S_no_hash with type t := t
+  include Map.With_set with type t := t
 end
 
 (** What the optimizer should do when it reaches a term that is known to be
@@ -771,7 +771,7 @@ end and Typed_parameter : sig
 (* XXX try to remove this
   (** N.B. Sets, maps and hash tables keyed on values of type [t] do not
       take into account the parameter's type in the comparison relation. *)
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 *)
   val print : Format.formatter -> t -> unit
 end and Flambda_type : sig

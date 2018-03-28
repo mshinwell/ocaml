@@ -28,7 +28,7 @@ type t = private {
 type immediate = t
 
 (** The comparison function for type [t] ignores [print_as_char]. *)
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 val one : t
 val zero : t
@@ -83,13 +83,13 @@ module Or_unknown : sig
   val ok : immediate -> t
   val unknown : unit -> t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 module Pair : sig
   type nonrec t = t * t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 val cross_product : Set.t -> Set.t -> Pair.Set.t

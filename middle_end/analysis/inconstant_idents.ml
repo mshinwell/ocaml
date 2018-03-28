@@ -63,7 +63,7 @@
 module Int = Numbers.Int
 module Symbol_field = struct
   type t = Symbol.t * Int.t
-  include Identifiable.Make (Identifiable.Pair (Symbol) (Int))
+  include Hashtbl.Make_with_map (Hashtbl.Pair_with_map_arg (Symbol) (Int))
 end
 
 type dep =

@@ -20,11 +20,10 @@ type t = Flambda_kind.t list
 
 let length t = List.length t
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 = Misc.Stdlib.List.compare Flambda_kind.compare t1 t2
-  let equal t1 t2 = (compare t1 t2) = 0
   let hash = Hashtbl.hash
 
   let print ppf t =

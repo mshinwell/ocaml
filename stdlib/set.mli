@@ -198,6 +198,11 @@ module type S =
         @since 4.05
     *)
 
+    val get_singleton : t -> elt option
+    (** If the set has exactly one element [elt], then [Some elt] is
+        returned, otherwise [None].
+        @since 4.08 *)
+
     val split: elt -> t -> t * bool * t
     (** [split x s] returns a triple [(l, present, r)], where
           [l] is the set of elements of [s] that are
@@ -283,3 +288,14 @@ module type S =
 module Make (Ord : OrderedType) : S with type elt = Ord.t
 (** Functor building an implementation of the set structure
    given a totally ordered type. *)
+
+module type S_printable = sig
+  include S
+
+  val print : Format.formatter -> t -> unit
+end
+
+module Make_printable (T : sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end) : S_printable with type elt = T.t

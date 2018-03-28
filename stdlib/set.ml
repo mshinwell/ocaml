@@ -52,6 +52,7 @@ module type S =
     val max_elt_opt: t -> elt option
     val choose: t -> elt
     val choose_opt: t -> elt option
+    val get_singleton : t -> elt option
     val split: elt -> t -> t * bool * t
     val find: elt -> t -> elt
     val find_opt: elt -> t -> elt option
@@ -392,6 +393,11 @@ module Make(Ord: OrderedType) =
 
     let choose_opt = min_elt_opt
 
+    let get_singleton = function
+      | Empty -> None
+      | Node { l = Empty; v; r = Empty; } -> Some v
+      | Node { l = _; v = _; r = _; } -> None
+
     let rec find x = function
         Empty -> raise Not_found
       | Node{l; v; r} ->
@@ -551,3 +557,24 @@ module Make(Ord: OrderedType) =
       in
       seq_of_enum_ (aux low s End)
   end
+
+module type S_printable = sig
+  include S
+
+  val print : Format.formatter -> t -> unit
+end
+
+module Make_printable (T : sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end) : S_printable with type elt = T.t = struct
+  include Make (T)
+
+  let print ppf t =
+    match get_singleton t with
+    | None ->
+      Format.fprintf ppf "@[<hov 1>(%a)@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+        (elements t)
+    | Some elt -> T.print ppf elt
+end

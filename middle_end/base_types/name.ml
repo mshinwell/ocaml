@@ -49,7 +49,7 @@ let to_symbol t =
   | Var _ -> None
   | Symbol sym -> Some sym
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let print ppf t =
@@ -68,9 +68,6 @@ include Identifiable.Make (struct
     | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
     | Var _, Symbol _ -> -1
     | Symbol _, Var _ -> 1
-
-  let equal t1 t2 =
-    compare t1 t2 = 0
 end)
 
 let variables_only t =
