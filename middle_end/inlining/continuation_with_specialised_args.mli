@@ -21,4 +21,4 @@
 
 type t = Continuation.t * (Flambda_type.t list)
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t

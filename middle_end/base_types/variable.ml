@@ -23,7 +23,7 @@ type t = {
   (** [name_stamp]s are unique within any given compilation unit. *)
 }
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -32,12 +32,6 @@ include Identifiable.Make (struct
       let c = t1.name_stamp - t2.name_stamp in
       if c <> 0 then c
       else Compilation_unit.compare t1.compilation_unit t2.compilation_unit
-
-  let equal t1 t2 =
-    if t1 == t2 then true
-    else
-      t1.name_stamp = t2.name_stamp
-        && Compilation_unit.equal t1.compilation_unit t2.compilation_unit
 
   let hash t = t.name_stamp lxor (Compilation_unit.hash t.compilation_unit)
 
@@ -115,7 +109,7 @@ let print_opt ppf = function
   | Some t -> print ppf t
 
 type pair = t * t
-module Pair = Identifiable.Make (Identifiable.Pair (T) (T))
+module Pair = Hashtbl.Make_with_map (Hashtbl.Pair_with_map_arg (T) (T))
 
 let compare_lists l1 l2 =
   Misc.Stdlib.List.compare compare l1 l2

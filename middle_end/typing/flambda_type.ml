@@ -833,18 +833,18 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             assert (Var_within_closure.Map.is_empty closure_elements);
             let cannot_lift = ref false in
             let closures =
-              Closure_id.Map.filter_map closures
-                ~f:(fun _closure_id ty_fabricated ->
+              Closure_id.Map.filter_map (fun _closure_id ty_fabricated ->
                   let t = of_ty_fabricated ty_fabricated in
                   match prove_closure env t with
                   | Proved closure -> Some closure.function_decls
                   | Unknown | Invalid ->
                     cannot_lift := true;
                     None)
+                closures
             in
             let funs =
-              Closure_id.Map.filter_map closures
-                ~f:(fun _closure_id (decls : function_declarations) ->
+              Closure_id.Map.filter_map
+                (fun _closure_id (decls : function_declarations) ->
                   match decls with
                   | Inlinable decl ->
                     let params =
@@ -887,6 +887,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
                   | Non_inlinable _ ->
                     cannot_lift := true;
                     None)
+                closures
             in
             if !cannot_lift then try_name ()
             else

@@ -39,7 +39,6 @@ OBJS=dynlinkaux.cmo dynlink.cmo
 
 COMPILEROBJS=\
   ../../utils/misc_color.cmo \
-  ../../utils/identifiable.cmo \
   ../../utils/misc.cmo ../../utils/config.cmo \
   ../../utils/numbers.cmo \
   ../../utils/arg_helper.cmo ../../utils/clflags.cmo \

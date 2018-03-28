@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : Set_of_closures_id.t -> t
 

@@ -24,7 +24,7 @@ module Definition = struct
     | Existing_inner_free_var of Variable.t
     | Projection_from_existing_specialised_arg of Projection.t
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =

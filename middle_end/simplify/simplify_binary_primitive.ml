@@ -39,17 +39,17 @@ type 'a binary_arith_outcome_for_one_side_only =
   | Invalid
 
 module type Binary_arith_like_sig = sig
-  module Lhs : Identifiable.S
-  module Rhs : Identifiable.S
+  module Lhs : Hashtbl.With_map
+  module Rhs : Hashtbl.With_map
 
   module Pair : sig
     type nonrec t = Lhs.t * Rhs.t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   module Result : sig
-    include Identifiable.S
+    include Hashtbl.With_map
   end
 
   val ok_to_evaluate : E.t -> bool
@@ -97,7 +97,7 @@ end = struct
       | Prim of Flambda_primitive.t
       | Exactly of N.Result.t
 
-    include Identifiable.Make_no_hash (struct
+    include Map.Make_with_set (struct
       type nonrec t = t
 
       let compare t1 t2 =
@@ -109,9 +109,6 @@ end = struct
         | Prim _, Simple _ -> 1
         | Prim _, Exactly _ -> -1
         | Exactly _, (Simple _ | Prim _) -> 1
-
-      let equal t1 t2 =
-        compare t1 t2 = 0
 
       let print _ppf _t = Misc.fatal_error "Not yet implemented"
     end)
@@ -406,13 +403,13 @@ end = struct
   let term = I.term_unboxed
 
   (* CR mshinwell: Try to factor out this cross product code directly into
-     [Identifiable] *)
+     the stdlib *)
   module Pair = struct
     type nonrec t = Lhs.t * Rhs.t
 
-    module T_pair = Identifiable.Pair (Lhs) (Rhs)
+    module T_pair = Hashtbl.Pair_with_map_arg (Lhs) (Rhs)
 
-    include Identifiable.Make (T_pair)
+    include Hashtbl.Make_with_map (T_pair)
   end
 
   let cross_product set1 set2 =
@@ -989,7 +986,7 @@ Format.eprintf "simplify_block_load %a.(%a).  Block type:@ %a\n%!"
   | Invalid -> invalid ()
 
 module String_info_and_immediate =
-  Identifiable.Make_pair (T.String_info) (Immediate)
+  Hashtbl.Make_with_map_pair (T.String_info) (Immediate)
 
 external swap16 : int -> int = "%bswap16" [@@noalloc]
 

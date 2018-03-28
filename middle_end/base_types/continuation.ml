@@ -38,7 +38,7 @@ type t = {
   compilation_unit : Compilation_unit.t
 }
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -46,9 +46,6 @@ include Identifiable.Make (struct
     if c <> 0 then c
     else Compilation_unit.compare t1.compilation_unit t2.compilation_unit
 
-  let equal t1 t2 =
-    t1.id = t2.id
-      && Compilation_unit.equal t1.compilation_unit t2.compilation_unit
 
   let hash t =
     Hashtbl.hash (t.id, Compilation_unit.hash t.compilation_unit)
@@ -75,16 +72,13 @@ let to_int t = t.id
 module With_args = struct
   type nonrec t = t * Variable.t list
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =
       let c = compare (fst t1) (fst t2) in
       if c <> 0 then c
       else Variable.compare_lists (snd t1) (snd t2)
-
-    let equal t1 t2 =
-      compare t1 t2 = 0
 
     let hash t =
       Hashtbl.hash (hash (fst t),

@@ -22,7 +22,7 @@ module Placement = struct
     | After_let_cont of Continuation.Set.t
     | Just_inside_continuation of Continuation.t
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =

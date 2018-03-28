@@ -35,7 +35,7 @@ module Const = struct
   let const_zero = const_false
   let const_unit = const_zero
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =
@@ -62,8 +62,6 @@ module Const = struct
       | _, Naked_int32 _ -> 1
       | Naked_int64 _, _ -> -1
       | _, Naked_int64 _ -> 1
-
-    let equal t1 t2 = (compare t1 t2 = 0)
 
     let hash t =
       match t with
@@ -139,7 +137,7 @@ let map_symbol t ~f =
     else Name name'
   | Const _ | Discriminant _ -> t
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -153,9 +151,6 @@ include Identifiable.Make (struct
     | Const _, Discriminant _ -> -1
     | Discriminant _, Name _ -> 1
     | Discriminant _, Const _ -> 1
-
-  let equal t1 t2 =
-    compare t1 t2 = 0
 
   let hash t =
     match t with
@@ -179,12 +174,8 @@ module List = struct
       Name.Set.empty
       t
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
-
-    let equal t1 t2 =
-      List.compare_lengths t1 t2 = 0
-        && List.for_all2 equal t1 t2
 
     let compare t1 t2 =
       Misc.Stdlib.List.compare compare t1 t2
@@ -200,11 +191,8 @@ end
 module With_kind = struct
   type nonrec t = t * Flambda_kind.t
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
-
-    let equal (s1, k1) (s2, k2) =
-      equal s1 s2 && Flambda_kind.equal k1 k2
 
     let compare (s1, k1) (s2, k2) =
       let c = compare s1 s2 in

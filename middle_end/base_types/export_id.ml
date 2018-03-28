@@ -21,7 +21,7 @@ module Unit_id = Id_types.UnitId (Id) (Compilation_unit)
 
 type t = Unit_id.t
 
-include Identifiable.Make (Unit_id)
+include Hashtbl.Make_with_map (Unit_id)
 
 let create = Unit_id.create
 let get_compilation_unit = Unit_id.unit

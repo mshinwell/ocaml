@@ -279,9 +279,6 @@ type t =
 
 type primitive_application = t
 
-(** Total ordering, equality, printing, sets, maps etc. *)
-include Identifiable.S_no_hash with type t := t
-
 (** Simpler version (e.g. for [Inlining_cost]), where only the actual
     primitive matters, not the arguments. *)
 type without_args =
@@ -401,5 +398,10 @@ module With_fixed_value : sig
   val free_names : t -> Name.Set.t
 
   (** Total ordering, equality, printing, sets, maps etc. *)
-  include Identifiable.S_no_hash with type t := t
+  include Map.With_set with type t := t
 end
+
+(** Total ordering, equality, printing, sets, maps etc. *)
+include Map.With_set with type t := t
+
+val equal : t -> t -> bool

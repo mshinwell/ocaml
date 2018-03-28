@@ -21,7 +21,7 @@ type t = {
   ident : Ident.t;
 }
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare v1 v2 =
@@ -31,10 +31,6 @@ include Identifiable.Make (struct
     else c
 
   let hash v = Ident.hash v.ident
-
-  let equal v1 v2 =
-    Ident.same v1.ident v2.ident &&
-    Compilation_unit.equal v1.compilation_unit v2.compilation_unit
 
   let print ppf v =
     Format.fprintf ppf "%a.%a"

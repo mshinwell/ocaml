@@ -42,17 +42,17 @@ val rename
 
 val map_var : (Variable.t -> Variable.t) -> t -> t
 
-module T : Identifiable.Thing with type t = t
+module T : Hashtbl.With_map_arg with type t = t
 
 module Set : sig
-  include Identifiable.Set with module T := T
+  include Set.S_printable with type elt = t
 
   val vars : parameter list -> Variable.Set.t
 
   val wrap : Variable.Set.t -> t
 end
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
                         and module T := T
                         and module Set := Set
 

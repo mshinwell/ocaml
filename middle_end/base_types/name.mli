@@ -32,7 +32,7 @@ val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
 val to_var : t -> Variable.t option
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 val print_sexp : Format.formatter -> t -> unit
 

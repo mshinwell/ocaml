@@ -108,7 +108,7 @@ end = struct
 end
 
 module type S = sig
-  module Id : Identifiable.S
+  module Id : Hashtbl.With_map
 
   type directed_graph = Id.Set.t Id.Map.t
 
@@ -123,7 +123,7 @@ module type S = sig
   val component_graph : directed_graph -> (component * int list) array
 end
 
-module Make (Id : Identifiable.S) = struct
+module Make (Id : Hashtbl.With_map) = struct
   type directed_graph = Id.Set.t Id.Map.t
 
   type component =
@@ -139,7 +139,7 @@ module Make (Id : Identifiable.S) = struct
             then
               Misc.fatal_errorf "Strongly_connected_components.check: the \
                   graph has external dependencies (%a -> %a)"
-               Id.print id Id.print v)
+               Id.T.print id Id.T.print v)
           set)
       dependencies
 
@@ -169,7 +169,7 @@ module Make (Id : Identifiable.S) = struct
               with Not_found ->
                 Misc.fatal_errorf
                   "Strongly_connected_components: missing dependency %a"
-                  Id.print dest
+                  Id.T.print dest
             in
             v :: acc)
           dests [])

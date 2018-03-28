@@ -25,7 +25,7 @@ type t = {
 
 let string_for_printing t = Ident.name t.id
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   (* Multiple units can have the same [id] if they come from different packs.
@@ -44,10 +44,6 @@ include Identifiable.Make (struct
         else
           c
       else c
-
-  let equal x y =
-    if x == y then true
-    else compare x y = 0
 
   let print ppf t = Format.pp_print_string ppf (string_for_printing t)
 

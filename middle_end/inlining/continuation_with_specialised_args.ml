@@ -18,7 +18,7 @@
 
 type t = Continuation.t * (Flambda_type.t list)
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =

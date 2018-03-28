@@ -18,7 +18,7 @@
 
 type t = string
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   include String
   let hash = Hashtbl.hash
   let print ppf t = Format.pp_print_string ppf t

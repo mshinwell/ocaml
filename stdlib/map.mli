@@ -306,6 +306,49 @@ module type S =
     (** Same as {!Map.S.map}, but the function receives as arguments both the
        key and the associated value for each binding of the map. *)
 
+    val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
+
+    val of_list : (key * 'a) list -> 'a t
+
+    val diff : 'a t -> 'a t -> 'a t
+
+    (** [union_right m1 m2] contains all bindings from [m1] and [m2]. If
+        some binding is present in both, the one from [m2] is taken *)
+    val union_right : 'a t -> 'a t -> 'a t
+
+    (** [union_left m1 m2 = union_right m2 m1] *)
+    val union_left : 'a t -> 'a t -> 'a t
+
+    (** [union_merge f m1 m2] contains all bindings from [m1] and [m2].
+        Bindings present in both [m1] and [m2] are sent through [f]. *)
+    val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+
+    (** [union_both f g m1 m2] contains all bindings from [m1] and [m2].
+        Bindings present in only one of [m1] and [m2] are sent through [f];
+        bindings present in both [m1] and [m2] are sent through [g]. *)
+    val union_both
+       : ('a -> 'a)
+      -> ('a -> 'a -> 'a)
+      -> 'a t
+      -> 'a t
+      -> 'a t
+
+    val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
+
+    val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
+
+    val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+
+    val rename : key t -> key -> key
+
+    val map_keys : (key -> key) -> 'a t -> 'a t
+
+    val data : 'a t -> 'a list
+
+    val get_singleton : 'a t -> (key * 'a) option
+
+    val transpose_keys_and_data : key t -> key t
+
     (** {6 Iterators} *)
 
     val to_seq : 'a t -> (key * 'a) Seq.t
@@ -327,6 +370,70 @@ module type S =
   end
 (** Output signature of the functor {!Map.Make}. *)
 
-module Make (Ord : OrderedType) : S with type key = Ord.t
+module Make (Ord : OrderedType)
+  : S with type key = Ord.t
 (** Functor building an implementation of the map structure
    given a totally ordered type. *)
+
+module type S_printable = sig
+  include S
+
+  val print
+     : ?before_key:string
+    -> ?after_key:string
+    -> (Format.formatter -> 'a -> unit)
+    -> Format.formatter
+    -> 'a t
+    -> unit
+
+  (* CR mshinwell: Here and elsewhere, implement [to_string] automatically
+     using [Format.asprintf]. *)
+
+  (** [disjoint_union m1 m2] contains all bindings from [m1] and
+      [m2]. If some binding is present in both and the associated
+      value is not equal, an exception is raised. *)
+  val disjoint_union
+     : ?eq:('a -> 'a -> bool)
+    -> ?print:(Format.formatter -> 'a -> unit)
+    -> 'a t
+    -> 'a t
+    -> 'a t
+
+  module Set_of_keys : Set.S_printable with type elt = key
+
+  val keys : 'a t -> Set_of_keys.t
+  val of_set : (key -> 'a) -> Set_of_keys.t -> 'a t
+  val transpose_keys_and_data_set : key t -> Set_of_keys.t t
+end
+
+module Make_printable (T : sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end) : S_printable with type key = T.t
+
+module type With_set_arg = sig
+  include OrderedType
+  val print : Format.formatter -> t -> unit
+end
+
+module type With_set = sig
+  type t
+
+  include OrderedType with type t := t
+
+  val print : Format.formatter -> t -> unit
+
+  module T : With_set_arg with type t = t
+
+  module Set : Set.S_printable with type elt = t
+
+  module Map : S_printable
+    with type key = t
+    with module Set_of_keys = Set
+end
+
+module Make_with_set (T : With_set_arg) : sig
+  include With_set
+    with type t := T.t
+    with module T = T
+end

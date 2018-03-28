@@ -49,11 +49,10 @@ let zero = Targetint.OCaml.zero
 let bool_false = zero
 let bool_true = Targetint.OCaml.one
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare = Targetint.OCaml.compare
-  let equal = Targetint.OCaml.equal
   let hash = Targetint.OCaml.hash
 
   let print ppf t =

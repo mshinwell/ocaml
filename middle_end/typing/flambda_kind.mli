@@ -90,7 +90,7 @@ val phantomize_in_types : t -> t
 
 val phantomize_debug_only : t -> t
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 module Standard_int : sig
   (** These kinds are known as the "standard integer kinds".  They correspond
@@ -109,7 +109,7 @@ module Standard_int : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 module Standard_int_or_float : sig
@@ -125,7 +125,7 @@ module Standard_int_or_float : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 module Boxable_number : sig
@@ -143,7 +143,7 @@ module Boxable_number : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 module Naked_number : sig

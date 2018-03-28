@@ -17,7 +17,7 @@
 (** Kosaraju's algorithm for strongly connected components. *)
 
 module type S = sig
-  module Id : Identifiable.S
+  module Id : Hashtbl.With_map
 
   type directed_graph = Id.Set.t Id.Map.t
   (** If (a -> set) belongs to the map, it means that there are edges
@@ -35,4 +35,4 @@ module type S = sig
   val component_graph : directed_graph -> (component * int list) array
 end
 
-module Make (Id : Identifiable.S) : S with module Id := Id
+module Make (Id : Hashtbl.With_map) : S with module Id := Id

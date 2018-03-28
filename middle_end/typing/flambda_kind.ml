@@ -89,11 +89,10 @@ let fabricated () = Fabricated
 
 let phantom occs phantom_kind = Phantom (occs, phantom_kind)
 
-include Identifiable.Make (struct
+include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 = Pervasives.compare t1 t2
-  let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash = Hashtbl.hash
 
@@ -187,7 +186,7 @@ module Standard_int = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let print ppf t =
@@ -198,7 +197,6 @@ module Standard_int = struct
       | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 
     let compare = Pervasives.compare
-    let equal t1 t2 = (compare t1 t2 = 0)
     let hash = Hashtbl.hash
   end)
 
@@ -226,7 +224,7 @@ module Standard_int_or_float = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let print ppf t =
@@ -238,7 +236,6 @@ module Standard_int_or_float = struct
       | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 
     let compare = Pervasives.compare
-    let equal t1 t2 = (compare t1 t2 = 0)
     let hash = Hashtbl.hash
   end)
 
@@ -265,7 +262,7 @@ module Boxable_number = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let print ppf t =
@@ -276,7 +273,6 @@ module Boxable_number = struct
       | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 
     let compare = Pervasives.compare
-    let equal t1 t2 = (compare t1 t2 = 0)
     let hash = Hashtbl.hash
   end)
 

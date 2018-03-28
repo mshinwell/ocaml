@@ -28,7 +28,7 @@ module Const : sig
     | Naked_int64 of Int64.t
     | Naked_nativeint of Targetint.t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 
   val kind : t -> Flambda_kind.t
 end
@@ -67,18 +67,18 @@ val map_var : t -> f:(Variable.t -> Variable.t) -> t
 
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 module List : sig
   type nonrec t = t list
 
   val free_names : t -> Name.Set.t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end
 
 module With_kind : sig
   type nonrec t = t * Flambda_kind.t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 end

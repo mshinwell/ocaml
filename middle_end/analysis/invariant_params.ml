@@ -45,7 +45,7 @@
 module type Continuations_or_functions = sig
   module Identifier : sig
     type t
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
 
     (* Conversions to and from variables, for first-class entities only. *)
     val as_variable : t -> Variable.t option
@@ -53,7 +53,7 @@ module type Continuations_or_functions = sig
   end
 
   module Identifier_and_variable : sig
-    include Identifiable.S with type t = Identifier.t * Variable.t
+    include Hashtbl.With_map with type t = Identifier.t * Variable.t
   end
 
   module Declaration : sig
@@ -186,7 +186,7 @@ module For_continuations = struct
   module Identifier_and_variable = struct
     type t = Continuation.t * Variable.t
 
-    include Identifiable.Make (struct
+    include Hashtbl.Make_with_map (struct
       type nonrec t = t
 
       let compare (cont1, var1) (cont2, var2) =

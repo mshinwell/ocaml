@@ -402,10 +402,11 @@ end;
         t.names_to_types
     in
     let levels_to_names =
-      Scope_level.Map.filter_map t.levels_to_names ~f:(fun _level names ->
-        let names = Name.Set.inter names allowed in
-        if Name.Set.is_empty names then None
-        else Some names)
+      Scope_level.Map.filter_map (fun _level names ->
+          let names = Name.Set.inter names allowed in
+          if Name.Set.is_empty names then None
+          else Some names)
+        t.levels_to_names
     in
     let existentials = Name.Set.inter t.existentials allowed in
     let existential_freshening =

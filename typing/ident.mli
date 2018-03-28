@@ -17,7 +17,9 @@
 
 type t = { stamp: int; name: string; mutable flags: int }
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
+(* CR mshinwell: It is dreadful that [equal] doesn't coincide with
+   [compare] *)
 (* Notes:
    - [equal] compares identifiers by name
    - [compare x y] is 0 if [same x y] is true.

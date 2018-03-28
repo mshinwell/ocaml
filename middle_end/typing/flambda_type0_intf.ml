@@ -56,7 +56,7 @@ module type S = sig
       size : Targetint.OCaml.t;
     }
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   type 'a mutable_or_immutable =
@@ -295,7 +295,7 @@ module type S = sig
       | Name of Name.t
       | Export_id of Export_id.t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   (** If the given type has kind [Phantom], return it; otherwise form the

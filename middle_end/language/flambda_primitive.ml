@@ -1015,48 +1015,47 @@ type t =
 
 type primitive_application = t
 
-include Identifiable.Make_no_hash (struct
+include Map.Make_with_set (struct
   type nonrec t = t
 
   let compare t1 t2 =
-    let numbering t =
-      match t with
-      | Unary _ -> 0
-      | Binary _ -> 1
-      | Ternary _ -> 2
-      | Variadic _ -> 3
-    in
-    match t1, t2 with
-    | Unary (p, s1), Unary (p', s1') ->
-      let c = compare_unary_primitive p p' in
-      if c <> 0 then c
-      else Simple.compare s1 s1'
-    | Binary (p, s1, s2), Binary (p', s1', s2') ->
-      let c = compare_binary_primitive p p' in
-      if c <> 0 then c
-      else
-        let c = Simple.compare s1 s1' in
+    if t1 == t2 then 0
+    else
+      let numbering t =
+        match t with
+        | Unary _ -> 0
+        | Binary _ -> 1
+        | Ternary _ -> 2
+        | Variadic _ -> 3
+      in
+      match t1, t2 with
+      | Unary (p, s1), Unary (p', s1') ->
+        let c = compare_unary_primitive p p' in
         if c <> 0 then c
-        else Simple.compare s2 s2'
-    | Ternary (p, s1, s2, s3), Ternary (p', s1', s2', s3') ->
-      let c = compare_ternary_primitive p p' in
-      if c <> 0 then c
-      else
-        let c = Simple.compare s1 s1' in
+        else Simple.compare s1 s1'
+      | Binary (p, s1, s2), Binary (p', s1', s2') ->
+        let c = compare_binary_primitive p p' in
         if c <> 0 then c
         else
-          let c = Simple.compare s2 s2' in
+          let c = Simple.compare s1 s1' in
           if c <> 0 then c
-          else Simple.compare s3 s3'
-    | Variadic (p, s), Variadic (p', s') ->
-      let c = compare_variadic_primitive p p' in
-      if c <> 0 then c
-      else Simple.List.compare s s'
-    | (Unary _ | Binary _ | Ternary _ | Variadic _), _ ->
-      Pervasives.compare (numbering t1) (numbering t2)
-
-  let equal t1 t2 =
-    compare t1 t2 = 0
+          else Simple.compare s2 s2'
+      | Ternary (p, s1, s2, s3), Ternary (p', s1', s2', s3') ->
+        let c = compare_ternary_primitive p p' in
+        if c <> 0 then c
+        else
+          let c = Simple.compare s1 s1' in
+          if c <> 0 then c
+          else
+            let c = Simple.compare s2 s2' in
+            if c <> 0 then c
+            else Simple.compare s3 s3'
+      | Variadic (p, s), Variadic (p', s') ->
+        let c = compare_variadic_primitive p p' in
+        if c <> 0 then c
+        else Simple.List.compare s s'
+      | (Unary _ | Binary _ | Ternary _ | Variadic _), _ ->
+        Pervasives.compare (numbering t1) (numbering t2)
 
   let print ppf t =
     match t with
@@ -1088,6 +1087,9 @@ include Identifiable.Make_no_hash (struct
         print_variadic_primitive prim
         (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) vs
 end)
+
+let equal t1 t2 =
+  compare t1 t2 = 0
 
 let free_names t =
   match t with
@@ -1160,11 +1162,10 @@ module With_fixed_value = struct
 
   let free_names = free_names
 
-  include Identifiable.Make_no_hash (struct
+  include Stdlib.Map.Make_with_set (struct
     type nonrec t = t
 
     let compare = compare
-    let equal = equal
     let print = print
   end)
 end

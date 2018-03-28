@@ -428,6 +428,9 @@ module type S =
     val add_seq : 'a t -> (key * 'a) Seq.t -> unit
     val replace_seq : 'a t -> (key * 'a) Seq.t -> unit
     val of_seq : (key * 'a) Seq.t -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val of_list : (key * 'a) list -> 'a t
+    val memoize : 'a t -> (key -> 'a) -> key -> 'a
   end
 
 module type SeededS =
@@ -456,6 +459,9 @@ module type SeededS =
     val add_seq : 'a t -> (key * 'a) Seq.t -> unit
     val replace_seq : 'a t -> (key * 'a) Seq.t -> unit
     val of_seq : (key * 'a) Seq.t -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val of_list : (key * 'a) list -> 'a t
+    val memoize : 'a t -> (key -> 'a) -> key -> 'a
   end
 
 module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
@@ -570,6 +576,21 @@ module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
           H.equal k key || mem_in_bucket next in
       mem_in_bucket h.data.(key_index h key)
 
+    let to_list t =
+      fold (fun key datum elts -> (key, datum)::elts) t []
+
+    let of_list elts =
+      let t = create 42 in
+      List.iter (fun (key, datum) -> add t key datum) elts;
+      t
+
+    let memoize t f = fun key ->
+      try find t key with
+      | Not_found ->
+        let r = f key in
+        add t key r;
+        r
+
     let iter = iter
     let filter_map_inplace = filter_map_inplace
     let fold = fold
@@ -592,3 +613,119 @@ module Make(H: HashedType): (S with type key = H.t) =
       end)
     let create sz = create ~random:false sz
   end
+
+module type S_printable = sig
+  include S
+
+  val print
+     : ?before_key:string
+    -> ?after_key:string
+    -> (Format.formatter -> 'a -> unit)
+    -> Format.formatter
+    -> 'a t
+    -> unit
+
+  val map : 'a t -> ('a -> 'b) -> 'b t
+
+  module Map_from_keys : Map.S_printable with type key = key
+
+  val to_map : 'a t -> 'a Map_from_keys.t
+
+  val of_map : 'a Map_from_keys.t -> 'a t
+end
+
+module Make_printable (T : sig
+  type t
+  val hash : t -> int
+  val print : Format.formatter -> t -> unit
+  val compare : t -> t -> int
+end) = struct
+  (* N.B. In general it is not correct to use "t1 == t2" here (e.g. for NaNs).
+     Any phys-equal shortcuts should be in [compare]. *)
+  let equal t1 t2 =
+    T.compare t1 t2 = 0
+
+  include Make (struct
+    include T
+    let equal = equal
+  end)
+
+  module Map_from_keys = Map.Make_printable (T)
+
+  let to_map t = fold Map_from_keys.add t Map_from_keys.empty
+
+  let of_map m =
+    let t = create (Map_from_keys.cardinal m) in
+    Map_from_keys.iter (fun k v -> add t k v) m;
+    t
+
+  let map t f =
+    of_map (Map_from_keys.map f (to_map t))
+
+  let print ?before_key ?after_key f ppf t =
+    Map_from_keys.print ?before_key ?after_key f ppf (to_map t)
+end
+
+module type With_map_arg = sig
+  include Map.With_set_arg
+  val hash : t -> int
+end
+
+module type With_map = sig
+  module T : With_map_arg
+
+  val hash : T.t -> int
+  val equal : T.t -> T.t -> bool
+
+  include Map.With_set with type t = T.t with module T := T
+
+  module Tbl : S_printable
+    with type key = T.t
+    with module Map_from_keys := Map
+end
+
+module Make_with_map (T : With_map_arg) = struct
+  module T = T
+
+  module Tbl = Make_printable (T)
+  module Map = Tbl.Map_from_keys
+  module Set = Map.Set_of_keys
+
+  let print = T.print
+  let compare = T.compare
+  let hash = T.hash
+
+  let equal = Tbl.equal
+end
+
+module Pair_with_map_arg (T1 : With_map_arg) (T2 : With_map_arg) :
+    With_map_arg with type t = T1.t * T2.t =
+struct
+  type t = T1.t * T2.t
+
+  let compare (a1, b1) (a2, b2) =
+    let c = T1.compare a1 a2 in
+    if c <> 0 then c
+    else T2.compare b1 b2
+
+  let hash (a, b) = hash (T1.hash a, T2.hash b)
+
+  let print ppf (a, b) = Format.fprintf ppf " (%a, @ %a)" T1.print a T2.print b
+end
+
+module Make_with_map_pair (T1 : With_map) (T2 : With_map) = struct
+  module Pair = Pair_with_map_arg (T1.T) (T2.T)
+
+  type t = T1.T.t * T2.T.t
+
+  include Make_with_map (Pair)
+
+  let create_from_cross_product t1_set t2_set =
+    T1.Set.fold (fun t1 result ->
+        T2.Set.fold (fun t2 result ->
+            Set.add (t1, t2) result)
+          t2_set
+          result)
+      t1_set
+      Set.empty
+end

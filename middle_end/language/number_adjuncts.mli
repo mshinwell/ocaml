@@ -21,12 +21,12 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type Num_common = sig
-  include Identifiable.S
+  include Hashtbl.With_map
 
   module Pair : sig
     type nonrec t = t * t
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -51,7 +51,7 @@ module type Num_common = sig
 end
 
 module type Number_kind_common = sig
-  module Num : Identifiable.S
+  module Num : Hashtbl.With_map
 
   (* CR mshinwell: Rename to standard_int_or_float_kind? *)
   val kind : Flambda_kind.Standard_int_or_float.t
@@ -95,7 +95,7 @@ module type Int_number_kind = sig
 end
 
 module type Boxable = sig
-  module Num : Identifiable.S
+  module Num : Hashtbl.With_map
 
   val boxable_number_kind : Flambda_kind.Boxable_number.t
 

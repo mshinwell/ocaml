@@ -31,14 +31,11 @@ let var t = t.var
 let name t = Name.var (var t)
 
 module M =
-  Identifiable.Make (struct
+  Hashtbl.Make_with_map (struct
     type t = parameter
 
     let compare { var = var1 } { var = var2 } =
       Variable.compare var1 var2
-
-    let equal { var = var1 } { var = var2 } =
-      Variable.equal var1 var2
 
     let hash { var } =
       Variable.hash var
@@ -53,6 +50,8 @@ include T
 let print_list ppf ts =
   let pp_sep ppf () = Format.fprintf ppf "@ " in
   Format.pp_print_list ~pp_sep print ppf ts
+
+let equal = M.equal
 
 module Map = M.Map
 module Tbl = M.Tbl

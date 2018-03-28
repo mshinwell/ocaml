@@ -596,21 +596,22 @@ struct
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
           let closures =
-            Closure_id.Map.filter_map closures1 ~f:(fun closure_id ty1 ->
-              match Closure_id.Map.find closure_id closures2 with
-              | exception Not_found -> Some ty1
-              | ty2 ->
-                let ty_fabricated, new_equations_from_meet =
-                  Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
-                in
-                if ty_is_obviously_bottom ty_fabricated then begin
-                  None
-                end else begin
-                  equations_from_meet :=
-                    Meet_and_join.meet_equations ~resolver
-                      new_equations_from_meet !equations_from_meet;
-                  Some ty_fabricated
-                end)
+            Closure_id.Map.filter_map (fun closure_id ty1 ->
+                match Closure_id.Map.find closure_id closures2 with
+                | exception Not_found -> Some ty1
+                | ty2 ->
+                  let ty_fabricated, new_equations_from_meet =
+                    Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
+                  in
+                  if ty_is_obviously_bottom ty_fabricated then begin
+                    None
+                  end else begin
+                    equations_from_meet :=
+                      Meet_and_join.meet_equations ~resolver
+                        new_equations_from_meet !equations_from_meet;
+                    Some ty_fabricated
+                  end)
+              closures1
           in
           Exactly closures
         | Open closures1, Open closures2 ->
@@ -671,8 +672,7 @@ struct
         | Exactly closure_elements1, Open closure_elements2
         | Open closure_elements2, Exactly closure_elements1 ->
           let closure_elements =
-            Var_within_closure.Map.filter_map closure_elements1
-              ~f:(fun closure_id ty1 ->
+            Var_within_closure.Map.filter_map (fun closure_id ty1 ->
                 match
                   Var_within_closure.Map.find closure_id closure_elements2
                 with
@@ -689,6 +689,7 @@ struct
                         new_equations_from_meet !equations_from_meet;
                     Some ty_value
                   end)
+              closure_elements1
           in
           Exactly closure_elements
         | Open closure_elements1, Open closure_elements2 ->

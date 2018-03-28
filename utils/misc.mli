@@ -53,7 +53,7 @@ module Stdlib : sig
   module Char : sig
     include module type of Char
 
-    include Identifiable.S with type t := t
+    include Hashtbl.With_map with type t := t
   end
 
   module List : sig

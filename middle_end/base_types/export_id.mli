@@ -21,7 +21,7 @@
    These keys are used to ensure maximal sharing of value descriptions,
    which may be substantial. *)
 
-include Identifiable.S
+include Hashtbl.With_map
 
 val create : ?name:string -> Compilation_unit.t -> t
 val name : t -> string option

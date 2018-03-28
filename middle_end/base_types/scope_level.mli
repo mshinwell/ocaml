@@ -18,7 +18,7 @@
 
 type t
 
-include Identifiable.S with type t := t
+include Hashtbl.With_map with type t := t
 
 val initial : t
 val for_symbols : t

@@ -316,7 +316,7 @@ module Trap_action = struct
         take_backtrace : bool;
       }
 
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare t1 t2 =
@@ -339,8 +339,6 @@ module Trap_action = struct
             Pervasives.compare take_backtrace1 take_backtrace2
       | Push _, Pop _ -> -1
       | Pop _, Push _ -> 1
-
-    let equal t1 t2 = (compare t1 t2 = 0)
 
     let hash t =
       match t with
@@ -387,12 +385,12 @@ module Switch = struct
 
   let arms t = t
 
-  include Identifiable.Make_no_hash (struct
+  include Map.Make_with_set (struct
     type nonrec t = t
 
-    let compare = Discriminant.Map.compare Continuation.compare
-
-    let equal t1 t2 = (compare t1 t2 = 0)
+    let compare t1 t2 =
+      if t1 == t2 then 0
+      else Discriminant.Map.compare Continuation.compare t1 t2
 
     let print ppf (t : t) =
       let spc = ref false in
@@ -405,6 +403,9 @@ module Switch = struct
             Continuation.print l)
         t
   end)
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
 end
 
 type invalid_term_semantics =
@@ -1864,7 +1865,7 @@ end and Typed_parameter : sig
       -> t
       -> bool
   end
-(*  include Identifiable.S with type t := t *)
+(*  include Hashtbl.With_map with type t := t *)
 (*
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t
     -> unit
@@ -1903,7 +1904,7 @@ end = struct
     Flambda_type.free_names t.ty
 
 (*
-  include Identifiable.Make (struct
+  include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
     let compare { param = param1; projection = projection1; ty = ty1; }
