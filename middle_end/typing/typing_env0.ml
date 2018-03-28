@@ -19,43 +19,10 @@
 module Make (T : sig
   include Flambda_type0_internal_intf.S
 
-  val print : Format.formatter -> t -> unit
-
-  val print_typing_environment
-     : Format.formatter
-    -> typing_environment
-    -> unit
-
-  val free_names : flambda_type -> Name_occurrences.t
-
-  val free_names_set : flambda_type -> Name.Set.t
-
-  val unknown : Flambda_kind.t -> t
-
-  val force_to_kind_value : t -> of_kind_value ty
-
-  val force_to_kind_naked_number
-     : 'a Flambda_kind.Naked_number.t
-    -> t
-    -> 'a of_kind_naked_number ty
-
-  val force_to_kind_fabricated : t -> of_kind_fabricated ty
-
-  val kind : flambda_type -> Flambda_kind.t
-
   module Typing_env_extension : Typing_env_extension_intf.S
     with type env_extension := env_extension
     with type typing_environment := typing_environment
     with type flambda_type := flambda_type
-
-  val join : t_in_context -> t_in_context -> t
-
-  val meet
-     : bias_towards:t_in_context
-    -> t_in_context
-    -> t * Typing_env_extension.t
-
-  val is_empty_typing_environment : typing_environment -> bool
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
     with type t_in_context := T.t_in_context
@@ -263,6 +230,9 @@ end) = struct
         t.names_to_types
     end
 
+  let mem t name =
+    Name.Map.mem name t.names_to_types
+
   let find_exn t name =
     match Name.Map.find name t.names_to_types with
     | exception Not_found ->
@@ -279,6 +249,20 @@ end) = struct
       | Existential ->
    (* XXX     let ty = rename_variables t freshening in *)
         ty, Existential
+
+  let scope_level_exn t name =
+    match Name.Map.find name t.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "scope_level: Cannot find %a in environment:@ %a"
+        Name.print name
+        print t
+    | scope_level, _ty -> scope_level
+
+  (* CR mshinwell: improve efficiency *)
+  let find_with_scope_level_exn t name =
+    let ty, binding_type = find t name in
+    let scope_level = scope_level_exn t name in
+    ty, scope_level, binding_type
 
   let find_opt t name =
     match find_exn t name with
@@ -301,6 +285,12 @@ end) = struct
       match Flambda_primitive.With_fixed_value.Map.find t.cse_to_names prim with
       | exception Not_found -> None
       | name -> Some name
+
+  let is_existential_exn t name =
+    let _ty, binding_type = find_exn t name in
+    match binding_type with
+    | Normal -> false
+    | Existential -> true
 
   let fold t ~init ~f =
     Scope_level.Map.fold (fun level by_sublevel acc ->
@@ -512,7 +502,7 @@ end) = struct
   let singleton ~resolver name scope_level binding =
     add (create ~resolver) name scope_level binding
 
-  let restrict_to_names t allowed =
+  let restrict_to_names0 t allowed =
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
@@ -549,33 +539,41 @@ end) = struct
       raise Misc.Fatal_error
     end
 
-  let scope_level t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "scope_level: Cannot find %a in environment:@ %a"
-        Name.print name
-        print t
-    | scope_level, _ty -> scope_level
+  let restrict_to_names t allowed =
+    let allowed = Name_occurrences.everything allowed in
+    restrict_to_names0 t allowed
 
-  (* CR mshinwell: improve efficiency *)
-  let find_with_scope_level t name =
-    let ty, binding_type = find t name in
-    let scope_level = scope_level t name in
-    ty, scope_level, binding_type
+  let restrict_to_symbols t =
+    let symbols = Name.symbols_only_map t.names_to_types in
+    restrict_to_names0 t (Name.Map.keys symbols)
 
-  let meet_typing_environment (t1 : typing_environment)
-        (t2 : typing_environment) : typing_environment =
+  let filter t ~f =
+    let allowed =
+      Name.Map.fold (fun name ty allowed ->
+          if f name ty then Name.Set.add name allowed
+          else allowed)
+        t.names_to_types
+        Name.Set.empty
+    in
+    restrict_to_names0 t allowed
+
+  let remove t name =
+    let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
+    restrict_to_names0 t allowed
+
+  let meet (t1 : typing_environment) (t2 : typing_environment)
+        : typing_environment =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
       let resolver = t1.resolver in
       let t =
-        Scope_level.Map.intersection_fold_and_remainder_fold
+        Scope_level.Map.fold_intersection_and_remainder
           t1.levels_to_types t2.levels_to_types
           ~init:(create ~resolver)
           ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
-            Scope_level.Sublevel.intersection_fold_and_remainder_fold
+            Scope_level.Sublevel.fold_intersection_and_remainder
               by_sublevel1 by_sublevel2
               ~init:t
               ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
@@ -627,8 +625,8 @@ end) = struct
       invariant t;
       t
 
-  let join_typing_environment (t1 : typing_environment)
-        (t2 : typing_environment) =
+  let join (t1 : typing_environment) (t2 : typing_environment)
+        : typing_environment =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then create_using_resolver_from t1
     else if is_empty t2 then create_using_resolver_from t1
@@ -683,13 +681,11 @@ end) = struct
       Typing_env_extension.to_typing_environment ~resolver:t.resolver
         env_extension
     in
-    meet_typing_environment t t'
+    meet t t'
 
-  let is_existential_exn t name =
-    let _ty, binding_type = find_exn t name in
-    match binding_type with
-    | Normal -> false
-    | Existential -> true
+  let to_env_extension t : env_extension =
+    { typing_judgements = Some t;
+    }
 
   let cut t ~existential_if_defined_at_or_later_than =
 (*
@@ -698,12 +694,18 @@ Scope_level.print existential_if_defined_at_or_later_than
 print_typing_environment t;
 *)
     let new_existentials =
-      Scope_level.Map.fold (fun scope_level names resulting_existentials ->
+      Scope_level.Map.fold
+        (fun scope_level by_sublevel resulting_existentials ->
           let will_be_existential =
             Scope_level.(>=)
               scope_level existential_if_defined_at_or_later_than
           in
           if will_be_existential then
+            let names =
+              Name.Set.of_list (
+                List.map (fun (name, _ty) -> name)
+                  (Scope_level.Sublevel.Map.data by_sublevel))
+            in
             let non_symbols = Name.variables_only names in
             Name.Set.union non_symbols resulting_existentials
           else
@@ -724,13 +726,23 @@ print_typing_environment t;
         new_existentials
         t.existential_freshening
     in
+    let existentials = Name.Set.union t.existentials new_existentials in
+    let cse_to_names =
+      Flambda_primitive.With_fixed_value.Map.filter (fun prim name ->
+          let names_in_prim =
+            Flambda_primitive.With_fixed_value.free_names prim
+          in
+          let names = Name.Set.add name names_in_prim in
+          Name.Set.is_empty (Name.Set.inter names existentials))
+        t.cse_to_names
+    in
 let result =
-    (* XXX we actually need to rename in the domain of [names_to_types] *)
-    { must_be_closed = t.must_be_closed;
-      resolver = t.resolver;
+    (* XXX fix freshening as required *)
+    { resolver = t.resolver;
       names_to_types = t.names_to_types;
       levels_to_names = t.levels_to_names;
-      existentials = Name.Set.union t.existentials new_existentials;
+      cse_to_names;
+      existentials;
       existential_freshening;
     }
 in
@@ -739,38 +751,6 @@ Format.eprintf "Result is: %a\n%!"
 print_typing_environment result;
 *)
     result
-
-  let restrict_to_names t allowed =
-    let allowed = Name_occurrences.everything allowed in
-    restrict_to_names0_typing_environment t allowed
-
-  let restrict_to_symbols t =
-    let symbols = Name.symbols_only_map t.names_to_types in
-    restrict_to_names0_typing_environment t (Name.Map.keys symbols)
-
-  (* CR mshinwell: The "derived" functions should be in Flambda_type *)
-  let remove t name =
-    let allowed =
-      Name.Set.remove name (Name.Map.keys t.names_to_types)
-    in
-    restrict_to_names0_typing_environment t allowed
-
-  let mem t name =
-    Name.Map.mem name t.names_to_types
-
-  let filter t ~f =
-    let allowed =
-      Name.Map.fold (fun name ty allowed ->
-          if f name ty then Name.Set.add name allowed
-          else allowed)
-        t.names_to_types
-        Name.Set.empty
-    in
-    restrict_to_names0_typing_environment t allowed
-
-  let to_env_extension t : env_extension =
-    { typing_judgements = Some t;
-    }
 
   let free_names_transitive env t =
     let all_names = ref (Name_occurrences.create ()) in
@@ -792,14 +772,18 @@ print_typing_environment result;
       (Name_occurrences.create ())
       ts
 
-  let diff ~strictly_more_precise t1 t2 : env_extension =
+  let restrict_names_to_those_occurring_in_types t tys =
+    let free_names = free_names_transitive_list t tys in
+    restrict_to_names t free_names
+
+  let diff t1 t2 : env_extension =
     let names_to_types =
       Name.Map.filter (fun name (level1, ty1) ->
           match Name.Map.find name t2.names_to_types with
           | exception Not_found -> true
           | (level2, ty2) ->
             assert (Scope_level.equal level1 level2);
-            strictly_more_precise (t1, ty1) ~than:(t2, ty2))
+            Meet_and_join.strictly_more_precise (t1, ty1) ~than:(t2, ty2))
         t1.names_to_types
     in
     let free_names =
@@ -813,9 +797,7 @@ print_typing_environment result;
         must_be_closed = false;
       }
     in
-    let t =
-      restrict_to_names0_typing_environment t1 (Name.Map.keys names_to_types)
-    in
+    let t = restrict_to_names0 t1 (Name.Map.keys names_to_types) in
     let unbound =
       Name.Set.diff (Name_occurrences.everything free_names)
         (Name.Map.keys names_to_types)
@@ -831,20 +813,6 @@ print_typing_environment result;
         unbound
         t
     in
-    let t =
-      { t with
-        must_be_closed = true;
-      }
-    in
     { typing_judgements = Some t;
     }
-
-  let restrict_names_to_those_occurring_in_types t tys =
-    let free_names = free_names_transitive_list t tys in
-Format.eprintf "Restricting to: %a\n%!"
-  Name_occurrences.print free_names;
-    restrict_to_names t free_names
-
-  let meet = meet_typing_environment
-  let join = join_typing_environment
 end

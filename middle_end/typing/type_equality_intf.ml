@@ -14,59 +14,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Interface to type equality functions. *)
+
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
-  type typing_environment
-  type env_extension
-
-  type 'a ty
-
-  type of_kind_foo
-
-  (* Least upper bound of two types of a particular kind. *)
-  val join_ty
-     : typing_environment
-    -> typing_environment
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-
-  (* Greatest lower bound of two types of a particular kind. *)
-  val meet_ty
-     : typing_environment
-    -> typing_environment
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-    -> of_kind_foo ty * env_extension
-end
-
-module type S_for_types = sig
   type flambda_type
-  type t_in_context
-  type env_extension
 
-  val meet
-     : bound_name:Name.t
-    -> t_in_context
-    -> t_in_context
-    -> flambda_type * env_extension
+  val fast_equal : flambda_type -> flambda_type -> bool
 
-  val join : t_in_context -> t_in_context -> flambda_type
-
-  val meet_env_extension
-     : resolver:(Export_id.t -> flambda_type option)
-    -> env_extension
-    -> env_extension
-    -> env_extension
-
-  val join_env_extension
-     : resolver:(Export_id.t -> flambda_type option)
-    -> env_extension
-    -> env_extension
-    -> env_extension
-
-  val as_or_more_precise : t_in_context -> than:t_in_context -> bool
-
-  val strictly_more_precise : t_in_context -> than:t_in_context -> bool
+  val equal : flambda_type -> flambda_type -> bool
 end

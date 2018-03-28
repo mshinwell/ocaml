@@ -329,4 +329,37 @@ module type S = sig
 
   include module type of struct include S_impl (struct type t = expr end) end
     with type expr := expr
+
+  val print : Format.formatter -> t -> unit
+
+  val print_typing_environment
+     : Format.formatter
+    -> typing_environment
+    -> unit
+
+  val free_names : flambda_type -> Name_occurrences.t
+
+  val free_names_set : flambda_type -> Name.Set.t
+
+  val unknown : Flambda_kind.t -> t
+
+  val force_to_kind_value : t -> of_kind_value ty
+
+  val force_to_kind_naked_number
+     : 'a Flambda_kind.Naked_number.t
+    -> t
+    -> 'a of_kind_naked_number ty
+
+  val force_to_kind_fabricated : t -> of_kind_fabricated ty
+
+  val kind : flambda_type -> Flambda_kind.t
+
+  val join : t_in_context -> t_in_context -> t
+
+  val meet
+     : bias_towards:t_in_context
+    -> t_in_context
+    -> t * Typing_env_extension.t
+
+  val is_empty_typing_environment : typing_environment -> bool
 end

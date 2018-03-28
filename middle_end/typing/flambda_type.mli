@@ -71,13 +71,6 @@ val is_useful : (t -> bool) type_accessor
 (** Whether all types in the given list do *not* satisfy [useful]. *)
 val all_not_useful : (t list -> bool) type_accessor
 
-(** Type equality. *)
-val equal : t -> t -> bool
-
-(** Returns [true] if the given type is known to provide strictly more
-    information about the corresponding value than the supplied type [than]. *)
-val strictly_more_precise : t_in_context -> than:t_in_context -> bool
-
 (** Whether values of the given two types will always be physically equal
     to each other. *)
 val values_physically_equal : t -> t -> bool

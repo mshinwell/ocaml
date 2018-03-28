@@ -1860,8 +1860,6 @@ result
         | Some name1, Some name2 when Name.equal name1 name2 ->
           Equals name1, Typing_env_extension.create ()
         | Some name1, Some name2 ->
-          (* N.B. This needs to respect the [bias_towards] argument on the
-             [meet] function exposed in the interface (below). *)
           let level1 = Typing_env0.scope_level env1 name1 in
           let level2 = Typing_env0.scope_level env2 name2 in
           let meet_unknown_or_join, env_extension_from_meet =
@@ -1923,9 +1921,10 @@ result
       with type env_extension := env_extension
       with type flambda_type := flambda_type
   end = struct
-    let meet ~bound_name ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t))
-          : t * env_extension =
-      if env1 == env2 && t1 == t2 then t1, Typing_env_extension.create ()
+    let meet ~bound_name (env1, (t1 : t)) (env2, (t2 : t)) : t * env_extension =
+      if Typing_env0.fast_equal env1 env2
+        && Type_equality.fast_equal t1 t2
+      then t1, Typing_env_extension.create ()
       else begin
         Typing_env0.invariant env1;
         Typing_env0.invariant env2;
@@ -2052,16 +2051,18 @@ result
               %a@ in env:@ %a,@ meet result@ %a"
             Name.print bound_name
             print t1
-            Typing_environment.print env1
+            Typing_env0.print env1
             print t2
-            Typing_environment.print env2
+            Typing_env0.print env2
             print t
         end;
         t, env_extension_from_meet
       end
 
     let join (env1, (t1 : t)) (env2, (t2 : t)) =
-      if env1 == env2 && t1 == t2 then t1
+      if Typing_env0.fast_equal env1 env2
+        && Type_equality.fast_equal t1 t2
+      then t1
       else begin
         ensure_phantomness_matches t1 t2 "kind mismatch upon join";
         let descr =
@@ -2131,27 +2132,14 @@ result
     let meet_or_join_env_extension ~resolver ~meet_or_join
           env_extension1 env_extension2 =
       let typing_judgements =
-        let env1 = Typing_env_extension.to_typing_environment ~resolver env_extension1 in
-        let env2 = Typing_env_extension.to_typing_environment ~resolver env_extension2 in
+        let env1 =
+          Typing_env_extension.to_typing_environment ~resolver env_extension1
+        in
+        let env2 =
+          Typing_env_extension.to_typing_environment ~resolver env_extension2
+        in
         meet_or_join env1 env2
       in
-(*
-      let typing_judgements =
-        let allowed_names =
-          Name.Map.fold (fun name (_level, ty) allowed_names ->
-              if is_unknown (env, ty) then allowed_names
-              else Name.Set.add name allowed_names)
-            env.names_to_types
-            Name.Set.empty
-        in
-        restrict_to_names0_typing_environment env allowed_names
-      in
-      let typing_judgements =
-        { typing_judgements with
-          must_be_closed = true;
-        }
-      in
-*)
       { typing_judgements = Some typing_judgements; }
 
     let meet_env_extension ~resolver env_extension1 env_extension2 =
@@ -2161,6 +2149,25 @@ result
     let join_env_extension ~resolver env_extension1 env_extension2 =
       meet_or_join_env_extension ~resolver ~meet_or_join:Typing_env0.join
         env_extension1 env_extension2
+
+    let as_or_more_precise ((t1, _) as ty_in_context1)
+          ~than:((t2, _) as ty_in_context2) =
+      if Type_equality.fast_equal t1 t2 then true
+      else
+        let ty1, _ = resolve_aliases ty_in_context1 in
+        let ty2, _ = resolve_aliases ty_in_context2 in
+        let meet_ty, _env_extension = meet (t1, ty1) (t2, ty2) in
+        Type_equality.equal meet_ty ty1
+
+    let strictly_more_precise ((t1, _) as ty_in_context1)
+          ~than:((t2, _) as ty_in_context2) =
+      if Type_equality.fast_equal t1 t2 then false
+      else
+        let ty1, _ = resolve_aliases ty_in_context1 in
+        let ty2, _ = resolve_aliases ty_in_context2 in
+        let meet_ty, _env_extension = meet (t1, ty1) (t2, ty2) in
+        Type_equality.equal meet_ty ty1
+          && not (Type_equality.equal meet_ty ty2)
   end and Meet_and_join_value : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := of_kind_value
@@ -2325,7 +2332,7 @@ result
     let free_names = free_names
     let print_typing_environment = print_typing_environment
     let print = print
-  end) (Meet_and_join)
+  end) (Meet_and_join) (Type_equality)
   and Typing_env_extension : sig
     include Typing_env_extension_intf.S
       with type env_extension := env_extension
@@ -2426,7 +2433,10 @@ result
             f acc name level ty)
           typing_judgements.names_to_types
           init
-  end
+  end and Type_equality : sig
+    include Type_equality_intf.S
+      with type flambda_type := flambda_type
+  end = struct
 
   let meet = Meet_and_join.meet
   let join = Meet_and_join.join

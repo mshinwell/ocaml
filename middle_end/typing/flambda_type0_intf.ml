@@ -356,6 +356,12 @@ module type S = sig
     -> inlinable_function_declaration
     -> unit
 
+  (** Type equality---sound, but should not be assumed to be complete. *)
+  val equal : t -> t -> bool
+
+  (** Fast type equality---sound but far from complete. *)
+  val fast_equal : t -> t -> bool
+
   val of_ty_value : ty_value -> t
 
   val of_ty_naked_number
@@ -648,4 +654,12 @@ module type S = sig
      : bias_towards:t_in_context
     -> t_in_context
     -> t * Typing_env_extension.t
+
+  (** Like [strictly_more_precise], but also returns [true] when the two
+      input types are equally precise. *)
+  val as_or_more_precise : t_in_context -> than:t_in_context -> bool
+
+  (** Returns [true] if the first type is known to provide strictly more
+      information about the corresponding value than the type [than]. *)
+  val strictly_more_precise : t_in_context -> than:t_in_context -> bool
 end
