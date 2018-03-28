@@ -22,6 +22,7 @@ module Make (T : sig
   module Typing_env_extension : Typing_env_extension_intf.S
     with type env_extension := env_extension
     with type typing_environment := typing_environment
+    with type typing_environment_entry0 := typing_environment_entry0
     with type flambda_type := flambda_type
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
@@ -60,7 +61,7 @@ end) = struct
   let equal
         ({ resolver = _;
            names_to_types = names_to_types1;
-           levels_to_types = _;
+           levels_to_entries = _;
            cse_to_names = cse_to_names1;
            next_sublevel_by_level = _;
            existentials = existentials1;
@@ -68,7 +69,7 @@ end) = struct
         } as t1)
         ({ resolver = _;
            names_to_types = names_to_types2;
-           levels_to_types = _;
+           levels_to_entries = _;
            cse_to_names = cse_to_names2;
            next_sublevel_by_level = _;
            existentials = existentials2;
@@ -100,7 +101,7 @@ end) = struct
     { resolver;
       names_to_types = Name.Map.empty;
       cse_to_names = Flambda_primitive.With_fixed_value.Map.empty;
-      levels_to_types = Scope_level.Map.empty;
+      levels_to_entries = Scope_level.Map.empty;
       next_sublevel_by_level = Scope_level.Map.empty;
       existentials = Name.Set.empty;
       existential_freshening;
@@ -250,7 +251,7 @@ end) = struct
             f acc name binding_type scope_level ty)
         by_sublevel
         acc)
-      t.levels_to_types
+      t.levels_to_entries
       init
 
   let iter t ~f =
@@ -266,11 +267,11 @@ end) = struct
       ignore (Sys.opaque_identity (fold t ~init:Name.Set.empty
         ~f:(fun names_seen (name : Name.t) (binding_type : binding_type)
                 scope_level entry ->
-          let ty =
+          let free_names =
             match entry with
-            | Definition ty | Equation ty -> ty
+            | Definition ty | Equation ty -> T.free_names_set ty
+            | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
           in
-          let free_names = T.free_names_set ty in
           if not (Name.Set.subset free_names names_seen) then begin
             Misc.fatal_errorf "Typing environment is not closed (%a free):@ %a"
               Name.Set.print (Name.Set.diff free_names names_seen)
@@ -353,7 +354,7 @@ end) = struct
     t, sublevel
 
   let min_level_for_new_binding t =
-    let all_levels = Scope_level.Map.keys t.levels_to_types in
+    let all_levels = Scope_level.Map.keys t.levels_to_entries in
     match Scope_level.Set.max_elt_opt all_levels with
     | None -> Scope_level.initial
     | Some level -> level
@@ -412,7 +413,7 @@ end) = struct
           print_typing_environment t
       | Equation _ | CSE _ -> ()
 
-  let rec invariant_for_new_equation t name level ty ~sense =
+  let rec invariant_for_new_equation t name level (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
     let meet_ty, env_extension =
       Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
@@ -442,7 +443,11 @@ end) = struct
         print_typing_environment t
     end;
     Typing_env_extension.iter env_extension
-      ~f:(fun name _binding_type level ty ->
+      ~f:(fun name _binding_type level (entry : typing_environment_entry0) ->
+        let ty =
+          match entry with
+          | Definition ty | Equation ty -> ty
+        in
         let level = Scope_level.With_sublevel.level level in
         invariant_for_any_new_binding t name level (Equation ty);
         invariant_for_new_equation t name level ty
@@ -498,35 +503,46 @@ end) = struct
     end else begin
       let names_to_types =
         match binding with
-        | Definition ty | Equation ty ->
-          Name.Map.add name (level, ty) t.names_to_types
+        | Definition ty ->
+          let entry0 : typing_environment_entry0 = Definition ty in
+          Name.Map.add name (level, entry0) t.names_to_types
+        | Equation ty ->
+          let entry0 : typing_environment_entry0 = Equation ty in
+          Name.Map.add name (level, entry0) t.names_to_types
         | CSE _ -> t.names_to_types
       in
-      let levels_to_names =
+      let levels_to_entries =
         Scope_level.Map.update cont_level
           (function
             | None ->
               let by_sublevel =
-                Scope_level.Sublevel.Map.singleton sublevel (name, ty)
+                Scope_level.Sublevel.Map.singleton sublevel (name, binding)
               in
               Some by_sublevel
             | Some by_sublevel ->
               assert (not (Scope_level.Sublevel.Map.mem sublevel by_sublevel));
-              Scope_level.Sublevel.Map.add sublevel (name, ty) by_sublevel)
-          t.levels_to_types
+              let by_sublevel =
+                Scope_level.Sublevel.Map.add sublevel (name, binding)
+                  by_sublevel
+              in
+              Some by_sublevel)
+          t.levels_to_entries
       in
       let cse_to_names =
         match binding with
         | Definition _ | Equation _ -> t.cse_to_names
         | CSE prim ->
-          match Flambda_primitive.Map.find prim t.cse_to_names with
-          | exception Not_found -> Flambda_primitive.Map.singleton prim name
+          match
+            Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
+          with
+          | exception Not_found ->
+            Flambda_primitive.With_fixed_value.Map.singleton prim name
           | _name -> t.cse_to_names  (* Keep the furthest-out binding. *)
       in
       let t =
         { t with
           names_to_types;
-          levels_to_names;
+          levels_to_entries;
           cse_to_names;
         }
       in
@@ -542,15 +558,14 @@ end) = struct
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
     in
-    let levels_to_names =
-      Scope_level.Map.filter_map t.levels_to_names
+    let levels_to_entries =
+      Scope_level.Map.filter_map t.levels_to_entries
         ~f:(fun _cont_level by_sublevel ->
           let by_sublevel =
             Scope_level.Sublevel.Map.filter_map by_sublevel
-              ~f:(fun _sublevel names ->
-                let names = Name.Set.inter names allowed in
-                if Name.Set.is_empty names then None
-                else Some names)
+              ~f:(fun _sublevel ((name, _) as entry) ->
+                if Name.Set.mem name allowed then Some entry
+                else None)
           in
           if Scope_level.Sublevel.Map.is_empty by_sublevel then None
           else Some by_sublevel)
@@ -559,10 +574,21 @@ end) = struct
     let existential_freshening =
       Freshening.restrict_to_names t.existential_freshening allowed
     in
+    let cse_to_names =
+      Flambda_primitive.With_fixed_value.Map.filter (fun prim name ->
+          let names_in_prim =
+            Flambda_primitive.With_fixed_value.free_names prim
+          in
+          let names = Name.Set.add name names_in_prim in
+          Name.Set.is_empty (Name.Set.diff names allowed))
+        t.cse_to_names
+    in
     let t =
       { resolver = t.resolver;
         names_to_types;
-        levels_to_names;
+        cse_to_names;
+        levels_to_entries;
+        next_sublevel_by_level = t.next_sublevel_by_level;
         existentials;
         existential_freshening;
       }
@@ -612,7 +638,7 @@ end) = struct
       let resolver = t1.resolver in
       let t =
         Scope_level.Map.fold_intersection_and_remainder
-          t1.levels_to_types t2.levels_to_types
+          t1.levels_to_entries t2.levels_to_entries
           ~init:(create ~resolver)
           ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
             Scope_level.Sublevel.fold_intersection_and_remainder
@@ -675,7 +701,7 @@ end) = struct
     else
       let t =
         Scope_level.Map.intersection_fold
-          t1.levels_to_types t2.levels_to_types
+          t1.levels_to_entries t2.levels_to_entries
           ~init:(create ~resolver)
           ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
             Scope_level.Sublevel.intersection_fold
@@ -709,7 +735,7 @@ end) = struct
         { t with
           names_to_types;
           cse_to_names;
-          levels_to_types;
+          levels_to_entries;
           existentials;
           existential_freshening;
         }
@@ -751,7 +777,7 @@ print_typing_environment t;
             Name.Set.union non_symbols resulting_existentials
           else
             resulting_existentials)
-        t.levels_to_names
+        t.levels_to_entries
         Name.Set.empty
     in
     let existential_freshening =
@@ -782,7 +808,7 @@ print_typing_environment t;
       (* XXX fix freshening as required *)
       { resolver = t.resolver;
         names_to_types = t.names_to_types;
-        levels_to_names = t.levels_to_names;
+        levels_to_entries = t.levels_to_entries;
         cse_to_names;
         existentials;
         existential_freshening;

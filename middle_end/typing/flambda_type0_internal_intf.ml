@@ -265,8 +265,8 @@ end) = struct
     names_to_types :
       (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
     cse_to_names : Name.t Flambda_primitive.With_fixed_value.Map.t;
-    levels_to_types :
-      (Name.t * typing_environment_entry0)
+    levels_to_entries :
+      (Name.t * typing_environment_entry)
         Scope_level.Sublevel.Map.t Scope_level.Map.t;
     next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
     existentials : Name.Set.t;
