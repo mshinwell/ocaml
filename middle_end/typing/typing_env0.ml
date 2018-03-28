@@ -640,12 +640,13 @@ end) = struct
         Scope_level.Map.fold_intersection_and_remainder
           t1.levels_to_entries t2.levels_to_entries
           ~init:(create ~resolver)
-          ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
-            Scope_level.Sublevel.fold_intersection_and_remainder
+          ~inter:(fun t cont_level by_sublevel1 by_sublevel2 ->
+            Scope_level.Sublevel.Map.fold_intersection_and_remainder
               by_sublevel1 by_sublevel2
               ~init:t
-              ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
-                assert (Name.equal name1 name2);
+              ~inter:(fun t sublevel (name1, entry1) (name2, entry2) ->
+                assert (Name.equal name1 name2);  (* XXX wrong *)
+
                 let meet_ty, env_extension =
                   Meet_and_join.meet (t1, ty1) (t2, ty2)
                 in
@@ -676,7 +677,7 @@ end) = struct
           (fun name1 name2 ->
             let level1 = scope_level_exn t1 name1 in
             let level2 = scope_level_exn t2 name2 in
-            (* Keep the outermost binding. *)
+            (* Use the outermost binding. *)
             if Scope_level.With_sublevel.(>) level1 level2 then name2
             else name1)
           t1.cse_to_names t2.cse_to_names
