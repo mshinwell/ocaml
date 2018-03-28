@@ -239,6 +239,10 @@ end) = struct
       t.levels_to_types
       init
 
+  let iter t ~f =
+    fold t ~init:() ~f:(fun () name binding_type scope_level ty ->
+        f name binding_type scope_level ty)
+
   let invariant t =
     (* CR mshinwell: Add more checks here *)
     if !Clflags.flambda_invariant_checks then begin
@@ -293,22 +297,13 @@ end) = struct
   let find_opt t name =
     match find_exn t name with
     | exception Not_found -> None
-    | _scope_level, ty ->
-      let binding_type =
-        if Name.Set.mem name t.existentials then Existential
-        else Normal
-      in
-      match binding_type with
-      | Normal -> Some (ty, Normal)
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        Some (ty, Existential)
+    | ty, binding_type -> Some (ty, binding_type)
 
   let find_cse t prim =
     match Flambda_primitive.With_fixed_value.create prim with
     | None -> None
     | Some prim ->
-      match Flambda_primitive.With_fixed_value.Map.find t.cse_to_names prim with
+      match Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names with
       | exception Not_found -> None
       | name -> Some name
 
@@ -396,7 +391,7 @@ end) = struct
       | Equation _ | CSE _ -> ()
 
   let rec invariant_for_new_equation t name level ty ~sense =
-    let _level, existing_ty = find t name in
+    let existing_ty, _binding_type = find_exn t name in
     let meet_ty, env_extension =
       Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
     in
@@ -406,19 +401,19 @@ end) = struct
       | Existing_equation_must_be_more_precise -> existing_ty, ty
     in
     let as_or_more_precise =
-      T.equal meet_ty ty_must_be_strictly_more_precise
+      Type_equality.equal meet_ty ty_must_be_strictly_more_precise
     in
     let strictly_more_precise =
-      ty_as_or_more_precise && not (T.equal meet_ty other_ty)
+      as_or_more_precise && not (Type_equality.equal meet_ty other_ty)
     in
-    if not ty_strictly_more_precise then begin
+    if not strictly_more_precise then begin
       Misc.fatal_errorf "Cannot add equation %a = %a@ to this environment: \
           as_or_more_precise %b,@ strictly_more_precise %b,@ meet_ty@ %a,@ \
           existing_ty@ %a,@ sense@ %a.@  Env:@ %a"
         Name.print name
         T.print ty
-        ty_as_or_more_precise
-        ty_strictly_more_precise
+        as_or_more_precise
+        strictly_more_precise
         T.print meet_ty
         T.print existing_ty
         print_sense sense
@@ -443,25 +438,31 @@ end) = struct
   let canonical_name t name =
     match find_opt t name with
     | None -> None
-    | Some (_level, ty) ->
+    | Some (ty, _binding_type) ->
       let _ty, canonical_name = resolve_aliases (t, ty) in
-      if Name.equal name canonical_name then begin
-        Misc.fatal_errorf "Canonical name for %a is itself in environment:@ %a"
-          Name.print name
-          print_typing_environment t
-      end;
-      Some canonical_name
+      match canonical_name with
+      | None -> None
+      | Some canonical_name ->
+        begin
+          if Name.equal name canonical_name then begin
+            Misc.fatal_errorf "Canonical name for %a is itself in \
+                environment:@ %a"
+              Name.print name
+              print_typing_environment t
+          end;
+          Some canonical_name
+        end
 
   let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
-    invariant_for_new_binding t name level binding;
+    invariant_for_new_binding t name cont_level binding;
     let t, sublevel = allocate_sublevel t cont_level in
     let level = Scope_level.With_sublevel.create cont_level sublevel in
     let redundant_possibly_cyclic_alias =
       match binding with
       | Definition _ | CSE _ -> false
       | Equation ty ->
-        let _, canonical_name = resolve_aliases (t, ty) in
         let canonical_name_for_t = canonical_name t name in
+        let _, canonical_name = resolve_aliases (t, ty) in
         match canonical_name, canonical_name_for_t with
         | Some canonical_name, Some canonical_name_for_t
             when Name.equal canonical_name canonical_name_for_t -> true

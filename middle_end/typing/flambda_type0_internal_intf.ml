@@ -254,7 +254,7 @@ end) = struct
   and typing_environment_entry =
     | Definition of t
     | Equation of t
-    | CSE of Flambda_primitive.t
+    | CSE of Flambda_primitive.With_fixed_value.t
 
   and typing_environment = {
     resolver : (Export_id.t -> t option);
@@ -332,6 +332,11 @@ module type S = sig
     with type expr := expr
 
   val print : Format.formatter -> t -> unit
+
+  val print_typing_environment_entry
+     : Format.formatter
+    -> typing_environment_entry
+    -> unit
 
   val print_typing_environment
      : Format.formatter

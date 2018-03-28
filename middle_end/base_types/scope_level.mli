@@ -26,6 +26,7 @@ module type S = sig
   val prev : t -> t
   val next : t -> t
 
+  val (<): t -> t -> bool
   val (>=): t -> t -> bool
 
   val to_int : t -> int

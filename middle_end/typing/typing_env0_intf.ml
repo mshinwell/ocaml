@@ -137,6 +137,16 @@ module type S = sig
       -> 'a)
     -> 'a
 
+  (** Like [fold], with the same ordering properties, but just an iterator. *)
+  val iter
+     : t
+    -> f:(Name.t
+      -> binding_type
+      -> Scope_level.With_sublevel.t
+      -> flambda_type
+      -> unit)
+    -> unit
+
   (** Least upper bound of two typing environments.  The domain of the
       resulting environment is the intersection of those supplied. *)
   val join : t -> t -> t

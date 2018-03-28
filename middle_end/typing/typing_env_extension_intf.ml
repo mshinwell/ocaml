@@ -35,22 +35,6 @@ module type S = sig
     -> flambda_type
     -> t
 
-  val add_or_replace
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
-  val add_or_replace_meet
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> Name.t
-    -> Scope_level.t
-    -> flambda_type
-    -> t
-
   val singleton
      : resolver:(Export_id.t -> flambda_type option)
     -> Name.t
@@ -58,11 +42,27 @@ module type S = sig
     -> flambda_type
     -> t
 
+  type binding_type = Normal | Existential
+
   val fold
      : t
     -> init:'a
-    -> f:('a -> Name.t -> Scope_level.t -> flambda_type -> 'a)
+    -> f:('a
+      -> Name.t
+      -> binding_type
+      -> Scope_level.With_sublevel.t
+      -> flambda_type
+      -> 'a)
     -> 'a
+
+  val iter
+     : t
+    -> f:(Name.t
+      -> binding_type
+      -> Scope_level.With_sublevel.t
+      -> flambda_type
+      -> unit)
+    -> unit
 
   val domain : t -> Name.Set.t
 
