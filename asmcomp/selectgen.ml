@@ -792,14 +792,16 @@ method emit_expr (env:environment) exp =
             List.fold_left (fun env (id, r) -> env_add id r env)
               env (List.combine ids rs)
           in
-          let (r, s) =
-            self#emit_sequence ~reset_with_adjusted_types:() new_env e2
-          in
-          let adjusted =
+          let adjusted_before = self#get_with_adjusted_types in
+          assert (Numbers.Int.Set.for_all (fun stamp -> stamp < old_stamp)
+            adjusted_before);
+          let (r, s) = self#emit_sequence new_env e2 in
+          let adjusted_after =
             Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
-              s#get_with_adjusted_types
+              self#get_with_adjusted_types
           in
-          (nfail, (r, s)), adjusted
+          assert (Numbers.Int.Set.subset adjusted_before adjusted_after);
+          (nfail, (r, s)), Numbers.Int.Set.diff adjusted_after adjusted_before
         in
         let l, adjusted =
           List.split (List.map translate_one_handler handlers)
@@ -850,16 +852,8 @@ method emit_expr (env:environment) exp =
         [||] [||];
       r
 
-method private emit_sequence ?reset_with_adjusted_types (env:environment) exp =
-  let s =
-    match reset_with_adjusted_types with
-    | None -> {< instr_seq = dummy_instr; >}
-    | Some () ->
-      {<
-        instr_seq = dummy_instr;
-        with_adjusted_types = ref Numbers.Int.Set.empty;
-      >}
-  in
+method private emit_sequence (env:environment) exp =
+  let s = {< instr_seq = dummy_instr; >} in
   let r = s#emit_expr env exp in
   (r, s)
 
@@ -1144,14 +1138,16 @@ method emit_tail (env:environment) exp =
             List.fold_left
               (fun env (id,r) -> env_add id r env)
               env (List.combine ids rs) in
-          let s =
-            self#emit_tail_sequence0 ~reset_with_adjusted_types:() new_env e2
-          in
-          let adjusted =
+          let adjusted_before = self#get_with_adjusted_types in
+          assert (Numbers.Int.Set.for_all (fun stamp -> stamp < old_stamp)
+            adjusted_before);
+          let s = self#emit_tail_sequence0 new_env e2 in
+          let adjusted_after =
             Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
-              s#get_with_adjusted_types
+              self#get_with_adjusted_types
           in
-          (nfail, s), adjusted
+          assert (Numbers.Int.Set.subset adjusted_before adjusted_after);
+          (nfail, s), Numbers.Int.Set.diff adjusted_after adjusted_before
         in
         let l, adjusted =
           List.split (List.map translate_one_handler handlers)
@@ -1185,16 +1181,8 @@ method emit_tail (env:environment) exp =
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence0 ?reset_with_adjusted_types env exp =
-  let s =
-    match reset_with_adjusted_types with
-    | None -> {< instr_seq = dummy_instr; >}
-    | Some () ->
-      {<
-        instr_seq = dummy_instr;
-        with_adjusted_types = ref Numbers.Int.Set.empty;
-      >}
-  in
+method private emit_tail_sequence0 env exp =
+  let s = {< instr_seq = dummy_instr; >} in
   s#emit_tail env exp;
   s
 
