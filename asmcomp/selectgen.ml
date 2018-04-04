@@ -556,16 +556,16 @@ method insert_moves src dst =
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
-val mutable with_adjusted_types = Numbers.Int.Set.empty
+val with_adjusted_types = ref Numbers.Int.Set.empty
 
-method get_with_adjusted_types = with_adjusted_types
+method get_with_adjusted_types = !with_adjusted_types
 
 method adjust_type src dst =
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
     | Val, Int ->
-      with_adjusted_types <- Numbers.Int.Set.add dst.stamp with_adjusted_types;
+      with_adjusted_types := Numbers.Int.Set.add dst.stamp !with_adjusted_types;
       dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
@@ -792,7 +792,9 @@ method emit_expr (env:environment) exp =
             List.fold_left (fun env (id, r) -> env_add id r env)
               env (List.combine ids rs)
           in
-          let (r, s) = self#emit_sequence new_env e2 in
+          let (r, s) =
+            self#emit_sequence ~reset_with_adjusted_types:() new_env e2
+          in
           let adjusted =
             Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
               s#get_with_adjusted_types
@@ -848,11 +850,16 @@ method emit_expr (env:environment) exp =
         [||] [||];
       r
 
-method private emit_sequence (env:environment) exp =
-  let s = {<
-    instr_seq = dummy_instr;
-    with_adjusted_types = Numbers.Int.Set.empty
-  >} in
+method private emit_sequence ?reset_with_adjusted_types (env:environment) exp =
+  let s =
+    match reset_with_adjusted_types with
+    | None -> {< instr_seq = dummy_instr; >}
+    | Some () ->
+      {<
+        instr_seq = dummy_instr;
+        with_adjusted_types = ref Numbers.Int.Set.empty;
+      >}
+  in
   let r = s#emit_expr env exp in
   (r, s)
 
@@ -1137,7 +1144,9 @@ method emit_tail (env:environment) exp =
             List.fold_left
               (fun env (id,r) -> env_add id r env)
               env (List.combine ids rs) in
-          let s = self#emit_tail_sequence0 new_env e2 in
+          let s =
+            self#emit_tail_sequence0 ~reset_with_adjusted_types:() new_env e2
+          in
           let adjusted =
             Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
               s#get_with_adjusted_types
@@ -1176,11 +1185,16 @@ method emit_tail (env:environment) exp =
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence0 env exp =
-  let s = {<
-    instr_seq = dummy_instr;
-    with_adjusted_types = Numbers.Int.Set.empty
-  >} in
+method private emit_tail_sequence0 ?reset_with_adjusted_types env exp =
+  let s =
+    match reset_with_adjusted_types with
+    | None -> {< instr_seq = dummy_instr; >}
+    | Some () ->
+      {<
+        instr_seq = dummy_instr;
+        with_adjusted_types = ref Numbers.Int.Set.empty;
+      >}
+  in
   s#emit_tail env exp;
   s
 

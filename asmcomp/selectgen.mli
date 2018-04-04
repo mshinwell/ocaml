@@ -172,7 +172,7 @@ class virtual selector_generic : object
     -> Mach.spacetime_shape option
 
   val mutable instr_seq : Mach.instruction
-  val mutable with_adjusted_types : Numbers.Int.Set.t
+  val with_adjusted_types : Numbers.Int.Set.t ref
 
 end
 
