@@ -45,33 +45,6 @@ let env_empty = {
   static_exceptions = Tbl.empty;
 }
 
-module Ident_and_stamp = Identifiable.Make (struct
-  type t = Ident.t * int
-
-  let compare (id1, stamp1) (id2, stamp2) =
-    let c = Ident.compare id1 id2 in
-    if c <> 0 then c
-    else Pervasives.compare stamp1 stamp2
-
-  let equal t1 t2 =
-    compare t1 t2 = 0
-
-  let hash (ident, stamp) =
-    Hashtbl.hash (Ident.hash ident, stamp)
-
-  let print _ _ = Misc.fatal_error "Not implemented"
-  let output _ = Misc.fatal_error "Not implemented"
-end)
-
-let env_register_types env =
-  Tbl.fold (fun ident regs types ->
-      Array.fold_left (fun types reg ->
-          Ident_and_stamp.Map.add (ident, reg.stamp) reg.typ types)
-        types
-        regs)
-    env.vars
-    Ident_and_stamp.Map.empty
-
 (* Infer the type of the result of an operation *)
 
 let oper_result_type = function
@@ -583,11 +556,17 @@ method insert_moves src dst =
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
+val mutable with_adjusted_types = Numbers.Int.Set.empty
+
+method get_with_adjusted_types = with_adjusted_types
+
 method adjust_type src dst =
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
-    | Val, Int -> dst.typ <- Val
+    | Val, Int ->
+      with_adjusted_types <- Numbers.Int.Set.add dst.stamp with_adjusted_types;
+      dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
@@ -806,6 +785,7 @@ method emit_expr (env:environment) exp =
       in
       let (r_body, s_body) = self#emit_sequence env body in
       let rec translate_all_handlers () =
+        let old_stamp = Reg.current_stamp () in
         let translate_one_handler (nfail, ids, rs, e2) =
           assert(List.length ids = List.length rs);
           let new_env =
@@ -813,13 +793,17 @@ method emit_expr (env:environment) exp =
               env (List.combine ids rs)
           in
           let (r, s) = self#emit_sequence new_env e2 in
-          (nfail, (r, s))
+          let adjusted =
+            Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
+              s#get_with_adjusted_types
+          in
+          (nfail, (r, s)), adjusted
         in
-        let old_reg_types = env_register_types env in
-        let l = List.map translate_one_handler handlers in
-        let new_reg_types = env_register_types env in
+        let l, adjusted =
+          List.split (List.map translate_one_handler handlers)
+        in
         let reg_types_unchanged =
-          Ident_and_stamp.Map.equal Cmm.equal_component old_reg_types new_reg_types
+          List.for_all Numbers.Int.Set.is_empty adjusted
         in
         if reg_types_unchanged then l
         else translate_all_handlers ()
@@ -1142,20 +1126,26 @@ method emit_tail (env:environment) exp =
             env_add_static_exception nfail rs env)
           env handlers in
       let s_body = self#emit_tail_sequence env e1 in
-      let translate_one_handler (nfail, ids, rs, e2) =
-        assert(List.length ids = List.length rs);
-        let new_env =
-          List.fold_left
-            (fun env (id,r) -> env_add id r env)
-            env (List.combine ids rs) in
-        nfail, self#emit_tail_sequence0 new_env e2
-      in
       let rec translate_all_handlers () =
-        let old_reg_types = env_register_types env in
-        let l = List.map translate_one_handler handlers in
-        let new_reg_types = env_register_types env in
+        let old_stamp = Reg.current_stamp () in
+        let translate_one_handler (nfail, ids, rs, e2) =
+          assert(List.length ids = List.length rs);
+          let new_env =
+            List.fold_left
+              (fun env (id,r) -> env_add id r env)
+              env (List.combine ids rs) in
+          let s = self#emit_tail_sequence0 new_env e2 in
+          let adjusted =
+            Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
+              s#get_with_adjusted_types
+          in
+          (nfail, s), adjusted
+        in
+        let l, adjusted =
+          List.split (List.map translate_one_handler handlers)
+        in
         let reg_types_unchanged =
-          Ident_and_stamp.Map.equal Cmm.equal_component old_reg_types new_reg_types
+          List.for_all Numbers.Int.Set.is_empty adjusted
         in
         if reg_types_unchanged then l
         else translate_all_handlers ()

@@ -64,6 +64,9 @@ let dummy =
   }
 
 let currstamp = ref 0
+
+let current_stamp () = !currstamp
+
 let reg_list = ref([] : t list)
 
 let create ty =
