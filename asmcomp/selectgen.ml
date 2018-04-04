@@ -563,7 +563,7 @@ method adjust_type src dst =
   if ts <> td then
     match ts, td with
     | Val, Int ->
-      num_adjust_types <- num_adjust_types + 1;
+      incr num_adjust_types;
       dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
@@ -782,7 +782,7 @@ method emit_expr (env:environment) exp =
           env handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
-      let translate_all_handlers () =
+      let rec translate_all_handlers () =
         let translate_one_handler (nfail, ids, rs, e2) =
           assert(List.length ids = List.length rs);
           let new_env =
@@ -1123,7 +1123,7 @@ method emit_tail (env:environment) exp =
             env (List.combine ids rs) in
         nfail, self#emit_tail_sequence0 new_env e2
       in
-      let translate_all_handlers () =
+      let rec translate_all_handlers () =
         let old_num_adjust_types = !num_adjust_types in
         let l = List.map translate_one_handler handlers in
         if !num_adjust_types = old_num_adjust_types then l
@@ -1158,7 +1158,7 @@ method private emit_tail_sequence0 env exp =
   s
 
 method private emit_tail_sequence env exp =
-  let s = emit_tail_sequence0 env exp in
+  let s = self#emit_tail_sequence0 env exp in
   s#extract
 
 (* Insertion of the function prologue *)
