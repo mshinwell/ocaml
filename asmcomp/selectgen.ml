@@ -556,8 +556,9 @@ method insert_moves src dst =
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
-val mutable num_adjust_types = 0
+val num_adjust_types = ref 0  (* N.B. not "val mutable" -- must be shared! *)
 
+method adjust_type src dst =
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
@@ -791,9 +792,9 @@ method emit_expr (env:environment) exp =
           let (r, s) = self#emit_sequence new_env e2 in
           (nfail, (r, s))
         in
-        let old_num_adjust_types = num_adjust_types in
+        let old_num_adjust_types = !num_adjust_types in
         let l = List.map translate_one_handler handlers in
-        if num_adjust_types = old_num_adjust_types then l
+        if !num_adjust_types = old_num_adjust_types then l
         else translate_all_handlers ()
       in
       let l = translate_all_handlers () in
@@ -1114,15 +1115,25 @@ method emit_tail (env:environment) exp =
             env_add_static_exception nfail rs env)
           env handlers in
       let s_body = self#emit_tail_sequence env e1 in
-      let aux (nfail, ids, rs, e2) =
+      let translate_one_handler (nfail, ids, rs, e2) =
         assert(List.length ids = List.length rs);
         let new_env =
           List.fold_left
             (fun env (id,r) -> env_add id r env)
             env (List.combine ids rs) in
-        nfail, self#emit_tail_sequence new_env e2
+        nfail, self#emit_tail_sequence0 new_env e2
       in
-      self#insert (Icatch(rec_flag, List.map aux handlers, s_body)) [||] [||]
+      let translate_all_handlers () =
+        let old_num_adjust_types = !num_adjust_types in
+        let l = List.map translate_one_handler handlers in
+        if !num_adjust_types = old_num_adjust_types then l
+        else translate_all_handlers ()
+      in
+      let handlers =
+        List.map (fun (nfail, s) -> nfail, s#extract)
+          (translate_all_handlers ())
+      in
+      self#insert (Icatch(rec_flag, handlers, s_body)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
@@ -1141,9 +1152,13 @@ method emit_tail (env:environment) exp =
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence env exp =
+method private emit_tail_sequence0 env exp =
   let s = {< instr_seq = dummy_instr >} in
   s#emit_tail env exp;
+  s
+
+method private emit_tail_sequence env exp =
+  let s = emit_tail_sequence0 env exp in
   s#extract
 
 (* Insertion of the function prologue *)
