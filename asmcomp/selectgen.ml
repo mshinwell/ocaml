@@ -849,7 +849,10 @@ method emit_expr (env:environment) exp =
       r
 
 method private emit_sequence (env:environment) exp =
-  let s = {< instr_seq = dummy_instr >} in
+  let s = {<
+    instr_seq = dummy_instr;
+    with_adjusted_types = Numbers.Int.Set.empty
+  >} in
   let r = s#emit_expr env exp in
   (r, s)
 
@@ -1174,7 +1177,10 @@ method emit_tail (env:environment) exp =
       self#emit_return env exp
 
 method private emit_tail_sequence0 env exp =
-  let s = {< instr_seq = dummy_instr >} in
+  let s = {<
+    instr_seq = dummy_instr;
+    with_adjusted_types = Numbers.Int.Set.empty
+  >} in
   s#emit_tail env exp;
   s
 
