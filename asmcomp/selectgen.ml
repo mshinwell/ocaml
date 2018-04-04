@@ -556,11 +556,14 @@ method insert_moves src dst =
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
-method adjust_type src dst =
+val mutable num_adjust_types = 0
+
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
-    | Val, Int -> dst.typ <- Val
+    | Val, Int ->
+      num_adjust_types <- num_adjust_types + 1;
+      dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
@@ -782,16 +785,22 @@ method emit_expr (env:environment) exp =
           env handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
-      let translate_one_handler (nfail, ids, rs, e2) =
-        assert(List.length ids = List.length rs);
-        let new_env =
-          List.fold_left (fun env (id, r) -> env_add id r env)
-            env (List.combine ids rs)
+      let translate_all_handlers () =
+        let translate_one_handler (nfail, ids, rs, e2) =
+          assert(List.length ids = List.length rs);
+          let new_env =
+            List.fold_left (fun env (id, r) -> env_add id r env)
+              env (List.combine ids rs)
+          in
+          let (r, s) = self#emit_sequence new_env e2 in
+          (nfail, (r, s))
         in
-        let (r, s) = self#emit_sequence new_env e2 in
-        (nfail, (r, s))
+        let old_num_adjust_types = num_adjust_types in
+        let l = List.map translate_one_handler handlers in
+        if num_adjust_types = old_num_adjust_types then l
+        else translate_all_handlers ()
       in
-      let l = List.map translate_one_handler handlers in
+      let l = translate_all_handlers () in
       let a = Array.of_list ((r_body, s_body) :: List.map snd l) in
       let r = join_array a in
       let aux (nfail, (_r, s)) = (nfail, s#extract) in
