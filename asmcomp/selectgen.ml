@@ -45,6 +45,15 @@ let env_empty = {
   static_exceptions = Tbl.empty;
 }
 
+let env_register_types env =
+  Tbl.fold (fun _ident regs types ->
+      Array.fold_left (fun types reg ->
+          Numbers.Int.Map.add reg.stamp reg.typ types)
+        types
+        regs)
+    env.vars
+    Numbers.Int.Map.empty
+
 (* Infer the type of the result of an operation *)
 
 let oper_result_type = function
@@ -556,15 +565,11 @@ method insert_moves src dst =
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
-val num_adjust_types = ref 0  (* N.B. not "val mutable" -- must be shared! *)
-
 method adjust_type src dst =
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
-    | Val, Int ->
-      incr num_adjust_types;
-      dst.typ <- Val
+    | Val, Int -> dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
@@ -792,9 +797,13 @@ method emit_expr (env:environment) exp =
           let (r, s) = self#emit_sequence new_env e2 in
           (nfail, (r, s))
         in
-        let old_num_adjust_types = !num_adjust_types in
+        let old_reg_types = env_register_types env in
         let l = List.map translate_one_handler handlers in
-        if !num_adjust_types = old_num_adjust_types then l
+        let new_reg_types = env_register_types env in
+        let reg_types_unchanged =
+          Numbers.Int.Map.equal Cmm.equal_component old_reg_types new_reg_types
+        in
+        if reg_types_unchanged then l
         else translate_all_handlers ()
       in
       let l = translate_all_handlers () in
@@ -1124,9 +1133,13 @@ method emit_tail (env:environment) exp =
         nfail, self#emit_tail_sequence0 new_env e2
       in
       let rec translate_all_handlers () =
-        let old_num_adjust_types = !num_adjust_types in
+        let old_reg_types = env_register_types env in
         let l = List.map translate_one_handler handlers in
-        if !num_adjust_types = old_num_adjust_types then l
+        let new_reg_types = env_register_types env in
+        let reg_types_unchanged =
+          Numbers.Int.Map.equal Cmm.equal_component old_reg_types new_reg_types
+        in
+        if reg_types_unchanged then l
         else translate_all_handlers ()
       in
       let handlers =

@@ -55,6 +55,8 @@ val typ_addr: machtype
 val typ_int: machtype
 val typ_float: machtype
 
+val equal_component : machtype_component -> machtype_component -> bool
+
 val size_component: machtype_component -> int
 
 (** Least upper bound of two [machtype_component]s. *)

@@ -27,6 +27,14 @@ let typ_addr = [|Addr|]
 let typ_int = [|Int|]
 let typ_float = [|Float|]
 
+let equal_component comp1 comp2 =
+  match comp1, comp2 with
+  | Val, Val
+  | Addr, Addr
+  | Int, Int
+  | Float, Float -> true
+  | (Val | Addr | Int | Float), _ -> false
+
 let size_component = function
   | Val | Addr -> Arch.size_addr
   | Int -> Arch.size_int
