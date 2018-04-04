@@ -52,6 +52,10 @@ Working version
   The old behaviour can be obtained using the `[@remove_aliases]` attribute.
   (Leo White, review by Jacques Garrigue)
 
+- GPR#1193: Remove [Cloop] and [Iloop] Cmm and Mach language
+  constructions in favour of existing continuation constructs.
+  (Mark Shinwell)
+
 ### Standard library:
 
 - GPR#1002: add a new `Seq` module defining a list-of-thunks style iterator.
