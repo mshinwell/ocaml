@@ -45,14 +45,32 @@ let env_empty = {
   static_exceptions = Tbl.empty;
 }
 
+module Ident_and_stamp = Identifiable.Make (struct
+  type t = Ident.t * int
+
+  let compare (id1, stamp1) (id2, stamp2) =
+    let c = Ident.compare id1 id2 in
+    if c <> 0 then c
+    else Pervasives.compare stamp1 stamp2
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
+
+  let hash (ident, stamp) =
+    Hashtbl.hash (Ident.hash ident, stamp)
+
+  let print _ _ = Misc.fatal_error "Not implemented"
+  let output _ = Misc.fatal_error "Not implemented"
+end)
+
 let env_register_types env =
-  Tbl.fold (fun _ident regs types ->
+  Tbl.fold (fun ident regs types ->
       Array.fold_left (fun types reg ->
-          Numbers.Int.Map.add reg.stamp reg.typ types)
+          Ident_and_stamp.Map.add (ident, reg.stamp) reg.typ types)
         types
         regs)
     env.vars
-    Numbers.Int.Map.empty
+    Ident_and_stamp.Map.empty
 
 (* Infer the type of the result of an operation *)
 
@@ -801,7 +819,7 @@ method emit_expr (env:environment) exp =
         let l = List.map translate_one_handler handlers in
         let new_reg_types = env_register_types env in
         let reg_types_unchanged =
-          Numbers.Int.Map.equal Cmm.equal_component old_reg_types new_reg_types
+          Ident_and_stamp.Map.equal Cmm.equal_component old_reg_types new_reg_types
         in
         if reg_types_unchanged then l
         else translate_all_handlers ()
@@ -1137,7 +1155,7 @@ method emit_tail (env:environment) exp =
         let l = List.map translate_one_handler handlers in
         let new_reg_types = env_register_types env in
         let reg_types_unchanged =
-          Numbers.Int.Map.equal Cmm.equal_component old_reg_types new_reg_types
+          Ident_and_stamp.Map.equal Cmm.equal_component old_reg_types new_reg_types
         in
         if reg_types_unchanged then l
         else translate_all_handlers ()
