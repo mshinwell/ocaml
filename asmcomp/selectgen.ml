@@ -680,7 +680,16 @@ method private maybe_emit_spacetime_move ~spacetime_reg =
 
 (* Compile code for a let binding. *)
 
-method emit_let env ~nothing ~emit_body bound_name ~defining_expr ~body =
+method emit_let :
+  type a.
+     environment
+  -> nothing:a
+  -> emit_body:(environment -> Cmm.expression -> a)
+  -> Ident.t
+  -> defining_expr:Cmm.expression
+  -> body:Cmm.expression
+  -> a =
+fun env ~nothing ~emit_body bound_name ~defining_expr ~body ->
   match self#emit_expr env defining_expr with
   | None -> nothing
   | Some r1 ->
@@ -1255,6 +1264,16 @@ method emit_fundecl f =
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
+  let assigned_to =
+    assignment_types ~function_params:f.Cmm.fun_args
+      ~function_body:f.Cmm.fun_body
+  in
+  let initial_env =
+    let initial_env = self#initial_env () in
+    { initial_env with
+      assigned_to;
+    }
+  in
   (* To make it easier to add the Spacetime instrumentation code, we
      first emit the body and extract the resulting instruction sequence;
      then we emit the prologue followed by any Spacetime instrumentation.  The
