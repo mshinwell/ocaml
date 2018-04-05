@@ -755,16 +755,9 @@ method emit_expr (env:environment) exp =
           env_find v env
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
-      begin match Ident.Map.find v env.assigned_to with
-      | exception Not_found ->
+      if not (Ident.Map.mem v env.assigned_to) then begin
         Misc.fatal_errorf "Assignment to %a was not recorded"
           Ident.print v
-      | ty ->
-        let rv_ty = Array.map (fun reg -> reg.typ) rv in
-        if not (Cmm.equal_machtype ty rv_ty) then begin
-          Misc.fatal_errorf "Type recorded for %a in assignment list is wrong"
-            Ident.print v
-        end
       end;
       begin match self#emit_expr env e1 with
         None -> None
