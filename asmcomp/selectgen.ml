@@ -84,6 +84,13 @@ let rec assignment_types env expr assigned_to =
   | Cvar id -> Ident.Map.find id env, assigned_to
   | Clet (id, defining_expr, body) ->
     let ty, assigned_to = assignment_types env defining_expr assigned_to in
+    let ty =
+      (* Even though [id] is not yet in scope in the term, it may be in
+         [assigned_to], from a previous round of [fixpoint] below. *)
+      match Ident.Map.find id assigned_to with
+      | exception Not_found -> ty
+      | existing_ty -> Cmm.lub_machtype ty existing_ty
+    in
     let env = Ident.Map.add id ty env in
     assignment_types env body assigned_to
   | Cassign (id, contents) ->
