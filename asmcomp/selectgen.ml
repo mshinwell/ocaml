@@ -74,14 +74,14 @@ let oper_result_type = function
 (* Collect the least upper bound of the types of all mutable variables'
    contents. *)
 
-let rec assignment_types env expr assigned_to : machtype =
+let rec assignment_types env expr assigned_to =
   match expr with
   | Cconst_int _
-  | Cconst_natint _ -> typ_int
-  | Cconst_float _ -> typ_float
-  | Cconst_symbol _ -> typ_val
-  | Cblockheader _ -> typ_int
-  | Cvar id -> Ident.Map.find id env
+  | Cconst_natint _ -> typ_int, assigned_to
+  | Cconst_float _ -> typ_float, assigned_to
+  | Cconst_symbol _ -> typ_val, assigned_to
+  | Cblockheader _ -> typ_int, assigned_to
+  | Cvar id -> Ident.Map.find id env, assigned_to
   | Clet (id, defining_expr, body) ->
     let ty, assigned_to = assignment_types env defining_expr assigned_to in
     let env = Ident.Map.add id ty env in
@@ -151,8 +151,7 @@ let rec assignment_types env expr assigned_to : machtype =
 
 let assignment_types ~function_params ~function_body =
   let env =
-    List.fold_left (fun env param ->
-        Ident.Map.add param typ_val env)
+    List.fold_left (fun env (param, ty) -> Ident.Map.add param ty env)
       env
       function_params
   in
@@ -1302,6 +1301,15 @@ method emit_fundecl f =
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
+  let assigned_to =
+    assignment_types ~function_params:f.Cmm.fun_args
+      ~function_body:f.Cmm.fun_body
+  in
+  let initial_env =
+    { self#initial_env with
+      assigned_to;
+    }
+  in
   (* To make it easier to add the Spacetime instrumentation code, we
      first emit the body and extract the resulting instruction sequence;
      then we emit the prologue followed by any Spacetime instrumentation.  The
@@ -1310,7 +1318,8 @@ method emit_fundecl f =
   let env =
     List.fold_right2
       (fun (id, _ty) r env -> env_add id r env)
-      f.Cmm.fun_args rargs (self#initial_env ()) in
+      f.Cmm.fun_args rargs initial_env
+
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
     else begin
