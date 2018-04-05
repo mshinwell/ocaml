@@ -90,8 +90,8 @@ let rec assignment_types env expr assigned_to =
          1. Use of a mutable variable after an assignment has promoted
             its type.
          2. Use of information from a previous round of the [fixpoint], below,
-            to avoid a type regressing when we encounter a particular [Clet]
-            binding a second time. *)
+            to avoid a type regressing after encountering a particular [Clet]
+            binding a second (or subsequent) time. *)
       Cmm.lub_machtype older_ty recent_ty, assigned_to
     end
   | Clet (id, defining_expr, body) ->
