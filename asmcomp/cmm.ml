@@ -97,6 +97,9 @@ let size_machtype mty =
   done;
   !size
 
+let lub_machtype ty1 ty2 =
+  Array.map2 lub_component ty1 ty2
+
 type integer_comparison = Lambda.integer_comparison =
   | Ceq | Cne | Clt | Cgt | Cle | Cge
 
