@@ -81,7 +81,14 @@ let rec assignment_types env expr assigned_to =
   | Cconst_float _ -> typ_float, assigned_to
   | Cconst_symbol _ -> typ_val, assigned_to
   | Cblockheader _ -> typ_int, assigned_to
-  | Cvar id -> Ident.Map.find id env, assigned_to
+  | Cvar id ->
+    let older_ty = Ident.Map.find id env in
+    begin match Ident.Map.find id assigned_to with
+    | exception Not_found -> older_ty, assigned_to
+    | recent_ty ->
+      assert (Cmm.ge_machtype recent_ty older_ty);
+      recent_ty, assigned_to
+    end
   | Clet (id, defining_expr, body) ->
     let ty, assigned_to = assignment_types env defining_expr assigned_to in
     let env = Ident.Map.add id ty env in
@@ -784,8 +791,9 @@ method emit_expr (env:environment) exp =
       | Some r1 ->
         Array.iter2 (fun src dst ->
             if not (Cmm.ge_component dst.typ src.typ) then begin
-              Misc.fatal_errorf "Bad assignment:@ %a"
+              Misc.fatal_errorf "Bad assignment:@ %a@ assigned_to:@ %a"
                 Printcmm.expression exp
+                (Ident.Map.print Printcmm.machtype) env.assigned_to
             end)
           r1 rv;
         self#insert_moves r1 rv; Some [||]
