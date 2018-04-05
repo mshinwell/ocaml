@@ -138,19 +138,31 @@ let rec assignment_types env expr assigned_to =
         cases
     end
   | Ccatch (_recursive, handlers, body) ->
-    List.fold_left (fun (ty, assigned_to) (_cont, params, handler) ->
-        let env =
-          List.fold_left (fun env param ->
-              Ident.Map.add param typ_val env)
-            env
-            params
-        in
-        let handler_ty, assigned_to =
-          assignment_types env handler assigned_to
-        in
-        Cmm.lub_machtype ty handler_ty, assigned_to)
-      (assignment_types env body assigned_to)
-      handlers
+    let body_ty, assigned_to = assignment_types env body assigned_to in
+    let rec fixpoint prev_assigned_to =
+      let joined_ty, new_assigned_to =
+        List.fold_left (fun (ty, assigned_to) (_cont, params, handler) ->
+            let env =
+              List.fold_left (fun env param ->
+                  Ident.Map.add param typ_val env)
+                env
+                params
+            in
+            let handler_ty, assigned_to =
+              assignment_types env handler assigned_to
+            in
+            Cmm.lub_machtype ty handler_ty, assigned_to)
+          (body_ty, prev_assigned_to)
+          handlers
+      in
+      let changed_types_in_outer_scopes =
+        not (Ident.Map.equal Cmm.equal_machtype
+          prev_assigned_to new_assigned_to)
+      in
+      if changed_types_in_outer_scopes then fixpoint new_assigned_to
+      else joined_ty, new_assigned_to
+    in
+    fixpoint assigned_to
   | Cexit _ -> typ_void, assigned_to
   | Ctrywith (body, bucket, handler) ->
     let handler_env = Ident.Map.add bucket typ_val env in
