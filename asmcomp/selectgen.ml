@@ -26,7 +26,7 @@ type environment =
     static_exceptions : (int, Reg.t array list) Tbl.t;
     (** Which registers must be populated when jumping to the given
         handler. *)
-    assigned_to : Cmm.machtype_component Ident.Map.t;
+    assigned_to : Cmm.machtype Ident.Map.t;
   }
 
 let env_add id v env =
@@ -96,7 +96,7 @@ let rec assignment_types env expr assigned_to =
         assigned_to
     in
     typ_void, assigned_to
-  | Ctuple [| |] -> typ_void, assigned_to
+  | Ctuple [] -> typ_void, assigned_to
   | Ctuple exprs ->
     let tys, assigned_to =
       (* Note: the ordering here must match [emit_tuple], below. *)
@@ -117,13 +117,13 @@ let rec assignment_types env expr assigned_to =
     let ty_ifnot, assigned_to = assignment_types env ifnot assigned_to in
     Cmm.lub_machtype ty_ifso ty_ifnot, assigned_to
   | Cswitch (_scrutinee, _nums, cases, _dbg) ->
-    begin match cases with
-    | [| |] -> typ_void, assigned_to
+    begin match Array.to_list cases with
+    | [] -> typ_void, assigned_to
     | case::cases ->
-      Array.fold_left (fun (ty, assigned_to) case ->
+      List.fold_left (fun (ty, assigned_to) case ->
           let case_ty, assigned_to = assignment_types env case assigned_to in
           Cmm.lub_machtype ty case_ty, assigned_to)
-        (assignment_types env case)
+        (assignment_types env case assigned_to)
         cases
     end
   | Ccatch (_recursive, handlers, body) ->
@@ -138,7 +138,7 @@ let rec assignment_types env expr assigned_to =
           assignment_types env handler assigned_to
         in
         Cmm.lub_machtype ty handler_ty, assigned_to)
-      (assignment_types env body)
+      (assignment_types env body assigned_to)
       handlers
   | Cexit _ -> typ_void, assigned_to
   | Ctrywith (body, bucket, handler) ->
@@ -152,11 +152,11 @@ let rec assignment_types env expr assigned_to =
 let assignment_types ~function_params ~function_body =
   let env =
     List.fold_left (fun env (param, ty) -> Ident.Map.add param ty env)
-      env
+      Ident.Map.empty
       function_params
   in
   let _ty, assigned_to =
-    assignment_types Ident.Map.empty function_body Ident.Map.empty
+    assignment_types env function_body Ident.Map.empty
   in
   assigned_to
 
@@ -680,25 +680,24 @@ method private maybe_emit_spacetime_move ~spacetime_reg =
 
 (* Compile code for a let binding. *)
 
-method emit_let env ~emit_body bound_name ~defining_expr ~body =
+method emit_let env ~nothing ~emit_body bound_name ~defining_expr ~body =
   match self#emit_expr env defining_expr with
-  | None -> None
+  | None -> nothing
   | Some r1 ->
     let r1 =
       match Ident.Map.find bound_name env.assigned_to with
-      | None -> r1
-      | Some lub_ty ->
-        Array.concat (List.map (fun r ->
-            let lub_ty = Cmm.lub_component r.typ lub_ty in
-            if not (Cmm.equal_component lub_ty r.typ) then begin
-              assert (Cmm.ge_component lub_ty r.typ);
-              let new_r = self#regs_for lub_ty in
-              self#insert_moves r new_r;
-              new_r
-            end else begin
-              [| r |]
-            end)
-          (Array.to_list r1))
+      | exception Not_found -> r1
+      | lub_ty ->
+        let r1_ty = Array.map (fun reg -> reg.typ) r1 in
+        let lub_ty = Cmm.lub_machtype r1_ty lub_ty in
+        if not (Cmm.equal_machtype lub_ty r1_ty) then begin
+          assert (Cmm.ge_machtype lub_ty r1_ty);
+          let new_r = self#regs_for lub_ty in
+          self#insert_moves r1 new_r;
+          new_r
+        end else begin
+          r1
+        end
     in
     emit_body (self#bind_let env bound_name r1) body
 
@@ -728,7 +727,8 @@ method emit_expr (env:environment) exp =
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
   | Clet (bound_name, defining_expr, body) ->
-      emit_let env ~emit_body:self#emit_expr bound_name ~defining_expr ~body
+      self#emit_let env ~nothing:None ~emit_body:self#emit_expr bound_name
+        ~defining_expr ~body
   | Cassign(v, e1) ->
       let rv =
         try
@@ -1117,7 +1117,8 @@ method private emit_return (env:environment) exp =
 method emit_tail (env:environment) exp =
   match exp with
   | Clet (bound_name, defining_expr, body) ->
-      emit_let env ~emit_body:self#emit_tail bound_name ~defining_expr ~body
+      self#emit_let env ~nothing:() ~emit_body:self#emit_tail bound_name
+        ~defining_expr ~body
   | Cop((Capply ty) as op, args, dbg) ->
       begin match self#emit_parts_list env args with
         None -> ()
@@ -1319,7 +1320,7 @@ method emit_fundecl f =
     List.fold_right2
       (fun (id, _ty) r env -> env_add id r env)
       f.Cmm.fun_args rargs initial_env
-
+  in
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
     else begin

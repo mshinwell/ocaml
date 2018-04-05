@@ -74,7 +74,11 @@ val ge_component
 
 val size_machtype: machtype -> int
 
+val equal_machtype : machtype -> machtype -> bool
+
 val lub_machtype : machtype -> machtype -> machtype
+
+val ge_machtype : machtype -> machtype -> bool
 
 type integer_comparison = Lambda.integer_comparison =
   | Ceq | Cne | Clt | Cgt | Cle | Cge
