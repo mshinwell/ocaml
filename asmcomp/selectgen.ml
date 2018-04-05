@@ -71,9 +71,10 @@ let oper_result_type = function
   | Craise _ -> typ_void
   | Ccheckbound -> typ_void
 
-(* Infer the type of the result of an expression *)
+(* Collect the least upper bound of the types of all mutable variables'
+   contents. *)
 
-let rec expr_result_type env expr : machtype =
+let rec assignment_types env expr assigned_to : machtype =
   match expr with
   | Cconst_int _
   | Cconst_natint _ -> typ_int
@@ -82,94 +83,83 @@ let rec expr_result_type env expr : machtype =
   | Cblockheader _ -> typ_int
   | Cvar id -> Ident.Map.find id env
   | Clet (id, defining_expr, body) ->
-    let env = Ident.Map.add id (expr_result_type env defining_expr) env in
-    expr_result_type env body
-  | Cassign _ -> typ_void
-  | Ctuple [| |] -> typ_void
+    let ty, assigned_to = assignment_types env defining_expr assigned_to in
+    let env = Ident.Map.add id ty env in
+    assignment_types env body assigned_to
+  | Cassign (id, contents) ->
+    let contents_ty, assigned_to = assignment_types env contents assigned_to in
+    let assigned_to =
+      Ident.Map.update id (function
+          | None -> Some contents_ty
+          | Some existing_ty ->
+            Some (Cmm.lub_machtype existing_ty contents_ty))
+        assigned_to
+    in
+    typ_void, assigned_to
+  | Ctuple [| |] -> typ_void, assigned_to
   | Ctuple exprs ->
-    (* Note: the ordering here must match [emit_tuple], below. *)
-    Array.concat (List.fold_left (fun tys expr ->
-        (expr_result_type env expr) :: tys)
-      []
-      exprs))
-  | Cop (op, _args, _dbg) -> oper_result_type op
-  | Csequence (_expr1, expr2) -> expr_result_type env expr2
-  | Cifthenelse (_cond, ifso, ifnot) ->
-    Cmm.lub_machtype (expr_result_type env ifso) (expr_result_type env ifnot)
+    let tys, assigned_to =
+      (* Note: the ordering here must match [emit_tuple], below. *)
+      List.fold_left (fun (tys, assigned_to) expr ->
+          let ty, assigned_to = assignment_types env expr assigned_to in
+          ty :: tys, assigned_to)
+        ([], assigned_to)
+        exprs
+    in
+    Array.concat tys, assigned_to
+  | Cop (op, _args, _dbg) -> oper_result_type op, assigned_to
+  | Csequence (expr1, expr2) ->
+    let _ty1, assigned_to = assignment_types env expr1 assigned_to in
+    assignment_types env expr2 assigned_to
+  | Cifthenelse (cond, ifso, ifnot) ->
+    let _ty_cond, assigned_to = assignment_types env cond assigned_to in
+    let ty_ifso, assigned_to = assignment_types env ifso assigned_to in
+    let ty_ifnot, assigned_to = assignment_types env ifnot assigned_to in
+    Cmm.lub_machtype ty_ifso ty_ifnot, assigned_to
   | Cswitch (_scrutinee, _nums, cases, _dbg) ->
     begin match cases with
-    | [| |] -> typ_void
+    | [| |] -> typ_void, assigned_to
     | case::cases ->
-      Array.fold_left (fun ty case ->
-          Cmm.lub_machtype ty (expr_result_type env case))
-        (expr_result_type env case)
+      Array.fold_left (fun (ty, assigned_to) case ->
+          let case_ty, assigned_to = assignment_types env case assigned_to in
+          Cmm.lub_machtype ty case_ty, assigned_to)
+        (assignment_types env case)
         cases
     end
   | Ccatch (_recursive, handlers, body) ->
-    List.fold_left (fun ty (_cont, params, handler) ->
+    List.fold_left (fun (ty, assigned_to) (_cont, params, handler) ->
         let env =
           List.fold_left (fun env param ->
               Ident.Map.add param typ_val env)
             env
             params
         in
-        Cmm.lub_machtype ty (expr_result_type env handler))
-      (expr_result_type env body)
+        let handler_ty, assigned_to =
+          assignment_types env handler assigned_to
+        in
+        Cmm.lub_machtype ty handler_ty, assigned_to)
+      (assignment_types env body)
       handlers
-  | Cexit _ -> typ_void
+  | Cexit _ -> typ_void, assigned_to
   | Ctrywith (body, bucket, handler) ->
     let handler_env = Ident.Map.add bucket typ_val env in
-    Cmm.lub_machtype (expr_result_type env body)
-      (expr_result_type handler_env handler)
+    let handler_ty, assigned_to =
+      assignment_types handler_env handler assigned_to
+    in
+    let body_ty, assigned_to = assignment_types env body assigned_to in
+    Cmm.lub_machtype handler_ty body_ty, assigned_to
 
-(* Collect the least upper bound of the types of all mutable variables'
-   contents. *)
-
-let rec collect_assigned_to exp =
-  match exp with
-  | Cconst_int _
-  | Cconst_natint _ -> typ_int
-  | Cconst_float _ -> typ_float
-  | Cconst_symbol _ -> typ_val
-  | Cblockheader _ -> typ_int
-  | Cvar id -> Ident.Map.find id env
-  | Clet (id, defining_expr, body) ->
-    let env = Ident.Map.add id (expr_result_type env defining_expr) env in
-    expr_result_type env body
-  | Cassign _ -> typ_void
-  | Ctuple [| |] -> typ_void
-  | Ctuple exprs ->
-    (* Note: the ordering here must match [emit_tuple], below. *)
-    Array.concat (List.fold_left (fun tys expr ->
-        (expr_result_type env expr) :: tys)
-      []
-      exprs))
-  | Cop (op, _args, _dbg) -> oper_result_type op
-  | Csequence (_expr1, expr2) -> expr_result_type env expr2
-  | Cifthenelse (_cond, ifso, ifnot) ->
-    Cmm.lub_machtype (expr_result_type env ifso) (expr_result_type env ifnot)
-  | Cswitch (_scrutinee, _nums, cases, _dbg) ->
-    begin match cases with
-    | [| |] -> typ_void
-    | case::cases ->
-      Array.fold_left (fun ty case ->
-          Cmm.lub_machtype ty (expr_result_type env case))
-        (expr_result_type env case)
-        cases
-    end
-  | Ccatch (_recursive, handlers, body) ->
-    List.fold_left (fun ty (_cont, params, handler) ->
-        let env =
-          List.fold_left (fun env param ->
-              Ident.Map.add param typ_val env)
-            env
-            params
-        in
-        Cmm.lub_machtype ty (expr_result_type env handler))
-      (expr_result_type env body)
-      handlers
-  | Cexit _ -> typ_void
-  | Ctrywith (body, bucket, handler) ->
+let assignment_types ~function_params ~function_body =
+  let env =
+    List.fold_left (fun env param ->
+        Ident.Map.add param typ_val env)
+      env
+      function_params
+  in
+  let _ty, assigned_to =
+    assignment_types Ident.Map.empty function_body Ident.Map.empty
+  in
+  assigned_to
 
 (* Infer the size in bytes of the result of an expression whose evaluation
    may be deferred (cf. [emit_parts]). *)
