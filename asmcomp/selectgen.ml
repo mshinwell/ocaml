@@ -879,35 +879,16 @@ method emit_expr (env:environment) exp =
           env handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
-      let rec translate_all_handlers () =
-        let old_stamp = Reg.current_stamp () in
-        let translate_one_handler (nfail, ids, rs, e2) =
-          assert(List.length ids = List.length rs);
-          let new_env =
-            List.fold_left (fun env (id, r) -> env_add id r env)
-              env (List.combine ids rs)
-          in
-          let adjusted_before = self#get_with_adjusted_types in
-          assert (Numbers.Int.Set.for_all (fun stamp -> stamp < old_stamp)
-            adjusted_before);
-          let (r, s) = self#emit_sequence new_env e2 in
-          let adjusted_after =
-            Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
-              self#get_with_adjusted_types
-          in
-          assert (Numbers.Int.Set.subset adjusted_before adjusted_after);
-          (nfail, (r, s)), Numbers.Int.Set.diff adjusted_after adjusted_before
+      let translate_one_handler (nfail, ids, rs, e2) =
+        assert(List.length ids = List.length rs);
+        let new_env =
+          List.fold_left (fun env (id, r) -> env_add id r env)
+            env (List.combine ids rs)
         in
-        let l, adjusted =
-          List.split (List.map translate_one_handler handlers)
-        in
-        let reg_types_unchanged =
-          List.for_all Numbers.Int.Set.is_empty adjusted
-        in
-        if reg_types_unchanged then l
-        else translate_all_handlers ()
+        let (r, s) = self#emit_sequence new_env e2 in
+        (nfail, (r, s))
       in
-      let l = translate_all_handlers () in
+      let l = List.map translate_one_handler handlers in
       let a = Array.of_list ((r_body, s_body) :: List.map snd l) in
       let r = join_array a in
       let aux (nfail, (_r, s)) = (nfail, s#extract) in
@@ -948,7 +929,7 @@ method emit_expr (env:environment) exp =
       r
 
 method private emit_sequence (env:environment) exp =
-  let s = {< instr_seq = dummy_instr; >} in
+  let s = {< instr_seq = dummy_instr >} in
   let r = s#emit_expr env exp in
   (r, s)
 
@@ -1223,39 +1204,15 @@ method emit_tail (env:environment) exp =
             env_add_static_exception nfail rs env)
           env handlers in
       let s_body = self#emit_tail_sequence env e1 in
-      let rec translate_all_handlers () =
-        let old_stamp = Reg.current_stamp () in
-        let translate_one_handler (nfail, ids, rs, e2) =
-          assert(List.length ids = List.length rs);
-          let new_env =
-            List.fold_left
-              (fun env (id,r) -> env_add id r env)
-              env (List.combine ids rs) in
-          let adjusted_before = self#get_with_adjusted_types in
-          assert (Numbers.Int.Set.for_all (fun stamp -> stamp < old_stamp)
-            adjusted_before);
-          let s = self#emit_tail_sequence0 new_env e2 in
-          let adjusted_after =
-            Numbers.Int.Set.filter (fun stamp -> stamp < old_stamp)
-              self#get_with_adjusted_types
-          in
-          assert (Numbers.Int.Set.subset adjusted_before adjusted_after);
-          (nfail, s), Numbers.Int.Set.diff adjusted_after adjusted_before
-        in
-        let l, adjusted =
-          List.split (List.map translate_one_handler handlers)
-        in
-        let reg_types_unchanged =
-          List.for_all Numbers.Int.Set.is_empty adjusted
-        in
-        if reg_types_unchanged then l
-        else translate_all_handlers ()
+      let aux (nfail, ids, rs, e2) =
+        assert(List.length ids = List.length rs);
+        let new_env =
+          List.fold_left
+            (fun env (id,r) -> env_add id r env)
+            env (List.combine ids rs) in
+        nfail, self#emit_tail_sequence new_env e2
       in
-      let handlers =
-        List.map (fun (nfail, s) -> nfail, s#extract)
-          (translate_all_handlers ())
-      in
-      self#insert (Icatch(rec_flag, handlers, s_body)) [||] [||]
+      self#insert (Icatch(rec_flag, List.map aux handlers, s_body)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
@@ -1274,13 +1231,9 @@ method emit_tail (env:environment) exp =
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence0 env exp =
-  let s = {< instr_seq = dummy_instr; >} in
-  s#emit_tail env exp;
-  s
-
 method private emit_tail_sequence env exp =
-  let s = self#emit_tail_sequence0 env exp in
+  let s = {< instr_seq = dummy_instr >} in
+  s#emit_tail env exp;
   s#extract
 
 (* Insertion of the function prologue *)
@@ -1302,15 +1255,6 @@ method emit_fundecl f =
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
-  let assigned_to =
-    assignment_types ~function_params:f.Cmm.fun_args
-      ~function_body:f.Cmm.fun_body
-  in
-  let initial_env =
-    { self#initial_env with
-      assigned_to;
-    }
-  in
   (* To make it easier to add the Spacetime instrumentation code, we
      first emit the body and extract the resulting instruction sequence;
      then we emit the prologue followed by any Spacetime instrumentation.  The
