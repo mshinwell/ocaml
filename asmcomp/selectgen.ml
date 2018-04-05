@@ -107,7 +107,15 @@ let rec assignment_types env expr assigned_to =
         exprs
     in
     Array.concat tys, assigned_to
-  | Cop (op, _args, _dbg) -> oper_result_type op, assigned_to
+  | Cop (op, args, _dbg) ->
+    let assigned_to =
+      List.fold_left (fun assigned_to arg ->
+          let _arg_ty, assigned_to = assignment_types env arg assigned_to in
+          assigned_to)
+        assigned_to
+        args
+    in
+    oper_result_type op, assigned_to
   | Csequence (expr1, expr2) ->
     let _ty1, assigned_to = assignment_types env expr1 assigned_to in
     assignment_types env expr2 assigned_to
@@ -116,7 +124,10 @@ let rec assignment_types env expr assigned_to =
     let ty_ifso, assigned_to = assignment_types env ifso assigned_to in
     let ty_ifnot, assigned_to = assignment_types env ifnot assigned_to in
     Cmm.lub_machtype ty_ifso ty_ifnot, assigned_to
-  | Cswitch (_scrutinee, _nums, cases, _dbg) ->
+  | Cswitch (scrutinee, _nums, cases, _dbg) ->
+    let _scrutinee_ty, assigned_to =
+      assignment_types env scrutinee assigned_to
+    in
     begin match Array.to_list cases with
     | [] -> typ_void, assigned_to
     | case::cases ->
