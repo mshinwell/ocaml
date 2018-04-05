@@ -68,5 +68,3 @@ val reset: unit -> unit
 val all_registers: unit -> t list
 val num_registers: unit -> int
 val reinit: unit -> unit
-
-val current_stamp : unit -> int
