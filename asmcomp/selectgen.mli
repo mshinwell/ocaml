@@ -99,8 +99,6 @@ class virtual selector_generic : object
     (* Fill a freshly allocated block.  Can be overridden for architectures
        that do not provide Arch.offset_addressing. *)
 
-  method get_with_adjusted_types : Numbers.Int.Set.t
-
   method mark_call : unit
   (* informs the code emitter that the current function is non-leaf:
      it may perform a (non-tail) call; by default, sets
@@ -172,7 +170,6 @@ class virtual selector_generic : object
     -> Mach.spacetime_shape option
 
   val mutable instr_seq : Mach.instruction
-  val with_adjusted_types : Numbers.Int.Set.t ref
 
 end
 
