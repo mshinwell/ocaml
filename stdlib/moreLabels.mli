@@ -188,6 +188,36 @@ module Map : sig
         -> 'a t
         -> 'a t
         -> 'a t
+      type 'a three_way_diff = private {
+        in_first_only : 'a t;
+        in_second_only : 'a t;
+        in_both : ('a * 'a) t;
+      }
+      val three_way_diff : 'a t -> 'a t -> 'a three_way_diff
+      type side = private
+        | Left
+        | Right
+      type 'a intersection_and_remainder = private {
+        intersection : ('a * 'a) t;
+        remainder : (side * 'a) t;
+      }
+      val intersection_and_remainder
+         : 'a t
+        -> 'a t
+        -> 'a intersection_and_remainder
+      val fold_intersection
+         : 'a t
+        -> 'a t
+        -> init:'b
+        -> inter:('b -> key -> 'a -> 'a -> 'b)
+        -> 'b
+      val fold_intersection_and_remainder
+         : 'a t
+        -> 'a t
+        -> init:'b
+        -> inter:('b -> key -> 'a -> 'a -> 'b)
+        -> rem:('b -> 'a t -> key -> 'a -> 'b)
+        -> 'b
       val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
       val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
       val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
