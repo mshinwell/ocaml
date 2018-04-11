@@ -561,10 +561,11 @@ end) = struct
     let levels_to_entries =
       Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
           let by_sublevel =
-            Scope_level.Sublevel.Map.filter_map by_sublevel
-              ~f:(fun _sublevel ((name, _) as entry) ->
+            Scope_level.Sublevel.Map.filter_map
+              (fun _sublevel ((name, _) as entry) ->
                 if Name.Set.mem name allowed then Some entry
                 else None)
+            by_sublevel
           in
           if Scope_level.Sublevel.Map.is_empty by_sublevel then None
           else Some by_sublevel)
