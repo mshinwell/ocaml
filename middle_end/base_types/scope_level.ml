@@ -17,7 +17,7 @@
 module type S = sig
   type t
 
-  include Identifiable.S with type t := t
+  include Hashtbl.With_map with type t := t
 
   val initial : t
 
@@ -78,12 +78,10 @@ end
 module With_sublevel = struct
   type with_sublevel = t * Sublevel.t
 
-  type t = with_sublevel
-
-  let create level sublevel : t = level, sublevel
+  let create level sublevel = level, sublevel
 
   let level (level, _sublevel) = level
   let sublevel (_level, sublevel) = sublevel
 
-  include Identifiable.Make_pair (T0) (Sublevel)
+  include Hashtbl.Make_with_map_pair (T0) (Sublevel)
 end

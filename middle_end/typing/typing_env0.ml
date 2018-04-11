@@ -559,8 +559,7 @@ end) = struct
         t.names_to_types
     in
     let levels_to_entries =
-      Scope_level.Map.filter_map t.levels_to_entries
-        ~f:(fun _cont_level by_sublevel ->
+      Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
           let by_sublevel =
             Scope_level.Sublevel.Map.filter_map by_sublevel
               ~f:(fun _sublevel ((name, _) as entry) ->
@@ -569,6 +568,7 @@ end) = struct
           in
           if Scope_level.Sublevel.Map.is_empty by_sublevel then None
           else Some by_sublevel)
+        t.levels_to_entries
     in
     let existentials = Name.Set.inter t.existentials allowed in
     let existential_freshening =

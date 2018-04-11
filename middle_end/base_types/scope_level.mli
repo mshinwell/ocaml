@@ -32,6 +32,8 @@ module type S = sig
   val to_int : t -> int
 end
 
+include S
+
 val for_symbols : t
 
 module Sublevel : S
@@ -45,5 +47,6 @@ module With_sublevel : sig
   val sublevel : with_sublevel -> Sublevel.t
 
   type t = with_sublevel
-  include Identifiable.S with type t := t
+
+  include Hashtbl.With_map with type t := t
 end
