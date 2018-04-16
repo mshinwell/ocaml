@@ -20,6 +20,8 @@ module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
+type binding_type = Normal | Existential
+
 module S_impl (Expr : sig
   type t
 end) = struct

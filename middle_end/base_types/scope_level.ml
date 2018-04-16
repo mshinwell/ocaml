@@ -25,6 +25,7 @@ module type S = sig
   val next : t -> t
 
   val (<): t -> t -> bool
+  val (>): t -> t -> bool
   val (>=): t -> t -> bool
 
   val to_int : t -> int
@@ -47,7 +48,9 @@ module T0 = struct
     t - 1
 
   let (<) (t1 : t) t2 = t1 < t2
+  let (>) (t1 : t) t2 = t1 > t2
   let (>=) (t1 : t) t2 = t1 >= t2
+  let (=) (t1 : t) t2 = t1 = t2
 
   let to_int t = t
 end
@@ -70,6 +73,7 @@ module Sublevel = struct
     t - 1
 
   let (<) (t1 : t) t2 = t1 < t2
+  let (>) (t1 : t) t2 = t1 > t2
   let (>=) (t1 : t) t2 = t1 >= t2
 
   let to_int t = t
@@ -82,6 +86,10 @@ module With_sublevel = struct
 
   let level (level, _sublevel) = level
   let sublevel (_level, sublevel) = sublevel
+
+  let (>) (level1, sublevel1) (level2, sublevel2) =
+    (level1 = level2 && Sublevel.(>) sublevel1 sublevel2)
+      || level1 > level2
 
   include Hashtbl.Make_with_map_pair (T0) (Sublevel)
 end

@@ -2319,8 +2319,6 @@ result
   end = Real_typing_environment0.Make (struct
     include T
 
-    module Typing_env_extension = Typing_env_extension
-
     let is_empty_typing_environment = is_empty_typing_environment
     let meet = Meet_and_join.meet
     let join = Meet_and_join.join
@@ -2333,7 +2331,7 @@ result
     let free_names = free_names
     let print_typing_environment = print_typing_environment
     let print = print
-  end) (Meet_and_join) (Type_equality)
+  end) (Typing_env_extension) (Meet_and_join) (Type_equality)
   and Typing_env_extension : sig
     include Typing_env_extension_intf.S
       with type env_extension := env_extension

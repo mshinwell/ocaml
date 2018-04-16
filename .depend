@@ -4168,9 +4168,11 @@ middle_end/typing/typing_env0_intf.cmx : \
     middle_end/base_types/export_id.cmx
 middle_end/typing/typing_env_extension_intf.cmo : \
     middle_end/base_types/scope_level.cmi middle_end/base_types/name.cmi \
+    middle_end/typing/flambda_type0_internal_intf.cmo \
     middle_end/base_types/export_id.cmi
 middle_end/typing/typing_env_extension_intf.cmx : \
     middle_end/base_types/scope_level.cmx middle_end/base_types/name.cmx \
+    middle_end/typing/flambda_type0_internal_intf.cmx \
     middle_end/base_types/export_id.cmx
 middle_end/removal/initialize_symbol_to_let_symbol.cmo : \
     middle_end/language/flambda_static.cmi \

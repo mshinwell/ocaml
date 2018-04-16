@@ -43,14 +43,12 @@ module type S = sig
     -> flambda_type
     -> t
 
-  type binding_type = Normal | Existential
-
   val fold
      : t
     -> init:'a
     -> f:('a
       -> Name.t
-      -> binding_type
+      -> Flambda_type0_internal_intf.binding_type
       -> Scope_level.With_sublevel.t
       -> typing_environment_entry0
       -> 'a)
@@ -59,7 +57,7 @@ module type S = sig
   val iter
      : t
     -> f:(Name.t
-      -> binding_type
+      -> Flambda_type0_internal_intf.binding_type
       -> Scope_level.With_sublevel.t
       -> typing_environment_entry0
       -> unit)

@@ -89,23 +89,27 @@ module type S = sig
       is idempotent. *)
   val remove : t -> Name.t -> t
 
-  (** Whether a name bound by the environment is normally-accessible or
-      has been made existential (as a result of [cut], below). *)
-  type binding_type = Normal | Existential
-
   (** Determine the most precise type which the environment knows for the
       given name. *)
-  val find_exn : t -> Name.t -> flambda_type * binding_type
-
-  (** As for [find] but returns the scoping level of the given name as well. *)
-  val find_with_scope_level
+  (* CR mshinwell: Clean up "Flambda_type0_internal_intf.binding_type" *)
+  val find_exn
      : t
     -> Name.t
-    -> flambda_type * Scope_level.With_sublevel.t * binding_type
+    -> flambda_type * Flambda_type0_internal_intf.binding_type
+
+  (** As for [find] but returns the scoping level of the given name as well. *)
+  val find_with_scope_level_exn
+     : t
+    -> Name.t
+    -> flambda_type * Scope_level.With_sublevel.t
+         * Flambda_type0_internal_intf.binding_type
 
   (** Like [find], but returns [None] iff the given name is not in the
       specified environment. *)
-  val find_opt : t -> Name.t -> (flambda_type * binding_type) option
+  val find_opt
+     : t
+    -> Name.t
+    -> (flambda_type * Flambda_type0_internal_intf.binding_type) option
 
   (** Return a name, if such is available, which may be substituted for the
       given primitive in the fashion of CSE.  (This function checks if the
@@ -118,7 +122,7 @@ module type S = sig
 
   (** Whether the given name is bound in the environment (either normally
       or existentially). *)
-  val mem_exn : t -> Name.t -> bool
+  val mem : t -> Name.t -> bool
 
   (** Returns [true] if the given name, which must be bound in the given
       environment, is existentially bound. *)
@@ -132,7 +136,7 @@ module type S = sig
     -> init:'a
     -> f:('a
       -> Name.t
-      -> binding_type
+      -> Flambda_type0_internal_intf.binding_type
       -> Scope_level.With_sublevel.t
       -> typing_environment_entry0
       -> 'a)
@@ -142,21 +146,22 @@ module type S = sig
   val iter
      : t
     -> f:(Name.t
-      -> binding_type
+      -> Flambda_type0_internal_intf.binding_type
       -> Scope_level.With_sublevel.t
       -> typing_environment_entry0
       -> unit)
     -> unit
 
-  (** Least upper bound of two typing environments.  The domain of the
-      resulting environment is the intersection of those supplied. *)
-  val join : t -> t -> t
+  (** Least upper bound of two typing environments at the given scope level.
+      The domain of the resulting environment is the intersection of those
+      supplied. *)
+  val join : t -> t -> Scope_level.t -> t
 
-  (** Greatest lower bound of two typing environments.  The domain of the
-      resulting environment is the union of those supplied.  Any equations
-      deduced during the meet process will have been applied to the
-      returned environment. *)
-  val meet : t -> t -> t
+  (** Greatest lower bound of two typing environments at the given scope
+      level.  The domain of the resulting environment is the union of those
+      supplied.  Any equations deduced during the meet process will have been
+      applied to the returned environment. *)
+  val meet : t -> t -> Scope_level.t -> t
 
   (** Rearrange the given environment so that names defined at or deeper than
       the given scope level are made existential. This means that they may be
@@ -167,6 +172,7 @@ module type S = sig
     -> existential_if_defined_at_or_later_than:Scope_level.t
     -> t
 
+  (* CR mshinwell: What exactly does "domain" mean here?  (existentials...) *)
   (** Adjust the domain of the given typing environment so that it only
       mentions the names in the given name occurrences structure. *)
   val restrict_to_names : t -> Name_occurrences.t -> t

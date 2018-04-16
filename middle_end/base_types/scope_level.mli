@@ -27,6 +27,7 @@ module type S = sig
   val next : t -> t
 
   val (<): t -> t -> bool
+  val (>): t -> t -> bool
   val (>=): t -> t -> bool
 
   val to_int : t -> int
@@ -47,6 +48,8 @@ module With_sublevel : sig
   val sublevel : with_sublevel -> Sublevel.t
 
   type t = with_sublevel
+
+  val (>): t -> t -> bool
 
   include Hashtbl.With_map with type t := t
 end

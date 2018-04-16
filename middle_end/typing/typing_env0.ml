@@ -18,12 +18,12 @@
 
 module Make (T : sig
   include Flambda_type0_internal_intf.S
-
-  module Typing_env_extension : Typing_env_extension_intf.S
-    with type env_extension := env_extension
-    with type typing_environment := typing_environment
-    with type typing_environment_entry0 := typing_environment_entry0
-    with type flambda_type := flambda_type
+end) (Typing_env_extension : sig
+  include Typing_env_extension_intf.S
+    with type env_extension := T.env_extension
+    with type typing_environment := T.typing_environment
+    with type typing_environment_entry0 := T.typing_environment_entry0
+    with type flambda_type := T.flambda_type
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
     with type t_in_context := T.t_in_context
@@ -39,13 +39,12 @@ end) = struct
 
   type typing_environment = T.typing_environment
   type typing_environment_entry = T.typing_environment_entry
-  type env_extension = T.Typing_env_extension.t
+  type typing_environment_entry0 = T.typing_environment_entry0
+  type env_extension = Typing_env_extension.t
   type flambda_type = T.flambda_type
   type t_in_context = T.t_in_context
   type 'a ty = 'a T.ty
   type 'a unknown_or_join = 'a T.unknown_or_join
-
-  type binding_type = Normal | Existential
 
   let print = print_typing_environment
 
@@ -123,20 +122,21 @@ end) = struct
     match Name.Map.find name t.names_to_types with
     | exception Not_found -> None
     | scope_level, entry ->
-      let binding_type =
+      let binding_type : Flambda_type0_internal_intf.binding_type =
         if Name.Set.mem name t.existentials then Existential
         else Normal
       in
       Some (binding_type, scope_level, entry)
 
-  let find_exn t name =
+  let find_exn t name
+        : flambda_type * Flambda_type0_internal_intf.binding_type =
     match Name.Map.find name t.names_to_types with
     | exception Not_found ->
       Misc.fatal_errorf "Cannot find %a in environment:@ %a"
         Name.print name
         print_typing_environment t
     | _scope_level, entry ->
-      let binding_type =
+      let binding_type : Flambda_type0_internal_intf.binding_type =
         if Name.Set.mem name t.existentials then Existential
         else Normal
       in
@@ -250,23 +250,48 @@ end) = struct
       in
       { ty with descr = Fabricated ty_fabricated; }, canonical_name
 
+  let fold_all t ~init ~f =
+    Scope_level.Map.fold (fun level by_sublevel acc ->
+        Scope_level.Sublevel.Map.fold (fun sublevel (name, entry) acc ->
+          let scope_level = Scope_level.With_sublevel.create level sublevel in
+          let binding_type : Flambda_type0_internal_intf.binding_type =
+            if Name.Set.mem name t.existentials then Existential
+            else Normal
+          in
+          f acc name binding_type scope_level entry)
+        by_sublevel
+        acc)
+      t.levels_to_entries
+      init
+
   let fold t ~init ~f =
     Scope_level.Map.fold (fun level by_sublevel acc ->
-          Scope_level.Sublevel.Map.fold (fun sublevel (name, ty) acc ->
+        Scope_level.Sublevel.Map.fold (fun sublevel (name, entry) acc ->
+          let entry0 =
+            match entry with
+            | CSE _ -> None
+            | Definition ty ->
+              Some ((Definition ty) : typing_environment_entry0)
+            | Equation ty ->
+              Some ((Equation ty) : typing_environment_entry0)
+          in
+          match entry0 with
+          | None -> acc
+          | Some entry0 ->
             let scope_level = Scope_level.With_sublevel.create level sublevel in
-            let binding_type =
+            let binding_type : Flambda_type0_internal_intf.binding_type =
               if Name.Set.mem name t.existentials then Existential
               else Normal
             in
-            f acc name binding_type scope_level ty)
+            f acc name binding_type scope_level entry0)
         by_sublevel
         acc)
       t.levels_to_entries
       init
 
   let iter t ~f =
-    fold t ~init:() ~f:(fun () name binding_type scope_level ty ->
-        f name binding_type scope_level ty)
+    fold t ~init:() ~f:(fun () name binding_type scope_level entry ->
+        f name binding_type scope_level entry)
 
   let invariant t =
     (* CR mshinwell: Add more checks here *)
@@ -274,8 +299,9 @@ end) = struct
       (* Since [fold] operates in (scope level, sublevel) order, then the
          following check establishes that dependencies between bindings in
          the environment are only in one direction. *)
-      ignore (fold t ~init:Name.Set.empty
-        ~f:(fun names_seen (name : Name.t) (binding_type : binding_type)
+      ignore (fold_all t ~init:Name.Set.empty
+        ~f:(fun names_seen (name : Name.t)
+                (binding_type : Flambda_type0_internal_intf.binding_type)
                 scope_level entry ->
           let free_names =
             match entry with
@@ -568,7 +594,8 @@ end) = struct
     end
 
   let add_with_binding_type t (name : Name.t) cont_level
-        (binding_type : binding_type) (binding : typing_environment_entry) =
+        (binding_type : Flambda_type0_internal_intf.binding_type)
+        (binding : typing_environment_entry) =
     (* CR mshinwell: more checks on not changing the binding type of an
        existing name here? *)
     let t = add t name cont_level binding in
@@ -579,9 +606,10 @@ end) = struct
         existentials = Name.Set.add name t.existentials;
       }
 
-  let add_env_extension t env_extension scope_level =
+  let add_env_extension_no_meet_required t env_extension scope_level =
     Typing_env_extension.fold env_extension ~init:t
-      ~f:(fun name binding_type _level (entry : typing_environment_entry0) ->
+      ~f:(fun t name (binding_type : Flambda_type0_internal_intf.binding_type)
+              _level (entry : typing_environment_entry0) ->
         match entry with
         | Definition ty ->
           add_with_binding_type t name scope_level binding_type
@@ -593,7 +621,7 @@ end) = struct
   let singleton ~resolver name scope_level binding =
     add (create ~resolver) name scope_level binding
 
-  let restrict_to_names0 t allowed =
+  let restrict_to_names0 ?don't_check_invariant t allowed =
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
@@ -635,7 +663,10 @@ end) = struct
       }
     in
     try
-      invariant t;
+      begin match don't_check_invariant with
+      | None -> invariant t
+      | Some () -> ()
+      end;
       t
     with Misc.Fatal_error -> begin
       Format.eprintf "\n%sContext is: \
@@ -694,9 +725,12 @@ end) = struct
               | Definition ty1, Equation ty2
               | Equation ty1, Equation ty2 ->
                 let meet_ty, env_extension =
-                  Meet_and_join.meet (t, ty1) (t2, ty2)
+                  Meet_and_join.meet ~bound_name:name (t, ty1) (t2, ty2)
                 in
-                let t = add_env_extension t env_extension meet_scope_level in
+                let t =
+                  add_env_extension_no_meet_required t env_extension
+                    meet_scope_level
+                in
                 add_with_binding_type t name meet_scope_level binding_type
                   (Equation meet_ty)
               | Equation _, Definition _ ->
@@ -714,6 +748,7 @@ end) = struct
               | Equation _ ->
                 Misc.fatal_errorf "Environment contains equation for %a \
                     without preceding definition:@ %a"
+                  Name.print name
                   print t2)
       in
       let cse_to_names =
@@ -728,12 +763,10 @@ end) = struct
             else name1)
           t1.cse_to_names t2.cse_to_names
       in
-      let existentials = Name.Set.union t1.existentials t2.existentials in
       let existential_freshening = t1.existential_freshening (* XXX *) in
       let t =
         { t with
           cse_to_names;
-          existentials;
           existential_freshening;
         }
       in
@@ -741,27 +774,36 @@ end) = struct
       t
 
   let join (t1 : typing_environment) (t2 : typing_environment)
-        : typing_environment =
+        join_scope_level : typing_environment =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then create_using_resolver_from t1
     else if is_empty t2 then create_using_resolver_from t1
     else
       let t =
-        Scope_level.Map.intersection_fold
-          t1.levels_to_entries t2.levels_to_entries
-          ~init:(create ~resolver)
-          ~inter:(fun cont_level by_sublevel1 by_sublevel2 t ->
-            Scope_level.Sublevel.intersection_fold
-              by_sublevel1 by_sublevel2
-              ~init:t
-              ~inter:(fun sublevel (name1, ty) (name2, ty2) t ->
-                assert (Name.equal name1 name2);
-                let join_ty =
-                  Meet_and_join.join (t1, ty1) (t2, ty2)
-                in
-                let binding_type = binding_type t name1 in
-                add_with_binding_type t name binding_type
-                  cont_level sublevel (Definition join_ty)))
+        fold t2 ~init:(create_using_resolver_from t1)
+          ~f:(fun t name binding_type level
+                  (entry : typing_environment_entry0) ->
+            match find0_opt t name with
+            | Some (existing_binding_type, existing_level, existing_entry) ->
+              assert (existing_binding_type = binding_type);
+              begin match existing_entry, entry with
+              | Definition ty1, Definition ty2 ->
+                assert (Type_equality.equal ty1 ty2);
+                assert (Scope_level.With_sublevel.equal existing_level level);
+                t
+              | Definition ty1, Equation ty2
+              | Equation ty1, Equation ty2 ->
+                let join_ty = Meet_and_join.join (t, ty1) (t2, ty2) in
+                add_with_binding_type t name join_scope_level binding_type
+                  (Equation join_ty)
+              | Equation _, Definition _ ->
+                Misc.fatal_errorf "Environments disagree on the definition \
+                    point of %a:@ %a@ versus:@ %a"
+                  Name.print name
+                  print t1
+                  print t2
+              end
+            | None -> t)
       in
       let cse_to_names =
         Flambda_primitive.With_fixed_value.Map.inter_merge
@@ -773,17 +815,10 @@ end) = struct
             else name1)
           t1.cse_to_names t2.cse_to_names
       in
-      let existentials =
-        Name.Set.filter (fun name -> Name.Map.mem name names_to_types)
-          Name.Set.union t1.existentials t2.existentials
-      in
       let existential_freshening = t1.existential_freshening (* XXX *) in
       let t =
         { t with
-          names_to_types;
           cse_to_names;
-          levels_to_entries;
-          existentials;
           existential_freshening;
         }
       in
@@ -795,6 +830,7 @@ end) = struct
       Typing_env_extension.to_typing_environment ~resolver:t.resolver
         env_extension
     in
+    (* XXX *)
     meet t t'
 
   let to_env_extension t : env_extension =
@@ -856,6 +892,7 @@ print_typing_environment t;
       { resolver = t.resolver;
         names_to_types = t.names_to_types;
         levels_to_entries = t.levels_to_entries;
+        next_sublevel_by_level = t.next_sublevel_by_level;
         cse_to_names;
         existentials;
         existential_freshening;
@@ -874,7 +911,7 @@ Format.eprintf "Result is: %a\n%!" print t
       match Name_occurrences.choose_and_remove_amongst_everything to_follow with
       | None -> ()
       | Some (name, to_follow) ->
-        let ty, _binding_type = find t name in
+        let ty, _binding_type = find_exn t name in
         let names = T.free_names ty in
         loop (Name_occurrences.union to_follow names)
     in
@@ -893,12 +930,23 @@ Format.eprintf "Result is: %a\n%!" print t
 
   let diff t1 t2 : env_extension =
     let names_to_types =
-      Name.Map.filter (fun name (level1, ty1) ->
+      Name.Map.filter_map
+        (fun name (level1, (entry1 : typing_environment_entry0)) ->
+          let ty1 =
+            match entry1 with
+            | Definition ty | Equation ty -> ty
+          in
           match Name.Map.find name t2.names_to_types with
-          | exception Not_found -> true
-          | (level2, ty2) ->
-            assert (Scope_level.equal level1 level2);
-            Meet_and_join.strictly_more_precise (t1, ty1) ~than:(t2, ty2))
+          | exception Not_found -> Some (level1, ty1)
+          | (level2, (entry2 : typing_environment_entry0)) ->
+            assert (Scope_level.With_sublevel.equal level1 level2);
+            let ty2 =
+              match entry2 with
+              | Definition ty | Equation ty -> ty
+            in
+            if Meet_and_join.strictly_more_precise (t1, ty1) ~than:(t2, ty2)
+            then Some (level1, ty1)
+            else None)
         t1.names_to_types
     in
     let free_names =
@@ -907,12 +955,12 @@ Format.eprintf "Result is: %a\n%!" print t
         names_to_types
         (Name_occurrences.create ())
     in
-    let t1 =
-      { t1 with
-        must_be_closed = false;
-      }
+    let t =
+      (* Invariant checking is suppressed since there may be unbound names
+         which we are about to fix up. *)
+      restrict_to_names0 ~don't_check_invariant:() t1
+        (Name.Map.keys names_to_types)
     in
-    let t = restrict_to_names0 t1 (Name.Map.keys names_to_types) in
     let unbound =
       Name.Set.diff (Name_occurrences.everything free_names)
         (Name.Map.keys names_to_types)
@@ -922,12 +970,14 @@ Format.eprintf "Result is: %a\n%!" print t
           let level, kind =
             match Name.Map.find unbound t1.names_to_types with
             | exception Not_found -> assert false
-            | (level, ty) -> level, kind ty
+            | (level, (Definition ty | Equation ty)) -> level, kind ty
           in
-          add_or_replace t unbound level (unknown kind))
+          add t unbound (Scope_level.With_sublevel.level level)
+            (Definition (unknown kind)))
         unbound
         t
     in
+    invariant t;
     { typing_judgements = Some t;
     }
 end
