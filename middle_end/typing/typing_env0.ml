@@ -194,7 +194,7 @@ end) = struct
     in
     ty, canonical_name
 
-  let resolve_aliases_and_squash_unresolved_names_on_ty t ?bound_name
+  let _resolve_aliases_and_squash_unresolved_names_on_ty t ?bound_name
         ~force_to_kind ~unknown ty =
     let ty, canonical_name, still_unresolved =
       resolve_aliases_on_ty0 t ?bound_name ~force_to_kind ty
@@ -302,7 +302,7 @@ end) = struct
       ignore (fold_all t ~init:Name.Set.empty
         ~f:(fun names_seen (name : Name.t)
                 (binding_type : Flambda_type0_internal_intf.binding_type)
-                scope_level entry ->
+                _scope_level entry ->
           let free_names =
             match entry with
             | Definition ty | Equation ty -> T.free_names_set ty
@@ -456,7 +456,7 @@ end) = struct
           print_typing_environment t
       | Equation _ | CSE _ -> ()
 
-  let rec invariant_for_new_equation t name level (ty : flambda_type) ~sense =
+  let rec invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
     let meet_ty, env_extension =
       Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
@@ -493,7 +493,7 @@ end) = struct
         in
         let level = Scope_level.With_sublevel.level level in
         invariant_for_any_new_binding t name level (Equation ty);
-        invariant_for_new_equation t name level ty
+        invariant_for_new_equation t name ty
           ~sense:Existing_equation_must_be_more_precise)
 
   let invariant_for_new_binding t name level
@@ -502,7 +502,7 @@ end) = struct
     match entry with
     | Definition _ | CSE _ -> ()
     | Equation ty ->
-      invariant_for_new_equation t name level ty
+      invariant_for_new_equation t name ty
         ~sense:New_equation_must_be_more_precise
 
   let canonical_name t name =
@@ -709,7 +709,6 @@ end) = struct
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let resolver = t1.resolver in
       let t =
         fold t2 ~init:t1
           ~f:(fun t name binding_type level
@@ -825,13 +824,13 @@ end) = struct
       invariant t;
       t
 
-  let add_env_extension t env_extension =
+  let add_env_extension t env_extension scope_level =
     let t' =
       Typing_env_extension.to_typing_environment ~resolver:t.resolver
         env_extension
     in
     (* XXX *)
-    meet t t'
+    meet t t' scope_level
 
   let to_env_extension t : env_extension =
     { typing_judgements = Some t;

@@ -191,11 +191,16 @@ module type S = sig
   (** Like [restrict_to_names] except using a traditional filtering
       predicate.  A name will only be kept if the predicate returns [true]
       for the name. *)
-  val filter : t -> f:(Name.t -> (Scope_level.t * flambda_type) -> bool) -> t
+  val filter
+     : t
+    -> f:(Name.t
+      -> (Scope_level.With_sublevel.t * typing_environment_entry0)
+      -> bool)
+    -> t
 
   (** Add the given environment extension into the given typing environment.
       Internally, this is done by using the [meet] operation. *)
-  val add_env_extension : t -> env_extension -> t
+  val add_env_extension : t -> env_extension -> Scope_level.t -> t
 
   (** Create an env_extension structure containing the same information as
       the given environment. *)
@@ -207,11 +212,7 @@ module type S = sig
         - do occur in [t2] but where [t1] specifies more precise information
           (which for types, means closer to bottom).
   *)
-  val diff
-     : strictly_more_precise:(t_in_context -> than:t_in_context -> bool)
-    -> t
-    -> t
-    -> env_extension
+  val diff : t -> t -> env_extension
 
   (** Return all names occurring in the type and all types referenced by it. *)
   val free_names_transitive : t -> flambda_type -> Name_occurrences.t
