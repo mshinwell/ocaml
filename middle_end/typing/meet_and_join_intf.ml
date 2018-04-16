@@ -47,7 +47,7 @@ module type S_for_types = sig
   type env_extension
 
   val meet
-     : bound_name:Name.t
+     : ?bound_name:Name.t
     -> t_in_context
     -> t_in_context
     -> flambda_type * env_extension

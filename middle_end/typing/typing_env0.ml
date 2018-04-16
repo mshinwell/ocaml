@@ -621,6 +621,11 @@ end) = struct
   let singleton ~resolver name scope_level binding =
     add (create ~resolver) name scope_level binding
 
+  let max_level t =
+    match Scope_level.Map.max_binding_opt with
+    | None -> Scope_level.initial
+    | Some (level, _) -> level
+
   let restrict_to_names0 ?don't_check_invariant t allowed =
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
@@ -703,6 +708,8 @@ end) = struct
 
   let meet (t1 : typing_environment) (t2 : typing_environment)
         meet_scope_level : typing_environment =
+    assert (Scope_level.(>=) (max_level t1) meet_scope_level);
+    assert (Scope_level.(>=) (max_level t2) meet_scope_level);
     (* CR mshinwell: Make use of the fact that bindings at or further out
        from [meet_scope_level] must be the same in [t1] and [t2]. *)
     if fast_equal t1 t2 then t1
@@ -742,8 +749,8 @@ end) = struct
             | None ->
               match entry with
               | Definition ty ->
-                add_with_binding_type t name meet_scope_level binding_type
-                  (Definition ty)
+                add_with_binding_type t name level Existential
+                  (Definition ...)
               | Equation _ ->
                 Misc.fatal_errorf "Environment contains equation for %a \
                     without preceding definition:@ %a"
@@ -774,6 +781,8 @@ end) = struct
 
   let join (t1 : typing_environment) (t2 : typing_environment)
         join_scope_level : typing_environment =
+    assert (Scope_level.(>=) (max_level t1) join_scope_level);
+    assert (Scope_level.(>=) (max_level t2) join_scope_level);
     if fast_equal t1 t2 then t1
     else if is_empty t1 then create_using_resolver_from t1
     else if is_empty t2 then create_using_resolver_from t1

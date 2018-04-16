@@ -128,7 +128,7 @@ struct
               let params =
                 List.map2 (fun t1 t2 ->
                     let t, new_env_extension_from_meet =
-                      Meet_and_join.meet ~bias_towards:(env1, t1) (env2, t2)
+                      Meet_and_join.meet (env1, t1) (env2, t2)
                     in
                     if not (t == t1) then begin
                       params_changed := join_changes !params_changed Left
@@ -154,40 +154,33 @@ struct
                   let param_name = Parameter.name param in
                   (* CR mshinwell: This level shouldn't be hard-coded *)
                   let level = Scope_level.initial in
-                  Typing_env0.add_or_replace_meet env
-                    param_name level param_ty)
+                  Typing_env0.add env param_name level (Definition param_ty))
                 env
                 param_names params
           in
           let result_changed = ref Neither in
+          let result_scope_level = Scope_level.initial in
           let result : _ Or_bottom.t =
             if not same_num_results then Bottom
             else
               let result =
                 List.map2 (fun t1 t2 ->
-                    let result_env_extension1 =
-                      Typing_env_extension.to_typing_environment ~resolver:env1.resolver
-                       result_env_extension1
-                    in
-                    let result_env_extension2 =
-                      Typing_env_extension.to_typing_environment ~resolver:env1.resolver
-                       result_env_extension2
-                    in
                     let result_env1 =
-                      Typing_env0.meet
+                      Typing_env0.add_env_extension
                         (env_for_result env1 ~params:params1
                           ~param_names:param_names1)
                         result_env_extension1
+                        result_scope_level
                     in
                     let result_env2 =
-                      Typing_env0.meet
+                      Typing_env0.add_env_extension
                         (env_for_result env2 ~params:params2
                           ~param_names:param_names2)
                         result_env_extension2
+                        result_scope_level
                     in
                     let t, new_env_extension_from_meet =
-                      Meet_and_join.meet ~bias_towards:(result_env1, t1)
-                        (result_env2, t2)
+                      Meet_and_join.meet (result_env1, t1) (result_env2, t2)
                     in
                     if not (t == t1) then begin
                       result_changed := join_changes !result_changed Left
@@ -211,10 +204,12 @@ struct
           in
           let result_env_extension_changed : changes =
             let changed1 =
-              not (Typing_env_extension.phys_equal result_env_extension1 result_env_extension)
+              not (Typing_env_extension.phys_equal
+                result_env_extension1 result_env_extension)
             in
             let changed2 =
-              not (Typing_env_extension.phys_equal result_env_extension2 result_env_extension)
+              not (Typing_env_extension.phys_equal
+                result_env_extension2 result_env_extension)
             in
             match changed1, changed2 with
             | false, false -> Neither
