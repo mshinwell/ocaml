@@ -19,8 +19,8 @@
 (** Typing of join points---that is to say, the entry points of
     continuations. *)
 
-(** Using information collected across all use sites of the continuation,
-    calculate:
+(** Using information collected across all use sites of a particular
+    continuation, calculate:
     - the types of a continuation's parameters; and
     - the typing environment for the body of the continuation (which
       includes bindings for the continuation's parameters).

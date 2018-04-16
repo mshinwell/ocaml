@@ -28,17 +28,21 @@ module Use : sig
         nor for specialisation (for example, it might be a [Switch] arm).
         The types of the continuation's parameters, as currently known from
         its definition in the term language, must be provided. *)
-    val not_inlinable_or_specialisable : param_tys:T.t list -> t
+    val not_inlinable_or_specialisable : param_tys:Flambda_type.t list -> t
 
     (** Describe that a continuation's use is eligible, in principle, for
         inlining and specialisation.  The arguments and their types seen at
         the use must be provided. *)
-    val inlinable_and_specialisable : args_with_tys:(Simple.t * T.t) list -> t
+    val inlinable_and_specialisable
+       : args_with_tys:(Simple.t * Flambda_type.t) list
+      -> t
 
     (** Describe that a continuation's use is eligible, in principle, for
         specialisable (but not inlining).  The arguments and their types seen
         at the use must be provided. *)
-    val only_specialisable : args_with_tys:(Simple.t * T.t) list -> t
+    val only_specialisable
+       : args_with_tys:(Simple.t * Flambda_type.t) list
+      -> t
   end
 
   (** A single use of a continuation. *)
@@ -52,13 +56,15 @@ module Use : sig
   val args : t -> Simple.t list
 
   (** As for [args], but returns the types of the arguments. *)
-  val arg_tys : t -> T.t list
+  val arg_tys : t -> Flambda_type.t list
 
   (** Whether the given use is a potential inlining site. *)
   val is_inlinable : t -> bool
 
-    (** Whether the given use is a potential specialisation site. *)
-  val is_specialisable : t -> bool
+  (** Whether the given use is a potential specialisation site.  [None] is
+      returned if it is not; otherwise [Some] is returned holding the
+      use's arguments with types. *)
+  val is_specialisable : t -> (Simple.t * Flambda_type.t) list option
 
   (** The typing environment at the continuation's use. *)
   val typing_env : t -> Flambda_type.Typing_env.t
@@ -109,4 +115,4 @@ val linearly_used_in_inlinable_position : t -> bool
 (* CR mshinwell: check we really need this, and clarify semantics *)
 (** Modify the list of parameters, without affecting the recorded use
     information, in the given use information structure. *)
-val update_parameters : t -> Flambda.Typed_parameter.t list -> t
+val update_parameters : t -> params:Flambda.Typed_parameter.t list -> t

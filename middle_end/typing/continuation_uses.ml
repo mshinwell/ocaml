@@ -26,6 +26,15 @@ module Use = struct
       | Inlinable_and_specialisable of (Simple.t * T.t) list
       | Only_specialisable of (Simple.t * T.t) list
 
+    let not_inlinable_or_specialisable ~param_tys =
+      Not_inlinable_or_specialisable param_tys
+
+    let inlinable_and_specialisable ~args_with_tys =
+      Inlinable_and_specialisable args_with_tys
+
+    let only_specialisable ~args_with_tys =
+      Only_specialisable args_with_tys
+
     let print ppf t =
       let print_arg_and_ty ppf (arg, ty) =
         Format.fprintf ppf "(%a %a)"
@@ -79,6 +88,12 @@ module Use = struct
     Format.fprintf ppf "@[((kind@ %a)@ (env@ %a))@]"
       Kind.print t.kind
       TE.print t.env
+
+  let args t = Kind.args t.kind
+  let arg_tys t = Kind.arg_tys t.kind
+  let is_inlinable t = Kind.is_inlinable t.kind
+  let is_specialisable t = Kind.is_specialisable t.kind
+  let typing_env t = t.env
 end
 
 type t = {

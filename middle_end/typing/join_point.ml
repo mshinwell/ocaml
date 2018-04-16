@@ -46,7 +46,7 @@ Continuation.print t.continuation
 Scope_level.print t.definition_scope_level
 Freshening.print freshening;
           let use_env =
-            TE.cut (Env.get_typing_environment use.env)
+            TE.cut use.env
               ~existential_if_defined_at_or_later_than:
                 (Scope_level.next t.definition_scope_level)
           in
