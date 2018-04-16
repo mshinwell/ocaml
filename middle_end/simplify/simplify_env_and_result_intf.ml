@@ -420,7 +420,7 @@ module type Result = sig
 
     val num_uses : t -> int
 
-    val join_of_arg_types
+    val param_types_and_body_env
        : t
       -> freshening:Freshening.t
       -> arity:Flambda_arity.t

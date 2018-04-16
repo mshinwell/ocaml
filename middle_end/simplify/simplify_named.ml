@@ -131,7 +131,7 @@ let simplify_set_of_closures original_env r
           return_cont_params
       in
       let result, result_env =
-        R.Continuation_uses.join_of_arg_types return_continuation_uses
+        R.Continuation_uses.param_types_and_body_env return_continuation_uses
           ~arity:function_decl.return_arity
           ~freshening:(E.freshening original_env)
           ~default_env

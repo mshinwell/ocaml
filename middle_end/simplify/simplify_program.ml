@@ -411,7 +411,7 @@ Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
             return_cont_params
         in
         try
-          R.Continuation_uses.join_of_arg_types continuation_uses
+          R.Continuation_uses.param_types_and_body_env continuation_uses
             ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
             ~freshening:(E.freshening default_env0)
             ~default_env

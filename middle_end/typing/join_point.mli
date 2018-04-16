@@ -16,10 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Typing of join points: inference of the types of continuations'
-    parameters given the types of their arguments at all use points. *)
+(** Typing of join points---that is to say, the entry points of
+    continuations. *)
 
-val join_of_arg_types
+(** Using information collected across all use sites of the continuation,
+    calculate:
+    - the types of a continuation's parameters; and
+    - the typing environment for the body of the continuation (which
+      includes bindings for the continuation's parameters).
+
+    In the event that there are no uses then the [default_env] will be used
+    as the body environment. *)
+val param_types_and_body_env
    : Continuation_uses.t
   -> Freshening.t
   -> arity:Flambda_arity.t

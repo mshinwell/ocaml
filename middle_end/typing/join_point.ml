@@ -24,7 +24,7 @@ module TE = Flambda_type.Typing_env
 (* XXX Needs documentation.  Change name of [default_env].  Note that
    this environment must contain entries for all parameters of
    the relevant continuation *)
-let join_of_arg_types_opt uses freshening ~default_env =
+let param_types_and_body_env_opt uses freshening ~default_env =
   match Continuation_uses.uses uses with
   | [] -> None
   | uses ->
@@ -134,7 +134,9 @@ TE.print joined_env;
                 T.Typing_env_extension.print env_extension;
               (* XXX should take into account aliases of [param] too *)
               let param = Flambda.Typed_parameter.name param in
-              let env_extension = T.Typing_env_extension.remove env_extension param in
+              let env_extension =
+                T.Typing_env_extension.remove env_extension param
+              in
               Format.eprintf "Final env_extension:@ %a\n%!"
                 T.Typing_env_extension.print env_extension;
               let this_ty =
@@ -176,40 +178,7 @@ Continuation.print t.continuation
 *)
     Some (joined_arg_tys, joined_env)
 
-let join_of_arg_types uses freshening ~arity ~default_env =
-  let tys, env =
-    match join_of_arg_types_opt uses freshening ~default_env with
-    | None -> T.bottom_types_from_arity arity, default_env
-    | Some (arg_tys, env) -> arg_tys, env
-  in
-(*
-  let free_names =
-    let type_of_name ?local_env (name : T.Name_or_export_id.t) =
-      (* CR mshinwell: this whole thing seems nasty *)
-      let env =
-        match local_env with
-        | None -> env
-        | Some local_env -> local_env
-      in
-      begin match name with
-      | Name name ->
-        begin match TE.find_opt env name with
-        | None -> None
-        | Some (ty, _binding_type) -> Some ty
-        end
-      | Export_id _ ->
-        Misc.fatal_error "Not yet implemented"
-      end
-    in
-    List.fold_left (fun free_names ty ->
-        Name_occurrences.union free_names
-          (T.free_names_transitive ~type_of_name ty))
-      (Name_occurrences.create ())
-      tys
-  in
-  let allowed_names =
-    Name_occurrences.union free_names (TE.domain default_env)
-  in
-*)
-(*      let env = TE.restrict_to_names env (TE.domain default_env) in *)
-  tys, env
+let param_types_and_body_env uses freshening ~arity ~default_env =
+  match param_types_and_body_env_opt uses freshening ~default_env with
+  | None -> T.bottom_types_from_arity arity, default_env
+  | Some (arg_tys, env) -> arg_tys, env

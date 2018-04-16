@@ -853,7 +853,7 @@ end = struct
         Continuation.print cont
         Continuation_uses.print uses;
 *)
-      Continuation_uses.join_of_arg_types uses ~freshening ~arity ~default_env
+      Continuation_uses.param_types_and_body_env uses ~freshening ~arity ~default_env
 
   let continuation_args_types' t cont ~arity ~freshening =
     let tys, _env =
@@ -868,7 +868,7 @@ end = struct
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | (uses, _approx, _env, _recursive) ->
-      Continuation_uses.join_of_arg_types uses ~arity ~freshening ~default_env
+      Continuation_uses.param_types_and_body_env uses ~arity ~freshening ~default_env
 
   let exit_scope_of_let_cont t env cont ~params =
     let t, uses =
