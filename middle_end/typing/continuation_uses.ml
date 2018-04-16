@@ -162,4 +162,7 @@ let linearly_used_in_inlinable_position t =
   | [use] when Use.Kind.is_inlinable use.kind -> true
   | _ -> false
 
+let continuation t = t.continuation
 let uses t = t.uses
+let params t = t.params
+let definition_scope_level t = t.definition_scope_level

@@ -24,31 +24,33 @@ module TE = Flambda_type.Typing_env
 (* XXX Needs documentation.  Change name of [default_env].  Note that
    this environment must contain entries for all parameters of
    the relevant continuation *)
-let param_types_and_body_env_opt uses freshening ~default_env =
-  match Continuation_uses.uses uses with
+let param_types_and_body_env_opt cont_uses freshening ~default_env =
+  match Continuation_uses.uses cont_uses with
   | [] -> None
   | uses ->
-    let arity = Flambda.Typed_parameter.List.arity t.params in
+    let params = Continuation_uses.params cont_uses in
+    let arity = Flambda.Typed_parameter.List.arity params in
     let param_tys =
       List.map (fun param ->
           let var = Flambda.Typed_parameter.var param in
           let var = Freshening.apply_variable freshening var in
           let kind = Flambda.Typed_parameter.kind param in
           T.alias_type_of kind (Name.var var))
-        t.params
+        params
     in
     let bottom_arg_tys = T.bottom_types_from_arity arity in
     let arg_tys_with_envs_rev, joined_env =
       List.fold_left
-        (fun (arg_tys_with_envs_rev, joined_env) (use : Use.t) ->
+        (fun (arg_tys_with_envs_rev, joined_env) use ->
 Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
-Continuation.print t.continuation
-Scope_level.print t.definition_scope_level
+Continuation.print (Continuation_uses.continuation cont_uses)
+Scope_level.print (Continuation_uses.definition_scope_level cont_uses)
 Freshening.print freshening;
           let use_env =
-            TE.cut use.env
+            TE.cut (Continuation_uses.Use.typing_env use)
               ~existential_if_defined_at_or_later_than:
-                (Scope_level.next t.definition_scope_level)
+                (Scope_level.next (
+                  Continuation_uses.definition_scope_level cont_uses))
           in
 (*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
@@ -64,7 +66,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                   TE.find_with_scope_level default_env name
                 in
                 Format.eprintf "Copying type for param %a level %a\n%!"
-                  Variable.print var Scope_level.print scope_level;
+                  Variable.print var
+                  Scope_level.With_sublevel.print scope_level;
                 TE.add_or_replace_meet use_env name scope_level ty)
               use_env
               t.params

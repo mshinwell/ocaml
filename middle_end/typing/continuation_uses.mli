@@ -96,6 +96,15 @@ val add_use : t -> Flambda_type.Typing_env.t -> Use.Kind.t -> t
 (** All uses of the continuation being tracked by [t]. *)
 val uses : t -> Use.t list
 
+(** The continuation being tracked by [t]. *)
+val continuation : t -> Continuation.t
+
+(** The parameters of the continuation tracked by [t]. *)
+val params : t -> Flambda.Typed_parameter.t list
+
+(** The definition scope level of the continuation tracked by [t]. *)
+val definition_scope_level : t -> Scope_level.t
+
 (** How many uses of the continuation being tracked by [t] have been seen. *)
 val num_uses : t -> int
 
