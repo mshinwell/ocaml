@@ -641,178 +641,7 @@ end = struct
 end and Result : sig
   include Simplify_env_and_result_intf.Result with type env = Env.t
 end = struct
-  module Continuation_uses = struct
-    module Use = struct
-      module Kind = struct
-        type t =
-          | Not_inlinable_or_specialisable of T.t list
-          | Inlinable_and_specialisable of
-              (Simple.t * T.t) list
-          | Only_specialisable of (Simple.t * T.t) list
-
-        let print ppf t =
-          let print_arg_and_ty ppf (arg, ty) =
-            Format.fprintf ppf "(%a %a)"
-              Simple.print arg
-              T.print ty
-          in
-          match t with
-          | Not_inlinable_or_specialisable args_tys ->
-            Format.fprintf ppf "(Not_inlinable_or_specialisable (%a))"
-              (Format.pp_print_list T.print) args_tys
-          | Inlinable_and_specialisable args_and_tys ->
-            Format.fprintf ppf "(Inlinable_and_specialisable (%a))"
-              (Format.pp_print_list print_arg_and_ty) args_and_tys
-          | Only_specialisable args_and_tys ->
-            Format.fprintf ppf "(Only_specialisable (%a))"
-              (Format.pp_print_list print_arg_and_ty) args_and_tys
-
-        let args t =
-          match t with
-          | Not_inlinable_or_specialisable _ -> []
-          | Inlinable_and_specialisable args_and_tys
-          | Only_specialisable args_and_tys ->
-            List.map (fun (arg, _ty) -> arg) args_and_tys
-
-        let arg_tys t =
-          match t with
-          | Not_inlinable_or_specialisable args_tys -> args_tys
-          | Inlinable_and_specialisable args_and_tys
-          | Only_specialisable args_and_tys ->
-            List.map (fun (_arg, ty) -> ty) args_and_tys
-
-  (*
-        let has_useful_ty t =
-          List.exists (fun ty -> A.useful ty) (args_tys t)
-  *)
-
-        let is_inlinable t =
-          match t with
-          | Not_inlinable_or_specialisable _ -> false
-          | Inlinable_and_specialisable _ -> true
-          | Only_specialisable _ -> false
-
-        let is_specialisable t =
-          match t with
-          | Not_inlinable_or_specialisable _ -> None
-          | Inlinable_and_specialisable args_and_tys
-          | Only_specialisable args_and_tys -> Some args_and_tys
-      end
-
-      type t = {
-        kind : Kind.t;
-        env : Env.t;
-      }
-
-      let print ppf t =
-        Format.fprintf ppf "@[((kind@ %a)@ (env@ %a))@]"
-          Kind.print t.kind
-          Env.print t.env
-    end
-
-    type t = {
-      backend : (module Backend_intf.S);
-      continuation : Continuation.t;
-      params : Flambda.Typed_parameter.t list;
-      definition_scope_level : Scope_level.t;
-      application_points : Use.t list;
-    }
-
-    let create ~continuation ~params ~definition_scope_level ~backend =
-      { backend;
-        continuation;
-        params;
-        definition_scope_level;
-        application_points = [];
-      }
-
-    let update_parameters t ~params =
-      { t with
-        params;
-      }
-
-    let union t1 t2 =
-      if not (Continuation.equal t1.continuation t2.continuation) then begin
-        Misc.fatal_errorf "Cannot union [Continuation_uses.t] for two \
-            different continuations (%a and %a)"
-          Continuation.print t1.continuation
-          Continuation.print t2.continuation
-      end;
-      { backend = t1.backend;
-        continuation = t1.continuation;
-        params = t1.params;
-        definition_scope_level = t1.definition_scope_level;
-        application_points = t1.application_points @ t2.application_points;
-      }
-
-    let print ppf t =
-      Format.fprintf ppf "(%a application_points =@ (%a))"
-        Continuation.print t.continuation
-        (Format.pp_print_list Use.print) t.application_points
-
-    let add_use t env kind =
-      { t with
-        application_points = { Use. env; kind; } :: t.application_points;
-      }
-
-    let num_application_points t : Num_continuation_uses.t =
-      match t.application_points with
-      | [] -> Zero
-      | [_] -> One
-      | _ -> Many
-
-    let unused t =
-      match num_application_points t with
-      | Zero -> true
-      | One | Many -> false
-
-    let linearly_used t =
-      match num_application_points t with
-      | Zero -> false
-      | One -> true
-      | Many -> false
-
-    let num_uses t = List.length t.application_points
-
-    let linearly_used_in_inlinable_position t =
-      match t.application_points with
-      | [use] when Use.Kind.is_inlinable use.kind -> true
-      | _ -> false
-
-
-    let application_points t = t.application_points
-  (*
-    let filter_out_non_useful_uses t =
-      (* CR mshinwell: This should check that the approximation is always
-         better than the join.  We could do this easily by adding an equality
-         function to T and then using that in conjunction with
-         the "join" function *)
-      let application_points =
-        List.filter (fun (use : Use.t) ->
-            Use.Kind.has_useful_approx use.kind)
-          t.application_points
-      in
-      { t with application_points; }
-  *)
-
-    let update_use_environments t ~if_present_in_env ~then_add_to_env =
-      let application_points =
-        List.map (fun (use : Use.t) ->
-            if Env.mem_continuation use.env if_present_in_env then
-              let new_cont, approx = then_add_to_env in
-              let env = Env.add_continuation use.env new_cont approx in
-              { use with env; }
-            else
-              use)
-          t.application_points
-      in
-      { t with application_points; }
-  end
-
-  (* CR mshinwell: Rename this module.  It's not just continuation uses now,
-     it's everything we may need to roll back when discarding a speculative
-     path *)
-  module Continuation_usage_snapshot = struct
+  module Roll_back_after_speculation = struct
     type t = {
       used_continuations : Continuation_uses.t Continuation.Map.t;
       defined_continuations :
@@ -884,6 +713,21 @@ end = struct
           t2.lifted_constants;
     }
 
+  (* XXX  -- in fact this may now be needed now
+  let update_use_environments t ~if_present_in_env ~then_add_to_env =
+    let application_points =
+      List.map (fun (use : Use.t) ->
+          if Env.mem_continuation use.env if_present_in_env then
+            let new_cont, approx = then_add_to_env in
+            let env = Env.add_continuation use.env new_cont approx in
+            { use with env; }
+          else
+            use)
+        t.application_points
+    in
+    { t with application_points; }
+  *)
+
   let use_continuation t env cont ~params kind =
     let args = Continuation_uses.Use.Kind.args kind in
     if not (List.for_all (fun arg -> Env.mem_simple env arg) args) then begin
@@ -893,6 +737,7 @@ end = struct
         (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args
         Env.print env
     end;
+(*
   let k = 34 in
   if Continuation.to_int cont = k then begin
   Format.eprintf "Adding use of continuation k%d, args %a approxs %a:\n%s\
@@ -904,6 +749,7 @@ end = struct
     (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
     Env.print env
   end;
+*)
     let uses =
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
@@ -963,7 +809,7 @@ end = struct
     Continuation.Map.is_empty t.used_continuations
 
   let snapshot_continuation_uses t =
-    { Continuation_usage_snapshot.
+    { Roll_back_after_speculation.
       used_continuations = t.used_continuations;
       defined_continuations = t.defined_continuations;
       lifted_constants = t.lifted_constants;
@@ -979,8 +825,8 @@ end = struct
     in
     snapshot, t
 
-  (* CR mshinwell: Rename these snapshot/rename functions, cf. the CR above *)
-  let roll_back_continuation_uses t (snapshot : Continuation_usage_snapshot.t) =
+  (* CR mshinwell: Rename these snapshot/rename functions *)
+  let roll_back_continuation_uses t (snapshot : Roll_back_after_speculation.t) =
     { t with
       used_continuations = snapshot.used_continuations;
       defined_continuations = snapshot.defined_continuations;

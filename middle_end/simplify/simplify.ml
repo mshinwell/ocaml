@@ -105,6 +105,7 @@ let check_toplevel_simplification_result r expr ~continuation
         Continuation.Set.print defined_continuations
         Expr.print expr
     end;
+    (* CR mshinwell: Comment is out of date *)
     (* Checking the number of uses recorded in [r] is correct helps to catch
        bugs where, for example, some [Value_unknown] approximation for some
        argument of some continuation fails to be removed by a transformation
