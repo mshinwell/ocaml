@@ -24,8 +24,8 @@ module TE = Flambda_type.Typing_env
 (* XXX Needs documentation.  Change name of [default_env].  Note that
    this environment must contain entries for all parameters of
    the relevant continuation *)
-let join_of_arg_types_opt t ~freshening ~default_env =
-  match t.application_points with
+let join_of_arg_types_opt uses freshening ~default_env =
+  match Continuation_uses.uses uses with
   | [] -> None
   | uses ->
     let arity = Flambda.Typed_parameter.List.arity t.params in
@@ -176,9 +176,9 @@ Continuation.print t.continuation
 *)
     Some (joined_arg_tys, joined_env)
 
-let join_of_arg_types t ~freshening ~arity ~default_env =
+let join_of_arg_types uses freshening ~arity ~default_env =
   let tys, env =
-    match join_of_arg_types_opt t ~freshening ~default_env with
+    match join_of_arg_types_opt uses freshening ~default_env with
     | None -> T.bottom_types_from_arity arity, default_env
     | Some (arg_tys, env) -> arg_tys, env
   in

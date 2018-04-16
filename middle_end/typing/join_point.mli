@@ -19,4 +19,9 @@
 (** Typing of join points: inference of the types of continuations'
     parameters given the types of their arguments at all use points. *)
 
-
+val join_of_arg_types
+   : Continuation_uses.t
+  -> Freshening.t
+  -> arity:Flambda_arity.t
+  -> default_env:Flambda_type.Typing_env.t
+  -> Flambda_type.t list * Flambda_type.Typing_env.t

@@ -80,7 +80,8 @@ val create
 val print : Format.formatter -> t -> unit
 
 (** Produce a use information structure that holds all information provided
-    by both of the given structures, which must be for the same continuation. *)
+    by both of the given structures, which must be for the same continuation,
+    otherwise a fatal error will result. *)
 val union : t -> t -> t
 
 (** Note that a use has been seen of the continuation tracked by [t]. *)
