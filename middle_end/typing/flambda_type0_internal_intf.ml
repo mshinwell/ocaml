@@ -268,15 +268,14 @@ end) = struct
       (Name.t * typing_environment_entry)
         Scope_level.Sublevel.Map.t Scope_level.Map.t;
     next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
-    existentials : Name.Set.t;
-    existential_freshening : Freshening.t;
+    were_existentials : Name.Set.t;
   }
 
   and env_extension = {
     (* The "option" is so that we don't need to pass [resolver] to lots of
        the type-constructing functions. *)
-    (* CR mshinwell: rename to typing_env or typing_environment *)
-    typing_judgements : typing_environment option;
+    typing_env : typing_environment option;
+
   }
 
   module Name_or_export_id = struct

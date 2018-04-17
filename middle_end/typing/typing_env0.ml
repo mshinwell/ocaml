@@ -706,12 +706,48 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
+  let open_existentials t level =
+    let existentials_by_sublevel =
+      match
+        Scope_level.Map.find Scope_level.existential t.levels_to_entries
+      with
+      | exception Not_found -> Scope_level.Sublevel.Map.empty
+      | existentials -> existentials
+    in
+    let levels_to_entries =
+      Scope_level.Map.remove Scope_level.existential t.levels_to_entries
+    in
+    let bound_names =
+      Scope_level.Sublevel.Map.fold
+        (fun _sublevel (name, _entry) bound_names ->
+          Name.Set.add name bound_names)
+        existentials_by_sublevel
+        Name.Set.empty
+    in
+    let fresh_names =
+      Name.Set.fold (fun (bound_name : Name.t) fresh_names ->
+          match bound_name with
+          | Symbol _ ->
+            Misc.fatal_errorf "Existentially-bound name should not be a
+                [Symbol]: %a@ in environment:@ %a"
+              Name.print bound_name
+              print t
+          | Var var ->
+            let fresh_name = Name.var (Variable.rename var) in
+            Name.Set.add fresh_name fresh_names)
+        bound_names
+    in
+    let were_existentials =
+      Name.Set.disjoint_union t.were_existentials bound_names
+    in
+
+
+
+
   let meet (t1 : typing_environment) (t2 : typing_environment)
         meet_scope_level : typing_environment =
     assert (Scope_level.(>=) (max_level t1) meet_scope_level);
     assert (Scope_level.(>=) (max_level t2) meet_scope_level);
-    (* CR mshinwell: Make use of the fact that bindings at or further out
-       from [meet_scope_level] must be the same in [t1] and [t2]. *)
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
@@ -741,7 +777,7 @@ end) = struct
                   (Equation meet_ty)
               | Equation _, Definition _ ->
                 Misc.fatal_errorf "Environments disagree on the definition \
-                    point of %a:@ %a@ versus:@ %a"
+                    point of %a:@ %a@ and:@ %a"
                   Name.print name
                   print t1
                   print t2
@@ -749,14 +785,44 @@ end) = struct
             | None ->
               match entry with
               | Definition ty ->
-                add_with_binding_type t name level Existential
-                  (Definition ...)
+                begin match binding_type with
+                | Existential ->
+                  add_with_binding_type t name level Existential
+                    (Definition ty)
+                | Normal ->
+                  Misc.fatal_errorf "%a is only defined in the second of these \
+                      two environments, which have been passed to [meet], yet \
+                      it is not marked existential:@ %a@ and:@ %a"
+                    Name.print name
+                    print t1
+                    print t2
+                end;
               | Equation _ ->
                 Misc.fatal_errorf "Environment contains equation for %a \
                     without preceding definition:@ %a"
                   Name.print name
                   print t2)
       in
+      let bindings_in_t1_and_not_in_t2_are_existential =
+        let names =
+          Name.Set.diff (Name.Map.keys t1.names_to_types)
+            (Name.Map.keys t2.names_to_types)
+        in
+        Name.Set.for_all (fun name ->
+            let _ty, binding_type = find_exn t name in
+            match binding_type with
+            | Normal -> false
+            | Existential -> true)
+          names
+      in
+      if not bindings_in_t1_and_not_in_t2_are_existential then begin
+        Misc.fatal_errorf "%a is/are only defined in the first of these two \
+            environments, which have been passed to [meet], yet it \
+            is not marked existential:@ %a@ and:@ %a"
+          Name.print name
+          print t1
+          print t2
+      end;
       let cse_to_names =
         Flambda_primitive.With_fixed_value.Map.union_merge
           (fun name1 name2 ->
@@ -773,11 +839,21 @@ end) = struct
       let t =
         { t with
           cse_to_names;
+          existentials;
           existential_freshening;
         }
       in
       invariant t;
       t
+
+(*
+
+New Env_base module - no existentials, no freshening
+ -- maybe this is just Typing_env?
+
+Meet and join move to Env_extension
+
+*)
 
   let join (t1 : typing_environment) (t2 : typing_environment)
         join_scope_level : typing_environment =
