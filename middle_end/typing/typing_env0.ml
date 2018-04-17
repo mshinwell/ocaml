@@ -740,7 +740,7 @@ end) = struct
     let were_existentials =
       Name.Set.disjoint_union t.were_existentials bound_names
     in
-
+    ...
 
 
 
@@ -909,12 +909,15 @@ Meet and join move to Env_extension
       invariant t;
       t
 
+  let of_env_extension ~resolver env_extension scope_level =
+    match env_extension.typing_env with
+    | None -> create ~resolver
+    | Some t -> open_existentials t scope_level
+
   let add_env_extension t env_extension scope_level =
     let t' =
-      Typing_env_extension.to_typing_environment ~resolver:t.resolver
-        env_extension
+      of_env_extension ~resolver:t.resolver env_extension scope_level
     in
-    (* XXX *)
     meet t t' scope_level
 
   let to_env_extension t : env_extension =

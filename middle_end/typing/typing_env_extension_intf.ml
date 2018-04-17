@@ -77,10 +77,5 @@ module type S = sig
 
   val remove : t -> Name.t -> t
 
-  val to_typing_environment
-     : resolver:(Export_id.t -> flambda_type option)
-    -> t
-    -> typing_environment
-
   val print : Format.formatter -> t -> unit
 end
