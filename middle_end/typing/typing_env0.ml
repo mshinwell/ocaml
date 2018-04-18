@@ -706,6 +706,7 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
+(*
   let open_existentials t level =
     let existentials_by_sublevel =
       match
@@ -741,6 +742,7 @@ end) = struct
       Name.Set.disjoint_union t.were_existentials bound_names
     in
     ...
+*)
 
 
 
@@ -846,15 +848,6 @@ end) = struct
       invariant t;
       t
 
-(*
-
-New Env_base module - no existentials, no freshening
- -- maybe this is just Typing_env?
-
-Meet and join move to Env_extension
-
-*)
-
   let join (t1 : typing_environment) (t2 : typing_environment)
         join_scope_level : typing_environment =
     assert (Scope_level.(>=) (max_level t1) join_scope_level);
@@ -912,18 +905,78 @@ Meet and join move to Env_extension
   let of_env_extension ~resolver env_extension scope_level =
     match env_extension.typing_env with
     | None -> create ~resolver
-    | Some t -> open_existentials t scope_level
 
   let add_env_extension t env_extension scope_level =
-    let t' =
-      of_env_extension ~resolver:t.resolver env_extension scope_level
+    let _freshening, at_or_after_cut_point =
+      Scope_level.Map.fold
+        (fun level by_sublevel (freshening, at_or_after_cut_point) ->
+          let freshening, by_sublevel =
+            Scope_level.Sublevel.Map.fold
+              (fun sublevel
+                   ((name : Name.t), (entry : typing_environment_entry0))
+                   (freshening, by_sublevel) ->
+                match entry with
+                | Equation ty ->
+                  let ty = T.rename_variables ty freshening in
+                  let by_sublevel =
+                    Scope_level.Sublevel.Map.add sublevel (name, Equation ty)
+                      by_sublevel
+                  in
+                  freshening, by_sublevel
+                | Definition ty ->
+                  let ty = T.rename_variables ty freshening in
+                  let freshening, fresh_name =
+                    match name with
+                    | Var var ->
+                      let fresh_name = Variable.rename var in
+                      let freshening =
+                        Variable.Map.add name fresh_name freshening
+                      in
+                      freshening, fresh_name
+                    | Symbol _ ->
+                      Misc.fatal_errorf "[Definition]s of symbols are not \
+                          expected in environment extensions:@ %a"
+                        print_env_extension env_extension
+                  in
+                  let by_sublevel =
+                    Scope_level.Sublevel.Map.add sublevel (name, Definition ty)
+                      by_sublevel
+                  in
+                  freshening, by_sublevel)
+              by_sublevel
+              (freshening, result)
+          in
+          let at_or_after_cut_point =
+            Scope_level.Map.add level by_sublevel at_or_after_cut_point
+          in
+          freshening, at_or_after_cut_point)
+        env_extension.at_or_after_cut_point
+        (Variable.Map.empty, Scope_level.Map.empty)
     in
+
+
     meet t t' scope_level
 
   let to_env_extension t : env_extension =
     { typing_judgements = Some t;
     }
 
+  let cut t ~existential_if_defined_at_or_later_than : env_extension =
+    let _before_cut_point, at_cut_point, after_cut_point =
+      Scope_level.Map.split existential_if_defined_at_or_later_than
+        t.levels_to_entries
+    in
+    let at_or_after_cut_point =
+      match at_cut_point with
+      | None -> after_cut_point
+      | Some by_sublevel ->
+        Scope_level.Map.add existential_if_defined_at_or_later_than
+          by_sublevel after_cut_point
+    in
+    { at_or_after_cut_point;
+    }
+
+(*
   let cut t ~existential_if_defined_at_or_later_than =
 (*
 Format.eprintf "Cutting environment at %a: %a\n%!"
@@ -990,6 +1043,7 @@ Format.eprintf "Result is: %a\n%!" print t
 *)
     invariant t;
     t
+*)
 
   let free_names_transitive t ty =
     let all_names = ref (Name_occurrences.create ()) in

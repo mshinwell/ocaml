@@ -259,23 +259,22 @@ end) = struct
     | Equation of t
     | CSE of Flambda_primitive.With_fixed_value.t
 
+  and levels_to_entries =
+    (Name.t * typing_environment_entry)
+      Scope_level.Sublevel.Map.t Scope_level.Map.t
+
   and typing_environment = {
     resolver : (Export_id.t -> t option);
     names_to_types :
       (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
     cse_to_names : Name.t Flambda_primitive.With_fixed_value.Map.t;
-    levels_to_entries :
-      (Name.t * typing_environment_entry)
-        Scope_level.Sublevel.Map.t Scope_level.Map.t;
+    levels_to_entries : levels_to_entries;
     next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
     were_existentials : Name.Set.t;
   }
 
   and env_extension = {
-    (* The "option" is so that we don't need to pass [resolver] to lots of
-       the type-constructing functions. *)
-    typing_env : typing_environment option;
-
+    at_or_after_cut_point : levels_to_entries;
   }
 
   module Name_or_export_id = struct
