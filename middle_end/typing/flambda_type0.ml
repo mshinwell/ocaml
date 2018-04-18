@@ -27,6 +27,7 @@ module Int64 = Numbers.Int64
 module K = Flambda_kind
 
 module Real_typing_environment0 = Typing_env0
+module Real_typing_env_extension = Typing_env_extension
 module Real_meet_and_join_value = Meet_and_join_value
 module Real_meet_and_join_naked_number = Meet_and_join_naked_number
 module Real_meet_and_join_fabricated = Meet_and_join_fabricated
@@ -2004,6 +2005,7 @@ result
           else if t2.descr == descr then t2
           else { t1 with descr; }
         in
+(*
         let free_names_in_t =
           Name_occurrences.everything (free_names t)
         in
@@ -2043,6 +2045,7 @@ result
             required_to_close
             env_extension_from_meet
         in
+*)
         let env_extension_domain =
           Typing_env_extension.domain env_extension_from_meet
         in
@@ -2337,102 +2340,10 @@ result
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
-  end = struct
-    type t = env_extension
-
-    let create = create_env_extension
-
-    let singleton_env_extension ~resolver name scope_level ty =
-      { typing_judgements =
-          Some (Typing_env0.singleton0 ~resolver name scope_level ty
-            ~must_be_closed:false);
-      }
-
-    let add_or_replace ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton_env_extension ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add_or_replace typing_judgements name
-              scope_level ty);
-        }
-
-    let invariant t =
-      match t.typing_judgements with
-      | None -> ()
-      | Some typing_judgements ->
-        assert (not typing_judgements.must_be_closed);
-        Typing_env0.invariant typing_judgements
-
-    let singleton = singleton_env_extension
-
-    let add ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add typing_judgements name scope_level ty);
-        }
-
-    let add_or_replace_meet ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add_or_replace_meet typing_judgements
-              name scope_level ty);
-        }
-
-    let meet = Meet_and_join.meet_env_extension
-
-    let equal ~equal_type
-          { typing_judgements = typing_judgements1;
-          }
-          { typing_judgements = typing_judgements2;
-          } =
-      Misc.Stdlib.Option.equal (Typing_env0.equal ~equal_type)
-        typing_judgements1 typing_judgements2
-
-    let phys_equal { typing_judgements = typing_judgements1; }
-          { typing_judgements = typing_judgements2; } =
-      typing_judgements1 == typing_judgements2
-        || match typing_judgements1, typing_judgements2 with
-           | None, None -> true
-           | None, Some _ | Some _, None -> false
-           | Some env1, Some env2 ->
-             Typing_env0.phys_equal env1 env2
-
-    let print = print_env_extension
-
-    let remove ({ typing_judgements; } as t) name =
-      match typing_judgements with
-      | None -> t
-      | Some typing_judgements ->
-        let typing_judgements =
-          Typing_env0.remove typing_judgements name
-        in
-        { typing_judgements = Some typing_judgements; }
-
-    let to_typing_environment ~resolver { typing_judgements; } =
-      match typing_judgements with
-      | None -> Typing_env0.create ~resolver
-      | Some typing_judgements -> typing_judgements
-
-    let domain { typing_judgements; } =
-      match typing_judgements with
-      | None -> Name.Set.empty
-      | Some typing_judgements ->
-        Name.Map.keys typing_judgements.names_to_types
-
-    let fold t ~init ~f =
-      match t.typing_judgements with
-      | None -> init
-      | Some typing_judgements ->
-        Name.Map.fold (fun name (level, ty) acc ->
-            f acc name level ty)
-          typing_judgements.names_to_types
-          init
-  end and Type_equality : sig
+  end = Real_typing_env_extension.Make (struct
+    include T
+  end) (Meet_and_join) (Type_equality)
+  and Type_equality : sig
     include Type_equality_intf.S
       with type flambda_type := flambda_type
   end = Real_type_equality.Make (T)
@@ -2474,7 +2385,8 @@ result
                               (fun (block : singleton_block)
                                     : singleton_block ->
                                 let env_extension =
-                                  Typing_env_extension.meet ~resolver:env.resolver
+                                  Typing_env_extension.meet
+                                    ~resolver:env.resolver
                                     block.env_extension env_extension_to_add
                                 in
                                 { block with env_extension; })
@@ -2496,7 +2408,8 @@ result
                         (fun ({ env_extension; } : immediate_case)
                               : immediate_case ->
                           let env_extension =
-                            Typing_env_extension.meet ~resolver:env.resolver
+                            Typing_env_extension.meet
+                              ~resolver:env.resolver
                               env_extension env_extension_to_add
                           in
                           { env_extension; })

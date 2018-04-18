@@ -606,6 +606,7 @@ end) = struct
         existentials = Name.Set.add name t.existentials;
       }
 
+(*
   let add_env_extension_no_meet_required t env_extension scope_level =
     Typing_env_extension.fold env_extension ~init:t
       ~f:(fun t name (binding_type : Flambda_type0_internal_intf.binding_type)
@@ -617,6 +618,7 @@ end) = struct
         | Equation ty ->
           add_with_binding_type t name scope_level binding_type
             (Equation ty))
+*)
 
   let singleton ~resolver name scope_level binding =
     add (create ~resolver) name scope_level binding
@@ -706,262 +708,44 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
-(*
-  let open_existentials t level =
-    let existentials_by_sublevel =
-      match
-        Scope_level.Map.find Scope_level.existential t.levels_to_entries
-      with
-      | exception Not_found -> Scope_level.Sublevel.Map.empty
-      | existentials -> existentials
-    in
-    let levels_to_entries =
-      Scope_level.Map.remove Scope_level.existential t.levels_to_entries
-    in
-    let bound_names =
-      Scope_level.Sublevel.Map.fold
-        (fun _sublevel (name, _entry) bound_names ->
-          Name.Set.add name bound_names)
-        existentials_by_sublevel
-        Name.Set.empty
-    in
-    let fresh_names =
-      Name.Set.fold (fun (bound_name : Name.t) fresh_names ->
-          match bound_name with
-          | Symbol _ ->
-            Misc.fatal_errorf "Existentially-bound name should not be a
-                [Symbol]: %a@ in environment:@ %a"
-              Name.print bound_name
-              print t
-          | Var var ->
-            let fresh_name = Name.var (Variable.rename var) in
-            Name.Set.add fresh_name fresh_names)
-        bound_names
-    in
-    let were_existentials =
-      Name.Set.disjoint_union t.were_existentials bound_names
-    in
-    ...
-*)
-
-
-
-  let meet (t1 : typing_environment) (t2 : typing_environment)
-        meet_scope_level : typing_environment =
-    assert (Scope_level.(>=) (max_level t1) meet_scope_level);
-    assert (Scope_level.(>=) (max_level t2) meet_scope_level);
-    if fast_equal t1 t2 then t1
-    else if is_empty t1 then t2
-    else if is_empty t2 then t1
-    else
-      let t =
-        fold t2 ~init:t1
-          ~f:(fun t name binding_type level
-                  (entry : typing_environment_entry0) ->
-            match find0_opt t name with
-            | Some (existing_binding_type, existing_level, existing_entry) ->
-              assert (existing_binding_type = binding_type);
-              begin match existing_entry, entry with
-              | Definition ty1, Definition ty2 ->
-                assert (Type_equality.equal ty1 ty2);
-                assert (Scope_level.With_sublevel.equal existing_level level);
-                t
-              | Definition ty1, Equation ty2
-              | Equation ty1, Equation ty2 ->
-                let meet_ty, env_extension =
-                  Meet_and_join.meet ~bound_name:name (t, ty1) (t2, ty2)
-                in
-                let t =
-                  add_env_extension_no_meet_required t env_extension
-                    meet_scope_level
-                in
-                add_with_binding_type t name meet_scope_level binding_type
-                  (Equation meet_ty)
-              | Equation _, Definition _ ->
-                Misc.fatal_errorf "Environments disagree on the definition \
-                    point of %a:@ %a@ and:@ %a"
-                  Name.print name
-                  print t1
-                  print t2
-              end
-            | None ->
-              match entry with
-              | Definition ty ->
-                begin match binding_type with
-                | Existential ->
-                  add_with_binding_type t name level Existential
-                    (Definition ty)
-                | Normal ->
-                  Misc.fatal_errorf "%a is only defined in the second of these \
-                      two environments, which have been passed to [meet], yet \
-                      it is not marked existential:@ %a@ and:@ %a"
-                    Name.print name
-                    print t1
-                    print t2
-                end;
-              | Equation _ ->
-                Misc.fatal_errorf "Environment contains equation for %a \
-                    without preceding definition:@ %a"
-                  Name.print name
-                  print t2)
-      in
-      let bindings_in_t1_and_not_in_t2_are_existential =
-        let names =
-          Name.Set.diff (Name.Map.keys t1.names_to_types)
-            (Name.Map.keys t2.names_to_types)
-        in
-        Name.Set.for_all (fun name ->
-            let _ty, binding_type = find_exn t name in
-            match binding_type with
-            | Normal -> false
-            | Existential -> true)
-          names
-      in
-      if not bindings_in_t1_and_not_in_t2_are_existential then begin
-        Misc.fatal_errorf "%a is/are only defined in the first of these two \
-            environments, which have been passed to [meet], yet it \
-            is not marked existential:@ %a@ and:@ %a"
-          Name.print name
-          print t1
-          print t2
-      end;
-      let cse_to_names =
-        Flambda_primitive.With_fixed_value.Map.union_merge
-          (fun name1 name2 ->
-            assert (mem t name1);
-            assert (mem t name2);
-            let level1 = scope_level_exn t1 name1 in
-            let level2 = scope_level_exn t2 name2 in
-            (* Use the outermost binding. *)
-            if Scope_level.With_sublevel.(>) level1 level2 then name2
-            else name1)
-          t1.cse_to_names t2.cse_to_names
-      in
-      let existential_freshening = t1.existential_freshening (* XXX *) in
-      let t =
-        { t with
-          cse_to_names;
-          existentials;
-          existential_freshening;
-        }
-      in
-      invariant t;
-      t
-
-  let join (t1 : typing_environment) (t2 : typing_environment)
-        join_scope_level : typing_environment =
-    assert (Scope_level.(>=) (max_level t1) join_scope_level);
-    assert (Scope_level.(>=) (max_level t2) join_scope_level);
-    if fast_equal t1 t2 then t1
-    else if is_empty t1 then create_using_resolver_from t1
-    else if is_empty t2 then create_using_resolver_from t1
-    else
-      let t =
-        fold t2 ~init:(create_using_resolver_from t1)
-          ~f:(fun t name binding_type level
-                  (entry : typing_environment_entry0) ->
-            match find0_opt t name with
-            | Some (existing_binding_type, existing_level, existing_entry) ->
-              assert (existing_binding_type = binding_type);
-              begin match existing_entry, entry with
-              | Definition ty1, Definition ty2 ->
-                assert (Type_equality.equal ty1 ty2);
-                assert (Scope_level.With_sublevel.equal existing_level level);
-                t
-              | Definition ty1, Equation ty2
-              | Equation ty1, Equation ty2 ->
-                let join_ty = Meet_and_join.join (t, ty1) (t2, ty2) in
-                add_with_binding_type t name join_scope_level binding_type
-                  (Equation join_ty)
-              | Equation _, Definition _ ->
-                Misc.fatal_errorf "Environments disagree on the definition \
-                    point of %a:@ %a@ versus:@ %a"
-                  Name.print name
-                  print t1
-                  print t2
-              end
-            | None -> t)
-      in
-      let cse_to_names =
-        Flambda_primitive.With_fixed_value.Map.inter_merge
-          (fun name1 name2 ->
-            let level1 = scope_level_exn t1 name1 in
-            let level2 = scope_level_exn t2 name2 in
-            (* Keep the outermost binding. *)
-            if Scope_level.With_sublevel.(>) level1 level2 then name2
-            else name1)
-          t1.cse_to_names t2.cse_to_names
-      in
-      let existential_freshening = t1.existential_freshening (* XXX *) in
-      let t =
-        { t with
-          cse_to_names;
-          existential_freshening;
-        }
-      in
-      invariant t;
-      t
-
-  let of_env_extension ~resolver env_extension scope_level =
-    match env_extension.typing_env with
-    | None -> create ~resolver
-
   let add_env_extension t env_extension scope_level =
-    let _freshening, at_or_after_cut_point =
+    let _freshening, t =
       Scope_level.Map.fold
-        (fun level by_sublevel (freshening, at_or_after_cut_point) ->
-          let freshening, by_sublevel =
-            Scope_level.Sublevel.Map.fold
-              (fun sublevel
-                   ((name : Name.t), (entry : typing_environment_entry0))
-                   (freshening, by_sublevel) ->
-                match entry with
-                | Equation ty ->
-                  let ty = T.rename_variables ty freshening in
-                  let by_sublevel =
-                    Scope_level.Sublevel.Map.add sublevel (name, Equation ty)
-                      by_sublevel
-                  in
-                  freshening, by_sublevel
-                | Definition ty ->
-                  let ty = T.rename_variables ty freshening in
-                  let freshening, fresh_name =
-                    match name with
-                    | Var var ->
-                      let fresh_name = Variable.rename var in
-                      let freshening =
-                        Variable.Map.add name fresh_name freshening
-                      in
-                      freshening, fresh_name
-                    | Symbol _ ->
-                      Misc.fatal_errorf "[Definition]s of symbols are not \
-                          expected in environment extensions:@ %a"
-                        print_env_extension env_extension
-                  in
-                  let by_sublevel =
-                    Scope_level.Sublevel.Map.add sublevel (name, Definition ty)
-                      by_sublevel
-                  in
-                  freshening, by_sublevel)
-              by_sublevel
-              (freshening, result)
-          in
-          let at_or_after_cut_point =
-            Scope_level.Map.add level by_sublevel at_or_after_cut_point
-          in
-          freshening, at_or_after_cut_point)
+        (fun level by_sublevel (freshening, t) ->
+          Scope_level.Sublevel.Map.fold
+            (fun sublevel
+                 ((name : Name.t), (entry : typing_environment_entry0)) t ->
+              match entry with
+              | Equation ty ->
+                let ty = T.rename_variables ty freshening in
+                let t = add t name level (Equation ty) in
+                freshening, t
+              | Definition ty ->
+                let ty = T.rename_variables ty freshening in
+                let freshening, fresh_name =
+                  match name with
+                  | Var var ->
+                    let fresh_name = Variable.rename var in
+                    let freshening =
+                      Variable.Map.add name fresh_name freshening
+                    in
+                    freshening, fresh_name
+                  | Symbol _ ->
+                    Misc.fatal_errorf "[Definition]s of symbols are not \
+                        expected in environment extensions:@ %a"
+                      print_env_extension env_extension
+                in
+                let t = add t name level (Definition ty) in
+                freshening, t)
+            by_sublevel
+            (freshening, result))
         env_extension.at_or_after_cut_point
-        (Variable.Map.empty, Scope_level.Map.empty)
+        (Variable.Map.empty, t)
     in
-
-
-    meet t t' scope_level
-
-  let to_env_extension t : env_extension =
-    { typing_judgements = Some t;
-    }
 
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
+    (* CR mshinwell: Add a split which only returns one map, the side we
+       would like. *)
     let _before_cut_point, at_cut_point, after_cut_point =
       Scope_level.Map.split existential_if_defined_at_or_later_than
         t.levels_to_entries
@@ -975,75 +759,6 @@ end) = struct
     in
     { at_or_after_cut_point;
     }
-
-(*
-  let cut t ~existential_if_defined_at_or_later_than =
-(*
-Format.eprintf "Cutting environment at %a: %a\n%!"
-Scope_level.print existential_if_defined_at_or_later_than
-print_typing_environment t;
-*)
-    let new_existentials =
-      Scope_level.Map.fold
-        (fun scope_level by_sublevel resulting_existentials ->
-          let will_be_existential =
-            Scope_level.(>=)
-              scope_level existential_if_defined_at_or_later_than
-          in
-          if will_be_existential then
-            let names =
-              Name.Set.of_list (
-                List.map (fun (name, _ty) -> name)
-                  (Scope_level.Sublevel.Map.data by_sublevel))
-            in
-            let non_symbols = Name.variables_only names in
-            Name.Set.union non_symbols resulting_existentials
-          else
-            resulting_existentials)
-        t.levels_to_entries
-        Name.Set.empty
-    in
-    let existential_freshening =
-      Name.Set.fold (fun (name : Name.t) freshening ->
-          match name with
-          | Symbol _ ->
-            Misc.fatal_error "Symbols cannot be existentially bound"
-          | Var var ->
-            let _new_var, freshening =
-              Freshening.add_variable freshening var
-            in
-            freshening)
-        new_existentials
-        t.existential_freshening
-    in
-    let existentials = Name.Set.union t.existentials new_existentials in
-    let cse_to_names =
-      (* CSE equations may never reference existentially-bound names. *)
-      Flambda_primitive.With_fixed_value.Map.filter (fun prim name ->
-          let names_in_prim =
-            Flambda_primitive.With_fixed_value.free_names prim
-          in
-          let names = Name.Set.add name names_in_prim in
-          Name.Set.is_empty (Name.Set.inter names existentials))
-        t.cse_to_names
-    in
-    let t =
-      (* XXX fix freshening as required *)
-      { resolver = t.resolver;
-        names_to_types = t.names_to_types;
-        levels_to_entries = t.levels_to_entries;
-        next_sublevel_by_level = t.next_sublevel_by_level;
-        cse_to_names;
-        existentials;
-        existential_freshening;
-      }
-    in
-(*
-Format.eprintf "Result is: %a\n%!" print t
-*)
-    invariant t;
-    t
-*)
 
   let free_names_transitive t ty =
     let all_names = ref (Name_occurrences.create ()) in
