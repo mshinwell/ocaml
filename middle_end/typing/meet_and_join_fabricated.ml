@@ -344,8 +344,10 @@ struct
             begin match result with
             | Ok (params, _params_changed, result, result_env_extension,
                   env_extension_from_meet) ->
-              (* For the arbitrary choice, we pick the inlinable declaration,
-                 since it gives more information. *)
+              (* We pick the inlinable declaration, since it gives more
+                 information.  (Note that this matches up with the fact
+                 that the parameter names passed to [cannot_prove_different]
+                 are for the inlinable declaration.) *)
               let params =
                 List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
                   inlinable.params
@@ -380,7 +382,8 @@ struct
       if env_extension1 == env_extension2 && closure1 == closure2 then begin
         closure1
       end else begin
-        let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
+        let produce_non_inlinable ~params1 ~params2
+              ~param_names1 ~param_names2 ~result1 ~result2
               ~result_env_extension1 ~result_env_extension2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
           let same_arity = List.compare_lengths params1 params2 = 0 in
@@ -432,6 +435,8 @@ struct
             produce_non_inlinable
               ~params1:non_inlinable1.params
               ~params2:non_inlinable2.params
+              ~param_names1:None
+              ~param_names2:None
               ~result1:non_inlinable1.result
               ~result2:non_inlinable2.result
               ~result_env_extension1:non_inlinable1.result_env_extension
@@ -443,9 +448,12 @@ struct
              field projection *)
           | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
             let params1 = List.map snd inlinable.params in
+            let param_names1 = List.map fst inlinable.params in
             produce_non_inlinable
               ~params1
               ~params2:non_inlinable.params
+              ~param_names1:(Some param_names1)
+              ~param_names2:None
               ~result1:inlinable.result
               ~result2:non_inlinable.result
               ~result_env_extension1:inlinable.result_env_extension
@@ -457,9 +465,13 @@ struct
             then begin
               let params1 = List.map snd inlinable1.params in
               let params2 = List.map snd inlinable2.params in
+              let param_names1 = List.map fst inlinable1.params in
+              let param_names2 = List.map fst inlinable2.params in
               produce_non_inlinable
                 ~params1
                 ~params2
+                ~param_names1:(Some param_names1)
+                ~param_names2:(Some param_names2)
                 ~result1:inlinable1.result
                 ~result2:inlinable2.result
                 ~result_env_extension1:inlinable1.result_env_extension
@@ -502,26 +514,53 @@ struct
               (* CR mshinwell: Add documentation for this -- the types provide
                  information about the calling context rather than the code of
                  the function. *)
-              let result_env_extension =
-                Meet_and_join.join_env_extension ~resolver:env1.resolver
-                  inlinable1.result_env_extension
-                  inlinable2.result_env_extension
-              in
               let params =
                 List.map2 (fun (param1, t1) (param2, t2) ->
                     assert (Parameter.equal param1 param2);
-                    let t = Meet_and_join.join (env1, t1) (env2, t2) in
+                    let t =
+                      Meet_and_join.join env env_extension1 env_extension2
+                        t1 t2
+                    in
                     param1, t)
                   inlinable1.params
                   inlinable2.params
               in
+              let env_with_params =
+                let scope_level = Typing_env0.max_level env in
+                match param_names with
+                | None -> env
+                | Some param_names ->
+                  List.fold_left2 (fun env param param_ty ->
+                      let param_name = Parameter.name param in
+                      Typing_env0.add env param_name level
+                        (Definition param_ty))
+                    env
+                    param_names params
+              in
+              let result_env_extension =
+                Typing_env_extension.join env_with_params
+                  inlinable1.result_env_extension
+                  inlinable2.result_env_extension
+              in
+              let result_env =
+                Typing_env0.add_env_extension env_with_params
+                  result_env_extension
+              in
               let result =
+                let result_env_extension1 =
+                  Typing_env_extension.diff env_with_params
+                    inlinable1.result_env_extension
+                    result_env_extension
+                in
+                let result_env_extension2 =
+                  Typing_env_extension.diff env_with_params
+                    inlinable2.result_env_extension
+                    result_env_extension
+                in
                 List.map2 (fun t1 t2 ->
-                    Meet_and_join.join
-                      (Typing_env_extension.to_typing_environment ~resolver:env1.resolver
-                         inlinable1.result_env_extension, t1)
-                      (Typing_env_extension.to_typing_environment ~resolver:env2.resolver
-                         inlinable2.result_env_extension, t2))
+                    Meet_and_join.join result_env
+                      result_env_extension1 result_env_extension2
+                      t1 ty)
                   inlinable1.result
                   inlinable2.result
               in
