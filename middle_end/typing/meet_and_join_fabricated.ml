@@ -107,7 +107,7 @@ struct
        function type (with a surrogate) propagated from the first round is
        put into a meet with a type for the same function, but a new
        surrogate. *)
-    let meet_closure env1 env2
+    let meet_closure env
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_bottom.t =
       if env1 == env2 && closure1 == closure2 then begin
@@ -125,10 +125,26 @@ struct
           let params : _ Or_bottom.t =
             if not same_arity then Bottom
             else
+              let params2_to_params1_freshening, param_names =
+                match param_names1, param_names2 with
+                | None, None -> Variable.Map.empty
+                | None, Some param_names2 -> Variable.Map.empty, param_names2
+                | Some param_names1, None -> Variable.Map.empty, param_names1
+                | Some param_names1, Some param_names2 ->
+                  let param_names1 =
+                    List.map (fun (param, _ty) -> Parameter.var param)
+                      param_names1
+                  in
+                  let param_names2 =
+                    List.map (fun (param, _ty) -> Parameter.var param)
+                      param_names2
+                  in
+                  Variable.Map.of_list (List.combine param_names2 param_names1)
+              in
               let params =
                 List.map2 (fun t1 t2 ->
                     let t, new_env_extension_from_meet =
-                      Meet_and_join.meet (env1, t1) (env2, t2)
+                      Meet_and_join.meet env t1 t2
                     in
                     if not (t == t1) then begin
                       params_changed := join_changes !params_changed Left
@@ -137,94 +153,93 @@ struct
                       params_changed := join_changes !params_changed Right
                     end;
                     env_extension_from_meet :=
-                      Meet_and_join.meet_env_extension ~resolver
+                      Meet_and_join.meet_env_extension env
                         new_env_extension_from_meet !env_extension_from_meet;
                     t)
                   params1
                   params2
               in
               if has_bottom params then Bottom
-              else Ok params
+              else Ok (params, param_names, params2_to_params1_freshening)
           in
-          let env_for_result env ~params ~param_names =
-            match param_names with
-            | None -> env
-            | Some param_names ->
-              List.fold_left2 (fun env param param_ty ->
-                  let param_name = Parameter.name param in
-                  (* CR mshinwell: This level shouldn't be hard-coded *)
-                  let level = Scope_level.initial in
-                  Typing_env0.add env param_name level (Definition param_ty))
-                env
-                param_names params
-          in
-          let result_changed = ref Neither in
-          let result_scope_level = Scope_level.initial in
-          let result : _ Or_bottom.t =
-            if not same_num_results then Bottom
-            else
-              let result =
-                List.map2 (fun t1 t2 ->
-                    let result_env1 =
-                      Typing_env0.add_env_extension
-                        (env_for_result env1 ~params:params1
-                          ~param_names:param_names1)
-                        result_env_extension1
-                        result_scope_level
-                    in
-                    let result_env2 =
-                      Typing_env0.add_env_extension
-                        (env_for_result env2 ~params:params2
-                          ~param_names:param_names2)
-                        result_env_extension2
-                        result_scope_level
-                    in
-                    let t, new_env_extension_from_meet =
-                      Meet_and_join.meet (result_env1, t1) (result_env2, t2)
-                    in
-                    if not (t == t1) then begin
-                      result_changed := join_changes !result_changed Left
-                    end;
-                    if not (t == t2) then begin
-                      result_changed := join_changes !result_changed Right
-                    end;
-                    env_extension_from_meet :=
-                      Meet_and_join.meet_env_extension ~resolver
-                        new_env_extension_from_meet !env_extension_from_meet;
-                    t)
-                  result1
-                  result2
+          match params with
+          | Bottom -> Bottom
+          | Ok (param_tys, param_names, params2_to_params1_freshening) ->
+            let result_env_extension2 =
+              Typing_env_extension.rename_variables_not_occurring_in_domain
+                result_env_extension2 params2_to_params1_freshening
+            in
+            let result_env_extension =
+              Meet_and_join.meet_env_extension result_env_extension1
+                result_env_extension2
+            in
+            let result_env_extension_changed : changes =
+              let changed1 =
+                not (Typing_env_extension.phys_equal
+                  result_env_extension1 result_env_extension)
               in
-              if has_bottom result then Bottom
-              else Ok result
-          in
-          let result_env_extension =
-            Meet_and_join.meet_env_extension ~resolver:env1.resolver
-              result_env_extension1 result_env_extension2
-          in
-          let result_env_extension_changed : changes =
-            let changed1 =
-              not (Typing_env_extension.phys_equal
-                result_env_extension1 result_env_extension)
+              let changed2 =
+                not (Typing_env_extension.phys_equal
+                  result_env_extension2 result_env_extension)
+              in
+              match changed1, changed2 with
+              | false, false -> Neither
+              | true, false -> Left
+              | false, true -> Right
+              | true, true -> Both
             in
-            let changed2 =
-              not (Typing_env_extension.phys_equal
-                result_env_extension2 result_env_extension)
+            let result_changed = ref Neither in
+            let result : _ Or_bottom.t =
+              if not same_num_results then Bottom
+              else
+                let result =
+                  List.map2 (fun t1 t2 ->
+                      let env_with_params =
+                        let scope_level =
+                          Typing_env0.max_level env
+                        in
+                        match param_names with
+                        | None -> env
+                        | Some param_names ->
+                          List.fold_left2 (fun env param param_ty ->
+                              let param_name = Parameter.name param in
+                              Typing_env0.add env param_name level
+                                (Definition param_ty))
+                            env
+                            param_names params
+                      in
+                      let result_env =
+                        Typing_env0.add_env_extension env_with_params
+                          result_env_extension1
+                      in
+                      let t, new_env_extension_from_meet =
+                        Meet_and_join.meet result_env t1 t2
+                      in
+                      if not (t == t1) then begin
+                        result_changed := join_changes !result_changed Left
+                      end;
+                      if not (t == t2) then begin
+                        result_changed := join_changes !result_changed Right
+                      end;
+                      env_extension_from_meet :=
+                        Meet_and_join.meet_env_extension
+                          new_env_extension_from_meet !env_extension_from_meet;
+                      t)
+                    result1
+                    result2
+                in
+                if has_bottom result then Bottom
+                else Ok result
             in
-            match changed1, changed2 with
-            | false, false -> Neither
-            | true, false -> Left
-            | false, true -> Right
-            | true, true -> Both
-          in
-          match params, result with
-          | Ok params, Ok result ->
-            let changed =
-              join_changes !params_changed
-                (join_changes !result_changed result_env_extension_changed)
-            in
-            Ok (params, changed, result, result_env_extension, !env_extension_from_meet)
-          | _, _ -> Bottom
+            match result with
+            | Ok result ->
+              let changed =
+                join_changes !params_changed
+                  (join_changes !result_changed result_env_extension_changed)
+              in
+              Ok (param_tys, changed, result, result_env_extension,
+                !env_extension_from_meet)
+            | Bottom -> Bottom
         in
         let function_decls : _ Or_bottom.t =
           match closure1.function_decls, closure2.function_decls with
@@ -428,6 +443,8 @@ struct
               ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
               ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
           | Non_inlinable (Some non_inlinable), Inlinable inlinable
+          (* CR mshinwell: This should use a record pattern match rather than
+             field projection *)
           | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
             let params1 = List.map snd inlinable.params in
             produce_non_inlinable
@@ -813,7 +830,7 @@ struct
           closure_elements;
         }
 
-    let meet_of_kind_foo env1 env2
+    let meet_of_kind_foo env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_bottom.t =
       let resolver = env1.resolver in
@@ -825,7 +842,7 @@ struct
                   ({ env_extension = env_extension2; } : discriminant_case)
                   : discriminant_case ->
               let env_extension =
-                Meet_and_join.meet_env_extension ~resolver
+                Meet_and_join.meet_env_extension env
                   env_extension1 env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
@@ -834,46 +851,55 @@ struct
             discriminants2
         in
         begin match Discriminant.Map.get_singleton discriminants with
-        | None -> Ok (Discriminant discriminants, Typing_env_extension.create ())
+        | None ->
+          Ok (Discriminant discriminants, Typing_env_extension.create ())
         | Some (discriminant, discriminant_case) ->
           let env_extension_from_meet = discriminant_case.env_extension in
           let discriminants =
             Discriminant.Map.singleton discriminant
-              ({ env_extension = Typing_env_extension.create (); } : discriminant_case)
+              ({ env_extension = Typing_env_extension.create (); }
+                : discriminant_case)
           in
           Ok (Discriminant discriminants, env_extension_from_meet)
         end
       | Set_of_closures set1, Set_of_closures set2 ->
-        begin match meet_set_of_closures env1 env2 set1 set2 with
+        begin match meet_set_of_closures env set1 set2 with
         | Ok (set_of_closures, env_extension_from_meet) ->
-          if set_of_closures == set1 then Ok (of_kind1, env_extension_from_meet)
-          else if set_of_closures == set2 then Ok (of_kind2, env_extension_from_meet)
-          else Ok (Set_of_closures set_of_closures, env_extension_from_meet)
+          if set_of_closures == set1 then
+            Ok (of_kind1, env_extension_from_meet)
+          else if set_of_closures == set2 then
+            Ok (of_kind2, env_extension_from_meet)
+          else
+            Ok (Set_of_closures set_of_closures, env_extension_from_meet)
         | Bottom -> Bottom
         end
       | Closure closure1, Closure closure2 ->
-        begin match meet_closure env1 env2 closure1 closure2 with
+        begin match meet_closure env closure1 closure2 with
         | Ok (closure, env_extension_from_meet) ->
-          if closure == closure1 then Ok (of_kind1, env_extension_from_meet)
-          else if closure == closure2 then Ok (of_kind2, env_extension_from_meet)
-          else Ok (Closure closure, env_extension_from_meet)
+          if closure == closure1 then
+            Ok (of_kind1, env_extension_from_meet)
+          else if closure == closure2 then
+            Ok (of_kind2, env_extension_from_meet)
+          else
+            Ok (Closure closure, env_extension_from_meet)
         | Bottom -> Bottom
         end
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
 
-    let join_of_kind_foo env1 env2
+    let join_of_kind_foo env env_extension1 env_extension2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : of_kind_fabricated Or_unknown.t =
       match of_kind1, of_kind2 with
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.union_merge
-            (fun ({ env_extension = env_extension1; } : discriminant_case)
-                  ({ env_extension = env_extension2; } : discriminant_case)
+            (fun ({ env_extension = env_extension1'; } : discriminant_case)
+                  ({ env_extension = env_extension2'; } : discriminant_case)
                   : discriminant_case ->
               let env_extension =
-                Meet_and_join.join_env_extension ~resolver:env1.resolver
+                Meet_and_join.join_env_extension env
                   env_extension1 env_extension2
+                  env_extension1' env_extension2'
               in
               { env_extension; })
             discriminants1
@@ -881,10 +907,14 @@ struct
         in
         Known (Discriminant discriminants)
       | Set_of_closures set1, Set_of_closures set2 ->
-        let set_of_closures = join_set_of_closures env1 env2 set1 set2 in
+        let set_of_closures =
+          join_set_of_closures env env_extension1 env_extension2 set1 set2
+        in
         Known (Set_of_closures set_of_closures)
       | Closure closure1, Closure closure2 ->
-        let closure = join_closure env1 env2 closure1 closure2 in
+        let closure =
+          join_closure env env_extension1 env_extension2 closure1 closure2
+        in
         Known (Closure closure)
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end)

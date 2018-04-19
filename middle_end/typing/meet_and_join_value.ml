@@ -168,6 +168,7 @@ struct
       assert (Array.length fields1 = Array.length fields2);
       let env_extension_from_meet = ref (Typing_env_extension.create ()) in
       let fields =
+        let env = Typing_env0.add_env_extension env env_extension in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
                (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
@@ -201,6 +202,7 @@ struct
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
+        let env = Typing_env0.add_env_extension env env_extension in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
                (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
@@ -361,27 +363,44 @@ struct
       in
       (* CR mshinwell: If we end up with [Bottom], should that be signalled
          as a judgement? *)
+      (* CR mshinwell: Should we propagate up the meet of equations across all
+         blocks, rather than only propagating upwards in the singleton
+         case? *)
       if is_bottom then Bottom
       else
-        let env_extension_from_meet =
+        let env_extension_from_meet, blocks =
           match immediates with
-          | Unknown -> env_extension_from_meet
+          | Unknown -> env_extension_from_meet, blocks
           | Known imms ->
-            if not (Immediate.Map.is_empty imms) then env_extension_from_meet
-            else  (* CR mshinwell: This should maybe meet across all blocks *)
+            if not (Immediate.Map.is_empty imms) then
+              env_extension_from_meet, blocks
+            else
               match blocks with
-              | Unknown -> env_extension_from_meet
+              | Unknown -> env_extension_from_meet, blocks
               | Known blocks ->
                 match Tag.Map.get_singleton blocks with
-                | None -> env_extension_from_meet
-                | Some (_, Blocks { by_length; }) ->
-                  (* CR mshinwell: This should remove env_extension propagated
-                     upwards from the block cases *)
+                | None -> env_extension_from_meet, blocks
+                | Some (tag, Blocks { by_length; }) ->
                   match Targetint.OCaml.Map.get_singleton by_length with
-                  | None -> env_extension_from_meet
-                  | Some (_, singleton_block) ->
-                    Typing_env_extension.meet env
-                      singleton_block.env_extension env_extension_from_meet
+                  | None -> env_extension_from_meet, blocks
+                  | Some (length, singleton_block) ->
+                    let env_extension_from_meet =
+                      Typing_env_extension.meet env
+                        singleton_block.env_extension env_extension_from_meet
+                    in
+                    let singleton_block : singleton_block =
+                      { singleton_block with
+                        env_extension = Typing_env_extension.create ();
+                      }
+                    in
+                    let by_length =
+                      Targetint.OCaml.Map.singleton length singleton_block
+                    in
+                    let block_cases : block_cases = Blocks { by_length; } in
+                    let blocks : _ Or_unknown.t =
+                      Known (Tag.Map.singleton tag block_cases)
+                    in
+                    env_extension_from_meet, blocks
         in
         Ok ({ blocks; immediates; }, env_extension_from_meet)
 

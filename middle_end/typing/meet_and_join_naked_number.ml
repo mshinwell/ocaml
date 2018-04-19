@@ -101,7 +101,7 @@ struct
 
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env1 _env2
+    let meet_of_kind_foo _env
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : (Immediate.Set.t of_kind_naked_number * env_extension)
@@ -113,7 +113,7 @@ struct
         else Ok (Immediate fs, Typing_env_extension.create ())
       | _, _ -> Bottom
 
-    let join_of_kind_foo _env1 _env2
+    let join_of_kind_foo _env _env_extension1 _env_extension2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : Immediate.Set.t of_kind_naked_number Or_unknown.t =
@@ -137,7 +137,7 @@ struct
     let force_to_kind = force_to_kind_naked_float
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env1 _env2
+    let meet_of_kind_foo _env
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : (Float_by_bit_pattern.Set.t of_kind_naked_number
@@ -149,7 +149,7 @@ struct
         else Ok (Float fs, Typing_env_extension.create ())
       | _, _ -> Bottom
 
-    let join_of_kind_foo _env1 _env2
+    let join_of_kind_foo _env _env_extension1 _env_extension2
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : Float_by_bit_pattern.Set.t of_kind_naked_number Or_unknown.t =
@@ -173,7 +173,7 @@ struct
     let force_to_kind = force_to_kind_naked_int32
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env1 _env2
+    let meet_of_kind_foo _env
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
           : (Int32.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
@@ -184,7 +184,7 @@ struct
         else Ok (Int32 is, Typing_env_extension.create ())
       | _, _ -> Bottom
 
-    let join_of_kind_foo _env1 _env2
+    let join_of_kind_foo _env _env_extension1 _env_extension2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
           : Int32.Set.t of_kind_naked_number Or_unknown.t =
@@ -208,7 +208,7 @@ struct
     let force_to_kind = force_to_kind_naked_int64
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env1 _env2
+    let meet_of_kind_foo _env
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
           : (Int64.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
@@ -219,7 +219,7 @@ struct
         else Ok (Int64 is, Typing_env_extension.create ())
       | _, _ -> Bottom
 
-    let join_of_kind_foo _env1 _env2
+    let join_of_kind_foo _env _env_extension1 _env_extension2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
           : Int64.Set.t of_kind_naked_number Or_unknown.t =
@@ -243,7 +243,7 @@ struct
     let force_to_kind = force_to_kind_naked_nativeint
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env1 _env2
+    let meet_of_kind_foo _env
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : (Targetint.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
@@ -254,7 +254,7 @@ struct
         else Ok (Nativeint is, Typing_env_extension.create ())
       | _, _ -> Bottom
 
-    let join_of_kind_foo _env1 _env2
+    let join_of_kind_foo _env _env_extension1 _env_extension2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : Targetint.Set.t of_kind_naked_number Or_unknown.t =
