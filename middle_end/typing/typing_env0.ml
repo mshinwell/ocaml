@@ -718,6 +718,7 @@ end) = struct
               match entry with
               | Equation ty ->
                 let ty = T.rename_variables ty freshening in
+                (* XXX probably should put the meet here *)
                 let t = add t name level (Equation ty) in
                 freshening, t
               | Definition ty ->

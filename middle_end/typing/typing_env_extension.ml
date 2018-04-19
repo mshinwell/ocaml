@@ -18,12 +18,14 @@
 
 module Make (T : sig
   include Flambda_type0_internal_intf.S
-end) (Typing_env_extension : sig
-  include Typing_env_extension_intf.S
-    with type env_extension := T.env_extension
+end) (Typing_env0 : sig
+  include Typing_env0_intf.S
     with type typing_environment := T.typing_environment
-    with type typing_environment_entry0 := T.typing_environment_entry0
+    with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
+    with type t_in_context := T.t_in_context
+    with type 'a ty = 'a T.ty
+    with type 'a unknown_or_join = 'a T.unknown_or_join
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
     with type t_in_context := T.t_in_context
@@ -33,122 +35,28 @@ end) (Type_equality : sig
   include Type_equality_intf.S
     with type flambda_type := T.flambda_type
 end) = struct
-  type t = T.typing_environment
+  type t = T.env_extension
 
   open T
 
-  type typing_environment = T.typing_environment
-  type typing_environment_entry = T.typing_environment_entry
-  type typing_environment_entry0 = T.typing_environment_entry0
-  type env_extension = Typing_env_extension.t
-  type flambda_type = T.flambda_type
-  type t_in_context = T.t_in_context
-  type 'a ty = 'a T.ty
-  type 'a unknown_or_join = 'a T.unknown_or_join
+  module TE = Typing_env0
 
-  let print = print_typing_env_extension
+  let print ppf t = print_typing_env_extension ppf t
 
-  let meet (t1 : typing_environment) (t2 : typing_environment)
-        meet_scope_level : typing_environment =
-    assert (Scope_level.(>=) (max_level t1) meet_scope_level);
-    assert (Scope_level.(>=) (max_level t2) meet_scope_level);
+  let fast_equal t1 t2 = (t1 == t2)
+
+  let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
+
+  let meet (env : typing_environment) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let t =
-        fold t2 ~init:t1
-          ~f:(fun t name binding_type level
-                  (entry : typing_environment_entry0) ->
-            match find0_opt t name with
-            | Some (existing_binding_type, existing_level, existing_entry) ->
-              assert (existing_binding_type = binding_type);
-              begin match existing_entry, entry with
-              | Definition ty1, Definition ty2 ->
-                assert (Type_equality.equal ty1 ty2);
-                assert (Scope_level.With_sublevel.equal existing_level level);
-                t
-              | Definition ty1, Equation ty2
-              | Equation ty1, Equation ty2 ->
-                let meet_ty, env_extension =
-                  Meet_and_join.meet ~bound_name:name (t, ty1) (t2, ty2)
-                in
-                let t =
-                  add_env_extension_no_meet_required t env_extension
-                    meet_scope_level
-                in
-                add_with_binding_type t name meet_scope_level binding_type
-                  (Equation meet_ty)
-              | Equation _, Definition _ ->
-                Misc.fatal_errorf "Environments disagree on the definition \
-                    point of %a:@ %a@ and:@ %a"
-                  Name.print name
-                  print t1
-                  print t2
-              end
-            | None ->
-              match entry with
-              | Definition ty ->
-                begin match binding_type with
-                | Existential ->
-                  add_with_binding_type t name level Existential
-                    (Definition ty)
-                | Normal ->
-                  Misc.fatal_errorf "%a is only defined in the second of these \
-                      two environments, which have been passed to [meet], yet \
-                      it is not marked existential:@ %a@ and:@ %a"
-                    Name.print name
-                    print t1
-                    print t2
-                end;
-              | Equation _ ->
-                Misc.fatal_errorf "Environment contains equation for %a \
-                    without preceding definition:@ %a"
-                  Name.print name
-                  print t2)
-      in
-      let bindings_in_t1_and_not_in_t2_are_existential =
-        let names =
-          Name.Set.diff (Name.Map.keys t1.names_to_types)
-            (Name.Map.keys t2.names_to_types)
-        in
-        Name.Set.for_all (fun name ->
-            let _ty, binding_type = find_exn t name in
-            match binding_type with
-            | Normal -> false
-            | Existential -> true)
-          names
-      in
-      if not bindings_in_t1_and_not_in_t2_are_existential then begin
-        Misc.fatal_errorf "%a is/are only defined in the first of these two \
-            environments, which have been passed to [meet], yet it \
-            is not marked existential:@ %a@ and:@ %a"
-          Name.print name
-          print t1
-          print t2
-      end;
-      let cse_to_names =
-        Flambda_primitive.With_fixed_value.Map.union_merge
-          (fun name1 name2 ->
-            assert (mem t name1);
-            assert (mem t name2);
-            let level1 = scope_level_exn t1 name1 in
-            let level2 = scope_level_exn t2 name2 in
-            (* Use the outermost binding. *)
-            if Scope_level.With_sublevel.(>) level1 level2 then name2
-            else name1)
-          t1.cse_to_names t2.cse_to_names
-      in
-      let existential_freshening = t1.existential_freshening (* XXX *) in
-      let t =
-        { t with
-          cse_to_names;
-          existentials;
-          existential_freshening;
-        }
-      in
-      invariant t;
-      t
+      let scope_level = TE.max_level env in
+      let env = TE.add_or_meet_env_extension env t1 scope_level in
+      let env = TE.add_or_meet_env_extension env t2 scope_level in
+      TE.cut env_with_t1_and_t2
+        ~existential_if_defined_at_or_later_than:scope_level
 
   let join (t1 : typing_environment) (t2 : typing_environment)
         join_scope_level : typing_environment =

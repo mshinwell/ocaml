@@ -27,15 +27,13 @@ module type S = sig
   (* Least upper bound of two types of a particular kind. *)
   val join_ty
      : typing_environment
-    -> typing_environment
-    -> of_kind_foo ty
-    -> of_kind_foo ty
+    -> (env_extension * of_kind_foo ty)
+    -> (env_extension * of_kind_foo ty)
     -> of_kind_foo ty
 
   (* Greatest lower bound of two types of a particular kind. *)
   val meet_ty
      : typing_environment
-    -> typing_environment
     -> of_kind_foo ty
     -> of_kind_foo ty
     -> of_kind_foo ty * env_extension

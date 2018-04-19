@@ -164,8 +164,6 @@ end) = struct
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t Or_unknown.t;
     blocks : block_cases Tag.Map.t Or_unknown.t;
-    is_int : Name.t option;
-    get_tag : Name.t option;
   }
 
   and 'a of_kind_value_boxed_number =

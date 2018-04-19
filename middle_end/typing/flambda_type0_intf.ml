@@ -636,11 +636,6 @@ module type S = sig
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
 
-  (** Push judgements from the given env_extension down to the uppermost places in
-      the type where such information can be hold (i.e. underneath tagged
-      immediate, block and tag maps). *)
-  val add_env_extension : t_in_context -> Typing_env_extension.t -> t
-
   (** Least upper bound of two types. *)
   val join : t_in_context -> t_in_context -> t
 
