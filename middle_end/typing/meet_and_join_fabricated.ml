@@ -110,7 +110,7 @@ struct
     let meet_closure env
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_bottom.t =
-      if env1 == env2 && closure1 == closure2 then begin
+      if closure1 == closure2 then begin
         Ok (closure1, Typing_env_extension.create ())
       end else begin
         let resolver = env1.resolver in
@@ -131,6 +131,9 @@ struct
                 | None, Some param_names2 -> Variable.Map.empty, param_names2
                 | Some param_names1, None -> Variable.Map.empty, param_names1
                 | Some param_names1, Some param_names2 ->
+                  (* This must match up with the code some distance below,
+                     where the left-hand function declarations (the ones
+                     whose parameter names are "param_names1") are chosen. *)
                   let param_names1 =
                     List.map (fun (param, _ty) -> Parameter.var param)
                       param_names1
@@ -165,53 +168,51 @@ struct
           match params with
           | Bottom -> Bottom
           | Ok (param_tys, param_names, params2_to_params1_freshening) ->
-            let result_env_extension2 =
-              Typing_env_extension.rename_variables_not_occurring_in_domain
-                result_env_extension2 params2_to_params1_freshening
-            in
-            let result_env_extension =
-              Meet_and_join.meet_env_extension result_env_extension1
-                result_env_extension2
-            in
-            let result_env_extension_changed : changes =
-              let changed1 =
-                not (Typing_env_extension.phys_equal
-                  result_env_extension1 result_env_extension)
-              in
-              let changed2 =
-                not (Typing_env_extension.phys_equal
-                  result_env_extension2 result_env_extension)
-              in
-              match changed1, changed2 with
-              | false, false -> Neither
-              | true, false -> Left
-              | false, true -> Right
-              | true, true -> Both
-            in
             let result_changed = ref Neither in
             let result : _ Or_bottom.t =
               if not same_num_results then Bottom
               else
+                let env_with_params =
+                  let scope_level = Typing_env0.max_level env in
+                  match param_names with
+                  | None -> env
+                  | Some param_names ->
+                    List.fold_left2 (fun env param param_ty ->
+                        let param_name = Parameter.name param in
+                        Typing_env0.add env param_name level
+                          (Definition param_ty))
+                      env
+                      param_names params
+                in
+                let result_env_extension2 =
+                  Typing_env_extension.rename_variables_not_occurring_in_domain
+                    result_env_extension2 params2_to_params1_freshening
+                in
+                let result_env_extension =
+                  Typing_env_extension.meet env_with_params
+                    result_env_extension1 result_env_extension2
+                in
+                let result_env_extension_changed : changes =
+                  let changed1 =
+                    not (Typing_env_extension.phys_equal
+                      result_env_extension1 result_env_extension)
+                  in
+                  let changed2 =
+                    not (Typing_env_extension.phys_equal
+                      result_env_extension2 result_env_extension)
+                  in
+                  match changed1, changed2 with
+                  | false, false -> Neither
+                  | true, false -> Left
+                  | false, true -> Right
+                  | true, true -> Both
+                in
+                let result_env =
+                  Typing_env0.add_env_extension env_with_params
+                    result_env_extension
+                in
                 let result =
                   List.map2 (fun t1 t2 ->
-                      let env_with_params =
-                        let scope_level =
-                          Typing_env0.max_level env
-                        in
-                        match param_names with
-                        | None -> env
-                        | Some param_names ->
-                          List.fold_left2 (fun env param param_ty ->
-                              let param_name = Parameter.name param in
-                              Typing_env0.add env param_name level
-                                (Definition param_ty))
-                            env
-                            param_names params
-                      in
-                      let result_env =
-                        Typing_env0.add_env_extension env_with_params
-                          result_env_extension1
-                      in
                       let t, new_env_extension_from_meet =
                         Meet_and_join.meet result_env t1 t2
                       in
@@ -263,7 +264,8 @@ struct
               (* [closure1.function_decls] and [closure2.function_decls] may be
                  different, but we cannot prove it.  We arbitrarily pick
                  [closure1.function_decls] to return, with parameter and result
-                 types refined. *)
+                 types refined.  (Note that this decision needs to line up
+                 with the code above; see comment above.) *)
               let params =
                 List.map2 (fun (param, _old_ty) new_ty ->
                     param, new_ty)
@@ -372,30 +374,24 @@ struct
             Ok (({ function_decls; } : closure), env_extension_from_meet)
       end
 
-    let join_closure env1 env2
+    let join_closure env env_extension1 env_extension2
           (closure1 : closure) (closure2 : closure)
           : closure =
-      if env1 == env2 && closure1 == closure2 then begin
+      if env_extension1 == env_extension2 && closure1 == closure2 then begin
         closure1
       end else begin
         let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
               ~result_env_extension1 ~result_env_extension2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
-          let same_arity =
-            List.compare_lengths params1 params2 = 0
-          in
-          let same_num_results =
-            List.compare_lengths result1 result2 = 0
-          in
+          let same_arity = List.compare_lengths params1 params2 = 0 in
+          let same_num_results = List.compare_lengths result1 result2 = 0 in
           if same_arity && same_num_results then
             let params =
               List.map2 (fun t1 t2 ->
-                  Meet_and_join.join (env1, t1) (env2, t2))
+                  Meet_and_join.join env env_extension1 env_extension2 t1 t2)
                 params1
                 params2
             in
-            (* XXX needs fixing as regards environments for the result, see
-               meet function above *)
             let result =
               List.map2 (fun t1 t2 ->
                   Meet_and_join.join
@@ -414,8 +410,8 @@ struct
               | _, _ -> None
             in
             let result_env_extension =
-              Meet_and_join.join_env_extension ~resolver:env1.resolver
-                result_env_extension1 result_env_extension2
+              Typing_env_extension.join result_env_extension1
+                result_env_extension2
             in
             let non_inlinable : non_inlinable_function_declarations =
               { params;
