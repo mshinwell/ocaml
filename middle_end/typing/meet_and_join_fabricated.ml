@@ -173,7 +173,9 @@ struct
               if not same_num_results then Bottom
               else
                 let env_with_params =
-                  let scope_level = Typing_env0.max_level env in
+                  let scope_level =
+                    Scope_level.next (Typing_env0.max_level env)
+                  in
                   match param_names with
                   | None -> env
                   | Some param_names ->
@@ -293,7 +295,8 @@ struct
           | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
             (* We can arbitrarily pick one side or the other: we choose the
                side which gives a more precise type. *)
-            Ok (Non_inlinable (Some non_inlinable), Typing_env_extension.create ())
+            Ok (Non_inlinable (Some non_inlinable),
+              Typing_env_extension.create ())
           | Non_inlinable None, Inlinable inlinable
           | Inlinable inlinable, Non_inlinable None ->
             (* Likewise. *)
@@ -395,14 +398,46 @@ struct
                 params1
                 params2
             in
+            let add_params_to_env_extension param_names env_extension =
+              match param_names with
+              | None -> env_extension
+              | Some env_extension ->
+                List.fold_left2 (fun env_extension param param_name ->
+                    Typing_env_extension.add_definition_at_beginning
+                      env_extension param_name param)
+                  params param_names
+            in
+            let result_env_extension1 =
+              add_params_to_env_extension param_names1 result_env_extension1
+            in
+            let result_env_extension2 =
+              add_params_to_env_extension param_names2 result_env_extension2
+            in
+            let result_env_extension =
+              Typing_env_extension.join env_with_params
+                result_env_extension1
+                result_env_extension2
+            in
             let result =
+              let result_env =
+                Typing_env0.add_env_extension env_with_params
+                  result_env_extension
+              in
+              let result_env_extension1 =
+                Typing_env_extension.diff env_with_params
+                  result_env_extension1
+                  result_env_extension
+              in
+              let result_env_extension2 =
+                Typing_env_extension.diff env_with_params
+                  result_env_extension2
+                  result_env_extension
+              in
               List.map2 (fun t1 t2 ->
-                  Meet_and_join.join
-                    (Typing_env_extension.to_typing_environment ~resolver:env1.resolver
-                       result_env_extension1, t1)
-                    (Typing_env_extension.to_typing_environment ~resolver:env2.resolver
-                       result_env_extension2, t2))
-                result1
+                  Meet_and_join.join result_env
+                    result_env_extension1 result_env_extension2
+                    t1 ty)
+                result12
                 result2
             in
             let direct_call_surrogate =
@@ -411,10 +446,6 @@ struct
                   when Closure_id.equal closure_id1 closure_id2 ->
                 Some closure_id1
               | _, _ -> None
-            in
-            let result_env_extension =
-              Typing_env_extension.join result_env_extension1
-                result_env_extension2
             in
             let non_inlinable : non_inlinable_function_declarations =
               { params;
@@ -526,7 +557,9 @@ struct
                   inlinable2.params
               in
               let env_with_params =
-                let scope_level = Typing_env0.max_level env in
+                let scope_level =
+                  Scope_level.next (Typing_env0.max_level env)
+                in
                 match param_names with
                 | None -> env
                 | Some param_names ->
@@ -542,11 +575,11 @@ struct
                   inlinable1.result_env_extension
                   inlinable2.result_env_extension
               in
-              let result_env =
-                Typing_env0.add_env_extension env_with_params
-                  result_env_extension
-              in
               let result =
+                let result_env =
+                  Typing_env0.add_env_extension env_with_params
+                    result_env_extension
+                in
                 let result_env_extension1 =
                   Typing_env_extension.diff env_with_params
                     inlinable1.result_env_extension
@@ -599,10 +632,9 @@ struct
         { function_decls; }
       end
 
-    let meet_set_of_closures env1 env2
+    let meet_set_of_closures env
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * env_extension) Or_bottom.t =
-      let resolver = env1.resolver in
       let env_extension_from_meet = ref (Typing_env_extension.create ()) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
@@ -611,14 +643,14 @@ struct
           let closures =
             Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_env_extension_from_meet =
-                  Meet_and_join_fabricated.meet_ty env1 env2
+                  Meet_and_join_fabricated.meet_ty env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
                   env_extension_from_meet :=
-                    Meet_and_join.meet_env_extension ~resolver
+                    Typing_env_extension.meet env
                       new_env_extension_from_meet !env_extension_from_meet;
                   Some ty_fabricated
                 end)
@@ -648,13 +680,13 @@ struct
                 | exception Not_found -> Some ty1
                 | ty2 ->
                   let ty_fabricated, new_env_extension_from_meet =
-                    Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
+                    Meet_and_join_fabricated.meet_ty env ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_fabricated then begin
                     None
                   end else begin
                     env_extension_from_meet :=
-                      Meet_and_join.meet_env_extension ~resolver
+                      Typing_env_extension.meet env
                         new_env_extension_from_meet !env_extension_from_meet;
                     Some ty_fabricated
                   end)
@@ -665,14 +697,14 @@ struct
           let closures =
             Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_env_extension_from_meet =
-                  Meet_and_join_fabricated.meet_ty env1 env2
+                  Meet_and_join_fabricated.meet_ty env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   bottom_as_ty_fabricated ()
                 end else begin
                   env_extension_from_meet :=
-                    Meet_and_join.meet_env_extension ~resolver
+                    Typing_env_extension.meet env
                       new_env_extension_from_meet !env_extension_from_meet;
                   ty_fabricated
                 end)
@@ -687,14 +719,13 @@ struct
           let closure_elements =
             Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
                 let ty_value, new_env_extension_from_meet =
-                  Meet_and_join_value.meet_ty env1 env2
-                    ty_value1 ty_value2
+                  Meet_and_join_value.meet_ty env ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   None
                 end else begin
                   env_extension_from_meet :=
-                    Meet_and_join.meet_env_extension ~resolver
+                    Typing_env_extension.meet env
                       new_env_extension_from_meet !env_extension_from_meet;
                   Some ty_value
                 end)
@@ -726,13 +757,13 @@ struct
                 | exception Not_found -> Some ty1
                 | ty2 ->
                   let ty_value, new_env_extension_from_meet =
-                    Meet_and_join_value.meet_ty env1 env2 ty1 ty2
+                    Meet_and_join_value.meet_ty env ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_value then begin
                     None
                   end else begin
                     env_extension_from_meet :=
-                      Meet_and_join.meet_env_extension ~resolver
+                      Typing_env_extension.meet env
                         new_env_extension_from_meet !env_extension_from_meet;
                     Some ty_value
                   end)
@@ -743,14 +774,13 @@ struct
           let closure_elements =
             Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
                 let ty_value, new_env_extension_from_meet =
-                  Meet_and_join_value.meet_ty env1 env2
-                    ty_value1 ty_value2
+                  Meet_and_join_value.meet_ty env ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   bottom_as_ty_value ()
                 end else begin
                   env_extension_from_meet :=
-                    Meet_and_join.meet_env_extension ~resolver new_env_extension_from_meet
+                    Typing_env_extension.meet env new_env_extension_from_meet
                       !env_extension_from_meet;
                   ty_value
                 end)
@@ -777,7 +807,7 @@ struct
           Ok (set, !env_extension_from_meet)
         end
 
-    let join_set_of_closures env1 env2
+    let join_set_of_closures env env_extension1 env_extension2
           (set1 : set_of_closures) (set2 : set_of_closures)
           : set_of_closures =
       let closures : _ extensibility =
@@ -786,7 +816,8 @@ struct
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env1 env2
+                Meet_and_join_fabricated.join_ty env
+                  env_extension1 env_extension2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -797,7 +828,8 @@ struct
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env1 env2
+                Meet_and_join_fabricated.join_ty env
+                  env_extension1 env_extension2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -809,7 +841,8 @@ struct
               (fun _ty_fabricated ->
                 any_fabricated_as_ty_fabricated ())
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env1 env2
+                Meet_and_join_fabricated.join_ty env
+                  env_extension1 env_extension2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -822,7 +855,7 @@ struct
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env1 env2
+                Meet_and_join_value.join_ty env env_extension1 env_extension2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -833,7 +866,7 @@ struct
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env1 env2
+                Meet_and_join_value.join_ty env env_extension1 env_extension2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -845,7 +878,7 @@ struct
               (fun _ty_value ->
                 any_value_as_ty_value ())
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env1 env2
+                Meet_and_join_value.join_ty env env_extension1 env_extension2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -868,7 +901,6 @@ struct
     let meet_of_kind_foo env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_bottom.t =
-      let resolver = env1.resolver in
       match of_kind1, of_kind2 with
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =

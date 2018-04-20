@@ -152,17 +152,6 @@ module type S = sig
       -> unit)
     -> unit
 
-  (** Least upper bound of two typing environments at the given scope level.
-      The domain of the resulting environment is the intersection of those
-      supplied. *)
-  val join : t -> t -> Scope_level.t -> t
-
-  (** Greatest lower bound of two typing environments at the given scope
-      level.  The domain of the resulting environment is the union of those
-      supplied.  Any equations deduced during the meet process will have been
-      applied to the returned environment. *)
-  val meet : t -> t -> Scope_level.t -> t
-
   (** Rearrange the given environment so that names defined at or deeper than
       the given scope level are made existential. This means that they may be
       referred to from types but may never occur normally in terms (or be

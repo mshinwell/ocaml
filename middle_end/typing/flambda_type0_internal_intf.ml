@@ -272,7 +272,9 @@ end) = struct
   }
 
   and env_extension = {
+    first_definitions : (Name.t * t) list;
     at_or_after_cut_point : levels_to_entries;
+    last_equations : (Name.t * t) list;
   }
 
   module Name_or_export_id = struct
