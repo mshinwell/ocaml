@@ -35,6 +35,8 @@ module type S = sig
 
   val fast_equal : t -> t -> bool
 
+  val empty : t
+
   val add_definition_at_beginning
      : t
     -> Name.t

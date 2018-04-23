@@ -91,8 +91,7 @@ end) = struct
       let scope_level = Scope_level.next (TE.max_level env) in
       let env = TE.add_or_meet_env_extension env t1 scope_level in
       let env = TE.add_or_meet_env_extension env t2 scope_level in
-      TE.cut env_with_t1_and_t2
-        ~existential_if_defined_at_or_later_than:scope_level
+      TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
   let join (env : typing_environment) (t1' : t) (t2' : t) (t1 : t) (t2 : t) =
     if fast_equal t1 t2 then t1
@@ -100,7 +99,10 @@ end) = struct
     else if is_empty t2 then empty
     else
       let t =
-        ...
+        let scope_level = Scope_level.next (TE.max_level env) in
+        let env = TE.add_or_join_env_extension env t1' t2' t1 scope_level in
+        let env = TE.add_or_join_env_extension env t1' t2' t2 scope_level in
+        TE.cut env ~existential_if_defined_at_or_later_than:scope_level
       in
       let defined_names_t1 = defined_names t1 in
       let defined_names_t2 = defined_names t2 in
@@ -125,14 +127,20 @@ end) = struct
             else Some by_sublevel)
           t.at_or_after_cut_point
       in
-      (* We don't need to filter [Equation]s in [t] because any [Equation]
-         containing a reference to a name defined in exactly one of [t1] or
-         [t2] should have had such reference removed by the join operation on
-         the type inside the [Equation]. *)
+      let last_equations_rev =
+        List.filter (fun (name, _ty) ->
+            Name.Set.mem name defined_names_join)
+          t.last_equations_rev
+      in
+      (* We don't need to filter the types within entries ([Equation]s or
+         [Definition]s) in [t].  Any entry originally containing a reference
+         to a name defined in exactly one of [t1] or [t2] should have had such
+         reference removed by the join operation on the type inside the
+         entry. *)
       let t =
-        { t with
-          first_definitions;
+        { first_definitions;
           at_or_after_cut_point;
+          last_equations_rev;
         }
       in
       invariant t;

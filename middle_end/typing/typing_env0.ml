@@ -681,7 +681,8 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
-  let rec add_or_meet_env_extension t env_extension scope_level =
+  let rec add_or_meet_or_join_env_extension t env_extension scope_level
+        ~meet_or_join =
     let add_definition t freshening name ty =
       let ty = T.rename_variables ty freshening in
       let freshening, fresh_name =
@@ -705,9 +706,9 @@ end) = struct
       match find_opt t name with
       | None -> add t name level (Equation ty)
       | Some existing_ty ->
-        let meet_ty, meet_env_extension = Meet_and_join.meet t ty existing_ty in
-        let t = add_or_meet_env_extension t meet_env_extension scope_level in
-        add t name level (Equation meet_ty)
+        let new_ty, new_env_extension = meet_or_join t ty existing_ty in
+        let t = add_or_meet_env_extension t new_env_extension scope_level in
+        add t name level (Equation new_ty)
     in
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
@@ -735,6 +736,19 @@ end) = struct
         add_equation t freshening name ty)
       t
       env_extension.last_equations_rev
+
+  let add_or_meet_env_extension t env_extension scope_level =
+    add_or_meet_or_join_env_extension t env_extension scope_level
+      ~meet_or_join:Meet_or_join.meet
+
+  let add_or_join_env_extension t env_extension1 env_extension2
+        env_extension scope_level =
+    add_or_meet_or_join_env_extension t env_extension scope_level
+      ~meet_or_join:(fun env ty1 ty2 ->
+        let join_ty =
+          Meet_or_join.join env env_extension1 env_extension2 ty1 ty2
+        in
+        join_ty, Typing_env_extension.empty)
 
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
     (* CR mshinwell: Add a split which only returns one map, the side we
