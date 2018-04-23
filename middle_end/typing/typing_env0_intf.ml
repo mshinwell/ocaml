@@ -173,13 +173,6 @@ module type S = sig
       mentions names which are symbols, not variables. *)
   val restrict_to_symbols : t -> t
 
-  (** The equivalent of finding all free names in the given types and then
-      calling [restrict_to_names]. *)
-  val restrict_names_to_those_occurring_in_types
-     : t
-    -> flambda_type list
-    -> t
-
   (** Like [restrict_to_names] except using a traditional filtering
       predicate.  A name will only be kept if the predicate returns [true]
       for the name. *)
@@ -215,11 +208,12 @@ module type S = sig
 
   (** [diff t1 t2] computes the environment extension whose bindings are
       those in [t1] that:
-        - do not occur in [t2]; or
+        - do not occur in [t2] (where [t2] is interpreted in the
+          context of the environment [t1]); or
         - do occur in [t2] but where [t1] specifies more precise information
           (which for types, means closer to bottom).
   *)
-  val diff : t -> t -> env_extension
+  val diff : t -> env_extension -> env_extension
 
   (** Return all names occurring in the type and all types referenced by it. *)
   val free_names_transitive : t -> flambda_type -> Name_occurrences.t

@@ -79,4 +79,14 @@ module type S = sig
     -> t
     -> t
     -> t
+
+  (* N.B. Does not take an environment *)
+  val free_names_transitive : t -> flambda_type -> Name_occurrences.t
+
+  (** The equivalent of finding all free names in the given types and then
+      calling [restrict_to_names]. *)
+  val restrict_names_to_those_occurring_in_types
+     : t
+    -> flambda_type list
+    -> t
 end
