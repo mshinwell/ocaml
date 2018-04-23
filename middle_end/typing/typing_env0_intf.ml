@@ -152,14 +152,17 @@ module type S = sig
       -> unit)
     -> unit
 
-  (** Rearrange the given environment so that names defined at or deeper than
-      the given scope level are made existential. This means that they may be
-      referred to from types but may never occur normally in terms (or be
-      produced from a reification of a type, c.f. [Flambda_type.reify], etc). *)
+  (** Cut off any portion of the given environment containing definitions
+      and/or equations at or after (deeper) the given scope level.
+
+      Such portion is returned as an environment extension; all names defined
+      in such extension will henceforth be treated as existentially bound.
+
+      If no such portion exists, an empty extension is returned. *)
   val cut
      : t
     -> existential_if_defined_at_or_later_than:Scope_level.t
-    -> t
+    -> env_extension
 
   (* CR mshinwell: What exactly does "domain" mean here?  (existentials...) *)
   (** Adjust the domain of the given typing environment so that it only
@@ -188,15 +191,30 @@ module type S = sig
     -> t
 
   (** Add the given environment extension into the given typing environment.
-      Internally, this is done by using the [meet] operation. *)
-  val add_env_extension : t -> env_extension -> Scope_level.t -> t
+      During the process, if an attempt is made to add a name which is
+      already bound, the given name's type will be determined using a meet
+      operation. *)
+  val add_or_meet_env_extension
+     : t
+    -> env_extension
+    -> Scope_level.t
+    -> t
 
-  (** Create an env_extension structure containing the same information as
-      the given environment. *)
-  val to_env_extension : t -> env_extension
+  (** Like [add_or_meet_env_extension] except uses a join function to
+      determine merged types.
+      [add_or_join_env_extension t ext1 ext2 ext level] has [ext] as the
+      extension being added/joined into the environment [t]; the extensions
+      [ext1] and [ext2] are pushed down onto resulting joined types. *)
+  val add_or_join_env_extension
+     : t
+    -> env_extension
+    -> env_extension
+    -> env_extension
+    -> Scope_level.t
+    -> t
 
-  (** [diff t1 t2] computes the environment whose bindings are those in
-      [t1] that:
+  (** [diff t1 t2] computes the environment extension whose bindings are
+      those in [t1] that:
         - do not occur in [t2]; or
         - do occur in [t2] but where [t1] specifies more precise information
           (which for types, means closer to bottom).

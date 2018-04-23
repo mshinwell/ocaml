@@ -83,6 +83,12 @@ end) = struct
     let last_equations_rev = (name, ty) :: t.last_equations_rev in
     { t with last_equations_rev; }
 
+  (* CR-someday mshinwell: Consider implementing [meet] and [join] directly
+     rather than opening up all of the existentials and cutting the
+     environment.  However this shouldn't be done until we are sure that the
+     semantics are correct and that there is likely to be a notable
+     performance increase. *)
+
   let meet (env : typing_environment) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2

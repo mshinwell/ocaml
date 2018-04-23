@@ -318,9 +318,9 @@ end) = struct
           | Symbol _ ->
             match binding_type with
             | Normal -> ()
-            | Existential ->
-              Misc.fatal_errorf "Symbols should never be marked as \
-                  existential: %a in@ %a"
+            | Was_existential ->
+              Misc.fatal_errorf "Symbol should never have been existential:@ \
+                  %a in@ %a"
                 Name.print name
                 print t
           end;
@@ -357,13 +357,6 @@ end) = struct
     match find_exn t name with
     | exception Not_found -> None
     | ty, binding_type -> Some (ty, binding_type)
-
-(*
-  let find_with_scope_level_opt t name =
-    match find_with_scope_level_exn t name with
-    | exception Not_found -> None
-    | ty, scope_level, binding_type -> Some (ty, scope_level, binding_type)
-*)
 
   let find_cse t prim =
     match Flambda_primitive.With_fixed_value.create prim with
@@ -706,9 +699,11 @@ end) = struct
       match find_opt t name with
       | None -> add t name level (Equation ty)
       | Some existing_ty ->
-        let new_ty, new_env_extension = meet_or_join t ty existing_ty in
-        let t = add_or_meet_env_extension t new_env_extension scope_level in
-        add t name level (Equation new_ty)
+        match meet_or_join t ty ~existing_ty with
+        | None -> t
+        | Some (new_ty, new_env_extension)->
+          let t = add_or_meet_env_extension t new_env_extension scope_level in
+          add t name level (Equation new_ty)
     in
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
@@ -739,7 +734,16 @@ end) = struct
 
   let add_or_meet_env_extension t env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
-      ~meet_or_join:Meet_or_join.meet
+      ~meet_or_join:(fun env ty ~existing_ty ->
+        let meet_ty, meet_env_extension =
+          Meet_or_join.meet env ty existing_ty
+        in
+        let as_or_more_precise = Type_equality.equal meet_ty ty in
+        let strictly_more_precise =
+          as_or_more_precise && not (Type_equality.equal meet_ty existing_ty)
+        in
+        if strictly_more_precise then Some (meet_ty, meet_env_extension)
+        else None)
 
   let add_or_join_env_extension t env_extension1 env_extension2
         env_extension scope_level =
@@ -748,7 +752,15 @@ end) = struct
         let join_ty =
           Meet_or_join.join env env_extension1 env_extension2 ty1 ty2
         in
-        join_ty, Typing_env_extension.empty)
+        let meet_ty, _meet_env_extension =
+          Meet_or_join.meet env join_ty existing_ty
+        in
+        let as_or_more_precise = Type_equality.equal meet_ty join_ty in
+        let strictly_more_precise =
+          as_or_more_precise && not (Type_equality.equal meet_ty existing_ty)
+        in
+        if strictly_more_precise then Some (join_ty, Typing_env_extension.empty)
+        else None)
 
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
     (* CR mshinwell: Add a split which only returns one map, the side we

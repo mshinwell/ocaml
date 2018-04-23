@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(** The interface of typing environment extensions. *)
+
 module type S = sig
   type env_extension
   type typing_environment
@@ -23,33 +25,58 @@ module type S = sig
 
   type t = env_extension
 
-  val print : Format.formatter -> t -> unit
-
+  (** Perform various invariant checks upon the given environment
+      extension. *)
   val invariant : t -> unit
 
+  (** Print the given typing environment to a formatter. *)
+  val print : Format.formatter -> t -> unit
+
+  (** Equality on two environment extensions, given equality on types. *)
   val equal
      : equal_type:(flambda_type -> flambda_type -> bool)
     -> t
     -> t
     -> bool
 
+  (** A sound but not complete equality function which is much faster than
+      [equal]. *)
   val fast_equal : t -> t -> bool
 
+  (** The unique environment extension containing no information. *)
   val empty : t
 
+  (** Add a definition of an existentially-bound name prior to all
+      other entries in the given extension. *)
   val add_definition_at_beginning
      : t
     -> Name.t
     -> flambda_type
     -> t
 
+  (** Add an equation (on a name that is either existentially bound in the
+      given extension, or free in the extension) after all other entries in
+      the given extension. *)
   val add_equation
      : t
     -> Name.t
     -> flambda_type
     -> t
 
+  (** Least upper bound of two environment extensions in the given typing
+      environment. *)
   val meet : typing_environment -> t -> t -> t
 
-  val join : typing_environment -> t -> t -> t
+  (* CR mshinwell: This signature is confusing -- labels? *)
+  (** Greatest lower bound of two environment extensions in the given typing
+      environment.  [join env t1' t2' t1 t2] will take the join of [t1] and
+      [t2] whilst pushing [t1'] and [t2'] down through the structure of
+      the resulting joined types. *)
+  val join
+     : typing_environment
+    -> t
+    -> t
+    -> t
+    -> t
+    -> t
 end
