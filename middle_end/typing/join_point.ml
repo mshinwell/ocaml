@@ -20,6 +20,12 @@ module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
+(* CR mshinwell: Move to stdlib *)
+let heads_and_tails_of_lists ls =
+  let heads = List.map List.hd ls in
+  let tails = List.map List.tl ls in
+  heads, tails
+
 let param_types_and_body_env_opt cont_uses freshening ~default_env =
   match Continuation_uses.uses cont_uses with
   | [] -> None
@@ -89,38 +95,57 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
           arg_tys, env_extension)
         arg_tys_with_env_extensions
     in
-    let joined_arg_tys, joined_env =
-      List.fold_left
-        (fun (joined_arg_tys, joined_env) (arg_tys, env_extension) ->
-          List.fold_left (fun (joined_arg_tys, joined_env) (param, ty) ->
-              let free_names_this_ty =
-                TEE.free_names_transitive env_extension ty
-              in
-              let env_extension =
-                TEE.restrict_names_to_those_occurring_in_types
-                  env_extension [ty]
-              in
-              let join_ty =
-                try T.join joined_env TEE.empty env_extension joined_ty ty
-                with Misc.Fatal_error -> begin
-                  Format.eprintf "\n%sContext is: parameter %a%s\n"
-                    (Misc_color.bold_red ())
-                    Parameter.print param
-                    (Misc_color.reset ());
-                  raise Misc.Fatal_error
-                end
-              in
-              let joined_env =
-                TE.add joined_env (Parameter.name param) scope_level
-                  (Definition join_ty)
-              in
-              join_ty :: joined_arg_tys, joined_env)
-            joined_arg_tys
-            (List.rev (List.combine t.params arg_tys)))
-        bottom_arg_tys
-        arg_tys_with_env_extensions
+    let transpose arg_tys_with_env_extensions =
+      match arg_tys_with_env_extensions with
+      | [] -> []
+      | (arg_tys, env_extension) ->
+        let rec inner_loop for_counting =
+          match arg_tys with
+          | [] -> ...
+          | _ :: arg_tys ->
+            let heads, tails = heads_and_tails_of_lists arg_tys
+        in
+        inner_loop arg_tys
     in
-    Some (joined_arg_tys, joined_env)
+    let arg_tys_with_env_extensions_transpose =
+      transpose arg_tys_with_env_extensions
+    in
+    let joined_arg_tys_rev, joined_env =
+      List.fold_left
+        (* XXX the env extension differs for each arg *)
+        (fun (joined_arg_tys, joined_env) (param, (arg_tys, env_extension)) ->
+          let joined_ty =
+            List.fold_left (fun joined_ty ty ->
+                let free_names_this_ty =
+                  TEE.free_names_transitive env_extension ty
+                in
+                let env_extension =
+                  TEE.restrict_names_to_those_occurring_in_types
+                    env_extension [ty]
+                in
+                let joined_ty =
+                  try T.join joined_env TEE.empty env_extension joined_ty ty
+                  with Misc.Fatal_error -> begin
+                    Format.eprintf "\n%sContext is: parameter %a%s\n"
+                      (Misc_color.bold_red ())
+                      Parameter.print param
+                      (Misc_color.reset ());
+                    raise Misc.Fatal_error
+                  end
+                in
+                join_ty :: joined_arg_tys, joined_env)
+              joined_arg_tys
+              arg_tys)
+          in
+          let joined_env =
+            TE.add joined_env (Parameter.name param) scope_level
+              (Definition joined_ty)
+          in
+          joined_ty :: joined_arg_tys, joined_env)
+        bottom_arg_tys
+        (List.combine params arg_tys_with_env_extensions)
+    in
+    Some (List.rev joined_arg_tys, joined_env)
 
 let param_types_and_body_env uses freshening ~arity ~default_env =
   match param_types_and_body_env_opt uses freshening ~default_env with
