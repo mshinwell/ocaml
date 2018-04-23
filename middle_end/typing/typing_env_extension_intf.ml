@@ -33,7 +33,7 @@ module type S = sig
     -> t
     -> bool
 
-  val phys_equal : t -> t -> bool
+  val fast_equal : t -> t -> bool
 
   val add_definition_at_beginning
      : t

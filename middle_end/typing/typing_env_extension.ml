@@ -45,165 +45,96 @@ end) = struct
 
   let fast_equal t1 t2 = (t1 == t2)
 
+  let invariant _t =
+    (* CR mshinwell: Work out what to do here.  Probably just a check that
+       the ordering is reasonable. *)
+    ()
+
+  let empty =
+    { first_definitions = [];
+      at_or_after_cut_point = Scope_level.Map.empty;
+      last_definitions_rev = [];
+    }
+
   let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
+
+  let defined_names t =
+    let from_first_definitions =
+      Name.Set.of_list (
+        List.map (fun (name, _ty) -> name) t.first_definitions)
+    in
+    Scope_level.Map.fold (fun _level by_sublevel defined_names ->
+        Scope_level.Sublevel.Map.fold
+          (fun _sublevel (name, (entry : typing_environment_entry0))
+               defined_names ->
+            match entry with
+            | Definition _ -> Name.Set.add name defined_names
+            | Equation _ -> defined_names)
+          by_sublevel
+          defined_names)
+      t.at_or_after_cut_point
+      from_first_definitions
+
+  let add_definition_at_beginning t name ty =
+    let first_definitions = (name, ty) :: t.first_definitions in
+    { t with first_definitions; }
+
+  let add_equation t name ty =
+    let last_equations_rev = (name, ty) :: t.last_equations_rev in
+    { t with last_equations_rev; }
 
   let meet (env : typing_environment) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let scope_level = TE.max_level env in
+      let scope_level = Scope_level.next (TE.max_level env) in
       let env = TE.add_or_meet_env_extension env t1 scope_level in
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env_with_t1_and_t2
         ~existential_if_defined_at_or_later_than:scope_level
 
-  let join (t1 : typing_environment) (t2 : typing_environment)
-        join_scope_level : typing_environment =
-    assert (Scope_level.(>=) (max_level t1) join_scope_level);
-    assert (Scope_level.(>=) (max_level t2) join_scope_level);
+  let join (env : typing_environment) (t1' : t) (t2' : t) (t1 : t) (t2 : t) =
     if fast_equal t1 t2 then t1
-    else if is_empty t1 then create_using_resolver_from t1
-    else if is_empty t2 then create_using_resolver_from t1
+    else if is_empty t1 then empty
+    else if is_empty t2 then empty
     else
       let t =
-        fold t2 ~init:(create_using_resolver_from t1)
-          ~f:(fun t name binding_type level
-                  (entry : typing_environment_entry0) ->
-            match find0_opt t name with
-            | Some (existing_binding_type, existing_level, existing_entry) ->
-              assert (existing_binding_type = binding_type);
-              begin match existing_entry, entry with
-              | Definition ty1, Definition ty2 ->
-                assert (Type_equality.equal ty1 ty2);
-                assert (Scope_level.With_sublevel.equal existing_level level);
-                t
-              | Definition ty1, Equation ty2
-              | Equation ty1, Equation ty2 ->
-                let join_ty = Meet_and_join.join (t, ty1) (t2, ty2) in
-                add_with_binding_type t name join_scope_level binding_type
-                  (Equation join_ty)
-              | Equation _, Definition _ ->
-                Misc.fatal_errorf "Environments disagree on the definition \
-                    point of %a:@ %a@ versus:@ %a"
-                  Name.print name
-                  print t1
-                  print t2
-              end
-            | None -> t)
+        ...
       in
-      let cse_to_names =
-        Flambda_primitive.With_fixed_value.Map.inter_merge
-          (fun name1 name2 ->
-            let level1 = scope_level_exn t1 name1 in
-            let level2 = scope_level_exn t2 name2 in
-            (* Keep the outermost binding. *)
-            if Scope_level.With_sublevel.(>) level1 level2 then name2
-            else name1)
-          t1.cse_to_names t2.cse_to_names
+      let defined_names_t1 = defined_names t1 in
+      let defined_names_t2 = defined_names t2 in
+      let defined_names_join =
+        Name.Set.inter defined_names_t1 defined_names_t2
       in
+      let first_definitions =
+        List.filter (fun (name, _ty) ->
+            Name.Set.mem name defined_names_join)
+          t.first_definitions
+      in
+      let at_or_after_cut_point =
+        Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
+            let by_sublevel =
+              Scope_level.Sublevel.Map.filter_map
+                (fun _sublevel ((name, _) as entry) ->
+                  if Name.Set.mem name defined_names_join then Some entry
+                  else None)
+              by_sublevel
+            in
+            if Scope_level.Sublevel.Map.is_empty by_sublevel then None
+            else Some by_sublevel)
+          t.at_or_after_cut_point
+      in
+      (* We don't need to filter [Equation]s in [t] because any [Equation]
+         containing a reference to a name defined in exactly one of [t1] or
+         [t2] should have had such reference removed by the join operation on
+         the type inside the [Equation]. *)
       let t =
         { t with
-          cse_to_names;
+          first_definitions;
+          at_or_after_cut_point;
         }
       in
       invariant t;
       t
-
-(*
-    type t = env_extension
-
-    let create = create_env_extension
-
-    let singleton_env_extension ~resolver name scope_level ty =
-      { typing_judgements =
-          Some (Typing_env0.singleton0 ~resolver name scope_level ty
-            ~must_be_closed:false);
-      }
-
-    let add_or_replace ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton_env_extension ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add_or_replace typing_judgements name
-              scope_level ty);
-        }
-
-    let invariant t =
-      match t.typing_judgements with
-      | None -> ()
-      | Some typing_judgements ->
-        assert (not typing_judgements.must_be_closed);
-        Typing_env0.invariant typing_judgements
-
-    let singleton = singleton_env_extension
-
-    let add ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add typing_judgements name scope_level ty);
-        }
-
-    let add_or_replace_meet ~resolver t name scope_level ty =
-      match t.typing_judgements with
-      | None -> singleton ~resolver name scope_level ty
-      | Some typing_judgements ->
-        { typing_judgements =
-            Some (Typing_env0.add_or_replace_meet typing_judgements
-              name scope_level ty);
-        }
-
-    let meet = Meet_and_join.meet_env_extension
-
-    let equal ~equal_type
-          { typing_judgements = typing_judgements1;
-          }
-          { typing_judgements = typing_judgements2;
-          } =
-      Misc.Stdlib.Option.equal (Typing_env0.equal ~equal_type)
-        typing_judgements1 typing_judgements2
-
-    let phys_equal { typing_judgements = typing_judgements1; }
-          { typing_judgements = typing_judgements2; } =
-      typing_judgements1 == typing_judgements2
-        || match typing_judgements1, typing_judgements2 with
-           | None, None -> true
-           | None, Some _ | Some _, None -> false
-           | Some env1, Some env2 ->
-             Typing_env0.phys_equal env1 env2
-
-    let print = print_env_extension
-
-    let remove ({ typing_judgements; } as t) name =
-      match typing_judgements with
-      | None -> t
-      | Some typing_judgements ->
-        let typing_judgements =
-          Typing_env0.remove typing_judgements name
-        in
-        { typing_judgements = Some typing_judgements; }
-
-    let to_typing_environment ~resolver { typing_judgements; } =
-      match typing_judgements with
-      | None -> Typing_env0.create ~resolver
-      | Some typing_judgements -> typing_judgements
-
-    let domain { typing_judgements; } =
-      match typing_judgements with
-      | None -> Name.Set.empty
-      | Some typing_judgements ->
-        Name.Map.keys typing_judgements.names_to_types
-
-    let fold t ~init ~f =
-      match t.typing_judgements with
-      | None -> init
-      | Some typing_judgements ->
-        Name.Map.fold (fun name (level, ty) acc ->
-            f acc name level ty)
-          typing_judgements.names_to_types
-          init
-*)
 end

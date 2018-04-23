@@ -459,7 +459,7 @@ end) = struct
   let rec invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
     let meet_ty, env_extension =
-      Meet_and_join.meet ~bound_name:name (t, existing_ty) (t, ty)
+      Meet_and_join.meet ~bound_name:name t existing_ty ty
     in
     let ty_must_be_strictly_more_precise, other_ty =
       match sense with
@@ -593,33 +593,6 @@ end) = struct
       t
     end
 
-  let add_with_binding_type t (name : Name.t) cont_level
-        (binding_type : Flambda_type0_internal_intf.binding_type)
-        (binding : typing_environment_entry) =
-    (* CR mshinwell: more checks on not changing the binding type of an
-       existing name here? *)
-    let t = add t name cont_level binding in
-    match binding_type with
-    | Normal -> t
-    | Existential ->
-      { t with
-        existentials = Name.Set.add name t.existentials;
-      }
-
-(*
-  let add_env_extension_no_meet_required t env_extension scope_level =
-    Typing_env_extension.fold env_extension ~init:t
-      ~f:(fun t name (binding_type : Flambda_type0_internal_intf.binding_type)
-              _level (entry : typing_environment_entry0) ->
-        match entry with
-        | Definition ty ->
-          add_with_binding_type t name scope_level binding_type
-            (Definition ty)
-        | Equation ty ->
-          add_with_binding_type t name scope_level binding_type
-            (Equation ty))
-*)
-
   let singleton ~resolver name scope_level binding =
     add (create ~resolver) name scope_level binding
 
@@ -708,41 +681,60 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
-  let add_env_extension t env_extension scope_level =
-    let _freshening, t =
+  let rec add_or_meet_env_extension t env_extension scope_level =
+    let add_definition t freshening name ty =
+      let ty = T.rename_variables ty freshening in
+      let freshening, fresh_name =
+        match name with
+        | Var var ->
+          let fresh_name = Variable.rename var in
+          let freshening =
+            Variable.Map.add name fresh_name freshening
+          in
+          freshening, fresh_name
+        | Symbol _ ->
+          Misc.fatal_errorf "[Definition]s of symbols are not \
+              expected in environment extensions:@ %a"
+            print_env_extension env_extension
+      in
+      let t = add t name level (Definition ty) in
+      freshening, t
+    in
+    let add_equation t freshening name ty =
+      let ty = T.rename_variables ty freshening in
+      match find_opt t name with
+      | None -> add t name level (Equation ty)
+      | Some existing_ty ->
+        let meet_ty, meet_env_extension = Meet_and_join.meet t ty existing_ty in
+        let t = add_or_meet_env_extension t meet_env_extension scope_level in
+        add t name level (Equation meet_ty)
+    in
+    let freshening, t =
+      List.fold_left (fun (freshening, t) (name, ty) ->
+          add_definition t freshening name ty)
+        (Variable.Map.empty, t)
+        (List.rev env_extension.first_definitions)
+    in
+    let freshening, t =
       Scope_level.Map.fold
         (fun level by_sublevel (freshening, t) ->
           Scope_level.Sublevel.Map.fold
             (fun sublevel
                  ((name : Name.t), (entry : typing_environment_entry0)) t ->
               match entry with
+              | Definition ty -> add_definition t freshening name ty
               | Equation ty ->
-                let ty = T.rename_variables ty freshening in
-                (* XXX probably should put the meet here *)
-                let t = add t name level (Equation ty) in
+                let t = add_equation t freshening name ty in
                 freshening, t
-              | Definition ty ->
-                let ty = T.rename_variables ty freshening in
-                let freshening, fresh_name =
-                  match name with
-                  | Var var ->
-                    let fresh_name = Variable.rename var in
-                    let freshening =
-                      Variable.Map.add name fresh_name freshening
-                    in
-                    freshening, fresh_name
-                  | Symbol _ ->
-                    Misc.fatal_errorf "[Definition]s of symbols are not \
-                        expected in environment extensions:@ %a"
-                      print_env_extension env_extension
-                in
-                let t = add t name level (Definition ty) in
-                freshening, t)
             by_sublevel
             (freshening, result))
         env_extension.at_or_after_cut_point
-        (Variable.Map.empty, t)
+        (freshening, t)
     in
+    List.fold_left (fun t (name, ty) ->
+        add_equation t freshening name ty)
+      t
+      env_extension.last_equations_rev
 
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
     (* CR mshinwell: Add a split which only returns one map, the side we
@@ -758,7 +750,9 @@ end) = struct
         Scope_level.Map.add existential_if_defined_at_or_later_than
           by_sublevel after_cut_point
     in
-    { at_or_after_cut_point;
+    { first_definitions = [];
+      at_or_after_cut_point;
+      last_equations_rev = [];
     }
 
   let free_names_transitive t ty =
@@ -801,6 +795,7 @@ end) = struct
               match entry2 with
               | Definition ty | Equation ty -> ty
             in
+            (* XXX *)
             if Meet_and_join.strictly_more_precise (t1, ty1) ~than:(t2, ty2)
             then Some (level1, ty1)
             else None)

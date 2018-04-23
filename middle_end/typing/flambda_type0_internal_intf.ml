@@ -20,7 +20,7 @@ module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
-type binding_type = Normal | Existential
+type binding_type = Normal | Was_existential
 
 module S_impl (Expr : sig
   type t
@@ -274,7 +274,7 @@ end) = struct
   and env_extension = {
     first_definitions : (Name.t * t) list;
     at_or_after_cut_point : levels_to_entries;
-    last_equations : (Name.t * t) list;
+    last_equations_rev : (Name.t * t) list;
   }
 
   module Name_or_export_id = struct

@@ -415,6 +415,8 @@ struct
             in
             let result_env_extension =
               Typing_env_extension.join env_with_params
+                env_extension1
+                env_extension2
                 result_env_extension1
                 result_env_extension2
             in
@@ -572,6 +574,8 @@ struct
               in
               let result_env_extension =
                 Typing_env_extension.join env_with_params
+                  env_extension1
+                  env_extension2
                   inlinable1.result_env_extension
                   inlinable2.result_env_extension
               in
