@@ -119,7 +119,6 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
     in
     let joined_arg_tys_rev, joined_env =
       List.fold_left
-        (* XXX the env extension differs for each arg *)
         (fun (joined_arg_tys, joined_env)
              (param, all_uses_for_arg_with_env_extensions) ->
           let joined_ty =
