@@ -344,22 +344,26 @@ module Make(Ord: OrderedType) = struct
       | Node {l; v; d; r} ->
           iter f l; f v d; iter f r
 
-    let rec map f = function
-        Empty ->
+    let rec map f node =
+      match node with
+      | Empty ->
           Empty
       | Node {l; v; d; r; h} ->
           let l' = map f l in
           let d' = f d in
           let r' = map f r in
-          Node{l=l'; v; d=d'; r=r'; h}
+          if l == l' && d == d' && r == r' then node
+          else Node{l=l'; v; d=d'; r=r'; h}
 
-    let rec mapi f = function
-        Empty ->
+    let rec mapi f node =
+      match node with
+      | Empty ->
           Empty
       | Node {l; v; d; r; h} ->
           let l' = mapi f l in
           let d' = f v d in
           let r' = mapi f r in
+          if l == l' && d == d' && r == r' then node
           Node{l=l'; v; d=d'; r=r'; h}
 
     let rec fold f m accu =

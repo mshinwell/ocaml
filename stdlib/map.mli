@@ -300,7 +300,10 @@ module type S =
        associated value [a] of all bindings of [m] has been
        replaced by the result of the application of [f] to [a].
        The bindings are passed to [f] in increasing order
-       with respect to the ordering over the type of the keys. *)
+       with respect to the ordering over the type of the keys.
+       The returned map will be physically equal to the input map if every
+       call [f a] made during the mapping returns a value physically equal
+       to [a]. *)
 
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
     (** Same as {!Map.S.map}, but the function receives as arguments both the

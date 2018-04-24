@@ -2501,19 +2501,12 @@ result
     match immediates with
     | Unknown -> immediates
     | Known by_immediate ->
-      let something_changed = ref false in
       let by_immediate' =
         Immediate.Map.map (fun immediate_case ->
-            let immediate_case' =
-              rename_variables_immediate_case subst immediate_case
-            in
-            if not (immediate_case == immediate_case') then begin
-              something_changed := true
-            end;
-            immediate_case')
+            rename_variables_immediate_case subst immediate_case)
           by_immediate
       in
-      if not !something_changed then immediates
+      if by_immediate == by_immediate' then immediates
       else Known by_immediate'
 
   and rename_variables_immediate_case subst
@@ -2532,33 +2525,20 @@ result
       let something_changed = ref false in
       let by_tag' =
         Tag.Map.map (fun block_cases ->
-            let block_cases' =
-              rename_variables_block_cases subst block_cases
-            in
-            if not (block_cases == block_cases') then begin
-              something_changed := true
-            end;
-            block_cases')
+            rename_variables_block_cases subst block_cases)
           by_tag
       in
-      if not !something_changed then immediates
+      if by_tag == by_tag' then blocks
       else Known by_tag'
 
   and rename_variables_block_cases subst
         ((Blocks { by_length; }) as block_cases) =
-    let something_changed = ref false in
     let by_length' =
       Targetint.OCaml.Map.map (fun singleton_block ->
-          let singleton_block' =
-            rename_variables_singleton_block subst singleton_block
-          in
-          if not (singleton_block == singleton_block') then
-            something_changed := true
-          end;
-          singleton_block')
+          rename_variables_singleton_block subst singleton_block)
         by_length
     in
-    if not !something_changed then by_length
+    if by_length == by_length' then by_length
     else Blocks { by_length; }
 
   and rename_variables_singleton_block subst
@@ -2586,11 +2566,41 @@ result
       { env_extension = env_extension'; fields; }
 
   and rename_variables_closures subst closures =
+    let closures' =
+      Closure_id.Map.map (fun closures_entry ->
+          rename_variables_closures_entry subst closures_entry)
+        closures
+    in
+    if closures == closures' then closures
+    else closures'
 
-
+  and rename_variables_closures_entry subst
+        (( { set_of_closures; } : closures_entry) as closures_entry)
+        : closures_entry =
+    let set_of_closures' =
+      rename_variables_ty rename_variables_of_kind_fabricated subst
+        set_of_closures
+    in
+    if set_of_closures == set_of_closures' then closures_entry
+    else { set_of_closures; }
 
   and rename_variables_discriminants subst discriminants =
+    let discriminants' =
+      Closure_id.Map.map (fun discriminant_case ->
+          rename_variables_discriminant_case subst discriminant_case)
+        discriminants
+    in
+    if discriminants == discriminants' then closures
+    else discriminants'
 
+  and rename_variables_discriminant_case subst
+        (({ env_extension; } : discriminant_case) as discriminant_case
+        : discriminant_case =
+    let env_extension' =
+      rename_variables_env_extension subst env_extension
+    in
+    if env_extension == env_extension' then discriminant_case
+    else { env_extension; }
 
   and rename_variables_set_of_closures subst set =
 
