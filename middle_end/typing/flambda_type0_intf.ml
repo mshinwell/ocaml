@@ -652,11 +652,11 @@ module type S = sig
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)
-  val as_or_more_precise : t_in_context -> than:t_in_context -> bool
+  val as_or_more_precise : Typing_env0.t -> t -> than:t -> bool
 
   (** Returns [true] if the first type is known to provide strictly more
       information about the corresponding value than the type [than]. *)
-  val strictly_more_precise : t_in_context -> than:t_in_context -> bool
+  val strictly_more_precise : Typing_env0.t -> t -> than:t -> bool
 
   val rename_variables : t -> Variable.t Variable.Map.t -> t
 end

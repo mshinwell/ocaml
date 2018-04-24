@@ -206,21 +206,6 @@ module type S = sig
     -> Scope_level.t
     -> t
 
-  (** [diff t1 t2] computes the environment extension whose bindings are
-      those in [t1] that:
-        - do not occur in [t2] (where [t2] is interpreted in the
-          context of the environment [t1]); or
-        - do occur in [t2] but where [t1] specifies more precise information
-          (which for types, means closer to bottom).
-  *)
-  val diff : t -> env_extension -> env_extension
-
-  (** Return all names occurring in the type and all types referenced by it. *)
-  val free_names_transitive : t -> flambda_type -> Name_occurrences.t
-
-  (** The union of [free_names_transitive] across the given list of types. *)
-  val free_names_transitive_list : t -> flambda_type list -> Name_occurrences.t
-
   (** Follow chains of aliases until either a [No_alias] type is reached
       or a name cannot be resolved.
 

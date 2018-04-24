@@ -107,7 +107,7 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
     in
     let arg_tys_with_env_extensions =
       List.map (fun (arg_tys, env_extension) ->
-          let env_extension = TE.diff joined_env env_extension in
+          let env_extension = TE.diff env_extension joined_env in
           let arg_tys =
             List.map (fun arg_ty -> arg_ty, env_extension) arg_tys
           in

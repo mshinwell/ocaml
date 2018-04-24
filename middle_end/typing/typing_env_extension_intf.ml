@@ -89,4 +89,12 @@ module type S = sig
      : t
     -> flambda_type list
     -> t
+
+  (** [diff t env] computes the environment extension whose bindings are
+      those in [t], when interpreted in the context of [env], that:
+        - do not occur in [env]; or
+        - do occur in [env] but where [t] specifies more precise information
+          (which for types means closer to bottom).
+  *)
+  val diff : env_extension -> t -> env_extension
 end
