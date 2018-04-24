@@ -213,8 +213,8 @@ end) = struct
           let ty_with_extension, _binding_type =
             TE.find_exn env_with_extension name
           in
-          T.strictly_more_precise ??? ty_with_extension
-            ~than:ty_without_extension)
+          T.strictly_more_precise (env_with_extension, ty_with_extension)
+            ~than:(env, ty_without_extension))
         names_bound_in_env_with_equations_in_extension 
     in
     restrict_to_names t names_to_keep

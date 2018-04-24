@@ -2381,7 +2381,9 @@ result
       with type flambda_type := flambda_type
   end = Real_type_equality.Make (T)
 
-  let meet = Meet_and_join.meet
+  let meet ?bound_name env t1 t2 =
+    Meet_and_join.meet ?bound_name (env, t1) (env, t2)
+
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
