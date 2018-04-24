@@ -2448,8 +2448,8 @@ result
             of_kind_foo')
           of_kind_foos
       in
-      if !something_changed then Join of_kind_foos
-      else unknown_or_join
+      if not !something_changed then unknown_or_join
+      else Join of_kind_foos
 
   and rename_variables_of_kind_value subst of_kind_value =
     match of_kind_value with
@@ -2498,9 +2498,105 @@ result
       { immediates = immediates'; blocks = blocks'; }
 
   and rename_variables_immediates subst immediates =
+    match immediates with
+    | Unknown -> immediates
+    | Known by_immediate ->
+      let something_changed = ref false in
+      let by_immediate' =
+        Immediate.Map.map (fun immediate_case ->
+            let immediate_case' =
+              rename_variables_immediate_case subst immediate_case
+            in
+            if not (immediate_case == immediate_case') then begin
+              something_changed := true
+            end;
+            immediate_case')
+          by_immediate
+      in
+      if not !something_changed then immediates
+      else Known by_immediate'
 
+  and rename_variables_immediate_case subst
+        (({ env_extension; } : immediate_case) as immediate_case
+        : immediate_case =
+    let env_extension' =
+      rename_variables_env_extension subst env_extension
+    in
+    if env_extension == env_extension' then immediate_case
+    else { env_extension; }
 
   and rename_variables_blocks subst blocks =
+    match blocks with
+    | Unknown -> blocks
+    | Known by_tag ->
+      let something_changed = ref false in
+      let by_tag' =
+        Tag.Map.map (fun block_cases ->
+            let block_cases' =
+              rename_variables_block_cases subst block_cases
+            in
+            if not (block_cases == block_cases') then begin
+              something_changed := true
+            end;
+            block_cases')
+          by_tag
+      in
+      if not !something_changed then immediates
+      else Known by_tag'
+
+  and rename_variables_block_cases subst
+        ((Blocks { by_length; }) as block_cases) =
+    let something_changed = ref false in
+    let by_length' =
+      Targetint.OCaml.Map.map (fun singleton_block ->
+          let singleton_block' =
+            rename_variables_singleton_block subst singleton_block
+          in
+          if not (singleton_block == singleton_block') then
+            something_changed := true
+          end;
+          singleton_block')
+        by_length
+    in
+    if not !something_changed then by_length
+    else Blocks { by_length; }
+
+  and rename_variables_singleton_block subst
+        (({ env_extension; fields; } : singleton_block) as singleton_block) =
+    let env_extension' =
+      rename_variables_env_extension subst env_extension
+    in
+    let fields_changed = ref false in
+    let fields =
+      Array.map
+        (fun (field : t mutable_or_immutable) : t mutable_or_immutable ->
+          match field with
+          | Immutable t ->
+            let t' = rename_variables subst t in
+            if not (t == t') then begin
+              fields_changed := true;
+            end;
+            Immutable t'
+          | Mutable -> field)
+        fields
+    in
+    if env_extension == env_extension' && not fields_changed then
+      singleton_block
+    else
+      { env_extension = env_extension'; fields; }
+
+  and rename_variables_closures subst closures =
+
+
+
+  and rename_variables_discriminants subst discriminants =
+
+
+  and rename_variables_set_of_closures subst set =
+
+
+  and rename_variables_closure subst closure =
+
 
 
   and rename_variables_name subst (name : Name.t) =
@@ -2511,4 +2607,8 @@ result
       | var -> Var var
       end
     | Symbol _ -> name
+
+  and rename_variables_env_extension subst
+        { first_definitions; at_or_after_cut_point; last_equations_rev; } =
+
 end
