@@ -657,4 +657,6 @@ module type S = sig
   (** Returns [true] if the first type is known to provide strictly more
       information about the corresponding value than the type [than]. *)
   val strictly_more_precise : t_in_context -> than:t_in_context -> bool
+
+  val rename_variables : t -> Variable.t Variable.Map.t -> t
 end

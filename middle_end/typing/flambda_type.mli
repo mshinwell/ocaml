@@ -32,10 +32,6 @@ val unknown_types_from_arity : Flambda_arity.t -> t list
 (** Like [unknown_like] but for a array of types. *)
 val unknown_like_array : t array -> t array
 
-(** Rename free variables in a type. *)
-(* CR mshinwell: and bound ones too, now... *)
-val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
-
 (** Building of types and terms representing tagged / boxed values from
     specified constants. *)
 val this_tagged_bool_named : bool -> Flambda0.Named.t * t

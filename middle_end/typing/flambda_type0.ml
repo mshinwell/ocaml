@@ -2386,4 +2386,129 @@ result
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
     Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
+
+  let rec rename_variables ({ descr; phantom; } as t) subst =
+    let descr' = rename_variables_descr descr subst in
+    if descr == descr' then t
+    else { descr = descr'; phantom; }
+
+  and rename_variables_descr descr subst =
+    match descr with
+    | Value ty_value ->
+      let ty_value' =
+        rename_variables_ty rename_variables_of_kind_value subst
+          ty_value
+      in
+      if ty_value == ty_value' then descr
+      else Value ty_value'
+    | Naked_number (ty_naked_number, kind) ->
+      let ty_naked_number' =
+        rename_variables_ty rename_variables_of_kind_naked_number subst
+          ty_naked_number
+      in
+      if ty_naked_number == ty_naked_number' then descr
+      else Naked_number (ty_naked_number', kind)
+    | Fabricated ty_fabricated ->
+      let ty_fabricated' =
+        rename_variables_ty rename_variables_of_kind_fabricated subst
+          ty_fabricated
+      in
+      if ty_fabricated == ty_fabricated' then descr
+      else Fabricated ty_fabricated'
+
+  and rename_variables_ty rename_variables_of_kind_foo subst ty =
+    match ty with
+    | No_alias unknown_or_join ->
+      let unknown_or_join' =
+        rename_variables_unknown_or_join rename_variables_of_kind_foo subst
+          unknown_or_join
+      in
+      if unknown_or_join == unknown_or_join' then ty
+      else No_alias unknown_or_join'
+    | Type _ -> ty
+    | Equals name ->
+      let name' = rename_variables_name subst name in
+      if name == name' then ty
+      else Equals name'
+
+  and rename_variables_unknown_or_join rename_variables_of_kind_foo
+        subst unknown_or_join =
+    match unknown_or_join with
+    | Unknown -> unknown_or_join
+    | Join of_kind_foos ->
+      let something_changed = ref false in
+      let of_kind_foos =
+        List.map (fun of_kind_foo ->
+            let of_kind_foo' =
+              rename_variables_of_kind_foo subst of_kind_foo
+            in
+            if not (of_kind_foo == of_kind_foo') then begin
+              something_changed := true
+            end;
+            of_kind_foo')
+          of_kind_foos
+      in
+      if !something_changed then Join of_kind_foos
+      else unknown_or_join
+
+  and rename_variables_of_kind_value subst of_kind_value =
+    match of_kind_value with
+    | Blocks_and_tagged_immediates blocks_and_tagged_immediates ->
+      let blocks_and_tagged_immediates' =
+        rename_variables_blocks_and_tagged_immediates subst
+          blocks_and_tagged_immediates'
+      in
+      if blocks_and_tagged_immediates == blocks_and_tagged_immediates'
+      then of_kind_value
+      else Blocks_and_tagged_immediates blocks_and_tagged_immediates'
+    | Boxed_number _ -> of_kind_value
+    | Closures closures ->
+      let closures' = rename_variables_closures subst closures in
+      if closures == closures' then of_kind_value
+      else Closures closures'
+    | String _ -> of_kind_value
+
+  and rename_variables_of_kind_naked_number _subst of_kind_naked_number =
+    of_kind_naked_number
+
+  and rename_variables_of_kind_fabricated subst of_kind_fabricated =
+    match of_kind_fabricated with
+    | Discriminant discriminants ->
+      let discriminants' =
+        rename_variables_discriminants subst discriminants
+      in
+      if discriminants == discriminants' then of_kind_fabricated
+      else Discriminant discriminants'
+    | Set_of_closures set ->
+      let set' = rename_variables_set_of_closures subst set in
+      if set == set' then of_kind_fabricated
+      else Set_of_closures set'
+    | Closure closure ->
+      let closure' = rename_variables_closure subst closure in
+      if closure == closure' then of_kind_fabricated
+      else closure closure'
+
+  and rename_variables_blocks_and_tagged_immediates subst
+        ({ immediates; blocks; } as blocks_and_tagged_immediates) =
+    let immediates' = rename_variables_immediates subst immediates in
+    let blocks' = rename_variables_blocks subst blocks in
+    if immediates == immediates' && blocks == blocks' then
+      blocks_and_tagged_immediates
+    else
+      { immediates = immediates'; blocks = blocks'; }
+
+  and rename_variables_immediates subst immediates =
+
+
+  and rename_variables_blocks subst blocks =
+
+
+  and rename_variables_name subst (name : Name.t) =
+    match name with
+    | Var var ->
+      begin match Variable.Map.find var subst with
+      | exception Not_found -> name
+      | var -> Var var
+      end
+    | Symbol _ -> name
 end
