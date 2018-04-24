@@ -2602,12 +2602,146 @@ result
     if env_extension == env_extension' then discriminant_case
     else { env_extension; }
 
-  and rename_variables_set_of_closures subst set =
+  and rename_variables_set_of_closures subst
+        (({ closures; closure_elements; } : set_of_closures)
+          as set_of_closures)
+        : set_of_closures =
+    let closures =
+      rename_variables_extensibility (fun closures ->
+          Closure_id.Map.map (fun ty_fabricated ->
+              rename_variables_ty rename_variables_of_kind_fabricated
+                subst ty_fabricated)
+            closures)
+        closures
+    in
+    let closure_elements =
+      rename_variables_extensibility (fun closure_elements ->
+          Var_within_closure.Map.map (fun ty_value ->
+              rename_variables_ty rename_variables_of_kind_value
+                subst ty_value)
+            closure_elements)
+        closure_elements
+    in
+    if closures == closures' && closure_elements == closure_elements'
+    then set_of_closures
+    else { closures; closure_elements; }
 
+  and rename_variables_closure subst
+        (({ function_decls; } : closure) as closure) =
+    let function_decls' =
+      rename_variables_function_decls subst function_decls
+    in
+    if function_decls == function_decls' then closure
+    else { function_decls; }
 
-  and rename_variables_closure subst closure =
+  and rename_variables_function_decls subst function_decls =
+    match function_decls with
+    | Non_inlinable None -> function_decls
+    | Non_inlinable (Some non_inlinable) ->
+      let non_inlinable' =
+        rename_variables_non_inlinable_function_decls subst non_inlinable
+      in
+      if non_inlinable == non_inlinable' then function_decls
+      else Non_inlinable (Some non_inlinable')
+    | Inlinable inlinable ->
+      let inlinable' =
+        rename_variables_inlinable_function_decl subst inlinable
+      in
+      if inlinable == inlinable' then function_decls
+      else inlinable (Some inlinable')
 
+  and rename_variables_non_inlinable_function_decls subst
+        (({ params;
+            result;
+            result_env_extension;
+            direct_call_surrogate;
+          } : non_inlinable_function_declarations) as non_inlinable) =
+    let params_changed = ref false in
+    let params' =
+      List.map (fun t ->
+          let t' = rename_variables subst t in
+          if not (t == t') then begin
+            result_changed := true
+          end;
+          t')
+        params
+    in
+    let result_changed = ref false in
+    let result' =
+      List.map (fun t ->
+          let t' = rename_variables subst t in
+          if not (t == t') then begin
+            result_changed := true
+          end;
+          t')
+        result
+    in
+    let result_env_extension' =
+      rename_variables_env_extension subst result_env_extension
+    in
+    if (not !params_changed) && (not !result_changed)
+      && result_env_extension == result_env_extension'
+    then non_inlinable
+    else
+      { non_inlinable with
+        params = params';
+        result = result';
+        result_env_extension = result_env_extension';
+      }
 
+  and rename_variables_inlinable_function_decl subst
+        (({ closure_origin;
+            continuation_param;
+            exn_continuation_param;
+            is_classic_mode;
+            params;
+            code_id;
+            body;
+            free_names_in_body;
+            result;
+            result_env_extension;
+            stub;
+            dbg;
+            inline;
+            specialise;
+            is_a_functor;
+            invariant_params;
+            size;
+            direct_call_surrogate;
+            my_closure;
+          } : inlinable_function_declaration) as inlinable) =
+    let params_changed = ref false in
+    let params' =
+      List.map (fun (param, t) ->
+          let t' = rename_variables subst t in
+          if not (t == t') then begin
+            params_changed := true
+          end;
+          param, t')
+        params
+    in
+    let result_changed = ref false in
+    let result' =
+      List.map (fun t ->
+          let t' = rename_variables subst t in
+          if not (t == t') then begin
+            result_changed := true
+          end;
+          t')
+        result
+    in
+    let result_env_extension' =
+      rename_variables_env_extension subst result_env_extension
+    in
+    if (not !params_changed) && (not !result_changed)
+      && result_env_extension == result_env_extension'
+    then inlinable
+    else
+      { inlinable with
+        params = params';
+        result = result';
+        result_env_extension = result_env_extension';
+      }
 
   and rename_variables_name subst (name : Name.t) =
     match name with
@@ -2618,7 +2752,67 @@ result
       end
     | Symbol _ -> name
 
-  and rename_variables_env_extension subst
-        { first_definitions; at_or_after_cut_point; last_equations_rev; } =
+  and rename_variables_typing_environment_entry0 subst
+        (entry : typing_environment_entry0)
+        : typing_environment_entry0 =
+    match entry with
+    | Definition t ->
+      let t' = rename_variables subst t in
+      if t == t' then entry
+      else Definition t
+    | Equation t ->
+      let t' = rename_variables subst t in
+      if t == t' then entry
+      else Equation t
 
+  and rename_variables_env_extension subst
+        ({ first_definitions; at_or_after_cut_point; last_equations_rev; }
+          as env_extension) =
+    let first_definitions_changed = ref false in
+    let first_definitions' =
+      List.map (fun (name, t) ->
+          let t' = rename_variables subst t in
+          if not (t == t') then begin
+            first_definitions_changed := true
+          end;
+          t')
+        first_definitions
+    in
+    let at_or_after_cut_point' =
+      Scope_level.Map.map (fun by_sublevel ->
+          Scope_level.Sublevel.Map.map
+            (fun ((name, (entry : typing_environment_entry0)) as datum) ->
+              let name' =
+                match entry with
+                | Definition _ -> name
+                | Equation _ -> rename_variables_name subst name
+              in
+              let entry' =
+                rename_variables_typing_environment_entry0 subst entry
+              in
+              if name == name' && entry == entry' then datum
+              else name, entry)
+            by_sublevel)
+        at_or_after_cut_point
+    in
+    let last_equations_rev_changed = ref false in
+    let last_equations_rev' =
+      List.map (fun (name, t) ->
+          let name' = rename_variables_name subst name in
+          let t' = rename_variables subst t in
+          if (not (name == name')) || (not (t == t')) then begin
+            last_equations_rev_changed := true
+          end;
+          name', t')
+        first_definitions
+    in
+    if (not !first_definitions_changed)
+      && at_or_after_cut_point == at_or_after_cut_point'
+      && (not !last_equations_rev_changed)
+    then env_extension
+    else 
+      { first_definitions;
+        at_or_after_cut_point;
+        last_equations_rev;
+      }
 end
