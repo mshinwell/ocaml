@@ -391,6 +391,8 @@ module With_fixed_value : sig
 
   val create : primitive_application -> t option
 
+  val equal : t -> t -> bool
+
   val eligible : primitive_application -> bool
 
   val to_primitive : t -> primitive_application

@@ -28,22 +28,54 @@ end) (Typing_env0 : sig
     with type 'a unknown_or_join = 'a T.unknown_or_join
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
-    with type t_in_context := T.t_in_context
+    with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
 end) (Type_equality : sig
   include Type_equality_intf.S
     with type flambda_type := T.flambda_type
 end) = struct
-  type t = T.env_extension
-
   open T
+
+  type env_extension = T.env_extension
+  type typing_environment = T.typing_environment
+  type flambda_type = T.flambda_type
+
+  type t = env_extension
+
+  (* CR mshinwell: We need a note somewhere giving the status of [CSE]
+     entries in env extensions.  At the moment these are present but
+     ignored. *)
 
   module TE = Typing_env0
 
-  let print ppf t = print_typing_env_extension ppf t
+  let print ppf t = T.print_typing_env_extension ppf t
 
   let fast_equal t1 t2 = (t1 == t2)
+
+  let equal ~equal_type t1 t2 =
+    let equal_names_and_types (name1, ty1) (name2, ty2) =
+      Name.equal name1 name2 && equal_type ty1 ty2
+    in
+    Misc.Stdlib.List.equal equal_names_and_types
+        t1.first_definitions t2.first_definitions
+      && Scope_level.Map.equal
+           (Scope_level.Sublevel.Map.equal
+             (fun (name1, (entry1 : typing_environment_entry))
+                  (name2, (entry2 : typing_environment_entry)) ->
+               Name.equal name1 name2
+                 && match entry1, entry2 with
+                    | Definition ty1, Definition ty2 ->
+                      equal_type ty1 ty2
+                    | Equation ty1, Equation ty2 ->
+                      equal_type ty1 ty2
+                    | CSE prim1, CSE prim2 ->
+                      Flambda_primitive.With_fixed_value.equal prim1 prim2
+                    | _, _ -> false))
+           t1.at_or_after_cut_point
+           t2.at_or_after_cut_point
+      && Misc.Stdlib.List.equal equal_names_and_types
+           t1.last_equations_rev t2.last_equations_rev
 
   let invariant _t =
     (* CR mshinwell: Work out what to do here.  Probably just a check that
@@ -53,7 +85,7 @@ end) = struct
   let empty =
     { first_definitions = [];
       at_or_after_cut_point = Scope_level.Map.empty;
-      last_definitions_rev = [];
+      last_equations_rev = [];
     }
 
   let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
@@ -66,11 +98,11 @@ end) = struct
       in
       Scope_level.Map.fold (fun _level by_sublevel defined_names ->
           Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : typing_environment_entry0))
+            (fun _sublevel (name, (entry : typing_environment_entry))
                  defined_names ->
               match entry with
               | Definition _ -> Name.Set.add name defined_names
-              | Equation _ -> defined_names)
+              | Equation _ | CSE _ -> defined_names)
             by_sublevel
             defined_names)
         t.at_or_after_cut_point
@@ -80,18 +112,21 @@ end) = struct
           { first_definitions = _; at_or_after_cut_point;
             last_equations_rev; } =
       let from_at_or_after_cut_point =
-        Scope_level.Map.fold (fun by_sublevel domain ->
+        Scope_level.Map.fold (fun _level by_sublevel domain ->
             Scope_level.Sublevel.Map.fold
-              (fun (name, (entry : typing_environment_entry0)) domain ->
+              (fun _sublevel (name, (entry : typing_environment_entry))
+                   domain ->
                 match entry with
                 | Definition _ -> domain
-                | Equation _ -> Name.Set.add name domain)
-              by_sublevel)
+                | Equation _ | CSE _ -> Name.Set.add name domain)
+              by_sublevel
+              domain)
           at_or_after_cut_point
           Name.Set.empty
       in
       let from_last_equations_rev =
-        Name.Set.of_list (List.map (fun (name, _ty) -> name) first_definitions)
+        Name.Set.of_list (
+          List.map (fun (name, _ty) -> name) last_equations_rev)
       in
       Name.Set.union from_at_or_after_cut_point from_last_equations_rev
     in
@@ -104,7 +139,7 @@ end) = struct
       match Name_occurrences.choose_and_remove_amongst_everything to_follow with
       | None -> ()
       | Some (name, to_follow) ->
-        let ty, _binding_type = TE.find_exn t name in
+        let ty, _binding_type = TE.find_exn env name in
         let names = T.free_names ty in
         loop (Name_occurrences.union to_follow names)
     in
@@ -120,6 +155,7 @@ end) = struct
       tys
 
   let restrict_to_names t allowed_names =
+    let allowed_names = Name_occurrences.everything allowed_names in
     let first_definitions =
       List.filter (fun (name, _ty) ->
           Name.Set.mem name allowed_names)
@@ -164,17 +200,19 @@ end) = struct
     let acc =
       List.fold_left (fun acc (name, ty) ->
           f acc name (Definition_in_extension ty))
+        init
         (List.rev t.first_definitions)
     in
     let acc =
-      Scope_level.fold (fun _level by_sublevel acc ->
-          Scope_level.Sublevel.fold
-            (fun _sublevel (name, (entry : typing_environment_entry0)) acc ->
+      Scope_level.Map.fold (fun _level by_sublevel acc ->
+          Scope_level.Sublevel.Map.fold
+            (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
               match entry with
               | Definition ty ->
                 f acc name (Definition_in_extension ty)
               | Equation ty ->
-                f acc name (Equation ty))
+                f acc name (Equation ty)
+              | CSE _ -> acc)
             by_sublevel
             acc)
         t.at_or_after_cut_point
@@ -182,6 +220,7 @@ end) = struct
     in
     List.fold_left (fun acc (name, ty) ->
         f acc name (Equation ty))
+      acc
       t.last_equations_rev
 
   let add_definition_at_beginning t name ty =
@@ -222,7 +261,8 @@ end) = struct
       let equations_in_t1_on_env = equations_on_env t1 in
       let equations_in_t2_on_env = equations_on_env t2 in
       let allowed_names =
-        Name.Set.inter defined_names_t1 defined_names_t2
+        Name_occurrences.create_from_set_in_types (
+          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env)
       in
       let t = restrict_to_names t allowed_names in
       (* We don't need to filter the types within entries ([Equation]s or
@@ -234,9 +274,9 @@ end) = struct
       t
 
   let diff t env : t =
-    let names_more_precise, freshening =
+    let names_more_precise, _freshening =
       fold t
-        ~init:(Name.Set.t, freshening)
+        ~init:(Name.Set.empty, Variable.Map.empty)
         ~f:(fun (names_more_precise, freshening) (name : Name.t)
                 (info : fold_info) ->
           let var =
@@ -248,14 +288,14 @@ end) = struct
                 print t
           in
           match info with
-          | Definition_in_extension ty ->
+          | Definition_in_extension _ty ->
             let fresh_var = Variable.rename var in
-            let freshening = Variable.add var fresh_var freshening in
+            let freshening = Variable.Map.add var fresh_var freshening in
             let names_more_precise =
               Name.Set.add (Name.var fresh_var) names_more_precise
             in
             names_more_precise, freshening
-          | Equation ->
+          | Equation ty ->
             let var =
               match Variable.Map.find var freshening with
               | exception Not_found -> var
@@ -273,16 +313,25 @@ end) = struct
               let more_precise_using_old_types_for_free_names =
                 T.strictly_more_precise env ty ~than:old_ty
               in
-              let free_names = T.free_names_set ty in
-              let more_precise_using_new_types_for_free_names =
-                not (Name.Set.empty (
-                  Name.Set.inter free_names names_more_precise))
-              in
-              if more_precise_using_new_types_for_free_names then
-                let names_more_precise = Name.Set.add name names_more_precise in
+              if more_precise_using_old_types_for_free_names then
+                let names_more_precise =
+                  Name.Set.add name names_more_precise
+                in
                 names_more_precise, freshening
               else
-                names_more_precise, freshening)
+                let free_names = T.free_names_set ty in
+                let more_precise_using_new_types_for_free_names =
+                  not (Name.Set.is_empty (
+                    Name.Set.inter free_names names_more_precise))
+                in
+                if more_precise_using_new_types_for_free_names then
+                  let names_more_precise =
+                    Name.Set.add name names_more_precise
+                  in
+                  names_more_precise, freshening
+                else
+                  names_more_precise, freshening)
     in
-    restrict_to_names t names_more_precise
+    restrict_to_names t
+      (Name_occurrences.create_from_set_in_types names_more_precise)
 end

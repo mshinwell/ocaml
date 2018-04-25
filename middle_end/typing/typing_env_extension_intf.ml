@@ -32,7 +32,10 @@ module type S = sig
   (** Print the given typing environment to a formatter. *)
   val print : Format.formatter -> t -> unit
 
-  (** Equality on two environment extensions, given equality on types. *)
+  (** Equality on two environment extensions, given equality on types.
+      Note that this doesn't do anything fancy such as making a canonical
+      form of environment from the extensions; it's just a structural
+      comparison. *)
   val equal
      : equal_type:(flambda_type -> flambda_type -> bool)
     -> t
@@ -91,5 +94,5 @@ module type S = sig
         - do not occur in [env]; or
         - do occur in [env] but where [t] contains a more precise type.
   *)
-  val diff : env_extension -> t -> env_extension
+  val diff : env_extension -> typing_environment -> env_extension
 end

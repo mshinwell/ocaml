@@ -1168,4 +1168,7 @@ module With_fixed_value = struct
     let compare = compare
     let print = print
   end)
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
 end

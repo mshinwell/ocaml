@@ -27,8 +27,10 @@ module type S = sig
   (* Least upper bound of two types of a particular kind. *)
   val join_ty
      : typing_environment
-    -> (env_extension * of_kind_foo ty)
-    -> (env_extension * of_kind_foo ty)
+    -> env_extension
+    -> env_extension
+    -> of_kind_foo ty
+    -> of_kind_foo ty
     -> of_kind_foo ty
 
   (* Greatest lower bound of two types of a particular kind. *)
@@ -41,30 +43,33 @@ end
 
 module type S_for_types = sig
   type flambda_type
-  type t_in_context
+  type typing_environment
   type env_extension
 
   val meet
      : ?bound_name:Name.t
-    -> t_in_context
-    -> t_in_context
+    -> typing_environment
+    -> flambda_type
+    -> flambda_type
     -> flambda_type * env_extension
 
-  val join : t_in_context -> t_in_context -> flambda_type
+  val join
+     : typing_environment
+    -> env_extension
+    -> env_extension
+    -> flambda_type
+    -> flambda_type
+    -> flambda_type
 
-  val meet_env_extension
-     : resolver:(Export_id.t -> flambda_type option)
-    -> env_extension
-    -> env_extension
-    -> env_extension
+  val as_or_more_precise
+     : typing_environment
+    -> flambda_type
+    -> than:flambda_type
+    -> bool
 
-  val join_env_extension
-     : resolver:(Export_id.t -> flambda_type option)
-    -> env_extension
-    -> env_extension
-    -> env_extension
-
-  val as_or_more_precise : t_in_context -> than:t_in_context -> bool
-
-  val strictly_more_precise : t_in_context -> than:t_in_context -> bool
+  val strictly_more_precise
+     : typing_environment
+    -> flambda_type
+    -> than:flambda_type
+    -> bool
 end

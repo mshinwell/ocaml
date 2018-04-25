@@ -22,11 +22,10 @@ end) (Typing_env_extension : sig
   include Typing_env_extension_intf.S
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
-    with type typing_environment_entry0 := T.typing_environment_entry0
     with type flambda_type := T.flambda_type
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
-    with type t_in_context := T.t_in_context
+    with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
 end) (Type_equality : sig
@@ -48,62 +47,13 @@ end) = struct
 
   let print = print_typing_environment
 
-  let fast_equal env1 env2 =
-    env1 == env2
-      || (Name.Map.is_empty env1.names_to_types
-            && Name.Map.is_empty env2.names_to_types
-            && Flambda_primitive.With_fixed_value.Map.is_empty
-                 env1.cse_to_names
-            && Flambda_primitive.With_fixed_value.Map.is_empty
-                 env2.cse_to_names)
-
-  let equal
-        ({ resolver = _;
-           names_to_types = names_to_types1;
-           levels_to_entries = _;
-           cse_to_names = cse_to_names1;
-           next_sublevel_by_level = _;
-           existentials = existentials1;
-           existential_freshening = _;
-        } as t1)
-        ({ resolver = _;
-           names_to_types = names_to_types2;
-           levels_to_entries = _;
-           cse_to_names = cse_to_names2;
-           next_sublevel_by_level = _;
-           existentials = existentials2;
-           existential_freshening = _;
-        } as t2) =
-    if fast_equal t1 t2 then true
-    else
-      let equal_entry (entry1 : typing_environment_entry0)
-            (entry2 : typing_environment_entry0) =
-        match entry1, entry2 with
-        | Definition ty1, Definition ty2 ->
-          Type_equality.equal ty1 ty2
-        | Equation ty1, Equation ty2 ->
-          Type_equality.equal ty1 ty2
-        | Definition _, Equation _
-        | Equation _, Definition _ -> false
-      in
-      let equal_scope_and_entry (scope1, entry1) (scope2, entry2) =
-        Scope_level.With_sublevel.equal scope1 scope2
-          && equal_entry entry1 entry2
-      in
-      Name.Map.equal equal_scope_and_entry names_to_types1 names_to_types2
-        && Flambda_primitive.With_fixed_value.Map.equal Name.equal
-             cse_to_names1 cse_to_names2
-        && Name.Set.equal existentials1 existentials2
-
   let create ~resolver =
-    let existential_freshening = Freshening.activate Freshening.empty in
     { resolver;
       names_to_types = Name.Map.empty;
       cse_to_names = Flambda_primitive.With_fixed_value.Map.empty;
       levels_to_entries = Scope_level.Map.empty;
       next_sublevel_by_level = Scope_level.Map.empty;
-      existentials = Name.Set.empty;
-      existential_freshening;
+      were_existentials = Name.Set.empty;
     }
 
   let create_using_resolver_from t = create ~resolver:t.resolver
@@ -113,20 +63,8 @@ end) = struct
   let is_empty t = Name.Map.is_empty t.names_to_types
 
   let domain t =
-    let domain =
-      Name.Set.diff (Name.Map.keys t.names_to_types) t.existentials
-    in
-    Name_occurrences.create_from_set_in_terms domain
-
-  let find0_opt t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found -> None
-    | scope_level, entry ->
-      let binding_type : Flambda_type0_internal_intf.binding_type =
-        if Name.Set.mem name t.existentials then Existential
-        else Normal
-      in
-      Some (binding_type, scope_level, entry)
+    Name_occurrences.create_from_set_in_terms
+      (Name.Map.keys t.names_to_types)
 
   let find_exn t name
         : flambda_type * Flambda_type0_internal_intf.binding_type =
@@ -137,18 +75,14 @@ end) = struct
         print_typing_environment t
     | _scope_level, entry ->
       let binding_type : Flambda_type0_internal_intf.binding_type =
-        if Name.Set.mem name t.existentials then Existential
+        if Name.Set.mem name t.were_existentials then Was_existential
         else Normal
       in
       let ty =
         match entry with
         | Definition ty | Equation ty -> ty
       in
-      match binding_type with
-      | Normal -> ty, Normal
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        ty, Existential
+      ty, binding_type
 
   type still_unresolved =
     | Resolved
@@ -255,7 +189,7 @@ end) = struct
         Scope_level.Sublevel.Map.fold (fun sublevel (name, entry) acc ->
           let scope_level = Scope_level.With_sublevel.create level sublevel in
           let binding_type : Flambda_type0_internal_intf.binding_type =
-            if Name.Set.mem name t.existentials then Existential
+            if Name.Set.mem name t.were_existentials then Was_existential
             else Normal
           in
           f acc name binding_type scope_level entry)
@@ -280,7 +214,7 @@ end) = struct
           | Some entry0 ->
             let scope_level = Scope_level.With_sublevel.create level sublevel in
             let binding_type : Flambda_type0_internal_intf.binding_type =
-              if Name.Set.mem name t.existentials then Existential
+              if Name.Set.mem name t.were_existentials then Was_existential
               else Normal
             in
             f acc name binding_type scope_level entry0)
@@ -366,11 +300,11 @@ end) = struct
       | exception Not_found -> None
       | name -> Some name
 
-  let is_existential_exn t name =
+  let was_existential_exn t name =
     let _ty, binding_type = find_exn t name in
     match binding_type with
     | Normal -> false
-    | Existential -> true
+    | Was_existential -> true
 
   let allocate_sublevel t level =
     let sublevel =
@@ -449,9 +383,9 @@ end) = struct
           print_typing_environment t
       | Equation _ | CSE _ -> ()
 
-  let rec invariant_for_new_equation t name (ty : flambda_type) ~sense =
+  let invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
-    let meet_ty, env_extension =
+    let meet_ty, _env_extension =
       Meet_and_join.meet ~bound_name:name t existing_ty ty
     in
     let ty_must_be_strictly_more_precise, other_ty =
@@ -477,7 +411,8 @@ end) = struct
         T.print existing_ty
         print_sense sense
         print_typing_environment t
-    end;
+    end
+(* XXX Not sure about this part
     Typing_env_extension.iter env_extension
       ~f:(fun name _binding_type level (entry : typing_environment_entry0) ->
         let ty =
@@ -488,6 +423,8 @@ end) = struct
         invariant_for_any_new_binding t name level (Equation ty);
         invariant_for_new_equation t name ty
           ~sense:Existing_equation_must_be_more_precise)
+*)
+  let _ = ignore Existing_equation_must_be_more_precise
 
   let invariant_for_new_binding t name level
         (entry : typing_environment_entry) =
@@ -590,11 +527,11 @@ end) = struct
     add (create ~resolver) name scope_level binding
 
   let max_level t =
-    match Scope_level.Map.max_binding_opt with
+    match Scope_level.Map.max_binding_opt t.levels_to_entries with
     | None -> Scope_level.initial
     | Some (level, _) -> level
 
-  let restrict_to_names0 ?don't_check_invariant t allowed =
+  let restrict_to_names0 t allowed =
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
@@ -612,10 +549,7 @@ end) = struct
           else Some by_sublevel)
         t.levels_to_entries
     in
-    let existentials = Name.Set.inter t.existentials allowed in
-    let existential_freshening =
-      Freshening.restrict_to_names t.existential_freshening allowed
-    in
+    let were_existentials = Name.Set.inter t.were_existentials allowed in
     let cse_to_names =
       Flambda_primitive.With_fixed_value.Map.filter (fun prim name ->
           let names_in_prim =
@@ -631,15 +565,11 @@ end) = struct
         cse_to_names;
         levels_to_entries;
         next_sublevel_by_level = t.next_sublevel_by_level;
-        existentials;
-        existential_freshening;
+        were_existentials;
       }
     in
     try
-      begin match don't_check_invariant with
-      | None -> invariant t
-      | Some () -> ()
-      end;
+      invariant t;
       t
     with Misc.Fatal_error -> begin
       Format.eprintf "\n%sContext is: \
@@ -651,10 +581,6 @@ end) = struct
         print_typing_environment t;
       raise Misc.Fatal_error
     end
-
-  let restrict_to_names t allowed =
-    let allowed = Name_occurrences.everything allowed in
-    restrict_to_names0 t allowed
 
   let restrict_to_symbols t =
     let symbols = Name.symbols_only_map t.names_to_types in
@@ -676,34 +602,34 @@ end) = struct
 
   let rec add_or_meet_or_join_env_extension t env_extension scope_level
         ~meet_or_join =
-    let add_definition t freshening name ty =
+    let add_definition t freshening (name : Name.t) ty =
       let ty = T.rename_variables ty freshening in
       let freshening, fresh_name =
         match name with
         | Var var ->
-          let fresh_name = Variable.rename var in
+          let fresh_var = Variable.rename var in
           let freshening =
-            Variable.Map.add name fresh_name freshening
+            Variable.Map.add var fresh_var freshening
           in
-          freshening, fresh_name
+          freshening, Name.var fresh_var
         | Symbol _ ->
           Misc.fatal_errorf "[Definition]s of symbols are not \
               expected in environment extensions:@ %a"
-            print_env_extension env_extension
+            Typing_env_extension.print env_extension
       in
-      let t = add t name level (Definition ty) in
+      let t = add t fresh_name scope_level (Definition ty) in
       freshening, t
     in
     let add_equation t freshening name ty =
       let ty = T.rename_variables ty freshening in
       match find_opt t name with
-      | None -> add t name level (Equation ty)
-      | Some existing_ty ->
+      | None -> add t name scope_level (Equation ty)
+      | Some (existing_ty, _binding_type) ->
         match meet_or_join t ty ~existing_ty with
         | None -> t
         | Some (new_ty, new_env_extension)->
           let t = add_or_meet_env_extension t new_env_extension scope_level in
-          add t name level (Equation new_ty)
+          add t name scope_level (Equation new_ty)
     in
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
@@ -713,17 +639,19 @@ end) = struct
     in
     let freshening, t =
       Scope_level.Map.fold
-        (fun level by_sublevel (freshening, t) ->
+        (fun _level by_sublevel (freshening, t) ->
           Scope_level.Sublevel.Map.fold
-            (fun sublevel
-                 ((name : Name.t), (entry : typing_environment_entry0)) t ->
+            (fun _sublevel
+                 ((name : Name.t), (entry : typing_environment_entry))
+                 (freshening, t) ->
               match entry with
               | Definition ty -> add_definition t freshening name ty
               | Equation ty ->
                 let t = add_equation t freshening name ty in
-                freshening, t)
+                freshening, t
+              | CSE _ -> freshening, t)
             by_sublevel
-            (freshening, result))
+            (freshening, t))
         env_extension.at_or_after_cut_point
         (freshening, t)
     in
@@ -732,11 +660,11 @@ end) = struct
       t
       env_extension.last_equations_rev
 
-  let add_or_meet_env_extension t env_extension scope_level =
+  and add_or_meet_env_extension t env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
       ~meet_or_join:(fun env ty ~existing_ty ->
         let meet_ty, meet_env_extension =
-          Meet_or_join.meet env ty existing_ty
+          Meet_and_join.meet env ty existing_ty
         in
         let as_or_more_precise = Type_equality.equal meet_ty ty in
         let strictly_more_precise =
@@ -748,12 +676,12 @@ end) = struct
   let add_or_join_env_extension t env_extension1 env_extension2
         env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
-      ~meet_or_join:(fun env ty1 ty2 ->
+      ~meet_or_join:(fun env ty ~existing_ty ->
         let join_ty =
-          Meet_or_join.join env env_extension1 env_extension2 ty1 ty2
+          Meet_and_join.join env env_extension1 env_extension2 ty existing_ty
         in
         let meet_ty, _meet_env_extension =
-          Meet_or_join.meet env join_ty existing_ty
+          Meet_and_join.meet env join_ty existing_ty
         in
         let as_or_more_precise = Type_equality.equal meet_ty join_ty in
         let strictly_more_precise =

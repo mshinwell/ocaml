@@ -345,6 +345,11 @@ module type S = sig
     -> typing_environment
     -> unit
 
+  val print_typing_env_extension
+     : Format.formatter
+    -> env_extension
+    -> unit
+
   val free_names : flambda_type -> Name_occurrences.t
 
   val free_names_set : flambda_type -> Name.Set.t
@@ -370,4 +375,10 @@ module type S = sig
     -> t * env_extension
 
   val is_empty_typing_environment : typing_environment -> bool
+
+  val as_or_more_precise : typing_environment -> t -> than:t -> bool
+
+  val strictly_more_precise : typing_environment -> t -> than:t -> bool
+
+  val rename_variables : t -> Variable.t Variable.Map.t -> t
 end

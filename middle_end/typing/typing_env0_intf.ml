@@ -37,13 +37,6 @@ module type S = sig
   (** Print the given typing environment to a formatter. *)
   val print : Format.formatter -> t -> unit
 
-  (** Equality on two environments. *)
-  val equal : t -> t -> bool
-
-  (** A sound but not complete equality function which is much faster than
-      [equal]. *)
-  val fast_equal : t -> t -> bool
-
   (** Create an empty environment using the given [resolver] to locate the
       definitions of export identifiers (e.g. by loading .cmx files). *)
   val create : resolver:(Export_id.t -> flambda_type option) -> t
@@ -61,10 +54,15 @@ module type S = sig
   val is_empty : t -> bool
 
   (** The names for which the given typing environment specifies a type
-      assignment.  (Note that [domain] returning an empty name occurrences
-      structure does not imply that [is_empty] holds; there may still be CSE
-      equations, which [domain] does not look at.) *)
+      assignment, including for names which were once existentially-bound. (Note
+      that [domain] returning an empty name occurrences structure does not imply
+      that [is_empty] holds; there may still be CSE equations, which [domain]
+      does not look at.) *)
   val domain : t -> Name_occurrences.t
+
+  (** The highest scope level for which the given environment contains a
+      binding. *)
+  val max_level : t -> Scope_level.t
 
   (** Define the type of a name, add a typing equation on a name, or add a
       CSE equation on one or more names.  Names may not be redefined nor
