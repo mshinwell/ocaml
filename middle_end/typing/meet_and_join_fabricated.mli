@@ -59,7 +59,7 @@ end) (Make_meet_and_join : functor
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
-        with type t_in_context := T.t_in_context
+        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
     end) (Typing_env0 : sig

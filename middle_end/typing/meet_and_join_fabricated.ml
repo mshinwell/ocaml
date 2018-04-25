@@ -61,12 +61,13 @@ end) (Make_meet_and_join : functor
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
-        with type t_in_context := T.t_in_context
+        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
     end) (Typing_env0 : sig
       include Typing_env0_intf.S
         with type typing_environment := T.typing_environment
+        with type typing_environment_entry := T.typing_environment_entry
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
         with type t_in_context := T.t_in_context
@@ -111,15 +112,14 @@ struct
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_bottom.t =
       if closure1 == closure2 then begin
-        Ok (closure1, Typing_env_extension.create ())
+        Ok (closure1, Typing_env_extension.empty)
       end else begin
-        let resolver = env1.resolver in
         let cannot_prove_different ~params1 ~params2
               ~param_names1 ~param_names2 ~result1 ~result2
               ~result_env_extension1 ~result_env_extension2 : _ Or_bottom.t =
           let same_arity = List.compare_lengths params1 params2 = 0 in
           let same_num_results = List.compare_lengths result1 result2 = 0 in
-          let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+          let env_extension_from_meet = ref (Typing_env_extension.empty) in
           let has_bottom params = List.exists is_obviously_bottom params in
           let params_changed = ref Neither in
           let params : _ Or_bottom.t =
@@ -127,22 +127,15 @@ struct
             else
               let params2_to_params1_freshening, param_names =
                 match param_names1, param_names2 with
-                | None, None -> Variable.Map.empty
+                | None, None -> Variable.Map.empty, []
                 | None, Some param_names2 -> Variable.Map.empty, param_names2
                 | Some param_names1, None -> Variable.Map.empty, param_names1
                 | Some param_names1, Some param_names2 ->
                   (* This must match up with the code some distance below,
                      where the left-hand function declarations (the ones
                      whose parameter names are "param_names1") are chosen. *)
-                  let param_names1 =
-                    List.map (fun (param, _ty) -> Parameter.var param)
-                      param_names1
-                  in
-                  let param_names2 =
-                    List.map (fun (param, _ty) -> Parameter.var param)
-                      param_names2
-                  in
-                  Variable.Map.of_list (List.combine param_names2 param_names1)
+                  Variable.Map.of_list (List.combine param_names2 param_names1),
+                    param_names1
               in
               let params =
                 List.map2 (fun t1 t2 ->
@@ -156,7 +149,7 @@ struct
                       params_changed := join_changes !params_changed Right
                     end;
                     env_extension_from_meet :=
-                      Meet_and_join.meet_env_extension env
+                      Typing_env_extension.meet env
                         new_env_extension_from_meet !env_extension_from_meet;
                     t)
                   params1
@@ -172,19 +165,13 @@ struct
             let result : _ Or_bottom.t =
               if not same_num_results then Bottom
               else
+                let scope_level = Typing_env0.max_level env in
                 let env_with_params =
-                  let scope_level =
-                    Scope_level.next (Typing_env0.max_level env)
-                  in
-                  match param_names with
-                  | None -> env
-                  | Some param_names ->
-                    List.fold_left2 (fun env param param_ty ->
-                        let param_name = Parameter.name param in
-                        Typing_env0.add env param_name level
-                          (Definition param_ty))
-                      env
-                      param_names params
+                  List.fold_left2 (fun env param param_ty ->
+                      Typing_env0.add env (Name.var param) scope_level
+                        (Definition param_ty))
+                    env
+                    param_names param_tys
                 in
                 let result_env_extension2 =
                   Typing_env_extension.rename_variables_not_occurring_in_domain
@@ -196,11 +183,11 @@ struct
                 in
                 let result_env_extension_changed : changes =
                   let changed1 =
-                    not (Typing_env_extension.phys_equal
+                    not (Typing_env_extension.fast_equal
                       result_env_extension1 result_env_extension)
                   in
                   let changed2 =
-                    not (Typing_env_extension.phys_equal
+                    not (Typing_env_extension.fast_equal
                       result_env_extension2 result_env_extension)
                   in
                   match changed1, changed2 with
@@ -210,8 +197,8 @@ struct
                   | true, true -> Both
                 in
                 let result_env =
-                  Typing_env0.add_env_extension env_with_params
-                    result_env_extension
+                  Typing_env0.add_or_meet_env_extension env_with_params
+                    result_env_extension scope_level;
                 in
                 let result =
                   List.map2 (fun t1 t2 ->
@@ -225,17 +212,19 @@ struct
                         result_changed := join_changes !result_changed Right
                       end;
                       env_extension_from_meet :=
-                        Meet_and_join.meet_env_extension
+                        Typing_env_extension.meet result_env
                           new_env_extension_from_meet !env_extension_from_meet;
                       t)
                     result1
                     result2
                 in
                 if has_bottom result then Bottom
-                else Ok result
+                else
+                  Ok (result, result_env_extension,
+                      result_env_extension_changed)
             in
             match result with
-            | Ok result ->
+            | Ok (result, result_env_extension, result_env_extension_changed) ->
               let changed =
                 join_changes !params_changed
                   (join_changes !result_changed result_env_extension_changed)
@@ -249,8 +238,14 @@ struct
           | Inlinable inlinable1, Inlinable inlinable2 ->
             let params1 = List.map snd inlinable1.params in
             let params2 = List.map snd inlinable2.params in
-            let param_names1 = List.map fst inlinable1.params in
-            let param_names2 = List.map fst inlinable2.params in
+            let param_names1 =
+              List.map (fun (param, _ty) -> Parameter.var param)
+                inlinable1.params
+            in
+            let param_names2 =
+              List.map (fun (param, _ty) -> Parameter.var param)
+                inlinable2.params
+            in
             let result =
               cannot_prove_different ~params1 ~params2
                 ~param_names1:(Some param_names1)
@@ -290,17 +285,17 @@ struct
               Bottom
             end
           | Non_inlinable None, Non_inlinable None ->
-            Ok (Non_inlinable None, Typing_env_extension.create ())
+            Ok (Non_inlinable None, Typing_env_extension.empty)
           | Non_inlinable (Some non_inlinable), Non_inlinable None
           | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
             (* We can arbitrarily pick one side or the other: we choose the
                side which gives a more precise type. *)
             Ok (Non_inlinable (Some non_inlinable),
-              Typing_env_extension.create ())
+              Typing_env_extension.empty)
           | Non_inlinable None, Inlinable inlinable
           | Inlinable inlinable, Non_inlinable None ->
             (* Likewise. *)
-            Ok (Inlinable inlinable, Typing_env_extension.create ())
+            Ok (Inlinable inlinable, Typing_env_extension.empty)
           | Non_inlinable (Some non_inlinable1),
               Non_inlinable (Some non_inlinable2) ->
             let result =
@@ -332,7 +327,10 @@ struct
           | Non_inlinable (Some non_inlinable), Inlinable inlinable
           | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
             let params1 = List.map snd inlinable.params in
-            let param_names1 = List.map fst inlinable.params in
+            let param_names1 =
+              List.map (fun (param, _ty) -> Parameter.var param)
+                inlinable.params
+            in
             let result =
               cannot_prove_different
                 ~params1
@@ -401,10 +399,11 @@ struct
             let add_params_to_env_extension param_names env_extension =
               match param_names with
               | None -> env_extension
-              | Some env_extension ->
+              | Some param_names ->
                 List.fold_left2 (fun env_extension param param_name ->
                     Typing_env_extension.add_definition_at_beginning
-                      env_extension param_name param)
+                      env_extension (Parameter.name param_name) param)
+                  env_extension
                   params param_names
             in
             let result_env_extension1 =
@@ -414,7 +413,7 @@ struct
               add_params_to_env_extension param_names2 result_env_extension2
             in
             let result_env_extension =
-              Typing_env_extension.join env_with_params
+              Typing_env_extension.join env
                 env_extension1
                 env_extension2
                 result_env_extension1
@@ -422,24 +421,21 @@ struct
             in
             let result =
               let result_env =
-                Typing_env0.add_env_extension env_with_params
+                Typing_env0.add_or_meet_env_extension env
                   result_env_extension
+                  (Typing_env0.max_level env)
               in
               let result_env_extension1 =
-                Typing_env_extension.diff env_with_params
-                  result_env_extension1
-                  result_env_extension
+                Typing_env_extension.diff result_env_extension1 result_env
               in
               let result_env_extension2 =
-                Typing_env_extension.diff env_with_params
-                  result_env_extension2
-                  result_env_extension
+                Typing_env_extension.diff result_env_extension2 result_env
               in
               List.map2 (fun t1 t2 ->
                   Meet_and_join.join result_env
                     result_env_extension1 result_env_extension2
-                    t1 ty)
-                result12
+                    t1 t2)
+                result1
                 result2
             in
             let direct_call_surrogate =
@@ -558,19 +554,16 @@ struct
                   inlinable1.params
                   inlinable2.params
               in
+              let scope_level =
+                Scope_level.next (Typing_env0.max_level env)
+              in
               let env_with_params =
-                let scope_level =
-                  Scope_level.next (Typing_env0.max_level env)
-                in
-                match param_names with
-                | None -> env
-                | Some param_names ->
-                  List.fold_left2 (fun env param param_ty ->
-                      let param_name = Parameter.name param in
-                      Typing_env0.add env param_name level
-                        (Definition param_ty))
-                    env
-                    param_names params
+                List.fold_left (fun env (param, ty) ->
+                    let param_name = Parameter.name param in
+                    Typing_env0.add env param_name scope_level
+                      (Definition ty))
+                  env
+                  params
               in
               let result_env_extension =
                 Typing_env_extension.join env_with_params
@@ -581,23 +574,22 @@ struct
               in
               let result =
                 let result_env =
-                  Typing_env0.add_env_extension env_with_params
+                  Typing_env0.add_or_meet_env_extension env_with_params
                     result_env_extension
+                    scope_level
                 in
                 let result_env_extension1 =
-                  Typing_env_extension.diff env_with_params
-                    inlinable1.result_env_extension
-                    result_env_extension
+                  Typing_env_extension.diff inlinable1.result_env_extension
+                    result_env
                 in
                 let result_env_extension2 =
-                  Typing_env_extension.diff env_with_params
-                    inlinable2.result_env_extension
-                    result_env_extension
+                  Typing_env_extension.diff inlinable2.result_env_extension
+                    result_env
                 in
                 List.map2 (fun t1 t2 ->
                     Meet_and_join.join result_env
                       result_env_extension1 result_env_extension2
-                      t1 ty)
+                      t1 t2)
                   inlinable1.result
                   inlinable2.result
               in
@@ -639,7 +631,7 @@ struct
     let meet_set_of_closures env
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * env_extension) Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+      let env_extension_from_meet = ref (Typing_env_extension.empty) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
         match set1.closures, set2.closures with
@@ -913,7 +905,7 @@ struct
                   ({ env_extension = env_extension2; } : discriminant_case)
                   : discriminant_case ->
               let env_extension =
-                Meet_and_join.meet_env_extension env
+                Typing_env_extension.meet env
                   env_extension1 env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
@@ -923,12 +915,12 @@ struct
         in
         begin match Discriminant.Map.get_singleton discriminants with
         | None ->
-          Ok (Discriminant discriminants, Typing_env_extension.create ())
+          Ok (Discriminant discriminants, Typing_env_extension.empty)
         | Some (discriminant, discriminant_case) ->
           let env_extension_from_meet = discriminant_case.env_extension in
           let discriminants =
             Discriminant.Map.singleton discriminant
-              ({ env_extension = Typing_env_extension.create (); }
+              ({ env_extension = Typing_env_extension.empty; }
                 : discriminant_case)
           in
           Ok (Discriminant discriminants, env_extension_from_meet)
@@ -968,7 +960,7 @@ struct
                   ({ env_extension = env_extension2'; } : discriminant_case)
                   : discriminant_case ->
               let env_extension =
-                Meet_and_join.join_env_extension env
+                Typing_env_extension.join env
                   env_extension1 env_extension2
                   env_extension1' env_extension2'
               in

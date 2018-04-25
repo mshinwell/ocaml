@@ -89,6 +89,11 @@ module type S = sig
     -> flambda_type list
     -> t
 
+  val rename_variables_not_occurring_in_domain
+     : t
+    -> Variable.t Variable.Map.t
+    -> t
+
   (** [diff t env] computes the environment extension whose bindings are
       those in [t], when interpreted in the context of [env], that:
         - do not occur in [env]; or

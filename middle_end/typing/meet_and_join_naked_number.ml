@@ -65,7 +65,7 @@ end) (Make_meet_and_join : functor
          with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
-        with type t_in_context := T.t_in_context
+        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
     end) (Typing_env0 : sig
@@ -110,7 +110,7 @@ struct
       | Immediate fs1, Immediate fs2 ->
         let fs = Immediate.Set.inter fs1 fs2 in
         if Immediate.Set.is_empty fs then Bottom
-        else Ok (Immediate fs, Typing_env_extension.create ())
+        else Ok (Immediate fs, Typing_env_extension.empty)
       | _, _ -> Bottom
 
     let join_of_kind_foo _env _env_extension1 _env_extension2
@@ -146,7 +146,7 @@ struct
       | Float fs1, Float fs2 ->
         let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
         if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok (Float fs, Typing_env_extension.create ())
+        else Ok (Float fs, Typing_env_extension.empty)
       | _, _ -> Bottom
 
     let join_of_kind_foo _env _env_extension1 _env_extension2
@@ -181,7 +181,7 @@ struct
       | Int32 is1, Int32 is2 ->
         let is = Int32.Set.inter is1 is2 in
         if Int32.Set.is_empty is then Bottom
-        else Ok (Int32 is, Typing_env_extension.create ())
+        else Ok (Int32 is, Typing_env_extension.empty)
       | _, _ -> Bottom
 
     let join_of_kind_foo _env _env_extension1 _env_extension2
@@ -216,7 +216,7 @@ struct
       | Int64 is1, Int64 is2 ->
         let is = Int64.Set.inter is1 is2 in
         if Int64.Set.is_empty is then Bottom
-        else Ok (Int64 is, Typing_env_extension.create ())
+        else Ok (Int64 is, Typing_env_extension.empty)
       | _, _ -> Bottom
 
     let join_of_kind_foo _env _env_extension1 _env_extension2
@@ -251,7 +251,7 @@ struct
       | Nativeint is1, Nativeint is2 ->
         let is = Targetint.Set.inter is1 is2 in
         if Targetint.Set.is_empty is then Bottom
-        else Ok (Nativeint is, Typing_env_extension.create ())
+        else Ok (Nativeint is, Typing_env_extension.empty)
       | _, _ -> Bottom
 
     let join_of_kind_foo _env _env_extension1 _env_extension2

@@ -334,4 +334,8 @@ end) = struct
     in
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
+
+  let rename_variables_not_occurring_in_domain t _freshening =
+    (* XXX *)
+    t
 end
