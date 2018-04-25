@@ -41,24 +41,13 @@ end) = struct
   module T = Flambda_type0_internal_intf.S_impl (Expr)
   include T
 
-  (* CR mshinwell: think about existentials *)
   let is_empty_typing_environment (env : typing_environment) =
     Name.Map.is_empty env.names_to_types
 
-  let is_empty_env_extension (env_extension : env_extension) =
-    match env_extension.typing_judgements with
-    | None -> true
-    | Some typing_judgements ->
-      is_empty_typing_environment typing_judgements
-
-  let create_env_extension () =
-    { typing_judgements = None;
-    }
-
-  let domain_env_extension (env_extension : env_extension) =
-    match env_extension.typing_judgements with
-    | None -> Name.Set.empty
-    | Some typing_judgements -> Name.Map.keys typing_judgements.names_to_types
+  let is_empty_env_extension (ext : env_extension) =
+    match ext.first_definitions, ext.last_equations_rev with
+    | [], [] -> Scope_level.Map.is_empty ext.at_or_after_cut_point
+    | _, _ -> false
 
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
@@ -140,7 +129,7 @@ end) = struct
   let rec print_immediate_case ~cache ppf
         ({ env_extension; } : immediate_case) =
     Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
-      (print_env_extension_with_cache ~cache) env_extension
+      (print_typing_env_extension_with_cache ~cache) env_extension
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
@@ -157,7 +146,7 @@ end) = struct
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(env_extension@ %a)@]@ \
           @[<hov 1>(fields@ %a)@])@]"
-        (print_env_extension_with_cache ~cache) env_extension
+        (print_typing_env_extension_with_cache ~cache) env_extension
         (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Blocks { by_length; }) : block_cases) =
@@ -183,14 +172,14 @@ end) = struct
 
   and print_of_kind_value ~cache ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
-    | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
-      begin match blocks, immediates, is_int, get_tag with
-      | Known blocks, Known immediates, None, None
+    | Blocks_and_tagged_immediates { blocks; immediates; } ->
+      begin match blocks, immediates with
+      | Known blocks, Known immediates
           when not (Tag.Map.is_empty blocks)
             && Immediate.Map.is_empty immediates ->
         Format.fprintf ppf "@[<hv 1>(blocks@ @[%a@])@])@]"
           (print_blocks ~cache) blocks
-      | Known blocks, Known immediates, None, None
+      | Known blocks, Known immediates
           when Tag.Map.is_empty blocks
             && not (Immediate.Map.is_empty immediates)
             && Immediate.Map.for_all
@@ -200,25 +189,12 @@ end) = struct
         Format.fprintf ppf "@[%a@]"
           Immediate.Set.print (Immediate.Map.keys immediates)
       | _ ->
-        match is_int, get_tag with
-        | None, None ->
-          Format.fprintf ppf
-            "@[<hov 1>(Blocks_and_immediates@ \
-               @[<hov 1>(blocks@ %a)@]@ \
-               @[<hov 1>(immediates@ %a)@])@]"
-            (Or_unknown.print (print_blocks ~cache)) blocks
-            (Or_unknown.print (print_immediates ~cache)) immediates
-        | _, _ ->
-          Format.fprintf ppf
-            "@[<hov 1>(Blocks_and_immediates@ \
-               @[<hov 1>(blocks@ %a)@]@ \
-               @[<hov 1>(immediates@ %a)@]@ \
-               @[<hov 1>(is_int@ %a)@]@ \
-               @[<hov 1>(get_tag@ %a)@])@]"
-            (Or_unknown.print (print_blocks ~cache)) blocks
-            (Or_unknown.print (print_immediates ~cache)) immediates
-            (Misc.Stdlib.Option.print Name.print) is_int
-            (Misc.Stdlib.Option.print Name.print) get_tag
+        Format.fprintf ppf
+          "@[<hov 1>(Blocks_and_immediates@ \
+             @[<hov 1>(blocks@ %a)@]@ \
+             @[<hov 1>(immediates@ %a)@])@]"
+          (Or_unknown.print (print_blocks ~cache)) blocks
+          (Or_unknown.print (print_immediates ~cache)) immediates
       end
     | Boxed_number n ->
       Format.fprintf ppf "@[(Boxed_number %a)@]"
@@ -286,7 +262,7 @@ end) = struct
           (fun ppf ty ->
             Format.fprintf ppf "%a"
               print ty)) decl.result
-        (print_env_extension_with_cache ~cache) decl.result_env_extension
+        (print_typing_env_extension_with_cache ~cache) decl.result_env_extension
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -345,7 +321,7 @@ end) = struct
 
   and print_discriminant_case ~cache ppf ({ env_extension; } : discriminant_case) =
     Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
-      (print_env_extension_with_cache ~cache) env_extension
+      (print_typing_env_extension_with_cache ~cache) env_extension
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
@@ -419,9 +395,11 @@ end) = struct
         (entry : typing_environment_entry) =
     match entry with
     | Definition ty ->
-      print_typing_environment_entry0_with_cache ~cache ppf (Definition ty)
+      print_typing_environment_entry0_with_cache ~cache ppf
+        ((Definition ty) : typing_environment_entry0)
     | Equation ty ->
-      print_typing_environment_entry0_with_cache ~cache ppf (Equation ty)
+      print_typing_environment_entry0_with_cache ~cache ppf
+        ((Equation ty) : typing_environment_entry0)
     | CSE with_fixed_value ->
       Format.fprintf ppf "@[(CSE %a)@]"
         Flambda_primitive.With_fixed_value.print with_fixed_value
@@ -453,7 +431,7 @@ end) = struct
               in
               if Scope_level.Sublevel.Map.is_empty by_sublevel then None
               else Some by_sublevel)
-            levels_to_names
+            levels_to_entries
         in
         if Name.Set.is_empty were_existentials
              && Flambda_primitive.With_fixed_value.Map.is_empty cse_to_names
@@ -463,7 +441,7 @@ end) = struct
                 @[<hov 1>(names_to_types@ %a)@]@ \
                 @[<hov 1>(levels_to_entries@ %a)@])@]"
             (Name.Map.print print_scope_level_and_entry0) names_to_types
-            print_levels_to_entries levels_to_entries
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
         else if Name.Set.is_empty were_existentials then
           Format.fprintf ppf
             "@[<hov 1>(\
@@ -473,7 +451,7 @@ end) = struct
             (Name.Map.print print_scope_level_and_entry0) names_to_types
             (Flambda_primitive.With_fixed_value.Map.print Name.print)
               cse_to_names
-            print_levels_to_entries levels_to_entries
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
         else
           Format.fprintf ppf
             "@[<hov 1>(\
@@ -484,12 +462,12 @@ end) = struct
             (Name.Map.print print_scope_level_and_entry0) names_to_types
             (Flambda_primitive.With_fixed_value.Map.print Name.print)
               cse_to_names
-            print_levels_to_entries levels_to_entries
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
             Name.Set.print were_existentials)
 
   and print_typing_env_extension_with_cache ~cache ppf
         ({ first_definitions; at_or_after_cut_point; last_equations_rev; }
-          : typing_env_extension) =
+          : env_extension) =
     let print_binding_list =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (name, ty) ->
@@ -546,7 +524,7 @@ end) = struct
 
   and free_names_of_kind_value (of_kind : of_kind_value) acc =
     match of_kind with
-    | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
+    | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
         match blocks with
         | Unknown -> acc
@@ -567,23 +545,13 @@ end) = struct
             blocks
             acc
       in
-      let acc =
-        match immediates with
-        | Unknown -> acc
-        | Known immediates ->
-          Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
-              free_names_of_env_extension case.env_extension acc)
-            immediates
-            acc
-      in
-      let acc =
-        match is_int with
-        | None -> acc
-        | Some is_int -> Name.Set.add is_int acc
-      in
-      begin match get_tag with
-      | None -> acc
-      | Some get_tag -> Name.Set.add get_tag acc
+      begin match immediates with
+      | Unknown -> acc
+      | Known immediates ->
+        Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
+            free_names_of_env_extension case.env_extension acc)
+          immediates
+          acc
       end
     | Boxed_number (Boxed_float n) ->
       free_names_ty free_names_of_kind_naked_number n acc
@@ -635,11 +603,13 @@ end) = struct
           Name.Set.empty
           decl.result
       in
-      let result_env_extension_domain = domain_env_extension decl.result_env_extension in
+      let free_names_result_env_extension =
+        free_names_of_env_extension decl.result_env_extension Name.Set.empty
+      in
       let acc =
         Name.Set.union acc
           (Name.Set.diff
-            (Name.Set.diff free_names_result result_env_extension_domain)
+            (Name.Set.union free_names_result free_names_result_env_extension)
             param_names)
       in
       List.fold_left (fun acc (_param, t) ->
@@ -656,26 +626,57 @@ end) = struct
   and free_names_of_typing_environment (_env : typing_environment) acc =
     (* Typing environments are always closed. *)
     acc
-(*
-    let all_names =
-      Name.Map.fold (fun _bound_name (_scope_level, t) all_names ->
-          free_names t all_names)
-        env.names_to_types
-        Name.Set.empty
-    in
-    let bound_names =
-      Name.Set.union (Name.Map.keys env.names_to_types)
-        env.existentials
-    in
-    let free_names = Name.Set.diff all_names bound_names in
-    Name.Set.union free_names acc
-*)
 
-  and free_names_of_env_extension { typing_judgements; } acc =
-    match typing_judgements with
-    | None -> acc
-    | Some typing_judgements ->
-      free_names_of_typing_environment typing_judgements acc
+  and free_names_of_env_extension t acc =
+    (* CR mshinwell: This is copied from typing_env_extension.ml, we need to
+       share this *)
+    let defined_names t =
+      let from_first_definitions =
+        Name.Set.of_list (
+          List.map (fun (name, _ty) -> name) t.first_definitions)
+      in
+      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
+          Scope_level.Sublevel.Map.fold
+            (fun _sublevel (name, (entry : typing_environment_entry))
+                 defined_names ->
+              match entry with
+              | Definition _ -> Name.Set.add name defined_names
+              | Equation _ | CSE _ -> defined_names)
+            by_sublevel
+            defined_names)
+        t.at_or_after_cut_point
+        from_first_definitions
+    in
+    let free_names_first_definitions =
+      List.fold_left (fun acc (_name, t) -> free_names t acc)
+        acc
+        t.first_definitions
+    in
+    let free_names_at_or_after_cut_point =
+      Scope_level.Map.fold (fun _level by_sublevel acc ->
+          Scope_level.Sublevel.Map.fold
+            (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
+              match entry with
+              | Definition t | Equation t -> free_names t acc
+              | CSE prim ->
+                Name.Set.union acc
+                  (Flambda_primitive.With_fixed_value.free_names prim))
+            by_sublevel
+            acc)
+        t.at_or_after_cut_point
+        acc
+    in
+    let free_names_last_equations_rev =
+      List.fold_left (fun acc (_name, t) -> free_names t acc)
+        acc
+        t.last_equations_rev
+    in
+    let free_names =
+      Name.Set.union free_names_first_definitions
+        (Name.Set.union free_names_at_or_after_cut_point
+          free_names_last_equations_rev)
+    in
+    Name.Set.diff free_names (defined_names t)
 
   let free_names_set t =
     free_names t Name.Set.empty

@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
+
 module Make (T : sig
   include Flambda_type0_internal_intf.S
 
@@ -163,16 +166,12 @@ end) = struct
     Targetint.OCaml.Map.equal equal_singleton_block by_length1 by_length2
 
   and equal_blocks_and_tagged_immediates
-        ({ immediates = immediates1; blocks = blocks1;
-           is_int = is_int1; get_tag = get_tag1; })
-        ({ immediates = immediates2; blocks = blocks2;
-           is_int = is_int2; get_tag = get_tag2; }) =
+        ({ immediates = immediates1; blocks = blocks1; })
+        ({ immediates = immediates2; blocks = blocks2; }) =
     equal_or_unknown (Immediate.Map.equal equal_immediate_case)
         immediates1 immediates2
       && equal_or_unknown (Tag.Map.equal equal_block_cases)
            blocks1 blocks2
-      && Misc.Stdlib.Option.equal Name.equal is_int1 is_int2
-      && Misc.Stdlib.Option.equal Name.equal get_tag1 get_tag2
 
   and equal_function_declarations
         (decl1 : function_declarations)
