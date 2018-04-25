@@ -58,47 +58,109 @@ end) = struct
 
   let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
 
-  let defined_names t =
-    let from_first_definitions =
-      Name.Set.of_list (
-        List.map (fun (name, _ty) -> name) t.first_definitions)
-    in
-    Scope_level.Map.fold (fun _level by_sublevel defined_names ->
-        Scope_level.Sublevel.Map.fold
-          (fun _sublevel (name, (entry : typing_environment_entry0))
-               defined_names ->
-            match entry with
-            | Definition _ -> Name.Set.add name defined_names
-            | Equation _ -> defined_names)
-          by_sublevel
-          defined_names)
-      t.at_or_after_cut_point
-      from_first_definitions
-
-  let equations_domain
-        { first_definitions = _; at_or_after_cut_point; last_equations_rev; } =
-    let from_at_or_after_cut_point =
-      Scope_level.Map.fold (fun by_sublevel domain ->
+  let equations_on_env t =
+    let defined_names t =
+      let from_first_definitions =
+        Name.Set.of_list (
+          List.map (fun (name, _ty) -> name) t.first_definitions)
+      in
+      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
           Scope_level.Sublevel.Map.fold
-            (fun (name, (entry : typing_environment_entry0)) domain ->
+            (fun _sublevel (name, (entry : typing_environment_entry0))
+                 defined_names ->
               match entry with
-              | Definition _ -> domain
-              | Equation _ -> Name.Set.add name domain)
-            by_sublevel)
-        at_or_after_cut_point
-        Name.Set.empty
+              | Definition _ -> Name.Set.add name defined_names
+              | Equation _ -> defined_names)
+            by_sublevel
+            defined_names)
+        t.at_or_after_cut_point
+        from_first_definitions
     in
-    let from_last_equations_rev =
-      Name.Set.of_list (List.map (fun (name, _ty) -> name) first_definitions)
+    let equations_domain
+          { first_definitions = _; at_or_after_cut_point;
+            last_equations_rev; } =
+      let from_at_or_after_cut_point =
+        Scope_level.Map.fold (fun by_sublevel domain ->
+            Scope_level.Sublevel.Map.fold
+              (fun (name, (entry : typing_environment_entry0)) domain ->
+                match entry with
+                | Definition _ -> domain
+                | Equation _ -> Name.Set.add name domain)
+              by_sublevel)
+          at_or_after_cut_point
+          Name.Set.empty
+      in
+      let from_last_equations_rev =
+        Name.Set.of_list (List.map (fun (name, _ty) -> name) first_definitions)
+      in
+      Name.Set.union from_at_or_after_cut_point from_last_equations_rev
     in
-    Name.Set.union from_at_or_after_cut_point from_last_equations_rev
+    Name.Set.diff (equations_domain t) (defined_names t)
+
+  let free_names_transitive env ty =
+    let all_names = ref (Name_occurrences.create ()) in
+    let rec loop to_follow =
+      all_names := Name_occurrences.union !all_names to_follow;
+      match Name_occurrences.choose_and_remove_amongst_everything to_follow with
+      | None -> ()
+      | Some (name, to_follow) ->
+        let ty, _binding_type = TE.find_exn t name in
+        let names = T.free_names ty in
+        loop (Name_occurrences.union to_follow names)
+    in
+    loop (free_names ty);
+    !all_names
+
+  let free_names_transitive_list t env tys =
+    let scope_level = Scope_level.next (TE.max_level env) in
+    let env = TE.add_or_meet_env_extension env t scope_level in
+    List.fold_left (fun names ty ->
+        Name_occurrences.union names (free_names_transitive env ty))
+      (Name_occurrences.create ())
+      tys
+
+  let restrict_to_names t allowed_names =
+    let first_definitions =
+      List.filter (fun (name, _ty) ->
+          Name.Set.mem name allowed_names)
+        t.first_definitions
+    in
+    let at_or_after_cut_point =
+      Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
+          let by_sublevel =
+            Scope_level.Sublevel.Map.filter_map
+              (fun _sublevel ((name, _) as entry) ->
+                if Name.Set.mem name allowed_names then Some entry
+                else None)
+            by_sublevel
+          in
+          if Scope_level.Sublevel.Map.is_empty by_sublevel then None
+          else Some by_sublevel)
+        t.at_or_after_cut_point
+    in
+    let last_equations_rev =
+      List.filter (fun (name, _ty) ->
+          Name.Set.mem name allowed_names)
+        t.last_equations_rev
+    in
+    let t =
+      { first_definitions;
+        at_or_after_cut_point;
+        last_equations_rev;
+      }
+    in
+    invariant t;
+    t
+
+  let restrict_names_to_those_occurring_in_types t env tys =
+    let free_names = free_names_transitive_list t env tys in
+    restrict_to_names t free_names
 
   type fold_info =
     | Definition_in_extension of T.t
     | Equation of T.t
 
   let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
-    let defined_names = defined_names t in
     let acc =
       List.fold_left (fun acc (name, ty) ->
           f acc name (Definition_in_extension ty))
@@ -157,79 +219,19 @@ end) = struct
         let env = TE.add_or_join_env_extension env t1' t2' t2 scope_level in
         TE.cut env ~existential_if_defined_at_or_later_than:scope_level
       in
-      (* XXX This is wrong *)
-      let defined_names_t1 = defined_names t1 in
-      let defined_names_t2 = defined_names t2 in
-      let defined_names_join =
+      let equations_in_t1_on_env = equations_on_env t1 in
+      let equations_in_t2_on_env = equations_on_env t2 in
+      let allowed_names =
         Name.Set.inter defined_names_t1 defined_names_t2
       in
-      let first_definitions =
-        List.filter (fun (name, _ty) ->
-            Name.Set.mem name defined_names_join)
-          t.first_definitions
-      in
-      let at_or_after_cut_point =
-        Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
-            let by_sublevel =
-              Scope_level.Sublevel.Map.filter_map
-                (fun _sublevel ((name, _) as entry) ->
-                  if Name.Set.mem name defined_names_join then Some entry
-                  else None)
-              by_sublevel
-            in
-            if Scope_level.Sublevel.Map.is_empty by_sublevel then None
-            else Some by_sublevel)
-          t.at_or_after_cut_point
-      in
-      let last_equations_rev =
-        List.filter (fun (name, _ty) ->
-            Name.Set.mem name defined_names_join)
-          t.last_equations_rev
-      in
+      let t = restrict_to_names t allowed_names in
       (* We don't need to filter the types within entries ([Equation]s or
          [Definition]s) in [t].  Any entry originally containing a reference
          to a name defined in exactly one of [t1] or [t2] should have had such
          reference removed by the join operation on the type inside the
          entry. *)
-      let t =
-        { first_definitions;
-          at_or_after_cut_point;
-          last_equations_rev;
-        }
-      in
       invariant t;
       t
-
-  let free_names_transitive env ty =
-    let all_names = ref (Name_occurrences.create ()) in
-    let rec loop to_follow =
-      all_names := Name_occurrences.union !all_names to_follow;
-      match Name_occurrences.choose_and_remove_amongst_everything to_follow with
-      | None -> ()
-      | Some (name, to_follow) ->
-        let ty, _binding_type = TE.find_exn t name in
-        let names = T.free_names ty in
-        loop (Name_occurrences.union to_follow names)
-    in
-    loop (free_names ty);
-    !all_names
-
-  let free_names_transitive_list t env tys =
-    let scope_level = Scope_level.next (TE.max_level env) in
-    let env = TE.add_or_meet_env_extension env t scope_level in
-    List.fold_left (fun names ty ->
-        Name_occurrences.union names (free_names_transitive env ty))
-      (Name_occurrences.create ())
-      tys
-
-  let restrict_to_names t names =
-    ...
-    invariant t;
-    t
-
-  let restrict_names_to_those_occurring_in_types t env tys =
-    let free_names = free_names_transitive_list t env tys in
-    restrict_to_names t free_names
 
   let diff t env : t =
     let names_more_precise, freshening =
