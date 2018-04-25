@@ -121,9 +121,6 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
              (param, all_uses_for_arg_with_env_extensions) ->
           let joined_ty =
             List.fold_left (fun joined_ty (arg_ty, env_extension) ->
-                let free_names_this_ty =
-                  TEE.free_names_transitive env_extension arg_ty
-                in
                 let env_extension =
                   TEE.restrict_names_to_those_occurring_in_types
                     env_extension [arg_ty]

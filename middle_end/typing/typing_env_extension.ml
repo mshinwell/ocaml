@@ -95,8 +95,7 @@ end) = struct
 
   type fold_info =
     | Definition_in_extension of T.t
-    | Equation_on_definition_in_extension of T.t
-    | Equation_on_definition_in_environment of T.t
+    | Equation of T.t
 
   let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
     let defined_names = defined_names t in
@@ -113,20 +112,14 @@ end) = struct
               | Definition ty ->
                 f acc name (Definition_in_extension ty)
               | Equation ty ->
-                if Name.Set.mem name defined_names then
-                  f acc name (Equation_on_definition_in_extension ty)
-                else
-                  f acc name (Equation_on_definition_in_environment ty))
+                f acc name (Equation ty))
             by_sublevel
             acc
         t.at_or_after_cut_point
         acc
     in
     List.fold_left (fun acc (name, ty) ->
-        if Name.Set.mem name defined_names then
-          f acc name (Equation_on_definition_in_extension ty)
-        else
-          f acc name (Equation_on_definition_in_environment ty))
+        f acc name (Equation ty))
       t.last_equations_rev
 
   let add_definition_at_beginning t name ty =
@@ -164,6 +157,7 @@ end) = struct
         let env = TE.add_or_join_env_extension env t1' t2' t2 scope_level in
         TE.cut env ~existential_if_defined_at_or_later_than:scope_level
       in
+      (* XXX This is wrong *)
       let defined_names_t1 = defined_names t1 in
       let defined_names_t2 = defined_names t2 in
       let defined_names_join =
@@ -206,78 +200,87 @@ end) = struct
       invariant t;
       t
 
-  let free_names_transitive t ty =
+  let free_names_transitive env ty =
     let all_names = ref (Name_occurrences.create ()) in
     let rec loop to_follow =
       all_names := Name_occurrences.union !all_names to_follow;
       match Name_occurrences.choose_and_remove_amongst_everything to_follow with
       | None -> ()
       | Some (name, to_follow) ->
-        let ty, _binding_type = find_exn t name in
+        let ty, _binding_type = TE.find_exn t name in
         let names = T.free_names ty in
         loop (Name_occurrences.union to_follow names)
     in
     loop (free_names ty);
     !all_names
 
+  let free_names_transitive_list t env tys =
+    let scope_level = Scope_level.next (TE.max_level env) in
+    let env = TE.add_or_meet_env_extension env t scope_level in
+    List.fold_left (fun names ty ->
+        Name_occurrences.union names (free_names_transitive env ty))
+      (Name_occurrences.create ())
+      tys
+
   let restrict_to_names t names =
     ...
     invariant t;
     t
 
-  let free_names_transitive_list t tys =
-    List.fold_left (fun names ty ->
-        Name_occurrences.union names (free_names_transitive t ty))
-      (Name_occurrences.create ())
-      tys
-
-  let restrict_names_to_those_occurring_in_types t tys =
-    let free_names = free_names_transitive_list t tys in
+  let restrict_names_to_those_occurring_in_types t env tys =
+    let free_names = free_names_transitive_list t env tys in
     restrict_to_names t free_names
 
   let diff t env : t =
-    let env_with_extension =
-      let scope_level = Scope_level.next (TE.max_level env) in
-      TE.add_or_meet_env_extension env t scope_level
-    in
-    let defined_names = defined_names t in
-    let equations_domain = equations_domain t in
-    let domain = Name.Set.union defined_names equations_domain in
-    let names_bound_in_env_with_equations_in_extension =
-      Name.Set.diff equations_domain defined_names
-    in
-    let names_to_keep =
-      Name.Set.filter (fun name ->
-          let ty_with_extension, _binding_type =
-            TE.find_exn env_with_extension name
+    let names_more_precise, freshening =
+      fold t
+        ~init:(Name.Set.t, freshening)
+        ~f:(fun (names_more_precise, freshening) (name : Name.t)
+                (info : fold_info) ->
+          let var =
+            match name with
+            | Var var -> var
+            | Symbol _ ->
+              Misc.fatal_errorf "Symbols should not be bound by environment \
+                  extensions:@ %a"
+                print t
           in
-          let ty_without_extension, _binding_type = TE.find_exn env name in
-          let free_names_ty_with_extension = T.free_names ty_with_extension in
-          let ty_with_extension_uses_nothing_in_extension =
-            Name.Set.is_empty (
-              Name.Set.inter free_names_ty_with_extension domain)
-          in
-          if ty_with_extension_uses_nothing_in_extension then
-            T.strictly_more_precise env ty_with_extension
-              ~than:ty_without_extension
-          else
-            let ty_with_extension_uses_defined_names =
-              not (Name.Set.is_empty (
-                Name.Set.inter free_names_ty_with_extension defined_names))
+          match info with
+          | Definition_in_extension ty ->
+            let fresh_var = Variable.rename var in
+            let freshening = Variable.add var fresh_var freshening in
+            let names_more_precise =
+              Name.Set.add (Name.var fresh_var) names_more_precise
             in
-            if ty_with_extension_uses_defined_names then true
-            else
-              let names_used_from_extension =
-                Name.Set.inter free_names_ty_with_extension equations_domain
+            names_more_precise, freshening
+          | Equation ->
+            let var =
+              match Variable.Map.find var freshening with
+              | exception Not_found -> var
+              | var -> var
+            in
+            let ty = T.rename_variables ty freshening in
+            let name = Name.var var in
+            match TE.find_opt env name with
+            | None ->
+              let names_more_precise =
+                Name.Set.add name names_more_precise
               in
-
-
-
-
-          T.strictly_more_precise (env_with_extension, ty_with_extension)
-            ~than:(env, ty_without_extension))
-        names_bound_in_env_with_equations_in_extension 
+              names_more_precise, freshening
+            | Some (old_ty, _) ->
+              let more_precise_using_old_types_for_free_names =
+                T.strictly_more_precise env ty ~than:old_ty
+              in
+              let free_names = T.free_names_set ty in
+              let more_precise_using_new_types_for_free_names =
+                not (Name.Set.empty (
+                  Name.Set.inter free_names names_more_precise))
+              in
+              if more_precise_using_new_types_for_free_names then
+                let names_more_precise = Name.Set.add name names_more_precise in
+                names_more_precise, freshening
+              else
+                names_more_precise, freshening)
     in
-    let names_to_keep = Name.Set.union defined_names names_to_keep in
-    restrict_to_names t names_to_keep
+    restrict_to_names t names_more_precise
 end
