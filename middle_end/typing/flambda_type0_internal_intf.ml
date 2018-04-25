@@ -367,13 +367,6 @@ module type S = sig
 
   val kind : flambda_type -> Flambda_kind.t
 
-  val join : t_in_context -> t_in_context -> t
-
-  val meet
-     : bias_towards:t_in_context
-    -> t_in_context
-    -> t * env_extension
-
   val is_empty_typing_environment : typing_environment -> bool
 
   val as_or_more_precise : typing_environment -> t -> than:t -> bool
