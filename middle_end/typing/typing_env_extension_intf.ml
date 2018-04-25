@@ -93,8 +93,7 @@ module type S = sig
   (** [diff t env] computes the environment extension whose bindings are
       those in [t], when interpreted in the context of [env], that:
         - do not occur in [env]; or
-        - do occur in [env] but where [t] specifies more precise information
-          (which for types means closer to bottom).
+        - do occur in [env] but where [t] contains a more precise type.
   *)
   val diff : env_extension -> t -> env_extension
 end

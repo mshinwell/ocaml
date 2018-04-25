@@ -155,6 +155,9 @@ struct
         immediates1
         immediates2
 
+    (* CR mshinwell: As for [join], [meet] should add env_extensions which
+       it finds during traversal into the environment. *)
+
     let meet_singleton_block env
           ({ env_extension = env_extension1;
              fields = fields1;

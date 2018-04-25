@@ -93,6 +93,42 @@ end) = struct
     in
     Name.Set.union from_at_or_after_cut_point from_last_equations_rev
 
+  type fold_info =
+    | Definition_in_extension of T.t
+    | Equation_on_definition_in_extension of T.t
+    | Equation_on_definition_in_environment of T.t
+
+  let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
+    let defined_names = defined_names t in
+    let acc =
+      List.fold_left (fun acc (name, ty) ->
+          f acc name (Definition_in_extension ty))
+        (List.rev t.first_definitions)
+    in
+    let acc =
+      Scope_level.fold (fun _level by_sublevel acc ->
+          Scope_level.Sublevel.fold
+            (fun _sublevel (name, (entry : typing_environment_entry0)) acc ->
+              match entry with
+              | Definition ty ->
+                f acc name (Definition_in_extension ty)
+              | Equation ty ->
+                if Name.Set.mem name defined_names then
+                  f acc name (Equation_on_definition_in_extension ty)
+                else
+                  f acc name (Equation_on_definition_in_environment ty))
+            by_sublevel
+            acc
+        t.at_or_after_cut_point
+        acc
+    in
+    List.fold_left (fun acc (name, ty) ->
+        if Name.Set.mem name defined_names then
+          f acc name (Equation_on_definition_in_extension ty)
+        else
+          f acc name (Equation_on_definition_in_environment ty))
+      t.last_equations_rev
+
   let add_definition_at_beginning t name ty =
     let first_definitions = (name, ty) :: t.first_definitions in
     { t with first_definitions; }
@@ -204,18 +240,44 @@ end) = struct
       let scope_level = Scope_level.next (TE.max_level env) in
       TE.add_or_meet_env_extension env t scope_level
     in
+    let defined_names = defined_names t in
+    let equations_domain = equations_domain t in
+    let domain = Name.Set.union defined_names equations_domain in
     let names_bound_in_env_with_equations_in_extension =
-      Name.Set.diff (equations_domain t) (defined_names t)
+      Name.Set.diff equations_domain defined_names
     in
     let names_to_keep =
       Name.Set.filter (fun name ->
-          let ty_without_extension, _binding_type = TE.find_exn env name in
           let ty_with_extension, _binding_type =
             TE.find_exn env_with_extension name
           in
+          let ty_without_extension, _binding_type = TE.find_exn env name in
+          let free_names_ty_with_extension = T.free_names ty_with_extension in
+          let ty_with_extension_uses_nothing_in_extension =
+            Name.Set.is_empty (
+              Name.Set.inter free_names_ty_with_extension domain)
+          in
+          if ty_with_extension_uses_nothing_in_extension then
+            T.strictly_more_precise env ty_with_extension
+              ~than:ty_without_extension
+          else
+            let ty_with_extension_uses_defined_names =
+              not (Name.Set.is_empty (
+                Name.Set.inter free_names_ty_with_extension defined_names))
+            in
+            if ty_with_extension_uses_defined_names then true
+            else
+              let names_used_from_extension =
+                Name.Set.inter free_names_ty_with_extension equations_domain
+              in
+
+
+
+
           T.strictly_more_precise (env_with_extension, ty_with_extension)
             ~than:(env, ty_without_extension))
         names_bound_in_env_with_equations_in_extension 
     in
+    let names_to_keep = Name.Set.union defined_names names_to_keep in
     restrict_to_names t names_to_keep
 end
