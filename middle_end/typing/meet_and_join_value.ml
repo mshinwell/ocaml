@@ -213,7 +213,7 @@ struct
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
               Immutable (Meet_and_join.join env
-                env_extension1 env_extension2 field1 field2)))
+                env_extension1 env_extension2 field1 field2))
           fields1
           fields2
       in

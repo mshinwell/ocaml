@@ -176,7 +176,7 @@ end) = struct
               | Equation ty ->
                 f acc name (Equation ty))
             by_sublevel
-            acc
+            acc)
         t.at_or_after_cut_point
         acc
     in

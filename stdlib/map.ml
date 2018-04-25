@@ -57,6 +57,7 @@ module type S =
     val find_last: (key -> bool) -> 'a t -> key * 'a
     val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
     val map: ('a -> 'b) -> 'a t -> 'b t
+    val map_sharing: ('a -> 'a) -> 'a t -> 'a t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
     val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
     val of_list : (key * 'a) list -> 'a t
@@ -70,36 +71,6 @@ module type S =
       -> 'a t
       -> 'a t
       -> 'a t
-    type 'a three_way_diff = private {
-      in_first_only : 'a t;
-      in_second_only : 'a t;
-      in_both : ('a * 'a) t;
-    }
-    val three_way_diff : 'a t -> 'a t -> 'a three_way_diff
-    type side = private
-      | Left
-      | Right
-    type 'a intersection_and_remainder = private {
-      intersection : ('a * 'a) t;
-      remainder : (side * 'a) t;
-    }
-    val intersection_and_remainder
-       : 'a t
-      -> 'a t
-      -> 'a intersection_and_remainder
-    val fold_intersection
-       : 'a t
-      -> 'a t
-      -> init:'b
-      -> inter:('b -> key -> 'a -> 'a -> 'b)
-      -> 'b
-    val fold_intersection_and_remainder
-       : 'a t
-      -> 'a t
-      -> init:'b
-      -> inter:('b -> key -> 'a -> 'a -> 'b)
-      -> rem:('b -> 'a t -> key -> 'a -> 'b)
-      -> 'b
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
     val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
     val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
@@ -352,6 +323,16 @@ module Make(Ord: OrderedType) = struct
           let l' = map f l in
           let d' = f d in
           let r' = map f r in
+          Node{l=l'; v; d=d'; r=r'; h}
+
+    let rec map_sharing f node =
+      match node with
+      | Empty ->
+          Empty
+      | Node {l; v; d; r; h} ->
+          let l' = map_sharing f l in
+          let d' = f d in
+          let r' = map_sharing f r in
           if l == l' && d == d' && r == r' then node
           else Node{l=l'; v; d=d'; r=r'; h}
 
@@ -363,7 +344,6 @@ module Make(Ord: OrderedType) = struct
           let l' = mapi f l in
           let d' = f v d in
           let r' = mapi f r in
-          if l == l' && d == d' && r == r' then node
           Node{l=l'; v; d=d'; r=r'; h}
 
     let rec fold f m accu =
@@ -592,84 +572,6 @@ module Make(Ord: OrderedType) = struct
           | t2_elt -> add key (f t1_elt t2_elt) inter)
         t1
         empty
-
-    (* CR mshinwell: Resolve the problem with [disjoint_union] (the exported
-       one is below, but requires [T.print]). *)
-    let disjoint_union ?eq m1 m2 =
-      union (fun _id v1 v2 ->
-          let ok =
-            match eq with
-            | None -> false
-            | Some eq -> eq v1 v2
-          in
-          if not ok then failwith "Map.disjoint_union"
-          else Some v1)
-        m1 m2
-
-    type 'a three_way_diff = {
-      in_first_only : 'a t;
-      in_second_only : 'a t;
-      in_both : ('a * 'a) t;
-    }
-
-    let three_way_diff t1 t2 : _ three_way_diff =
-      let in_both =
-        inter (fun datum1 datum2 -> Some (datum1, datum2)) t1 t2
-      in
-      let in_first_only =
-        filter (fun key _ -> not (mem key in_both)) t1
-      in
-      let in_second_only =
-        filter (fun key _ -> not (mem key in_both)) t2
-      in
-      { in_first_only;
-        in_second_only;
-        in_both;
-      }
-
-    type side =
-      | Left
-      | Right
-
-    type 'a intersection_and_remainder = {
-      intersection : ('a * 'a) t;
-      remainder : (side * 'a) t;
-    }
-
-    let intersection_and_remainder t1 t2 : _ intersection_and_remainder =
-      let diff = three_way_diff t1 t2 in
-      let in_first_only =
-        map (fun datum -> Left, datum) diff.in_first_only
-      in
-      let in_second_only =
-        map (fun datum -> Right, datum) diff.in_second_only
-      in
-      { intersection = diff.in_both;
-        remainder = disjoint_union in_first_only in_second_only;
-      }
-
-    let fold_intersection t1 t2 ~init ~inter =
-      let intersection_and_remainder = intersection_and_remainder t1 t2 in
-      fold (fun key (datum1, datum2) acc -> inter acc key datum1 datum2)
-        intersection_and_remainder.intersection
-        init
-
-    let fold_intersection_and_remainder t1 t2 ~init ~inter ~rem =
-      let intersection_and_remainder = intersection_and_remainder t1 t2 in
-      let acc =
-        fold (fun key (datum1, datum2) acc -> inter acc key datum1 datum2)
-          intersection_and_remainder.intersection
-          init
-      in
-      fold (fun key ((side : side), datum) acc ->
-          let t1_or_t2 =
-            match side with
-            | Left -> t1
-            | Right -> t2
-          in
-          rem acc t1_or_t2 key datum)
-        intersection_and_remainder.remainder
-        acc
 
     let rename m v =
       try find v m

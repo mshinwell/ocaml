@@ -485,7 +485,7 @@ end) = struct
             (Flambda_primitive.With_fixed_value.Map.print Name.print)
               cse_to_names
             print_levels_to_entries levels_to_entries
-            Name.Set.print were_existentials
+            Name.Set.print were_existentials)
 
   and print_typing_env_extension_with_cache ~cache ppf
         ({ first_definitions; at_or_after_cut_point; last_equations_rev; }
@@ -2512,7 +2512,7 @@ result
       else Known by_immediate'
 
   and rename_variables_immediate_case subst
-        (({ env_extension; } : immediate_case) as immediate_case
+        (({ env_extension; } : immediate_case) as immediate_case)
         : immediate_case =
     let env_extension' =
       rename_variables_env_extension subst env_extension
@@ -2596,7 +2596,7 @@ result
     else discriminants'
 
   and rename_variables_discriminant_case subst
-        (({ env_extension; } : discriminant_case) as discriminant_case
+        (({ env_extension; } : discriminant_case) as discriminant_case)
         : discriminant_case =
     let env_extension' =
       rename_variables_env_extension subst env_extension

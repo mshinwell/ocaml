@@ -721,7 +721,7 @@ end) = struct
               | Definition ty -> add_definition t freshening name ty
               | Equation ty ->
                 let t = add_equation t freshening name ty in
-                freshening, t
+                freshening, t)
             by_sublevel
             (freshening, result))
         env_extension.at_or_after_cut_point

@@ -125,8 +125,8 @@ module type S = sig
   val mem : t -> Name.t -> bool
 
   (** Returns [true] if the given name, which must be bound in the given
-      environment, is existentially bound. *)
-  val is_existential_exn : t -> Name.t -> bool
+      environment, is an opened existential. *)
+  val was_existential_exn : t -> Name.t -> bool
 
   (** Fold over entries of the typing environment.  The entries are passed
       to [f] in order of increasing (level, sublevel) order (i.e. outermost
@@ -163,11 +163,6 @@ module type S = sig
      : t
     -> existential_if_defined_at_or_later_than:Scope_level.t
     -> env_extension
-
-  (* CR mshinwell: What exactly does "domain" mean here?  (existentials...) *)
-  (** Adjust the domain of the given typing environment so that it only
-      mentions the names in the given name occurrences structure. *)
-  val restrict_to_names : t -> Name_occurrences.t -> t
 
   (** Adjust the domain of the given typing environment so that it only
       mentions names which are symbols, not variables. *)

@@ -301,9 +301,12 @@ module type S =
        replaced by the result of the application of [f] to [a].
        The bindings are passed to [f] in increasing order
        with respect to the ordering over the type of the keys.
-       The returned map will be physically equal to the input map if every
-       call [f a] made during the mapping returns a value physically equal
-       to [a]. *)
+    *)
+
+    (** Like [map, but the returned map will be physically equal to the input
+       map if every call [f a] made during the mapping returns a value
+       physically equal to [a]. *)
+    val map_sharing: ('a -> 'a) -> 'a t -> 'a t
 
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
     (** Same as {!Map.S.map}, but the function receives as arguments both the
@@ -335,43 +338,6 @@ module type S =
       -> 'a t
       -> 'a t
       -> 'a t
-
-    type 'a three_way_diff = private {
-      in_first_only : 'a t;
-      in_second_only : 'a t;
-      in_both : ('a * 'a) t;
-    }
-
-    val three_way_diff : 'a t -> 'a t -> 'a three_way_diff
-
-    type side = private
-      | Left
-      | Right
-
-    type 'a intersection_and_remainder = private {
-      intersection : ('a * 'a) t;
-      remainder : (side * 'a) t;
-    }
-
-    val intersection_and_remainder
-       : 'a t
-      -> 'a t
-      -> 'a intersection_and_remainder
-
-    val fold_intersection
-       : 'a t
-      -> 'a t
-      -> init:'b
-      -> inter:('b -> key -> 'a -> 'a -> 'b)
-      -> 'b
-
-    val fold_intersection_and_remainder
-       : 'a t
-      -> 'a t
-      -> init:'b
-      -> inter:('b -> key -> 'a -> 'a -> 'b)
-      -> rem:('b -> 'a t -> key -> 'a -> 'b)
-      -> 'b
 
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 

@@ -25,7 +25,6 @@ end) (Typing_env_extension : sig
   include Typing_env_extension_intf.S
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
-    with type typing_environment_entry0 := T.typing_environment_entry0
     with type flambda_type := T.flambda_type
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
