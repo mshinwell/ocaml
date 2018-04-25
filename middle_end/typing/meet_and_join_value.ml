@@ -82,7 +82,7 @@ end) (Make_meet_and_join : functor
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
-        with type t_in_context := T.t_in_context
+        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
     end) (Typing_env0 : sig
@@ -119,7 +119,7 @@ struct
     let force_to_kind = force_to_kind_value
     let print_ty = print_ty_value
 
-    let meet_immediate_case _env
+    let meet_immediate_case env
           ({ env_extension = env_extension1; } : immediate_case)
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
@@ -169,9 +169,12 @@ struct
         Typing_env_extension.meet env env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
-      let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+      let env_extension_from_meet = ref (Typing_env_extension.empty) in
       let fields =
-        let env = Typing_env0.add_env_extension env env_extension in
+        let env = 
+          Typing_env0.add_or_meet_env_extension env env_extension
+            (Typing_env0.max_level env)
+        in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
                (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
@@ -200,12 +203,15 @@ struct
              fields = fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
-        Meet_and_join.join_env_extension env env_extension1 env_extension2
+        Typing_env_extension.join env env_extension1 env_extension2
           env_extension1' env_extension2'
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
-        let env = Typing_env0.add_env_extension env env_extension in
+        let env =
+          Typing_env0.add_or_meet_env_extension env env_extension
+            (Typing_env0.max_level env)
+        in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
                (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
@@ -225,7 +231,7 @@ struct
           ((Blocks { by_length = singleton_blocks1; }) : block_cases)
           ((Blocks { by_length = singleton_blocks2; }) : block_cases)
           : (block_cases * env_extension) Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+      let env_extension_from_meet = ref (Typing_env_extension.empty) in
       let by_length =
         Targetint.OCaml.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
@@ -276,13 +282,13 @@ struct
               add_env_extension_singleton_block env
                 env_extension2 singleton_block
             else
-              singleton_blocks)
+              singleton_block)
           by_length
       in
       Blocks { by_length; }
 
     let meet_blocks env blocks1 blocks2 : _ Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+      let env_extension_from_meet = ref (Typing_env_extension.empty) in
       let blocks =
         Tag.Map.inter (fun block_cases1 block_cases2 ->
             match meet_block_cases env block_cases1 block_cases2 with
@@ -336,12 +342,12 @@ struct
           : (blocks_and_tagged_immediates * env_extension) Or_bottom.t =
       let (blocks : _ Or_unknown.t), env_extension_from_meet =
         match blocks1, blocks2 with
-        | Unknown, _ -> blocks2, Typing_env_extension.create ()
-        | _, Unknown -> blocks1, Typing_env_extension.create ()
+        | Unknown, _ -> blocks2, Typing_env_extension.empty
+        | _, Unknown -> blocks1, Typing_env_extension.empty
         | Known blocks1, Known blocks2 ->
           match meet_blocks env blocks1 blocks2 with
           | Bottom ->
-            Or_unknown.Known Tag.Map.empty, Typing_env_extension.create ()
+            Or_unknown.Known Tag.Map.empty, Typing_env_extension.empty
           | Ok (blocks, env_extension_from_meet) ->
             Or_unknown.Known blocks, env_extension_from_meet
       in
@@ -382,10 +388,10 @@ struct
               | Unknown -> env_extension_from_meet, blocks
               | Known blocks ->
                 match Tag.Map.get_singleton blocks with
-                | None -> env_extension_from_meet, blocks
+                | None -> env_extension_from_meet, Or_unknown.Known blocks
                 | Some (tag, Blocks { by_length; }) ->
                   match Targetint.OCaml.Map.get_singleton by_length with
-                  | None -> env_extension_from_meet, blocks
+                  | None -> env_extension_from_meet, Or_unknown.Known blocks
                   | Some (length, singleton_block) ->
                     let env_extension_from_meet =
                       Typing_env_extension.meet env
@@ -393,7 +399,7 @@ struct
                     in
                     let singleton_block : singleton_block =
                       { singleton_block with
-                        env_extension = Typing_env_extension.create ();
+                        env_extension = Typing_env_extension.empty;
                       }
                     in
                     let by_length =
@@ -428,7 +434,6 @@ struct
     let meet_of_kind_foo env
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * env_extension) Or_bottom.t =
-      let resolver = env1.resolver in
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -466,7 +471,7 @@ struct
         in
         Ok (Boxed_number (Boxed_nativeint n), env_extension_from_meet)
       | Closures closures1, Closures closures2 ->
-        let env_extension_from_meet = ref (Typing_env_extension.create ()) in
+        let env_extension_from_meet = ref (Typing_env_extension.empty) in
         let closures =
           Closure_id.Map.inter
             (fun (closures_entry1 : closures_entry)
@@ -480,7 +485,7 @@ struct
                 None
               end else begin
                 env_extension_from_meet :=
-                  Typing_env_extension.meet new_env_extension_from_meet
+                  Typing_env_extension.meet env new_env_extension_from_meet
                     !env_extension_from_meet;
                 Some { set_of_closures = set; }
               end)
@@ -492,7 +497,7 @@ struct
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
-        else Ok (String strs, Typing_env_extension.create ())
+        else Ok (String strs, Typing_env_extension.empty)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closures _

@@ -65,6 +65,7 @@ end) (Make_meet_and_join : functor
     end) (Typing_env0 : sig
       include Typing_env0_intf.S
         with type typing_environment := T.typing_environment
+        with type typing_environment_entry := T.typing_environment_entry
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
         with type t_in_context := T.t_in_context

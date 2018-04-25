@@ -180,6 +180,8 @@ module type S = sig
       During the process, if an attempt is made to add a name which is
       already bound, the given name's type will be determined using a meet
       operation. *)
+  (* CR mshinwell: Maybe this (and the next function) doesn't need to take
+     a level and instead use the max? *)
   val add_or_meet_env_extension
      : t
     -> env_extension
