@@ -124,7 +124,6 @@ val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 type tagged_immediate_as_discriminants_proof = private
   | By_discriminant of Typing_env_extension.t Discriminant.Map.t
-  | Answer_given_by of Name.t
 
 val prove_tagged_immediate_as_discriminants
    : (t -> tagged_immediate_as_discriminants_proof proof) type_accessor
@@ -132,7 +131,6 @@ val prove_tagged_immediate_as_discriminants
 type is_tagged_immediate = private
   | Never_a_tagged_immediate
   | Always_a_tagged_immediate
-  | Answer_given_by of Name.t
 
 val prove_is_tagged_immediate : (t -> is_tagged_immediate proof) type_accessor
 
@@ -203,7 +201,6 @@ val prove_boxed_nativeint
 
 type tags = private
   | Tags of Tag.Set.t
-  | Answer_given_by of Name.t
 
 (** Determine which tags values of the given type may take on. *)
 (* CR mshinwell: duplicate return value (Proved empty_set, and Invalid) *)
@@ -266,12 +263,3 @@ val switch_arms
     -> arms:Continuation.t Discriminant.Map.t
     -> (Typing_env_extension.t * Continuation.t) Discriminant.Map.t)
   type_accessor
-
-module Typing_env : sig
-  include module type of struct include Typing_env0 end
-
-  (** [diff t1 t2] returns judgements from the environment [t1] excepting any
-      for which [t2] is known to specify an equally precise, or less precise,
-      type. *)
-  val diff : t -> t -> Typing_env_extension.t
-end

@@ -68,13 +68,6 @@ let this_naked_int64_named n : Named.t * t =
 let this_naked_nativeint_named n : Named.t * t =
   Simple (Simple.const (Naked_nativeint n)), this_naked_nativeint n
 
-let strictly_more_precise (t_env, t) ~than:(than_env, than) =
-  (* The [bias_towards] choice is arbitrary here. *)
-  let meet, _env_extension =
-    meet ~bias_towards:(t_env, t) (than_env, than)
-  in
-  not (equal than meet)
-
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
      - alias information;
@@ -384,7 +377,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     let try_name () : reification_result =
       match canonical_name with
       | None -> Cannot_reify
-      | Some name when Typing_env0.is_existential env name ->
+      | Some name when Typing_env0.was_existential_exn env name ->
         Cannot_reify
       | Some name ->
         match name with
@@ -650,7 +643,6 @@ let prove_tagged_immediate env t
 
 type tagged_immediate_as_discriminants_proof =
   | By_discriminant of Typing_env_extension.t Discriminant.Map.t
-  | Answer_given_by of Name.t
 
 let prove_tagged_immediate_as_discriminants env t
       : tagged_immediate_as_discriminants_proof proof =
@@ -668,17 +660,12 @@ let prove_tagged_immediate_as_discriminants env t
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      let use_get_tag () =
-        match blocks_imms.get_tag with
-        | None -> Unknown
-        | Some get_tag -> Proved (Answer_given_by get_tag)
-      in
       begin match blocks_imms.blocks, blocks_imms.immediates with
-      | Unknown, _ | _, Unknown -> use_get_tag ()
+      | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
         match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
-        | false, false -> use_get_tag ()
+        | false, false -> Unknown
         | true, false ->
           let by_discr =
             Immediate.Map.fold (fun imm (imm_case : immediate_case) by_discr ->
@@ -708,7 +695,6 @@ let prove_tagged_immediate_as_discriminants env t
 type is_tagged_immediate =
   | Never_a_tagged_immediate
   | Always_a_tagged_immediate
-  | Answer_given_by of Name.t
 
 let prove_is_tagged_immediate env t : is_tagged_immediate proof =
   let wrong_kind () =
@@ -724,17 +710,12 @@ let prove_is_tagged_immediate env t : is_tagged_immediate proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      let use_is_int () =
-        match blocks_imms.is_int with
-        | None -> Unknown
-        | Some is_int -> Proved (Answer_given_by is_int)
-      in
       begin match blocks_imms.blocks, blocks_imms.immediates with
-      | Unknown, _ | _, Unknown -> use_is_int ()
+      | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
         match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
-        | false, false -> use_is_int ()
+        | false, false -> Unknown
         | true, false -> Proved Always_a_tagged_immediate
         | false, true -> Proved Never_a_tagged_immediate
       end
@@ -811,7 +792,10 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
                         | None -> None
                         | Some field_ty ->
                           let field_ty =
-                            join (env, this_field_ty) (env, field_ty)
+                            join env
+                              Typing_env_extension.empty
+                              Typing_env_extension.empty
+                              this_field_ty field_ty
                           in
                           Some field_ty
                       end)
@@ -1010,7 +994,6 @@ let prove_float_array env t : float_array_proof proof =
 
 type tags =
   | Tags of Tag.Set.t
-  | Answer_given_by of Name.t
 
 (* CR mshinwell: There's a bit of a wart here (in conjunction with the
    [Get_tag] primitive -- some of these tags don't really make any sense in
@@ -1033,11 +1016,8 @@ let prove_tags env t : tags proof =
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       begin match blocks_imms.blocks with
       | Known blocks -> Proved (Tags (Tag.Map.keys blocks))
-      | Unknown ->
-        match blocks_imms.get_tag with
-        | None -> Unknown
-        | Some get_tag -> Proved (Answer_given_by get_tag)
-        end
+      | Unknown -> Unknown
+      end
     | Ok (Boxed_number (Boxed_float _)) ->
       Proved (Tags (Tag.Set.singleton Tag.double_tag))
     | Ok (Boxed_number (Boxed_int32 _)) ->
@@ -1324,11 +1304,9 @@ Format.eprintf "SD check: %a vs %a\n%!" print t1 print t2;
       | Ok of_kind_value1, Ok of_kind_value2 ->
         begin match of_kind_value1, of_kind_value2 with
         | Blocks_and_tagged_immediates
-            { blocks = blocks1; immediates = imms1;
-              is_int = _; get_tag = _; },
+              { blocks = blocks1; immediates = imms1; },
             Blocks_and_tagged_immediates
-              { blocks = blocks2; immediates = imms2;
-                is_int = _; get_tag = _; } ->
+              { blocks = blocks2; immediates = imms2; } ->
           (* CR-someday mshinwell: This could be improved if required. *)
           begin match blocks1, blocks2 with
           | Unknown, _ | _, Unknown -> false
@@ -1473,7 +1451,7 @@ Format.eprintf "SD check: %a vs %a\n%!" print t1 print t2;
         print t2
 
 let switch_arms env t ~arms =
-  let no_env_extension = Typing_env_extension.create () in
+  let no_env_extension = Typing_env_extension.empty in
   let wrong_kind () =
     Misc.fatal_errorf
       "Wrong kind for something claimed to be a discriminant: %a"
@@ -1539,9 +1517,3 @@ let prove_unboxable env ~unboxee_ty : unboxable_proof =
               match prove_boxed_nativeint env unboxee_ty with
               | Proved _ty_naked_number -> Boxed_nativeint
               | Invalid | Unknown -> Cannot_unbox
-
-module Typing_env = struct
-  include Typing_env0
-
-  let diff t1 t2 = diff ~strictly_more_precise t1 t2
-end
