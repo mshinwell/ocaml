@@ -385,9 +385,7 @@ end) = struct
 
   let invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
-    let meet_ty, _env_extension =
-      Meet_and_join.meet ~bound_name:name t existing_ty ty
-    in
+    let meet_ty, _env_extension = Meet_and_join.meet t existing_ty ty in
     let ty_must_be_strictly_more_precise, other_ty =
       match sense with
       | New_equation_must_be_more_precise -> ty, existing_ty

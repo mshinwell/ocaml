@@ -424,7 +424,7 @@ end) = struct
               not (Name.is_predefined_exception name))
             names_to_types
         in
-        let levels_to_names =
+        let levels_to_entries =
           Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
               let by_sublevel =
                 Scope_level.Sublevel.Map.filter_map
@@ -627,10 +627,6 @@ end) = struct
         acc
         decls.result
 
-  and free_names_of_typing_environment (_env : typing_environment) acc =
-    (* Typing environments are always closed. *)
-    acc
-
   and free_names_of_env_extension t acc =
     (* CR mshinwell: This is copied from typing_env_extension.ml, we need to
        share this *)
@@ -661,7 +657,8 @@ end) = struct
           Scope_level.Sublevel.Map.fold
             (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
               match entry with
-              | Definition t | Equation t -> free_names t acc
+              | Definition t -> free_names t acc
+              | Equation t -> free_names t (Name.Set.add name acc)
               | CSE prim ->
                 Name.Set.union acc
                   (Flambda_primitive.With_fixed_value.free_names prim))
@@ -671,7 +668,8 @@ end) = struct
         acc
     in
     let free_names_last_equations_rev =
-      List.fold_left (fun acc (_name, t) -> free_names t acc)
+      List.fold_left (fun acc (name, t) ->
+          free_names t (Name.Set.add name acc))
         acc
         t.last_equations_rev
     in
@@ -1551,17 +1549,6 @@ result
     in
     block_of_values tag ~fields
 
-  let variant_whose_discriminants_are ~is_int ~get_tag : t =
-    let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Unknown;
-        blocks = Unknown;
-      }
-    in
-    { descr =
-        Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-      phantom = None;
-    }
-
   let any_boxed_float () = box_float (any_naked_float ())
   let any_boxed_int32 () = box_int32 (any_naked_int32 ())
   let any_boxed_int64 () = box_int64 (any_naked_int64 ())
@@ -1862,7 +1849,6 @@ result
     match blocks with
     | Unknown -> blocks
     | Known by_tag ->
-      let something_changed = ref false in
       let by_tag' =
         Tag.Map.map_sharing (fun block_cases ->
             rename_variables_block_cases subst block_cases)
@@ -1992,7 +1978,7 @@ result
         (({ params;
             result;
             result_env_extension;
-            direct_call_surrogate;
+            direct_call_surrogate = _;
           } : non_inlinable_function_declarations) as non_inlinable) =
     let params_changed = ref false in
     let params' =
@@ -2028,25 +2014,25 @@ result
       }
 
   and rename_variables_inlinable_function_decl subst
-        (({ closure_origin;
-            continuation_param;
-            exn_continuation_param;
-            is_classic_mode;
+        (({ closure_origin = _;
+            continuation_param = _;
+            exn_continuation_param = _;
+            is_classic_mode = _;
             params;
-            code_id;
-            body;
-            free_names_in_body;
+            code_id = _;
+            body = _;
+            free_names_in_body = _;
             result;
             result_env_extension;
-            stub;
-            dbg;
-            inline;
-            specialise;
-            is_a_functor;
-            invariant_params;
-            size;
-            direct_call_surrogate;
-            my_closure;
+            stub = _;
+            dbg = _;
+            inline = _;
+            specialise = _;
+            is_a_functor = _;
+            invariant_params = _;
+            size = _;
+            direct_call_surrogate = _;
+            my_closure = _;
           } : inlinable_function_declaration) as inlinable)
         : inlinable_function_declaration =
     let params_changed = ref false in
@@ -2084,7 +2070,7 @@ result
 
   and rename_variables_typing_environment_entry subst
         (entry : typing_environment_entry)
-        : typing_environment_entry0 =
+        : typing_environment_entry =
     match entry with
     | Definition t ->
       let t' = rename_variables subst t in
@@ -2108,7 +2094,7 @@ result
           if not (t == t') then begin
             first_definitions_changed := true
           end;
-          t')
+          name, t')
         first_definitions
     in
     let at_or_after_cut_point' =
@@ -2137,17 +2123,54 @@ result
             last_equations_rev_changed := true
           end;
           name', t')
-        first_definitions
+        last_equations_rev
     in
     if (not !first_definitions_changed)
       && at_or_after_cut_point == at_or_after_cut_point'
       && (not !last_equations_rev_changed)
     then env_extension
     else 
-      { first_definitions;
-        at_or_after_cut_point;
-        last_equations_rev;
+      { first_definitions = first_definitions';
+        at_or_after_cut_point = at_or_after_cut_point';
+        last_equations_rev = last_equations_rev';
       }
+
+  (* CR mshinwell: Move [subst] second in the above functions' parameters
+     then delete this *)
+  let rename_variables t subst =
+    rename_variables subst t
+
+  module T1 = struct
+    include T
+
+    let print = print
+    let print_typing_environment_entry = print_typing_environment_entry
+    let print_typing_environment = print_typing_environment
+    let print_typing_env_extension = print_typing_env_extension
+    let free_names = free_names
+    let free_names_set = free_names_set
+    let unknown = unknown
+    let force_to_kind_value = force_to_kind_value
+    let force_to_kind_naked_number = force_to_kind_naked_number
+    let force_to_kind_naked_int32 = force_to_kind_naked_int32
+    let force_to_kind_naked_int64 = force_to_kind_naked_int64
+    let force_to_kind_naked_nativeint = force_to_kind_naked_nativeint
+    let force_to_kind_naked_float = force_to_kind_naked_float
+    let force_to_kind_naked_immediate = force_to_kind_naked_immediate
+    let force_to_kind_fabricated = force_to_kind_fabricated
+    let kind = kind
+    let is_empty_typing_environment = is_empty_typing_environment
+    let rename_variables = rename_variables
+    let print_ty_value = print_ty_value
+    let print_ty_naked_number = print_ty_naked_number
+    let print_ty_fabricated = print_ty_fabricated
+    let ty_is_obviously_bottom = ty_is_obviously_bottom
+    let any_value_as_ty_value = any_value_as_ty_value
+    let any_fabricated_as_ty_fabricated = any_fabricated_as_ty_fabricated
+    let bottom_as_ty_value = bottom_as_ty_value
+    let bottom_as_ty_fabricated = bottom_as_ty_fabricated
+    let is_obviously_bottom = is_obviously_bottom
+  end
 
   (* CR mshinwell: Work out which properties we need to prove, e.g.
      Distributivity of meet over join:
@@ -2273,7 +2296,6 @@ result
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join * env_extension =
-      let resolver = env.resolver in
       if ou1 == ou2 then ou1, Typing_env_extension.empty
       else
         match ou1, ou2 with
@@ -2323,7 +2345,6 @@ result
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty * env_extension =
-      let resolver = env.resolver in
       if or_alias1 == or_alias2 then begin
         or_alias1, Typing_env_extension.empty
       end else begin
@@ -2403,7 +2424,7 @@ result
       with type env_extension := env_extension
       with type flambda_type := flambda_type
   end = struct
-    let meet ?bound_name env t1 t2 : t * env_extension =
+    let meet env t1 t2 : t * env_extension =
       if Type_equality.fast_equal t1 t2
       then t1, Typing_env_extension.empty
       else begin
@@ -2483,61 +2504,6 @@ result
           else if t2.descr == descr then t2
           else { t1 with descr; }
         in
-(*
-        let free_names_in_t =
-          Name_occurrences.everything (free_names t)
-        in
-        let names_free_in_env_extension =
-          Typing_env_extension.fold env_extension_from_meet ~init:Name.Set.empty
-            ~f:(fun names_free_in_env_extension _name _scope_level t ->
-              let free_names = free_names_set t in
-              Name.Set.union free_names names_free_in_env_extension)
-        in
-        let names_bound_by_env_extension =
-          Typing_env_extension.domain env_extension_from_meet
-        in
-        let required_to_close =
-          Name.Set.diff
-            (Name.Set.union free_names_in_t names_free_in_env_extension)
-            names_bound_by_env_extension
-        in
-        let env_extension_from_meet =
-          Name.Set.fold (fun name env_extension_from_meet ->
-              let level, ty =
-                match Name.Map.find name env1.names_to_types with
-                | exception Not_found ->
-                  begin match Name.Map.find name env2.names_to_types with
-                  | exception Not_found ->
-                    Misc.fatal_errorf "Cannot close returned type from meet \
-                        because of unbound name %a: %a"
-                      Name.print name
-                      print t
-                  | level, ty -> level, ty
-                  end
-                | level, ty -> level, ty
-              in
-              let kind = kind ty in
-              let ty = unknown kind in
-              Typing_env_extension.add ~resolver:env1.resolver
-                env_extension_from_meet name level ty)
-            required_to_close
-            env_extension_from_meet
-        in
-        let env_extension_domain =
-          Typing_env_extension.domain env_extension_from_meet
-        in
-        if Name.Set.mem bound_name env_extension_domain then begin
-          Misc.fatal_errorf "Meet of types bound to name %a is not allowed \
-              to generate equations on that same name:@ %a@ in env:@ %a,@ \
-              %a@ in env:@ %a,@ meet result@ %a"
-            Name.print bound_name
-            print t1
-            Typing_env0.print env1
-            print t2
-            Typing_env0.print env2
-            print t
-        end;
-*)
         t, env_extension_from_meet
       end
 
@@ -2636,25 +2602,7 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_value.Make (struct
-      include T
-
-      let print = print
-      let print_typing_environment_entry = print_typing_environment_entry
-      let print_typing_environment = print_typing_environment
-      let print_typing_env_extension = print_typing_env_extension
-      let free_names = free_names
-      let free_names_set = free_names_set
-      let unknown = unknown
-      let force_to_kind_value = force_to_kind_value
-      let force_to_kind_naked_number = force_to_kind_naked_number
-      let force_to_kind_fabricated = force_to_kind_fabricated
-      let kind = kind
-      let is_empty_typing_environment = is_empty_typing_environment
-      let as_or_more_precise = Meet_and_join.as_or_more_precise
-      let strictly_more_precise = Meet_and_join.strictly_more_precise
-      let rename_variables = rename_variables
-    end)
+  end = Real_meet_and_join_value.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join_naked_immediate)
     (Meet_and_join_naked_float)
@@ -2708,15 +2656,7 @@ result
         with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
-  end = Real_meet_and_join_naked_number.Make (struct
-      include T
-      let print_ty_naked_number = print_ty_naked_number
-      let force_to_kind_naked_immediate = force_to_kind_naked_immediate
-      let force_to_kind_naked_float = force_to_kind_naked_float
-      let force_to_kind_naked_int32 = force_to_kind_naked_int32
-      let force_to_kind_naked_int64 = force_to_kind_naked_int64
-      let force_to_kind_naked_nativeint = force_to_kind_naked_nativeint
-    end)
+  end = Real_meet_and_join_naked_number.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join)
     (Typing_env0)
@@ -2764,18 +2704,7 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_fabricated.Make (struct
-      include T
-
-      let print_ty_fabricated = print_ty_fabricated
-      let is_obviously_bottom = is_obviously_bottom
-      let ty_is_obviously_bottom = ty_is_obviously_bottom
-      let force_to_kind_fabricated = force_to_kind_fabricated
-      let bottom_as_ty_fabricated = bottom_as_ty_fabricated
-      let bottom_as_ty_value = bottom_as_ty_value
-      let any_fabricated_as_ty_fabricated = any_fabricated_as_ty_fabricated
-      let any_value_as_ty_value = any_value_as_ty_value
-    end)
+  end = Real_meet_and_join_fabricated.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join_value)
     (Meet_and_join)
@@ -2784,45 +2713,43 @@ result
   and Typing_env0 : sig
     include Typing_env0_intf.S
       with type typing_environment := typing_environment
+      with type typing_environment_entry = typing_environment_entry
       with type env_extension := env_extension
       with type flambda_type := flambda_type
       with type t_in_context := t_in_context
       with type 'a ty = 'a ty
       with type 'a unknown_or_join = 'a unknown_or_join
-  end = Real_typing_environment0.Make (struct
-    include T
-
-    let is_empty_typing_environment = is_empty_typing_environment
-    let meet = Meet_and_join.meet
-    let join = Meet_and_join.join
-    let kind = kind
-    let force_to_kind_fabricated = force_to_kind_fabricated
-    let force_to_kind_naked_number = force_to_kind_naked_number
-    let force_to_kind_value = force_to_kind_value
-    let unknown = unknown
-    let free_names_set = free_names_set
-    let free_names = free_names
-    let print_typing_environment = print_typing_environment
-    let print = print
-  end) (Typing_env_extension) (Meet_and_join) (Type_equality)
+  end = Real_typing_environment0.Make (T2)
+    (Typing_env_extension) (Meet_and_join) (Type_equality)
   and Typing_env_extension : sig
     include Typing_env_extension_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
-  end = Real_typing_env_extension.Make (struct
-    include T
-  end) (Meet_and_join) (Type_equality)
+  end = Real_typing_env_extension.Make (T2)
+    (Typing_env0) (Meet_and_join) (Type_equality)
   and Type_equality : sig
     include Type_equality_intf.S
       with type flambda_type := flambda_type
-  end = Real_type_equality.Make (T)
+  end = Real_type_equality.Make (T2) (Typing_env_extension)
+  and T2 : sig
+    include module type of struct include T1 end
 
-  let meet ?bound_name env t1 t2 =
-    Meet_and_join.meet ?bound_name (env, t1) (env, t2)
+    val as_or_more_precise : typing_environment -> t -> than:t -> bool
+    val strictly_more_precise : typing_environment -> t -> than:t -> bool
+  end = struct
+    include T1
 
+    let as_or_more_precise = Meet_and_join.as_or_more_precise
+    let strictly_more_precise = Meet_and_join.strictly_more_precise
+  end
+
+  let meet = Meet_and_join.meet
   let join = Meet_and_join.join
 
-  let join_ty_value (env1, ty_value1) (env2, ty_value2) =
-    Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
+  let strictly_more_precise = Meet_and_join.strictly_more_precise
+  let as_or_more_precise = Meet_and_join.as_or_more_precise
+
+  let fast_equal = Type_equality.fast_equal
+  let equal = Type_equality.equal
 end

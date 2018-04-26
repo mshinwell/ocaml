@@ -363,6 +363,18 @@ module type S = sig
     -> t
     -> 'a of_kind_naked_number ty
 
+  val force_to_kind_naked_int32 : t -> Int32.Set.t ty_naked_number
+
+  val force_to_kind_naked_int64 : t -> Int64.Set.t ty_naked_number
+
+  val force_to_kind_naked_nativeint : t -> Targetint.Set.t ty_naked_number
+
+  val force_to_kind_naked_float
+     : t
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+
+  val force_to_kind_naked_immediate : t -> Immediate.Set.t ty_naked_number
+
   val force_to_kind_fabricated : t -> of_kind_fabricated ty
 
   val kind : flambda_type -> Flambda_kind.t
@@ -374,4 +386,12 @@ module type S = sig
   val strictly_more_precise : typing_environment -> t -> than:t -> bool
 
   val rename_variables : t -> Variable.t Variable.Map.t -> t
+
+  val any_value_as_ty_value : unit -> ty_value
+
+  val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
+
+  val bottom_as_ty_value : unit -> ty_value
+
+  val bottom_as_ty_fabricated : unit -> ty_fabricated
 end

@@ -87,6 +87,7 @@ module type S = sig
 
   and flambda_type = t
 
+  (* CR mshinwell: We can probably remove [t_in_context] now *)
   and t_in_context = typing_environment * t
 
   and descr = private
@@ -165,13 +166,6 @@ module type S = sig
     blocks : block_cases Tag.Map.t Or_unknown.t;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
-    is_int : Name.t option;
-    (** A name that is known to contain the result of the [Is_int]
-        primitive on the corresponding block. *)
-    (* CR mshinwell: Rename? *)
-    get_tag : Name.t option;
-    (** A name that is known to contain the result of the [Get_tag]
-        or [Discriminant_of_int] primitive on the corresponding block. *)
   }
 
   (** Boxed integer and floating-point numbers together with the types
@@ -514,15 +508,6 @@ module type S = sig
     -> size:int
     -> t
 
-  (** The type of a value [v] for which the result of the [Is_int] primitive on
-      [v] is given by the name [is_int] and the result of the [Get_tag]
-      primitive on [v] is given by the name [get_tag]. (Used for unboxing
-      transformations.) *)
-  val variant_whose_discriminants_are
-     : is_int:Name.t option
-    -> get_tag:Name.t option
-    -> t
-
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
 
@@ -637,10 +622,13 @@ module type S = sig
   val check_of_kind : t -> Flambda_kind.t -> unit
 
   (** Least upper bound of two types. *)
-  val join : t_in_context -> t_in_context -> t
-
-  (** Least upper bound of two types known to be of kind [Value]. *)
-  val join_ty_value : ty_value_in_context -> ty_value_in_context -> ty_value
+  val join
+     : Typing_env0.t
+    -> Typing_env_extension.t
+    -> Typing_env_extension.t
+    -> t
+    -> t
+    -> t
 
   (** Greatest lower bound of two types.  The process of meeting may generate
       equations, which are returned as an environment extension. *)
@@ -648,11 +636,11 @@ module type S = sig
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)
-  val as_or_more_precise : t_in_context -> than:t_in_context -> bool
+  val as_or_more_precise : Typing_env0.t -> t -> than:t -> bool
 
   (** Returns [true] if the first type is known to provide strictly more
       information about the corresponding value than the type [than]. *)
-  val strictly_more_precise : t_in_context -> than:t_in_context -> bool
+  val strictly_more_precise : Typing_env0.t -> t -> than:t -> bool
 
   val rename_variables : t -> Variable.t Variable.Map.t -> t
 end

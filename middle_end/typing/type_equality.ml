@@ -21,11 +21,11 @@ module Int64 = Numbers.Int64
 
 module Make (T : sig
   include Flambda_type0_internal_intf.S
-
-  module Typing_env_extension : Typing_env_extension_intf.S
-    with type env_extension := env_extension
-    with type typing_environment := typing_environment
-    with type flambda_type := flambda_type
+end) (Typing_env_extension : sig
+  include Typing_env_extension_intf.S
+    with type env_extension := T.env_extension
+    with type typing_environment := T.typing_environment
+    with type flambda_type := T.flambda_type
 end) = struct
   open T
 
