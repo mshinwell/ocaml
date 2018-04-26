@@ -119,15 +119,18 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         fields), dbg)
     | None -> assert false  (* See [create], above. *)
 
-  let refine_unboxee_ty env t ~unboxee_ty ~all_fields ~is_int ~get_tag =
+  let refine_unboxee_ty _env t ~unboxee_ty ~all_fields ~is_int:_ ~get_tag:_ =
     match t.no_discriminant_needed with
     | None ->
+(*
       (* XXX Check we can't get here when there is no [is_int] (i.e. no
          constant ctors or one unique one). *)
       let unboxee_discriminants =
         T.variant_whose_discriminants_are ~is_int ~get_tag
       in
       T.join (env, unboxee_ty) (env, unboxee_discriminants)
+*)
+      unboxee_ty
     | Some unique_tag ->
       let fields =
         List.map (fun field : T.t T.mutable_or_immutable ->
@@ -385,7 +388,7 @@ module Make (S : Unboxing_spec) = struct
           Immediate.Set.fold (fun ctor_index by_discriminant ->
               let ctor_index = Immediate.to_targetint ctor_index in
               Discriminant.Map.add (Discriminant.create_exn ctor_index)
-                (T.Typing_env_extension.create ())
+                T.Typing_env_extension.empty
                 by_discriminant)
             constant_ctors
             Discriminant.Map.empty
@@ -393,7 +396,7 @@ module Make (S : Unboxing_spec) = struct
         let constant_ctors = Discriminant.Map.keys by_discriminant in
         let by_discriminant =
           Discriminant.Map.fold (fun discr _ by_discriminant ->
-              Discriminant.Map.add discr (T.Typing_env_extension.create ())
+              Discriminant.Map.add discr T.Typing_env_extension.empty
                 by_discriminant)
             blocks
             by_discriminant
