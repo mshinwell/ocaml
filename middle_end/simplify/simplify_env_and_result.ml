@@ -695,7 +695,7 @@ end = struct
       lifted_constants = Symbol.Map.empty;
     }
 
-  let union t1 t2 =
+  let union env t1 t2 =
     { resolver = t1.resolver;
       used_continuations =
         Continuation.Map.union_merge Continuation_uses.union
@@ -707,7 +707,7 @@ end = struct
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      env_extension = T.Typing_env_extension.meet 
+      env_extension = T.Typing_env_extension.meet env
         t1.env_extension t2.env_extension;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
@@ -758,11 +758,12 @@ end = struct
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
         Continuation_uses.create ~continuation:cont ~params
-          ~backend:(Env.backend env)
           ~definition_scope_level:(Env.scope_level_of_continuation env cont)
       | uses -> uses
     in
-    let uses = Continuation_uses.add_use uses env kind in
+    let uses =
+      Continuation_uses.add_use uses (Env.get_typing_environment env) kind
+    in
   (*
   if Continuation.to_int cont = k then begin
   Format.eprintf "Join of args approxs for k%d: %a\n%!"
@@ -857,14 +858,8 @@ end = struct
         Continuation.print cont
         Continuation_uses.print uses;
 *)
-      Continuation_uses.param_types_and_body_env uses ~freshening ~arity ~default_env
-
-  let continuation_args_types' t cont ~arity ~freshening =
-    let tys, _env =
-      continuation_args_types t cont ~arity ~freshening
-        ~default_env:(T.Typing_env.create ~resolver:t.resolver)
-    in
-    tys
+      Join_point.param_types_and_body_env uses freshening ~arity
+        ~default_env
   
   let defined_continuation_args_types t cont ~arity ~freshening ~default_env =
     match Continuation.Map.find cont t.defined_continuations with
@@ -872,7 +867,7 @@ end = struct
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | (uses, _approx, _env, _recursive) ->
-      Continuation_uses.param_types_and_body_env uses ~arity ~freshening ~default_env
+      Join_point.param_types_and_body_env uses ~arity freshening ~default_env
 
   let exit_scope_of_let_cont t env cont ~params =
     let t, uses =
@@ -880,7 +875,6 @@ end = struct
       | exception Not_found ->
         let uses =
           Continuation_uses.create ~continuation:cont ~params
-            ~backend:(Env.backend env)
             ~definition_scope_level:(Env.scope_level_of_continuation env cont)
         in
         t, uses
@@ -893,8 +887,10 @@ end = struct
     assert (continuation_unused t cont);
     t, uses
 
-  let update_all_continuation_use_environments t ~if_present_in_env
-        ~then_add_to_env =
+  let update_all_continuation_use_environments _t ~if_present_in_env:_
+        ~then_add_to_env:_ =
+    Misc.fatal_error "Not yet implemented"
+(* XXX think about this
     let used_continuations =
       Continuation.Map.map (fun uses ->
             Continuation_uses.update_use_environments uses
@@ -914,6 +910,7 @@ end = struct
       used_continuations;
       defined_continuations;
     }
+*)
 
   let update_continuation_parameters t cont
         ~params =
@@ -1022,21 +1019,21 @@ end = struct
 
   let clear_env_extension t =
     { t with
-      env_extension = T.Typing_env_extension.create ();
+      env_extension = T.Typing_env_extension.empty;
     }
 
-  let add_or_meet_equation t name scope_level ty =
+  (* CR mshinwell: delete [scope_level] *)
+  let add_or_meet_equation t name _scope_level ty =
     let env_extension =
-      T.Typing_env_extension.add_or_replace_meet ~resolver:t.resolver
-        t.env_extension name scope_level ty
+      T.Typing_env_extension.add_equation t.env_extension name ty
     in
     { t with
       env_extension;
     }
 
-  let add_or_meet_env_extension t env_extension =
+  let add_or_meet_env_extension env t env_extension =
     let env_extension =
-      T.Typing_env_extension.meet ~resolver:t.resolver t.env_extension env_extension
+      T.Typing_env_extension.meet env t.env_extension env_extension
     in
     { t with
       env_extension;

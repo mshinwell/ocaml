@@ -183,6 +183,7 @@ module type Env = sig
     -> t
 
   (** Determine if the environment knows about a variable that is bound
+
       to the given [projection]. *)
   val find_projection
      : t

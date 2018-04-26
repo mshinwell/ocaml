@@ -43,6 +43,10 @@ module Use : sig
     val only_specialisable
        : args_with_tys:(Simple.t * Flambda_type.t) list
       -> t
+
+    (** The arguments seen at the given continuation use.  (If there is no
+        information about the arguments, an empty list will be returned.) *)
+    val args : t -> Simple.t list
   end
 
   (** A single use of a continuation. *)
