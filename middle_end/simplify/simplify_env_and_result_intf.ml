@@ -562,6 +562,12 @@ module type Result = sig
     -> Flambda_type.Typing_env_extension.t
     -> t
 
+  val add_cse
+     : t
+    -> Flambda_primitive.With_fixed_value.t
+    -> bound_to:Name.t
+    -> t
+
   val get_env_extension : t -> Flambda_type.Typing_env_extension.t
 
   val newly_imported_symbols : t -> Flambda_kind.t Symbol.Map.t

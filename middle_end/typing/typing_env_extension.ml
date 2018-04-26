@@ -43,10 +43,6 @@ end) = struct
 
   type t = env_extension
 
-  (* CR mshinwell: We need a note somewhere giving the status of [CSE]
-     entries in env extensions.  At the moment these are present but
-     ignored. *)
-
   module TE = Typing_env
 
   let print ppf t = T.print_typing_env_extension ppf t
@@ -86,6 +82,7 @@ end) = struct
     { first_definitions = [];
       at_or_after_cut_point = Scope_level.Map.empty;
       last_equations_rev = [];
+      cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
 
   let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
@@ -179,10 +176,16 @@ end) = struct
           Name.Set.mem name allowed_names)
         t.last_equations_rev
     in
+    let cse =
+      Flambda_primitive.With_fixed_value.Map.filter (fun _prim name ->
+          Name.Set.mem name allowed_names)
+        t.cse
+    in
     let t =
       { first_definitions;
         at_or_after_cut_point;
         last_equations_rev;
+        cse;
       }
     in
     invariant t;
@@ -231,6 +234,15 @@ end) = struct
     let last_equations_rev = (name, ty) :: t.last_equations_rev in
     { t with last_equations_rev; }
 
+  let add_cse t name prim =
+    let cse =
+      match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
+      | exception Not_found ->
+        Flambda_primitive.With_fixed_value.Map.add prim name t.cse
+      | _name -> t.cse
+    in
+    { t with cse; }
+
   (* CR-someday mshinwell: Consider implementing [meet] and [join] directly
      rather than opening up all of the existentials and cutting the
      environment.  However this shouldn't be done until we are sure that the
@@ -273,6 +285,7 @@ end) = struct
       invariant t;
       t
 
+  (* CR mshinwell: This needs to do something with [t.cse] perhaps *)
   let diff t env : t =
     let names_more_precise, _freshening =
       fold t

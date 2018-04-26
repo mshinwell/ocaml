@@ -600,6 +600,15 @@ end) = struct
 
   let rec add_or_meet_or_join_env_extension t env_extension scope_level
         ~meet_or_join =
+    let rename_name (name : Name.t) freshening =
+      match name with
+      | Var var ->
+        begin match Variable.Map.find var freshening with
+        | exception Not_found -> name
+        | var -> Name.var var
+        end
+      | Symbol _ -> name
+    in
     let add_definition t freshening (name : Name.t) ty =
       let ty = T.rename_variables ty freshening in
       let freshening, fresh_name =
@@ -619,6 +628,7 @@ end) = struct
       freshening, t
     in
     let add_equation t freshening name ty =
+      let name = rename_name name freshening in
       let ty = T.rename_variables ty freshening in
       match find_opt t name with
       | None -> add t name scope_level (Equation ty)
@@ -628,6 +638,20 @@ end) = struct
         | Some (new_ty, new_env_extension)->
           let t = add_or_meet_env_extension t new_env_extension scope_level in
           add t name scope_level (Equation new_ty)
+    in
+    let add_cse t freshening bound_to prim =
+      let bound_to = rename_name bound_to freshening in
+      let t = add t bound_to scope_level (CSE prim) in
+      let cse_to_names =
+        match
+          Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
+        with
+        | exception Not_found ->
+          Flambda_primitive.With_fixed_value.Map.add prim bound_to
+            t.cse_to_names
+        | _bound_to -> t.cse_to_names  (* As above, keep the outer binding. *)
+      in
+      { t with cse_to_names; }
     in
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
@@ -647,16 +671,25 @@ end) = struct
               | Equation ty ->
                 let t = add_equation t freshening name ty in
                 freshening, t
-              | CSE _ -> freshening, t)
+              | CSE prim ->
+                let t = add_cse t freshening name prim in
+                freshening, t)
             by_sublevel
             (freshening, t))
         env_extension.at_or_after_cut_point
         (freshening, t)
     in
-    List.fold_left (fun t (name, ty) ->
-        add_equation t freshening name ty)
+    let t =
+      List.fold_left (fun t (name, ty) ->
+          add_equation t freshening name ty)
+        t
+        env_extension.last_equations_rev
+    in
+    Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
+        let bound_to = rename_name bound_to freshening in
+        add t bound_to scope_level (CSE prim))
+      env_extension.cse
       t
-      env_extension.last_equations_rev
 
   and add_or_meet_env_extension t env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
@@ -716,5 +749,6 @@ end) = struct
     { first_definitions = [];
       at_or_after_cut_point;
       last_equations_rev = [];
+      cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
 end

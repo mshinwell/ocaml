@@ -391,6 +391,13 @@ module With_fixed_value : sig
 
   val create : primitive_application -> t option
 
+  val create_is_int : immediate_or_block:Name.t -> t
+
+  val create_get_tag
+     : block:Name.t
+    -> tags_to_sizes:(Targetint.OCaml.t Tag.Map.t)
+    -> t
+
   val equal : t -> t -> bool
 
   val eligible : primitive_application -> bool
@@ -398,6 +405,8 @@ module With_fixed_value : sig
   val to_primitive : t -> primitive_application
 
   val free_names : t -> Name.Set.t
+
+  val rename_variables : t -> Variable.t Variable.Map.t -> t
 
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Map.With_set with type t := t

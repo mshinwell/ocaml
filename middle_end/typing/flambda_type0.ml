@@ -470,8 +470,8 @@ end) = struct
             Name.Set.print were_existentials)
 
   and print_typing_env_extension_with_cache ~cache ppf
-        ({ first_definitions; at_or_after_cut_point; last_equations_rev; }
-          : env_extension) =
+        ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+           cse; } : env_extension) =
     let print_binding_list =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (name, ty) ->
@@ -483,10 +483,12 @@ end) = struct
       "@[<hov 1>(\
           @[<hov 1>(first_definitions@ %a)@]@ \
           @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
-          @[<hov 1>(last_equations_rev@ %a)@])@]"
+          @[<hov 1>(last_equations_rev@ %a)@]@ \
+          @[<hov 1>(cse@ %a)@])@]"
       print_binding_list first_definitions
       (print_levels_to_entries_with_cache ~cache) at_or_after_cut_point
       print_binding_list last_equations_rev
+      (Flambda_primitive.With_fixed_value.Map.print Name.print) cse
 
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
@@ -627,13 +629,15 @@ end) = struct
         acc
         decls.result
 
-  and free_names_of_env_extension t acc =
+  and free_names_of_env_extension
+        { first_definitions; at_or_after_cut_point; last_equations_rev;
+          cse; } acc =
     (* CR mshinwell: This is copied from typing_env_extension.ml, we need to
        share this *)
-    let defined_names t =
+    let defined_names =
       let from_first_definitions =
         Name.Set.of_list (
-          List.map (fun (name, _ty) -> name) t.first_definitions)
+          List.map (fun (name, _ty) -> name) first_definitions)
       in
       Scope_level.Map.fold (fun _level by_sublevel defined_names ->
           Scope_level.Sublevel.Map.fold
@@ -644,13 +648,13 @@ end) = struct
               | Equation _ | CSE _ -> defined_names)
             by_sublevel
             defined_names)
-        t.at_or_after_cut_point
+        at_or_after_cut_point
         from_first_definitions
     in
     let free_names_first_definitions =
       List.fold_left (fun acc (_name, t) -> free_names t acc)
         acc
-        t.first_definitions
+        first_definitions
     in
     let free_names_at_or_after_cut_point =
       Scope_level.Map.fold (fun _level by_sublevel acc ->
@@ -664,21 +668,31 @@ end) = struct
                   (Flambda_primitive.With_fixed_value.free_names prim))
             by_sublevel
             acc)
-        t.at_or_after_cut_point
+        at_or_after_cut_point
         acc
     in
     let free_names_last_equations_rev =
       List.fold_left (fun acc (name, t) ->
           free_names t (Name.Set.add name acc))
         acc
-        t.last_equations_rev
+        last_equations_rev
+    in
+    let free_names_last_equations_rev_and_cse =
+      Flambda_primitive.With_fixed_value.Map.fold (fun prim name acc ->
+          let acc =
+            Name.Set.union acc
+              (Flambda_primitive.With_fixed_value.free_names prim)
+          in
+          Name.Set.add name acc)
+        cse
+        free_names_last_equations_rev
     in
     let free_names =
       Name.Set.union free_names_first_definitions
         (Name.Set.union free_names_at_or_after_cut_point
-          free_names_last_equations_rev)
+          free_names_last_equations_rev_and_cse)
     in
-    Name.Set.diff free_names (defined_names t)
+    Name.Set.diff free_names defined_names
 
   let free_names_set t =
     free_names t Name.Set.empty
@@ -843,6 +857,7 @@ result
     { first_definitions = [];
       at_or_after_cut_point = Scope_level.Map.empty;
       last_equations_rev = [];
+      cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
 
   type 'a type_accessor = typing_environment -> 'a
@@ -2085,8 +2100,8 @@ result
       Misc.fatal_error "Not yet implemented"
 
   and rename_variables_env_extension subst
-        ({ first_definitions; at_or_after_cut_point; last_equations_rev; }
-          as env_extension) =
+        ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+           cse; } as env_extension) =
     let first_definitions_changed = ref false in
     let first_definitions' =
       List.map (fun (name, t) ->
@@ -2125,14 +2140,30 @@ result
           name', t')
         last_equations_rev
     in
+    let cse_changed = ref false in
+    let cse' =
+      Flambda_primitive.With_fixed_value.Map.fold (fun prim name cse' ->
+          let name' = rename_variables_name subst name in
+          let prim' =
+            Flambda_primitive.With_fixed_value.rename_variables prim subst
+          in
+          if (not (name == name')) || (not (prim == prim')) then begin
+            cse_changed := true
+          end;
+          Flambda_primitive.With_fixed_value.Map.add prim name cse')
+        cse
+        Flambda_primitive.With_fixed_value.Map.empty
+    in
     if (not !first_definitions_changed)
       && at_or_after_cut_point == at_or_after_cut_point'
       && (not !last_equations_rev_changed)
+      && (not !cse_changed)
     then env_extension
     else 
       { first_definitions = first_definitions';
         at_or_after_cut_point = at_or_after_cut_point';
         last_equations_rev = last_equations_rev';
+        cse = cse';
       }
 
   (* CR mshinwell: Move [subst] second in the above functions' parameters

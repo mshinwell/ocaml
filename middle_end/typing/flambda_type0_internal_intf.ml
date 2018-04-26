@@ -276,6 +276,7 @@ end) = struct
     first_definitions : (Name.t * t) list;
     at_or_after_cut_point : levels_to_entries;
     last_equations_rev : (Name.t * t) list;
+    cse : Name.t Flambda_primitive.With_fixed_value.Map.t;
   }
 
   module Name_or_export_id = struct

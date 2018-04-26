@@ -66,6 +66,12 @@ module type S = sig
     -> flambda_type
     -> t
 
+  val add_cse
+     : t
+    -> Name.t
+    -> Flambda_primitive.With_fixed_value.t
+    -> t
+
   (** Least upper bound of two environment extensions in the given typing
       environment. *)
   val meet : typing_environment -> t -> t -> t

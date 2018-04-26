@@ -1040,6 +1040,14 @@ end = struct
       env_extension;
     }
 
+  let add_cse t prim ~bound_to =
+    let env_extension =
+      T.Typing_env_extension.add_cse t.env_extension bound_to prim
+    in
+    { t with
+      env_extension;
+    }
+
   let get_env_extension t = t.env_extension
 
   (* CR mshinwell: There should be a function here which records the new

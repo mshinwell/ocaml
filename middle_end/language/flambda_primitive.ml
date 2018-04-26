@@ -1101,6 +1101,8 @@ let free_names t =
       (Name.Set.union (Simple.free_names x1) (Simple.free_names x2))
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
+(* CR mshinwell: This should maybe just take [Variable.t Variable.Map.t]
+   rather than [f]. *)
 let rename_variables t ~f =
   match t with
   | Unary (prim, x0) -> Unary (prim, Simple.map_var x0 ~f)
@@ -1136,12 +1138,6 @@ let at_most_generative_effects t =
   | (No_effects | Only_generative_effects _), _ -> true
   | _, _ -> false
 
-type without_args =
-  | Unary of unary_primitive
-  | Binary of binary_primitive
-  | Ternary of ternary_primitive
-  | Variadic of variadic_primitive
-
 module With_fixed_value = struct
   type t = primitive_application
 
@@ -1153,6 +1149,12 @@ module With_fixed_value = struct
       Some t
     | _, _ -> None
 
+  let create_is_int ~immediate_or_block =
+    Unary (Is_int, Simple.name immediate_or_block)
+
+  let create_get_tag ~block ~tags_to_sizes =
+    Unary (Get_tag { tags_to_sizes }, Simple.name block)
+
   let eligible t =
     match create t with
     | None -> false
@@ -1161,6 +1163,12 @@ module With_fixed_value = struct
   let to_primitive t = t
 
   let free_names = free_names
+
+  let rename_variables t subst =
+    rename_variables t ~f:(fun var ->
+      match Variable.Map.find var subst with
+      | exception Not_found -> var
+      | var -> var)
 
   include Stdlib.Map.Make_with_set (struct
     type nonrec t = t
@@ -1172,3 +1180,9 @@ module With_fixed_value = struct
   let equal t1 t2 =
     compare t1 t2 = 0
 end
+
+type without_args =
+  | Unary of unary_primitive
+  | Binary of binary_primitive
+  | Ternary of ternary_primitive
+  | Variadic of variadic_primitive

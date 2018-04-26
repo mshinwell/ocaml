@@ -318,6 +318,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
 *)
 
 let simplify_is_int env r prim arg dbg ~result_var =
+  let result_name = Name.var result_var in
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = T.prove_is_tagged_immediate (E.get_typing_environment env) ty in
@@ -334,7 +335,6 @@ let simplify_is_int env r prim arg dbg ~result_var =
   in
   let r =
     match arg with
-    | Const _ | Discriminant _ -> r
     | Name arg ->
       let arg_ty =
         T.variant_whose_discriminants_are
@@ -347,6 +347,20 @@ let simplify_is_int env r prim arg dbg ~result_var =
       in
       let scope_level = E.scope_level_of_name env arg in
       R.add_or_meet_equation r arg scope_level arg_ty
+    | Const _ | Discriminant _ -> r
+  in
+  let r =
+    R.add_or_meet_equation r result_name
+      (E.continuation_scope_level env)
+      (T.unknown (K.fabricated ()))
+  in
+  let r =
+    match arg with
+    | Name arg ->
+      R.add_cse r result_name
+        (Flambda_primitive.With_fixed_value.create_is_int
+          ~immediate_or_block:arg)
+    | Const _ | Discriminant _ -> r
   in
   match proof with
   | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
