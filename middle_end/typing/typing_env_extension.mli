@@ -18,8 +18,8 @@
 
 module Make (T : sig
   include Flambda_type0_internal_intf.S
-end) (Typing_env0 : sig
-  include Typing_env0_intf.S
+end) (Typing_env : sig
+  include Typing_env_intf.S
     with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type

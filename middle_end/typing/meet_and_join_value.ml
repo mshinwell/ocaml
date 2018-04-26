@@ -85,8 +85,8 @@ end) (Make_meet_and_join : functor
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
-    end) (Typing_env0 : sig
-      include Typing_env0_intf.S
+    end) (Typing_env : sig
+      include Typing_env_intf.S
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
@@ -172,8 +172,8 @@ struct
       let env_extension_from_meet = ref (Typing_env_extension.empty) in
       let fields =
         let env = 
-          Typing_env0.add_or_meet_env_extension env env_extension
-            (Typing_env0.max_level env)
+          Typing_env.add_or_meet_env_extension env env_extension
+            (Typing_env.max_level env)
         in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
@@ -209,8 +209,8 @@ struct
       assert (Array.length fields1 = Array.length fields2);
       let fields =
         let env =
-          Typing_env0.add_or_meet_env_extension env env_extension
-            (Typing_env0.max_level env)
+          Typing_env.add_or_meet_env_extension env env_extension
+            (Typing_env.max_level env)
         in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)

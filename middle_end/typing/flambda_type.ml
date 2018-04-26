@@ -152,7 +152,7 @@ end = struct
       | Join _ -> Unknown
 
   let create env (t : flambda_type) : t * (Name.t option) =
-    let t, canonical_name = Typing_env0.resolve_aliases (env, t) in
+    let t, canonical_name = Typing_env.resolve_aliases (env, t) in
     let (descr : descr) =
       match t.descr with
       | Value ty_value ->
@@ -356,7 +356,7 @@ type reification_result =
   | Invalid
 
 let reify env ~allow_free_variables t : reification_result =
-  let t, canonical_name = Typing_env0.resolve_aliases (env, t) in
+  let t, canonical_name = Typing_env.resolve_aliases (env, t) in
 (*
 Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   canonical_name;
@@ -377,7 +377,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     let try_name () : reification_result =
       match canonical_name with
       | None -> Cannot_reify
-      | Some name when Typing_env0.was_existential_exn env name ->
+      | Some name when Typing_env.was_existential_exn env name ->
         Cannot_reify
       | Some name ->
         match name with

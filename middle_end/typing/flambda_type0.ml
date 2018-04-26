@@ -26,7 +26,7 @@ module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
-module Real_typing_environment0 = Typing_env0
+module Real_typing_environment0 = Typing_env
 module Real_typing_env_extension = Typing_env_extension
 module Real_meet_and_join_value = Meet_and_join_value
 module Real_meet_and_join_naked_number = Meet_and_join_naked_number
@@ -2251,13 +2251,13 @@ result
       if or_alias1 == or_alias2 then or_alias1
       else
         let unknown_or_join1, canonical_name1 =
-          Typing_env0.resolve_aliases_and_squash_unresolved_names_on_ty' env
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
         let unknown_or_join2, canonical_name2 =
-          Typing_env0.resolve_aliases_and_squash_unresolved_names_on_ty' env
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
@@ -2349,13 +2349,13 @@ result
         or_alias1, Typing_env_extension.empty
       end else begin
         let unknown_or_join1, canonical_name1 =
-          Typing_env0.resolve_aliases_and_squash_unresolved_names_on_ty' env
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
         let unknown_or_join2, canonical_name2 =
-          Typing_env0.resolve_aliases_and_squash_unresolved_names_on_ty' env
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
@@ -2428,7 +2428,7 @@ result
       if Type_equality.fast_equal t1 t2
       then t1, Typing_env_extension.empty
       else begin
-        Typing_env0.invariant env;
+        Typing_env.invariant env;
         ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
         let descr, env_extension_from_meet =
           match t1.descr, t2.descr with
@@ -2611,7 +2611,7 @@ result
     (Meet_and_join_naked_nativeint)
     (Meet_and_join_fabricated)
     (Meet_and_join)
-    (Typing_env0)
+    (Typing_env)
     (Typing_env_extension)
   and Meet_and_join_naked_number : sig
     (* CR mshinwell: Deal with this signature somehow *)
@@ -2659,7 +2659,7 @@ result
   end = Real_meet_and_join_naked_number.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join)
-    (Typing_env0)
+    (Typing_env)
     (Typing_env_extension)
   and Meet_and_join_naked_immediate : sig
     include Meet_and_join_intf.S
@@ -2708,10 +2708,10 @@ result
     (Make_meet_and_join)
     (Meet_and_join_value)
     (Meet_and_join)
-    (Typing_env0)
+    (Typing_env)
     (Typing_env_extension)
-  and Typing_env0 : sig
-    include Typing_env0_intf.S
+  and Typing_env : sig
+    include Typing_env_intf.S
       with type typing_environment := typing_environment
       with type typing_environment_entry = typing_environment_entry
       with type env_extension := env_extension
@@ -2727,7 +2727,7 @@ result
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
   end = Real_typing_env_extension.Make (T2)
-    (Typing_env0) (Meet_and_join) (Type_equality)
+    (Typing_env) (Meet_and_join) (Type_equality)
   and Type_equality : sig
     include Type_equality_intf.S
       with type flambda_type := flambda_type

@@ -64,8 +64,8 @@ end) (Make_meet_and_join : functor
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type flambda_type := T.flambda_type
-    end) (Typing_env0 : sig
-      include Typing_env0_intf.S
+    end) (Typing_env : sig
+      include Typing_env_intf.S
         with type typing_environment := T.typing_environment
         with type typing_environment_entry := T.typing_environment_entry
         with type env_extension := T.env_extension
@@ -165,10 +165,10 @@ struct
             let result : _ Or_bottom.t =
               if not same_num_results then Bottom
               else
-                let scope_level = Typing_env0.max_level env in
+                let scope_level = Typing_env.max_level env in
                 let env_with_params =
                   List.fold_left2 (fun env param param_ty ->
-                      Typing_env0.add env (Name.var param) scope_level
+                      Typing_env.add env (Name.var param) scope_level
                         (Definition param_ty))
                     env
                     param_names param_tys
@@ -197,7 +197,7 @@ struct
                   | true, true -> Both
                 in
                 let result_env =
-                  Typing_env0.add_or_meet_env_extension env_with_params
+                  Typing_env.add_or_meet_env_extension env_with_params
                     result_env_extension scope_level;
                 in
                 let result =
@@ -421,9 +421,9 @@ struct
             in
             let result =
               let result_env =
-                Typing_env0.add_or_meet_env_extension env
+                Typing_env.add_or_meet_env_extension env
                   result_env_extension
-                  (Typing_env0.max_level env)
+                  (Typing_env.max_level env)
               in
               let result_env_extension1 =
                 Typing_env_extension.diff result_env_extension1 result_env
@@ -555,12 +555,12 @@ struct
                   inlinable2.params
               in
               let scope_level =
-                Scope_level.next (Typing_env0.max_level env)
+                Scope_level.next (Typing_env.max_level env)
               in
               let env_with_params =
                 List.fold_left (fun env (param, ty) ->
                     let param_name = Parameter.name param in
-                    Typing_env0.add env param_name scope_level
+                    Typing_env.add env param_name scope_level
                       (Definition ty))
                   env
                   params
@@ -574,7 +574,7 @@ struct
               in
               let result =
                 let result_env =
-                  Typing_env0.add_or_meet_env_extension env_with_params
+                  Typing_env.add_or_meet_env_extension env_with_params
                     result_env_extension
                     scope_level
                 in

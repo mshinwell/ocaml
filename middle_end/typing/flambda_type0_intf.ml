@@ -299,7 +299,7 @@ module type S = sig
     -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
-  module Typing_env0 : sig
+  module Typing_env : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
         via the [resolver], required to import types from .cmx files (or
@@ -308,7 +308,7 @@ module type S = sig
         Typing environments must be closed.
     *)
 
-    include Typing_env0_intf.S
+    include Typing_env_intf.S
       with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type flambda_type := flambda_type
@@ -324,7 +324,7 @@ module type S = sig
 
   (** Annotation for functions that may require examination of the current
       environment (in particular to resolve [Type] or [Equals] aliases). *)
-  type 'a type_accessor = Typing_env0.t -> 'a
+  type 'a type_accessor = Typing_env.t -> 'a
 
   (** Print a type to the given formatter. *)
   val print : Format.formatter -> t -> unit
@@ -623,7 +623,7 @@ module type S = sig
 
   (** Least upper bound of two types. *)
   val join
-     : Typing_env0.t
+     : Typing_env.t
     -> Typing_env_extension.t
     -> Typing_env_extension.t
     -> t
@@ -632,15 +632,15 @@ module type S = sig
 
   (** Greatest lower bound of two types.  The process of meeting may generate
       equations, which are returned as an environment extension. *)
-  val meet : Typing_env0.t -> t -> t -> t * Typing_env_extension.t
+  val meet : Typing_env.t -> t -> t -> t * Typing_env_extension.t
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)
-  val as_or_more_precise : Typing_env0.t -> t -> than:t -> bool
+  val as_or_more_precise : Typing_env.t -> t -> than:t -> bool
 
   (** Returns [true] if the first type is known to provide strictly more
       information about the corresponding value than the type [than]. *)
-  val strictly_more_precise : Typing_env0.t -> t -> than:t -> bool
+  val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
 
   val rename_variables : t -> Variable.t Variable.Map.t -> t
 end

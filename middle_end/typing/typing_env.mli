@@ -35,7 +35,7 @@ end) (Type_equality : sig
   include Type_equality_intf.S
     with type flambda_type := T.flambda_type
 end) : sig
-  include Typing_env0_intf.S
+  include Typing_env_intf.S
     with type typing_environment = T.typing_environment
     with type typing_environment_entry = T.typing_environment_entry
     with type env_extension = Typing_env_extension.t
