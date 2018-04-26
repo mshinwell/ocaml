@@ -334,22 +334,6 @@ let simplify_is_int env r prim arg dbg ~result_var =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let r =
-    match arg with
-    | Name arg ->
-      let arg_ty =
-        T.variant_whose_discriminants_are
-          ~is_int:(Some (Name.var result_var)) ~get_tag:None
-      in
-      let r =
-        R.add_or_meet_equation r (Name.var result_var)
-          (E.continuation_scope_level env)
-          (T.unknown (K.fabricated ()))
-      in
-      let scope_level = E.scope_level_of_name env arg in
-      R.add_or_meet_equation r arg scope_level arg_ty
-    | Const _ | Discriminant _ -> r
-  in
-  let r =
     R.add_or_meet_equation r result_name
       (E.continuation_scope_level env)
       (T.unknown (K.fabricated ()))
@@ -357,7 +341,7 @@ let simplify_is_int env r prim arg dbg ~result_var =
   let r =
     match arg with
     | Name arg ->
-      R.add_cse r result_name
+      R.add_cse r ~bound_to:result_name
         (Flambda_primitive.With_fixed_value.create_is_int
           ~immediate_or_block:arg)
     | Const _ | Discriminant _ -> r
@@ -365,13 +349,10 @@ let simplify_is_int env r prim arg dbg ~result_var =
   match proof with
   | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
   | Proved Never_a_tagged_immediate -> proved ~is_tagged_immediate:false
-  | Proved (Answer_given_by name) ->
-    Reachable.reachable (original_term ()),
-      T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     (* CR mshinwell: This should use the [result_var] as the [is_int] in a
        refined type of [arg]. *)
-    let no_env_extension = T.Typing_env_extension.create () in
+    let no_env_extension = T.Typing_env_extension.empty in
     let all_results =
       T.these_discriminants (Discriminant.Map.of_list [
         Discriminant.bool_false, no_env_extension;
@@ -384,6 +365,7 @@ let simplify_is_int env r prim arg dbg ~result_var =
       R.map_benefit r (B.remove_primitive (Unary prim))
 
 let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
+  let result_name = Name.var result_var in
   let block, block_ty = S.simplify_simple env block in
   let inferred_tags = T.prove_tags (E.get_typing_environment env) block_ty in
   let possible_tags = Tag.Map.keys tags_to_sizes in
@@ -413,11 +395,10 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
             | Const _ | Discriminant _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
                  [Const] or [Discriminant] *)
-              T.Typing_env_extension.create ()
+              T.Typing_env_extension.empty
             | Name block ->
-              let scope_level = E.scope_level_of_name env block in
-              T.Typing_env_extension.singleton ~resolver:(E.resolver env)
-                block scope_level block_ty
+              T.Typing_env_extension.add_equation T.Typing_env_extension.empty
+                block block_ty
           in
           let discriminant = Discriminant.of_tag tag in
           Discriminant.Map.add discriminant env discriminants_to_env_extension)
@@ -427,20 +408,17 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
     T.these_discriminants discriminants_to_env_extension
   in
   let r =
+    R.add_or_meet_equation r (Name.var result_var)
+      (E.continuation_scope_level env)
+      (T.unknown (K.fabricated ()))
+  in
+  let r =
     match block with
-    | Const _ | Discriminant _ -> r
     | Name block ->
-      let block_ty =
-        T.variant_whose_discriminants_are ~is_int:None
-          ~get_tag:(Some (Name.var result_var))
-      in
-      let r =
-        R.add_or_meet_equation r (Name.var result_var)
-          (E.continuation_scope_level env)
-          (T.unknown (K.fabricated ()))
-      in
-      let scope_level = E.scope_level_of_name env block in
-      R.add_or_meet_equation r block scope_level block_ty
+      R.add_cse r ~bound_to:result_name
+        (Flambda_primitive.With_fixed_value.create_get_tag
+          ~block ~tags_to_sizes)
+    | Const _ | Discriminant _ -> r
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -464,9 +442,6 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
       let result_var_type = result_var_type ~tags_to_sizes in
       Reachable.reachable term, result_var_type, r
     end
-  | Proved (Answer_given_by name) ->
-    let term : Named.t = Prim (Unary (prim, block), dbg) in
-    Reachable.reachable term, T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     let prim : Flambda_primitive.unary_primitive =
       Get_tag { tags_to_sizes; }
@@ -788,9 +763,6 @@ let simplify_discriminant_of_int env r prim arg dbg ~result_var:_ =
   | Proved (By_discriminant by_discriminant) ->
     Reachable.reachable (original_term ()),
       T.these_discriminants by_discriminant, r
-  | Proved (Answer_given_by name) ->
-    Reachable.reachable (original_term ()),
-      T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     Reachable.reachable (original_term ()), T.unknown result_kind, r
   | Invalid -> result_invalid ()

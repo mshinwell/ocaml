@@ -1133,7 +1133,10 @@ let simplify_string_or_bigstring_load env r prim dbg
                     T.this_naked_int64 result
             in
             let env = E.get_typing_environment env in
-            T.join (env, this_ty) (env, ty))
+            T.join env
+              T.Typing_env_extension.empty
+              T.Typing_env_extension.empty
+              this_ty ty)
         strs_and_indexes
         bottom
     in
