@@ -90,6 +90,8 @@ module Stdlib : sig
     val cross_product : 'a t -> 'b t -> ('a * 'b) t
 
     val first_n : 'a t -> int -> ('a t * 'a t) option
+
+    val transpose : 'a list list -> 'a list list
   end
 
   module Option : sig

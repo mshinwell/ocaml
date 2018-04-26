@@ -66,6 +66,14 @@ module Use = struct
       | Only_specialisable args_and_tys ->
         List.map (fun (_arg, ty) -> ty) args_and_tys
 
+    let args_with_tys t =
+      match t with
+      | Not_inlinable_or_specialisable args_tys ->
+        List.map (fun ty -> None, ty) args_tys
+      | Inlinable_and_specialisable args_and_tys
+      | Only_specialisable args_and_tys ->
+        List.map (fun (arg, ty) -> Some arg, ty) args_and_tys
+
     let is_inlinable t =
       match t with
       | Not_inlinable_or_specialisable _ -> false
@@ -91,6 +99,7 @@ module Use = struct
 
   let args t = Kind.args t.kind
   let arg_tys t = Kind.arg_tys t.kind
+  let args_with_tys t = Kind.args_with_tys t.kind
   let is_inlinable t = Kind.is_inlinable t.kind
   let is_specialisable t = Kind.is_specialisable t.kind
   let typing_env t = t.env

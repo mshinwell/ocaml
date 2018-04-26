@@ -299,6 +299,11 @@ module type S = sig
     -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
+  type typing_environment_entry =
+    | Definition of t
+    | Equation of t
+    | CSE of Flambda_primitive.With_fixed_value.t
+
   module Typing_env : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
@@ -310,6 +315,7 @@ module type S = sig
 
     include Typing_env_intf.S
       with type typing_environment := typing_environment
+      with type typing_environment_entry := typing_environment_entry
       with type env_extension := env_extension
       with type flambda_type := flambda_type
       with type t_in_context := t_in_context

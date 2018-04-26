@@ -20,29 +20,11 @@ module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
-(* CR mshinwell: Move to stdlib *)
-let heads_and_tails_of_lists ls =
-  let heads = List.map List.hd ls in
-  let tails = List.map List.tl ls in
-  heads, tails
-
-let transpose lists =
-  match lists with
-  | [] -> []
-  | for_counting::_ ->
-    let rec inner_loop for_counting lists =
-      match for_counting with
-      | [] -> []
-      | _ :: for_counting ->
-        let column, lists = heads_and_tails_of_lists lists in
-        column :: (inner_loop for_counting lists)
-    in
-    inner_loop for_counting
-
 (* CR-soon mshinwell: Consider lwhite's suggestion of doing the existential
    introduction at [Switch] time *)
 
-let param_types_and_body_env_opt cont_uses freshening ~default_env =
+(* XXX Need to work out what to do re. freshening *)
+let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   match Continuation_uses.uses cont_uses with
   | [] -> None
   | uses ->
@@ -52,16 +34,21 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
     let arg_tys_with_env_extensions, joined_env_extension =
       List.fold_left
         (fun (arg_tys_with_env_extensions, joined_env_extension) use ->
-          let use_env = Use.Kind.typing_env use.kind in
-          let args_with_tys_this_use = Use.Kind.args_with_tys use.kind in
+          let use_env = Continuation_uses.Use.typing_env use in
+          let args_with_tys_this_use =
+            Continuation_uses.Use.args_with_tys use
+          in
           let canonical_names_and_resolved_types_for_args =
-            List.map (fun ((arg : Simple.t), ty) ->
-                let ty, canonical_name = TE.resolve_aliases use_env ty in
+            List.map (fun ((arg : Simple.t option), ty) ->
+                let ty, canonical_name = TE.resolve_aliases (use_env, ty) in
                 match canonical_name with
                 | None ->
                   begin match arg with
-                  | Name (Var var) -> Some var, ty
-                  | Name (Symbol _) | Const _ -> None, ty
+                  | None -> None, ty
+                  | Some (Name (Var var)) -> Some var, ty
+                  | Some (Name (Symbol _))
+                  | Some (Const _)
+                  | Some (Discriminant _) -> None, ty
                   end
                 | Some (Var var) -> Some var, ty
                 | Some (Symbol _) -> None, ty)
@@ -72,6 +59,7 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
                 match canonical_name with
                 | None -> acc
                 | Some canonical_name ->
+                  let param = Flambda.Typed_parameter.var param in
                   Variable.Map.add canonical_name param acc)
               Variable.Map.empty
               (List.combine canonical_names_and_resolved_types_for_args params)
@@ -114,41 +102,42 @@ let param_types_and_body_env_opt cont_uses freshening ~default_env =
           arg_tys)
         arg_tys_with_env_extensions
     in
-    let arg_tys_with_env_extensions = transpose arg_tys_with_env_extensions in
+    let arg_tys_with_env_extensions =
+      Misc.Stdlib.List.transpose arg_tys_with_env_extensions
+    in
+    let bottom_arg_tys = T.bottom_types_from_arity arity in
     let joined_arg_tys_rev, joined_env =
       List.fold_left
         (fun (joined_arg_tys, joined_env)
-             (param, all_uses_for_arg_with_env_extensions) ->
+             (param, (bottom_ty, all_uses_for_arg_with_env_extensions)) ->
           let joined_ty =
             List.fold_left (fun joined_ty (arg_ty, env_extension) ->
                 let env_extension =
                   TEE.restrict_names_to_those_occurring_in_types
-                    env_extension [arg_ty]
+                    env_extension joined_env [arg_ty]
                 in
-                let joined_ty =
-                  try
-                    T.join joined_env TEE.empty env_extension joined_ty arg_ty
-                  with Misc.Fatal_error -> begin
-                    Format.eprintf "\n%sContext is: parameter %a%s\n"
-                      (Misc_color.bold_red ())
-                      Parameter.print param
-                      (Misc_color.reset ());
-                    raise Misc.Fatal_error
-                  end
-                in
-                joined_ty :: joined_arg_tys, joined_env)
-              joined_arg_tys
+                try
+                  T.join joined_env TEE.empty env_extension joined_ty arg_ty
+                with Misc.Fatal_error -> begin
+                  Format.eprintf "\n%sContext is: parameter %a%s\n"
+                    (Misc_color.bold_red ())
+                    Flambda.Typed_parameter.print param
+                    (Misc_color.reset ());
+                  raise Misc.Fatal_error
+                end)
+              bottom_ty
               all_uses_for_arg_with_env_extensions
           in
           let joined_env =
-            TE.add joined_env (Parameter.name param) scope_level
+            TE.add joined_env (Flambda.Typed_parameter.name param) scope_level
               (Definition joined_ty)
           in
           joined_ty :: joined_arg_tys, joined_env)
-        bottom_arg_tys
-        (List.combine params arg_tys_with_env_extensions)
+        ([], joined_env)
+        (List.combine params (
+          List.combine bottom_arg_tys arg_tys_with_env_extensions))
     in
-    Some (List.rev joined_arg_tys, joined_env)
+    Some (List.rev joined_arg_tys_rev, joined_env)
 
 let param_types_and_body_env uses freshening ~arity ~default_env =
   match param_types_and_body_env_opt uses freshening ~default_env with

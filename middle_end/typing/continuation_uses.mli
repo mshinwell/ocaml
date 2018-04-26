@@ -58,6 +58,9 @@ module Use : sig
   (** As for [args], but returns the types of the arguments. *)
   val arg_tys : t -> Flambda_type.t list
 
+  (** The combination of the results of [args] and [arg_tys]. *)
+  val args_with_tys : t -> (Simple.t option * Flambda_type.t) list
+
   (** Whether the given use is a potential inlining site. *)
   val is_inlinable : t -> bool
 

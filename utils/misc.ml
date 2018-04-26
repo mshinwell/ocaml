@@ -173,6 +173,24 @@ module Stdlib = struct
             t1)
         []
         t0
+
+    let heads_and_tails_of_lists ls =
+      let heads = List.map List.hd ls in
+      let tails = List.map List.tl ls in
+      heads, tails
+    
+    let transpose lists =
+      match lists with
+      | [] -> []
+      | for_counting::_ ->
+        let rec inner_loop for_counting lists =
+          match for_counting with
+          | [] -> []
+          | _ :: for_counting ->
+            let column, lists = heads_and_tails_of_lists lists in
+            column :: (inner_loop for_counting lists)
+        in
+        inner_loop for_counting lists
   end
 
   module Option = struct
