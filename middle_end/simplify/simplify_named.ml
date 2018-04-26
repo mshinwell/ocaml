@@ -126,21 +126,21 @@ let simplify_set_of_closures original_env r
             let var = Flambda.Typed_parameter.var param in
             let scope_level = E.continuation_scope_level original_env in
             let ty = Flambda.Typed_parameter.ty param in
-            T.Typing_env.add env (Name.var var) scope_level ty)
+            T.Typing_env.add env (Name.var var) scope_level (Definition ty))
           (E.get_typing_environment original_env)
           return_cont_params
       in
       let result, result_env =
-        R.Continuation_uses.param_types_and_body_env return_continuation_uses
+        Join_point.param_types_and_body_env return_continuation_uses
           ~arity:function_decl.return_arity
-          ~freshening:(E.freshening original_env)
+          (E.freshening original_env)
           ~default_env
       in
-      let result_env =
-        T.Typing_env.restrict_names_to_those_occurring_in_types
+      let result_env_extension =
+        T.Typing_env_extension.restrict_names_to_those_occurring_in_types
           result_env result
       in
-      result, T.Typing_env.to_env_extension result_env
+      result, result_env_extension
     in
     let return_arity = List.map (fun ty -> T.kind ty) result in
     let inline : Flambda.inline_attribute =
