@@ -83,6 +83,12 @@ module type S = sig
     -> typing_environment_entry
     -> t
 
+  (** Add a new equation for a name already bound by the given typing
+      environment.  The actual type of the added equation will be the meet of
+      the current best type specified by the environment for the given name
+      with the supplied type. *)
+  val add_equation : t -> Name.t -> flambda_type -> t
+
   (** Ensure that a binding is not present in an environment.  This function 
       is idempotent. *)
   val remove : t -> Name.t -> t

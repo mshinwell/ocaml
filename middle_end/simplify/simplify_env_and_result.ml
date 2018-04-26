@@ -194,7 +194,8 @@ end = struct
 
   let extend_typing_environment t ~env_extension =
     let typing_environment =
-      T.Typing_env.add_env_extension t.typing_environment env_extension
+      TE.add_or_meet_env_extension t.typing_environment env_extension
+        (TE.max_level t.typing_environment)
     in
     { t with typing_environment; }
 
@@ -211,11 +212,11 @@ end = struct
     }
 
   let find_variable0 typing_environment var =
-    let ty, binding_type = TE.find typing_environment (Name.var var) in
+    let ty, binding_type = TE.find_exn typing_environment (Name.var var) in
     match binding_type with
     | Normal -> ty
-    | Existential ->
-      Misc.fatal_errorf "Variable %a is existentially bound"
+    | Was_existential ->
+      Misc.fatal_errorf "Variable %a was existentially bound"
         Variable.print var
 
   let find_variable t var =
@@ -227,12 +228,12 @@ end = struct
     | Some (ty, binding_type) ->
       match binding_type with
       | Normal -> Some ty
-      | Existential ->
-        Misc.fatal_errorf "Variable %a is existentially bound"
+      | Was_existential ->
+        Misc.fatal_errorf "Variable %a was existentially bound"
           Variable.print var
 
   let scope_level_of_name t name =
-    TE.scope_level t.typing_environment name
+    TE.scope_level_exn t.typing_environment name
 
   let mem_variable t var =
     match find_variable_opt t var with
@@ -241,22 +242,25 @@ end = struct
 
   let add_variable t var ty =
     let typing_environment =
-      TE.add t.typing_environment (Name.var var) t.continuation_scope_level ty
+      TE.add t.typing_environment (Name.var var)
+        t.continuation_scope_level (Definition ty)
+    in
+    { t with typing_environment; }
+
+  (* CR mshinwell: rename "replace_meet" *)
+
+  let replace_meet_variable t var ty =
+    let typing_environment =
+      TE.add_equation t.typing_environment (Name.var var) ty
     in
     { t with typing_environment; }
 
   let add_or_replace_meet_variable t var ty =
-    let typing_environment =
-      TE.add_or_replace_meet t.typing_environment (Name.var var)
-        t.continuation_scope_level ty
-    in
-    { t with typing_environment; }
-
-  let replace_meet_variable t var ty =
-    let typing_environment =
-      TE.replace_meet t.typing_environment (Name.var var) ty
-    in
-    { t with typing_environment; }
+    let name = Name.var var in
+    if TE.mem t.typing_environment name then
+      replace_meet_variable t var ty
+    else
+      add_variable t var ty
 
   let add_symbol t sym ty =
     let typing_environment =
@@ -264,13 +268,19 @@ end = struct
     in
     { t with typing_environment; }
 
+  let add_equation_symbol t sym ty =
+    let typing_environment =
+      TE.add_equation t.typing_environment (Name.symbol sym) ty
+    in
+    { t with typing_environment; }
+
   let find_symbol0 typing_environment sym =
     let ty, binding_type =
-      TE.find typing_environment (Name.symbol sym)
+      TE.find_exn typing_environment (Name.symbol sym)
     in
     match binding_type with
     | Normal -> ty
-    | Existential ->
+    | Was_existential ->
       Misc.fatal_errorf "Symbol %a is existentially bound"
         Symbol.print sym
 
@@ -283,17 +293,17 @@ end = struct
     | Some (ty, binding_type) ->
       match binding_type with
       | Normal -> Some ty
-      | Existential ->
+      | Was_existential ->
         Misc.fatal_errorf "Symbol %a is existentially bound"
           Symbol.print sym
 
   (* CR mshinwell: Use this code as a basis for the find-by-variable/symbol
      functions, above *)
   let find_name0 typing_environment name =
-    let ty, binding_type = TE.find typing_environment name in
+    let ty, binding_type = TE.find_exn typing_environment name in
     match binding_type with
     | Normal -> ty
-    | Existential ->
+    | Was_existential ->
       Misc.fatal_errorf "Name %a is existentially bound"
         Name.print name
 
@@ -315,36 +325,30 @@ end = struct
     | Name name -> mem_name t name
     | Const _ | Discriminant _ -> true
 
+  (* CR mshinwell: Rename this function---it takes a meet, not redefines *)
   let redefine_symbol t sym ty =
-    match find_symbol_opt t sym with
-    | Some _ ->
-      let typing_environment =
-        TE.add_or_replace t.typing_environment (Name.symbol sym)
-          Scope_level.initial ty
-      in
-      { t with typing_environment; }
-    | None ->
+    let name = Name.symbol sym in
+    if not (TE.mem t.typing_environment name) then
       Misc.fatal_errorf "Symbol %a cannot be redefined when it is not \
           already defined"
         Symbol.print sym
+    else
+      add_symbol t sym ty
 
   let add_mutable t mut_var ty =
     { t with mutable_variables =
       Mutable_variable.Map.add mut_var ty t.mutable_variables;
     }
 
-(*
-  let add_projection t ~projection ~bound_to =
-    { t with
-      projections =
-        Projection.Map.add projection bound_to t.projections;
-    }
+  let add_cse t prim ~bound_to =
+    let typing_environment =
+      TE.add t.typing_environment bound_to t.continuation_scope_level
+        (CSE prim)
+    in
+    { t with typing_environment; }
 
-  let find_projection t ~projection =
-    match Projection.Map.find projection t.projections with
-    | exception Not_found -> None
-    | var -> Some var
-*)
+  let find_cse t prim =
+    TE.find_cse t.typing_environment prim
 
   let add_continuation t cont ty =
     let continuations =
@@ -686,7 +690,7 @@ end = struct
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
-      env_extension = T.Typing_env_extension.create ();
+      env_extension = T.Typing_env_extension.empty;
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
     }
@@ -703,7 +707,7 @@ end = struct
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      env_extension = T.Typing_env_extension.meet ~resolver:t1.resolver
+      env_extension = T.Typing_env_extension.meet 
         t1.env_extension t2.env_extension;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols

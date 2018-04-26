@@ -688,6 +688,17 @@ end) = struct
         if strictly_more_precise then Some (join_ty, Typing_env_extension.empty)
         else None)
 
+  let add_equation t name ty =
+    if not (mem t name) then begin
+      Misc.fatal_errorf "Typing_env.replace_meet: name %a not bound in:@ %a"
+        Name.print name
+        print t
+    end;
+    let env_extension =
+      Typing_env_extension.add_equation Typing_env_extension.empty name ty
+    in
+    add_or_meet_env_extension t env_extension (max_level t)
+
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
     (* CR mshinwell: Add a split which only returns one map, the side we
        would like. *)
