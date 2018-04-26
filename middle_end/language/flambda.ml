@@ -685,7 +685,7 @@ end = struct
     let sb' = sb in
     let sb v = try Variable.Map.find v sb with Not_found -> v in
     let substitute_type ty =
-      Flambda_type.rename_variables ty ~f:(fun var -> sb var)
+      Flambda_type.rename_variables ty sb'
     in
     let substitute_params_list params =
       List.map (fun param ->
