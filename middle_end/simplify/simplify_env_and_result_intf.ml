@@ -118,7 +118,7 @@ module type Env = sig
   val replace_meet_variable
      : t
     -> Variable.t
-    -> Flambda_type.t_in_context
+    -> Flambda_type.t
     -> t
 
   (** Find the type of a given variable, raising a fatal error if the
@@ -174,22 +174,16 @@ module type Env = sig
   val does_not_freshen : t -> Variable.t list -> bool
 *)
 
-  (* XXX to be turned into env_extension (including to primitives)
-  (** Note that the given [bound_to] holds the given [projection]. *)
-  val add_projection
+  val add_cse
      : t
-    -> projection:Projection.t
-    -> bound_to:Variable.t
+    -> Flambda_primitive.With_fixed_value.t
+    -> bound_to:Name.t
     -> t
 
-  (** Determine if the environment knows about a variable that is bound
-
-      to the given [projection]. *)
-  val find_projection
+  val find_cse
      : t
-    -> projection:Projection.t
-    -> Variable.t option
-  *)
+    -> Flambda_primitive.t
+    -> Name.t option
 
   val get_typing_environment : t -> Flambda_type.Typing_env.t
 
@@ -375,61 +369,7 @@ module type Result = sig
 
   type env
 
-  module Continuation_uses : sig
-    module Use : sig
-      module Kind : sig
-        type t =
-          | Not_inlinable_or_specialisable of Flambda_type.t list
-            (** Do not attempt to inline or specialise the continuation at this
-                use point. *)
-          | Inlinable_and_specialisable of
-              (Simple.t * Flambda_type.t) list
-            (** The continuation may be inlined or specialised at this
-                use point. *)
-          | Only_specialisable of (Simple.t * Flambda_type.t) list
-            (** The continuation may be specialised but not inlined at this use
-                point.  (Used for [Apply_cont] which have a [trap_action].) *)
-
-        val is_specialisable
-           : t
-          -> (Simple.t * Flambda_type.t) list option
-      end
-
-      type t = private {
-        kind : Kind.t;
-        env : env;
-      }
-    end
-
-    type t
-
-(*
-    val create
-       : continuation:Continuation.t
-      -> params:Flambda.Typed_parameter.t list
-      -> definition_scope_level:Scope_level.t
-      -> backend:(module Backend_intf.S)
-      -> t
-*)
-
-    val print : Format.formatter -> t -> unit
-
-    val application_points : t -> Use.t list
-
-    val unused : t -> bool
-    val linearly_used : t -> bool
-
-    val num_uses : t -> int
-
-    val param_types_and_body_env
-       : t
-      -> freshening:Freshening.t
-      -> arity:Flambda_arity.t
-      -> default_env:Flambda_type.Typing_env.t
-      -> Flambda_type.t list * Flambda_type.Typing_env.t
-  end
-
-  module Continuation_usage_snapshot : sig
+  module Roll_back_after_speculation : sig
     type t
 
     val continuations_defined_between_snapshots
@@ -442,7 +382,7 @@ module type Result = sig
 
   val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
-  val union : t -> t -> t
+  val union : Flambda_type.Typing_env.t -> t -> t -> t
 
   (** Check that [prepare_for_continuation_uses] has been called on the given
       result structure. *)
@@ -458,13 +398,13 @@ module type Result = sig
     -> Continuation_uses.Use.Kind.t
     -> t
 
-  val snapshot_continuation_uses : t -> Continuation_usage_snapshot.t
+  val snapshot_continuation_uses : t -> Roll_back_after_speculation.t
 
   val snapshot_and_forget_continuation_uses
      : t
-    -> Continuation_usage_snapshot.t * t
+    -> Roll_back_after_speculation.t * t
 
-  val roll_back_continuation_uses : t -> Continuation_usage_snapshot.t -> t
+  val roll_back_continuation_uses : t -> Roll_back_after_speculation.t -> t
 
   val continuation_unused : t -> Continuation.t -> bool
   val continuation_defined : t -> Continuation.t -> bool
@@ -485,15 +425,6 @@ module type Result = sig
     -> freshening:Freshening.t
     -> default_env:Flambda_type.Typing_env.t
     -> Flambda_type.t list * Flambda_type.Typing_env.t
-
-  (** Like [continuation_args_types'], except only returns the parameters'
-      types, not the typing environment. *)
-  val continuation_args_types'
-     : t
-    -> Continuation.t
-    -> arity:Flambda_arity.t
-    -> freshening:Freshening.t
-    -> Flambda_type.t list
 
   val defined_continuation_args_types
      : t
@@ -625,7 +556,11 @@ module type Result = sig
 
   val add_or_meet_equation : t -> Name.t -> Scope_level.t -> Flambda_type.t -> t
 
-  val add_or_meet_env_extension : t -> Flambda_type.Typing_env_extension.t -> t
+  val add_or_meet_env_extension
+     : t
+    -> Flambda_type.Typing_env.t
+    -> Flambda_type.Typing_env_extension.t
+    -> t
 
   val get_env_extension : t -> Flambda_type.Typing_env_extension.t
 

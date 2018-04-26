@@ -22,10 +22,9 @@ module TE = Flambda_type.Typing_env
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
     with type result = Result.t
-    with type continuation_uses = Result.Continuation_uses.t
 end = struct
   type result = Result.t
-  type continuation_uses = Result.Continuation_uses.t
+  type continuation_uses = Continuation_uses.t  (* CR mshinwell: remove *)
 
   type t = {
     backend : (module Backend_intf.S);
@@ -233,7 +232,8 @@ end = struct
           Variable.print var
 
   let scope_level_of_name t name =
-    TE.scope_level_exn t.typing_environment name
+    Scope_level.With_sublevel.level (
+      TE.scope_level_exn t.typing_environment name)
 
   let mem_variable t var =
     match find_variable_opt t var with
@@ -264,7 +264,8 @@ end = struct
 
   let add_symbol t sym ty =
     let typing_environment =
-      TE.add t.typing_environment (Name.symbol sym) Scope_level.for_symbols ty
+      TE.add t.typing_environment (Name.symbol sym) Scope_level.for_symbols
+        (Definition ty)
     in
     { t with typing_environment; }
 
@@ -333,7 +334,7 @@ end = struct
           already defined"
         Symbol.print sym
     else
-      add_symbol t sym ty
+      add_equation_symbol t sym ty
 
   let add_mutable t mut_var ty =
     { t with mutable_variables =
@@ -1031,7 +1032,7 @@ end = struct
       env_extension;
     }
 
-  let add_or_meet_env_extension env t env_extension =
+  let add_or_meet_env_extension t env env_extension =
     let env_extension =
       T.Typing_env_extension.meet env t.env_extension env_extension
     in
