@@ -230,7 +230,7 @@ end) = struct
          the environment are only in one direction. *)
       ignore (fold_all t ~init:Name.Set.empty
         ~f:(fun names_seen (name : Name.t)
-                (binding_type : Flambda_type0_internal_intf.binding_type)
+                (_binding_type : Flambda_type0_internal_intf.binding_type)
                 _scope_level entry ->
           let free_names =
             match entry with
@@ -241,17 +241,6 @@ end) = struct
             Misc.fatal_errorf "Typing environment is not closed (%a free):@ %a"
               Name.Set.print (Name.Set.diff free_names names_seen)
               print t
-          end;
-          begin match name with
-          | Var _ -> ()
-          | Symbol _ ->
-            match binding_type with
-            | Normal -> ()
-            | Was_existential ->
-              Misc.fatal_errorf "Symbol should never have been existential:@ \
-                  %a in@ %a"
-                Name.print name
-                print t
           end;
           match entry with
           | Definition _ -> Name.Set.add name names_seen
