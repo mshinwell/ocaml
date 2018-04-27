@@ -69,8 +69,9 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
                 T.rename_variables ty canonical_names_for_args_to_params)
               canonical_names_and_resolved_types_for_args
           in
+          let use_env = Continuation_uses.Use.typing_env use in
           let use_env_extension =
-            TE.cut (Continuation_uses.Use.typing_env use)
+            TE.cut use_env
               ~existential_if_defined_at_or_later_than:
                 (Scope_level.next scope_level)
           in
@@ -81,7 +82,7 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
               TEE.join default_env TEE.empty TEE.empty
                 use_env_extension joined_env_extension
           in
-          (arg_tys, use_env_extension) :: arg_tys_with_env_extensions,
+          (arg_tys, use_env, use_env_extension) :: arg_tys_with_env_extensions,
             Some joined_env_extension)
         ([], None)
         uses
@@ -94,10 +95,10 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
           scope_level
     in
     let arg_tys_with_env_extensions =
-      List.map (fun (arg_tys, env_extension) ->
+      List.map (fun (arg_tys, use_env, env_extension) ->
           let env_extension = TEE.diff env_extension joined_env in
           let arg_tys =
-            List.map (fun arg_ty -> arg_ty, env_extension) arg_tys
+            List.map (fun arg_ty -> arg_ty, use_env, env_extension) arg_tys
           in
           arg_tys)
         arg_tys_with_env_extensions
@@ -111,10 +112,10 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
         (fun (joined_arg_tys, joined_env)
              (param, (bottom_ty, all_uses_for_arg_with_env_extensions)) ->
           let joined_ty =
-            List.fold_left (fun joined_ty (arg_ty, env_extension) ->
+            List.fold_left (fun joined_ty (arg_ty, use_env, env_extension) ->
                 let env_extension =
                   TEE.restrict_names_to_those_occurring_in_types
-                    env_extension joined_env [arg_ty]
+                    env_extension use_env [arg_ty]
                 in
                 try
                   T.join joined_env TEE.empty env_extension joined_ty arg_ty

@@ -1880,7 +1880,7 @@ result
         by_length
     in
     if by_length == by_length' then block_cases
-    else Blocks { by_length; }
+    else Blocks { by_length = by_length'; }
 
   and rename_variables_singleton_block subst
         (({ env_extension; fields; } : singleton_block) as singleton_block) =

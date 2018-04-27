@@ -301,7 +301,14 @@ end = struct
   (* CR mshinwell: Use this code as a basis for the find-by-variable/symbol
      functions, above *)
   let find_name0 typing_environment name =
-    let ty, binding_type = TE.find_exn typing_environment name in
+    let ty, binding_type =
+      match TE.find_exn typing_environment name with
+      | exception Not_found ->
+        Misc.fatal_errorf "Unbound name %a@ in@ %a"
+          Name.print name
+          TE.print typing_environment
+      | result -> result
+    in
     match binding_type with
     | Normal -> ty
     | Was_existential ->

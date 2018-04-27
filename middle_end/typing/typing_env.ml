@@ -624,6 +624,10 @@ end) = struct
               expected in environment extensions:@ %a"
             Typing_env_extension.print env_extension
       in
+(*
+Format.eprintf "Opening existential %a -> %a\n%!"
+  Name.print name Name.print fresh_name;
+*)
       let t = add t fresh_name scope_level (Definition ty) in
       let t =
         { t with

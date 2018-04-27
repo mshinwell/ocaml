@@ -136,7 +136,16 @@ end) = struct
       match Name_occurrences.choose_and_remove_amongst_everything to_follow with
       | None -> ()
       | Some (name, to_follow) ->
-        let ty, _binding_type = TE.find_exn env name in
+        let ty =
+          match TE.find_exn env name with
+          | exception Not_found ->
+            Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
+                transitively, of %a@ in environment@ %a"
+              Name.print name
+              T.print ty
+              TE.print env
+          | ty, _binding_type -> ty
+        in
         let names = T.free_names ty in
         loop (Name_occurrences.union to_follow names)
     in
