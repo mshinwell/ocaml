@@ -75,6 +75,11 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
               ~existential_if_defined_at_or_later_than:
                 (Scope_level.next scope_level)
           in
+Format.eprintf "Cutting environment so existential at or later than \
+    %a:@ %a@ Extension is:@ %a\n%!"
+  Scope_level.print (Scope_level.next scope_level)
+  TE.print use_env
+  TEE.print use_env_extension;
           let joined_env_extension =
             match joined_env_extension with
             | None -> use_env_extension
@@ -87,18 +92,45 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
         ([], None)
         uses
     in
-    let joined_env =
+Format.eprintf "Joined env extension is:@ %a\n%!"
+  (Misc.Stdlib.Option.print TEE.print) joined_env_extension;
+    let joined_env, opening_existentials_freshening =
       match joined_env_extension with
-      | None -> default_env
+      | None -> default_env, Variable.Map.empty
       | Some joined_env_extension ->
-        TE.add_or_meet_env_extension default_env joined_env_extension
+        TE.add_or_meet_env_extension' default_env joined_env_extension
           scope_level
     in
+Format.eprintf "Joined env before diffing is:@ %a\n%!"
+  TE.print joined_env;
     let arg_tys_with_env_extensions =
       List.map (fun (arg_tys, use_env, env_extension) ->
-          let env_extension = TEE.diff env_extension joined_env in
+          let env_extension =
+            match uses with
+            | [_] -> TEE.empty
+            | _ -> TEE.diff env_extension joined_env
+          in
           let arg_tys =
-            List.map (fun arg_ty -> arg_ty, use_env, env_extension) arg_tys
+            List.map (fun arg_ty ->
+                match uses with
+                | [_] ->
+                  let freshened_arg_ty =
+                    T.rename_variables arg_ty opening_existentials_freshening
+                  in
+                  let env_extension =
+                    TEE.restrict_names_to_those_occurring_in_types
+                      env_extension joined_env [freshened_arg_ty]
+                  in
+                  freshened_arg_ty, env_extension
+                | _ ->
+                  assert (Variable.Map.is_empty
+                    opening_existentials_freshening);
+                  let env_extension =
+                    TEE.restrict_names_to_those_occurring_in_types
+                      env_extension use_env [arg_ty]
+                  in
+                  arg_ty, env_extension)
+              arg_tys
           in
           arg_tys)
         arg_tys_with_env_extensions
@@ -112,25 +144,21 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
         (fun (joined_arg_tys, joined_env)
              (param, (bottom_ty, all_uses_for_arg_with_env_extensions)) ->
           let joined_ty =
-            List.fold_left (fun joined_ty (arg_ty, use_env, env_extension) ->
-                let env_extension =
-                  TEE.restrict_names_to_those_occurring_in_types
-                    env_extension use_env [arg_ty]
-                in
-                let env, freshening =
-                  TE.add_or_meet_env_extension' joined_env
-                    (TEE.restrict_to_definitions env_extension)
-                    (TE.max_level joined_env)
-                in
-                let freshened_arg_ty = T.rename_variables arg_ty freshening in
+            List.fold_left
+              (fun joined_ty (arg_ty, env_extension) ->
+(*
+Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
+  T.print arg_ty
+  TEE.print env_extension;
+*)
                 try
-                  T.join env TEE.empty env_extension joined_ty freshened_arg_ty
+                  T.join joined_env TEE.empty env_extension joined_ty arg_ty
                 with Misc.Fatal_error -> begin
                   Format.eprintf "\n%sContext is: parameter %a%s@ in@ %a\n"
                     (Misc_color.bold_red ())
                     Flambda.Typed_parameter.print param
                     (Misc_color.reset ())
-                    TE.print env;
+                    TE.print joined_env;
                   raise Misc.Fatal_error
                 end)
               bottom_ty
@@ -154,23 +182,3 @@ let param_types_and_body_env uses freshening ~arity ~default_env =
     match env_extension with
     | None -> arg_tys, env, TEE.empty
     | Some env_extension -> arg_tys, env, env_extension
-
-(*
-Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
-Continuation.print (Continuation_uses.continuation cont_uses)
-Scope_level.print (Continuation_uses.definition_scope_level cont_uses)
-Freshening.print freshening;
-*)
-(*
-Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
-*)
-(*
-Format.eprintf "The joined environment for %a is:@ %a\n%!"
-Continuation.print t.continuation
-TE.print joined_env
-*)
-(*
-Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
-Continuation.print t.continuation
-(Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) joined_arg_tys;
-*)

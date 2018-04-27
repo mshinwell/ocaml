@@ -206,6 +206,7 @@ end) = struct
 
   let restrict_names_to_those_occurring_in_types t env tys =
     let free_names = free_names_transitive_list t env tys in
+Format.eprintf "Restricting to %a\n%!" Name_occurrences.print free_names;
     restrict_to_names t free_names
 
   type fold_info =
@@ -299,11 +300,14 @@ end) = struct
       t
 
   (* CR mshinwell: This needs to do something with [t.cse] perhaps *)
+  (* CR mshinwell: Think carefully about whether the freshening is actually
+     needed here *)
   let diff t env : t =
-    let names_more_precise, _freshening =
+    let names_more_precise, _freshened_names_more_precise, _freshening =
       fold t
-        ~init:(Name.Set.empty, Variable.Map.empty)
-        ~f:(fun (names_more_precise, freshening) (name : Name.t)
+        ~init:(Name.Set.empty, Name.Set.empty, Variable.Map.empty)
+        ~f:(fun (names_more_precise, freshened_names_more_precise, freshening)
+                (name : Name.t)
                 (info : fold_info) ->
           let var =
             match name with
@@ -318,10 +322,14 @@ end) = struct
             let fresh_var = Variable.rename var in
             let freshening = Variable.Map.add var fresh_var freshening in
             let names_more_precise =
-              Name.Set.add (Name.var fresh_var) names_more_precise
+              Name.Set.add (Name.var var) names_more_precise
             in
-            names_more_precise, freshening
+            let freshened_names_more_precise =
+              Name.Set.add (Name.var fresh_var) freshened_names_more_precise
+            in
+            names_more_precise, freshened_names_more_precise, freshening
           | Equation ty ->
+            let unfreshened_name = Name.var var in
             let var =
               match Variable.Map.find var freshening with
               | exception Not_found -> var
@@ -332,9 +340,12 @@ end) = struct
             match TE.find_opt env name with
             | None ->
               let names_more_precise =
+                Name.Set.add unfreshened_name names_more_precise
+              in
+              let freshened_names_more_precise =
                 Name.Set.add name names_more_precise
               in
-              names_more_precise, freshening
+              names_more_precise, freshened_names_more_precise, freshening
             | Some (old_ty, _) ->
               let more_precise_using_old_types_for_free_names =
                 T.strictly_more_precise env ty ~than:old_ty
@@ -343,7 +354,7 @@ end) = struct
                 let names_more_precise =
                   Name.Set.add name names_more_precise
                 in
-                names_more_precise, freshening
+                names_more_precise, freshened_names_more_precise, freshening
               else
                 let free_names = T.free_names_set ty in
                 let more_precise_using_new_types_for_free_names =
@@ -352,11 +363,14 @@ end) = struct
                 in
                 if more_precise_using_new_types_for_free_names then
                   let names_more_precise =
+                    Name.Set.add unfreshened_name names_more_precise
+                  in
+                  let freshened_names_more_precise =
                     Name.Set.add name names_more_precise
                   in
-                  names_more_precise, freshening
+                  names_more_precise, freshened_names_more_precise, freshening
                 else
-                  names_more_precise, freshening)
+                  names_more_precise, freshened_names_more_precise, freshening)
     in
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
