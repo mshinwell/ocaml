@@ -290,8 +290,8 @@ type without_args =
 (** All free names in a primitive application. *)
 val free_names : t -> Name.Set.t
 
-(** Rename variables in a primitive application. *)
-val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
+(** Rename free names in a primitive application. *)
+val rename_names : t -> f:(Name.t -> Name.t) -> t
 
 (** A description of the kind of values which a unary primitive expects as
     its arguments. *)
@@ -406,7 +406,7 @@ module With_fixed_value : sig
 
   val free_names : t -> Name.Set.t
 
-  val rename_variables : t -> Variable.t Variable.Map.t -> t
+  val rename_names : t -> Name.t Name.Map.t -> t
 
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Map.With_set with type t := t

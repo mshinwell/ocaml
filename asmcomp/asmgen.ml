@@ -220,7 +220,7 @@ let flambda_gen_implementation ?toplevel ~backend:_ ppf
   in
   let constants =
     List.map (fun (symbol, definition) ->
-        { Clambda.symbol = Linkage_name.to_string (Symbol.label symbol);
+        { Clambda.symbol = Linkage_name.to_string (Symbol.linkage_name symbol);
           exported = true;
           definition })
       (Symbol.Map.bindings constants)

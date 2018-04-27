@@ -386,7 +386,7 @@ module type S = sig
 
   val strictly_more_precise : typing_environment -> t -> than:t -> bool
 
-  val rename_variables : t -> Variable.t Variable.Map.t -> t
+  val rename_variables : t -> Name.t Name.Map.t -> t
 
   val any_value_as_ty_value : unit -> ty_value
 

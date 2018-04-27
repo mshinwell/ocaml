@@ -365,8 +365,8 @@ and lift (expr : Flambda.Expr.t) =
           | _kind, var ->
             var, constants
         in
-        constants, Variable.Map.add var new_var subst)
-      (Simple.Map.empty, Variable.Map.empty)
+        constants, Name.Map.add (Name.var var) (Name.var new_var) subst)
+      (Simple.Map.empty, Name.Map.empty)
       (State.constants state)
   in
   (* CR mshinwell: Do this substitution more efficiently *)

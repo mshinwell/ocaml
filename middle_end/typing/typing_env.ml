@@ -601,34 +601,16 @@ end) = struct
   let rec add_or_meet_or_join_env_extension t env_extension scope_level
         ~meet_or_join =
     let rename_name (name : Name.t) freshening =
-      match name with
-      | Var var ->
-        begin match Variable.Map.find var freshening with
-        | exception Not_found -> name
-        | var -> Name.var var
-        end
-      | Symbol _ -> name
+      match Name.Map.find name freshening with
+      | exception Not_found -> name
+      | name -> name
     in
     let add_definition t freshening (name : Name.t) ty =
       let ty = T.rename_variables ty freshening in
       let freshening, fresh_name =
-        match name with
-        | Var var ->
-          let fresh_var = Variable.rename var in
-          let freshening =
-            Variable.Map.add var fresh_var freshening
-          in
-          freshening, Name.var fresh_var
-        | Symbol _ ->
-          (* XXX
-             It looks like we should use Name.t Name.Map.t for the
-             freshening *)
-          freshening, name
-(*
-          Misc.fatal_errorf "[Definition]s of symbols are not \
-              expected in environment extensions:@ %a"
-            Typing_env_extension.print env_extension
-*)
+        let fresh_name = Name.rename name in
+        let freshening = Name.Map.add name fresh_name freshening in
+        freshening, fresh_name
       in
 (*
 Format.eprintf "Opening existential %a -> %a\n%!"
@@ -673,7 +655,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
           add_definition t freshening name ty)
-        (Variable.Map.empty, t)
+        (Name.Map.empty, t)
         (List.rev env_extension.first_definitions)
     in
     let freshening, t =

@@ -26,3 +26,7 @@ end)
 
 let create t = t
 let to_string t = t
+
+(* CR mshinwell: this is dire *)
+let rename t =
+  t ^ "_"

@@ -648,5 +648,9 @@ module type S = sig
       information about the corresponding value than the type [than]. *)
   val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
 
-  val rename_variables : t -> Variable.t Variable.Map.t -> t
+  (* CR mshinwell: Rename -- it shouldn't say "variables" since this works
+     on Name.t values now *)
+  (* CR mshinwell: Make this take Freshening.t instead.  We should only have
+     one type for renaming maps *)
+  val rename_variables : t -> Name.t Name.Map.t -> t
 end

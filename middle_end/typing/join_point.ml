@@ -59,9 +59,9 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
                 match canonical_name with
                 | None -> acc
                 | Some canonical_name ->
-                  let param = Flambda.Typed_parameter.var param in
-                  Variable.Map.add canonical_name param acc)
-              Variable.Map.empty
+                  let param = Flambda.Typed_parameter.name param in
+                  Name.Map.add (Name.var canonical_name) param acc)
+              Name.Map.empty
               (List.combine canonical_names_and_resolved_types_for_args params)
           in
           let arg_tys =
@@ -96,7 +96,7 @@ Format.eprintf "Joined env extension is:@ %a\n%!"
   (Misc.Stdlib.Option.print TEE.print) joined_env_extension;
     let joined_env, opening_existentials_freshening =
       match joined_env_extension with
-      | None -> default_env, Variable.Map.empty
+      | None -> default_env, Name.Map.empty
       | Some joined_env_extension ->
         TE.add_or_meet_env_extension' default_env joined_env_extension
           scope_level
@@ -123,8 +123,7 @@ Format.eprintf "Joined env before diffing is:@ %a\n%!"
                   in
                   freshened_arg_ty, env_extension
                 | _ ->
-                  assert (Variable.Map.is_empty
-                    opening_existentials_freshening);
+                  assert (Name.Map.is_empty opening_existentials_freshening);
                   let env_extension =
                     TEE.restrict_names_to_those_occurring_in_types
                       env_extension use_env [arg_ty]

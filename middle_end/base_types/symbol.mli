@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -20,11 +20,8 @@
     - another compilation unit; or
     - a top-level module.
 
-    * [sym_unit] is the compilation unit containing the value.
-    * [sym_label] is the linkage name of the variable.
-
-    The label must be globally unique: two compilation units linked in the
-    same program must not share labels. *)
+    The linkage name must be globally unique: two compilation units linked in
+    the same program must not share a linkage name. *)
 
 include Hashtbl.With_map
 
@@ -48,7 +45,7 @@ val import_for_pack
   -> t
 
 val compilation_unit : t -> Compilation_unit.t
-val label : t -> Linkage_name.t
+val linkage_name : t -> Linkage_name.t
 
 val print_opt : Format.formatter -> t option -> unit
 
@@ -57,3 +54,5 @@ val compare_lists : t list -> t list -> int
 val in_compilation_unit : t -> Compilation_unit.t -> bool
 
 val is_predefined_exception : t -> bool
+
+val rename : t -> t

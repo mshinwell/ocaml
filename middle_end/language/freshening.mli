@@ -102,6 +102,8 @@ val does_not_freshen : t -> Variable.t list -> bool
 
 val variable_substitution : t -> Variable.t Variable.Map.t
 
+val name_substitution : t -> Name.t Name.Map.t
+
 val print : Format.formatter -> t -> unit
 
 (*

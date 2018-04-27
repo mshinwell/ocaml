@@ -134,3 +134,8 @@ let is_predefined_exception t =
   match t with
   | Var _ -> false
   | Symbol sym -> Symbol.is_predefined_exception sym
+
+let rename t =
+  match t with
+  | Var var -> Var (Variable.rename var)
+  | Symbol sym -> Symbol (Symbol.rename sym)

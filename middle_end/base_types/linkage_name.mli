@@ -20,3 +20,5 @@ include Hashtbl.With_map
 
 val create : string -> t
 val to_string : t -> string
+
+val rename : t -> t

@@ -202,7 +202,7 @@ module type S = sig
      : t
     -> env_extension
     -> Scope_level.t
-    -> t * (Variable.t Variable.Map.t)
+    -> t * (Name.t Name.Map.t)
 
   (** Like [add_or_meet_env_extension] except uses a join function to
       determine merged types.

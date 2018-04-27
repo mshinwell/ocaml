@@ -121,6 +121,14 @@ let free_names t =
   | Name name -> Name.Set.singleton name
   | Const _ | Discriminant _ -> Name.Set.empty
 
+let map_name t ~f =
+  match t with
+  | Name name ->
+    let name' = f name in
+    if name == name' then t
+    else Name name'
+  | Const _ | Discriminant _ -> t
+
 let map_var t ~f =
   match t with
   | Name name ->

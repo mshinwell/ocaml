@@ -307,6 +307,18 @@ let variable_substitution t =
   | Inactive -> Variable.Map.empty
   | Active tbl -> tbl.variables
 
+(* CR mshinwell: This whole module should work on [Name]s probably *)
+let name_substitution t =
+  match t with
+  | Inactive -> Name.Map.empty
+  | Active tbl ->
+    Variable.Map.fold (fun old_var new_var result ->
+        let old_name = Name.var old_var in
+        let new_name = Name.var new_var in
+        Name.Map.add old_name new_name result)
+    tbl.variables
+    Name.Map.empty
+
 let restrict_to_names t allowed =
   match t with
   | Inactive -> Inactive

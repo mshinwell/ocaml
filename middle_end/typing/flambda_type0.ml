@@ -1708,13 +1708,9 @@ result
         print t2
 
   let rename_variables_name subst (name : Name.t) =
-    match name with
-    | Var var ->
-      begin match Variable.Map.find var subst with
-      | exception Not_found -> name
-      | var -> Name.var var
-      end
-    | Symbol _ -> name
+    match Name.Map.find name subst with
+    | exception Not_found -> name
+    | name -> name
 
   let rename_variables_extensibility rename_contents subst
         (ext : _ extensibility) =
@@ -2145,7 +2141,7 @@ result
       Flambda_primitive.With_fixed_value.Map.fold (fun prim name cse' ->
           let name' = rename_variables_name subst name in
           let prim' =
-            Flambda_primitive.With_fixed_value.rename_variables prim subst
+            Flambda_primitive.With_fixed_value.rename_names prim subst
           in
           if (not (name == name')) || (not (prim == prim')) then begin
             cse_changed := true

@@ -305,38 +305,29 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print free_names;
   let diff t env : t =
     let names_more_precise, _freshened_names_more_precise, _freshening =
       fold t
-        ~init:(Name.Set.empty, Name.Set.empty, Variable.Map.empty)
+        ~init:(Name.Set.empty, Name.Set.empty, Name.Map.empty)
         ~f:(fun (names_more_precise, freshened_names_more_precise, freshening)
                 (name : Name.t)
                 (info : fold_info) ->
-          let var =
-            match name with
-            | Var var -> var
-            | Symbol _ ->
-              Misc.fatal_errorf "Symbols should not be bound by environment \
-                  extensions:@ %a"
-                print t
-          in
           match info with
           | Definition_in_extension _ty ->
-            let fresh_var = Variable.rename var in
-            let freshening = Variable.Map.add var fresh_var freshening in
+            let fresh_name = Name.rename name in
+            let freshening = Name.Map.add name fresh_name freshening in
             let names_more_precise =
-              Name.Set.add (Name.var var) names_more_precise
+              Name.Set.add name names_more_precise
             in
             let freshened_names_more_precise =
-              Name.Set.add (Name.var fresh_var) freshened_names_more_precise
+              Name.Set.add fresh_name freshened_names_more_precise
             in
             names_more_precise, freshened_names_more_precise, freshening
           | Equation ty ->
-            let unfreshened_name = Name.var var in
-            let var =
-              match Variable.Map.find var freshening with
-              | exception Not_found -> var
-              | var -> var
+            let unfreshened_name = name in
+            let name =
+              match Name.Map.find name freshening with
+              | exception Not_found -> name
+              | name -> name
             in
             let ty = T.rename_variables ty freshening in
-            let name = Name.var var in
             match TE.find_opt env name with
             | None ->
               let names_more_precise =

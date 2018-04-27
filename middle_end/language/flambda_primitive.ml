@@ -1101,18 +1101,18 @@ let free_names t =
       (Name.Set.union (Simple.free_names x1) (Simple.free_names x2))
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
-(* CR mshinwell: This should maybe just take [Variable.t Variable.Map.t]
+(* CR mshinwell: This should maybe just take [Name.t Name.Map.t]
    rather than [f]. *)
-let rename_variables t ~f =
+let rename_names t ~f =
   match t with
-  | Unary (prim, x0) -> Unary (prim, Simple.map_var x0 ~f)
+  | Unary (prim, x0) -> Unary (prim, Simple.map_name x0 ~f)
   | Binary (prim, x0, x1) ->
-    Binary (prim, Simple.map_var x0 ~f, Simple.map_var x1 ~f)
+    Binary (prim, Simple.map_name x0 ~f, Simple.map_name x1 ~f)
   | Ternary (prim, x0, x1, x2) ->
-    Ternary (prim, Simple.map_var x0 ~f, Simple.map_var x1 ~f,
-      Simple.map_var x2 ~f)
+    Ternary (prim, Simple.map_name x0 ~f, Simple.map_name x1 ~f,
+      Simple.map_name x2 ~f)
   | Variadic (prim, xs) ->
-    Variadic (prim, List.map (fun x -> Simple.map_var x ~f) xs)
+    Variadic (prim, List.map (fun x -> Simple.map_name x ~f) xs)
 
 let result_kind (t : t) =
   match t with
@@ -1164,11 +1164,11 @@ module With_fixed_value = struct
 
   let free_names = free_names
 
-  let rename_variables t subst =
-    rename_variables t ~f:(fun var ->
-      match Variable.Map.find var subst with
-      | exception Not_found -> var
-      | var -> var)
+  let rename_names t subst =
+    rename_names t ~f:(fun name ->
+      match Name.Map.find name subst with
+      | exception Not_found -> name
+      | name -> name)
 
   include Stdlib.Map.Make_with_set (struct
     type nonrec t = t

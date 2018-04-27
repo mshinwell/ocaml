@@ -18,7 +18,7 @@
 
 type t = {
   compilation_unit : Compilation_unit.t;
-  label : Linkage_name.t;
+  linkage_name : Linkage_name.t;
   hash : int;
 }
 
@@ -34,42 +34,42 @@ module I = Hashtbl.Make_with_map (struct
     else
       let c = compare t1.hash t2.hash in
       if c <> 0 then c
-      else Linkage_name.compare t1.label t2.label
+      else Linkage_name.compare t1.linkage_name t2.linkage_name
 
   let hash t = t.hash
 
   let print ppf t =
     Compilation_unit.print ppf t.compilation_unit;
     Format.pp_print_string ppf ".";
-    Linkage_name.print ppf t.label
+    Linkage_name.print ppf t.linkage_name
 end)
 
 include I
 
-let create compilation_unit label =
+let create compilation_unit linkage_name =
   let unit_linkage_name =
     Linkage_name.to_string
       (Compilation_unit.get_linkage_name compilation_unit)
   in
-  let label =
+  let linkage_name =
     Linkage_name.create
-      (unit_linkage_name ^ "__" ^ (Linkage_name.to_string label))
+      (unit_linkage_name ^ "__" ^ (Linkage_name.to_string linkage_name))
   in
-  let hash = Linkage_name.hash label in
-  { compilation_unit; label; hash; }
+  let hash = Linkage_name.hash linkage_name in
+  { compilation_unit; linkage_name; hash; }
 
-let unsafe_create compilation_unit label =
-  let hash = Linkage_name.hash label in
-  { compilation_unit; label; hash; }
+let unsafe_create compilation_unit linkage_name =
+  let hash = Linkage_name.hash linkage_name in
+  { compilation_unit; linkage_name; hash; }
 
 let import_for_pack t ~pack:compilation_unit =
-  let hash = Linkage_name.hash t.label in
+  let hash = Linkage_name.hash t.linkage_name in
   { compilation_unit;
-    label = t.label; hash;
+    linkage_name = t.linkage_name; hash;
   }
 
 let compilation_unit t = t.compilation_unit
-let label t = t.label
+let linkage_name t = t.linkage_name
 
 let print_opt ppf = function
   | None -> Format.fprintf ppf "<no symbol>"
@@ -83,3 +83,7 @@ let in_compilation_unit t cu =
 
 let is_predefined_exception t =
   Compilation_unit.is_predefined_exception t.compilation_unit
+
+let rename t =
+  let linkage_name = Linkage_name.rename t.linkage_name in
+  create t.compilation_unit linkage_name

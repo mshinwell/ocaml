@@ -43,28 +43,32 @@ module With_free_names = F0.With_free_names
 module Call_kind = struct
   include F0.Call_kind
 
-  let rename_variables t ~f =
+  let rename_names t ~f =
     match t with
     | Function (Direct _)
     | Function Indirect_unknown_arity
     | Function (Indirect_known_arity _)
     | C_call _ -> t
     | Method { kind; obj; } ->
-      Method {
-        kind;
-        obj = Name.map_var obj ~f;
-      }
+      let obj' = f obj in
+      if obj == obj' then t
+      else
+        Method {
+          kind;
+          obj = f obj;
+        }
 end
 
 module Apply = struct
   include F0.Apply
 
-  let rename_variables t ~f =
-    { func = Name.map_var t.func ~f;
+  let rename_names t ~f =
+    (* CR mshinwell: add phys-equal checks *)
+    { func = f t.func;
       continuation = t.continuation;
       exn_continuation = t.exn_continuation;
-      args = List.map (fun arg -> Simple.map_var arg ~f) t.args;
-      call_kind = Call_kind.rename_variables t.call_kind ~f;
+      args = List.map (fun arg -> Simple.map_name arg ~f) t.args;
+      call_kind = Call_kind.rename_names t.call_kind ~f;
       dbg = t.dbg;
       inline = t.inline;
       specialise = t.specialise;
@@ -132,7 +136,7 @@ module rec Expr : sig
     -> dbg:Debuginfo.t
     -> t
   val toplevel_substitution
-     : Variable.t Variable.Map.t
+     : Name.t Name.Map.t
     -> t
     -> t
   val description_of_toplevel_node : t -> string
@@ -683,7 +687,12 @@ end = struct
   (* CR-soon mshinwell: this should use the explicit ignore functions *)
   let toplevel_substitution sb tree =
     let sb' = sb in
-    let sb v = try Variable.Map.find v sb with Not_found -> v in
+    let sb name : Name.t = try Name.Map.find name sb with Not_found -> name in
+    let sb_var name =
+      match sb name with
+      | Var var -> var
+      | Symbol _ -> Misc.fatal_error "Symbols not allowed here"
+    in
     let substitute_type ty =
       Flambda_type.rename_variables ty sb'
     in
@@ -694,19 +703,19 @@ end = struct
         params
     in
     let substitute_args_list args =
-      List.map (fun arg -> Simple.map_var arg ~f:sb) args
+      List.map (fun arg -> Simple.map_name arg ~f:sb) args
     in
     let aux (expr : t) : t =
       (* Note that this does not have to traverse subexpressions; the call to
          [map_toplevel] below will deal with that. *)
       match expr with
       | Let_mutable mutable_let ->
-        let initial_value = Simple.map_var mutable_let.initial_value ~f:sb in
+        let initial_value = Simple.map_name mutable_let.initial_value ~f:sb in
         Let_mutable { mutable_let with initial_value }
       | Apply apply ->
-        Apply (Apply.rename_variables apply ~f:sb)
+        Apply (Apply.rename_names apply ~f:sb)
       | Switch (cond, sw) ->
-        let cond = Name.map_var cond ~f:sb in
+        let cond = sb cond in
         Switch (cond, sw)
       | Apply_cont (cont, trap_action, args) ->
         let args = substitute_args_list args in
@@ -729,12 +738,12 @@ end = struct
     let aux_named (named : Named.t) : Named.t =
       match named with
       | Simple simple ->
-        let simple' = Simple.map_var simple ~f:sb in
+        let simple' = Simple.map_name simple ~f:sb in
         if simple == simple' then named
         else Simple simple'
       | Read_mutable _ -> named
       | Assign { being_assigned; new_value; } ->
-        let new_value = Simple.map_var new_value ~f:sb in
+        let new_value = Simple.map_name new_value ~f:sb in
         Assign { being_assigned; new_value; }
       | Set_of_closures set_of_closures ->
         let function_decls =
@@ -747,15 +756,17 @@ end = struct
             ~function_decls
             ~in_closure:
               (Var_within_closure.Map.map (fun (free_var : Free_var.t) ->
-                  { free_var with var = sb free_var.var; })
+                  { free_var with
+                    var = sb_var (Name.var free_var.var);
+                  })
                 set_of_closures.free_vars)
             ~direct_call_surrogates:set_of_closures.direct_call_surrogates
         in
         Set_of_closures set_of_closures
       | Prim (prim, dbg) ->
-        Prim (Flambda_primitive.rename_variables prim ~f:sb, dbg)
+        Prim (Flambda_primitive.rename_names prim ~f:sb, dbg)
     in
-    if Variable.Map.is_empty sb' then tree
+    if Name.Map.is_empty sb' then tree
     else Mappers.Toplevel_only.map aux aux_named tree
 
   let make_closure_declaration ~id
@@ -786,9 +797,9 @@ end = struct
     in
     let sb =
       Variable.Set.fold (fun id sb ->
-          Variable.Map.add id (Variable.rename id) sb)
+          Name.Map.add (Name.var id) (Name.var (Variable.rename id)) sb)
         free_variables
-        Variable.Map.empty
+        Name.Map.empty
     in
     (* CR-soon mshinwell: try to eliminate this [toplevel_substitution].  This
        function is only called from [Simplify], so we should be able
@@ -801,7 +812,17 @@ end = struct
     in
     let body =
       Variable.Map.fold (fun var var_within_closure body ->
-          let new_var = Variable.Map.find var sb in
+          let new_var =
+            (* CR mshinwell: tidy up *)
+            match Name.Map.find (Name.var var) sb with
+            | exception Not_found ->
+              Misc.fatal_errorf "Variable missing from freshening: %a"
+                Variable.print var
+            | Var var -> var
+            | Symbol sym ->
+              Misc.fatal_errorf "Freshening should not yield a symbol: %a"
+                Symbol.print sym
+          in
           let kind : K.t = free_variable_kind var in
           let projection : Named.t =
             let my_closure = Simple.var my_closure in
@@ -822,7 +843,17 @@ end = struct
             Misc.fatal_error "Not yet implemented" (* XXX *) )
         vars_within_closure body
     in
-    let subst var = Variable.Map.find var sb in
+    let subst var =
+      (* CR mshinwell: messy, as above *)
+      match Name.Map.find (Name.var var) sb with
+      | exception Not_found ->
+        Misc.fatal_errorf "Variable missing from freshening: %a"
+          Variable.print var
+      | Var var -> var
+      | Symbol sym ->
+        Misc.fatal_errorf "Freshening should not yield a symbol: %a"
+          Symbol.print sym
+    in
     let subst_param param = Typed_parameter.map_var param ~f:subst in
     let function_declaration : Function_declaration.t =
       Function_declaration.create
@@ -1215,7 +1246,7 @@ end and Named : sig
     -> t
     -> Flambda_primitive.result_kind
   val toplevel_substitution
-     : Variable.t Variable.Map.t
+     : Name.t Name.Map.t
     -> t
     -> t
   val no_effects_or_coeffects : t -> bool
@@ -1852,7 +1883,8 @@ end = struct
          Can't this freshening be put into the environment and then applied
          as needed? *)
       let body =
-        Expr.toplevel_substitution (Freshening.variable_substitution freshening)
+        Expr.toplevel_substitution
+          (Freshening.name_substitution freshening)
           func_decl.body
       in
       let function_decl =

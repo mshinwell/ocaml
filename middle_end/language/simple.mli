@@ -63,8 +63,10 @@ val discriminant : Discriminant.t -> t
 
 val free_names : t -> Name.Set.t
 
-val map_var : t -> f:(Variable.t -> Variable.t) -> t
+val map_name : t -> f:(Name.t -> Name.t) -> t
 
+(* CR mshinwell: remove these next two? *)
+val map_var : t -> f:(Variable.t -> Variable.t) -> t
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
 include Hashtbl.With_map with type t := t

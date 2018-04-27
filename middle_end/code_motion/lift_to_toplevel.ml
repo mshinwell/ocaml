@@ -271,8 +271,8 @@ let introduce_symbols (defn : Program_body.definition) =
                       (var, kind, defining_expr) ->
                   let var' = Variable.rename var in
                   let to_copy = (var', kind, defining_expr) :: to_copy in
-                  to_copy, Variable.Map.add var var' subst)
-                ([], Variable.Map.empty)
+                  to_copy, Name.Map.add (Name.var var) (Name.var var') subst)
+                ([], Name.Map.empty)
                 to_copy
             in
             let to_copy =

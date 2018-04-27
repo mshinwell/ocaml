@@ -96,7 +96,7 @@ let copy_of_function's_body_with_freshened_params _env
       ~(function_decl : T.inlinable_function_declaration) =
   let params = function_decl.params in
   let param_vars =
-    List.map (fun (param, _ty) -> Parameter.var param) params
+    List.map (fun (param, _ty) -> Parameter.name param) params
   in
   (* We cannot avoid the substitution in the case where we are inlining
      inside the function itself.  This can happen in two ways: either
@@ -122,10 +122,10 @@ let copy_of_function's_body_with_freshened_params _env
         params
     in
     let freshened_param_vars =
-      List.map (fun (param, _ty) -> Parameter.var param) freshened_params
+      List.map (fun (param, _ty) -> Parameter.name param) freshened_params
     in
     let subst =
-      Variable.Map.of_list (List.combine param_vars freshened_param_vars)
+      Name.Map.of_list (List.combine param_vars freshened_param_vars)
     in
     let body =
       Flambda.Expr.toplevel_substitution subst function_decl.body

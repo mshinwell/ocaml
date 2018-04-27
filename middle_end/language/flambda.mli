@@ -144,7 +144,7 @@ module rec Expr : sig
     -> dbg:Debuginfo.t
     -> t
 
-  val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
+  val toplevel_substitution : Name.t Name.Map.t -> t -> t
 
   val description_of_toplevel_node : t -> string
 
@@ -330,7 +330,7 @@ end and Named : sig
       type-correct, at the given kind. *)
   val dummy_value : Flambda_kind.t -> t
 
-  val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
+  val toplevel_substitution : Name.t Name.Map.t -> t -> t
 
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
