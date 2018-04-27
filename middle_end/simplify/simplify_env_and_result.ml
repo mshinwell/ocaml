@@ -264,7 +264,7 @@ end = struct
 
   let add_symbol t sym ty =
     let typing_environment =
-      TE.add t.typing_environment (Name.symbol sym) Scope_level.for_symbols
+      TE.add t.typing_environment (Name.symbol sym) t.continuation_scope_level
         (Definition ty)
     in
     { t with typing_environment; }

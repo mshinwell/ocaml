@@ -620,9 +620,15 @@ end) = struct
           in
           freshening, Name.var fresh_var
         | Symbol _ ->
+          (* XXX
+             It looks like we should use Name.t Name.Map.t for the
+             freshening *)
+          freshening, name
+(*
           Misc.fatal_errorf "[Definition]s of symbols are not \
               expected in environment extensions:@ %a"
             Typing_env_extension.print env_extension
+*)
       in
 (*
 Format.eprintf "Opening existential %a -> %a\n%!"
