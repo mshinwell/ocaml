@@ -645,7 +645,9 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         match meet_or_join t ty ~existing_ty with
         | None -> t
         | Some (new_ty, new_env_extension)->
-          let t = add_or_meet_env_extension t new_env_extension scope_level in
+          let t, _freshening =
+            add_or_meet_env_extension' t new_env_extension scope_level
+          in
           add t name scope_level (Equation new_ty)
     in
     let add_cse t freshening bound_to prim =
@@ -694,13 +696,16 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         t
         env_extension.last_equations_rev
     in
-    Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
-        let bound_to = rename_name bound_to freshening in
-        add t bound_to scope_level (CSE prim))
-      env_extension.cse
-      t
+    let t =
+      Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
+          let bound_to = rename_name bound_to freshening in
+          add t bound_to scope_level (CSE prim))
+        env_extension.cse
+        t
+    in
+    t, freshening
 
-  and add_or_meet_env_extension t env_extension scope_level =
+  and add_or_meet_env_extension' t env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
       ~meet_or_join:(fun env ty ~existing_ty ->
         let meet_ty, meet_env_extension =
@@ -713,7 +718,13 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         if strictly_more_precise then Some (meet_ty, meet_env_extension)
         else None)
 
-  let add_or_join_env_extension t env_extension1 env_extension2
+  let add_or_meet_env_extension t env_extension scope_level =
+    let t, _freshening =
+      add_or_meet_env_extension' t env_extension scope_level
+    in
+    t
+
+  let add_or_join_env_extension' t env_extension1 env_extension2
         env_extension scope_level =
     add_or_meet_or_join_env_extension t env_extension scope_level
       ~meet_or_join:(fun env ty ~existing_ty ->
@@ -729,6 +740,14 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         in
         if strictly_more_precise then Some (join_ty, Typing_env_extension.empty)
         else None)
+
+  let add_or_join_env_extension t env_extension1 env_extension2
+      env_extension scope_level =
+    let t, _freshening =
+      add_or_join_env_extension' t env_extension1 env_extension2
+        env_extension scope_level
+    in
+    t
 
   let add_equation t name ty =
     if not (mem t name) then begin

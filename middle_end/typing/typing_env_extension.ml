@@ -87,24 +87,24 @@ end) = struct
 
   let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
 
-  let equations_on_env t =
-    let defined_names t =
-      let from_first_definitions =
-        Name.Set.of_list (
-          List.map (fun (name, _ty) -> name) t.first_definitions)
-      in
-      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
-          Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : typing_environment_entry))
-                 defined_names ->
-              match entry with
-              | Definition _ -> Name.Set.add name defined_names
-              | Equation _ | CSE _ -> defined_names)
-            by_sublevel
-            defined_names)
-        t.at_or_after_cut_point
-        from_first_definitions
+  let defined_names t =
+    let from_first_definitions =
+      Name.Set.of_list (
+        List.map (fun (name, _ty) -> name) t.first_definitions)
     in
+    Scope_level.Map.fold (fun _level by_sublevel defined_names ->
+        Scope_level.Sublevel.Map.fold
+          (fun _sublevel (name, (entry : typing_environment_entry))
+               defined_names ->
+            match entry with
+            | Definition _ -> Name.Set.add name defined_names
+            | Equation _ | CSE _ -> defined_names)
+          by_sublevel
+          defined_names)
+      t.at_or_after_cut_point
+      from_first_definitions
+
+  let equations_on_env t =
     let equations_domain
           { first_definitions = _; at_or_after_cut_point;
             last_equations_rev; } =
@@ -199,6 +199,10 @@ end) = struct
     in
     invariant t;
     t
+
+  let restrict_to_definitions t =
+    restrict_to_names t (
+      Name_occurrences.create_from_set_in_types (defined_names t))
 
   let restrict_names_to_those_occurring_in_types t env tys =
     let free_names = free_names_transitive_list t env tys in

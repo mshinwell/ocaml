@@ -89,6 +89,8 @@ module type S = sig
     -> t
     -> t
 
+  val restrict_to_definitions : t -> t
+
   val restrict_names_to_those_occurring_in_types
      : t
     -> typing_environment

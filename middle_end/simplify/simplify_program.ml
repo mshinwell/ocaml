@@ -551,6 +551,8 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
 Format.eprintf "\n\n>> Final environment after define_symbol:@ %a\n%!" E.print env;
   definition, env, newly_imported_symbols, lifted_constants
 
+let add_lifted_constants _ body = body
+(* Seems to be done above, now 
 let add_lifted_constants lifted_constants (body : Program_body.t) =
   (* CR mshinwell: Dependencies between lifted constants?  Need to get the
      ordering correct. *)
@@ -563,6 +565,7 @@ let add_lifted_constants lifted_constants (body : Program_body.t) =
       Define_symbol (definition, body))
     body
     (Symbol.Map.bindings lifted_constants)
+*)
 
 let rec simplify_program_body env (body : Program_body.t)
       : Program_body.t * (K.t Symbol.Map.t) =

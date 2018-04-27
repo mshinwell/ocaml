@@ -196,6 +196,14 @@ module type S = sig
     -> Scope_level.t
     -> t
 
+  (** As for [add_or_meet_env_extension], but also returns the freshening
+      used to open existentials in the supplied extension. *)
+  val add_or_meet_env_extension'
+     : t
+    -> env_extension
+    -> Scope_level.t
+    -> t * (Variable.t Variable.Map.t)
+
   (** Like [add_or_meet_env_extension] except uses a join function to
       determine merged types.
       [add_or_join_env_extension t ext1 ext2 ext level] has [ext] as the

@@ -117,13 +117,20 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
                   TEE.restrict_names_to_those_occurring_in_types
                     env_extension use_env [arg_ty]
                 in
+                let env, freshening =
+                  TE.add_or_meet_env_extension' joined_env
+                    (TEE.restrict_to_definitions env_extension)
+                    (TE.max_level joined_env)
+                in
+                let freshened_arg_ty = T.rename_variables arg_ty freshening in
                 try
-                  T.join joined_env TEE.empty env_extension joined_ty arg_ty
+                  T.join env TEE.empty env_extension joined_ty freshened_arg_ty
                 with Misc.Fatal_error -> begin
-                  Format.eprintf "\n%sContext is: parameter %a%s\n"
+                  Format.eprintf "\n%sContext is: parameter %a%s@ in@ %a\n"
                     (Misc_color.bold_red ())
                     Flambda.Typed_parameter.print param
-                    (Misc_color.reset ());
+                    (Misc_color.reset ())
+                    TE.print env;
                   raise Misc.Fatal_error
                 end)
               bottom_ty
