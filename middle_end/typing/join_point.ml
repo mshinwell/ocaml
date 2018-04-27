@@ -129,8 +129,8 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
               all_uses_for_arg_with_env_extensions
           in
           let joined_env =
-            TE.add joined_env (Flambda.Typed_parameter.name param) scope_level
-              (Definition joined_ty)
+            TE.add_equation joined_env (Flambda.Typed_parameter.name param)
+              joined_ty
           in
           joined_ty :: joined_arg_tys, joined_env)
         ([], joined_env)

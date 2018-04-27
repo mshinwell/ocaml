@@ -119,7 +119,9 @@ let prepare_to_simplify_closure
         E.add_variable env var ty)
       set_of_closures_env function_decl.params
   in
+(*
   let env = E.increment_continuation_scope_level env in
+*)
   (* XXX use the correct my_closure type. *)
   E.add_variable env my_closure
     (T.unknown (Flambda_kind.value ()))

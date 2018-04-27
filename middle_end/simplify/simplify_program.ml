@@ -359,7 +359,6 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
           ~params:(Simplify_aux.params_for_exception_handler ())
       in
       let default_env0 = env in
-      let default_env = E.get_typing_environment env in
       let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
         let env =
@@ -396,15 +395,22 @@ Format.eprintf "TOPLEVEL:@ \n%a\n"
   Flambda.Expr.print expr;
 Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print default_env0;
+      let env =
+        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+Format.eprintf "Adding lifted constant %a\n%!" Symbol.print symbol;
+            E.add_symbol env symbol ty)
+          lifted_constants
+          env
+      in
+      (* CR mshinwell: tidy all these environments up *)
+      let default_env = E.get_typing_environment env in
       let _args_types, new_env, _env_extension =
         let default_env =
           (* CR mshinwell: move to auxiliary function; share with
              [Simplify_named] *)
           List.fold_left (fun env param ->
               let var = Flambda.Typed_parameter.var param in
-              let scope_level =
-                Scope_level.next (E.continuation_scope_level default_env0)
-              in
+              let scope_level = E.continuation_scope_level default_env0 in
               let ty = Flambda.Typed_parameter.ty param in
               T.Typing_env.add env (Name.var var) scope_level (Definition ty))
             default_env
@@ -426,6 +432,7 @@ Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
           raise exn
         end
       in
+      let env = E.replace_typing_environment env new_env in
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
@@ -435,15 +442,6 @@ Format.eprintf "Args for %a: %a\n%!"
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
 *)
-(* XXX Work out why these symbols are already bound
-      let env =
-        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-            E.add_symbol env symbol ty)
-          lifted_constants
-          env
-      in
-*)
-      let env = E.replace_typing_environment env new_env in
       let env = E.increment_continuation_scope_level env in
 (*
       assert (List.for_all2 (fun (_var, kind1) ty ->
@@ -550,9 +548,7 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
       computation;
     }
   in
-(*
 Format.eprintf "\n\n>> Final environment after define_symbol:@ %a\n%!" E.print env;
-*)
   definition, env, newly_imported_symbols, lifted_constants
 
 let add_lifted_constants lifted_constants (body : Program_body.t) =

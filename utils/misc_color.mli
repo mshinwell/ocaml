@@ -46,5 +46,6 @@ val bold_cyan : unit -> string
 val bold_white : unit -> string
 val bold_yellow : unit -> string
 val bold_blue : unit -> string
+val bold_magenta : unit -> string
 
 val reset : unit -> string

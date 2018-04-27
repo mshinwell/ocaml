@@ -124,16 +124,16 @@ let simplify_set_of_closures original_env r
       let default_env =
         List.fold_left (fun env param ->
             let var = Flambda.Typed_parameter.var param in
-            let scope_level = E.continuation_scope_level original_env in
+            let scope_level = E.continuation_scope_level set_of_closures_env in
             let ty = Flambda.Typed_parameter.ty param in
             T.Typing_env.add env (Name.var var) scope_level (Definition ty))
-          (E.get_typing_environment original_env)
+          (E.get_typing_environment closure_env)
           return_cont_params
       in
       let result, _result_env, result_env_extension =
         Join_point.param_types_and_body_env return_continuation_uses
           ~arity:function_decl.return_arity
-          (E.freshening original_env)
+          (E.freshening set_of_closures_env)
           ~default_env
       in
       let result_env_extension =

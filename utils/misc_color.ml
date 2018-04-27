@@ -144,5 +144,8 @@ let bold_yellow () =
 let bold_blue () =
   if !enable then ansi_of_style_l [FG Blue; Bold] else ""
 
+let bold_magenta () =
+  if !enable then ansi_of_style_l [FG Magenta; Bold] else ""
+
 let reset () =
   if !enable then ansi_of_style_l [Reset] else ""

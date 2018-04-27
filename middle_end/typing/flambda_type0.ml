@@ -2764,7 +2764,7 @@ result
       with type flambda_type := flambda_type
   end = Real_type_equality.Make (T2) (Typing_env_extension)
   and T2 : sig
-    include module type of struct include T1 end
+    include module type of struct include T1 end [@remove_aliases]
 
     val as_or_more_precise : typing_environment -> t -> than:t -> bool
     val strictly_more_precise : typing_environment -> t -> than:t -> bool

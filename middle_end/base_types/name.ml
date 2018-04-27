@@ -49,26 +49,51 @@ let to_symbol t =
   | Var _ -> None
   | Symbol sym -> Some sym
 
-include Hashtbl.Make_with_map (struct
-  type nonrec t = t
+module With_map =
+  Hashtbl.Make_with_map (struct
+    type nonrec t = t
 
-  let print ppf t =
-    match t with
-    | Var var -> Variable.print ppf var
-    | Symbol sym -> Symbol.print ppf sym
+    let print ppf t =
+      match t with
+      | Var var -> Variable.print ppf var
+      | Symbol sym -> Symbol.print ppf sym
 
-  let hash t =
-    match t with
-    | Var var -> Hashtbl.hash (0, Variable.hash var)
-    | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
+    let hash t =
+      match t with
+      | Var var -> Hashtbl.hash (0, Variable.hash var)
+      | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
 
-  let compare t1 t2 =
-    match t1, t2 with
-    | Var var1, Var var2 -> Variable.compare var1 var2
-    | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
-    | Var _, Symbol _ -> -1
-    | Symbol _, Var _ -> 1
-end)
+    let compare t1 t2 =
+      match t1, t2 with
+      | Var var1, Var var2 -> Variable.compare var1 var2
+      | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
+      | Var _, Symbol _ -> -1
+      | Symbol _, Var _ -> 1
+  end)
+
+(* CR mshinwell: We need a better way of adding the colours to maps. *)
+
+module T = With_map.T
+
+let compare = T.compare
+let equal t1 t2 = T.compare t1 t2 = 0
+let print = T.print
+let hash = T.hash
+
+module Set = With_map.Set
+
+module Map = struct
+  include With_map.Map
+
+  let print ?before_key ?after_key print_contents ppf t =
+    ignore before_key;
+    ignore after_key;
+    print ~before_key:(Misc_color.bold_green ())
+      ~after_key:(Misc_color.reset ())
+      print_contents ppf t
+end
+
+module Tbl = With_map.Tbl
 
 let variables_only t =
   Set.filter (fun name ->

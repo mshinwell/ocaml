@@ -35,7 +35,7 @@ module T0 = struct
   include Numbers.Int
 
   let for_symbols = 0
-  let initial = for_symbols
+  let initial = for_symbols + 1
 
   let next t =
     t + 1

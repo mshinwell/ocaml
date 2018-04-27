@@ -73,6 +73,8 @@ module type S = sig
       given environment knows already.  The specified scoping level, which
       typically corresponds to continuation scoping, will be augmented by a
       scoping sublevel computed by the environment. *)
+  (* CR mshinwell: I think maybe this should be add_definition, and
+     add_equation should be used otherwise, which meets. *)
   val add : t -> Name.t -> Scope_level.t -> typing_environment_entry -> t
 
   (** The same as [add] on a newly-[create]d environment. *)

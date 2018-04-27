@@ -68,21 +68,16 @@ end) = struct
 
   let find_exn t name
         : flambda_type * Flambda_type0_internal_intf.binding_type =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-        Name.print name
-        print_typing_environment t
-    | _scope_level, entry ->
-      let binding_type : Flambda_type0_internal_intf.binding_type =
-        if Name.Set.mem name t.were_existentials then Was_existential
-        else Normal
-      in
-      let ty =
-        match entry with
-        | Definition ty | Equation ty -> ty
-      in
-      ty, binding_type
+    let _scope_level, entry = Name.Map.find name t.names_to_types in
+    let binding_type : Flambda_type0_internal_intf.binding_type =
+      if Name.Set.mem name t.were_existentials then Was_existential
+      else Normal
+    in
+    let ty =
+      match entry with
+      | Definition ty | Equation ty -> ty
+    in
+    ty, binding_type
 
   type still_unresolved =
     | Resolved
@@ -258,7 +253,9 @@ end) = struct
                 Name.print name
                 print t
           end;
-          Name.Set.union free_names names_seen) : Name.Set.t);
+          match entry with
+          | Definition _ -> Name.Set.add name names_seen
+          | Equation _ | CSE _ -> names_seen) : Name.Set.t);
       (* Checking that alias resolution works also ensures there are no
          cycles via aliases. *)
       Name.Map.iter (fun bound_name (_level, entry) ->
@@ -267,7 +264,7 @@ end) = struct
             | Definition ty | Equation ty -> ty
           in
           ignore (Sys.opaque_identity (resolve_aliases ~bound_name (t, ty))))
-        t.names_to_types
+        t.names_to_types;
     end
 
   let mem t name =
@@ -348,14 +345,17 @@ end) = struct
       | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
     in
     if Name.Set.mem name free_names then begin
-      Misc.fatal_errorf "Cannot add binding %a = %a@ as it would produce \
+      Misc.fatal_errorf "Cannot add binding@ %a = %a@ as it would produce \
           a circular dependency"
         Name.print name
         print_typing_environment_entry entry
     end;
+    (* CR mshinwell: Unsure about levels for symbols yet *)
     let min_level = min_level_for_new_binding t in
-    if Scope_level.(<) level min_level then begin
-      Misc.fatal_errorf "Cannot add binding %a = %a@ to this environment \
+    if (not (Scope_level.equal level Scope_level.for_symbols))
+      && Scope_level.(<) level min_level
+    then begin
+      Misc.fatal_errorf "Cannot add binding@ %a = %a@ to this environment \
           with scope level %a (minimum permitted level %a):@ %a"
         Name.print name
         print_typing_environment_entry entry
@@ -368,7 +368,7 @@ end) = struct
       begin match entry with
       | Definition _ | CSE _ -> ()
       | Equation _ ->
-        Misc.fatal_errorf "Cannot add %a = %a@ for name undefined in \
+        Misc.fatal_errorf "Cannot add@ %a = %a@ for name undefined in \
             environment:@ %a"
           Name.print name
           print_typing_environment_entry entry
@@ -377,7 +377,7 @@ end) = struct
     | Some _ ->
       match entry with
       | Definition _ ->
-        Misc.fatal_errorf "Cannot redefine %a = %a@ in environment:@ %a"
+        Misc.fatal_errorf "Cannot redefine@ %a = %a@ in environment:@ %a"
           Name.print name
           print_typing_environment_entry entry
           print_typing_environment t
@@ -625,6 +625,11 @@ end) = struct
             Typing_env_extension.print env_extension
       in
       let t = add t fresh_name scope_level (Definition ty) in
+      let t =
+        { t with
+          were_existentials = Name.Set.add fresh_name t.were_existentials;
+        }
+      in
       freshening, t
     in
     let add_equation t freshening name ty =
