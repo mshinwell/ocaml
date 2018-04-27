@@ -118,16 +118,14 @@ let check_toplevel_simplification_result r expr ~continuation
           | exception Not_found -> 0
           | count -> count
         in
-        let num_in_r =
-          Simplify_env_and_result.Result.Continuation_uses.num_uses uses
-        in
+        let num_in_r = Continuation_uses.num_uses uses in
         if num_in_term <> num_in_r then begin
           Misc.fatal_errorf "Continuation count mismatch for %a between the \
               term (%d) and [r] (%d):@ Continuation uses:@ %a@ Term:@ %a"
             Continuation.print cont
             num_in_term
             num_in_r
-            Simplify_env_and_result.Result.Continuation_uses.print uses
+            Continuation_uses.print uses
             Expr.print expr
         end)
       continuation_definitions_with_uses

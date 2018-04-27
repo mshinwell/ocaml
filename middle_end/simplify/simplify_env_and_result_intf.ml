@@ -22,7 +22,7 @@ module type Env = sig
   type t
 
   type result
-  type continuation_uses
+  type continuation_uses = Continuation_uses.t
 
   val invariant : t -> unit
 

@@ -331,11 +331,11 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \
   middle_end/typing/flambda_type.cmo \
-  middle_end/typing/continuation_uses.cmo \
-  middle_end/typing/join_point.cmo \
   middle_end/language/number_adjuncts.cmo \
   middle_end/language/invariant_env.cmo \
   middle_end/language/flambda.cmo \
+  middle_end/typing/continuation_uses.cmo \
+  middle_end/typing/join_point.cmo \
   middle_end/language/flambda_static.cmo \
   middle_end/language/flambda_utils.cmo
 

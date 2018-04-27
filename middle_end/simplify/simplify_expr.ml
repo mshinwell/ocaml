@@ -47,10 +47,10 @@ let simplify_continuation_use_cannot_inline env r cont ~params =
       Freshening.apply_continuation (E.freshening env) alias_of
   in
   let arity = Flambda.Typed_parameter.List.arity params in
-  let arg_tys = Flambda_type.unknown_types_from_arity arity in
+  let param_tys = Flambda_type.unknown_types_from_arity arity in
   let r =
     R.use_continuation r env cont ~params
-     (Not_inlinable_or_specialisable arg_tys)
+     (Continuation_uses.Use.Kind.not_inlinable_or_specialisable ~param_tys)
   in
   cont, r
 
@@ -289,8 +289,7 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
               let env =
                 match scrutinee with
                 | Var scrutinee ->
-                  E.replace_meet_variable env scrutinee
-                    (E.get_typing_environment env, scrutinee_ty)
+                  E.replace_meet_variable env scrutinee scrutinee_ty
                 | Symbol _ -> env
               in
   (*
@@ -447,7 +446,7 @@ Format.eprintf "simplify_let_cont_handler, params %a\n%!"
                 (Misc_color.bold_red ())
                 Continuation.print cont
                 (Misc_color.reset ())
-                R.Continuation_uses.print uses;
+                Continuation_uses.print uses;
               raise Misc.Fatal_error
             end
           in
@@ -477,10 +476,10 @@ Format.eprintf "simplify_let_cont_handler, params %a\n%!"
        inlining and specialisation transformations. *)
     let r =
       Continuation.Map.fold (fun cont
-              ((_handler : Flambda.Continuation_handler.t), _env,
+              ((_handler : Flambda.Continuation_handler.t), env,
                r_from_handler) r ->
           if continuation_unused cont then r
-          else R.union r r_from_handler)
+          else R.union (E.get_typing_environment env) r r_from_handler)
         handlers
         r
     in
@@ -755,7 +754,10 @@ and simplify_let_cont env r ~body
                 ~freshening:(E.freshening env)
                 ~default_env:(E.get_typing_environment env)
             in
+            new_env := new_env';
+(* XXX Need to think about this
             new_env := T.Typing_env.meet !new_env new_env';
+*)
             arg_tys)
           original_handlers
       in
@@ -1269,8 +1271,8 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
   let cont = freshen_continuation env cont in
   let cont_approx = E.find_continuation env cont in
   let cont = Continuation_approx.name cont_approx in
-  let args_and_types = S.simplify_simples env args in
-  let args, _arg_tys = List.split args_and_types in
+  let args_with_tys = S.simplify_simples env args in
+  let args, _arg_tys = List.split args_with_tys in
   let freshen_trap_action env r (trap_action : Flambda.Trap_action.t) =
     match trap_action with
     | Push { id; exn_handler; } ->
@@ -1318,7 +1320,7 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
         }
     in
     let bindings_of_params_to_args =
-      if List.compare_lengths handler.params args_and_types <> 0 then
+      if List.compare_lengths handler.params args_with_tys <> 0 then
         Misc.fatal_errorf "Cannot simplify application of %a to %a:@ \
             mismatch between parameters and arguments"
           Continuation.print original_cont
@@ -1328,7 +1330,7 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
         List.map2 (fun param (arg, ty) ->
             let param = Flambda.Typed_parameter.var param in
             param, T.kind ty, Named.Simple arg)
-          handler.params args_and_types
+          handler.params args_with_tys
     in
     (* CR mshinwell: The check about not regressing in preciseness of type
        should also go here *)
@@ -1356,10 +1358,11 @@ Format.eprintf "Body for inlining:@ %a\n@ Freshening: %a\n%!"
     end
   | Some _ | None ->
     let r =
-      let kind : R.Continuation_uses.Use.Kind.t =
+      let kind =
+        let module K = Continuation_uses.Use.Kind in
         match trap_action with
-        | None -> Inlinable_and_specialisable args_and_types
-        | Some _ -> Only_specialisable args_and_types
+        | None -> K.inlinable_and_specialisable ~args_with_tys
+        | Some _ -> K.only_specialisable ~args_with_tys
       in
       R.use_continuation r env cont
         ~params:(Continuation_approx.params cont_approx)

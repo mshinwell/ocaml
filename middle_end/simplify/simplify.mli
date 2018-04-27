@@ -40,7 +40,7 @@ val simplify_toplevel
   -> exn_continuation:Continuation.t
   -> descr:string
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-       * Simplify_env_and_result.Result.Continuation_uses.t
+       * Continuation_uses.t
        * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
            Symbol.Map.t
 

@@ -21,9 +21,12 @@
 
 (** Using information collected across all use sites of a particular
     continuation, calculate:
-    - the types of a continuation's parameters; and
+    - the types of a continuation's parameters;
     - the typing environment for the body of the continuation (which
-      includes bindings for the continuation's parameters).
+      includes bindings for the continuation's parameters); and
+    - the environment extension that transforms [default_env] into the
+      returned typing environment, save that the parameters' types are not
+      included in the extension.
 
     In the event that there are no uses then the [default_env] will be used
     as the body environment.  (This environment must include bindings for
@@ -35,3 +38,4 @@ val param_types_and_body_env
   -> arity:Flambda_arity.t
   -> default_env:Flambda_type.Typing_env.t
   -> Flambda_type.t list * Flambda_type.Typing_env.t
+       * Flambda_type.Typing_env_extension.t

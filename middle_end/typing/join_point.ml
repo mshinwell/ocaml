@@ -137,12 +137,15 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
         (List.combine params (
           List.combine bottom_arg_tys arg_tys_with_env_extensions))
     in
-    Some (List.rev joined_arg_tys_rev, joined_env)
+    Some (List.rev joined_arg_tys_rev, joined_env, joined_env_extension)
 
 let param_types_and_body_env uses freshening ~arity ~default_env =
   match param_types_and_body_env_opt uses freshening ~default_env with
-  | None -> T.bottom_types_from_arity arity, default_env
-  | Some (arg_tys, env) -> arg_tys, env
+  | None -> T.bottom_types_from_arity arity, default_env, TEE.empty
+  | Some (arg_tys, env, env_extension) ->
+    match env_extension with
+    | None -> arg_tys, env, TEE.empty
+    | Some env_extension -> arg_tys, env, env_extension
 
 (*
 Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"

@@ -130,7 +130,7 @@ let simplify_set_of_closures original_env r
           (E.get_typing_environment original_env)
           return_cont_params
       in
-      let result, result_env =
+      let result, _result_env, result_env_extension =
         Join_point.param_types_and_body_env return_continuation_uses
           ~arity:function_decl.return_arity
           (E.freshening original_env)
@@ -138,7 +138,7 @@ let simplify_set_of_closures original_env r
       in
       let result_env_extension =
         T.Typing_env_extension.restrict_names_to_those_occurring_in_types
-          result_env result
+          result_env_extension default_env result
       in
       result, result_env_extension
     in
@@ -218,9 +218,11 @@ let simplify_set_of_closures original_env r
       | Some function_decl -> function_decl
     in
 *)
+(* XXX Why was this here?
     let r =
       R.add_or_meet_env_extension r result_env_extension
     in
+*)
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in
   let funs_with_types, r =

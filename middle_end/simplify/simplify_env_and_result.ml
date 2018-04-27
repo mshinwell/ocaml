@@ -859,8 +859,11 @@ end = struct
         Continuation.print cont
         Continuation_uses.print uses;
 *)
-      Join_point.param_types_and_body_env uses freshening ~arity
-        ~default_env
+      let tys, env, _env_extension =
+        Join_point.param_types_and_body_env uses freshening ~arity
+          ~default_env
+      in
+      tys, env
   
   let defined_continuation_args_types t cont ~arity ~freshening ~default_env =
     match Continuation.Map.find cont t.defined_continuations with
@@ -868,7 +871,10 @@ end = struct
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | (uses, _approx, _env, _recursive) ->
-      Join_point.param_types_and_body_env uses ~arity freshening ~default_env
+      let tys, env, _env_extension =
+        Join_point.param_types_and_body_env uses ~arity freshening ~default_env
+      in
+      tys, env
 
   let exit_scope_of_let_cont t env cont ~params =
     let t, uses =
