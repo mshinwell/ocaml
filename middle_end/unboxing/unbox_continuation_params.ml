@@ -174,13 +174,13 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                   new_cont;
                   new_handler = {
                     params;
-                    stub = false; (* handler.stub; XXX *)
+                    stub = handler.stub;
                     is_exn_handler = false;
                     handler = handler.handler;
                   };
                   wrapper_handler = {
                     params = wrapper_params;
-                    stub = (* true; XXX *) false;
+                    stub = true;
                     is_exn_handler = false;
                     handler = wrapper_body;
                   };
