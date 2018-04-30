@@ -56,5 +56,8 @@ include Hashtbl.Make_with_map (struct
   let hash = Targetint.OCaml.hash
 
   let print ppf t =
-    Format.fprintf ppf "@[discr_%a@]" Targetint.OCaml.print t
+    Format.fprintf ppf "@[%s%a%s@]"
+      (Misc_color.bold_yellow ())
+      Targetint.OCaml.print t
+      (Misc_color.reset ())
 end)

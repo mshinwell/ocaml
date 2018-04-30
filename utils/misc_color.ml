@@ -16,6 +16,7 @@ type style =
   | FG of color (* foreground *)
   | BG of color (* background *)
   | Bold
+  | Underline
   | Reset
 
 let ansi_of_color = function
@@ -32,6 +33,7 @@ let code_of_style = function
   | FG c -> "3" ^ ansi_of_color c
   | BG c -> "4" ^ ansi_of_color c
   | Bold -> "1"
+  | Underline -> "4"
   | Reset -> "0"
 
 let ansi_of_style_l l =
@@ -146,6 +148,12 @@ let bold_blue () =
 
 let bold_magenta () =
   if !enable then ansi_of_style_l [FG Magenta; Bold] else ""
+
+(* CR mshinwell: Consider adding a mode which doesn't have colour but does
+   have underlining *)
+
+let underline () =
+  if !enable then ansi_of_style_l [Underline] else ""
 
 let reset () =
   if !enable then ansi_of_style_l [Reset] else ""

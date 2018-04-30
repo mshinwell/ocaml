@@ -15,6 +15,7 @@ type style =
   | FG of color (* foreground *)
   | BG of color (* background *)
   | Bold
+  | Underline
   | Reset
 
 val ansi_of_style_l : style list -> string
@@ -47,5 +48,6 @@ val bold_white : unit -> string
 val bold_yellow : unit -> string
 val bold_blue : unit -> string
 val bold_magenta : unit -> string
+val underline : unit -> string
 
 val reset : unit -> string
