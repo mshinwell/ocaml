@@ -629,6 +629,10 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     in
     let add_cse t freshening bound_to prim =
       let bound_to = rename_name bound_to freshening in
+      let prim =
+        Flambda_primitive.With_fixed_value.rename_names prim
+          freshening
+      in
       let t = add t bound_to scope_level (CSE prim) in
       let cse_to_names =
         match
@@ -675,8 +679,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     in
     let t =
       Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
-          let bound_to = rename_name bound_to freshening in
-          add t bound_to scope_level (CSE prim))
+          add_cse t freshening bound_to prim)
         env_extension.cse
         t
     in

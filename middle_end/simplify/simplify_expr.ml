@@ -309,6 +309,7 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
 
 let environment_for_let_cont_handler ~env _cont
       ~(handler : Flambda.Continuation_handler.t) =
+  let env = E.increment_continuation_scope_level env in
   let params = handler.params in
   let _freshened_vars, freshening =
     Freshening.add_variables' (E.freshening env)
@@ -420,16 +421,12 @@ and simplify_let_cont_handlers0 env r ~handlers
           let env =
             environment_for_let_cont_handler ~env cont ~handler
           in
-Format.eprintf "simplify_let_cont_handler, params %a\n%!"
-  Flambda.Typed_parameter.List.print handler.params;
-(*
-          Format.eprintf "Environment for %a:@ %a@ \nArg types:@ %a@ \n\
-              Params:@ %a\n%!"
+          Format.eprintf "simplify_let_cont_handler\n%!";
+          Format.eprintf "Environment for %a:@ %a@ \nParams:@ %a\n%!"
             Continuation.print cont
             T.Typing_env.print (E.get_typing_environment env)
             (Format.pp_print_list ~pp_sep:Format.pp_print_space
               Flambda.Typed_parameter.print) handler.params;
-*)
           let arg_tys, new_env =
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
@@ -707,10 +704,12 @@ and simplify_let_cont env r ~body
       let body, r =
         simplify_one_handler env r ~name:new_cont ~handler:new_handler ~body
       in
+(*
       let r =
         R.update_all_continuation_use_environments r
           ~if_present_in_env:name ~then_add_to_env:(new_cont, ty)
       in
+*)
       body, r
     end
   | Recursive handlers ->
