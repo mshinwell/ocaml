@@ -343,28 +343,6 @@ let environment_for_let_cont_handler ~env _cont
         end
       end;
 *)
-(*
-      let env_extension, ty =
-        let env_extension, ty =
-          (* CR mshinwell: More thought required.  The order of arguments
-             to [meet] is important: if there are two [Type_of]s, then the
-             one from the first type is the one which sticks (as we want
-             for relations between parameters).
-             It seems like instead we should try to work out how to remove
-             this meet entirely. *)
-          T.meet ~resolver:(E.resolver env)
-            (E.get_typing_environment env, param_ty)
-            (E.get_typing_environment env, arg_ty)
-        in
-        env_extension, ty
-      in
-      let env = E.extend_typing_environment env ~env_extension in
-      let arg_ty =
-        T.adjust_variables arg_ty ~f:(fun var : T.variable_adjustment ->
-          Keep (Freshening.apply_variable freshening var))
-      in
-      let param = Typed_parameter.with_type param arg_ty in
-*)
       E.add_variable env (Typed_parameter.var param)
         (Typed_parameter.ty param))
     (E.set_freshening env freshening)
@@ -1367,9 +1345,13 @@ Format.eprintf "Body for inlining:@ %a\n@ Freshening: %a\n%!"
         | None -> K.inlinable_and_specialisable ~args_with_tys
         | Some _ -> K.only_specialisable ~args_with_tys
       in
-      R.use_continuation r env cont
-        ~params:(Continuation_approx.params cont_approx)
-        kind
+      let params =
+        List.map (fun param ->
+            Flambda.Typed_parameter.map_var param ~f:(fun var ->
+              Freshening.apply_variable (E.freshening env) var))
+          (Continuation_approx.params cont_approx)
+      in
+      R.use_continuation r env cont ~params kind
     in
     let trap_action, r =
       match trap_action with

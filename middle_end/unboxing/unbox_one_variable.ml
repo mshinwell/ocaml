@@ -20,7 +20,7 @@ module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module T = Flambda_type
 
-let generate_stubs = false
+let generate_stubs = true
 
 type unboxing_spec = {
   constant_ctors : Immediate.Set.t;

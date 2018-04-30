@@ -30,6 +30,10 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   | uses ->
     let scope_level = Continuation_uses.definition_scope_level cont_uses in
     let params = Continuation_uses.params cont_uses in
+    Format.eprintf ">>> param_types_and_body_env_opt %a, params %a\n%!"
+      Continuation.print (Continuation_uses.continuation cont_uses)
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Flambda.Typed_parameter.print) params;
     let arity = Flambda.Typed_parameter.List.arity params in
     let arg_tys_with_env_extensions, joined_env_extension =
       List.fold_left
@@ -69,7 +73,24 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
                 T.rename_variables ty canonical_names_for_args_to_params)
               canonical_names_and_resolved_types_for_args
           in
+Format.eprintf "Canonical names and resolved arg types:@ %a\n%!"
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space
+    (fun ppf ((canonical_name, _ty), ty) ->
+      Format.fprintf ppf "@[%a %a@]"
+        (Misc.Stdlib.Option.print Variable.print) canonical_name
+        T.print ty))
+  (List.combine canonical_names_and_resolved_types_for_args arg_tys);
           let use_env = Continuation_uses.Use.typing_env use in
+          let use_env =
+            List.fold_left (fun use_env param ->
+                (* XXX For recursive continuations the params should already
+                   be in the env *)
+                TE.add use_env (Flambda.Typed_parameter.name param)
+                  (Scope_level.next scope_level)
+                  (Definition (Flambda.Typed_parameter.ty param)))
+              use_env
+              params
+          in
           let use_env_extension =
             TE.cut use_env
               ~existential_if_defined_at_or_later_than:
@@ -125,6 +146,8 @@ Format.eprintf "Joined env before diffing is:@ %a\n%!"
                   freshened_arg_ty, env_extension
                 | _ ->
                   assert (Name.Map.is_empty opening_existentials_freshening);
+Format.eprintf "Use env, for case 2, is:@ %a\n%!"
+  TE.print use_env;
                   let env_extension =
                     TEE.restrict_names_to_those_occurring_in_types
                       env_extension use_env [arg_ty]
