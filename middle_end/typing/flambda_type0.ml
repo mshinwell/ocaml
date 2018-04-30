@@ -1854,7 +1854,7 @@ result
       rename_variables_env_extension subst env_extension
     in
     if env_extension == env_extension' then immediate_case
-    else { env_extension; }
+    else { env_extension = env_extension'; }
 
   and rename_variables_blocks subst (blocks : _ Or_unknown.t) =
     match blocks with
@@ -1933,7 +1933,7 @@ result
       rename_variables_env_extension subst env_extension
     in
     if env_extension == env_extension' then discriminant_case
-    else { env_extension; }
+    else { env_extension = env_extension'; }
 
   and rename_variables_set_of_closures subst
         (({ closures; closure_elements; } : set_of_closures)
