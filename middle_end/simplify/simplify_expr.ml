@@ -292,10 +292,10 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
                   E.replace_meet_variable env scrutinee scrutinee_ty
                 | Symbol _ -> env
               in
-  (*
-  Format.eprintf "Environment for %a switch arm:@ %a\n%!"
-    Continuation.print cont E.print env;
-  *)
+  Format.eprintf "Environment for %a switch arm (level %a):@ %a\n%!"
+    Continuation.print cont
+    Scope_level.print (E.continuation_scope_level env)
+    E.print env;
               simplify_continuation_use_cannot_inline env r cont
                 ~params:[]
             in
@@ -633,10 +633,13 @@ and simplify_let_cont env r ~body
   (* CR mshinwell: Is _unfreshened_name redundant? *)
   let body_env =
     let env = E.set_freshening env freshening in
-    Continuation.Map.fold (fun name (_unfreshened_name, cont_approx) env ->
-        E.add_continuation env name cont_approx)
-      conts_and_types
-      env
+    let env =
+      Continuation.Map.fold (fun name (_unfreshened_name, cont_approx) env ->
+          E.add_continuation env name cont_approx)
+        conts_and_types
+        env
+    in
+    E.increment_continuation_scope_level env
   in
   let body, r = simplify_expr body_env r body in
   begin match handlers with
@@ -1264,9 +1267,10 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
       ~(args : Simple.t list) : Expr.t * R.t =
   let original_cont = cont in
   let original_args = args in
-  Format.eprintf "simplify_apply_cont %a (%a)\n%!"
+  Format.eprintf "simplify_apply_cont %a (%a) in env:@ %a\n%!"
     Continuation.print cont
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args;
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args
+    E.print env;
   let cont = freshen_continuation env cont in
   let cont_approx = E.find_continuation env cont in
   let cont = Continuation_approx.name cont_approx in
@@ -1374,6 +1378,9 @@ Format.eprintf "Body for inlining:@ %a\n@ Freshening: %a\n%!"
         let trap_action, r = freshen_trap_action env r trap_action in
         Some trap_action, r
     in
+  Format.eprintf "END OF simplify_apply_cont %a (%a)\n%!"
+    Continuation.print cont
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args;
     Apply_cont (cont, trap_action, args), r
 
 and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =

@@ -309,7 +309,7 @@ end) = struct
     in
     t, sublevel
 
-  let min_level_for_new_binding t =
+  let _min_level_for_new_binding t =
     let all_levels = Scope_level.Map.keys t.levels_to_entries in
     match Scope_level.Set.max_elt_opt all_levels with
     | None -> Scope_level.initial
@@ -326,7 +326,7 @@ end) = struct
     | Existing_equation_must_be_more_precise ->
       Format.fprintf ppf "Existing_equation_must_be_more_precise"
 
-  let invariant_for_any_new_binding t name level
+  let invariant_for_any_new_binding t name _level
         (entry : typing_environment_entry) =
     let free_names =
       match entry with
@@ -339,7 +339,7 @@ end) = struct
         Name.print name
         print_typing_environment_entry entry
     end;
-    (* CR mshinwell: Unsure about levels for symbols yet *)
+    (* CR mshinwell: Unsure about levels for symbols yet
     let min_level = min_level_for_new_binding t in
     if (not (Scope_level.equal level Scope_level.for_symbols))
       && Scope_level.(<) level min_level
@@ -352,6 +352,7 @@ end) = struct
         Scope_level.print min_level
         print_typing_environment t
     end;
+*)
     match find_opt t name with
     | None ->
       begin match entry with
@@ -729,7 +730,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     in
     t
 
-  let add_equation t name ty =
+  let add_equation t name scope_level ty =
     if not (mem t name) then begin
       Misc.fatal_errorf "Typing_env.replace_meet: name %a not bound in:@ %a"
         Name.print name
@@ -738,7 +739,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     let env_extension =
       Typing_env_extension.add_equation Typing_env_extension.empty name ty
     in
-    add_or_meet_env_extension t env_extension (max_level t)
+    add_or_meet_env_extension t env_extension scope_level
 
   let cut t ~existential_if_defined_at_or_later_than : env_extension =
     (* CR mshinwell: Add a split which only returns one map, the side we

@@ -89,7 +89,7 @@ module type S = sig
       environment.  The actual type of the added equation will be the meet of
       the current best type specified by the environment for the given name
       with the supplied type. *)
-  val add_equation : t -> Name.t -> flambda_type -> t
+  val add_equation : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
   (** Ensure that a binding is not present in an environment.  This function 
       is idempotent. *)

@@ -92,8 +92,9 @@ Format.eprintf "Cutting environment so existential at or later than \
         ([], None)
         uses
     in
-Format.eprintf "Joined env extension is:@ %a\n%!"
-  (Misc.Stdlib.Option.print TEE.print) joined_env_extension;
+Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
+  (Misc.Stdlib.Option.print TEE.print) joined_env_extension
+  TE.print default_env;
     let joined_env, opening_existentials_freshening =
       match joined_env_extension with
       | None -> default_env, Name.Map.empty
@@ -165,7 +166,7 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
           in
           let joined_env =
             TE.add_equation joined_env (Flambda.Typed_parameter.name param)
-              joined_ty
+              (Scope_level.next scope_level) joined_ty
           in
           joined_ty :: joined_arg_tys, joined_env)
         ([], joined_env)

@@ -251,7 +251,8 @@ end = struct
 
   let replace_meet_variable t var ty =
     let typing_environment =
-      TE.add_equation t.typing_environment (Name.var var) ty
+      TE.add_equation t.typing_environment (Name.var var)
+        t.continuation_scope_level ty
     in
     { t with typing_environment; }
 
@@ -265,7 +266,6 @@ end = struct
   let add_symbol t sym ty =
     let typing_environment =
       TE.add t.typing_environment (Name.symbol sym)
-        (* Scope_level.for_symbols *)
         t.continuation_scope_level
         (Definition ty)
     in
@@ -273,7 +273,8 @@ end = struct
 
   let add_equation_symbol t sym ty =
     let typing_environment =
-      TE.add_equation t.typing_environment (Name.symbol sym) ty
+      TE.add_equation t.typing_environment (Name.symbol sym)
+        t.continuation_scope_level ty
     in
     { t with typing_environment; }
 

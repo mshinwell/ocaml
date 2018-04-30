@@ -358,7 +358,6 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
         Continuation_approx.create_unknown ~name:computation.exception_cont
           ~params:(Simplify_aux.params_for_exception_handler ())
       in
-      let default_env0 = env in
       let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
         let env =
@@ -393,33 +392,32 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
 *)
 Format.eprintf "TOPLEVEL:@ \n%a\n"
   Flambda.Expr.print expr;
-Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
-  Continuation.print name E.print default_env0;
+Format.eprintf "env (cont %a) is@ %a\n\n%!"
+  Continuation.print name E.print env;
       let env =
+        let env = E.increment_continuation_scope_level env in
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
 Format.eprintf "Adding lifted constant %a\n%!" Symbol.print symbol;
             E.add_symbol env symbol ty)
           lifted_constants
           env
       in
-      (* CR mshinwell: tidy all these environments up *)
-      let default_env = E.get_typing_environment env in
       let _args_types, new_env, _env_extension =
+        (* CR mshinwell: move to auxiliary function; share with
+           [Simplify_named]? *)
         let default_env =
-          (* CR mshinwell: move to auxiliary function; share with
-             [Simplify_named] *)
           List.fold_left (fun env param ->
               let var = Flambda.Typed_parameter.var param in
-              let scope_level = E.continuation_scope_level default_env0 in
+              let scope_level = Scope_level.next Scope_level.initial in
               let ty = Flambda.Typed_parameter.ty param in
               T.Typing_env.add env (Name.var var) scope_level (Definition ty))
-            default_env
+            (E.get_typing_environment env)
             return_cont_params
         in
         try
           Join_point.param_types_and_body_env continuation_uses
             ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
-            (E.freshening default_env0)
+            (E.freshening env)
             ~default_env
         with Misc.Fatal_error as exn -> begin
           Format.eprintf "\n%sContext: Term resulting from \
@@ -442,7 +440,6 @@ Format.eprintf "Args for %a: %a\n%!"
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
 *)
-      let env = E.increment_continuation_scope_level env in
 (*
       assert (List.for_all2 (fun (_var, kind1) ty ->
           Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
@@ -467,7 +464,6 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
             computed_values = computation.computed_values;
           } : Program_body.computation)
       in
-      let env = E.decrement_continuation_scope_level env in
       env, computation, R.newly_imported_symbols r, lifted_constants
   in
   let env =
@@ -477,17 +473,6 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   in
   let unreachable, env, static_structure =
     simplify_static_structure env recursive defn.static_structure
-  in
-  let typing_env = E.get_typing_environment env in
-  let typing_env_extension =
-    T.Typing_env.cut typing_env
-      ~existential_if_defined_at_or_later_than:
-        (Scope_level.next Scope_level.initial)
-  in
-  let env =
-    E.replace_typing_environment env
-      (T.Typing_env.add_or_meet_env_extension typing_env
-        typing_env_extension (T.Typing_env.max_level typing_env))
   in
   (* CR mshinwell: [unreachable] should also be set to [true] if
      [computation] is [Some (Invalid _)]. *)
