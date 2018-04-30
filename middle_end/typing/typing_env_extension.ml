@@ -204,10 +204,12 @@ end) = struct
     restrict_to_names t (
       Name_occurrences.create_from_set_in_types (defined_names t))
 
-  let restrict_names_to_those_occurring_in_types t env tys =
+  let restrict_names_to_those_occurring_in_types t env env_allowed_names tys =
     let free_names = free_names_transitive_list t env tys in
-Format.eprintf "Restricting to %a\n%!" Name_occurrences.print free_names;
-    restrict_to_names t free_names
+    let env_allowed_names = Typing_env.domain env_allowed_names in
+    let allowed_names = Name_occurrences.union free_names env_allowed_names in
+Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
+    restrict_to_names t allowed_names
 
   type fold_info =
     | Definition_in_extension of T.t

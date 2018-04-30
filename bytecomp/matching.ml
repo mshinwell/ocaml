@@ -2387,16 +2387,11 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
           match
             (cstr.cstr_consts, cstr.cstr_nonconsts, consts, nonconsts)
           with
-          | (1, 1, [0, act1], [{ sw_tag = 0; sw_size = _; }, act2]) ->
-              if not Config.flambda then begin
-                (* Typically, match on lists, will avoid isint primitive in that
-                   case *)
-                Lifthenelse(arg, act2, act1)
-              end else begin
-                let zero = Lconst (Const_base (Const_int 0)) in
-                Lifthenelse (Lprim (Pintcomp Cne, [arg; zero], loc),
-                  act2, act1) 
-              end
+          | (1, 1, [0, act1], [{ sw_tag = 0; sw_size = _; }, act2])
+              when not Config.flambda ->
+              (* Typically, match on lists, will avoid isint primitive in that
+                  case *)
+              Lifthenelse(arg, act2, act1)
           | (n,0,_,[])  -> (* The type defines constant constructors only *)
               call_switcher loc fail_opt arg 0 (n-1) consts
           | (n, _, _, _) ->

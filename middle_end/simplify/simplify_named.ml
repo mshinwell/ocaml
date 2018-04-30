@@ -138,7 +138,7 @@ let simplify_set_of_closures original_env r
       in
       let result_env_extension =
         T.Typing_env_extension.restrict_names_to_those_occurring_in_types
-          result_env_extension default_env result
+          result_env_extension default_env default_env result
       in
       result, result_env_extension
     in

@@ -76,11 +76,17 @@ end) = struct
         (Misc_color.reset ())
         Export_id.print export_id
 
+  let unicode = true  (* CR mshinwell: move elsewhere *)
+
   let print_unknown_or_join print_contents ppf (o : _ unknown_or_join) =
     let colour = Misc_color.bold_red () in
     match o with
     | Unknown -> Format.fprintf ppf "%sT%s" colour (Misc_color.reset ())
-    | Join [] -> Format.fprintf ppf "%s_|_%s" colour (Misc_color.reset ())
+    | Join [] ->
+      if unicode then
+        Format.fprintf ppf "%s\u{22a5}%s" colour (Misc_color.reset ())
+      else
+        Format.fprintf ppf "%s_|_%s" colour (Misc_color.reset ())
     | Join [contents] -> print_contents ppf contents
     | Join incompatibles ->
       Format.fprintf ppf "@[(Join_incompatible@ (%a))@]"
@@ -2224,12 +2230,114 @@ result
       with type env_extension := env_extension
       with type 'a ty := 'a ty
   end) -> struct
+    let add_env_extension env t env_extension_to_add : t =
+      let t, _canonical_name = Typing_env.resolve_aliases (env, t) in
+      match t.descr with
+      | Value (No_alias (Join of_kind_values)) ->
+        let of_kind_values =
+          List.map
+            (fun (of_kind_value : of_kind_value) : of_kind_value ->
+              match of_kind_value with
+              | Blocks_and_tagged_immediates { blocks; immediates;
+                  is_int; get_tag; } ->
+                let blocks : _ Or_unknown.t =
+                  match blocks with
+                  | Unknown -> Unknown
+                  | (Known blocks) as blocks' ->
+                    let only_one_case =
+                      match Tag.Map.get_singleton blocks with
+                      | None -> false
+                      | Some (_, Blocks { by_length; }) ->
+                        Targetint.OCaml.Map.cardinal by_length = 1
+                    in
+                    if only_one_case then blocks'
+                    else
+                      let blocks =
+                        Tag.Map.map
+                          (fun ((Blocks { by_length }) : block_cases)
+                                : block_cases ->
+                            let by_length =
+                              Targetint.OCaml.Map.map
+                                (fun (block : singleton_block)
+                                      : singleton_block ->
+                                  let env_extension =
+                                    Typing_env_extension.meet
+                                      block.env_extension env_extension_to_add
+                                  in
+                                  { block with env_extension; })
+                                by_length
+                            in
+                            Blocks { by_length; })
+                          blocks
+                      in
+                      Known blocks
+                in
+                let immediates : _ Or_unknown.t =
+                  match immediates with
+                  | Unknown -> Unknown
+                  | Known imm_map ->
+                    if Immediate.Map.cardinal imm_map <= 1 then immediates
+                    else
+                      let imm_map =
+                        Immediate.Map.map
+                          (fun ({ env_extension; } : immediate_case)
+                                : immediate_case ->
+                            let env_extension =
+                              Typing_env_extension.meet
+                                env_extension env_extension_to_add
+                            in
+                            { env_extension; })
+                          imm_map
+                      in
+                      Known imm_map
+                in
+                Blocks_and_tagged_immediates { blocks; immediates; is_int;
+                  get_tag; }
+              | Boxed_number _ | Closures _ | String _ -> of_kind_value)
+            of_kind_values
+        in
+        { t with
+          descr = Value (No_alias (Join of_kind_values));
+        }
+      | Fabricated (No_alias (Join of_kind_fabricateds)) ->
+        let of_kind_fabricateds =
+          List.map
+            (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
+              match of_kind_fabricated with
+              | Discriminant discriminant_map ->
+                if Discriminant.Map.cardinal discriminant_map <= 1 then
+                  of_kind_fabricated
+                else
+                  let discriminant_map =
+                    Discriminant.Map.map
+                      (fun ({ env_extension; } : discriminant_case)
+                            : discriminant_case ->
+                        let env_extension =
+                          Typing_env_extension.meet
+                            env_extension env_extension_to_add
+                        in
+                        { env_extension; })
+                      discriminant_map
+                  in
+                  Discriminant discriminant_map
+              | Set_of_closures _
+              | Closure _ -> of_kind_fabricated)
+            of_kind_fabricateds
+        in
+        { t with
+          descr = Fabricated (No_alias (Join of_kind_fabricateds));
+        }
+      | Value (Type _ | Equals _ | No_alias Unknown)
+      | Fabricated (Type _ | Equals _ | No_alias Unknown) -> t
+      | Naked_number _ -> t
+
     let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
       match uj with
       | Join [] -> true
       | Unknown | Join _ -> false
 
     let rec join_on_unknown_or_join env env_extension1 env_extension2
+          ~add_env_extension
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
@@ -2237,6 +2345,9 @@ result
       else
         match uj1, uj2 with
         | Unknown, _ | _, Unknown -> Unknown
+        | Join [], Join [] -> Join []
+        | Join [], _ -> Join (add_env_extension uj2 env_extension2)
+        | _, Join [] -> Join (add_env_extension uj1 env_extension1)
         | Join of_kind_foos1, Join of_kind_foos2 ->
           (* We rely on the invariant in flambda_type0_intf.ml.
              Everything in [of_kind_foos1] is mutually incompatible with each
@@ -2295,6 +2406,7 @@ result
         (* CR mshinwell: The symmetrical cases ("is unknown") should be
            present on the [meet] function, below. *)
         | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+          (* CR mshinwell: Should we push down the env extension here? *)
           Equals name1
         | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
           Equals name2

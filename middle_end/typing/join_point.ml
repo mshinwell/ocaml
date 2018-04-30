@@ -132,6 +132,7 @@ Format.eprintf "Joined env before diffing is:@ %a\n%!"
             | [_] -> TEE.empty
             | _ -> TEE.diff env_extension joined_env
           in
+Format.eprintf "Diffed env extension:@ %a\n%!" TEE.print env_extension;
           let arg_tys =
             List.map (fun arg_ty ->
                 match uses with
@@ -139,19 +140,29 @@ Format.eprintf "Joined env before diffing is:@ %a\n%!"
                   let freshened_arg_ty =
                     T.rename_variables arg_ty opening_existentials_freshening
                   in
+(* XXX This is still restricting too much
+   ...ah, it's because TE.domain isn't right for the CSE ones.  It's probably
+   TE.domain for non-CSE ones and then the names on the right-hand side of the
+   CSE ones
                   let env_extension =
+                    (* CR mshinwell: rename this function *)
                     TEE.restrict_names_to_those_occurring_in_types
-                      env_extension joined_env [freshened_arg_ty]
+                      env_extension joined_env default_env [freshened_arg_ty]
                   in
+*)
+Format.eprintf "(1) Restricted env extension:@ %a\n%!" TEE.print env_extension;
                   freshened_arg_ty, env_extension
                 | _ ->
                   assert (Name.Map.is_empty opening_existentials_freshening);
 Format.eprintf "Use env, for case 2, is:@ %a\n%!"
   TE.print use_env;
+(*
                   let env_extension =
                     TEE.restrict_names_to_those_occurring_in_types
-                      env_extension use_env [arg_ty]
+                      env_extension use_env default_env [arg_ty]
                   in
+*)
+Format.eprintf "(2) Restricted env extension:@ %a\n%!" TEE.print env_extension;
                   arg_ty, env_extension)
               arg_tys
           in
@@ -175,7 +186,15 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
   TEE.print env_extension;
 *)
                 try
+let ty =
                   T.join joined_env TEE.empty env_extension joined_ty arg_ty
+in
+Format.eprintf "Joining@ JT %a with@ AT %a in@ TEE %a -->@ %a\n%!"
+  T.print joined_ty
+  T.print arg_ty
+  TEE.print env_extension
+  T.print ty;
+ty
                 with Misc.Fatal_error -> begin
                   Format.eprintf "\n%sContext is: parameter %a%s@ in@ %a\n"
                     (Misc_color.bold_red ())
@@ -199,9 +218,15 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
     Some (List.rev joined_arg_tys_rev, joined_env, joined_env_extension)
 
 let param_types_and_body_env uses freshening ~arity ~default_env =
-  match param_types_and_body_env_opt uses freshening ~default_env with
-  | None -> T.bottom_types_from_arity arity, default_env, TEE.empty
-  | Some (arg_tys, env, env_extension) ->
-    match env_extension with
-    | None -> arg_tys, env, TEE.empty
-    | Some env_extension -> arg_tys, env, env_extension
+  let arg_tys, env, env_extension =
+    match param_types_and_body_env_opt uses freshening ~default_env with
+    | None -> T.bottom_types_from_arity arity, default_env, TEE.empty
+    | Some (arg_tys, env, env_extension) ->
+      match env_extension with
+      | None -> arg_tys, env, TEE.empty
+      | Some env_extension -> arg_tys, env, env_extension
+  in
+  Format.eprintf "Final argument types for %a are:@ %a\n%!"
+    Continuation.print (Continuation_uses.continuation uses)
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_tys;
+  arg_tys, env, env_extension

@@ -94,6 +94,7 @@ module type S = sig
   val restrict_names_to_those_occurring_in_types
      : t
     -> typing_environment
+    -> typing_environment
     -> flambda_type list
     -> t
 
