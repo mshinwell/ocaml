@@ -35,17 +35,24 @@ module T0 = struct
   include Numbers.Int
 
   let for_symbols = 0
+
   let initial = for_symbols + 1
 
-  let next t =
+  let half_next t =
     t + 1
 
-  let prev t =
+  let next t =
+    t + 2
+
+  let half_prev t =
     if t <= initial then begin
       Misc.fatal_error "Cannot decrement continuation level past the \
         initial level"
     end;
     t - 1
+
+  let prev t =
+    half_prev (half_prev t)
 
   let (<) (t1 : t) t2 = t1 < t2
   let (>) (t1 : t) t2 = t1 > t2

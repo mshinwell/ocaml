@@ -426,7 +426,6 @@ and simplify_let_cont_handlers0 env r ~handlers
             end
           in
           let env = E.replace_typing_environment env new_env in
-          let env = E.increment_continuation_scope_level env in
           let r, handler =
             let r = R.create ~resolver:(E.resolver env) in
             simplify_let_cont_handler ~env ~r ~cont:cont' ~handler ~arg_tys
@@ -613,6 +612,9 @@ and simplify_let_cont env r ~body
     let env = E.set_freshening env freshening in
     let env =
       Continuation.Map.fold (fun name (_unfreshened_name, cont_approx) env ->
+Format.eprintf "ADDING %a at level %a\n%!"
+  Continuation.print name
+  Scope_level.print (E.continuation_scope_level env);
           E.add_continuation env name cont_approx)
         conts_and_types
         env
@@ -678,11 +680,18 @@ and simplify_let_cont env r ~body
         Continuation_approx.create_unknown ~name:new_cont
           ~params:new_handler.params
       in
+Format.eprintf "WRAPPERS (orig %a new %a) at level %a\n%!"
+  Continuation.print name
+  Continuation.print new_cont
+  Scope_level.print (E.continuation_scope_level env);
       let body, r =
+        let env = E.decrement_continuation_scope_level_by_half env in
         let env = E.add_continuation env new_cont ty in
+        let env = E.increment_continuation_scope_level_by_half env in
         simplify_one_handler env r ~name ~handler:wrapper_handler ~body
       in
       let body, r =
+        let env = E.decrement_continuation_scope_level_by_half env in
         simplify_one_handler env r ~name:new_cont ~handler:new_handler ~body
       in
 (*
@@ -770,6 +779,7 @@ and simplify_let_cont env r ~body
                   Continuation_approx.create_unknown ~name:new_cont
                     ~params:new_handler.params
                 in
+                let env = E.increment_continuation_scope_level env in
                 let env = E.add_continuation env new_cont ty in
                 let update_use_env = (cont, (new_cont, ty)) :: update_use_env in
                 handlers, env, update_use_env)

@@ -35,6 +35,8 @@ end
 
 include S
 
+val half_prev : t -> t
+val half_next : t -> t
 val for_symbols : t
 
 module Sublevel : S

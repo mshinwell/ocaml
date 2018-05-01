@@ -30,8 +30,9 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   | uses ->
     let scope_level = Continuation_uses.definition_scope_level cont_uses in
     let params = Continuation_uses.params cont_uses in
-    Format.eprintf ">>> param_types_and_body_env_opt %a, params %a\n%!"
+    Format.eprintf ">>> param_types_and_body_env_opt %a, level %a, params %a\n%!"
       Continuation.print (Continuation_uses.continuation cont_uses)
+      Scope_level.print scope_level
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         Flambda.Typed_parameter.print) params;
     let arity = Flambda.Typed_parameter.List.arity params in
@@ -121,7 +122,7 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
       | None -> default_env, Name.Map.empty
       | Some joined_env_extension ->
         TE.add_or_meet_env_extension' default_env joined_env_extension
-          (TE.max_level default_env)
+          scope_level
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;
@@ -189,11 +190,13 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
 let ty =
                   T.join joined_env TEE.empty env_extension joined_ty arg_ty
 in
+(*
 Format.eprintf "Joining@ JT %a with@ AT %a in@ TEE %a -->@ %a\n%!"
   T.print joined_ty
   T.print arg_ty
   TEE.print env_extension
   T.print ty;
+*)
 ty
                 with Misc.Fatal_error -> begin
                   Format.eprintf "\n%sContext is: parameter %a%s@ in@ %a\n"
@@ -215,6 +218,8 @@ ty
         (List.combine params (
           List.combine bottom_arg_tys arg_tys_with_env_extensions))
     in
+Format.eprintf "Final environment for handler:@ %a\n%!"
+  TE.print joined_env;
     Some (List.rev joined_arg_tys_rev, joined_env, joined_env_extension)
 
 let param_types_and_body_env uses freshening ~arity ~default_env =

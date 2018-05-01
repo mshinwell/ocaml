@@ -181,6 +181,18 @@ end = struct
       continuation_scope_level = Scope_level.prev t.continuation_scope_level;
     }
 
+  let increment_continuation_scope_level_by_half t =
+    { t with
+      continuation_scope_level =
+        Scope_level.half_next t.continuation_scope_level;
+    }
+
+  let decrement_continuation_scope_level_by_half t =
+    { t with
+      continuation_scope_level =
+        Scope_level.half_prev t.continuation_scope_level;
+    }
+
   let const_float_prop _t =
     (* CR mshinwell: Does this need to be in the environment?
        Also, the naming should be made consistent with Clflags *)
