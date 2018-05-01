@@ -30,11 +30,13 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   | uses ->
     let scope_level = Continuation_uses.definition_scope_level cont_uses in
     let params = Continuation_uses.params cont_uses in
-    Format.eprintf ">>> param_types_and_body_env_opt %a, level %a, params %a\n%!"
+    Format.eprintf ">>> param_types_and_body_env_opt %a, level %a, params %a, \
+        default_env@ %a\n%!"
       Continuation.print (Continuation_uses.continuation cont_uses)
       Scope_level.print scope_level
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Flambda.Typed_parameter.print) params;
+        Flambda.Typed_parameter.print) params
+      TE.print default_env;
     let arity = Flambda.Typed_parameter.List.arity params in
     let arg_tys_with_env_extensions, joined_env_extension =
       List.fold_left

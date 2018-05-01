@@ -685,13 +685,10 @@ Format.eprintf "WRAPPERS (orig %a new %a) at level %a\n%!"
   Continuation.print new_cont
   Scope_level.print (E.continuation_scope_level env);
       let body, r =
-        let env = E.decrement_continuation_scope_level_by_half env in
         let env = E.add_continuation env new_cont ty in
-        let env = E.increment_continuation_scope_level_by_half env in
         simplify_one_handler env r ~name ~handler:wrapper_handler ~body
       in
       let body, r =
-        let env = E.decrement_continuation_scope_level_by_half env in
         simplify_one_handler env r ~name:new_cont ~handler:new_handler ~body
       in
 (*
