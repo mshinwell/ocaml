@@ -210,7 +210,8 @@ module type S = sig
       extension being added/joined into the environment [t]; the extensions
       [ext1] and [ext2] are pushed down onto resulting joined types. *)
   val add_or_join_env_extension
-     : t
+     : ?don't_freshen:unit
+    -> t
     -> env_extension
     -> env_extension
     -> env_extension

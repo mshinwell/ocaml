@@ -282,18 +282,26 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     else
       let t =
         let scope_level = Scope_level.next (TE.max_level env) in
-        let env = TE.add_or_join_env_extension env t1' t2' t1 scope_level in
-        let env = TE.add_or_join_env_extension env t1' t2' t2 scope_level in
+        let env =
+          TE.add_or_join_env_extension ~don't_freshen:()
+            env t1' t2' t1 scope_level
+        in
+        let env =
+          TE.add_or_join_env_extension ~don't_freshen:()
+            env t1' t2' t2 scope_level
+        in
         TE.cut env ~existential_if_defined_at_or_later_than:scope_level
       in
 Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
-      let equations_in_t1_on_env = equations_on_env t1 in
-      let equations_in_t2_on_env = equations_on_env t2 in
+      let _equations_in_t1_on_env = equations_on_env t1 in
+      let _equations_in_t2_on_env = equations_on_env t2 in
+(*
       let allowed_names =
         Name_occurrences.create_from_set_in_types (
           Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env)
       in
       let t = restrict_to_names t allowed_names in
+*)
       (* We don't need to filter the types within entries ([Equation]s or
          [Definition]s) in [t].  Any entry originally containing a reference
          to a name defined in exactly one of [t1] or [t2] should have had such

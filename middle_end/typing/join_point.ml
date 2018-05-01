@@ -75,6 +75,18 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
             List.map (fun (_canonical_name, ty) ->
                 T.rename_variables ty canonical_names_for_args_to_params)
               canonical_names_and_resolved_types_for_args
+(*
+            List.map (fun (canonical_name, ty) ->
+                match canonical_name with
+                | None ->
+                  T.rename_variables ty canonical_names_for_args_to_params
+                | Some canonical_name ->
+                  let ty =
+                    T.alias_type_of (T.kind ty) (Name.var canonical_name)
+                  in
+                  T.rename_variables ty canonical_names_for_args_to_params)
+              canonical_names_and_resolved_types_for_args
+*)
           in
 Format.eprintf "Canonical names and resolved arg types:@ %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space
@@ -128,6 +140,8 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;
+Format.eprintf "Opening existentials freshening:@ %a\n%!"
+  (Name.Map.print Name.print) opening_existentials_freshening;
     let arg_tys_with_env_extensions =
       List.map (fun (arg_tys, use_env, env_extension) ->
           let env_extension =
@@ -138,11 +152,11 @@ Format.eprintf "Joined env before diffing is:@ %a\n%!"
 Format.eprintf "Diffed env extension:@ %a\n%!" TEE.print env_extension;
           let arg_tys =
             List.map (fun arg_ty ->
+                let freshened_arg_ty =
+                  T.rename_variables arg_ty opening_existentials_freshening
+                in
                 match uses with
                 | [_] ->
-                  let freshened_arg_ty =
-                    T.rename_variables arg_ty opening_existentials_freshening
-                  in
 (* XXX This is still restricting too much
    ...ah, it's because TE.domain isn't right for the CSE ones.  It's probably
    TE.domain for non-CSE ones and then the names on the right-hand side of the
@@ -156,7 +170,9 @@ Format.eprintf "Diffed env extension:@ %a\n%!" TEE.print env_extension;
 Format.eprintf "(1) Restricted env extension:@ %a\n%!" TEE.print env_extension;
                   freshened_arg_ty, env_extension
                 | _ ->
+(*
                   assert (Name.Map.is_empty opening_existentials_freshening);
+*)
 Format.eprintf "Use env, for case 2, is:@ %a\n%!"
   TE.print use_env;
 (*
@@ -166,7 +182,7 @@ Format.eprintf "Use env, for case 2, is:@ %a\n%!"
                   in
 *)
 Format.eprintf "(2) Restricted env extension:@ %a\n%!" TEE.print env_extension;
-                  arg_ty, env_extension)
+                  freshened_arg_ty, env_extension)
               arg_tys
           in
           arg_tys)
@@ -192,13 +208,11 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
 let ty =
                   T.join joined_env TEE.empty env_extension joined_ty arg_ty
 in
-(*
 Format.eprintf "Joining@ JT %a with@ AT %a in@ TEE %a -->@ %a\n%!"
   T.print joined_ty
   T.print arg_ty
   TEE.print env_extension
   T.print ty;
-*)
 ty
                 with Misc.Fatal_error -> begin
                   Format.eprintf "\n%sContext is: parameter %a%s@ in@ %a\n"
@@ -220,7 +234,9 @@ ty
         (List.combine params (
           List.combine bottom_arg_tys arg_tys_with_env_extensions))
     in
-Format.eprintf "Final environment for handler:@ %a\n%!"
+Format.eprintf "Final environment for handler (params %a):@ %a\n%!"
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space
+    Flambda.Typed_parameter.print) params
   TE.print joined_env;
     Some (List.rev joined_arg_tys_rev, joined_env, joined_env_extension)
 

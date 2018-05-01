@@ -588,31 +588,13 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
-  let rec add_or_meet_or_join_env_extension t env_extension scope_level
-        ~meet_or_join =
+  (* XXX [don't_freshen] needs sorting properly *)
+  let rec add_or_meet_or_join_env_extension ?don't_freshen t env_extension
+        scope_level ~meet_or_join =
     let rename_name (name : Name.t) freshening =
       match Name.Map.find name freshening with
       | exception Not_found -> name
       | name -> name
-    in
-    let add_definition t freshening (name : Name.t) ty =
-      let ty = T.rename_variables ty freshening in
-      let freshening, fresh_name =
-        let fresh_name = Name.rename name in
-        let freshening = Name.Map.add name fresh_name freshening in
-        freshening, fresh_name
-      in
-(*
-Format.eprintf "Opening existential %a -> %a\n%!"
-  Name.print name Name.print fresh_name;
-*)
-      let t = add t fresh_name scope_level (Definition ty) in
-      let t =
-        { t with
-          were_existentials = Name.Set.add fresh_name t.were_existentials;
-        }
-      in
-      freshening, t
     in
     let add_equation t freshening name ty =
       let name = rename_name name freshening in
@@ -627,6 +609,35 @@ Format.eprintf "Opening existential %a -> %a\n%!"
             add_or_meet_env_extension' t new_env_extension scope_level
           in
           add t name scope_level (Equation new_ty)
+    in
+    let add_definition t freshening (name : Name.t) ty =
+      let ty = T.rename_variables ty freshening in
+      let freshening, fresh_name =
+        match don't_freshen with
+        | None ->
+          let fresh_name = Name.rename name in
+          let freshening = Name.Map.add name fresh_name freshening in
+          freshening, fresh_name
+        | Some () ->
+          freshening, name
+      in
+(*
+Format.eprintf "Opening existential %a -> %a\n%!"
+  Name.print name Name.print fresh_name;
+*)
+      if mem t fresh_name then
+        freshening, add_equation t freshening name ty
+      else
+        let t = add t fresh_name scope_level (Definition ty) in
+        let t =
+          match don't_freshen with
+          | None ->
+            { t with
+              were_existentials = Name.Set.add fresh_name t.were_existentials;
+            }
+          | Some () -> t
+        in
+        freshening, t
     in
     let add_cse t freshening bound_to prim =
       let bound_to = rename_name bound_to freshening in
@@ -705,9 +716,9 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     in
     t
 
-  let add_or_join_env_extension' t env_extension1 env_extension2
+  let add_or_join_env_extension' ?don't_freshen t env_extension1 env_extension2
         env_extension scope_level =
-    add_or_meet_or_join_env_extension t env_extension scope_level
+    add_or_meet_or_join_env_extension ?don't_freshen t env_extension scope_level
       ~meet_or_join:(fun env ty ~existing_ty ->
         let join_ty =
           Meet_and_join.join env env_extension1 env_extension2 ty existing_ty
@@ -722,10 +733,10 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         if strictly_more_precise then Some (join_ty, Typing_env_extension.empty)
         else None)
 
-  let add_or_join_env_extension t env_extension1 env_extension2
+  let add_or_join_env_extension ?don't_freshen t env_extension1 env_extension2
       env_extension scope_level =
     let t, _freshening =
-      add_or_join_env_extension' t env_extension1 env_extension2
+      add_or_join_env_extension' ?don't_freshen t env_extension1 env_extension2
         env_extension scope_level
     in
     t
