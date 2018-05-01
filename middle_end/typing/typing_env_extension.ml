@@ -286,6 +286,7 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         let env = TE.add_or_join_env_extension env t1' t2' t2 scope_level in
         TE.cut env ~existential_if_defined_at_or_later_than:scope_level
       in
+Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
       let equations_in_t1_on_env = equations_on_env t1 in
       let equations_in_t2_on_env = equations_on_env t2 in
       let allowed_names =

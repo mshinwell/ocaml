@@ -2230,6 +2230,7 @@ result
       with type env_extension := env_extension
       with type 'a ty := 'a ty
   end) -> struct
+(*
     let add_env_extension env t env_extension_to_add : t =
       let t, _canonical_name = Typing_env.resolve_aliases (env, t) in
       match t.descr with
@@ -2330,6 +2331,7 @@ result
       | Value (Type _ | Equals _ | No_alias Unknown)
       | Fabricated (Type _ | Equals _ | No_alias Unknown) -> t
       | Naked_number _ -> t
+*)
 
     let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
       match uj with
@@ -2337,7 +2339,7 @@ result
       | Unknown | Join _ -> false
 
     let rec join_on_unknown_or_join env env_extension1 env_extension2
-          ~add_env_extension
+(*          ~add_env_extension *)
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
@@ -2346,8 +2348,10 @@ result
         match uj1, uj2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Join [], Join [] -> Join []
+(*
         | Join [], _ -> Join (add_env_extension uj2 env_extension2)
         | _, Join [] -> Join (add_env_extension uj1 env_extension1)
+*)
         | Join of_kind_foos1, Join of_kind_foos2 ->
           (* We rely on the invariant in flambda_type0_intf.ml.
              Everything in [of_kind_foos1] is mutually incompatible with each
