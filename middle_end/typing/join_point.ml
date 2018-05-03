@@ -140,8 +140,6 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;
-Format.eprintf "Opening existentials freshening:@ %a\n%!"
-  (Name.Map.print Name.print) opening_existentials_freshening;
     let arg_tys_with_env_extensions =
       List.map (fun (arg_tys, use_env, env_extension) ->
           let env_extension =
@@ -234,6 +232,8 @@ ty
         (List.combine params (
           List.combine bottom_arg_tys arg_tys_with_env_extensions))
     in
+Format.eprintf "Opening existentials freshening:@ %a\n%!"
+  (Name.Map.print Name.print) opening_existentials_freshening;
 Format.eprintf "Final environment for handler (params %a):@ %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space
     Flambda.Typed_parameter.print) params

@@ -645,17 +645,19 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         Flambda_primitive.With_fixed_value.rename_names prim
           freshening
       in
-      let t = add t bound_to scope_level (CSE prim) in
-      let cse_to_names =
-        match
-          Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
-        with
-        | exception Not_found ->
+      match
+        Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
+      with
+      | exception Not_found ->
+        let t = add t bound_to scope_level (CSE prim) in
+        let cse_to_names =
           Flambda_primitive.With_fixed_value.Map.add prim bound_to
             t.cse_to_names
-        | _bound_to -> t.cse_to_names  (* As above, keep the outer binding. *)
-      in
-      { t with cse_to_names; }
+        in
+        { t with cse_to_names; }
+      | _bound_to ->
+        (* As above, keep the outer binding. *)
+        t
     in
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
