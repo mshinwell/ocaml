@@ -60,6 +60,17 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
     (Name.Map.print Name.print) subst;
   List.rev arg_tys_rev
 
+(* Seems like we may need to rename on a whole environment.
+   When x |-> y then definitions for x would just be left, but equations on
+   x (including CSE equations) would be rewritten to be on y.
+   Right-hand sides of CSE equations and normal bindings would be renamed.
+
+   Effectively there is a relational structure inside each use environment
+   which is on arguments to the continuation; this is transformed to a
+   relation which is structurally identical to the previous one but over
+   parameters.
+*)
+
 let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   match Continuation_uses.uses cont_uses with
   | [] -> None
