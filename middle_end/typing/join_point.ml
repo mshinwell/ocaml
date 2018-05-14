@@ -25,6 +25,9 @@ module TEE = Flambda_type.Typing_env_extension
 
 let transform_relations_on_arguments_to_relations_on_params ~use_env
       ~args_with_tys_this_use ~params =
+  Format.eprintf "params:@ %a\n%!"
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+      Flambda.Typed_parameter.print) params;
   Format.eprintf "args_with_tys_this_use:@ %a\n%!"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
       (fun ppf (arg, ty) ->
