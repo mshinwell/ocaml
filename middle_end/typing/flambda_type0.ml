@@ -2092,11 +2092,11 @@ result
     | Definition t ->
       let t' = rename_variables subst t in
       if t == t' then entry
-      else Definition t
+      else Definition t'
     | Equation t ->
       let t' = rename_variables subst t in
       if t == t' then entry
-      else Equation t
+      else Equation t'
     | CSE _prim ->
       (* CR mshinwell: implement this *)
       Misc.fatal_error "Not yet implemented"
@@ -2127,7 +2127,7 @@ result
                 rename_variables_typing_environment_entry subst entry
               in
               if name == name' && entry == entry' then datum
-              else name, entry)
+              else name', entry')
             by_sublevel)
         at_or_after_cut_point
     in
@@ -2152,7 +2152,7 @@ result
           if (not (name == name')) || (not (prim == prim')) then begin
             cse_changed := true
           end;
-          Flambda_primitive.With_fixed_value.Map.add prim name cse')
+          Flambda_primitive.With_fixed_value.Map.add prim' name' cse')
         cse
         Flambda_primitive.With_fixed_value.Map.empty
     in

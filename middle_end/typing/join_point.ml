@@ -25,7 +25,13 @@ module TEE = Flambda_type.Typing_env_extension
 
 let transform_relations_on_arguments_to_relations_on_params ~use_env
       ~args_with_tys_this_use ~params =
-  let _subst, arg_tys_rev =
+  Format.eprintf "args_with_tys_this_use:@ %a\n%!"
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+      (fun ppf (arg, ty) ->
+        Format.fprintf ppf "%a : %a"
+          (Misc.Stdlib.Option.print Simple.print) arg T.print ty))
+    args_with_tys_this_use;
+  let subst, arg_tys_rev =
     List.fold_left (fun (subst, arg_tys_rev) (param, (arg, arg_ty)) ->
         let arg_ty = T.rename_variables arg_ty subst in
         let aliases =
@@ -47,6 +53,8 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
       (Name.Map.empty, [])
       (List.combine params args_with_tys_this_use)
   in
+  Format.eprintf "Final substitution:@ %a\n%!"
+    (Name.Map.print Name.print) subst;
   List.rev arg_tys_rev
 
 let param_types_and_body_env_opt cont_uses _freshening ~default_env =
@@ -76,6 +84,7 @@ Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
   arg_tys;
           let use_env = Continuation_uses.Use.typing_env use in
+(*
           let use_env =
             List.fold_left (fun use_env param ->
                 (* XXX For recursive continuations the params should already
@@ -86,6 +95,7 @@ Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
               use_env
               params
           in
+*)
           let use_env_extension =
             TE.cut use_env
               ~existential_if_defined_at_or_later_than:
@@ -116,7 +126,7 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
       | None -> default_env, Name.Map.empty
       | Some joined_env_extension ->
         TE.add_or_meet_env_extension' default_env joined_env_extension
-          scope_level
+          (Scope_level.next scope_level)
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;
@@ -183,13 +193,15 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
   TEE.print env_extension;
 *)
                 try
-let ty =
-                  T.join joined_env TEE.empty env_extension joined_ty arg_ty
-in
-Format.eprintf "Joining@ JT %a with@ AT %a in@ TEE %a -->@ %a\n%!"
+Format.eprintf "Joining@ JT %a with@ (AT %a in@ TEE %a)@ in env %a"
   T.print joined_ty
   T.print arg_ty
   TEE.print env_extension
+  TE.print joined_env;
+let ty =
+                  T.join joined_env TEE.empty env_extension joined_ty arg_ty
+in
+Format.eprintf "-->@ %a\n%!"
   T.print ty;
 ty
                 with Misc.Fatal_error -> begin

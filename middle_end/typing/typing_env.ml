@@ -68,6 +68,8 @@ end) = struct
 
   let find_exn t name
         : flambda_type * Flambda_type0_internal_intf.binding_type =
+    (* CR mshinwell: Maybe this should cause a fatal error and we shouldn't
+       rely on catching the exception *)
     let _scope_level, entry = Name.Map.find name t.names_to_types in
     let binding_type : Flambda_type0_internal_intf.binding_type =
       if Name.Set.mem name t.were_existentials then Was_existential

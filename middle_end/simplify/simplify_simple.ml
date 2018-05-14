@@ -67,6 +67,10 @@ let simplify_simple env (simple : Simple.t) =
   | Name name ->
     let name = Freshening.apply_name (E.freshening env) name in
     let ty = E.find_name env name in
+(* Experiment: don't reify so that we preserve relations *)
+    Simple.name name, T.alias_type_of (T.kind ty) name
+(* The following works.  Maybe we could do this only for names which were
+   syntactically bound to constants.
     let reified =
       T.reify ~allow_free_variables:true
         (E.get_typing_environment env)
@@ -76,6 +80,7 @@ let simplify_simple env (simple : Simple.t) =
     | Term (simple, ty) -> simple, ty
     | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
+*)
 
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples

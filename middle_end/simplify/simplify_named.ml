@@ -69,6 +69,8 @@ let simplify_set_of_closures original_env r
         Continuation_approx.create_unknown ~name:continuation_param
           ~params:return_cont_params
       in
+Format.eprintf "function return continuation is at level %a\n%!"
+  Scope_level.print (E.continuation_scope_level closure_env);
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
           continuation_param cont_type
@@ -83,6 +85,7 @@ let simplify_set_of_closures original_env r
         Continuation_approx.create_unknown ~name:exn_continuation_param
           ~params:(Simplify_aux.params_for_exception_handler ())
       in
+      let closure_env = E.increment_continuation_scope_level closure_env in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
           exn_continuation_param cont_type
@@ -105,6 +108,9 @@ let simplify_set_of_closures original_env r
         ~f:(fun body_env ->
           assert (E.inside_set_of_closures_declaration
             function_decls.set_of_closures_origin body_env);
+          let body_env = E.increment_continuation_scope_level body_env in
+Format.eprintf "function body starts at level %a\n%!"
+  Scope_level.print (E.continuation_scope_level body_env);
           (* We don't need to collect the lifted constants separately; they
              will remain in [r]. *)
           let body, r, uses, _lifted_constants =
