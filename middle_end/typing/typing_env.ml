@@ -103,10 +103,10 @@ end) = struct
         | Export_id export_id ->
           match t.resolver export_id with
           | Some ty -> continue_resolving ty ~canonical_name
-          | None -> ty, None, Still_unresolved
+          | None -> ty, None, Name.Set.empty, Still_unresolved
       in
       match ty with
-      | No_alias _ -> ty, canonical_name, Resolved
+      | No_alias _ -> ty, canonical_name, names_seen, Resolved
       | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
       | Equals name -> resolve (Name_or_export_id.Name name)
     in
@@ -118,25 +118,15 @@ end) = struct
     resolve_aliases seen ~canonical_name:None ty
 
   let resolve_aliases_on_ty t ?bound_name ~force_to_kind ty =
-    let ty, canonical_name, _still_unresolved =
+    let ty, canonical_name, names_seen, _still_unresolved =
       resolve_aliases_on_ty0 t ?bound_name ~force_to_kind ty
     in
-    ty, canonical_name
+    ty, canonical_name, names_seen
 
-  let _resolve_aliases_and_squash_unresolved_names_on_ty t ?bound_name
-        ~force_to_kind ~unknown ty =
-    let ty, canonical_name, still_unresolved =
-      resolve_aliases_on_ty0 t ?bound_name ~force_to_kind ty
-    in
-    match still_unresolved with
-    | Resolved -> ty, canonical_name
-    | Still_unresolved -> unknown, canonical_name
-
-  (* CR mshinwell: choose this function or the one above *)
   let resolve_aliases_and_squash_unresolved_names_on_ty' env ?bound_name
         ~print_ty ~force_to_kind ty
         : _ unknown_or_join * (Name.t option) =
-    let ty, canonical_name, _still_unresolved =
+    let ty, canonical_name, _names_seen, _still_unresolved =
       try resolve_aliases_on_ty0 env ?bound_name ~force_to_kind ty
       with Misc.Fatal_error -> begin
         Format.eprintf "\n%sContext is: \
@@ -161,20 +151,20 @@ end) = struct
     match ty.descr with
     | Value ty_value ->
       let force_to_kind = force_to_kind_value in
-      let ty_value, canonical_name =
+      let ty_value, _names_seen, canonical_name =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
       in
-      { ty with descr = Value ty_value; }, canonical_name
+      { ty with descr = Value ty_value; }, _names_seen, canonical_name
     | Naked_number (ty_naked_number, kind) ->
       let force_to_kind = force_to_kind_naked_number kind in
-      let ty_naked_number, canonical_name =
+      let ty_naked_number, _names_seen, canonical_name =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
       in
       { ty with descr = Naked_number (ty_naked_number, kind); },
         canonical_name
     | Fabricated ty_fabricated ->
       let force_to_kind = force_to_kind_fabricated in
-      let ty_fabricated, canonical_name =
+      let ty_fabricated, _names_seen, canonical_name =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
       in
       { ty with descr = Fabricated ty_fabricated; }, canonical_name
@@ -773,4 +763,25 @@ Format.eprintf "Opening existential %a -> %a\n%!"
       last_equations_rev = [];
       cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
+
+  let all_aliases t ty =
+    match ty.descr with
+    | Value ty_value ->
+      let force_to_kind = force_to_kind_value in
+      let _ty_value, names_seen, _canonical_name =
+        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
+      in
+      names_seen
+    | Naked_number (ty_naked_number, kind) ->
+      let force_to_kind = force_to_kind_naked_number kind in
+      let _ty_naked_number, names_seen, _canonical_name =
+        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
+      in
+      names_seen
+    | Fabricated ty_fabricated ->
+      let force_to_kind = force_to_kind_fabricated in
+      let _ty_fabricated, names_seen, _canonical_name =
+        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
+      in
+      names_seen
 end

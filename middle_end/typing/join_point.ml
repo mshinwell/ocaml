@@ -23,7 +23,27 @@ module TEE = Flambda_type.Typing_env_extension
 (* CR-soon mshinwell: Consider lwhite's suggestion of doing the existential
    introduction at [Switch] time *)
 
-(* XXX Need to work out what to do re. freshening *)
+let transform_relations_on_arguments_to_relations_on_params ~use_env
+      ~args_with_tys_this_use ~params =
+  let _subst, arg_tys_rev =
+    List.fold_left (fun (subst, arg_tys_rev) (param, (arg, arg_ty)) ->
+        let arg_ty = T.rename_variables arg_ty subst in
+        let aliases =
+          match (arg : Simple.t) with
+          | Name arg -> Name.Set.add (TE.all_aliases use_env arg_ty) arg
+          | Const _ -> Name.Set.empty
+        in
+        let subst =
+          Name.Set.fold (fun alias subst ->
+              Name.Map.add alias param subst)
+            aliases
+            subst
+        in
+        subst, arg_ty::arg_tys_rev)
+      (List.combine params args_with_tys_this_use)
+  in
+  List.rev arg_tys_rev
+
 let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   match Continuation_uses.uses cont_uses with
   | [] -> None
@@ -42,59 +62,14 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
       List.fold_left
         (fun (arg_tys_with_env_extensions, joined_env_extension) use ->
           let use_env = Continuation_uses.Use.typing_env use in
-          let args_with_tys_this_use =
-            Continuation_uses.Use.args_with_tys use
-          in
-          let canonical_names_and_resolved_types_for_args =
-            List.map (fun ((arg : Simple.t option), ty) ->
-                let ty, canonical_name = TE.resolve_aliases (use_env, ty) in
-                match canonical_name with
-                | None ->
-                  begin match arg with
-                  | None -> None, ty
-                  | Some (Name (Var var)) -> Some var, ty
-                  | Some (Name (Symbol _))
-                  | Some (Const _)
-                  | Some (Discriminant _) -> None, ty
-                  end
-                | Some (Var var) -> Some var, ty
-                | Some (Symbol _) -> None, ty)
-              args_with_tys_this_use
-          in
-          let canonical_names_for_args_to_params =
-            List.fold_left (fun acc ((canonical_name, _ty), param) ->
-                match canonical_name with
-                | None -> acc
-                | Some canonical_name ->
-                  let param = Flambda.Typed_parameter.name param in
-                  Name.Map.add (Name.var canonical_name) param acc)
-              Name.Map.empty
-              (List.combine canonical_names_and_resolved_types_for_args params)
-          in
           let arg_tys =
-            List.map (fun (_canonical_name, ty) ->
-                T.rename_variables ty canonical_names_for_args_to_params)
-              canonical_names_and_resolved_types_for_args
-(*
-            List.map (fun (canonical_name, ty) ->
-                match canonical_name with
-                | None ->
-                  T.rename_variables ty canonical_names_for_args_to_params
-                | Some canonical_name ->
-                  let ty =
-                    T.alias_type_of (T.kind ty) (Name.var canonical_name)
-                  in
-                  T.rename_variables ty canonical_names_for_args_to_params)
-              canonical_names_and_resolved_types_for_args
-*)
+            transform_relations_on_arguments_to_relations_on_params ~use_env
+              ~args_with_tys_this_use:(Continuation_uses.Use.args_with_tys use)
+              ~params
           in
-Format.eprintf "Canonical names and resolved arg types:@ %a\n%!"
-  (Format.pp_print_list ~pp_sep:Format.pp_print_space
-    (fun ppf ((canonical_name, _ty), ty) ->
-      Format.fprintf ppf "@[%a %a@]"
-        (Misc.Stdlib.Option.print Variable.print) canonical_name
-        T.print ty))
-  (List.combine canonical_names_and_resolved_types_for_args arg_tys);
+Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+  arg_tys;
           let use_env = Continuation_uses.Use.typing_env use in
           let use_env =
             List.fold_left (fun use_env param ->

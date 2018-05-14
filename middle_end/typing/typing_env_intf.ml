@@ -245,4 +245,8 @@ module type S = sig
     -> force_to_kind:(flambda_type -> 'a ty)
     -> 'a ty
     -> 'a unknown_or_join * (Name.t option)
+
+  (** If the specified type is a chain of aliases, return all of those aliases,
+      otherwise return an empty set of names. *)
+  val all_aliases : t -> flambda_type -> Name.Set.t
 end
