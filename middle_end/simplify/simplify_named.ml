@@ -116,6 +116,8 @@ let simplify_set_of_closures original_env r
               ~continuation_params:return_cont_params
               ~exn_continuation:exn_continuation_param
               ~descr
+              ~scope_level_for_lifted_constants:
+                (E.scope_level_for_lifted_constants env)
           in
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
           body, r, uses)

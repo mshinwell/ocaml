@@ -154,7 +154,7 @@ let check_toplevel_simplification_result r expr ~continuation
    possibility. *)
 
 let simplify_toplevel env r expr ~continuation ~continuation_params
-     ~exn_continuation ~descr =
+     ~exn_continuation ~descr ~scope_level_for_lifted_constants =
   if not (Continuation.Map.mem continuation (E.continuations_in_scope env))
   then begin
     Misc.fatal_errorf "The continuation parameter (%a) must be in the \
@@ -177,6 +177,9 @@ let simplify_toplevel env r expr ~continuation ~continuation_params
   *)
   let continuation_uses_snapshot, r =
     R.snapshot_and_forget_continuation_uses r
+  in
+  let env =
+    E.set_scope_level_for_lifted_constants env scope_level_for_lifted_constants
   in
   let expr, r = Simplify_expr.simplify_expr env r expr in
   check_toplevel_simplification_result r expr ~continuation ~exn_continuation
@@ -349,7 +352,9 @@ let run ~never_inline ~allow_continuation_inlining
   if never_inline then Clflags.inlining_report := false;
   let initial_env =
     E.create ~never_inline ~allow_continuation_inlining
-      ~allow_continuation_specialisation ~backend ~round
+      ~allow_continuation_specialisation ~backend
+      ~scope_level_for_lifted_constants:Scope_level.initial
+      ~round
       ~simplify_toplevel
       ~simplify_expr:Simplify_expr.simplify_expr
       ~simplify_continuation_use_cannot_inline:

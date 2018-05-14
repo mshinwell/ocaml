@@ -332,6 +332,7 @@ end) = struct
         print_typing_environment_entry entry
     end;
     (* CR mshinwell: Unsure about levels for symbols yet
+    ...well, we need to add them with a lower level than the current one...
     let min_level = min_level_for_new_binding t in
     if (not (Scope_level.equal level Scope_level.for_symbols))
       && Scope_level.(<) level min_level
@@ -435,6 +436,17 @@ end) = struct
 
   let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
     invariant_for_new_binding t name cont_level binding;
+(* XXX This probably isn't the right way to do it -- it would mean changing
+   levels of opened existentials too
+    let cont_level =
+      (* CR mshinwell: If this turns out to be the right decision, we should
+         not pass a level when adding a symbol's definition (and also fix
+         the invariant call just above *)
+      match name, binding with
+      | Symbol _, Definition _ -> Scope_level.for_symbols
+      | _, _ -> cont_level
+    in
+*)
     let t, sublevel = allocate_sublevel t cont_level in
     let level = Scope_level.With_sublevel.create cont_level sublevel in
     let redundant_possibly_cyclic_alias =
@@ -583,6 +595,7 @@ end) = struct
   (* XXX [don't_freshen] needs sorting properly *)
   let rec add_or_meet_or_join_env_extension ?don't_freshen t env_extension
         scope_level ~meet_or_join =
+    let original_t = t in
     let rename_name (name : Name.t) freshening =
       match Name.Map.find name freshening with
       | exception Not_found -> name
@@ -624,6 +637,16 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         let t =
           match don't_freshen with
           | None ->
+            begin match fresh_name with
+            | Var _ -> ()
+            | Symbol sym ->
+              Misc.fatal_errorf "Definitions of symbols should never occur \
+                  in environment extensions: symbol %a, env@ %a,@ \
+                  env_extension@ %a"
+                Symbol.print sym
+                print original_t
+                Typing_env_extension.print env_extension
+            end;
             { t with
               were_existentials = Name.Set.add fresh_name t.were_existentials;
             }

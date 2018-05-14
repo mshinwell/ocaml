@@ -38,6 +38,7 @@ module type Env = sig
     -> allow_continuation_specialisation:bool
     -> round:int
     -> backend:(module Backend_intf.S)
+    -> scope_level_for_lifted_constants:Scope_level.t
     -> simplify_toplevel:(
          t
       -> result
@@ -46,6 +47,7 @@ module type Env = sig
       -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
+      -> scope_level_for_lifted_constants:Scope_level.t
       -> Flambda.Expr.t * result * continuation_uses
            * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
                Symbol.Map.t)
@@ -82,6 +84,7 @@ module type Env = sig
       -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
+      -> scope_level_for_lifted_constants:Scope_level.t
       -> Flambda.Expr.t * result * continuation_uses
            * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
                Symbol.Map.t)
@@ -133,6 +136,8 @@ module type Env = sig
 
   val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
 
+  val add_symbol_for_lifted_constant : t -> Symbol.t -> Flambda_type.t -> t
+
   val redefine_symbol : t -> Symbol.t -> Flambda_type.t -> t
 
   val find_symbol : t -> Symbol.t -> Flambda_type.t
@@ -152,6 +157,9 @@ module type Env = sig
   val increment_continuation_scope_level_by_half : t -> t
   val decrement_continuation_scope_level : t -> t
   val decrement_continuation_scope_level_by_half : t -> t
+
+  val scope_level_for_lifted_constants : t -> Scope_level.t
+  val set_scope_level_for_lifted_constants : t -> Scope_level.t -> t
 
   (* CR mshinwell: The [Continuation.t] is in the [Continuation.approx.t] *)
   val add_continuation : t -> Continuation.t -> Continuation_approx.t -> t

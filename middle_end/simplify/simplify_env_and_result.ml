@@ -36,6 +36,7 @@ end = struct
       -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
+      -> scope_level_for_lifted_constants:Scope_level.t
       -> Flambda.Expr.t * result * continuation_uses
            * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
                Symbol.Map.t);
@@ -55,6 +56,7 @@ end = struct
     mutable_variables : T.t Mutable_variable.Map.t;
     continuations : (Scope_level.t * Continuation_approx.t) Continuation.Map.t;
     continuation_scope_level : Scope_level.t;
+    scope_level_for_lifted_constants : Scope_level.t;
 (*    projections : Variable.t Projection.Map.t; *)
     (* CR mshinwell: but we do need the CSEed pure primitives *)
     current_functions : Set_of_closures_origin.Set.t;
@@ -79,6 +81,7 @@ end = struct
 
   let create ~never_inline ~allow_continuation_inlining
         ~allow_continuation_specialisation ~round ~backend
+        ~scope_level_for_lifted_constants
         ~simplify_toplevel ~simplify_expr
         ~simplify_continuation_use_cannot_inline =
     (* XXX [resolver] should come from [backend] *)
@@ -92,6 +95,7 @@ end = struct
       mutable_variables = Mutable_variable.Map.empty;
       continuations = Continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
+      scope_level_for_lifted_constants;
 (*      projections = Projection.Map.empty; *)
       current_functions = Set_of_closures_origin.Set.empty;
       inlining_level = 0;
@@ -123,6 +127,7 @@ end = struct
         @[(mutable_variables@ %a)@]@ \
         @[(continuations@ %a)@]@ \
         @[(continuation_scope_level@ %a)@]@ \
+        @[(scope_level_for_lifted_constants@ %a)@]@ \
         @[(current_functions@ %a)@]@ \
         @[(inlining_level@ %d)@]@ \
         @[(inside_branch@ %d)@]@ \
@@ -145,6 +150,7 @@ end = struct
       (Continuation.Map.print print_scope_level_and_continuation_approx)
         t.continuations
       Scope_level.print t.continuation_scope_level
+      Scope_level.print t.scope_level_for_lifted_constants
       Set_of_closures_origin.Set.print t.current_functions
       t.inlining_level
       t.inside_branch
@@ -279,6 +285,14 @@ end = struct
     let typing_environment =
       TE.add t.typing_environment (Name.symbol sym)
         t.continuation_scope_level
+        (Definition ty)
+    in
+    { t with typing_environment; }
+
+  let add_symbol_for_lifted_constant t sym ty =
+    let typing_environment =
+      TE.add t.typing_environment (Name.symbol sym)
+        t.scope_level_for_lifted_constants
         (Definition ty)
     in
     { t with typing_environment; }
@@ -664,7 +678,12 @@ end = struct
               print t
           | _ -> ())
         from_freshening
-    end
+      end
+
+  let scope_level_for_lifted_constants t = t.scope_level_for_lifted_constants
+
+  let set_scope_level_for_lifted_constants t scope_level =
+    { t with scope_level_for_lifted_constants = scope_level; }
 end and Result : sig
   include Simplify_env_and_result_intf.Result with type env = Env.t
 end = struct

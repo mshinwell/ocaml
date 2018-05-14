@@ -359,6 +359,7 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
           ~params:(Simplify_aux.params_for_exception_handler ())
       in
       let expr, r, continuation_uses, lifted_constants =
+        let scope_level_for_lifted_constants = E.continuation_scope_level env in
         let env = E.add_continuation env name return_cont_approx in
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
@@ -379,6 +380,7 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
           ~continuation_params:return_cont_params
           ~exn_continuation:computation.exception_cont
           ~descr
+          ~scope_level_for_lifted_constants
       in
       (* CR mshinwell: Add unboxing of the continuation here.  This will look
          like half of Unbox_returns (same analysis and the same thing to
@@ -395,9 +397,9 @@ Format.eprintf "TOPLEVEL:@ \n%a\n"
 Format.eprintf "env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
       let env =
-        let env = E.increment_continuation_scope_level env in
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-Format.eprintf "Adding lifted constant %a\n%!" Symbol.print symbol;
+Format.eprintf "Adding lifted constant %a at level %a\n%!" Symbol.print symbol
+  Scope_level.print (E.continuation_scope_level env);
             E.add_symbol env symbol ty)
           lifted_constants
           env
@@ -415,6 +417,8 @@ Format.eprintf "Adding lifted constant %a\n%!" Symbol.print symbol;
             return_cont_params
         in
         try
+Format.eprintf "TOPLEVEL JOIN definition level %a\n%!"
+  Scope_level.print (Continuation_uses.definition_scope_level continuation_uses);
           Join_point.param_types_and_body_env continuation_uses
             ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
             (E.freshening env)

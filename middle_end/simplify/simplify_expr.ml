@@ -78,7 +78,7 @@ Format.eprintf "Simplifying let %a = %a\n%!"
   in
   let env =
     Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-        E.add_symbol env symbol ty)
+        E.add_symbol_for_lifted_constant env symbol ty)
       lifted_constants
       env
   in

@@ -39,6 +39,7 @@ val simplify_toplevel
   -> continuation_params:Flambda.Typed_parameter.t list
   -> exn_continuation:Continuation.t
   -> descr:string
+  -> scope_level_for_lifted_constants:Scope_level.t
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t
        * Continuation_uses.t
        * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
