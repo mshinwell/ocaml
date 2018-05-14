@@ -84,9 +84,11 @@ end) = struct
     | Still_unresolved
 
   let resolve_aliases_on_ty0 (type a) t ?bound_name ~force_to_kind
-        (ty : a ty) : (a ty) * (Name.t option) * still_unresolved =
+        (ty : a ty)
+        : (a ty) * (Name.t option) * Name_or_export_id.Set.t
+            * still_unresolved =
     let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
-      let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
+      let resolve (name : Name_or_export_id.t) : _ * _ * _ * still_unresolved =
         if Name_or_export_id.Set.mem name names_seen then begin
           Misc.fatal_errorf "Loop on %a whilst resolving aliases"
             Name_or_export_id.print name
@@ -103,7 +105,7 @@ end) = struct
         | Export_id export_id ->
           match t.resolver export_id with
           | Some ty -> continue_resolving ty ~canonical_name
-          | None -> ty, None, Name.Set.empty, Still_unresolved
+          | None -> ty, None, Name_or_export_id.Set.empty, Still_unresolved
       in
       match ty with
       | No_alias _ -> ty, canonical_name, names_seen, Resolved
@@ -151,20 +153,20 @@ end) = struct
     match ty.descr with
     | Value ty_value ->
       let force_to_kind = force_to_kind_value in
-      let ty_value, _names_seen, canonical_name =
+      let ty_value, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
       in
-      { ty with descr = Value ty_value; }, _names_seen, canonical_name
+      { ty with descr = Value ty_value; }, canonical_name
     | Naked_number (ty_naked_number, kind) ->
       let force_to_kind = force_to_kind_naked_number kind in
-      let ty_naked_number, _names_seen, canonical_name =
+      let ty_naked_number, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
       in
       { ty with descr = Naked_number (ty_naked_number, kind); },
         canonical_name
     | Fabricated ty_fabricated ->
       let force_to_kind = force_to_kind_fabricated in
-      let ty_fabricated, _names_seen, canonical_name =
+      let ty_fabricated, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
       in
       { ty with descr = Fabricated ty_fabricated; }, canonical_name
@@ -765,23 +767,33 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     }
 
   let all_aliases t ty =
-    match ty.descr with
-    | Value ty_value ->
-      let force_to_kind = force_to_kind_value in
-      let _ty_value, names_seen, _canonical_name =
-        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
-      in
+    let names_seen =
+      let bound_name = None in
+      match ty.descr with
+      | Value ty_value ->
+        let force_to_kind = force_to_kind_value in
+        let _ty_value, _canonical_name, names_seen =
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
+        in
+        names_seen
+      | Naked_number (ty_naked_number, kind) ->
+        let force_to_kind = force_to_kind_naked_number kind in
+        let _ty_naked_number, _canonical_name, names_seen =
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
+        in
+        names_seen
+      | Fabricated ty_fabricated ->
+        let force_to_kind = force_to_kind_fabricated in
+        let _ty_fabricated, _canonical_name, names_seen =
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
+        in
+        names_seen
+    in
+    Name_or_export_id.Set.fold
+      (fun (name_or_export_id : Name_or_export_id.t) all_aliases ->
+        match name_or_export_id with
+        | Name name -> Name.Set.add name all_aliases
+        | Export_id _ -> all_aliases)
       names_seen
-    | Naked_number (ty_naked_number, kind) ->
-      let force_to_kind = force_to_kind_naked_number kind in
-      let _ty_naked_number, names_seen, _canonical_name =
-        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
-      in
-      names_seen
-    | Fabricated ty_fabricated ->
-      let force_to_kind = force_to_kind_fabricated in
-      let _ty_fabricated, names_seen, _canonical_name =
-        resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
-      in
-      names_seen
+      Name.Set.empty
 end

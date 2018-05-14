@@ -29,10 +29,14 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
     List.fold_left (fun (subst, arg_tys_rev) (param, (arg, arg_ty)) ->
         let arg_ty = T.rename_variables arg_ty subst in
         let aliases =
-          match (arg : Simple.t) with
-          | Name arg -> Name.Set.add (TE.all_aliases use_env arg_ty) arg
-          | Const _ -> Name.Set.empty
+          match (arg : Simple.t option) with
+          | None -> Name.Set.empty
+          | Some arg ->
+            match arg with
+            | Name arg -> Name.Set.add arg (TE.all_aliases use_env arg_ty)
+            | Const _ | Discriminant _ -> Name.Set.empty
         in
+        let param = Flambda.Typed_parameter.name param in
         let subst =
           Name.Set.fold (fun alias subst ->
               Name.Map.add alias param subst)
@@ -40,6 +44,7 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
             subst
         in
         subst, arg_ty::arg_tys_rev)
+      (Name.Map.empty, [])
       (List.combine params args_with_tys_this_use)
   in
   List.rev arg_tys_rev
