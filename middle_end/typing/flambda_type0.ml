@@ -1925,7 +1925,7 @@ result
         set_of_closures
     in
     if set_of_closures == set_of_closures' then closures_entry
-    else { set_of_closures; }
+    else { set_of_closures = set_of_closures'; }
 
   and rename_variables_discriminants subst discriminants =
     Discriminant.Map.map_sharing (fun discriminant_case ->
@@ -1965,7 +1965,7 @@ result
     in
     if closures == closures' && closure_elements == closure_elements'
     then set_of_closures
-    else { closures; closure_elements; }
+    else { closures = closures'; closure_elements = closure_elements'; }
 
   and rename_variables_closure subst
         (({ function_decls; } : closure) as closure) =
@@ -1973,7 +1973,7 @@ result
       rename_variables_function_decls subst function_decls
     in
     if function_decls == function_decls' then closure
-    else { function_decls; }
+    else { function_decls = function_decls'; }
 
   and rename_variables_function_decls subst function_decls =
     match function_decls with

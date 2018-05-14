@@ -126,7 +126,7 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
       | None -> default_env, Name.Map.empty
       | Some joined_env_extension ->
         TE.add_or_meet_env_extension' default_env joined_env_extension
-          (Scope_level.next scope_level)
+          scope_level  (*(Scope_level.next scope_level) *)
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;

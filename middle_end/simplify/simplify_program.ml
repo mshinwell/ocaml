@@ -360,6 +360,9 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
       in
       let expr, r, continuation_uses, lifted_constants =
         let scope_level_for_lifted_constants = E.continuation_scope_level env in
+Format.eprintf "TOPLEVEL CONT %a at level %a\n%!"
+  Continuation.print name
+  Scope_level.print (E.continuation_scope_level env);
         let env = E.add_continuation env name return_cont_approx in
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
