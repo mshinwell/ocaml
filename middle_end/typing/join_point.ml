@@ -42,8 +42,12 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
           | None -> Name.Set.empty
           | Some arg ->
             match arg with
-            | Name arg -> Name.Set.add arg (TE.all_aliases use_env arg_ty)
-            | Const _ | Discriminant _ -> Name.Set.empty
+            | Name ((Var _) as arg) ->
+              let aliases =
+                Name.variables_only (TE.all_aliases use_env arg_ty)
+              in
+              Name.Set.add arg aliases
+            | Name (Symbol _) | Const _ | Discriminant _ -> Name.Set.empty
         in
         let param = Flambda.Typed_parameter.name param in
         let subst =
@@ -59,7 +63,9 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
 Format.eprintf "Final substitution:@ %a\n%!"
   (Name.Map.print Name.print) subst;
   let arg_tys = List.rev arg_tys_rev in
-  let use_env_extension = TEE.rename_names use_env_extension subst in
+  let use_env_extension =
+    TEE.rename_names ~for_join:() use_env_extension subst
+  in
 Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
   arg_tys;
@@ -121,7 +127,7 @@ Format.eprintf "Joined env extension is:@ %a@ default_env:@ %a\n%!"
       | None -> default_env, Name.Map.empty
       | Some joined_env_extension ->
         TE.add_or_meet_env_extension' default_env joined_env_extension
-          scope_level  (*(Scope_level.next scope_level) *)
+          scope_level (*(Scope_level.next scope_level) *)
     in
 Format.eprintf "Joined env before diffing is:@ %a\n%!"
   TE.print joined_env;
@@ -188,7 +194,8 @@ Format.eprintf "Final use env extension for arg ty %a: %a\n%!"
   TEE.print env_extension;
 *)
                 try
-Format.eprintf "Joining@ JT %a with@ (AT %a in@ TEE %a)@ in env %a"
+Format.eprintf "Joining for param %a@ JT %a with@ (AT %a in@ TEE %a)@ in env %a"
+  Flambda.Typed_parameter.print param
   T.print joined_ty
   T.print arg_ty
   TEE.print env_extension

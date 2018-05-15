@@ -236,17 +236,16 @@ module type S = sig
     -> t_in_context
     -> flambda_type * (Name.t option)
 
-  (** Like [resolve_aliases], except working on types statically known to be
-      of a particular kind, and returning an [unknown_or_join]. *)
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t
+    -> env_extension
     -> ?bound_name:Name.t
     -> print_ty:(Format.formatter -> 'a ty -> unit)
     -> force_to_kind:(flambda_type -> 'a ty)
     -> 'a ty
-    -> 'a unknown_or_join * (Name.t option)
+    -> 'a unknown_or_join * Name.Set.t
 
-  (** If the specified type is a chain of aliases, return all of those aliases,
-      otherwise return an empty set of names. *)
-  val all_aliases : t -> flambda_type -> Name.Set.t
+  (** All names (not including the given name) which are known to be aliases
+      of the given name in the given environment. *)
+  val aliases_of_name : t -> Name.t -> Name.Set.t
 end

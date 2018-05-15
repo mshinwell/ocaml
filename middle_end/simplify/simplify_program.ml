@@ -413,7 +413,7 @@ Format.eprintf "Adding lifted constant %a at level %a\n%!" Symbol.print symbol
         let default_env =
           List.fold_left (fun env param ->
               let var = Flambda.Typed_parameter.var param in
-              let scope_level = Scope_level.next Scope_level.initial in
+              let scope_level = Scope_level.initial in
               let ty = Flambda.Typed_parameter.ty param in
               T.Typing_env.add env (Name.var var) scope_level (Definition ty))
             (E.get_typing_environment env)

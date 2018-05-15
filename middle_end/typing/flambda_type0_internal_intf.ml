@@ -263,6 +263,7 @@ end) = struct
 
   and typing_environment = {
     resolver : (Export_id.t -> t option);
+    aliases_of_names : Name.Set.t Name.Map.t;
     (* CR mshinwell: Rename names_to_types -> names_to_entries *)
     names_to_types :
       (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
@@ -273,9 +274,13 @@ end) = struct
   }
 
   and env_extension = {
+    aliases_of_names : Name.Set.t Name.Map.t;
     first_definitions : (Name.t * t) list;
+    first_definitions_names_to_types : t Name.Map.t;
     at_or_after_cut_point : levels_to_entries;
+    at_or_after_cut_point_names_to_types : typing_environment_entry0 Name.Map.t;
     last_equations_rev : (Name.t * t) list;
+    last_equations_names_to_types : t Name.Map.t;
     cse : Name.t Flambda_primitive.With_fixed_value.Map.t;
   }
 
@@ -389,7 +394,8 @@ module type S = sig
   val rename_variables : t -> Name.t Name.Map.t -> t
 
   val rename_variables_env_extension
-     : Name.t Name.Map.t
+     : ?for_join:unit
+    -> Name.t Name.Map.t
     -> env_extension
     -> env_extension
 

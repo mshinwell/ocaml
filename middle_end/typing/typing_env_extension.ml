@@ -244,20 +244,49 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
 
   let add_definition_at_beginning t name ty =
     let first_definitions = (name, ty) :: t.first_definitions in
-    { t with first_definitions; }
+    let first_definitions_names_to_types =
+      Name.Map.add name ty t.first_definitions_names_to_types
+    in
+    { t with
+      first_definitions;
+      first_definitions_names_to_types;
+    }
 
+  (* CR mshinwell: Invariant check for increased preciseness? *)
   let add_equation t name ty =
     let last_equations_rev = (name, ty) :: t.last_equations_rev in
-    { t with last_equations_rev; }
+    let last_equations_names_to_types =
+      Name.Map.add name ty t.last_equations_names_to_types
+    in
+    { t with
+      last_equations_rev;
+      last_equations_names_to_types;
+    }
 
   let add_cse t name prim =
     let cse =
       match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
       | exception Not_found ->
         Flambda_primitive.With_fixed_value.Map.add prim name t.cse
-      | _name -> t.cse
+      | name -> t.cse
     in
     { t with cse; }
+
+  let find_opt t name =
+    match Name.Map.find name t.last_equations_names_to_types with
+    | ty -> Some ty
+    | exception Not_found ->
+      match Name.Map.find name t.at_or_after_cut_point_names_to_types with
+      | Definition ty | Equation ty -> Some ty
+      | exception Not_found ->
+        match Name.Map.find name t.first_definitions_names_to_types with
+        | ty -> Some ty
+        | exception Not_found -> None
+
+  let find_then_find_in_env_exn t env name =
+    match find_opt t name with
+    | Some ty -> ty
+    | None -> fst (TE.find_exn env name)
 
   (* CR-someday mshinwell: Consider implementing [meet] and [join] directly
      rather than opening up all of the existentials and cutting the
@@ -377,6 +406,6 @@ Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
 
-  let rename_names t subst =
-    T.rename_variables_env_extension subst t
+  let rename_names ?for_join t subst =
+    T.rename_variables_env_extension ?for_join subst t
 end

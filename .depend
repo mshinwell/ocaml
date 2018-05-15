@@ -2327,8 +2327,8 @@ middle_end/simplify/simplify_named.cmo : middle_end/base_types/variable.cmi \
     middle_end/simplify/simplify_primitive.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
     middle_end/simplify/simplify_aux.cmi middle_end/language/simple.cmi \
-    middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
-    middle_end/typing/join_point.cmi \
+    middle_end/base_types/scope_level.cmi middle_end/base_types/parameter.cmi \
+    middle_end/base_types/name.cmi middle_end/typing/join_point.cmi \
     middle_end/inlining/inlining_decision.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/language/freshening.cmi \
     middle_end/typing/flambda_type.cmi \
@@ -2343,8 +2343,8 @@ middle_end/simplify/simplify_named.cmx : middle_end/base_types/variable.cmx \
     middle_end/simplify/simplify_primitive.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
     middle_end/simplify/simplify_aux.cmx middle_end/language/simple.cmx \
-    middle_end/base_types/parameter.cmx middle_end/base_types/name.cmx \
-    middle_end/typing/join_point.cmx \
+    middle_end/base_types/scope_level.cmx middle_end/base_types/parameter.cmx \
+    middle_end/base_types/name.cmx middle_end/typing/join_point.cmx \
     middle_end/inlining/inlining_decision.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/language/freshening.cmx \
     middle_end/typing/flambda_type.cmx \
@@ -2700,7 +2700,6 @@ middle_end/middle_end.cmo : utils/warnings.cmi \
     utils/profile.cmi bytecomp/printlambda.cmi \
     middle_end/from_lambda/prepare_lambda.cmi utils/misc_color.cmi \
     utils/misc.cmi parsing/location.cmi \
-    middle_end/code_motion/lift_to_toplevel.cmi \
     middle_end/code_motion/lift_let_cont.cmi \
     middle_end/from_lambda/ilambda.cmi middle_end/language/flambda_static.cmi \
     middle_end/base_types/debuginfo.cmi \
@@ -2714,7 +2713,6 @@ middle_end/middle_end.cmx : utils/warnings.cmx \
     utils/profile.cmx bytecomp/printlambda.cmx \
     middle_end/from_lambda/prepare_lambda.cmx utils/misc_color.cmx \
     utils/misc.cmx parsing/location.cmx \
-    middle_end/code_motion/lift_to_toplevel.cmx \
     middle_end/code_motion/lift_let_cont.cmx \
     middle_end/from_lambda/ilambda.cmx middle_end/language/flambda_static.cmx \
     middle_end/base_types/debuginfo.cmx \
@@ -4199,11 +4197,9 @@ middle_end/typing/typing_env_extension.cmi : \
     middle_end/typing/meet_and_join_intf.cmo \
     middle_end/typing/flambda_type0_internal_intf.cmo
 middle_end/typing/typing_env_extension_intf.cmo : \
-    middle_end/base_types/variable.cmi middle_end/base_types/name.cmi \
-    middle_end/language/flambda_primitive.cmi
+    middle_end/base_types/name.cmi middle_end/language/flambda_primitive.cmi
 middle_end/typing/typing_env_extension_intf.cmx : \
-    middle_end/base_types/variable.cmx middle_end/base_types/name.cmx \
-    middle_end/language/flambda_primitive.cmx
+    middle_end/base_types/name.cmx middle_end/language/flambda_primitive.cmx
 middle_end/typing/typing_env_intf.cmo : \
     middle_end/base_types/scope_level.cmi \
     middle_end/base_types/name_occurrences.cmi middle_end/base_types/name.cmi \
@@ -4515,8 +4511,8 @@ middle_end/simplify/simplify_named.cmo : middle_end/base_types/variable.cmi \
     middle_end/simplify/simplify_primitive.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
     middle_end/simplify/simplify_aux.cmi middle_end/language/simple.cmi \
-    middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
-    middle_end/typing/join_point.cmi \
+    middle_end/base_types/scope_level.cmi middle_end/base_types/parameter.cmi \
+    middle_end/base_types/name.cmi middle_end/typing/join_point.cmi \
     middle_end/inlining/inlining_decision.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/language/freshening.cmi \
     middle_end/typing/flambda_type.cmi \
@@ -4531,8 +4527,8 @@ middle_end/simplify/simplify_named.cmx : middle_end/base_types/variable.cmx \
     middle_end/simplify/simplify_primitive.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
     middle_end/simplify/simplify_aux.cmx middle_end/language/simple.cmx \
-    middle_end/base_types/parameter.cmx middle_end/base_types/name.cmx \
-    middle_end/typing/join_point.cmx \
+    middle_end/base_types/scope_level.cmx middle_end/base_types/parameter.cmx \
+    middle_end/base_types/name.cmx middle_end/typing/join_point.cmx \
     middle_end/inlining/inlining_decision.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/language/freshening.cmx \
     middle_end/typing/flambda_type.cmx \

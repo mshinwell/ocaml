@@ -183,6 +183,8 @@ struct
                     param_names param_tys
                 in
                 let result_env_extension2 =
+                  (* XXX Check that [rename_names] has the correct
+                     semantics *)
                   Typing_env_extension.rename_names
                     result_env_extension2 params2_to_params1_freshening
                 in

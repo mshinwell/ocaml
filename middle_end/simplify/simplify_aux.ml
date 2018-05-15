@@ -122,9 +122,6 @@ let prepare_to_simplify_closure
         E.add_variable env var ty)
       env function_decl.params
   in
-(*
-  let env = E.increment_continuation_scope_level env in
-*)
   (* XXX use the correct my_closure type. *)
   let env =
     E.add_variable env my_closure

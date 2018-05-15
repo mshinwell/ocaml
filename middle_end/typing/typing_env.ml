@@ -49,6 +49,7 @@ end) = struct
 
   let create ~resolver =
     { resolver;
+      aliases_of_names = Name.Map.empty;
       names_to_types = Name.Map.empty;
       cse_to_names = Flambda_primitive.With_fixed_value.Map.empty;
       levels_to_entries = Scope_level.Map.empty;
@@ -436,38 +437,43 @@ end) = struct
           Some canonical_name
         end
 
+  let aliases_of_name t name =
+    match Name.Map.find name t.aliases_of_names with
+    | exception Not_found ->
+      Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
+        Name.print name
+    | aliases -> aliases
+
   let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
     invariant_for_new_binding t name cont_level binding;
-(* XXX This probably isn't the right way to do it -- it would mean changing
-   levels of opened existentials too
-    let cont_level =
-      (* CR mshinwell: If this turns out to be the right decision, we should
-         not pass a level when adding a symbol's definition (and also fix
-         the invariant call just above *)
-      match name, binding with
-      | Symbol _, Definition _ -> Scope_level.for_symbols
-      | _, _ -> cont_level
-    in
-*)
-    let t, sublevel = allocate_sublevel t cont_level in
-    let level = Scope_level.With_sublevel.create cont_level sublevel in
-    let redundant_possibly_cyclic_alias =
+    let alias =
       match binding with
-      | Definition _ | CSE _ -> false
-      | Equation ty ->
-        let canonical_name_for_t = canonical_name t name in
-        let _, canonical_name = resolve_aliases (t, ty) in
-        match canonical_name, canonical_name_for_t with
-        | Some canonical_name, Some canonical_name_for_t
-            when Name.equal canonical_name canonical_name_for_t -> true
-        | Some _, Some _ -> assert false (* XXX *)
-        | None, Some canonical_name_for_t
-            when Name.equal name canonical_name_for_t -> true
-        | None, Some _ | None, None | Some _, None -> false
+      | Definition ty | Equation ty -> T.get_alias ty
+      | CSE _ -> None
     in
-    if redundant_possibly_cyclic_alias then begin
+    let equation_with_reverse_alias_already_present =
+      match binding with
+      | Equation _ ->
+        begin match alias with
+        | None -> false
+        | Some alias -> Name.Set.mem alias (aliases_of_name t name)
+        end
+      | Definition _ -> CSE _ -> false
+    in
+    if equation_with_reverse_alias_already_present then begin
       t
     end else begin
+      let aliases_of_names =
+        match alias with
+        | None -> t.aliases_of_names
+        | Some aliases_of_names ->
+          Name.Map.update alias (function
+              | None -> Some (Name.Set.singleton name)
+              | Some aliases -> Some (Name.Set.add name aliases))
+            aliases_of_names
+      in
+      let t, sublevel = allocate_sublevel t cont_level in
+      let level = Scope_level.With_sublevel.create cont_level sublevel in
       let names_to_types =
         match binding with
         | Definition ty ->
@@ -508,6 +514,7 @@ end) = struct
       in
       let t =
         { t with
+          aliases_of_names;
           names_to_types;
           levels_to_entries;
           cse_to_names;
@@ -790,35 +797,4 @@ Format.eprintf "Opening existential %a -> %a\n%!"
       last_equations_rev = [];
       cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
-
-  let all_aliases t ty =
-    let names_seen =
-      let bound_name = None in
-      match ty.descr with
-      | Value ty_value ->
-        let force_to_kind = force_to_kind_value in
-        let _ty_value, _canonical_name, names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
-        in
-        names_seen
-      | Naked_number (ty_naked_number, kind) ->
-        let force_to_kind = force_to_kind_naked_number kind in
-        let _ty_naked_number, _canonical_name, names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
-        in
-        names_seen
-      | Fabricated ty_fabricated ->
-        let force_to_kind = force_to_kind_fabricated in
-        let _ty_fabricated, _canonical_name, names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
-        in
-        names_seen
-    in
-    Name_or_export_id.Set.fold
-      (fun (name_or_export_id : Name_or_export_id.t) all_aliases ->
-        match name_or_export_id with
-        | Name name -> Name.Set.add name all_aliases
-        | Export_id _ -> all_aliases)
-      names_seen
-      Name.Set.empty
 end

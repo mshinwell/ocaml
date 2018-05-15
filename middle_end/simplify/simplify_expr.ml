@@ -309,7 +309,6 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
 
 let environment_for_let_cont_handler ~env _cont
       ~(handler : Flambda.Continuation_handler.t) =
-  let env = E.increment_continuation_scope_level env in
   let params = handler.params in
   let _freshened_vars, freshening =
     Freshening.add_variables' (E.freshening env)
@@ -621,7 +620,23 @@ Format.eprintf "ADDING %a at level %a\n%!"
     in
     E.increment_continuation_scope_level env
   in
+  (* CR mshinwell: Think more about this lifted constant handling.  The
+     reason code is needed here is in case lifting happens in the body
+     of a [Let_cont]; in this case, the types of the continuation's arguments
+     may involve the new symbols---so they need to be in the [default_env]
+     when dealing with the join points. *)
+  (* XXX Share code for the lifted_constants handling with above *)
+  let already_lifted_constants = R.get_lifted_constants r in
   let body, r = simplify_expr body_env r body in
+  let lifted_constants =
+    Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+  in
+  let env =
+    Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+        E.add_symbol_for_lifted_constant env symbol ty)
+      lifted_constants
+      env
+  in
   begin match handlers with
   | Non_recursive { name; handler; } ->
     let with_wrapper : Expr.with_wrapper =

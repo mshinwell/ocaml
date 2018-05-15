@@ -2097,13 +2097,20 @@ result
       let t' = rename_variables subst t in
       if t == t' then entry
       else Equation t'
-    | CSE _prim ->
-      (* CR mshinwell: implement this *)
-      Misc.fatal_error "Not yet implemented"
+    | CSE prim ->
+      let prim' = Flambda_primitive.With_fixed_value.rename_names prim subst in
+      if prim == prim' then entry
+      else CSE prim'
 
-  and rename_variables_env_extension subst
+  (* XXX find a proper name for [for_join] *)
+  and rename_variables_env_extension ?for_join subst
         ({ first_definitions; at_or_after_cut_point; last_equations_rev;
            cse; } as env_extension) =
+    let for_join =
+      match for_join with
+      | None -> false
+      | Some () -> true
+    in
     let first_definitions_changed = ref false in
     let first_definitions' =
       List.map (fun (name, t) ->
@@ -2118,28 +2125,32 @@ result
       Scope_level.Map.map_sharing (fun by_sublevel ->
           Scope_level.Sublevel.Map.map_sharing
             (fun ((name, (entry : typing_environment_entry)) as datum) ->
-              let name' =
-                match entry with
-                | Definition _ -> name
-                | Equation _ | CSE _ -> rename_variables_name subst name
-              in
-              let entry' =
-                rename_variables_typing_environment_entry subst entry
-              in
-              if name == name' && entry == entry' then datum
-              else name', entry')
+              if for_join && Name.Map.mem name subst then datum
+              else
+                let name' =
+                  match entry with
+                  | Definition _ -> name
+                  | Equation _ | CSE _ -> rename_variables_name subst name
+                in
+                let entry' =
+                  rename_variables_typing_environment_entry subst entry
+                in
+                if name == name' && entry == entry' then datum
+                else name', entry')
             by_sublevel)
         at_or_after_cut_point
     in
     let last_equations_rev_changed = ref false in
     let last_equations_rev' =
-      List.map (fun (name, t) ->
-          let name' = rename_variables_name subst name in
-          let t' = rename_variables subst t in
-          if (not (name == name')) || (not (t == t')) then begin
-            last_equations_rev_changed := true
-          end;
-          name', t')
+      List.map (fun ((name, t) as equation) ->
+          if for_join && Name.Map.mem name subst then equation
+          else
+            let name' = rename_variables_name subst name in
+            let t' = rename_variables subst t in
+            if (not (name == name')) || (not (t == t')) then begin
+              last_equations_rev_changed := true
+            end;
+            name', t')
         last_equations_rev
     in
     let cse_changed = ref false in
@@ -2390,51 +2401,58 @@ result
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
-      (* CR mshinwell: N.B. This phys_equal isn't checking the extensions *)
-      if or_alias1 == or_alias2 then or_alias1
+      if env_extension1 == env_extension2 && or_alias1 == or_alias2 then
+        or_alias1
       else
-        let unknown_or_join1, canonical_name1 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
+        let unknown_or_join1, all_aliases1 =
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+            env env_extension1
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
-        let unknown_or_join2, canonical_name2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
+        let unknown_or_join2, all_aliases2 =
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+            env env_extension2
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
         in
-        match canonical_name1, canonical_name2 with
-        | Some name1, Some name2 when Name.equal name1 name2 ->
-          Equals name1
-        (* CR mshinwell: The symmetrical cases ("is unknown") should be
-           present on the [meet] function, below. *)
-        | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
-          (* CR mshinwell: Should we push down the env extension here? *)
-          Equals name1
-        | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
-          Equals name2
-        | None, None ->
-          let unknown_or_join =
-            join_on_unknown_or_join env env_extension1 env_extension2
-              unknown_or_join1 unknown_or_join2
-          in
-          if unknown_or_join == unknown_or_join1 then begin
-            assert (match or_alias1 with No_alias _ -> true | _ -> false);
-            or_alias1
-          end else if unknown_or_join == unknown_or_join2 then begin
-            assert (match or_alias2 with No_alias _ -> true | _ -> false);
-            or_alias2
-          end else begin
+        let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
+        let alias_both_sides = Name.Set.choose_opt all_aliases in
+        match alias_both_sides with
+        | Some name -> Equals name
+          (* CR mshinwell: The symmetrical cases ("is unknown") should be
+             present on the [meet] function, below. *)
+        | None ->
+          let alias1 = Name.Set.choose_opt all_aliases1 in
+          let alias2 = Name.Set.choose_opt all_aliases2 in
+          match alias1, alias2 with
+          | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+            (* CR mshinwell: Should we push down the env extension here? *)
+            Equals name1
+          | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
+            Equals name2
+          | None, None ->
+            let unknown_or_join =
+              join_on_unknown_or_join env env_extension1 env_extension2
+                unknown_or_join1 unknown_or_join2
+            in
+            if unknown_or_join == unknown_or_join1 then begin
+              assert (match or_alias1 with No_alias _ -> true | _ -> false);
+              or_alias1
+            end else if unknown_or_join == unknown_or_join2 then begin
+              assert (match or_alias2 with No_alias _ -> true | _ -> false);
+              or_alias2
+            end else begin
+              No_alias unknown_or_join
+            end
+          | _, _ ->
+            let unknown_or_join =
+              join_on_unknown_or_join env env_extension1 env_extension2
+                unknown_or_join1 unknown_or_join2
+            in
             No_alias unknown_or_join
-          end
-        | _, _ ->
-          let unknown_or_join =
-            join_on_unknown_or_join env env_extension1 env_extension2
-              unknown_or_join1 unknown_or_join2
-          in
-          No_alias unknown_or_join
 
     let rec meet_on_unknown_or_join env
           (ou1 : S.of_kind_foo unknown_or_join)
