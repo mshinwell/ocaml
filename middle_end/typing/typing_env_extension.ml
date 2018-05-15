@@ -377,7 +377,6 @@ Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
 
-  let rename_variables_not_occurring_in_domain t _freshening =
-    (* XXX *)
-    t
+  let rename_names t subst =
+    T.rename_variables_env_extension subst t
 end

@@ -2194,6 +2194,7 @@ result
     let kind = kind
     let is_empty_typing_environment = is_empty_typing_environment
     let rename_variables = rename_variables
+    let rename_variables_env_extension = rename_variables_env_extension
     let print_ty_value = print_ty_value
     let print_ty_naked_number = print_ty_naked_number
     let print_ty_fabricated = print_ty_fabricated

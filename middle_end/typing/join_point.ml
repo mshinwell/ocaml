@@ -24,7 +24,7 @@ module TEE = Flambda_type.Typing_env_extension
    introduction at [Switch] time *)
 
 let transform_relations_on_arguments_to_relations_on_params ~use_env
-      ~args_with_tys_this_use ~params =
+      ~use_env_extension ~args_with_tys_this_use ~params =
   Format.eprintf "params:@ %a\n%!"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
       Flambda.Typed_parameter.print) params;
@@ -56,20 +56,16 @@ let transform_relations_on_arguments_to_relations_on_params ~use_env
       (Name.Map.empty, [])
       (List.combine params args_with_tys_this_use)
   in
-  Format.eprintf "Final substitution:@ %a\n%!"
-    (Name.Map.print Name.print) subst;
-  List.rev arg_tys_rev
-
-(* Seems like we may need to rename on a whole environment.
-   When x |-> y then definitions for x would just be left, but equations on
-   x (including CSE equations) would be rewritten to be on y.
-   Right-hand sides of CSE equations and normal bindings would be renamed.
-
-   Effectively there is a relational structure inside each use environment
-   which is on arguments to the continuation; this is transformed to a
-   relation which is structurally identical to the previous one but over
-   parameters.
-*)
+Format.eprintf "Final substitution:@ %a\n%!"
+  (Name.Map.print Name.print) subst;
+  let arg_tys = List.rev arg_tys_rev in
+  let use_env_extension = TEE.rename_names use_env_extension subst in
+Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+  arg_tys;
+Format.eprintf "Extension after substitution is:@ %a\n%!"
+  TEE.print use_env_extension;
+  arg_tys, use_env_extension
 
 let param_types_and_body_env_opt cont_uses _freshening ~default_env =
   match Continuation_uses.uses cont_uses with
@@ -89,27 +85,6 @@ let param_types_and_body_env_opt cont_uses _freshening ~default_env =
       List.fold_left
         (fun (arg_tys_with_env_extensions, joined_env_extension) use ->
           let use_env = Continuation_uses.Use.typing_env use in
-          let arg_tys =
-            transform_relations_on_arguments_to_relations_on_params ~use_env
-              ~args_with_tys_this_use:(Continuation_uses.Use.args_with_tys use)
-              ~params
-          in
-Format.eprintf "Arg types after transformation to parameters:@ %a\n%!"
-  (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-  arg_tys;
-          let use_env = Continuation_uses.Use.typing_env use in
-(*
-          let use_env =
-            List.fold_left (fun use_env param ->
-                (* XXX For recursive continuations the params should already
-                   be in the env *)
-                TE.add use_env (Flambda.Typed_parameter.name param)
-                  (Scope_level.next scope_level)
-                  (Definition (Flambda.Typed_parameter.ty param)))
-              use_env
-              params
-          in
-*)
           let use_env_extension =
             TE.cut use_env
               ~existential_if_defined_at_or_later_than:
@@ -120,6 +95,12 @@ Format.eprintf "Cutting environment so existential at or later than \
   Scope_level.print (Scope_level.next scope_level)
   TE.print use_env
   TEE.print use_env_extension;
+          let arg_tys, use_env_extension =
+            transform_relations_on_arguments_to_relations_on_params ~use_env
+              ~use_env_extension
+              ~args_with_tys_this_use:(Continuation_uses.Use.args_with_tys use)
+              ~params
+          in
           let joined_env_extension =
             match joined_env_extension with
             | None -> use_env_extension

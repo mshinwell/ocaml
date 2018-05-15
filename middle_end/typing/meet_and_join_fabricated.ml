@@ -125,16 +125,25 @@ struct
           let params : _ Or_bottom.t =
             if not same_arity then Bottom
             else
+              let variable_list_to_name_list vars =
+                List.map (fun var -> Name.var var) vars
+              in
               let params2_to_params1_freshening, param_names =
                 match param_names1, param_names2 with
-                | None, None -> Variable.Map.empty, []
-                | None, Some param_names2 -> Variable.Map.empty, param_names2
-                | Some param_names1, None -> Variable.Map.empty, param_names1
+                | None, None -> Name.Map.empty, []
+                | None, Some param_names2 ->
+                  let param_names2 = variable_list_to_name_list param_names2 in
+                  Name.Map.empty, param_names2
+                | Some param_names1, None ->
+                  let param_names1 = variable_list_to_name_list param_names1 in
+                  Name.Map.empty, param_names1
                 | Some param_names1, Some param_names2 ->
                   (* This must match up with the code some distance below,
                      where the left-hand function declarations (the ones
                      whose parameter names are "param_names1") are chosen. *)
-                  Variable.Map.of_list (List.combine param_names2 param_names1),
+                  let param_names1 = variable_list_to_name_list param_names1 in
+                  let param_names2 = variable_list_to_name_list param_names2 in
+                  Name.Map.of_list (List.combine param_names2 param_names1),
                     param_names1
               in
               let params =
@@ -168,13 +177,13 @@ struct
                 let scope_level = Typing_env.max_level env in
                 let env_with_params =
                   List.fold_left2 (fun env param param_ty ->
-                      Typing_env.add env (Name.var param) scope_level
+                      Typing_env.add env param scope_level
                         (Definition param_ty))
                     env
                     param_names param_tys
                 in
                 let result_env_extension2 =
-                  Typing_env_extension.rename_variables_not_occurring_in_domain
+                  Typing_env_extension.rename_names
                     result_env_extension2 params2_to_params1_freshening
                 in
                 let result_env_extension =
