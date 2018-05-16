@@ -48,8 +48,7 @@ module type S = sig
      relationness *)
   val join_of_kind_foo
      : typing_environment
-    -> env_extension
-    -> env_extension
+    -> typing_environment
     -> of_kind_foo
     -> of_kind_foo
     -> of_kind_foo Or_unknown.t

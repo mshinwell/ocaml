@@ -190,8 +190,8 @@ end) = struct
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    result : t list;
-    result_env_extension : env_extension;
+    return_values : Kinded_parameter.t list;
+    return_env_extension : env_extension;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -263,7 +263,7 @@ end) = struct
 
   and typing_environment = {
     resolver : (Export_id.t -> t option);
-    aliases_of_names : Name.Set.t Name.Map.t;
+    aliases : Name.Set.t Simple.Map.t;
     (* CR mshinwell: Rename names_to_types -> names_to_entries *)
     names_to_types :
       (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
@@ -274,14 +274,10 @@ end) = struct
   }
 
   and env_extension = {
-    aliases_of_names : Name.Set.t Name.Map.t;
     first_definitions : (Name.t * t) list;
-    first_definitions_names_to_types : t Name.Map.t;
     at_or_after_cut_point : levels_to_entries;
-    at_or_after_cut_point_names_to_types : typing_environment_entry0 Name.Map.t;
     last_equations_rev : (Name.t * t) list;
-    last_equations_names_to_types : t Name.Map.t;
-    cse : Name.t Flambda_primitive.With_fixed_value.Map.t;
+    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
   }
 
   module Name_or_export_id = struct
@@ -406,4 +402,6 @@ module type S = sig
   val bottom_as_ty_value : unit -> ty_value
 
   val bottom_as_ty_fabricated : unit -> ty_fabricated
+
+  val get_alias : flambda_type -> Name.t option
 end

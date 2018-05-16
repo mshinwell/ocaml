@@ -437,7 +437,7 @@ end) = struct
           Some canonical_name
         end
 
-  let aliases_of_name t name =
+  let aliases_of_name (t : t) name =
     match Name.Map.find name t.aliases_of_names with
     | exception Not_found ->
       Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
@@ -458,7 +458,7 @@ end) = struct
         | None -> false
         | Some alias -> Name.Set.mem alias (aliases_of_name t name)
         end
-      | Definition _ -> CSE _ -> false
+      | Definition _ | CSE _ -> false
     in
     if equation_with_reverse_alias_already_present then begin
       t

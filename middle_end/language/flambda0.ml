@@ -1391,7 +1391,8 @@ end = struct
     Continuation.Map.equal (Continuation_handler.equal ~equal_type) t1 t2
 end and Continuation_handler : sig
   type t = {
-    params : Typed_parameter.t list;
+    params : Kinded_parameter.t list;
+    env_extension : Flambda_type.Typing_env_extension.t;
     stub : bool;
     is_exn_handler : bool;
     handler : Expr.t;
@@ -1409,21 +1410,24 @@ end = struct
   include Continuation_handler
 
   let equal ~equal_type
-        { params = params1; stub = stub1; is_exn_handler = is_exn_handler1;
-          handler = handler1; }
-        { params = params2; stub = stub2; is_exn_handler = is_exn_handler2;
-          handler = handler2; } =
-    Typed_parameter.List.equal ~equal_type params1 params2
+        { params = params1; env_extension = env_extension1; stub = stub1;
+          is_exn_handler = is_exn_handler1; handler = handler1; }
+        { params = params2; env_extension = env_extension2; stub = stub2;
+          is_exn_handler = is_exn_handler2; handler = handler2; } =
+    Kinded_parameter.List.equal ~equal_type params1 params2
+      && Flambda_type.Typing_env_extension.equal env_extension1 env_extension2
       && Pervasives.compare stub1 stub2 = 0
       && Pervasives.compare is_exn_handler1 is_exn_handler2 = 0
       && Expr.equal ~equal_type handler1 handler2
 
-  let print_with_cache ~cache ppf { params; stub; handler; is_exn_handler; } =
-    fprintf ppf "%s%s%s%a%s=@ %a"
+  let print_with_cache ~cache:_ ppf
+        { params; env_extension; stub; handler; is_exn_handler; } =
+    fprintf ppf "%s%s%s%a@ %a@ %s=@ %a"
       (if stub then "*stub* " else "")
       (if is_exn_handler then "*exn* " else "")
       (match params with [] -> "" | _ -> "(")
-      (Typed_parameter.List.print_with_cache ~cache) params
+      Kinded_parameter.List.print params
+      Flambda_type.Typing_env_extension.print env_extension
       (match params with [] -> "" | _ -> ") ")
       Expr.print handler
 
@@ -1902,27 +1906,6 @@ end = struct
     (* The variable within [t] is always presumed to be a binding
        occurrence. *)
     Flambda_type.free_names t.ty
-
-(*
-  include Hashtbl.Make_with_map (struct
-    type nonrec t = t
-
-    let compare { param = param1; projection = projection1; ty = ty1; }
-          { param = param2; projection = projection2; ty = ty2; } =
-      let c = Parameter.compare param1 param2 in
-      if c <> 0 then c
-      else
-        let c = Projection.compare projection1 projection2 in
-        if c <> 0 then c
-        else
-          Flambda_type.compare ...
-
-    let equal t1 t2 = (compare t1 t2 = 0)
-
-    let hash t =
-
-  end)
-*)
 
   let equal ~equal_type
         { param = param1; ty = ty1; }

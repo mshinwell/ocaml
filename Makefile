@@ -314,6 +314,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/flambda_arity.cmo \
   middle_end/language/flambda_primitive.cmo \
   middle_end/language/allocated_const.cmo \
+  middle_end/language/kinded_parameter.cmo \
   middle_end/typing/flambda_type0_intf.cmo \
   middle_end/typing/flambda_type0_internal_intf.cmo \
   middle_end/typing/typing_env_intf.cmo \

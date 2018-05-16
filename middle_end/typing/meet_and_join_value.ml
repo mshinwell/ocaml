@@ -128,13 +128,12 @@ struct
       in
       { env_extension; }
 
-    let join_immediate_case env env_extension1 env_extension2
-          ({ env_extension = env_extension1'; } : immediate_case)
-          ({ env_extension = env_extension2'; } : immediate_case)
+    let join_immediate_case env1 env2
+          ({ env_extension = env_extension1; } : immediate_case)
+          ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Typing_env_extension.join env env_extension1 env_extension2
-          env_extension1' env_extension2'
+        Typing_env_extension.join env1 env2 env_extension1 env_extension2
       in
       { env_extension; }
 
@@ -148,10 +147,9 @@ struct
       if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
-    let join_immediates env env_extension1 env_extension2
-          immediates1 immediates2 =
+    let join_immediates env1 env2 immediates1 immediates2 =
       Immediate.Map.union_merge (fun imm1 imm2 ->
-          join_immediate_case env env_extension1 env_extension2 imm1 imm2)
+          join_immediate_case env1 env2 imm1 imm2)
         immediates1
         immediates2
 
@@ -195,22 +193,26 @@ struct
         fields;
       }, !env_extension_from_meet
 
-    let join_singleton_block env env_extension1 env_extension2
-          ({ env_extension = env_extension1';
+    let join_singleton_block env1 env2
+          ({ env_extension = env_extension1;
              fields = fields1;
            } : singleton_block)
-          ({ env_extension = env_extension2';
+          ({ env_extension = env_extension2;
              fields = fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
-        Typing_env_extension.join env env_extension1 env_extension2
-          env_extension1' env_extension2'
+        Typing_env_extension.join env1 env2
+          env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
-        let env =
-          Typing_env.add_or_meet_env_extension env env_extension
-            (Typing_env.max_level env)
+        let env1 =
+          Typing_env.add_or_meet_env_extension env1 env_extension
+            (Typing_env.max_level env1)
+        in
+        let env2 =
+          Typing_env.add_or_meet_env_extension env2 env_extension
+            (Typing_env.max_level env2)
         in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
@@ -218,8 +220,7 @@ struct
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              Immutable (Meet_and_join.join env
-                env_extension1 env_extension2 field1 field2))
+              Immutable (Meet_and_join.join env1 env2 field1 field2))
           fields1
           fields2
       in
@@ -257,15 +258,14 @@ struct
       in
       { env_extension; fields; }
 
-    let join_block_cases env env_extension1 env_extension2
+    let join_block_cases env1 env2
           ((Blocks { by_length = by_length1; }) : block_cases)
           ((Blocks { by_length = by_length2; }) : block_cases)
           : block_cases =
       let by_length =
         Targetint.OCaml.Map.union_merge
           (fun singleton_block1 singleton_block2 ->
-            join_singleton_block env env_extension1 env_extension2
-              singleton_block1 singleton_block2)
+            join_singleton_block env1 env2 singleton_block1 singleton_block2)
           by_length1
           by_length2
       in
@@ -315,10 +315,10 @@ struct
       in
       Blocks { by_length; }
 
-    let join_blocks env env_extension1 env_extension2 blocks1 blocks2 =
+    let join_blocks env1 env2 blocks1 blocks2 =
       let blocks =
         Tag.Map.union_merge (fun block_cases1 block_cases2 ->
-            join_block_cases env env_extension1 env_extension2
+            join_block_cases env1 env2
               block_cases1 block_cases2)
           blocks1
           blocks2
@@ -328,10 +328,11 @@ struct
           let in_blocks2 = Tag.Map.mem tag blocks2 in
           let only_in_blocks1 = in_blocks1 && (not in_blocks2) in
           let only_in_blocks2 = (not in_blocks1) && in_blocks2 in
+          (* XXX this might not be right---think about env1/env2 *)
           if only_in_blocks1 then
-            add_env_extension_block_cases env env_extension1 block_cases
+            add_env_extension_block_cases env1 env_extension1 block_cases
           else if only_in_blocks2 then
-            add_env_extension_block_cases env env_extension2 block_cases
+            add_env_extension_block_cases env2 env_extension2 block_cases
           else
             block_cases)
         blocks
@@ -413,7 +414,7 @@ struct
         in
         Ok ({ blocks; immediates; }, env_extension_from_meet)
 
-    let join_blocks_and_tagged_immediates env env_extension1 env_extension2
+    let join_blocks_and_tagged_immediates env1 env2
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
           : blocks_and_tagged_immediates =
@@ -421,13 +422,13 @@ struct
         match blocks1, blocks2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Known blocks1, Known blocks2 ->
-          Known (join_blocks env env_extension1 env_extension2 blocks1 blocks2)
+          Known (join_blocks env1 env2 blocks1 blocks2)
       in
       let immediates : _ Or_unknown.t =
         match imms1, imms2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Known imms1, Known imms2 ->
-          Known (join_immediates env env_extension1 env_extension2 imms1 imms2)
+          Known (join_immediates env1 env2 imms1 imms2)
       in
       { blocks; immediates; }
 
@@ -504,42 +505,38 @@ struct
           | String _), _ ->
         Bottom
 
-    let join_of_kind_foo env env_extension1 env_extension2
+    let join_of_kind_foo env1 env2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : of_kind_value Or_unknown.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
         let blocks_imms =
-          join_blocks_and_tagged_immediates env env_extension1 env_extension2
+          join_blocks_and_tagged_immediates env1 env2
             blocks_imms1 blocks_imms2
         in
         Known (Blocks_and_tagged_immediates blocks_imms)
       | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_float.join_ty env
-            env_extension1 env_extension2 n1 n2
+          Meet_and_join_naked_float.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_float n))
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_int32.join_ty env
-            env_extension1 env_extension2 n1 n2
+          Meet_and_join_naked_int32.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_int32 n))
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_int64.join_ty env
-            env_extension1 env_extension2 n1 n2
+          Meet_and_join_naked_int64.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_int64 n))
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_nativeint.join_ty env
-            env_extension1 env_extension2 n1 n2
+          Meet_and_join_naked_nativeint.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_nativeint n))
       | Closures closures1, Closures closures2 ->
@@ -549,10 +546,7 @@ struct
                  (closures_entry2 : closures_entry) : closures_entry ->
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
-              let set =
-                Meet_and_join_fabricated.join_ty env
-                  env_extension1 env_extension2 set1 set2
-              in
+              let set = Meet_and_join_fabricated.join_ty env1 env2 set1 set2 in
               { set_of_closures = set; })
             closures1
             closures2

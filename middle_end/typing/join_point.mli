@@ -31,6 +31,8 @@
     In the event that there are no uses then the [default_env] will be used
     as the body environment.  (This environment must include bindings for
     the continuation's parameters.) *)
+(* XXX update comment *)
+
 (* CR mshinwell: Rename [default_env]? *)
 val param_types_and_body_env
    : Continuation_uses.t

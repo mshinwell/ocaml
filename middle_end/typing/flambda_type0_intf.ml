@@ -201,10 +201,8 @@ module type S = sig
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    result : t list;  (* CR mshinwell: make plural *)
-    (* CR mshinwell: Is this name misleading?  The quantifiers are before
-       the parameters *)
-    result_env_extension : env_extension;
+    return_values : Kinded_parameter.t list;
+    return_env_extension : env_extension;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;

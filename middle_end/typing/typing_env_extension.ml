@@ -244,23 +244,15 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
 
   let add_definition_at_beginning t name ty =
     let first_definitions = (name, ty) :: t.first_definitions in
-    let first_definitions_names_to_types =
-      Name.Map.add name ty t.first_definitions_names_to_types
-    in
     { t with
       first_definitions;
-      first_definitions_names_to_types;
     }
 
   (* CR mshinwell: Invariant check for increased preciseness? *)
   let add_equation t name ty =
     let last_equations_rev = (name, ty) :: t.last_equations_rev in
-    let last_equations_names_to_types =
-      Name.Map.add name ty t.last_equations_names_to_types
-    in
     { t with
       last_equations_rev;
-      last_equations_names_to_types;
     }
 
   let add_cse t name prim =
@@ -283,16 +275,13 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         | ty -> Some ty
         | exception Not_found -> None
 
-  let find_then_find_in_env_exn t env name =
+  let find t name =
     match find_opt t name with
     | Some ty -> ty
-    | None -> fst (TE.find_exn env name)
-
-  (* CR-someday mshinwell: Consider implementing [meet] and [join] directly
-     rather than opening up all of the existentials and cutting the
-     environment.  However this shouldn't be done until we are sure that the
-     semantics are correct and that there is likely to be a notable
-     performance increase. *)
+    | None ->
+      Misc.fatal_errorf "Unbound name %a in@ %a"
+        Name.print name
+        print t
 
   let meet (env : typing_environment) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
@@ -304,38 +293,50 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
-  let join (env : typing_environment) (t1' : t) (t2' : t) (t1 : t) (t2 : t) =
-    if fast_equal t1 t2 then t1
+  let join (env1 : typing_environment) (t1 : t)
+        (env2 : typing_environment) (t2 : t) =
+    if TE.fast_equal env1 env2 && fast_equal t1 t2 then t1
     else if is_empty t1 then empty
     else if is_empty t2 then empty
     else
-      let t =
-        let scope_level = Scope_level.next (TE.max_level env) in
-        let env =
-          TE.add_or_join_env_extension ~don't_freshen:()
-            env t1' t2' t1 scope_level
-        in
-        let env =
-          TE.add_or_join_env_extension ~don't_freshen:()
-            env t1' t2' t2 scope_level
-        in
-        TE.cut env ~existential_if_defined_at_or_later_than:scope_level
-      in
-Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
-      let _equations_in_t1_on_env = equations_on_env t1 in
-      let _equations_in_t2_on_env = equations_on_env t2 in
-(*
+      let equations_in_t1_on_env = equations_on_env t1 in
+      let equations_in_t2_on_env = equations_on_env t2 in
       let allowed_names =
-        Name_occurrences.create_from_set_in_types (
-          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env)
+        Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
       in
-      let t = restrict_to_names t allowed_names in
-*)
-      (* We don't need to filter the types within entries ([Equation]s or
-         [Definition]s) in [t].  Any entry originally containing a reference
-         to a name defined in exactly one of [t1] or [t2] should have had such
-         reference removed by the join operation on the type inside the
-         entry. *)
+      let env1 =
+        TE.add_or_meet_env_extension env t1
+          (Scope_level.next (TE.max_level env))
+      in
+      let env2 =
+        TE.add_or_meet_env_extension env t2
+          (Scope_level.next (TE.max_level env))
+      in
+      let t =
+        Name.Set.fold (fun name t ->
+            let ty1 = find t1 name in
+            let ty2 = find t2 name in
+            let join_ty = T.join env1 env2 ty1 ty2 in
+            add_equation t name join_ty)
+          allowed_names
+          empty
+      in
+      let domain_of_env1 = Name_occurrences.everything (TE.domain env1) in
+      let domain_of_env2 = Name_occurrences.everything (TE.domain env2) in
+      let domain_of_both = Name.Set.inter domain_of_env1 domain_of_env2 in
+      let preserved_cse_equations env t cse =
+
+      in
+      let cse =
+        (* CR-someday mshinwell: This could be improved to preserve some of
+           those equations that talk about existentially-bound names. *)
+        Flambda_primitive.With_fixed_value.
+      in
+      let t =
+        { t with
+          cse;
+        }
+      in
       invariant t;
       t
 
@@ -379,6 +380,8 @@ Format.eprintf "TEE.join without restriction:@ %a\n%!" print t;
               names_more_precise, freshened_names_more_precise, freshening
             | Some (old_ty, _) ->
               let more_precise_using_old_types_for_free_names =
+                (* XXX Not sure [env] is right: shouldn't it contain names
+                   from the extension too? *)
                 T.strictly_more_precise env ty ~than:old_ty
               in
               if more_precise_using_old_types_for_free_names then

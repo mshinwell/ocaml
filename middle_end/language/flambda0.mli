@@ -475,19 +475,32 @@ end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end and Continuation_handler : sig
   type t = {
-    params : Typed_parameter.t list;
+    params : Kinded_parameter.t list;
+    (** The parameters of the continuation, in order from left to right,
+        with their kinds. *)
+    env_extension : Flambda_type.Typing_env_extension.t;
+    (** The environment extension contains [Equation] bindings for the
+        [params] together with any other information required to interpret
+        them (refinements to the environment and/or definitions of
+        existentially-bound names). *)
     stub : bool;
+    (** Whether the continuation is a compiler-generated wrapper that should
+        always be inlined. *)
     is_exn_handler : bool;
-    (** Continuations used as exception handlers must always be [Non_recursive]
+    (** Whether the continuation is an exception handler.
+
+        Continuations used as exception handlers must always be [Non_recursive]
         and must have exactly one argument.  To enable identification of them
         in passes not invoked from [Simplify] (where they could be
         identified by looking at the [Apply_cont]s that reference them) they
         are marked explicitly.
+
         (Relevant piece of background info: the backend cannot compile
         simultaneously-defined continuations when one or more of them is an
         exception handler.)
     *)
     handler : Expr.t;
+    (** The code of the continuation itself. *)
   }
 
   val print : Format.formatter -> t -> unit
@@ -614,8 +627,18 @@ end and Function_declaration : sig
     body : Expr.t;
     (** The code of the function's body. *)
     free_names_in_body : Name_occurrences.t;
-    (** All names that occur free in the function's body.  (See note on the
-        [free_names] function, below.) *)
+    (** All free names in the function's body (that is to say, treating
+        parameters etc. bound by the function as free).  (See [free_names],
+        below.) *)
+    return_values : Kinded_parameter.t list;
+    (** The parameters of the return continuation, in order from left to right,
+        with their kinds. *)
+    return_env_extension : Flambda_type.Typing_env_extension.t;
+    (** The environment extension contains [Equation] bindings for the
+        [return_values].  These may only reference other [return_values] for
+        the same function declaration (only dependencies on [return_values]
+        to the left are allowed), the [params], or existentially-bound
+        variables defined in the extension. *)
     stub : bool;
     (** A stub function is a generated function used to prepare arguments or
         return values to allow indirect calls to functions with a special
@@ -768,11 +791,6 @@ end and Typed_parameter : sig
       -> bool
   end
 
-(* XXX try to remove this
-  (** N.B. Sets, maps and hash tables keyed on values of type [t] do not
-      take into account the parameter's type in the comparison relation. *)
-  include Hashtbl.With_map with type t := t
-*)
   val print : Format.formatter -> t -> unit
 end and Flambda_type : sig
   include Flambda_type0_intf.S with type expr := Expr.t

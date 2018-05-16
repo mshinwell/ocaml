@@ -2184,6 +2184,15 @@ result
   let rename_variables t subst =
     rename_variables subst t
 
+  let get_alias t =
+    match t.descr with
+    | Value (Equals name) -> Some name
+    | Value _ -> None
+    | Naked_number (Equals name, _) -> Some name
+    | Naked_number _ -> None
+    | Fabricated (Equals name, _) -> Some name
+    | Fabricated _ -> None
+
   module T1 = struct
     include T
 
@@ -2215,6 +2224,7 @@ result
     let bottom_as_ty_value = bottom_as_ty_value
     let bottom_as_ty_fabricated = bottom_as_ty_fabricated
     let is_obviously_bottom = is_obviously_bottom
+    let get_alias = get_alias
   end
 
   (* CR mshinwell: Work out which properties we need to prove, e.g.
@@ -2242,116 +2252,12 @@ result
       with type env_extension := env_extension
       with type 'a ty := 'a ty
   end) -> struct
-(*
-    let add_env_extension env t env_extension_to_add : t =
-      let t, _canonical_name = Typing_env.resolve_aliases (env, t) in
-      match t.descr with
-      | Value (No_alias (Join of_kind_values)) ->
-        let of_kind_values =
-          List.map
-            (fun (of_kind_value : of_kind_value) : of_kind_value ->
-              match of_kind_value with
-              | Blocks_and_tagged_immediates { blocks; immediates;
-                  is_int; get_tag; } ->
-                let blocks : _ Or_unknown.t =
-                  match blocks with
-                  | Unknown -> Unknown
-                  | (Known blocks) as blocks' ->
-                    let only_one_case =
-                      match Tag.Map.get_singleton blocks with
-                      | None -> false
-                      | Some (_, Blocks { by_length; }) ->
-                        Targetint.OCaml.Map.cardinal by_length = 1
-                    in
-                    if only_one_case then blocks'
-                    else
-                      let blocks =
-                        Tag.Map.map
-                          (fun ((Blocks { by_length }) : block_cases)
-                                : block_cases ->
-                            let by_length =
-                              Targetint.OCaml.Map.map
-                                (fun (block : singleton_block)
-                                      : singleton_block ->
-                                  let env_extension =
-                                    Typing_env_extension.meet
-                                      block.env_extension env_extension_to_add
-                                  in
-                                  { block with env_extension; })
-                                by_length
-                            in
-                            Blocks { by_length; })
-                          blocks
-                      in
-                      Known blocks
-                in
-                let immediates : _ Or_unknown.t =
-                  match immediates with
-                  | Unknown -> Unknown
-                  | Known imm_map ->
-                    if Immediate.Map.cardinal imm_map <= 1 then immediates
-                    else
-                      let imm_map =
-                        Immediate.Map.map
-                          (fun ({ env_extension; } : immediate_case)
-                                : immediate_case ->
-                            let env_extension =
-                              Typing_env_extension.meet
-                                env_extension env_extension_to_add
-                            in
-                            { env_extension; })
-                          imm_map
-                      in
-                      Known imm_map
-                in
-                Blocks_and_tagged_immediates { blocks; immediates; is_int;
-                  get_tag; }
-              | Boxed_number _ | Closures _ | String _ -> of_kind_value)
-            of_kind_values
-        in
-        { t with
-          descr = Value (No_alias (Join of_kind_values));
-        }
-      | Fabricated (No_alias (Join of_kind_fabricateds)) ->
-        let of_kind_fabricateds =
-          List.map
-            (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
-              match of_kind_fabricated with
-              | Discriminant discriminant_map ->
-                if Discriminant.Map.cardinal discriminant_map <= 1 then
-                  of_kind_fabricated
-                else
-                  let discriminant_map =
-                    Discriminant.Map.map
-                      (fun ({ env_extension; } : discriminant_case)
-                            : discriminant_case ->
-                        let env_extension =
-                          Typing_env_extension.meet
-                            env_extension env_extension_to_add
-                        in
-                        { env_extension; })
-                      discriminant_map
-                  in
-                  Discriminant discriminant_map
-              | Set_of_closures _
-              | Closure _ -> of_kind_fabricated)
-            of_kind_fabricateds
-        in
-        { t with
-          descr = Fabricated (No_alias (Join of_kind_fabricateds));
-        }
-      | Value (Type _ | Equals _ | No_alias Unknown)
-      | Fabricated (Type _ | Equals _ | No_alias Unknown) -> t
-      | Naked_number _ -> t
-*)
-
     let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
       match uj with
       | Join [] -> true
       | Unknown | Join _ -> false
 
-    let rec join_on_unknown_or_join env env_extension1 env_extension2
-(*          ~add_env_extension *)
+    let rec join_on_unknown_or_join env1 env2
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
@@ -2360,10 +2266,6 @@ result
         match uj1, uj2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Join [], Join [] -> Join []
-(*
-        | Join [], _ -> Join (add_env_extension uj2 env_extension2)
-        | _, Join [] -> Join (add_env_extension uj1 env_extension1)
-*)
         | Join of_kind_foos1, Join of_kind_foos2 ->
           (* We rely on the invariant in flambda_type0_intf.ml.
              Everything in [of_kind_foos1] is mutually incompatible with each
@@ -2376,8 +2278,7 @@ result
                 let joined =
                   List.map (fun of_kind_foo' ->
                       let join =
-                        S.join_of_kind_foo env env_extension1 env_extension2
-                          of_kind_foo of_kind_foo'
+                        S.join_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
                       in
                       match join with
                       | Known of_kind_foo ->
@@ -2397,23 +2298,21 @@ result
           in
           Join of_kind_foos
 
-    and join_ty env env_extension1 env_extension2
+    and join_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
-      if env_extension1 == env_extension2 && or_alias1 == or_alias2 then
+      if env1 == env2 && or_alias1 == or_alias2 then
         or_alias1
       else
         let unknown_or_join1, all_aliases1 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-            env env_extension1
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env1
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
         let unknown_or_join2, all_aliases2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-            env env_extension2
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env2
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
@@ -2435,7 +2334,7 @@ result
             Equals name2
           | None, None ->
             let unknown_or_join =
-              join_on_unknown_or_join env env_extension1 env_extension2
+              join_on_unknown_or_join env1 env2
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
@@ -2449,7 +2348,7 @@ result
             end
           | _, _ ->
             let unknown_or_join =
-              join_on_unknown_or_join env env_extension1 env_extension2
+              join_on_unknown_or_join env1 env2
                 unknown_or_join1 unknown_or_join2
             in
             No_alias unknown_or_join
@@ -2669,8 +2568,8 @@ result
         t, env_extension_from_meet
       end
 
-    let join env env_extension1 env_extension2 t1 t2 =
-      if Typing_env_extension.fast_equal env_extension1 env_extension2
+    let join env1 env2 t1 t2 =
+      if Typing_env_extension.fast_equal env1 env2
         && Type_equality.fast_equal t1 t2
       then t1
       else begin
@@ -2679,8 +2578,7 @@ result
           match t1.descr, t2.descr with
           | Value ty_value1, Value ty_value2 ->
             let ty_value =
-              Meet_and_join_value.join_ty env
-                env_extension1 env_extension2 ty_value1 ty_value2
+              Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
             in
             if ty_value == ty_value1 then t1.descr
             else if ty_value == ty_value2 then t2.descr
@@ -2691,36 +2589,31 @@ result
             begin match kind1, kind2 with
             | N.Naked_immediate, N.Naked_immediate ->
               let ty_naked_number =
-                Meet_and_join_naked_immediate.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_naked_immediate.join_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_immediate)
             | N.Naked_float, N.Naked_float ->
               let ty_naked_number =
-                Meet_and_join_naked_float.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_naked_float.join_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_float)
             | N.Naked_int32, N.Naked_int32 ->
               let ty_naked_number =
-                Meet_and_join_naked_int32.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_naked_int32.join_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int32)
             | N.Naked_int64, N.Naked_int64 ->
               let ty_naked_number =
-                Meet_and_join_naked_int64.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_naked_int64.join_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int64)
             | N.Naked_nativeint, N.Naked_nativeint ->
               let ty_naked_number =
-                Meet_and_join_naked_nativeint.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_naked_nativeint.join_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_nativeint)
@@ -2731,8 +2624,7 @@ result
             end
           | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
             let ty_fabricated =
-              Meet_and_join_fabricated.join_ty env
-                env_extension1 env_extension2
+              Meet_and_join_fabricated.join_ty env1 env2
                 ty_fabricated1 ty_fabricated2
             in
             if ty_fabricated == ty_fabricated1 then t1.descr

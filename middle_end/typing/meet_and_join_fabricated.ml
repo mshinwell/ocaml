@@ -388,10 +388,10 @@ struct
             Ok (({ function_decls; } : closure), env_extension_from_meet)
       end
 
-    let join_closure env env_extension1 env_extension2
+    let join_closure env1 env2
           (closure1 : closure) (closure2 : closure)
           : closure =
-      if env_extension1 == env_extension2 && closure1 == closure2 then begin
+      if env1 == env2 && closure1 == closure2 then begin
         closure1
       end else begin
         let produce_non_inlinable ~params1 ~params2
@@ -402,8 +402,7 @@ struct
           let same_num_results = List.compare_lengths result1 result2 = 0 in
           if same_arity && same_num_results then
             let params =
-              List.map2 (fun t1 t2 ->
-                  Meet_and_join.join env env_extension1 env_extension2 t1 t2)
+              List.map2 (fun t1 t2 -> Meet_and_join.join env1 env2 t1 t2)
                 params1
                 params2
             in
