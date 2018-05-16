@@ -475,14 +475,8 @@ end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end and Continuation_handler : sig
   type t = {
-    params : Kinded_parameter.t list;
-    (** The parameters of the continuation, in order from left to right,
-        with their kinds. *)
-    env_extension : Flambda_type.Typing_env_extension.t;
-    (** The environment extension contains [Equation] bindings for the
-        [params] together with any other information required to interpret
-        them (refinements to the environment and/or definitions of
-        existentially-bound names). *)
+    params : Flambda_type.Parameters.t;
+    (** The parameters of the continuation. *)
     stub : bool;
     (** Whether the continuation is a compiler-generated wrapper that should
         always be inlined. *)
@@ -616,11 +610,7 @@ end and Function_declaration : sig
     exn_continuation_param : Continuation.t;
     (** To where we must jump if application of the function raises an
         exception. *)
-    return_arity : Flambda_arity.t;
-    (** The kinds of the parameters of the [continuation_param] continuation.
-        (This encodes whether the function returns multiple and/or unboxed
-        values, for example.) *)
-    params : Typed_parameter.t list;
+    params : Flambda_type.Parameters.t;
     (** The normal (variable) parameters of the function together with their
         types.  Some of the parameters may have non-trivial types that
         indicate previous specialisation of the function. *)
@@ -630,15 +620,9 @@ end and Function_declaration : sig
     (** All free names in the function's body (that is to say, treating
         parameters etc. bound by the function as free).  (See [free_names],
         below.) *)
-    return_values : Kinded_parameter.t list;
-    (** The parameters of the return continuation, in order from left to right,
-        with their kinds. *)
-    return_env_extension : Flambda_type.Typing_env_extension.t;
-    (** The environment extension contains [Equation] bindings for the
-        [return_values].  These may only reference other [return_values] for
-        the same function declaration (only dependencies on [return_values]
-        to the left are allowed), the [params], or existentially-bound
-        variables defined in the extension. *)
+    result : Flambda_type.Parameters.t;
+    (** The type(s) of the value(s) returned by the function (which types
+        are those of the parameters of the return continuation). *)
     stub : bool;
     (** A stub function is a generated function used to prepare arguments or
         return values to allow indirect calls to functions with a special
@@ -672,7 +656,7 @@ end and Function_declaration : sig
       existing [closure_origin].
   *)
   val create
-     : params:Typed_parameter.t list
+     : params:Flambda_type.Parameters.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
     -> return_arity:Flambda_arity.t
@@ -691,12 +675,12 @@ end and Function_declaration : sig
   val update_body : t -> body:Expr.t -> t
 
   (** Change only the parameters of a function declaration. *)
-  val update_params : t -> params:Typed_parameter.t list -> t
+  val update_params : t -> Parameters.t -> t
 
   (** Change only the code and parameters of a function declaration. *)
   val update_params_and_body
      : t
-    -> params:Typed_parameter.t list
+    -> Parameters.t
     -> body:Expr.t
     -> t
 
@@ -706,92 +690,6 @@ end and Function_declaration : sig
   val free_names : t -> Name_occurrences.t
 
   val print : Closure_id.t -> Format.formatter -> t -> unit
-end and Typed_parameter : sig
-  (** A parameter (to a function, continuation, etc.) together with its
-      type. *)
-  type t
-
-  (** Create a typed parameter. *)
-  val create : Parameter.t -> Flambda_type.t -> t
-
-  (** The underlying parameter. *)
-  val param : t -> Parameter.t
-
-  (** The underlying variable (cf. [Parameter.var]). *)
-  val var : t -> Variable.t
-
-  val name : t -> Name.t
-
-  (** As for [var], but returns a [Simple.t] describing the variable. *)
-  val simple : t -> Simple.t
-
-  (** The type of the given parameter. *)
-  val ty : t -> Flambda_type.t
-
-  (** The kind of the given parameter. *)
-  val kind : t -> Flambda_kind.t
-
-  (** Replace the type of the given parameter. *)
-  val with_type : t -> Flambda_type.t -> t
-
-  (** Map the underlying variable of the given parameter. *)
-  val map_var : t -> f:(Variable.t -> Variable.t) -> t
-
-  (** Map the type of the given parameter. *)
-  val map_type : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
-
-  (** Free names in the given parameter's type.  (The variable corresponding
-      to the parameter is assumed to be always a binding occurrence.) *)
-  val free_names : t -> Name_occurrences.t
-
-  (** Equality on typed parameters. *)
-  val equal
-     : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
-    -> t
-    -> t
-    -> bool
-
-  val rename : t -> t
-
-  module List : sig
-    type nonrec t = t list
-
-    val create : (Parameter.t * Flambda_type.t) list -> t
-
-    val free_names : t -> Name_occurrences.t
-
-    (** As for [Parameter.List.vars]. *)
-    val vars : t -> Variable.t list
-
-    (** As for [vars] but returns a list of [Simple.t] values describing the
-        variables. *)
-    val simples : t -> Simple.t list
-
-    (** As for [vars] but returns a set. *)
-    val var_set : t -> Variable.Set.t
-
-    (** As for [var_set] but returns a set of [Name]s. *)
-    val name_set : t -> Name.Set.t
-
-    (** As for [var_set] but returns a set of [Parameter]s. *)
-    val param_set : t -> Parameter.Set.t
-
-    val equal_vars : t -> Variable.t list -> bool
-
-    val rename : t -> t
-
-    val arity : t -> Flambda_arity.t
-
-    val print : Format.formatter -> t -> unit
-
-    val equal
-       : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
-      -> t
-      -> t
-      -> bool
-  end
-
-  val print : Format.formatter -> t -> unit
 end and Flambda_type : sig
   include Flambda_type0_intf.S with type expr := Expr.t
 end

@@ -309,6 +309,16 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
 
 let environment_for_let_cont_handler ~env _cont
       ~(handler : Flambda.Continuation_handler.t) =
+  let params = T.Parameters.params handler.params in
+  let _freshened_vars, freshening =
+    Freshening.add_variables' (E.freshening env)
+      (Typed_parameter.List.vars params)
+  in
+  T.Parameters.introduce handler.params freshening env
+
+(*
+let environment_for_let_cont_handler ~env _cont
+      ~(handler : Flambda.Continuation_handler.t) =
   let params = handler.params in
   let _freshened_vars, freshening =
     Freshening.add_variables' (E.freshening env)
@@ -346,6 +356,7 @@ let environment_for_let_cont_handler ~env _cont
         (Typed_parameter.ty param))
     (E.set_freshening env freshening)
     params
+*)
 
 let rec simplify_let_cont_handler ~env ~r ~cont:_
       ~(handler : Flambda.Continuation_handler.t) ~arg_tys =

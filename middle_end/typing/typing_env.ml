@@ -602,8 +602,8 @@ end) = struct
     restrict_to_names0 t allowed
 
   (* XXX [don't_freshen] needs sorting properly *)
-  let rec add_or_meet_or_join_env_extension ?don't_freshen t env_extension
-        scope_level ~meet_or_join =
+  let rec add_or_meet_or_join_env_extension ?don't_freshen ?freshening
+        t env_extension scope_level ~meet_or_join =
     let original_t = t in
     let rename_name (name : Name.t) freshening =
       match Name.Map.find name freshening with
@@ -686,7 +686,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
           add_definition t freshening name ty)
-        (Name.Map.empty, t)
+        (Freshening.name_substitution freshening, t)
         (List.rev env_extension.first_definitions)
     in
     let freshening, t =

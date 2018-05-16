@@ -293,9 +293,10 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
-  let join (env1 : typing_environment) (t1 : t)
-        (env2 : typing_environment) (t2 : t) =
-    if TE.fast_equal env1 env2 && fast_equal t1 t2 then t1
+  let join (env : typing_environment)
+        (env_plus_t1 : typing_environment) (env_plus_t2 : typing_environment)
+        (t1 : t) (t2 : t) =
+    if TE.fast_equal env_plus_t1 env_plus_t2 && fast_equal t1 t2 then t1
     else if is_empty t1 then empty
     else if is_empty t2 then empty
     else
@@ -304,33 +305,50 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       let allowed_names =
         Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
       in
-      let env1 =
-        TE.add_or_meet_env_extension env t1
-          (Scope_level.next (TE.max_level env))
-      in
-      let env2 =
-        TE.add_or_meet_env_extension env t2
-          (Scope_level.next (TE.max_level env))
-      in
       let t =
         Name.Set.fold (fun name t ->
             let ty1 = find t1 name in
             let ty2 = find t2 name in
-            let join_ty = T.join env1 env2 ty1 ty2 in
+            let join_ty = T.join env env_plus_t1 env_plus_t2 t1 t2 ty1 ty2 in
             add_equation t name join_ty)
           allowed_names
           empty
       in
       let domain_of_env1 = Name_occurrences.everything (TE.domain env1) in
       let domain_of_env2 = Name_occurrences.everything (TE.domain env2) in
-      let domain_of_both = Name.Set.inter domain_of_env1 domain_of_env2 in
-      let preserved_cse_equations env t cse =
-
+      let domain_of_both_envs = Name.Set.inter domain_of_env1 domain_of_env2 in
+      let preserved_cse_equations env t =
+        (* CR-someday mshinwell: This could be improved to preserve some of
+           those CSE equations that talk about existentially-bound names.  For
+           the moment we only preserve those CSE equations whose free names are
+           wholly contained within both the domain of [env1] and the domain
+           of [env2]. *)
+        Flambda_primitive.With_fixed_value.Map.filter
+          (fun prim (bound_to_or_value : Simple.t) ->
+            match bound_to_or_value with
+            | Name name when not (Name.Set.mem name domain_of_both_envs) ->
+              false
+            | Name _ | Const _ | Discriminant _ ->
+              let free_names_prim =
+                Flambda_primitive.With_fixed_value.free_names prim
+              in
+              Name.Set.subset free_names_prim domain_of_both_envs)
+          t.cse
       in
       let cse =
-        (* CR-someday mshinwell: This could be improved to preserve some of
-           those equations that talk about existentially-bound names. *)
-        Flambda_primitive.With_fixed_value.
+        Flambda_primitive.With_fixed_value.Map.merge
+          (fun _prim (simple1 : Simple.t option) (simple2 : Simple.t option) ->
+            match simple1, simple2 with
+            | None, None -> None
+            | Some _, None -> simple1
+            | None, Some _ -> simple2
+            | Some simple1, Some simple2 ->
+              (* For the moment just keep this very straightforward. *)
+              (* CR-soon mshinwell: Make this take account of aliases. *)
+              if Simple.equal simple1 simple2 then Some simple1
+              else None)
+          (preserved_cse_equations env1 t1)
+          (preserved_cse_equations env2 t2)
       in
       let t =
         { t with

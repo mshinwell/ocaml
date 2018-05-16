@@ -52,14 +52,7 @@ let simplify_set_of_closures original_env r
         (funs, r) =
     let closure_env = set_of_closures_env in
     let return_cont_params =
-      (* CR mshinwell: Move into utility function *)
-      List.mapi (fun index kind ->
-          let name = Format.sprintf "return_cont_param%d" index in
-          let var = Variable.create name in
-          let param = Parameter.wrap var in
-          let ty = T.unknown kind in
-          Flambda.Typed_parameter.create param ty)
-        function_decl.return_arity
+      T.Parameters.freshened_params function_decl.result (E.freshening env)
     in
     let continuation_param, closure_env =
       let continuation_param, freshening =
@@ -83,6 +76,7 @@ Format.eprintf "function return continuation is at level %a\n%!"
       in
       let cont_type =
         Continuation_approx.create_unknown ~name:exn_continuation_param
+          (* XXX missing freshening? *)
           ~params:(Simplify_aux.params_for_exception_handler ())
       in
       let closure_env = E.increment_continuation_scope_level closure_env in
@@ -128,29 +122,13 @@ Format.eprintf "function body starts at level %a\n%!"
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
           body, r, uses)
     in
-    let result, result_env_extension =
-      let default_env =
-        List.fold_left (fun env param ->
-            let var = Flambda.Typed_parameter.var param in
-            let scope_level = E.continuation_scope_level set_of_closures_env in
-            let ty = Flambda.Typed_parameter.ty param in
-            T.Typing_env.add env (Name.var var) scope_level (Definition ty))
-          (E.get_typing_environment closure_env)
-          return_cont_params
-      in
-      let result, _result_env, result_env_extension =
-        Join_point.param_types_and_body_env return_continuation_uses
-          ~arity:function_decl.return_arity
-          (E.freshening set_of_closures_env)
-          ~default_env
-      in
-      let result_env_extension =
-        T.Typing_env_extension.restrict_names_to_those_occurring_in_types
-          result_env_extension default_env default_env result
-      in
-      result, result_env_extension
+    let result =
+      Join_point.parameters return_continuation_uses
+        ~arity:function_decl.return_arity
+        (E.freshening set_of_closures_env)
+        ~continuation_env_of_definition:(E.get_typing_environment closure_env)
+        ~existing_continuation_params:function_decl.result
     in
-    let return_arity = List.map (fun ty -> T.kind ty) result in
     let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->

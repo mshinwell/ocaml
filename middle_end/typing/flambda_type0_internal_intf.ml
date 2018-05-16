@@ -267,7 +267,7 @@ end) = struct
     (* CR mshinwell: Rename names_to_types -> names_to_entries *)
     names_to_types :
       (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
-    cse_to_names : Name.t Flambda_primitive.With_fixed_value.Map.t;
+    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
     levels_to_entries : levels_to_entries;
     next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
     were_existentials : Name.Set.t;
@@ -278,6 +278,11 @@ end) = struct
     at_or_after_cut_point : levels_to_entries;
     last_equations_rev : (Name.t * t) list;
     cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
+  }
+
+  and parameters = {
+    params : Kinded_parameter.t list;
+    env_extension : env_extension;
   }
 
   module Name_or_export_id = struct

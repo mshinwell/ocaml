@@ -2257,7 +2257,8 @@ result
       | Join [] -> true
       | Unknown | Join _ -> false
 
-    let rec join_on_unknown_or_join env1 env2
+    let rec join_on_unknown_or_join env env_plus_extension1 env_plus_extension2
+          env_extension1 env_extension2
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
@@ -2278,7 +2279,10 @@ result
                 let joined =
                   List.map (fun of_kind_foo' ->
                       let join =
-                        S.join_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
+                        S.join_of_kind_foo env
+                          env_plus_extension1 env_plus_extension2
+                          env_extension1 env_extension2
+                          of_kind_foo of_kind_foo'
                       in
                       match join with
                       | Known of_kind_foo ->
@@ -2298,21 +2302,24 @@ result
           in
           Join of_kind_foos
 
-    and join_ty env1 env2
+    and join_ty env env_plus_extension1 env_plus_extension2
+          env_extension1 env_extension2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
-      if env1 == env2 && or_alias1 == or_alias2 then
-        or_alias1
+      if env_plus_extension1 == env_plus_extension2 && or_alias1 == or_alias2
+      then or_alias1
       else
         let unknown_or_join1, all_aliases1 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env1
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+            env_plus_extension1
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
         let unknown_or_join2, all_aliases2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env2
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env1
+            env_plus_extension2
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
@@ -2320,7 +2327,9 @@ result
         let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
         let alias_both_sides = Name.Set.choose_opt all_aliases in
         match alias_both_sides with
-        | Some name -> Equals name
+        | Some name ->
+          assert (Typing_env.mem name env);
+          Equals name
           (* CR mshinwell: The symmetrical cases ("is unknown") should be
              present on the [meet] function, below. *)
         | None ->
@@ -2334,7 +2343,9 @@ result
             Equals name2
           | None, None ->
             let unknown_or_join =
-              join_on_unknown_or_join env1 env2
+              join_on_unknown_or_join env
+                env_plus_extension1 env_plus_extension2
+                env_extension1 env_extension2
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
@@ -2348,7 +2359,9 @@ result
             end
           | _, _ ->
             let unknown_or_join =
-              join_on_unknown_or_join env1 env2
+              join_on_unknown_or_join env
+                env_plus_extension1 env_plus_extension2
+                env_extension1 env_extension2
                 unknown_or_join1 unknown_or_join2
             in
             No_alias unknown_or_join
@@ -2568,8 +2581,9 @@ result
         t, env_extension_from_meet
       end
 
-    let join env1 env2 t1 t2 =
-      if Typing_env_extension.fast_equal env1 env2
+    let join env env_plus_extension1 env_plus_extension2
+          env_extension1 env_extension2 t1 t2 =
+      if Typing_env_extension.fast_equal env_plus_extension1 env_plus_extension2
         && Type_equality.fast_equal t1 t2
       then t1
       else begin
@@ -2578,7 +2592,10 @@ result
           match t1.descr, t2.descr with
           | Value ty_value1, Value ty_value2 ->
             let ty_value =
-              Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
+              Meet_and_join_value.join_ty env
+                env_plus_extension1 env_plus_extension2
+                env_extension1 env_extension2
+                ty_value1 ty_value2
             in
             if ty_value == ty_value1 then t1.descr
             else if ty_value == ty_value2 then t2.descr
@@ -2589,31 +2606,41 @@ result
             begin match kind1, kind2 with
             | N.Naked_immediate, N.Naked_immediate ->
               let ty_naked_number =
-                Meet_and_join_naked_immediate.join_ty env1 env2
+                Meet_and_join_naked_immediate.join_ty env
+                  env_plus_extension1 env_plus_extension2
+                  env_extension1 env_extension2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_immediate)
             | N.Naked_float, N.Naked_float ->
               let ty_naked_number =
-                Meet_and_join_naked_float.join_ty env1 env2
+                Meet_and_join_naked_float.join_ty env
+                  env_plus_extension1 env_plus_extension2
+                  env_extension1 env_extension2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_float)
             | N.Naked_int32, N.Naked_int32 ->
               let ty_naked_number =
-                Meet_and_join_naked_int32.join_ty env1 env2
+                Meet_and_join_naked_int32.join_ty env
+                  env_plus_extension1 env_plus_extension2
+                  env_extension1 env_extension2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int32)
             | N.Naked_int64, N.Naked_int64 ->
               let ty_naked_number =
-                Meet_and_join_naked_int64.join_ty env1 env2
+                Meet_and_join_naked_int64.join_ty env
+                  env_plus_extension1 env_plus_extension2
+                  env_extension1 env_extension2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int64)
             | N.Naked_nativeint, N.Naked_nativeint ->
               let ty_naked_number =
-                Meet_and_join_naked_nativeint.join_ty env1 env2
+                Meet_and_join_naked_nativeint.join_ty env
+                  env_plus_extension1 env_plus_extension2
+                  env_extension1 env_extension2
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_nativeint)
@@ -2624,7 +2651,9 @@ result
             end
           | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
             let ty_fabricated =
-              Meet_and_join_fabricated.join_ty env1 env2
+              Meet_and_join_fabricated.join_ty env
+                env_plus_extension1 env_plus_extension2
+                env_extension1 env_extension2
                 ty_fabricated1 ty_fabricated2
             in
             if ty_fabricated == ty_fabricated1 then t1.descr
@@ -2806,4 +2835,39 @@ result
 
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal
+
+  module Parameters = struct
+    type t = parameters
+
+    let create params : t =
+      { params;
+        env_extension = empty_env_extension;
+      }
+
+    let print ppf { params; env_extension; } =
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(params@ %a)@]@ \
+          @[<hov 1>(env_extension@ %a)@])@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          Kinded_parameter.print) params
+        print_typing_env_extension env_extension
+
+    let introduce t freshening env =
+      let scope_level = Typing_env.max_level env in
+      let env =
+        List.fold_left (fun env param ->
+            let name =
+              Freshening.apply_name freshening (Kinded_parameter.name param)
+            in
+            let kind = Kinded_parameter.kind param in
+            let ty = bottom kind in
+            Typing_env.add env name scope_level (Definition ty))
+          env
+          t.params
+      in
+      Typing_env.add_or_meet_env_extension ?freshening env
+        t.env_extension scope_level
+
+    let env_extension t = t.env_extension
+  end
 end

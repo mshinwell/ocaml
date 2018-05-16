@@ -388,7 +388,8 @@ struct
             Ok (({ function_decls; } : closure), env_extension_from_meet)
       end
 
-    let join_closure env1 env2
+    let join_closure env env_plus_extension1 env_plus_extension2
+          env_extension1 env_extension2
           (closure1 : closure) (closure2 : closure)
           : closure =
       if env1 == env2 && closure1 == closure2 then begin
@@ -424,29 +425,10 @@ struct
             in
             let result_env_extension =
               Typing_env_extension.join env
-                env_extension1
-                env_extension2
+                env_plus_extension1
+                env_plus_extension2
                 result_env_extension1
                 result_env_extension2
-            in
-            let result =
-              let result_env =
-                Typing_env.add_or_meet_env_extension env
-                  result_env_extension
-                  (Typing_env.max_level env)
-              in
-              let result_env_extension1 =
-                Typing_env_extension.diff result_env_extension1 result_env
-              in
-              let result_env_extension2 =
-                Typing_env_extension.diff result_env_extension2 result_env
-              in
-              List.map2 (fun t1 t2 ->
-                  Meet_and_join.join result_env
-                    result_env_extension1 result_env_extension2
-                    t1 t2)
-                result1
-                result2
             in
             let direct_call_surrogate =
               match direct_call_surrogate1, direct_call_surrogate2 with
@@ -502,6 +484,7 @@ struct
           | Inlinable inlinable1, Inlinable inlinable2 ->
             if not (Code_id.equal inlinable1.code_id inlinable2.code_id)
             then begin
+              (* XXX check lengths *)
               let params1 = List.map snd inlinable1.params in
               let params2 = List.map snd inlinable2.params in
               let param_names1 = List.map fst inlinable1.params in

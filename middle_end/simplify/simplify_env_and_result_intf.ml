@@ -372,6 +372,11 @@ module type Env = sig
   val add_inlined_debuginfo : t -> dbg:Debuginfo.t -> Debuginfo.t
 
   val continuations_in_scope : t -> Continuation_approx.t Continuation.Map.t
+
+  val with_typing_env
+     : t
+    -> (Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t)
+    -> t
 end
 
 module type Result = sig

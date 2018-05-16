@@ -28,6 +28,9 @@ module type S = sig
   val join_ty
      : typing_environment
     -> typing_environment
+    -> typing_environment
+    -> env_extension
+    -> env_extension
     -> of_kind_foo ty
     -> of_kind_foo ty
     -> of_kind_foo ty
@@ -54,6 +57,9 @@ module type S_for_types = sig
   val join
      : typing_environment
     -> typing_environment
+    -> typing_environment
+    -> env_extension
+    -> env_extension
     -> flambda_type
     -> flambda_type
     -> flambda_type

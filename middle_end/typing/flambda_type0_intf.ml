@@ -78,6 +78,8 @@ module type S = sig
 
   type env_extension
 
+  type parameters
+
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
   type t = private {
@@ -121,6 +123,8 @@ module type S = sig
           of the type.
         Invariant: every member of a [Join] is mutually incompatible with the
         other members. *)
+    (* XXX "incompatible" should also include e.g. functions with different
+       arities (params or return values) *)
 
   (* CR mshinwell: There needs to be an invariant function which checks that
      any possible "bottom" case here is represented instead by "Join []".
@@ -197,12 +201,11 @@ module type S = sig
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
-    params : (Parameter.t * t) list;
+    params : parameters;
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    return_values : Kinded_parameter.t list;
-    return_env_extension : env_extension;
+    result : parameters;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -221,9 +224,8 @@ module type S = sig
   (** A function declaration that is not inlinable (typically because the
       code is unknown, possibly due to being deliberately discarded). *)
   and non_inlinable_function_declarations = private {
-    params : t list;
-    result : t list;
-    result_env_extension : env_extension;
+    params : parameters;
+    result : parameters;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -240,6 +242,9 @@ module type S = sig
   (** The various closures which flow to a particular program point. *)
   and closures =
     closures_entry Closure_id.Map.t
+
+  (* CR-soon mshinwell: Consider migrating closure elements and maybe even
+     block fields to use environment extensions. *)
 
   (** Unboxed ("naked") integer and floating-point numbers together with
       any information known about which particular numbers they might be. *)
@@ -298,6 +303,8 @@ module type S = sig
     -> t
 
   type typing_environment_entry =
+    (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
+       change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
     | Definition of t
     | Equation of t
     | CSE of Flambda_primitive.With_fixed_value.t
@@ -324,6 +331,29 @@ module type S = sig
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
+  end
+
+  module Parameters : sig
+    (** A structure representing the binding of an ordered list of
+        parameters along with their types. *)
+
+    type t = parameters
+
+    val create : Kinded_parameter.t list -> t
+
+    val env_extension : t -> Typing_env_extension.t
+
+    (** At the highest scope level in the given environment, introduce
+        definitions for the parameters inside [t]; and then add the
+        environment extension (using "meet") to yield another environment.
+        (This will open any existentials in the extension.)
+        Parameters and types will be freshened according to the provided
+        [Freshening.t]. *)
+    val introduce : t -> Freshening.t -> Typing_env.t -> t
+
+    val freshened_params : t -> Freshening.t -> t
+
+    val print : Format.formatter -> t -> unit
   end
 
   (** Annotation for functions that may require examination of the current

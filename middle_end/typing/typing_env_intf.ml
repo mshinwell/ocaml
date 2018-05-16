@@ -199,7 +199,8 @@ module type S = sig
   (** As for [add_or_meet_env_extension], but also returns the freshening
       used to open existentials in the supplied extension. *)
   val add_or_meet_env_extension'
-     : t
+     : ?freshening:Freshening.t
+    -> t
     -> env_extension
     -> Scope_level.t
     -> t * (Name.t Name.Map.t)

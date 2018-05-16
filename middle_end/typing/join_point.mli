@@ -21,23 +21,22 @@
 
 (** Using information collected across all use sites of a particular
     continuation, calculate:
-    - the types of a continuation's parameters;
-    - the typing environment for the body of the continuation (which
-      includes bindings for the continuation's parameters); and
-    - the environment extension that transforms [default_env] into the
-      returned typing environment, save that the parameters' types are not
-      included in the extension.
-
-    In the event that there are no uses then the [default_env] will be used
-    as the body environment.  (This environment must include bindings for
-    the continuation's parameters.) *)
+    ... *)
 (* XXX update comment *)
 
 (* CR mshinwell: Rename [default_env]? *)
-val param_types_and_body_env
+val parameters_and_body_env
    : Continuation_uses.t
   -> Freshening.t
   -> arity:Flambda_arity.t
-  -> default_env:Flambda_type.Typing_env.t
-  -> Flambda_type.t list * Flambda_type.Typing_env.t
-       * Flambda_type.Typing_env_extension.t
+  -> continuation_env_of_definition:Flambda_type.Typing_env.t
+  -> existing_continuation_params:Flambda_type.Parameters.t
+  -> Flambda_type.Typing_env.t * Flambda_type.Parameters.t
+
+val parameters
+   : Continuation_uses.t
+  -> Freshening.t
+  -> arity:Flambda_arity.t
+  -> continuation_env_of_definition:Flambda_type.Typing_env.t
+  -> existing_continuation_params:Flambda_type.Parameters.t
+  -> Flambda_type.Parameters.t

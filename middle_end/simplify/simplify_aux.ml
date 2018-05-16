@@ -101,13 +101,6 @@ let prepare_to_simplify_set_of_closures ~env
 let prepare_to_simplify_closure
       ~(function_decl : Flambda.Function_declaration.t)
       ~set_of_closures_env =
-(*
-  let closure_env =
-    Variable.Map.fold (fun inner_var (_outer_var, ty) env ->
-        E.add_outer_scope env inner_var ty)
-      free_vars set_of_closures_env
-  in
-*)
   let my_closure =
     Freshening.apply_variable (E.freshening set_of_closures_env)
       function_decl.my_closure
@@ -116,11 +109,13 @@ let prepare_to_simplify_closure
      of toplevel expressions *)
   let env = E.decrement_continuation_scope_level set_of_closures_env in
   let env =
-    List.fold_left (fun env (param : Flambda.Typed_parameter.t) ->
-        let var = Flambda.Typed_parameter.var param in
-        let ty = Flambda.Typed_parameter.ty param in
-        E.add_variable env var ty)
-      env function_decl.params
+    E.with_typing_env env (fun typing_env ->
+      let params = T.Parameters.params function_decl.params in
+      let _freshened_vars, freshening =
+        Freshening.add_variables' (E.freshening env)
+          (Typed_parameter.List.vars params)
+      in
+      T.Parameters.introduce function_decl.params freshening typing_env)
   in
   (* XXX use the correct my_closure type. *)
   let env =

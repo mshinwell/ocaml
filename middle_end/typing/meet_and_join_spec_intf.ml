@@ -49,6 +49,9 @@ module type S = sig
   val join_of_kind_foo
      : typing_environment
     -> typing_environment
+    -> typing_environment
+    -> env_extension
+    -> env_extension
     -> of_kind_foo
     -> of_kind_foo
     -> of_kind_foo Or_unknown.t
