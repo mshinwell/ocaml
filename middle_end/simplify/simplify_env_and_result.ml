@@ -886,36 +886,29 @@ end = struct
   let continuation_defined t cont =
     Continuation.Map.mem cont t.defined_continuations
 
-  let continuation_args_types t cont ~arity ~freshening ~default_env =
-    match Continuation.Map.find cont t.used_continuations with
-    | exception Not_found ->
-(*
-      Format.eprintf "No uses of continuation %a\n%!" Continuation.print cont;
-*)
-      let tys = List.map (fun kind -> T.bottom kind) arity in
-      tys, default_env
-    | uses ->
-(*
-      Format.eprintf "Continuation uses for %a:@ %a\n%!"
-        Continuation.print cont
-        Continuation_uses.print uses;
-*)
-      let tys, env, _env_extension =
-        Join_point.param_types_and_body_env uses freshening ~arity
-          ~default_env
-      in
-      tys, env
-  
-  let defined_continuation_args_types t cont ~arity ~freshening ~default_env =
-    match Continuation.Map.find cont t.defined_continuations with
-    | exception Not_found ->
-      let tys = List.map (fun kind -> T.bottom kind) arity in
-      tys, default_env
-    | (uses, _approx, _env, _recursive) ->
-      let tys, env, _env_extension =
-        Join_point.param_types_and_body_env uses ~arity freshening ~default_env
-      in
-      tys, env
+  let continuation_parameters t cont ~arity ~freshening
+        ~continuation_env_of_definition ~existing_continuation_params =
+    let uses =
+      match Continuation.Map.find cont t.used_continuations with
+      | exception Not_found -> None
+      | uses -> Some uses
+    in
+    Join_point.parameters uses ~arity
+      (E.freshening set_of_closures_env)
+      ~continuation_env_of_definition
+      ~existing_continuation_params
+
+  let defined_continuation_parameters t cont ~arity ~freshening
+        ~continuation_env_of_definition ~existing_continuation_params =
+    let uses =
+      match Continuation.Map.find cont t.defined_continuations with
+      | exception Not_found -> None
+      | uses -> Some uses
+    in
+    Join_point.parameters uses ~arity
+      (E.freshening set_of_closures_env)
+      ~continuation_env_of_definition
+      ~existing_continuation_params
 
   let exit_scope_of_let_cont t env cont ~params =
     let t, uses =
