@@ -325,10 +325,9 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
-  let join ~(env : typing_environment)
-        ~(env_plus_extension1 : typing_environment)
-        ~(env_plus_extension2 : typing_environment)
-        ~(extension1 : t) ~(extension2 : t) =
+  let join (env : typing_environment)
+        ((env_plus_extension1 : typing_environment), (extension1 : t))
+        ((env_plus_extension2 : typing_environment), (extension2 : t)) : t =
     let env_plus_t1 = env_plus_extension1 in
     let env_plus_t2 = env_plus_extension2 in
     let t1 = extension1 in

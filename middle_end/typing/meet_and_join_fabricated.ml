@@ -408,6 +408,7 @@ struct
                 params2
             in
             let add_params_to_env_extension param_names env_extension =
+              (* XXX This needs adapting for the new [Parameters] model *)
               match param_names with
               | None -> env_extension
               | Some param_names ->
@@ -424,12 +425,9 @@ struct
               add_params_to_env_extension param_names2 result_env_extension2
             in
             let result_env_extension =
-              (* XXX *)
-              Typing_env_extension.join ~env
-                ~env_plus_extension1
-                ~env_plus_extension2
-                ~extension1:result_env_extension1
-                ~extension2:result_env_extension2
+              Typing_env_extension.join env
+                (env_plus_extension1, result_env_extension1)
+                (env_plus_extension2, result_env_extension2)
             in
             let direct_call_surrogate =
               match direct_call_surrogate1, direct_call_surrogate2 with
