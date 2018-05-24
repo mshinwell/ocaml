@@ -403,26 +403,13 @@ struct
           let same_num_results = List.compare_lengths result1 result2 = 0 in
           if same_arity && same_num_results then
             let params =
-              List.map2 (fun t1 t2 -> Meet_and_join.join env1 env2 t1 t2)
-                params1
-                params2
+              Typing_env_extension.join env
+                (env_plus_extension1, params1)
+                (env_plus_extension2, params2)
             in
-            let add_params_to_env_extension param_names env_extension =
-              (* XXX This needs adapting for the new [Parameters] model *)
-              match param_names with
-              | None -> env_extension
-              | Some param_names ->
-                List.fold_left2 (fun env_extension param param_name ->
-                    Typing_env_extension.add_definition_at_beginning
-                      env_extension (Parameter.name param_name) param)
-                  env_extension
-                  params param_names
-            in
-            let result_env_extension1 =
-              add_params_to_env_extension param_names1 result_env_extension1
-            in
-            let result_env_extension2 =
-              add_params_to_env_extension param_names2 result_env_extension2
+            let env =
+              Typing_env.add_or_meet_env_extension env params
+                (Scope_level.max env)
             in
             let result_env_extension =
               Typing_env_extension.join env
