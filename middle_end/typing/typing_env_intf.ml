@@ -247,6 +247,8 @@ module type S = sig
     -> 'a unknown_or_join * Name.Set.t
 
   (** All names (not including the given name) which are known to be aliases
-      of the given name in the given environment. *)
-  val aliases_of_name : t -> Name.t -> Name.Set.t
+      of the given [Simple.t] in the given environment.  (For [Name]s this
+      is the usual notion of alias; for [Const]s and [Discriminant]s an
+      "alias" is just another name known to hold that same value.) *)
+  val aliases_of_simple : t -> Simple.t -> Name.Set.t
 end

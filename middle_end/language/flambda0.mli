@@ -675,12 +675,12 @@ end and Function_declaration : sig
   val update_body : t -> body:Expr.t -> t
 
   (** Change only the parameters of a function declaration. *)
-  val update_params : t -> Parameters.t -> t
+  val update_params : t -> Flambda_type.Parameters.t -> t
 
   (** Change only the code and parameters of a function declaration. *)
   val update_params_and_body
      : t
-    -> Parameters.t
+    -> Flambda_type.Parameters.t
     -> body:Expr.t
     -> t
 

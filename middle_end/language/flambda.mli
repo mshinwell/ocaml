@@ -92,10 +92,6 @@ module Continuation_handler : sig
   val param_arity : t -> Flambda_arity.t
 end
 
-module Typed_parameter : sig
-  include module type of struct include F0.Typed_parameter end
-end
-
 module rec Expr : sig
   include module type of struct include F0.Expr end
 
@@ -134,7 +130,7 @@ module rec Expr : sig
      : id:Variable.t
     -> free_variable_kind:(Variable.t -> Flambda_kind.t)
     -> body:t
-    -> params:Typed_parameter.t list
+    -> params:Flambda_type.Parameters.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
     (* CR mshinwell: update comment. *)

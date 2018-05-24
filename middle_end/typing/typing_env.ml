@@ -32,9 +32,9 @@ end) (Type_equality : sig
   include Type_equality_intf.S
     with type flambda_type := T.flambda_type
 end) = struct
-  type t = T.typing_environment
-
   open T
+
+  type t = T.typing_environment
 
   type typing_environment = T.typing_environment
   type typing_environment_entry = T.typing_environment_entry
@@ -49,9 +49,9 @@ end) = struct
 
   let create ~resolver =
     { resolver;
-      aliases_of_names = Name.Map.empty;
+      aliases = Simple.Map.empty;
       names_to_types = Name.Map.empty;
-      cse_to_names = Flambda_primitive.With_fixed_value.Map.empty;
+      cse = Flambda_primitive.With_fixed_value.Map.empty;
       levels_to_entries = Scope_level.Map.empty;
       next_sublevel_by_level = Scope_level.Map.empty;
       were_existentials = Name.Set.empty;
@@ -277,7 +277,7 @@ end) = struct
     match Flambda_primitive.With_fixed_value.create prim with
     | None -> None
     | Some prim ->
-      match Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names with
+      match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
       | exception Not_found -> None
       | name -> Some name
 
@@ -437,11 +437,15 @@ end) = struct
           Some canonical_name
         end
 
-  let aliases_of_name (t : t) name =
-    match Name.Map.find name t.aliases_of_names with
+  let aliases_of_simple (t : t) (simple : Simple.t) =
+    match Simple.Map.find simple t.aliases with
     | exception Not_found ->
-      Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
-        Name.print name
+      begin match simple with
+      | Const _ | Discriminant _ -> Name.Set.empty
+      | Name name ->
+        Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
+          Name.print name
+      end
     | aliases -> aliases
 
   let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
@@ -456,21 +460,22 @@ end) = struct
       | Equation _ ->
         begin match alias with
         | None -> false
-        | Some alias -> Name.Set.mem alias (aliases_of_name t name)
+        | Some alias ->
+          Name.Set.mem alias (aliases_of_simple t (Simple.name name))
         end
       | Definition _ | CSE _ -> false
     in
     if equation_with_reverse_alias_already_present then begin
       t
     end else begin
-      let aliases_of_names =
+      let aliases =
         match alias with
-        | None -> t.aliases_of_names
-        | Some aliases_of_names ->
-          Name.Map.update alias (function
+        | None -> t.aliases
+        | Some alias ->
+          Simple.Map.update (Simple.name alias) (function
               | None -> Some (Name.Set.singleton name)
               | Some aliases -> Some (Name.Set.add name aliases))
-            aliases_of_names
+            t.aliases
       in
       let t, sublevel = allocate_sublevel t cont_level in
       let level = Scope_level.With_sublevel.create cont_level sublevel in
@@ -501,23 +506,24 @@ end) = struct
               Some by_sublevel)
           t.levels_to_entries
       in
-      let cse_to_names =
+      let cse =
         match binding with
-        | Definition _ | Equation _ -> t.cse_to_names
+        | Definition _ | Equation _ -> t.cse
         | CSE prim ->
           match
-            Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
+            Flambda_primitive.With_fixed_value.Map.find prim t.cse
           with
           | exception Not_found ->
-            Flambda_primitive.With_fixed_value.Map.singleton prim name
-          | _name -> t.cse_to_names  (* Keep the furthest-out binding. *)
+            Flambda_primitive.With_fixed_value.Map.singleton prim
+              (Simple.name name)
+          | _name -> t.cse  (* Keep the furthest-out binding. *)
       in
       let t =
         { t with
-          aliases_of_names;
+          aliases;
           names_to_types;
           levels_to_entries;
-          cse_to_names;
+          cse;
         }
       in
       invariant t;
@@ -532,7 +538,10 @@ end) = struct
     | None -> Scope_level.initial
     | Some (level, _) -> level
 
-  let restrict_to_names0 t allowed =
+  let restrict_to_names0 (t : t) allowed =
+    let aliases =
+      ...
+    in
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
         t.names_to_types
@@ -551,19 +560,25 @@ end) = struct
         t.levels_to_entries
     in
     let were_existentials = Name.Set.inter t.were_existentials allowed in
-    let cse_to_names =
-      Flambda_primitive.With_fixed_value.Map.filter (fun prim name ->
+    let cse =
+      Flambda_primitive.With_fixed_value.Map.filter
+        (fun prim (simple : Simple.t) ->
           let names_in_prim =
             Flambda_primitive.With_fixed_value.free_names prim
           in
-          let names = Name.Set.add name names_in_prim in
+          let names =
+            match simple with
+            | Name name -> Name.Set.add name names_in_prim
+            | Const _ | Discriminant _ -> names_in_prim
+          in
           Name.Set.is_empty (Name.Set.diff names allowed))
-        t.cse_to_names
+        t.cse
     in
     let t =
       { resolver = t.resolver;
+        aliases;
         names_to_types;
-        cse_to_names;
+        cse;
         levels_to_entries;
         next_sublevel_by_level = t.next_sublevel_by_level;
         were_existentials;
@@ -670,15 +685,15 @@ Format.eprintf "Opening existential %a -> %a\n%!"
           freshening
       in
       match
-        Flambda_primitive.With_fixed_value.Map.find prim t.cse_to_names
+        Flambda_primitive.With_fixed_value.Map.find prim t.cse
       with
       | exception Not_found ->
         let t = add t bound_to scope_level (CSE prim) in
-        let cse_to_names =
+        let cse =
           Flambda_primitive.With_fixed_value.Map.add prim bound_to
-            t.cse_to_names
+            t.cse
         in
-        { t with cse_to_names; }
+        { t with cse; }
       | _bound_to ->
         (* As above, keep the outer binding. *)
         t
