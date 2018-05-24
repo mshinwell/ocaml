@@ -424,11 +424,12 @@ struct
               add_params_to_env_extension param_names2 result_env_extension2
             in
             let result_env_extension =
-              Typing_env_extension.join env
-                env_plus_extension1
-                env_plus_extension2
-                result_env_extension1
-                result_env_extension2
+              (* XXX *)
+              Typing_env_extension.join ~env
+                ~env_plus_extension1
+                ~env_plus_extension2
+                ~extension1:result_env_extension1
+                ~extension2:result_env_extension2
             in
             let direct_call_surrogate =
               match direct_call_surrogate1, direct_call_surrogate2 with

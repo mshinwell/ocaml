@@ -79,10 +79,10 @@ module type S = sig
   (** Greatest lower bound of two environment extensions. *)
   val join
      : env:typing_environment
-    -> env_plus_t1:typing_environment
-    -> env_plus_t2:typing_environment
-    -> t1:t
-    -> t2:t
+    -> env_plus_extension1:typing_environment
+    -> env_plus_extension2:typing_environment
+    -> extension1:t
+    -> extension2:t
     -> t
 
   val restrict_to_definitions : t -> t
