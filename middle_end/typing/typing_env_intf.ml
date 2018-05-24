@@ -117,10 +117,10 @@ module type S = sig
     -> Name.t
     -> (flambda_type * Flambda_type0_internal_intf.binding_type) option
 
-  (** Return a name, if such is available, which may be substituted for the
-      given primitive in the fashion of CSE.  (This function checks if the
-      primitive is suitable for such an operation.) *)
-  val find_cse : t -> Flambda_primitive.t -> Name.t option
+  (** Return a name or constant, if such is available, which may be
+      substituted for the given primitive in the fashion of CSE.  (This
+      function checks if the primitive is suitable for such an operation.) *)
+  val find_cse : t -> Flambda_primitive.t -> Simple.t option
 
   (** The scoping level known for the given name, which must be bound by the
       given environment. *)
@@ -199,25 +199,12 @@ module type S = sig
   (** As for [add_or_meet_env_extension], but also returns the freshening
       used to open existentials in the supplied extension. *)
   val add_or_meet_env_extension'
-     : ?freshening:Freshening.t
+     : ?don't_freshen:unit
+    -> ?freshening:Freshening.t
     -> t
     -> env_extension
     -> Scope_level.t
     -> t * (Name.t Name.Map.t)
-
-  (** Like [add_or_meet_env_extension] except uses a join function to
-      determine merged types.
-      [add_or_join_env_extension t ext1 ext2 ext level] has [ext] as the
-      extension being added/joined into the environment [t]; the extensions
-      [ext1] and [ext2] are pushed down onto resulting joined types. *)
-  val add_or_join_env_extension
-     : ?don't_freshen:unit
-    -> t
-    -> env_extension
-    -> env_extension
-    -> env_extension
-    -> Scope_level.t
-    -> t
 
   (** Follow chains of aliases until either a [No_alias] type is reached
       or a name cannot be resolved.
@@ -239,12 +226,11 @@ module type S = sig
 
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t
-    -> env_extension
     -> ?bound_name:Name.t
     -> print_ty:(Format.formatter -> 'a ty -> unit)
     -> force_to_kind:(flambda_type -> 'a ty)
     -> 'a ty
-    -> 'a unknown_or_join * Name.Set.t
+    -> 'a unknown_or_join * (Name.t option)
 
   (** All names (not including the given name) which are known to be aliases
       of the given [Simple.t] in the given environment.  (For [Name]s this

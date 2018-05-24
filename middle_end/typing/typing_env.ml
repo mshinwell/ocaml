@@ -273,7 +273,7 @@ end) = struct
     | exception Not_found -> None
     | ty, binding_type -> Some (ty, binding_type)
 
-  let find_cse t prim =
+  let find_cse (t : t) prim =
     match Flambda_primitive.With_fixed_value.create prim with
     | None -> None
     | Some prim ->
@@ -419,6 +419,7 @@ end) = struct
       invariant_for_new_equation t name ty
         ~sense:New_equation_must_be_more_precise
 
+(*
   let canonical_name t name =
     match find_opt t name with
     | None -> None
@@ -436,6 +437,7 @@ end) = struct
           end;
           Some canonical_name
         end
+*)
 
   let aliases_of_simple (t : t) (simple : Simple.t) =
     match Simple.Map.find simple t.aliases with
@@ -540,7 +542,16 @@ end) = struct
 
   let restrict_to_names0 (t : t) allowed =
     let aliases =
-      ...
+      Simple.Map.filter_map (fun (simple : Simple.t) aliases ->
+          let aliases =
+            Name.Set.filter (fun name -> Name.Set.mem name allowed) aliases
+          in
+          match simple with
+          | Name name ->
+            if Name.Set.mem name allowed then Some aliases
+            else None
+          | Const _ | Discriminant _ -> Some aliases)
+        t.aliases
     in
     let names_to_types =
       Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
@@ -617,13 +628,19 @@ end) = struct
     restrict_to_names0 t allowed
 
   (* XXX [don't_freshen] needs sorting properly *)
-  let rec add_or_meet_or_join_env_extension ?don't_freshen ?freshening
-        t env_extension scope_level ~meet_or_join =
+  let rec add_or_meet_env_extension' ?don't_freshen ?freshening
+        t env_extension scope_level =
     let original_t = t in
+    let original_freshening = freshening in
     let rename_name (name : Name.t) freshening =
       match Name.Map.find name freshening with
       | exception Not_found -> name
       | name -> name
+    in
+    let rename_simple (simple : Simple.t) freshening =
+      match simple with
+      | Name name -> Simple.name (rename_name name freshening)
+      | Const _ | Discriminant _ -> simple
     in
     let add_equation t freshening name ty =
       let name = rename_name name freshening in
@@ -631,11 +648,24 @@ end) = struct
       match find_opt t name with
       | None -> add t name scope_level (Equation ty)
       | Some (existing_ty, _binding_type) ->
-        match meet_or_join t ty ~existing_ty with
+        let meet =
+          let meet_ty, meet_env_extension =
+            Meet_and_join.meet t ty existing_ty
+          in
+          let as_or_more_precise = Type_equality.equal meet_ty ty in
+          let strictly_more_precise =
+            as_or_more_precise && not (Type_equality.equal meet_ty existing_ty)
+          in
+          if strictly_more_precise then Some (meet_ty, meet_env_extension)
+          else None
+        in
+        match meet with
         | None -> t
         | Some (new_ty, new_env_extension)->
           let t, _freshening =
-            add_or_meet_env_extension' t new_env_extension scope_level
+            add_or_meet_env_extension' ?don't_freshen
+              ?freshening:original_freshening
+              t new_env_extension scope_level
           in
           add t name scope_level (Equation new_ty)
     in
@@ -678,8 +708,8 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         in
         freshening, t
     in
-    let add_cse t freshening bound_to prim =
-      let bound_to = rename_name bound_to freshening in
+    let add_cse (t : t) freshening bound_to prim =
+      let bound_to = rename_simple bound_to freshening in
       let prim =
         Flambda_primitive.With_fixed_value.rename_names prim
           freshening
@@ -688,10 +718,13 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         Flambda_primitive.With_fixed_value.Map.find prim t.cse
       with
       | exception Not_found ->
-        let t = add t bound_to scope_level (CSE prim) in
+        let t =
+          match bound_to with
+          | Name bound_to -> add t bound_to scope_level (CSE prim)
+          | Const _ | Discriminant _ -> t
+        in
         let cse =
-          Flambda_primitive.With_fixed_value.Map.add prim bound_to
-            t.cse
+          Flambda_primitive.With_fixed_value.Map.add prim bound_to t.cse
         in
         { t with cse; }
       | _bound_to ->
@@ -699,9 +732,14 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         t
     in
     let freshening, t =
+      let freshening =
+        match freshening with
+        | None -> Name.Map.empty
+        | Some freshening -> Freshening.name_substitution freshening
+      in
       List.fold_left (fun (freshening, t) (name, ty) ->
           add_definition t freshening name ty)
-        (Freshening.name_substitution freshening, t)
+        (freshening, t)
         (List.rev env_extension.first_definitions)
     in
     let freshening, t =
@@ -717,7 +755,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
                 let t = add_equation t freshening name ty in
                 freshening, t
               | CSE prim ->
-                let t = add_cse t freshening name prim in
+                let t = add_cse t freshening (Simple.name name) prim in
                 freshening, t)
             by_sublevel
             (freshening, t))
@@ -738,47 +776,9 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     in
     t, freshening
 
-  and add_or_meet_env_extension' t env_extension scope_level =
-    add_or_meet_or_join_env_extension t env_extension scope_level
-      ~meet_or_join:(fun env ty ~existing_ty ->
-        let meet_ty, meet_env_extension =
-          Meet_and_join.meet env ty existing_ty
-        in
-        let as_or_more_precise = Type_equality.equal meet_ty ty in
-        let strictly_more_precise =
-          as_or_more_precise && not (Type_equality.equal meet_ty existing_ty)
-        in
-        if strictly_more_precise then Some (meet_ty, meet_env_extension)
-        else None)
-
   let add_or_meet_env_extension t env_extension scope_level =
     let t, _freshening =
       add_or_meet_env_extension' t env_extension scope_level
-    in
-    t
-
-  let add_or_join_env_extension' ?don't_freshen t env_extension1 env_extension2
-        env_extension scope_level =
-    add_or_meet_or_join_env_extension ?don't_freshen t env_extension scope_level
-      ~meet_or_join:(fun env ty ~existing_ty ->
-        let join_ty =
-          Meet_and_join.join env env_extension1 env_extension2 ty existing_ty
-        in
-        let meet_ty, _meet_env_extension =
-          Meet_and_join.meet env join_ty existing_ty
-        in
-        let as_or_more_precise = Type_equality.equal meet_ty join_ty in
-        let strictly_more_precise =
-          as_or_more_precise && not (Type_equality.equal meet_ty existing_ty)
-        in
-        if strictly_more_precise then Some (join_ty, Typing_env_extension.empty)
-        else None)
-
-  let add_or_join_env_extension ?don't_freshen t env_extension1 env_extension2
-      env_extension scope_level =
-    let t, _freshening =
-      add_or_join_env_extension' ?don't_freshen t env_extension1 env_extension2
-        env_extension scope_level
     in
     t
 
