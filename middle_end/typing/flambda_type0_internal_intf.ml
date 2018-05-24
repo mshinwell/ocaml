@@ -409,4 +409,15 @@ module type S = sig
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
   val get_alias : flambda_type -> Name.t option
+
+  (** Least upper bound of two types. *)
+  val join
+     : env:typing_environment
+    -> env_plus_extension1:typing_environment
+    -> env_plus_extension2:typing_environment
+    -> extension1:env_extension
+    -> extension2:env_extension
+    -> t
+    -> t
+    -> t
 end

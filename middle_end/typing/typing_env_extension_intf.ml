@@ -68,7 +68,7 @@ module type S = sig
 
   val add_cse
      : t
-    -> Name.t
+    -> Simple.t
     -> Flambda_primitive.With_fixed_value.t
     -> t
 
@@ -76,17 +76,13 @@ module type S = sig
       environment. *)
   val meet : typing_environment -> t -> t -> t
 
-  (* CR mshinwell: This signature is confusing -- labels? *)
-  (** Greatest lower bound of two environment extensions in the given typing
-      environment.  [join env t1' t2' t1 t2] will take the join of [t1] and
-      [t2] whilst pushing [t1'] and [t2'] down through the structure of
-      the resulting joined types. *)
+  (** Greatest lower bound of two environment extensions. *)
   val join
-     : typing_environment
-    -> t
-    -> t
-    -> t
-    -> t
+     : env:typing_environment
+    -> env_plus_t1:typing_environment
+    -> env_plus_t2:typing_environment
+    -> t1:t
+    -> t2:t
     -> t
 
   val restrict_to_definitions : t -> t

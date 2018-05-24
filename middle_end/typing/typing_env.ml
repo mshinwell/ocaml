@@ -63,6 +63,9 @@ end) = struct
 
   let is_empty t = Name.Map.is_empty t.names_to_types
 
+  let fast_equal t1 t2 =
+    t1 == t2
+
   let domain t =
     Name_occurrences.create_from_set_in_terms
       (Name.Map.keys t.names_to_types)

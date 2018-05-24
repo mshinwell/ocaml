@@ -186,8 +186,11 @@ end) = struct
         t.last_equations_rev
     in
     let cse =
-      Flambda_primitive.With_fixed_value.Map.filter (fun _prim name ->
-          Name.Set.mem name allowed_names)
+      Flambda_primitive.With_fixed_value.Map.filter
+        (fun _prim (simple : Simple.t) ->
+          match simple with
+          | Name name -> Name.Set.mem name allowed_names
+          | Const _ | Discriminant _ -> true)
         t.cse
     in
     let t =
@@ -260,18 +263,47 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
       | exception Not_found ->
         Flambda_primitive.With_fixed_value.Map.add prim name t.cse
-      | name -> t.cse
+      | _name -> t.cse
     in
     { t with cse; }
 
+  (* CR mshinwell: These [find] operations need serious optimisation.
+     The tricky thing is keeping a "names_to_types" map for the
+     "at_or_after_cut_point" map without making [cut] expensive. *)
+
+  let find_first_definitions_exn t name =
+    List.assoc name (List.rev t.first_definitions)
+
+  let find_at_or_after_cut_point_exn t name =
+    let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
+    let flattened_sublevels_rev =
+      List.map (fun (_scope_level, by_sublevel) ->
+          List.rev (List.map (fun (_sublevel, binding) -> binding)
+            (Scope_level.Sublevel.Map.bindings by_sublevel)))
+        bindings
+    in
+    let flattened_levels_rev = List.rev (List.concat flattened_sublevels_rev) in
+    let without_cse =
+      Misc.Stdlib.List.filter_map
+        (fun (name, (entry : typing_environment_entry)) ->
+          match entry with
+          | Definition ty | Equation ty -> Some (name, ty)
+          | CSE _ -> None)
+        flattened_levels_rev
+    in
+    List.assoc name without_cse
+
+  let find_last_equations_rev_exn t name =
+    List.assoc name t.last_equations_rev
+
   let find_opt t name =
-    match Name.Map.find name t.last_equations_names_to_types with
+    match find_last_equations_rev_exn t name with
     | ty -> Some ty
     | exception Not_found ->
-      match Name.Map.find name t.at_or_after_cut_point_names_to_types with
-      | Definition ty | Equation ty -> Some ty
+      match find_at_or_after_cut_point_exn t name with
+      | ty -> Some ty
       | exception Not_found ->
-        match Name.Map.find name t.first_definitions_names_to_types with
+        match find_first_definitions_exn t name with
         | ty -> Some ty
         | exception Not_found -> None
 
@@ -293,9 +325,9 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
-  let join (env : typing_environment)
-        (env_plus_t1 : typing_environment) (env_plus_t2 : typing_environment)
-        (t1 : t) (t2 : t) =
+  let join ~(env : typing_environment)
+        ~(env_plus_t1 : typing_environment) ~(env_plus_t2 : typing_environment)
+        ~(t1 : t) ~(t2 : t) =
     if TE.fast_equal env_plus_t1 env_plus_t2 && fast_equal t1 t2 then t1
     else if is_empty t1 then empty
     else if is_empty t2 then empty
@@ -309,20 +341,33 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         Name.Set.fold (fun name t ->
             let ty1 = find t1 name in
             let ty2 = find t2 name in
-            let join_ty = T.join env env_plus_t1 env_plus_t2 t1 t2 ty1 ty2 in
+            let join_ty =
+              T.join ~env
+                ~env_plus_extension1:env_plus_t1
+                ~env_plus_extension2:env_plus_t2
+                ~extension1:t1
+                ~extension2:t2
+                ty1 ty2
+            in
             add_equation t name join_ty)
           allowed_names
           empty
       in
-      let domain_of_env1 = Name_occurrences.everything (TE.domain env1) in
-      let domain_of_env2 = Name_occurrences.everything (TE.domain env2) in
-      let domain_of_both_envs = Name.Set.inter domain_of_env1 domain_of_env2 in
-      let preserved_cse_equations env t =
+      let domain_of_env_plus_t1 =
+        Name_occurrences.everything (TE.domain env_plus_t1)
+      in
+      let domain_of_env_plus_t2 =
+        Name_occurrences.everything (TE.domain env_plus_t2)
+      in
+      let domain_of_both_envs =
+        Name.Set.inter domain_of_env_plus_t1 domain_of_env_plus_t2
+      in
+      let preserved_cse_equations _env t =
         (* CR-someday mshinwell: This could be improved to preserve some of
            those CSE equations that talk about existentially-bound names.  For
            the moment we only preserve those CSE equations whose free names are
-           wholly contained within both the domain of [env1] and the domain
-           of [env2]. *)
+           wholly contained within both the domain of [env_plus_t1] and the
+           domain of [env_plus_t2]. *)
         Flambda_primitive.With_fixed_value.Map.filter
           (fun prim (bound_to_or_value : Simple.t) ->
             match bound_to_or_value with
@@ -347,8 +392,8 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
               (* CR-soon mshinwell: Make this take account of aliases. *)
               if Simple.equal simple1 simple2 then Some simple1
               else None)
-          (preserved_cse_equations env1 t1)
-          (preserved_cse_equations env2 t2)
+          (preserved_cse_equations env_plus_t1 t1)
+          (preserved_cse_equations env_plus_t2 t2)
       in
       let t =
         { t with

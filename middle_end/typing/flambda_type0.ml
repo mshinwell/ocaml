@@ -2828,7 +2828,11 @@ result
   end
 
   let meet = Meet_and_join.meet
-  let join = Meet_and_join.join
+
+  let join ~env ~env_plus_extension1 ~env_plus_extension2
+        ~extension1 ~extension2 ty1 ty2 =
+    Meet_and_join.join env env_plus_extension1 env_plus_extension2
+      extension1 extension2 ty1 ty2
 
   let strictly_more_precise = Meet_and_join.strictly_more_precise
   let as_or_more_precise = Meet_and_join.as_or_more_precise

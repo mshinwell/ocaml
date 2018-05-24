@@ -655,18 +655,20 @@ module type S = sig
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
 
-  (** Least upper bound of two types. *)
-  val join
-     : Typing_env.t
-    -> Typing_env_extension.t
-    -> Typing_env_extension.t
-    -> t
-    -> t
-    -> t
-
   (** Greatest lower bound of two types.  The process of meeting may generate
       equations, which are returned as an environment extension. *)
   val meet : Typing_env.t -> t -> t -> t * Typing_env_extension.t
+
+  (** Least upper bound of two types. *)
+  val join
+     : env:Typing_env.t
+    -> env_plus_extension1:Typing_env.t
+    -> env_plus_extension2:Typing_env.t
+    -> extension1:Typing_env_extension.t
+    -> extension2:Typing_env_extension.t
+    -> t
+    -> t
+    -> t
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)

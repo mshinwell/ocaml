@@ -53,6 +53,8 @@ module type S = sig
       as empty.) *)
   val is_empty : t -> bool
 
+  val fast_equal : t -> t -> bool
+
   (** The names for which the given typing environment specifies a type
       assignment, including for names which were once existentially-bound. (Note
       that [domain] returning an empty name occurrences structure does not imply
