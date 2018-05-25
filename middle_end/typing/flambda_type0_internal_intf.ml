@@ -285,6 +285,14 @@ end) = struct
     env_extension : env_extension;
   }
 
+  type join_env = {
+    env : typing_environment;
+    env_plus_extension1 : typing_environment;
+    env_plus_extension2 : typing_environment;
+    extension1 : env_extension;
+    extension2 : env_extension;
+  }
+
   module Name_or_export_id = struct
     type t =
       | Name of Name.t

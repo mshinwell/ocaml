@@ -2302,24 +2302,23 @@ result
           in
           Join of_kind_foos
 
-    and join_ty env env_plus_extension1 env_plus_extension2
-          env_extension1 env_extension2
-          (or_alias1 : S.of_kind_foo ty)
-          (or_alias2 : S.of_kind_foo ty)
+    and join_ty join_env
+          (or_alias1 : S.of_kind_foo ty) (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
-      if env_plus_extension1 == env_plus_extension2 && or_alias1 == or_alias2
+      if Join_env.fast_check_extensions_same_both_sides join_env
+        && or_alias1 == or_alias2
       then or_alias1
       else
         let unknown_or_join1, all_aliases1 =
           Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-            env_plus_extension1
+            (Join_env.environment_on_left join_env)
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias1
         in
         let unknown_or_join2, all_aliases2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env1
-            env_plus_extension2
+          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+            (Join_env.environment_on_right join_env)
             ~force_to_kind:S.force_to_kind
             ~print_ty:S.print_ty
             or_alias2
@@ -2328,7 +2327,7 @@ result
         let alias_both_sides = Name.Set.choose_opt all_aliases in
         match alias_both_sides with
         | Some name ->
-          assert (Typing_env.mem name env);
+          assert (Typing_env.mem name (Join_env.joined_environment join_env));
           Equals name
           (* CR mshinwell: The symmetrical cases ("is unknown") should be
              present on the [meet] function, below. *)
@@ -2343,9 +2342,7 @@ result
             Equals name2
           | None, None ->
             let unknown_or_join =
-              join_on_unknown_or_join env
-                env_plus_extension1 env_plus_extension2
-                env_extension1 env_extension2
+              join_on_unknown_or_join join_env
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
@@ -2359,9 +2356,7 @@ result
             end
           | _, _ ->
             let unknown_or_join =
-              join_on_unknown_or_join env
-                env_plus_extension1 env_plus_extension2
-                env_extension1 env_extension2
+              join_on_unknown_or_join join_env
                 unknown_or_join1 unknown_or_join2
             in
             No_alias unknown_or_join
@@ -2581,9 +2576,8 @@ result
         t, env_extension_from_meet
       end
 
-    let join env env_plus_extension1 env_plus_extension2
-          env_extension1 env_extension2 t1 t2 =
-      if Typing_env_extension.fast_equal env_plus_extension1 env_plus_extension2
+    let join join_env t1 t2 =
+      if Join_env.fast_check_extensions_same_both_sides joined_env
         && Type_equality.fast_equal t1 t2
       then t1
       else begin
@@ -2592,10 +2586,7 @@ result
           match t1.descr, t2.descr with
           | Value ty_value1, Value ty_value2 ->
             let ty_value =
-              Meet_and_join_value.join_ty env
-                env_plus_extension1 env_plus_extension2
-                env_extension1 env_extension2
-                ty_value1 ty_value2
+              Meet_and_join_value.join_ty join_env ty_value1 ty_value2
             in
             if ty_value == ty_value1 then t1.descr
             else if ty_value == ty_value2 then t2.descr
@@ -2606,41 +2597,32 @@ result
             begin match kind1, kind2 with
             | N.Naked_immediate, N.Naked_immediate ->
               let ty_naked_number =
-                Meet_and_join_naked_immediate.join_ty env
-                  env_plus_extension1 env_plus_extension2
-                  env_extension1 env_extension2
+                Meet_and_join_naked_immediate.join_ty join_env
                   ty_naked_number1 ty_naked_number2
               in
+              (* CR mshinwell: add phys_equal checks as above *)
               Naked_number (ty_naked_number, N.Naked_immediate)
             | N.Naked_float, N.Naked_float ->
               let ty_naked_number =
-                Meet_and_join_naked_float.join_ty env
-                  env_plus_extension1 env_plus_extension2
-                  env_extension1 env_extension2
+                Meet_and_join_naked_float.join_ty join_env
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_float)
             | N.Naked_int32, N.Naked_int32 ->
               let ty_naked_number =
-                Meet_and_join_naked_int32.join_ty env
-                  env_plus_extension1 env_plus_extension2
-                  env_extension1 env_extension2
+                Meet_and_join_naked_int32.join_ty join_env
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int32)
             | N.Naked_int64, N.Naked_int64 ->
               let ty_naked_number =
-                Meet_and_join_naked_int64.join_ty env
-                  env_plus_extension1 env_plus_extension2
-                  env_extension1 env_extension2
+                Meet_and_join_naked_int64.join_ty join_env
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_int64)
             | N.Naked_nativeint, N.Naked_nativeint ->
               let ty_naked_number =
-                Meet_and_join_naked_nativeint.join_ty env
-                  env_plus_extension1 env_plus_extension2
-                  env_extension1 env_extension2
+                Meet_and_join_naked_nativeint.join_ty join_env
                   ty_naked_number1 ty_naked_number2
               in
               Naked_number (ty_naked_number, N.Naked_nativeint)
@@ -2651,9 +2633,7 @@ result
             end
           | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
             let ty_fabricated =
-              Meet_and_join_fabricated.join_ty env
-                env_plus_extension1 env_plus_extension2
-                env_extension1 env_extension2
+              Meet_and_join_fabricated.join_ty join_env
                 ty_fabricated1 ty_fabricated2
             in
             if ty_fabricated == ty_fabricated1 then t1.descr
@@ -2828,11 +2808,7 @@ result
   end
 
   let meet = Meet_and_join.meet
-
-  let join ~env ~env_plus_extension1 ~env_plus_extension2
-        ~extension1 ~extension2 ty1 ty2 =
-    Meet_and_join.join env env_plus_extension1 env_plus_extension2
-      extension1 extension2 ty1 ty2
+  let join = Meet_and_join.join
 
   let strictly_more_precise = Meet_and_join.strictly_more_precise
   let as_or_more_precise = Meet_and_join.as_or_more_precise

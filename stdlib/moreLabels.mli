@@ -184,8 +184,9 @@ module Map : sig
       val union_left : 'a t -> 'a t -> 'a t
       val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
       val union_both
-         : ('a -> 'a)
-        -> ('a -> 'a -> 'a)
+         : in_left_only:('a -> 'a)
+        -> in_right_only:('a -> 'a)
+        -> in_both:('a -> 'a -> 'a)
         -> 'a t
         -> 'a t
         -> 'a t

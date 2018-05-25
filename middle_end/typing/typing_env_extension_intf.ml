@@ -21,6 +21,7 @@
 module type S = sig
   type env_extension
   type typing_environment
+  type join_env
   type flambda_type
 
   type t = env_extension
@@ -76,19 +77,8 @@ module type S = sig
       environment. *)
   val meet : typing_environment -> t -> t -> t
 
-  (** Greatest lower bound of two environment extensions.
-
-      [join env (env1, t1) (env2, t2)] interprets the extension [t1] in the
-      environment [env1] (and likewise for [t2]).  The resulting extension
-      will be valid when interpreted in [env].  The intuition is that [env1]
-      and [env2] were previously themselves formed from [env] by some
-      environment extension(s) having been merged in.
-  *)
-  val join
-     : typing_environment
-    -> (typing_environment * t)
-    -> (typing_environment * t)
-    -> t
+  (** Greatest lower bound of two environment extensions. *)
+  val join : join_env -> t -> t -> t
 
   val restrict_to_definitions : t -> t
 

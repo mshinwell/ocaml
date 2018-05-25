@@ -388,34 +388,33 @@ struct
             Ok (({ function_decls; } : closure), env_extension_from_meet)
       end
 
-    let join_closure env env_plus_extension1 env_plus_extension2
-          env_extension1 env_extension2
+    let join_closure join_env
           (closure1 : closure) (closure2 : closure)
           : closure =
-      if env1 == env2 && closure1 == closure2 then begin
+      if Join_env.fast_check_extensions_same_both_sides join_env
+        && closure1 == closure2
+      then begin
         closure1
       end else begin
-        let produce_non_inlinable ~params1 ~params2
-              ~param_names1 ~param_names2 ~result1 ~result2
-              ~result_env_extension1 ~result_env_extension2
+        let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
-          let same_arity = List.compare_lengths params1 params2 = 0 in
-          let same_num_results = List.compare_lengths result1 result2 = 0 in
-          if same_arity && same_num_results then
-            let params =
-              Typing_env_extension.join env
-                (env_plus_extension1, params1)
-                (env_plus_extension2, params2)
+          let same_num_params = Parameters.same_num_params params1 params2 in
+          let same_num_results = Parameters.same_num_params results1 results2 in
+          if not (same_arity && same_num_results) then
+            Non_inlinable None
+          else
+            let params = Parameters.join join_env params1 params2 in
+            let join_env =
+              Join_env.change_joined_environment join_env ~f:(fun joined_env ->
+                Parameters.introduce_definitions params joined_env)
             in
-            let env =
-              Typing_env.add_or_meet_env_extension env params
-                (Scope_level.max env)
+            let join_env =
+              Join_env.add_extensions join_env
+                ~holds_in_join:params
+                ~holds_on_left:params1
+                ~holds_on_right:params2
             in
-            let result_env_extension =
-              Typing_env_extension.join env
-                (env_plus_extension1, result_env_extension1)
-                (env_plus_extension2, result_env_extension2)
-            in
+            let results = Parameters.join join_env results1 results2 in
             let direct_call_surrogate =
               match direct_call_surrogate1, direct_call_surrogate2 with
               | Some closure_id1, Some closure_id2
@@ -425,14 +424,11 @@ struct
             in
             let non_inlinable : non_inlinable_function_declarations =
               { params;
-                result;
-                result_env_extension;
+                results;
                 direct_call_surrogate;
               }
             in
             Non_inlinable (Some non_inlinable)
-          else
-            Non_inlinable None
         in
         let function_decls : function_declarations =
           match closure1.function_decls, closure2.function_decls with

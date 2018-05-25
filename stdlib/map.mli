@@ -329,12 +329,10 @@ module type S =
         Bindings present in both [m1] and [m2] are sent through [f]. *)
     val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
 
-    (** [union_both f g m1 m2] contains all bindings from [m1] and [m2].
-        Bindings present in only one of [m1] and [m2] are sent through [f];
-        bindings present in both [m1] and [m2] are sent through [g]. *)
     val union_both
-       : ('a -> 'a)
-      -> ('a -> 'a -> 'a)
+       : in_left_only:('a -> 'a)
+      -> in_right_only:('a -> 'a)
+      -> in_both:('a -> 'a -> 'a)
       -> 'a t
       -> 'a t
       -> 'a t

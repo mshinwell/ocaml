@@ -205,7 +205,7 @@ module type S = sig
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    result : parameters;
+    results : parameters;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -343,15 +343,23 @@ module type S = sig
 
     val env_extension : t -> Typing_env_extension.t
 
+    val introduce_definitions
+       : ?freshening:Freshening.t
+      -> t
+      -> Typing_env.t
+      -> t
+
     (** At the highest scope level in the given environment, introduce
         definitions for the parameters inside [t]; and then add the
         environment extension (using "meet") to yield another environment.
         (This will open any existentials in the extension.)
         Parameters and types will be freshened according to the provided
         [Freshening.t]. *)
-    val introduce : t -> Freshening.t -> Typing_env.t -> t
+    val introduce : ?freshening:Freshening.t -> t -> Typing_env.t -> t
 
     val freshened_params : t -> Freshening.t -> t
+
+    val same_num_params : t -> t -> bool
 
     val print : Format.formatter -> t -> unit
   end
