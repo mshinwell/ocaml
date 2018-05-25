@@ -398,37 +398,51 @@ struct
       end else begin
         let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
-          let same_num_params = Parameters.same_num_params params1 params2 in
-          let same_num_results = Parameters.same_num_params results1 results2 in
-          if not (same_arity && same_num_results) then
-            Non_inlinable None
-          else
-            let params = Parameters.join join_env params1 params2 in
-            let join_env =
-              Join_env.change_joined_environment join_env ~f:(fun joined_env ->
-                Parameters.introduce_definitions params joined_env)
-            in
-            let join_env =
-              Join_env.add_extensions join_env
-                ~holds_in_join:params
-                ~holds_on_left:params1
-                ~holds_on_right:params2
-            in
-            let results = Parameters.join join_env results1 results2 in
-            let direct_call_surrogate =
-              match direct_call_surrogate1, direct_call_surrogate2 with
-              | Some closure_id1, Some closure_id2
-                  when Closure_id.equal closure_id1 closure_id2 ->
-                Some closure_id1
-              | _, _ -> None
-            in
-            let non_inlinable : non_inlinable_function_declarations =
-              { params;
-                results;
-                direct_call_surrogate;
-              }
-            in
-            Non_inlinable (Some non_inlinable)
+          match Parameters.use_the_same_fresh_names params1 params2 with
+          | None -> Non_inlinable None
+          | Some (kinded_params, params1, params2) ->
+            match Parameters.use_the_same_fresh_names results1 results2 with
+            | None -> Non_inlinable None
+            | Some (kinded_results, results1, results2) ->
+              let join_env =
+                Join_env.change_joined_environment join_env
+                  ~f:(fun joined_env ->
+                    List.fold_left (fun joined_env kinded_param ->
+                        let name = Kinded_parameter.name kinded_param in
+                        let kind = Kinded_parameter.kind kinded_param in
+                        let ty = T.bottom kind in
+                        Typing_env.add name (Typing_env.max_level joined_env)
+                          (Definition ty))
+                      joined_env
+                      kinded_params
+              in
+              let params =
+                Parameters.create_with_env_extension kinded_params
+                  (Typing_env_extension.join join_env params1 params2)
+              in
+              let join_env =
+                Join_env.add_extensions join_env
+                  ~holds_in_join:(Parameters.env_extension params)
+                  ~holds_on_left:(Parameters.env_extension params1)
+                  ~holds_on_right:(Parameters.env_extension params2)
+              in
+
+
+              let results = Parameters.join join_env results1 results2 in
+              let direct_call_surrogate =
+                match direct_call_surrogate1, direct_call_surrogate2 with
+                | Some closure_id1, Some closure_id2
+                    when Closure_id.equal closure_id1 closure_id2 ->
+                  Some closure_id1
+                | _, _ -> None
+              in
+              let non_inlinable : non_inlinable_function_declarations =
+                { params;
+                  results;
+                  direct_call_surrogate;
+                }
+              in
+              Non_inlinable (Some non_inlinable)
         in
         let function_decls : function_declarations =
           match closure1.function_decls, closure2.function_decls with

@@ -341,7 +341,19 @@ module type S = sig
 
     val create : Kinded_parameter.t list -> t
 
+    val create_with_env_extension
+       : Kinded_parameter.t list
+      -> Typing_env_extension.t
+      -> t
+
     val env_extension : t -> Typing_env_extension.t
+
+    val use_the_same_fresh_names
+       : t
+      -> t
+      -> (Kinded_parameter.t list
+        * Typing_env_extension.t
+        * Typing_env_extension.t) option
 
     val introduce_definitions
        : ?freshening:Freshening.t
@@ -358,8 +370,6 @@ module type S = sig
     val introduce : ?freshening:Freshening.t -> t -> Typing_env.t -> t
 
     val freshened_params : t -> Freshening.t -> t
-
-    val same_num_params : t -> t -> bool
 
     val print : Format.formatter -> t -> unit
   end
