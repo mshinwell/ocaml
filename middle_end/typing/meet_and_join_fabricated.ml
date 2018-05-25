@@ -616,24 +616,20 @@ struct
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
           let closures =
-            (* XXX *)
-            Closure_id.Map.filter_map (fun closure_id ty1 ->
-                match Closure_id.Map.find closure_id closures2 with
-                | exception Not_found -> Some ty1
-                | ty2 ->
-                  let ty_fabricated, new_equations =
-                    E.Meet_and_join_fabricated.meet_ty meet_or_join_env
-                      ty1 ty2
-                  in
-                  if ty_is_obviously_bottom ty_fabricated then begin
-                    None
-                  end else begin
-                    equations :=
-                      Typing_env_extension.meet meet_or_join_env
-                        new_equations !equations;
-                    Some ty_fabricated
-                  end)
-              closures1
+            E.Closure_id.Map.union_or_inter (fun closure_id ty1 ty2 ->
+                let ty_fabricated, new_equations =
+                  E.Meet_and_join_fabricated.meet_or_join_ty meet_or_join_env
+                    ty1 ty2
+                in
+                if ty_is_obviously_bottom ty_fabricated then begin
+                  None
+                end else begin
+                  equations :=
+                    Typing_env_extension.meet meet_or_join_env
+                      new_equations !equations;
+                  Some ty_fabricated
+                end)
+              closures1 closures2
           in
           Exactly closures
         | Open closures1, Open closures2 ->
@@ -661,7 +657,7 @@ struct
         match set1.closure_elements, set2.closure_elements with
         | Exactly closure_elements1, Exactly closure_elements2 ->
           let closure_elements =
-            E.Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
+            E.Var_within_closure.Map.union_or_inter (fun ty_value1 ty_value2 ->
                 let ty_value, new_equations =
                   E.Meet_and_join_value.meet_or_join_ty meet_or_join_env
                     ty_value1 ty_value2
