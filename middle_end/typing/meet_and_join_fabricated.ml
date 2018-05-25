@@ -832,88 +832,80 @@ struct
           closure_elements;
         }
 
-    let meet_of_kind_foo env
+    let meet_or_join_of_kind_foo meet_or_join_env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : (of_kind_fabricated * env_extension) Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Discriminant discriminants1, Discriminant discriminants2 ->
-        let discriminants =
-          Discriminant.Map.inter_merge
-            (fun ({ env_extension = env_extension1; } : discriminant_case)
-                  ({ env_extension = env_extension2; } : discriminant_case)
-                  : discriminant_case ->
-              let env_extension =
-                Typing_env_extension.meet env
-                  env_extension1 env_extension2
-              in
-              (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
-              { env_extension; })
-            discriminants1
-            discriminants2
-        in
-        begin match Discriminant.Map.get_singleton discriminants with
-        | None ->
-          Ok (Discriminant discriminants, Typing_env_extension.empty)
-        | Some (discriminant, discriminant_case) ->
-          let env_extension_from_meet = discriminant_case.env_extension in
+          : (of_kind_fabricated * env_extension) Or_absorbing.t =
+      if
+        Meet_and_join_env.fast_check_extensions_same_both_sides meet_or_join_env
+          && of_kind1 == of_kind2
+      then
+        Ok (of_kind1, Typing_env_extension.empty)
+      else
+        match of_kind1, of_kind2 with
+        | Discriminant discriminants1, Discriminant discriminants2 ->
           let discriminants =
-            Discriminant.Map.singleton discriminant
-              ({ env_extension = Typing_env_extension.empty; }
-                : discriminant_case)
+            E.Discriminant.Map.union_or_inter_both
+              ~in_left_only:
+                (fun ({ env_extension; } : discriminant_case)
+                      : discriminant_case ->
+                  let env_extension =
+                    Meet_or_join_env.holds_on_left meet_and_join_env
+                  in
+                  { env_extension; })
+              ~in_right_only:
+                (fun ({ env_extension; } : discriminant_case)
+                      : discriminant_case ->
+                  let env_extension =
+                    Meet_or_join_env.holds_on_right meet_and_join_env
+                  in
+                  { env_extension; })
+              ~in_both:
+                (fun ({ env_extension = env_extension1; } : discriminant_case)
+                     ({ env_extension = env_extension2; } : discriminant_case)
+                     : discriminant_case ->
+                  let env_extension =
+                    E.Typing_env_extension.meet_or_join meet_or_join_env
+                      env_extension1 env_extension2
+                  in
+                  { env_extension; })
           in
-          Ok (Discriminant discriminants, env_extension_from_meet)
-        end
-      | Set_of_closures set1, Set_of_closures set2 ->
-        begin match meet_set_of_closures env set1 set2 with
-        | Ok (set_of_closures, env_extension_from_meet) ->
-          if set_of_closures == set1 then
-            Ok (of_kind1, env_extension_from_meet)
-          else if set_of_closures == set2 then
-            Ok (of_kind2, env_extension_from_meet)
-          else
-            Ok (Set_of_closures set_of_closures, env_extension_from_meet)
-        | Bottom -> Bottom
-        end
-      | Closure closure1, Closure closure2 ->
-        begin match meet_closure env closure1 closure2 with
-        | Ok (closure, env_extension_from_meet) ->
-          if closure == closure1 then
-            Ok (of_kind1, env_extension_from_meet)
-          else if closure == closure2 then
-            Ok (of_kind2, env_extension_from_meet)
-          else
-            Ok (Closure closure, env_extension_from_meet)
-        | Bottom -> Bottom
-        end
-      | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
-
-    let join_of_kind_foo join_env
-          (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : of_kind_fabricated Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Discriminant discriminants1, Discriminant discriminants2 ->
-        let discriminants =
-          Discriminant.Map.union_merge
-            (fun ({ env_extension = env_extension1; } : discriminant_case)
-                  ({ env_extension = env_extension2; } : discriminant_case)
-                  : discriminant_case ->
-              let env_extension =
-                Typing_env_extension.join env
-                  env_extension1 env_extension2
-                  env_extension1' env_extension2'
-              in
-              { env_extension; })
-            discriminants1
-            discriminants2
-        in
-        Known (Discriminant discriminants)
-      | Set_of_closures set1, Set_of_closures set2 ->
-        let set_of_closures = join_set_of_closures join_env set1 set2 in
-        Known (Set_of_closures set_of_closures)
-      | Closure closure1, Closure closure2 ->
-        let closure = join_closure join_env closure1 closure2 in
-        Known (Closure closure)
-      | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
+          begin match Discriminant.Map.get_singleton discriminants with
+          | None ->
+            Ok (Discriminant discriminants, Typing_env_extension.empty)
+          | Some (discriminant, discriminant_case) ->
+            let discriminants =
+              Discriminant.Map.singleton discriminant
+                ({ env_extension = Typing_env_extension.empty; }
+                  : discriminant_case)
+            in
+            Ok (Discriminant discriminants, discriminant_case.env_extension)
+          end
+        | Set_of_closures set1, Set_of_closures set2 ->
+          begin match meet_set_of_closures env set1 set2 with
+          | Ok (set_of_closures, env_extension_from_meet) ->
+            if set_of_closures == set1 then
+              Ok (of_kind1, env_extension_from_meet)
+            else if set_of_closures == set2 then
+              Ok (of_kind2, env_extension_from_meet)
+            else
+              Ok (Set_of_closures set_of_closures, env_extension_from_meet)
+          | Bottom ->
+            (* CR mshinwell: Here and elsewhere we are relying on this case
+               never been taken for [join] *)
+            Absorbing
+          end
+        | Closure closure1, Closure closure2 ->
+          begin match meet_closure env closure1 closure2 with
+          | Ok (closure, env_extension_from_meet) ->
+            if closure == closure1 then
+              Ok (of_kind1, env_extension_from_meet)
+            else if closure == closure2 then
+              Ok (of_kind2, env_extension_from_meet)
+            else
+              Ok (Closure closure, env_extension_from_meet)
+          | Bottom -> Absorbing
+          end
+        | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Absorbing
   end)
 
   include Meet_and_join_fabricated
