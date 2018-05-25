@@ -164,7 +164,7 @@ struct
       in
       let meet_or_join_env =
         Meet_or_join_env.add_extensions meet_or_join_env
-          ~holds_everywhere:env_extension
+          ~holds_for_meet_or_join:env_extension
           ~holds_on_left:env_extension1
           ~holds_on_right:env_extension2
       in

@@ -35,7 +35,7 @@ module type S = sig
 
   val add_extensions
      : t
-    -> holds_in_join:env_extension
+    -> holds_for_meet_or_join:env_extension
     -> holds_on_left:env_extension
     -> holds_on_right:env_extension
     -> t

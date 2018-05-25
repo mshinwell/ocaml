@@ -81,6 +81,11 @@ end) (Make_meet_and_join : functor
         with type env_extension := T.env_extension
         with type typing_environment := T.typing_environment
         with type flambda_type := T.flambda_type
+    end) (E : sig
+      include Either_meet_or_join_intf.S
+        with type typing_environment := T.typing_environment
+        with type env_extension := T.env_extension
+        with type flambda_type := T.flambda_type
     end) =
 struct
   open T
@@ -101,27 +106,17 @@ struct
 
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env
+    let meet_or_join_of_kind_foo _meet_or_join_env
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : (Immediate.Set.t of_kind_naked_number * env_extension)
-              Or_bottom.t =
+              Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.inter fs1 fs2 in
-        if Immediate.Set.is_empty fs then Bottom
+        let fs = E.Immediate.Set.union_or_inter fs1 fs2 in
+        if Immediate.Set.is_empty fs then Absorbing
         else Ok (Immediate fs, Typing_env_extension.empty)
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _join_env
-          (of_kind1 : Immediate.Set.t of_kind_naked_number)
-          (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : Immediate.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.union fs1 fs2 in
-        Known (Immediate fs)
-      | _, _ -> Unknown
+      | _, _ -> Absorbing
   end)
 
   module Naked_float = Make_meet_and_join (struct
@@ -137,27 +132,17 @@ struct
     let force_to_kind = force_to_kind_naked_float
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env
+    let meet_or_join_of_kind_foo _meet_or_join_env
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : (Float_by_bit_pattern.Set.t of_kind_naked_number
-              * env_extension) Or_bottom.t =
+              * env_extension) Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
-        if Float_by_bit_pattern.Set.is_empty fs then Bottom
+        let fs = E.Float_by_bit_pattern.Set.union_or_inter fs1 fs2 in
+        if Float_by_bit_pattern.Set.is_empty fs then Absorbing
         else Ok (Float fs, Typing_env_extension.empty)
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _join_env
-          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : Float_by_bit_pattern.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
-        Known (Float fs)
-      | _, _ -> Unknown
+      | _, _ -> Absorbing
   end)
 
   module Naked_int32 = Make_meet_and_join (struct
@@ -173,26 +158,16 @@ struct
     let force_to_kind = force_to_kind_naked_int32
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env
+    let meet_or_join_of_kind_foo _meet_or_join_env
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : (Int32.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
+          : (Int32.Set.t of_kind_naked_number * env_extension) Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.inter is1 is2 in
-        if Int32.Set.is_empty is then Bottom
+        let is = E.Int32.Set.union_or_inter is1 is2 in
+        if Int32.Set.is_empty is then Absorbing
         else Ok (Int32 is, Typing_env_extension.empty)
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _join_env
-          (of_kind1 : Int32.Set.t of_kind_naked_number)
-          (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : Int32.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.union is1 is2 in
-        Known (Int32 is)
-      | _, _ -> Unknown
+      | _, _ -> Absorbing
   end)
 
   module Naked_int64 = Make_meet_and_join (struct
@@ -208,26 +183,16 @@ struct
     let force_to_kind = force_to_kind_naked_int64
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env
+    let meet_or_join_of_kind_foo _env
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : (Int64.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
+          : (Int64.Set.t of_kind_naked_number * env_extension) Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.inter is1 is2 in
-        if Int64.Set.is_empty is then Bottom
+        let is = E.Int64.Set.union_or_inter is1 is2 in
+        if Int64.Set.is_empty is then Absorbing
         else Ok (Int64 is, Typing_env_extension.empty)
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _join_env
-          (of_kind1 : Int64.Set.t of_kind_naked_number)
-          (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : Int64.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.union is1 is2 in
-        Known (Int64 is)
-      | _, _ -> Unknown
+      | _, _ -> Absorbing
   end)
 
   module Naked_nativeint = Make_meet_and_join (struct
@@ -243,25 +208,16 @@ struct
     let force_to_kind = force_to_kind_naked_nativeint
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _env
+    let meet_of_kind_foo _meet_or_join_env
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : (Targetint.Set.t of_kind_naked_number * env_extension) Or_bottom.t =
+          : (Targetint.Set.t of_kind_naked_number * env_extension)
+              Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.inter is1 is2 in
-        if Targetint.Set.is_empty is then Bottom
+        let is = E.Targetint.Set.union_or_inter is1 is2 in
+        if Targetint.Set.is_empty is then Absorbing
         else Ok (Nativeint is, Typing_env_extension.empty)
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _join_env
-          (of_kind1 : Targetint.Set.t of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : Targetint.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.union is1 is2 in
-        Known (Nativeint is)
-      | _, _ -> Unknown
+      | _, _ -> Absorbing
   end)
 end
