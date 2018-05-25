@@ -313,21 +313,15 @@ struct
               cannot_prove_different
                 ~params1:non_inlinable1.params
                 ~params2:non_inlinable2.params
-                ~param_names1:None
-                ~param_names2:None
-                ~result1:non_inlinable1.result
-                ~result2:non_inlinable2.result
-                ~result_env_extension1:non_inlinable1.result_env_extension
-                ~result_env_extension2:non_inlinable2.result_env_extension
+                ~results1:non_inlinable1.results
+                ~results2:non_inlinable2.results
             in
             begin match result with
-            | Ok (params, _params_changed, result, result_env_extension,
-                  env_extension_from_meet) ->
+            | Ok (params, _params_changed, results, env_extension_from_meet) ->
               let non_inlinable_function_decl =
                 { non_inlinable1 with
                   params;
-                  result;
-                  result_env_extension;
+                  results;
                 }
               in
               Ok (Non_inlinable (Some non_inlinable_function_decl),
@@ -398,37 +392,12 @@ struct
       end else begin
         let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
               ~direct_call_surrogate1 ~direct_call_surrogate2 =
-          match Parameters.use_the_same_fresh_names params1 params2 with
+          match Parameters.join_and_introduce join_env params1 params2 with
           | None -> Non_inlinable None
-          | Some (kinded_params, params1, params2) ->
-            match Parameters.use_the_same_fresh_names results1 results2 with
+          | Some (params, join_env) ->
+            match Parameters.join join_env results1 results2 with
             | None -> Non_inlinable None
-            | Some (kinded_results, results1, results2) ->
-              let join_env =
-                Join_env.change_joined_environment join_env
-                  ~f:(fun joined_env ->
-                    List.fold_left (fun joined_env kinded_param ->
-                        let name = Kinded_parameter.name kinded_param in
-                        let kind = Kinded_parameter.kind kinded_param in
-                        let ty = T.bottom kind in
-                        Typing_env.add name (Typing_env.max_level joined_env)
-                          (Definition ty))
-                      joined_env
-                      kinded_params
-              in
-              let params =
-                Parameters.create_with_env_extension kinded_params
-                  (Typing_env_extension.join join_env params1 params2)
-              in
-              let join_env =
-                Join_env.add_extensions join_env
-                  ~holds_in_join:(Parameters.env_extension params)
-                  ~holds_on_left:(Parameters.env_extension params1)
-                  ~holds_on_right:(Parameters.env_extension params2)
-              in
-
-
-              let results = Parameters.join join_env results1 results2 in
+            | Some results ->
               let direct_call_surrogate =
                 match direct_call_surrogate1, direct_call_surrogate2 with
                 | Some closure_id1, Some closure_id2
@@ -452,29 +421,19 @@ struct
             produce_non_inlinable
               ~params1:non_inlinable1.params
               ~params2:non_inlinable2.params
-              ~param_names1:None
-              ~param_names2:None
-              ~result1:non_inlinable1.result
-              ~result2:non_inlinable2.result
-              ~result_env_extension1:non_inlinable1.result_env_extension
-              ~result_env_extension2:non_inlinable2.result_env_extension
+              ~results1:non_inlinable1.results
+              ~results2:non_inlinable2.results
               ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
               ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
           | Non_inlinable (Some non_inlinable), Inlinable inlinable
           (* CR mshinwell: This should use a record pattern match rather than
              field projection *)
           | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
-            let params1 = List.map snd inlinable.params in
-            let param_names1 = List.map fst inlinable.params in
             produce_non_inlinable
-              ~params1
+              ~params1:inlinable.params
               ~params2:non_inlinable.params
-              ~param_names1:(Some param_names1)
-              ~param_names2:None
-              ~result1:inlinable.result
-              ~result2:non_inlinable.result
-              ~result_env_extension1:inlinable.result_env_extension
-              ~result_env_extension2:non_inlinable.result_env_extension
+              ~results1:inlinable.results
+              ~results2:non_inlinable.results
               ~direct_call_surrogate1:inlinable.direct_call_surrogate
               ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
           | Inlinable inlinable1, Inlinable inlinable2 ->
@@ -488,12 +447,8 @@ struct
               produce_non_inlinable
                 ~params1
                 ~params2
-                ~param_names1:(Some param_names1)
-                ~param_names2:(Some param_names2)
-                ~result1:inlinable1.result
-                ~result2:inlinable2.result
-                ~result_env_extension1:inlinable1.result_env_extension
-                ~result_env_extension2:inlinable2.result_env_extension
+                ~results1:inlinable1.results
+                ~results2:inlinable2.results
                 ~direct_call_surrogate1:inlinable1.direct_call_surrogate
                 ~direct_call_surrogate2:inlinable2.direct_call_surrogate
             end else begin
@@ -801,8 +756,7 @@ struct
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_fabricated.join_ty join_env
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -813,8 +767,7 @@ struct
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_fabricated.join_ty join_env
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -826,8 +779,7 @@ struct
               (fun _ty_fabricated ->
                 any_fabricated_as_ty_fabricated ())
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty env
-                  env_extension1 env_extension2
+                Meet_and_join_fabricated.join_ty join_env
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -840,8 +792,7 @@ struct
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env env_extension1 env_extension2
-                  ty_value1 ty_value2)
+                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
               closure_elements1
               closure_elements2
           in
@@ -851,8 +802,7 @@ struct
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env env_extension1 env_extension2
-                  ty_value1 ty_value2)
+                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
               closure_elements1
               closure_elements2
           in
@@ -863,8 +813,7 @@ struct
               (fun _ty_value ->
                 any_value_as_ty_value ())
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty env env_extension1 env_extension2
-                  ty_value1 ty_value2)
+                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
               closure_elements1
               closure_elements2
           in
@@ -938,15 +887,15 @@ struct
         end
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
 
-    let join_of_kind_foo env env_extension1 env_extension2
+    let join_of_kind_foo join_env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : of_kind_fabricated Or_unknown.t =
       match of_kind1, of_kind2 with
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.union_merge
-            (fun ({ env_extension = env_extension1'; } : discriminant_case)
-                  ({ env_extension = env_extension2'; } : discriminant_case)
+            (fun ({ env_extension = env_extension1; } : discriminant_case)
+                  ({ env_extension = env_extension2; } : discriminant_case)
                   : discriminant_case ->
               let env_extension =
                 Typing_env_extension.join env
@@ -959,14 +908,10 @@ struct
         in
         Known (Discriminant discriminants)
       | Set_of_closures set1, Set_of_closures set2 ->
-        let set_of_closures =
-          join_set_of_closures env env_extension1 env_extension2 set1 set2
-        in
+        let set_of_closures = join_set_of_closures join_env set1 set2 in
         Known (Set_of_closures set_of_closures)
       | Closure closure1, Closure closure2 ->
-        let closure =
-          join_closure env env_extension1 env_extension2 closure1 closure2
-        in
+        let closure = join_closure join_env closure1 closure2 in
         Known (Closure closure)
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end)

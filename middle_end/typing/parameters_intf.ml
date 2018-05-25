@@ -16,45 +16,55 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** The interface of "join environments": structures which keep track of
-    the various environments and environment extensions that are required
-    whilst carrying out join operations (on types, etc). *)
+(** The abstraction used to represent parameters of functions, return
+    continuations, and so forth. *)
 
 module type S = sig
   type env_extension
   type typing_environment
   type join_env
   type flambda_type
+  type parameters
 
-  type t = join_env
+  type t = parameters
 
-  (** Perform various invariant checks upon the given join environment. *)
-  val invariant : t -> unit
+  val create : Kinded_parameter.t list -> t
 
-  val create : typing_environment -> t
-
-  val add_extensions
-     : t
-    -> holds_in_join:env_extension
-    -> holds_on_left:env_extension
-    -> holds_on_right:env_extension
+  val create_with_env_extension
+     : Kinded_parameter.t list
+    -> Typing_env_extension.t
     -> t
 
-  val add_definition_all_environments : t -> Name.t -> flambda_type -> t
+  val kinded_params : t -> Kinded_parameter.t
 
-  val add_definition_left_environment : t -> Name.t -> flambda_type -> t
+  val env_extension : t -> Typing_env_extension.t
 
-  val add_definition_right_environment : t -> Name.t -> flambda_type -> t
+  val use_the_same_fresh_names
+     : t
+    -> t
+    -> (Kinded_parameter.t list
+      * Typing_env_extension.t
+      * Typing_env_extension.t) option
 
-  val joined_environment : t -> typing_environment
+  val introduce_definitions
+     : ?freshening:Freshening.t
+    -> t
+    -> Typing_env.t
+    -> t
 
-  val environment_on_left : t -> typing_environment
+  (** At the highest scope level in the given environment, introduce
+      definitions for the parameters inside [t]; and then add the
+      environment extension (using "meet") to yield another environment.
+      (This will open any existentials in the extension.)
+      Parameters and types will be freshened according to the provided
+      [Freshening.t]. *)
+  val introduce : ?freshening:Freshening.t -> t -> Typing_env.t -> t
 
-  val environment_on_right : t -> typing_environment
+  val freshened_params : t -> Freshening.t -> t
 
-  val holds_on_left : t -> env_extension
+  val print : Format.formatter -> t -> unit
 
-  val holds_on_right : t -> env_extension
+  val join : Join_env.t -> t -> t -> t option
 
-  val fast_check_extensions_same_both_sides : t -> bool
+  val join_and_introduce : Join_env.t -> t -> t -> (t * Join_env.t) option
 end

@@ -334,44 +334,12 @@ module type S = sig
   end
 
   module Parameters : sig
-    (** A structure representing the binding of an ordered list of
-        parameters along with their types. *)
-
-    type t = parameters
-
-    val create : Kinded_parameter.t list -> t
-
-    val create_with_env_extension
-       : Kinded_parameter.t list
-      -> Typing_env_extension.t
-      -> t
-
-    val env_extension : t -> Typing_env_extension.t
-
-    val use_the_same_fresh_names
-       : t
-      -> t
-      -> (Kinded_parameter.t list
-        * Typing_env_extension.t
-        * Typing_env_extension.t) option
-
-    val introduce_definitions
-       : ?freshening:Freshening.t
-      -> t
-      -> Typing_env.t
-      -> t
-
-    (** At the highest scope level in the given environment, introduce
-        definitions for the parameters inside [t]; and then add the
-        environment extension (using "meet") to yield another environment.
-        (This will open any existentials in the extension.)
-        Parameters and types will be freshened according to the provided
-        [Freshening.t]. *)
-    val introduce : ?freshening:Freshening.t -> t -> Typing_env.t -> t
-
-    val freshened_params : t -> Freshening.t -> t
-
-    val print : Format.formatter -> t -> unit
+    include Parameters_intf.S
+      with type env_extension := env_extension
+      with type typing_environment := typing_environment
+      with type join_env := join_env
+      with type flambda_type := flambda_type
+      with type parameters := parameters
   end
 
   (** Annotation for functions that may require examination of the current

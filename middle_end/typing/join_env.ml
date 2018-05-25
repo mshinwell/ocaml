@@ -48,6 +48,14 @@ end)
 
   type t = join_env
 
+  (* XXX rename:
+     env --> joined_env
+     env_plus_extension1 --> left_env
+     env_plus_extension2 --> right_env
+     etc.
+     As we go along, it's not expected that:
+       env + left_env = left_extension
+  *)
   let create env =
     { env;
       env_plus_extension1 = env;
@@ -57,8 +65,6 @@ end)
     }
 
   let invariant _t =
-    (* CR mshinwell: Check here that, e.g.
-       env_plus_extension1 = env plus the things in extension1 *)
     ()
 
   let add_extensions t ~holds_in_join ~holds_on_left ~holds_on_right =
@@ -96,4 +102,49 @@ end)
 
   let fast_check_extensions_same_both_sides t =
     TEE.fast_equal t.extension1 t.extension2
+
+  let join join_env t1 t2 =
+    match use_the_same_fresh_names t1 t2 with
+    | None -> None
+    | Some (kinded_params, t1, t2) ->
+      let add_parameter_definitions join_env kinded_params ~add =
+        List.fold_left (fun join_env kinded_param ->
+            let name = Kinded_parameter.name kinded_param in
+            let kind = Kinded_parameter.kind kinded_param in
+            let ty = T.bottom kind in
+            add join_env name ty)
+          join_env
+          kinded_params
+      in
+      let join_env =
+        add_parameter_definitions join_env
+          kinded_params
+          ~add:Join_env.add_definition_all_environments
+      in
+      let join_env =
+        add_parameter_definitions join_env
+          (kinded_params t1)
+          ~add:Join_env.add_definition_left_environment
+      in
+      let join_env =
+        add_parameter_definitions join_env
+          (kinded_params t2)
+          ~add:Join_env.add_definition_right_environment
+      in
+      let joined_params_env_extension =
+        Typing_env_extension.join join_env
+          (env_extension t1)
+          (env_extension t2)
+      in
+      let t =
+        create_with_env_extension kinded_params
+          joined_params_env_extension
+      in
+      let join_env =
+        Join_env.add_extensions join_env
+          ~holds_in_join:(env_extension params)
+          ~holds_on_left:(env_extension t1)
+          ~holds_on_right:(env_extension t2)
+      in
+      t, join_env
 end
