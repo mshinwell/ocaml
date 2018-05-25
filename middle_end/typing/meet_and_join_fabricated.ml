@@ -119,7 +119,7 @@ struct
               ~result_env_extension1 ~result_env_extension2 : _ Or_bottom.t =
           let same_arity = List.compare_lengths params1 params2 = 0 in
           let same_num_results = List.compare_lengths result1 result2 = 0 in
-          let env_extension_from_meet = ref (Typing_env_extension.empty) in
+          let equations = ref (Typing_env_extension.empty) in
           let has_bottom params = List.exists is_obviously_bottom params in
           let params_changed = ref Neither in
           let params : _ Or_bottom.t =
@@ -148,7 +148,7 @@ struct
               in
               let params =
                 List.map2 (fun t1 t2 ->
-                    let t, new_env_extension_from_meet =
+                    let t, new_equations =
                       Meet_and_join.meet env t1 t2
                     in
                     if not (t == t1) then begin
@@ -157,9 +157,9 @@ struct
                     if not (t == t2) then begin
                       params_changed := join_changes !params_changed Right
                     end;
-                    env_extension_from_meet :=
+                    equations :=
                       Typing_env_extension.meet env
-                        new_env_extension_from_meet !env_extension_from_meet;
+                        new_equations !equations;
                     t)
                   params1
                   params2
@@ -213,7 +213,7 @@ struct
                 in
                 let result =
                   List.map2 (fun t1 t2 ->
-                      let t, new_env_extension_from_meet =
+                      let t, new_equations =
                         Meet_and_join.meet result_env t1 t2
                       in
                       if not (t == t1) then begin
@@ -222,9 +222,9 @@ struct
                       if not (t == t2) then begin
                         result_changed := join_changes !result_changed Right
                       end;
-                      env_extension_from_meet :=
+                      equations :=
                         Typing_env_extension.meet result_env
-                          new_env_extension_from_meet !env_extension_from_meet;
+                          new_equations !equations;
                       t)
                     result1
                     result2
@@ -241,7 +241,7 @@ struct
                   (join_changes !result_changed result_env_extension_changed)
               in
               Ok (param_tys, changed, result, result_env_extension,
-                !env_extension_from_meet)
+                !equations)
             | Bottom -> Bottom
         in
         let function_decls : _ Or_bottom.t =
@@ -268,7 +268,7 @@ struct
             in
             begin match result with
             | Ok (params, changed, result, result_env_extension,
-                  env_extension_from_meet) ->
+                  equations) ->
               (* [closure1.function_decls] and [closure2.function_decls] may be
                  different, but we cannot prove it.  We arbitrarily pick
                  [closure1.function_decls] to return, with parameter and result
@@ -281,15 +281,15 @@ struct
                   params
               in
               begin match changed with
-              | Neither -> Ok (closure1.function_decls, env_extension_from_meet)
-              | Left -> Ok (closure2.function_decls, env_extension_from_meet)
-              | Right -> Ok (closure1.function_decls, env_extension_from_meet)
+              | Neither -> Ok (closure1.function_decls, equations)
+              | Left -> Ok (closure2.function_decls, equations)
+              | Right -> Ok (closure1.function_decls, equations)
               | Both ->
                 Ok (Inlinable { inlinable1 with
                   params;
                   result;
                   result_env_extension;
-                }, env_extension_from_meet)
+                }, equations)
               end
             | Bottom ->
               (* [closure1] and [closure2] are definitely different. *)
@@ -317,7 +317,7 @@ struct
                 ~results2:non_inlinable2.results
             in
             begin match result with
-            | Ok (params, _params_changed, results, env_extension_from_meet) ->
+            | Ok (params, _params_changed, results, equations) ->
               let non_inlinable_function_decl =
                 { non_inlinable1 with
                   params;
@@ -325,7 +325,7 @@ struct
                 }
               in
               Ok (Non_inlinable (Some non_inlinable_function_decl),
-                env_extension_from_meet)
+                equations)
             | Bottom ->
               Bottom
             end
@@ -349,7 +349,7 @@ struct
             in
             begin match result with
             | Ok (params, _params_changed, result, result_env_extension,
-                  env_extension_from_meet) ->
+                  equations) ->
               (* We pick the inlinable declaration, since it gives more
                  information.  (Note that this matches up with the fact
                  that the parameter names passed to [cannot_prove_different]
@@ -366,20 +366,20 @@ struct
                   result_env_extension;
                 }
               in
-              Ok (Inlinable inlinable_function_decl, env_extension_from_meet)
+              Ok (Inlinable inlinable_function_decl, equations)
             | Bottom ->
               Bottom
             end
         in
         match function_decls with
         | Bottom -> Bottom
-        | Ok (function_decls, env_extension_from_meet) ->
+        | Ok (function_decls, equations) ->
           if function_decls == closure1.function_decls then
-            Ok (closure1, env_extension_from_meet)
+            Ok (closure1, equations)
           else if function_decls == closure2.function_decls then
-            Ok (closure2, env_extension_from_meet)
+            Ok (closure2, equations)
           else
-            Ok (({ function_decls; } : closure), env_extension_from_meet)
+            Ok (({ function_decls; } : closure), equations)
       end
 
     let join_closure join_env
@@ -572,26 +572,27 @@ struct
         { function_decls; }
       end
 
-    let meet_set_of_closures env
+    let meet_or_join_set_of_closures meet_or_join_env
           (set1 : set_of_closures) (set2 : set_of_closures)
-          : (set_of_closures * env_extension) Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.empty) in
+          : (set_of_closures * env_extension) E.Or_absorbing.t =
+      let equations = ref (Typing_env_extension.empty) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
         match set1.closures, set2.closures with
         | Exactly closures1, Exactly closures2 ->
           let closures =
-            Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_env_extension_from_meet =
-                  Meet_and_join_fabricated.meet_ty env
+            E.Closure_id.Map.union_or_inter
+              (fun ty_fabricated1 ty_fabricated2 ->
+                let ty_fabricated, new_equations =
+                  Meet_and_join_fabricated.meet_or_join_ty meet_or_join_env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
-                  env_extension_from_meet :=
-                    Typing_env_extension.meet env
-                      new_env_extension_from_meet !env_extension_from_meet;
+                  equations :=
+                    Typing_env_extension.meet meet_or_join_env
+                      new_equations !equations;
                   Some ty_fabricated
                 end)
               closures1
@@ -615,19 +616,21 @@ struct
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
           let closures =
+            (* XXX *)
             Closure_id.Map.filter_map (fun closure_id ty1 ->
                 match Closure_id.Map.find closure_id closures2 with
                 | exception Not_found -> Some ty1
                 | ty2 ->
-                  let ty_fabricated, new_env_extension_from_meet =
-                    Meet_and_join_fabricated.meet_ty env ty1 ty2
+                  let ty_fabricated, new_equations =
+                    E.Meet_and_join_fabricated.meet_ty meet_or_join_env
+                      ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_fabricated then begin
                     None
                   end else begin
-                    env_extension_from_meet :=
-                      Typing_env_extension.meet env
-                        new_env_extension_from_meet !env_extension_from_meet;
+                    equations :=
+                      Typing_env_extension.meet meet_or_join_env
+                        new_equations !equations;
                     Some ty_fabricated
                   end)
               closures1
@@ -635,17 +638,18 @@ struct
           Exactly closures
         | Open closures1, Open closures2 ->
           let closures =
-            Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_env_extension_from_meet =
+            E.Closure_id.Map.union_or_inter_merge
+              (fun ty_fabricated1 ty_fabricated2 ->
+                let ty_fabricated, new_equations =
                   Meet_and_join_fabricated.meet_ty env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   bottom_as_ty_fabricated ()
                 end else begin
-                  env_extension_from_meet :=
-                    Typing_env_extension.meet env
-                      new_env_extension_from_meet !env_extension_from_meet;
+                  equations :=
+                    Typing_env_extension.meet meet_or_join_env
+                      new_equations !equations;
                   ty_fabricated
                 end)
               closures1
@@ -657,16 +661,17 @@ struct
         match set1.closure_elements, set2.closure_elements with
         | Exactly closure_elements1, Exactly closure_elements2 ->
           let closure_elements =
-            Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
-                let ty_value, new_env_extension_from_meet =
-                  Meet_and_join_value.meet_ty env ty_value1 ty_value2
+            E.Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
+                let ty_value, new_equations =
+                  E.Meet_and_join_value.meet_or_join_ty meet_or_join_env
+                    ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   None
                 end else begin
-                  env_extension_from_meet :=
-                    Typing_env_extension.meet env
-                      new_env_extension_from_meet !env_extension_from_meet;
+                  equations :=
+                    Typing_env_extension.meet meet_or_join_env
+                      new_equations !equations;
                   Some ty_value
                 end)
               closure_elements1
@@ -690,21 +695,22 @@ struct
         | Exactly closure_elements1, Open closure_elements2
         | Open closure_elements2, Exactly closure_elements1 ->
           let closure_elements =
+            (* XXX *)
             Var_within_closure.Map.filter_map (fun closure_id ty1 ->
                 match
                   Var_within_closure.Map.find closure_id closure_elements2
                 with
                 | exception Not_found -> Some ty1
                 | ty2 ->
-                  let ty_value, new_env_extension_from_meet =
+                  let ty_value, new_equations =
                     Meet_and_join_value.meet_ty env ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_value then begin
                     None
                   end else begin
-                    env_extension_from_meet :=
-                      Typing_env_extension.meet env
-                        new_env_extension_from_meet !env_extension_from_meet;
+                    equations :=
+                      Typing_env_extension.meet meet_or_join_env
+                        new_equations !equations;
                     Some ty_value
                   end)
               closure_elements1
@@ -712,16 +718,18 @@ struct
           Exactly closure_elements
         | Open closure_elements1, Open closure_elements2 ->
           let closure_elements =
-            Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
-                let ty_value, new_env_extension_from_meet =
-                  Meet_and_join_value.meet_ty env ty_value1 ty_value2
+            E.Var_within_closure.Map.union_or_inter_merge
+              (fun ty_value1 ty_value2 ->
+                let ty_value, new_equations =
+                  Meet_and_join_value.meet_or_join_ty meet_or_join_env
+                    ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   bottom_as_ty_value ()
                 end else begin
-                  env_extension_from_meet :=
-                    Typing_env_extension.meet env new_env_extension_from_meet
-                      !env_extension_from_meet;
+                  equations :=
+                    Typing_env_extension.meet meet_or_join_env
+                      new_equations !equations;
                   ty_value
                 end)
               closure_elements1
@@ -730,113 +738,28 @@ struct
           Open closure_elements
       in
       match closures with
-      | Exactly map when Closure_id.Map.is_empty map -> Bottom
+      | Exactly map when Closure_id.Map.is_empty map -> Absorbing
       | _ ->
         if closures == set1.closures
           && closure_elements == set1.closure_elements
-        then Ok (set1, !env_extension_from_meet)
+        then Ok (set1, !equations)
         else if closures == set2.closures
           && closure_elements == set2.closure_elements
-        then Ok (set2, !env_extension_from_meet)
+        then Ok (set2, !equations)
         else begin
           let set : set_of_closures =
             { closures;
               closure_elements;
             }
           in
-          Ok (set, !env_extension_from_meet)
+          Ok (set, !equations)
         end
-
-    let join_set_of_closures env env_extension1 env_extension2
-          (set1 : set_of_closures) (set2 : set_of_closures)
-          : set_of_closures =
-      let closures : _ extensibility =
-        match set1.closures, set2.closures with
-        | Exactly closures1, Exactly closures2 ->
-          let closures =
-            Closure_id.Map.union_merge
-              (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty join_env
-                  ty_fabricated1 ty_fabricated2)
-              closures1
-              closures2
-          in
-          Exactly closures
-        | Exactly closures1, Open closures2
-        | Open closures1, Exactly closures2 ->
-          let closures =
-            Closure_id.Map.union_merge
-              (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty join_env
-                  ty_fabricated1 ty_fabricated2)
-              closures1
-              closures2
-          in
-          Open closures
-        | Open closures1, Open closures2 ->
-          let closures =
-            Closure_id.Map.union_both
-              (fun _ty_fabricated ->
-                any_fabricated_as_ty_fabricated ())
-              (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty join_env
-                  ty_fabricated1 ty_fabricated2)
-              closures1
-              closures2
-          in
-          Open closures
-      in
-      let closure_elements : _ extensibility =
-        match set1.closure_elements, set2.closure_elements with
-        | Exactly closure_elements1, Exactly closure_elements2 ->
-          let closure_elements =
-            Var_within_closure.Map.union_merge
-              (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
-              closure_elements1
-              closure_elements2
-          in
-          Exactly closure_elements
-        | Exactly closure_elements1, Open closure_elements2
-        | Open closure_elements1, Exactly closure_elements2 ->
-          let closure_elements =
-            Var_within_closure.Map.union_merge
-              (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
-              closure_elements1
-              closure_elements2
-          in
-          Open closure_elements
-        | Open closure_elements1, Open closure_elements2 ->
-          let closure_elements =
-            Var_within_closure.Map.union_both
-              (fun _ty_value ->
-                any_value_as_ty_value ())
-              (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty join_env ty_value1 ty_value2)
-              closure_elements1
-              closure_elements2
-          in
-          Open closure_elements
-      in
-      if closures == set1.closures
-        && closure_elements == set1.closure_elements
-      then
-        set1
-      else if closures == set2.closures
-        && closure_elements == set2.closure_elements
-      then
-        set2
-      else
-        { closures;
-          closure_elements;
-        }
 
     let meet_or_join_of_kind_foo meet_or_join_env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_absorbing.t =
       if
-        Meet_and_join_env.fast_check_extensions_same_both_sides meet_or_join_env
+        Meet_or_join_env.fast_check_extensions_same_both_sides meet_or_join_env
           && of_kind1 == of_kind2
       then
         Ok (of_kind1, Typing_env_extension.empty)
@@ -849,14 +772,14 @@ struct
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
                   let env_extension =
-                    Meet_or_join_env.holds_on_left meet_and_join_env
+                    Meet_or_join_env.holds_on_left meet_or_join_env
                   in
                   { env_extension; })
               ~in_right_only:
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
                   let env_extension =
-                    Meet_or_join_env.holds_on_right meet_and_join_env
+                    Meet_or_join_env.holds_on_right meet_or_join_env
                   in
                   { env_extension; })
               ~in_both:
@@ -882,13 +805,13 @@ struct
           end
         | Set_of_closures set1, Set_of_closures set2 ->
           begin match meet_set_of_closures env set1 set2 with
-          | Ok (set_of_closures, env_extension_from_meet) ->
+          | Ok (set_of_closures, equations) ->
             if set_of_closures == set1 then
-              Ok (of_kind1, env_extension_from_meet)
+              Ok (of_kind1, equations)
             else if set_of_closures == set2 then
-              Ok (of_kind2, env_extension_from_meet)
+              Ok (of_kind2, equations)
             else
-              Ok (Set_of_closures set_of_closures, env_extension_from_meet)
+              Ok (Set_of_closures set_of_closures, equations)
           | Bottom ->
             (* CR mshinwell: Here and elsewhere we are relying on this case
                never been taken for [join] *)
@@ -896,13 +819,13 @@ struct
           end
         | Closure closure1, Closure closure2 ->
           begin match meet_closure env closure1 closure2 with
-          | Ok (closure, env_extension_from_meet) ->
+          | Ok (closure, equations) ->
             if closure == closure1 then
-              Ok (of_kind1, env_extension_from_meet)
+              Ok (of_kind1, equations)
             else if closure == closure2 then
-              Ok (of_kind2, env_extension_from_meet)
+              Ok (of_kind2, equations)
             else
-              Ok (Closure closure, env_extension_from_meet)
+              Ok (Closure closure, equations)
           | Bottom -> Absorbing
           end
         | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Absorbing
