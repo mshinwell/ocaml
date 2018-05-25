@@ -615,6 +615,7 @@ struct
           else Exactly closures
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
+          (* XXX  -- this used to go over [closures1] *)
           let closures =
             E.Closure_id.Map.union_or_inter (fun closure_id ty1 ty2 ->
                 let ty_fabricated, new_equations =
