@@ -103,6 +103,11 @@ end) (Make_meet_and_join : functor
         with type env_extension := T.env_extension
         with type typing_environment := T.typing_environment
         with type join_env := T.join_env
+    end) (E : sig
+      include Either_meet_or_join_intf.S
+        with type typing_environment := T.typing_environment
+        with type env_extension := T.env_extension
+        with type flambda_type := T.flambda_type
     end) =
 struct
   module rec Meet_and_join_value : sig
@@ -124,203 +129,158 @@ struct
     let force_to_kind = force_to_kind_value
     let print_ty = print_ty_value
 
-    let meet_immediate_case env
+    let meet_or_join_immediate_case meet_or_join_env
           ({ env_extension = env_extension1; } : immediate_case)
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Typing_env_extension.meet env env_extension1 env_extension2
+        E.Typing_env_extension.meet_or_join meet_or_join_env
+          env_extension1 env_extension2
       in
       { env_extension; }
 
-    let join_immediate_case join_env
-          ({ env_extension = env_extension1; } : immediate_case)
-          ({ env_extension = env_extension2; } : immediate_case)
-          : immediate_case =
-      let env_extension =
-        Typing_env_extension.join join_env env_extension1 env_extension2
-      in
-      { env_extension; }
-
-    let meet_immediates env immediates1 immediates2 : _ Or_bottom.t =
+    let meet_or_join_immediates meet_or_join_env immediates1 immediates2
+          : _ Or_bottom.t =
       let immediates =
-        Immediate.Map.inter_merge (fun imm1 imm2 ->
-            meet_immediate_case env imm1 imm2)
+        E.Immediate.Map.union_or_inter_merge (fun imm1 imm2 ->
+            meet_or_join_immediate_case meet_or_join_env imm1 imm2)
           immediates1
           immediates2
       in
       if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
-    let join_immediates join_env immediates1 immediates2 =
-      Immediate.Map.union_merge (fun imm1 imm2 ->
-          join_immediate_case join_env imm1 imm2)
-        immediates1
-        immediates2
-
-    (* CR mshinwell: As for [join], [meet] should add env_extensions which
-       it finds during traversal into the environment. *)
-
-    let meet_singleton_block env
+    let meet_or_join_singleton_block meet_or_join_env
           ({ env_extension = env_extension1;
              fields = fields1;
            } : singleton_block)
           ({ env_extension = env_extension2;
              fields = fields2;
-           } : singleton_block) : singleton_block * env_extension =
+           } : singleton_block)
+          : singleton_block * env_extension =
       let env_extension =
-        Typing_env_extension.meet env env_extension1 env_extension2
+        E.Typing_env_extension.meet_or_join meet_or_join_env
+          env_extension1 env_extension2
+      in
+      let meet_or_join_env =
+        Meet_or_join_env.add_extensions meet_or_join_env
+          ~holds_everywhere:env_extension
+          ~holds_on_left:env_extension1
+          ~holds_on_right:env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
-      let env_extension_from_meet = ref (Typing_env_extension.empty) in
+      let equations = ref Typing_env_extension.empty in
       let fields =
-        let env = 
-          Typing_env.add_or_meet_env_extension env env_extension
-            (Typing_env.max_level env)
-        in
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
                (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              let field, new_env_extension_from_meet =
-                Meet_and_join.meet env field1 field2
+              let field, equations =
+                E.Flambda_type.meet_or_join meet_or_join_env field1 field2
               in
-              env_extension_from_meet :=
-                Typing_env_extension.meet env new_env_extension_from_meet
-                  !env_extension_from_meet;
+              equations :=
+                E.Typing_env_extension.meet_or_join meet_or_join_env
+                  equations !equations;
               Immutable field)
           fields1
           fields2
       in
       { env_extension;
         fields;
-      }, !env_extension_from_meet
+      }, !equations
 
-    let join_singleton_block join_env
-          ({ env_extension = env_extension1;
-             fields = fields1;
-           } : singleton_block)
-          ({ env_extension = env_extension2;
-             fields = fields2;
-           } : singleton_block)
-          : singleton_block =
-      let env_extension_join =
-        Typing_env_extension.join join_env env_extension1 env_extension2
-      in
-      let join_env =
-        Join_env.add_extensions join_env
-          ~holds_in_join:env_extension_join
-          ~holds_on_left:env_extension1
-          ~holds_on_right:env_extension2
-      in
-      assert (Array.length fields1 = Array.length fields2);
-      let fields =
-        Array.map2
-          (fun (field1 : _ mutable_or_immutable)
-               (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
-            match field1, field2 with
-            | Mutable, _ | _, Mutable -> Mutable
-            | Immutable field1, Immutable field2 ->
-              Immutable (Meet_and_join.join join_env field1 field2))
-          fields1
-          fields2
-      in
-      { env_extension = env_extension_join;
-        fields;
-      }
-
-    let meet_block_cases env
-          ((Blocks { by_length = singleton_blocks1; }) : block_cases)
-          ((Blocks { by_length = singleton_blocks2; }) : block_cases)
-          : (block_cases * env_extension) Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.empty) in
-      let by_length =
-        Targetint.OCaml.Map.inter_merge
-          (fun singleton_block1 singleton_block2 ->
-            let singleton_block, new_env_extension_from_meet =
-              meet_singleton_block env singleton_block1 singleton_block2
-            in
-            env_extension_from_meet :=
-              Typing_env_extension.meet env
-                new_env_extension_from_meet !env_extension_from_meet;
-            singleton_block)
-          singleton_blocks1
-          singleton_blocks2
-      in
-      if Targetint.OCaml.Map.is_empty by_length then Bottom
-      else
-        Ok (((Blocks { by_length; }) : block_cases), !env_extension_from_meet)
-
-    let join_block_cases join_env
+    let meet_or_join_block_cases meet_or_join_env
           ((Blocks { by_length = by_length1; }) : block_cases)
           ((Blocks { by_length = by_length2; }) : block_cases)
-          : block_cases =
+          : (block_cases * env_extension) Or_bottom.t =
+      let equations = ref Typing_env_extension.empty in
       let by_length =
-        Targetint.OCaml.Map.union_both
+        E.Targetint.OCaml.Map.union_or_inter_both
           ~in_left_only:(fun singleton_block : singleton_block ->
-            let env_extension = Join_env.holds_on_left join_env in
+            let env_extension =
+              Meet_or_join_env.holds_on_left meet_and_join_env
+            in
             { singleton_block with env_extension; })
           ~in_right_only:(fun singleton_block : singleton_block ->
-            let env_extension = Join_env.holds_on_right join_env in
+            let env_extension =
+              Meet_or_join_env.holds_on_right meet_and_join_env
+            in
             { singleton_block with env_extension; })
           ~in_both:(fun singleton_block1 singleton_block2 ->
-            join_singleton_block join_env singleton_block1 singleton_block2)
+            let singleton_block, new_equations =
+              meet_or_join_singleton_block meet_or_join_env
+                singleton_block1 singleton_block2
+            in
+            equations :=
+              E.Typing_env_extension.meet_or_join meet_or_join_env
+                new_equations !equations;
+            singleton_block)
           by_length1
           by_length2
       in
-      Blocks { by_length; }
+      if Targetint.OCaml.Map.is_empty by_length then Bottom
+      else Ok (((Blocks { by_length; }) : block_cases), !equations)
 
-    let meet_blocks env blocks1 blocks2 : _ Or_bottom.t =
-      let env_extension_from_meet = ref (Typing_env_extension.empty) in
+    let meet_or_join_blocks meet_or_join_env blocks1 blocks2
+          : (blocks * env_extension) Or_bottom.t =
+      let equations = ref Typing_env_extension.empty in
       let blocks =
-        Tag.Map.inter (fun block_cases1 block_cases2 ->
-            match meet_block_cases env block_cases1 block_cases2 with
-            | Ok (block_cases, new_env_extension_from_meet) ->
-              env_extension_from_meet :=
-                Typing_env_extension.meet env
-                  new_env_extension_from_meet !env_extension_from_meet;
+        E.Tag.Map.union_or_inter_both
+          ~in_left_only:(fun block_cases : block_cases ->
+            let env_extension =
+              Meet_or_join_env.holds_on_left meet_and_join_env
+            in
+            { block_cases with env_extension; })
+          ~in_right_only:(fun block_cases : block_cases ->
+            let env_extension =
+              Meet_or_join_env.holds_on_right meet_and_join_env
+            in
+            { block_cases with env_extension; })
+          ~in_both:(fun block_cases1 block_cases2 ->
+            match meet_or_join_block_cases meet_or_join_env
+              block_cases1 block_cases2
+            with
+            | Ok (block_cases, new_equations) ->
+              equations :=
+                E.Typing_env_extension.meet meet_or_join_env
+                  new_equations !equations;
               Some block_cases
             | Bottom -> None)
-          blocks1
-          blocks2
+          by_length1
+          by_length2
       in
       if Tag.Map.is_empty blocks then Bottom
-      else Ok (blocks, !env_extension_from_meet)
+      else Ok (blocks, !equations)
 
-    let join_blocks join_env blocks1 blocks2 =
-      Tag.Map.union_both
-        ~in_left_only:(fun block_cases : block_cases ->
-          let env_extension = Join_env.holds_on_left join_env in
-          { block_cases with env_extension; })
-        ~in_right_only:(fun block_cases : block_cases ->
-          let env_extension = Join_env.holds_on_right join_env in
-          { block_cases with env_extension; })
-        ~in_both:(fun block_cases1 block_cases2 ->
-          join_block_cases join_env block_cases1 block_cases2)
-        by_length1
-        by_length2
-
-    let meet_blocks_and_tagged_immediates env
+    let meet_or_join_blocks_and_tagged_immediates meet_or_join_env
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
           : (blocks_and_tagged_immediates * env_extension) Or_bottom.t =
-      let (blocks : _ Or_unknown.t), env_extension_from_meet =
+      let (blocks : _ Or_unknown.t), equations =
         match blocks1, blocks2 with
-        | Unknown, _ -> blocks2, Typing_env_extension.empty
-        | _, Unknown -> blocks1, Typing_env_extension.empty
+        | Unknown, _ when E.unknown_is_identity ->
+          blocks2, Typing_env_extension.empty
+        | _, Unknown when E.unknown_is_identity ->
+          blocks1, Typing_env_extension.empty
+        | Unknown, _ when E.unknown_is_absorbing ->
+          Unknown, Typing_env_extension.empty
+        | _, Unknown when E.unknown_is_absorbing ->
+          Unknown, Typing_env_extension.empty
         | Known blocks1, Known blocks2 ->
-          match meet_blocks env blocks1 blocks2 with
+          match meet_or_join_blocks meet_or_join_env blocks1 blocks2 with
           | Bottom ->
             Or_unknown.Known Tag.Map.empty, Typing_env_extension.empty
-          | Ok (blocks, env_extension_from_meet) ->
-            Or_unknown.Known blocks, env_extension_from_meet
+          | Ok (blocks, equations) ->
+            Or_unknown.Known blocks, equations
       in
       let immediates : _ Or_unknown.t =
         match imms1, imms2 with
-        | Unknown, _ -> imms2
-        | _, Unknown -> imms1
+        | Unknown, _ when E.unknown_is_identity -> imms2
+        | _, Unknown when E.unknown_is_identity -> imms1
+        | Unknown, _ when E.unknown_is_absorbing -> Unknown
+        | _, Unknown when E.unknown_is_absorbing -> Unknown
         | Known imms1, Known imms2 ->
           match meet_immediates env imms1 imms2 with
           | Bottom -> Known Immediate.Map.empty
@@ -343,25 +303,25 @@ struct
          case? *)
       if is_bottom then Bottom
       else
-        let env_extension_from_meet, blocks =
+        let equations, blocks =
           match immediates with
-          | Unknown -> env_extension_from_meet, blocks
+          | Unknown -> equations, blocks
           | Known imms ->
             if not (Immediate.Map.is_empty imms) then
-              env_extension_from_meet, blocks
+              equations, blocks
             else
               match blocks with
-              | Unknown -> env_extension_from_meet, blocks
+              | Unknown -> equations, blocks
               | Known blocks ->
                 match Tag.Map.get_singleton blocks with
-                | None -> env_extension_from_meet, Or_unknown.Known blocks
+                | None -> equations, Or_unknown.Known blocks
                 | Some (tag, Blocks { by_length; }) ->
                   match Targetint.OCaml.Map.get_singleton by_length with
-                  | None -> env_extension_from_meet, Or_unknown.Known blocks
+                  | None -> equations, Or_unknown.Known blocks
                   | Some (length, singleton_block) ->
-                    let env_extension_from_meet =
-                      Typing_env_extension.meet env
-                        singleton_block.env_extension env_extension_from_meet
+                    let equations =
+                      Typing_env_extension.meet meet_or_join_env
+                        singleton_block.env_extension equations
                     in
                     let singleton_block : singleton_block =
                       { singleton_block with
@@ -375,91 +335,74 @@ struct
                     let blocks : _ Or_unknown.t =
                       Known (Tag.Map.singleton tag block_cases)
                     in
-                    env_extension_from_meet, blocks
+                    equations, blocks
         in
-        Ok ({ blocks; immediates; }, env_extension_from_meet)
+        Ok ({ blocks; immediates; }, equations)
 
-    let join_blocks_and_tagged_immediates join_env
-          { blocks = blocks1; immediates = imms1; }
-          { blocks = blocks2; immediates = imms2; }
-          : blocks_and_tagged_immediates =
-      let blocks : _ Or_unknown.t =
-        match blocks1, blocks2 with
-        | Unknown, _ | _, Unknown -> Unknown
-        | Known blocks1, Known blocks2 ->
-          Known (join_blocks join_env blocks1 blocks2)
-      in
-      let immediates : _ Or_unknown.t =
-        match imms1, imms2 with
-        | Unknown, _ | _, Unknown -> Unknown
-        | Known imms1, Known imms2 ->
-          Known (join_immediates join_env imms1 imms2)
-      in
-      { blocks; immediates; }
-
-    let meet_of_kind_foo env
+    let meet_of_kind_foo meet_or_join_env
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value * env_extension) Or_bottom.t =
+          : (of_kind_value * env_extension) E.Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
         let blocks_imms =
-          meet_blocks_and_tagged_immediates env
+          meet_or_join_blocks_and_tagged_immediates meet_or_join_env
             blocks_imms1 blocks_imms2
         in
         begin match blocks_imms with
-        | Ok (blocks_imms, env_extension_from_meet) ->
-          Ok (Blocks_and_tagged_immediates blocks_imms, env_extension_from_meet)
+        | Ok (blocks_imms, equations) ->
+          Ok (Blocks_and_tagged_immediates blocks_imms, equations)
         | Bottom -> Bottom
         end
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
-        let (n : _ ty_naked_number), env_extension_from_meet =
-          Meet_and_join_naked_float.meet_ty env n1 n2
+        let (n : _ ty_naked_number), equations =
+          E.Meet_and_join_naked_float.meet_or_join_ty env n1 n2
         in
-        Ok (Boxed_number (Boxed_float n), env_extension_from_meet)
+        Ok (Boxed_number (Boxed_float n), equations)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
-        let (n : _ ty_naked_number), env_extension_from_meet =
-          Meet_and_join_naked_int32.meet_ty env n1 n2
+        let (n : _ ty_naked_number), equations =
+          E.Meet_and_join_naked_int32.meet_or_join_ty meet_or_join_env n1 n2
         in
-        Ok (Boxed_number (Boxed_int32 n), env_extension_from_meet)
+        Ok (Boxed_number (Boxed_int32 n), equations)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
-        let (n : _ ty_naked_number), env_extension_from_meet =
-          Meet_and_join_naked_int64.meet_ty env n1 n2
+        let (n : _ ty_naked_number), equations =
+          E.Meet_and_join_naked_int64.meet_or_join_ty meet_or_join_env n1 n2
         in
-        Ok (Boxed_number (Boxed_int64 n), env_extension_from_meet)
+        Ok (Boxed_number (Boxed_int64 n), equations)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
-        let (n : _ ty_naked_number), env_extension_from_meet =
-          Meet_and_join_naked_nativeint.meet_ty env n1 n2
+        let (n : _ ty_naked_number), equations =
+          E.Meet_and_join_naked_nativeint.meet_or_join_ty meet_or_join_env n1 n2
         in
-        Ok (Boxed_number (Boxed_nativeint n), env_extension_from_meet)
+        Ok (Boxed_number (Boxed_nativeint n), equations)
       | Closures closures1, Closures closures2 ->
-        let env_extension_from_meet = ref (Typing_env_extension.empty) in
+        let equations = ref (Typing_env_extension.empty) in
         let closures =
-          Closure_id.Map.inter
+          E.Closure_id.Map.union_or_inter
             (fun (closures_entry1 : closures_entry)
                  (closures_entry2 : closures_entry) : closures_entry option ->
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
-              let set, new_env_extension_from_meet =
-                Meet_and_join_fabricated.meet_ty env set1 set2
+              let set, new_equations =
+                E.Meet_and_join_fabricated.meet_or_join_ty meet_or_join_env
+                  set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None
               end else begin
-                env_extension_from_meet :=
-                  Typing_env_extension.meet env new_env_extension_from_meet
-                    !env_extension_from_meet;
+                equations :=
+                  Typing_env_extension.meet_or_join meet_or_join_env
+                    new_equations !equations;
                 Some { set_of_closures = set; }
               end)
             closures1
             closures2
         in
         if Closure_id.Map.is_empty closures then Bottom
-        else Ok (Closures closures, !env_extension_from_meet)
+        else Ok (Closures closures, !equations)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
@@ -468,64 +411,7 @@ struct
           | Boxed_number _
           | Closures _
           | String _), _ ->
-        Bottom
-
-    let join_of_kind_foo join_env
-          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : of_kind_value Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Blocks_and_tagged_immediates blocks_imms1,
-          Blocks_and_tagged_immediates blocks_imms2 ->
-        let blocks_imms =
-          join_blocks_and_tagged_immediates join_env blocks_imms1 blocks_imms2
-        in
-        Known (Blocks_and_tagged_immediates blocks_imms)
-      | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_float.join_ty join_env n1 n2
-        in
-        Known (Boxed_number (Boxed_float n))
-      | Boxed_number (Boxed_int32 n1),
-          Boxed_number (Boxed_int32 n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_int32.join_ty join_env n1 n2
-        in
-        Known (Boxed_number (Boxed_int32 n))
-      | Boxed_number (Boxed_int64 n1),
-          Boxed_number (Boxed_int64 n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_int64.join_ty join_env n1 n2
-        in
-        Known (Boxed_number (Boxed_int64 n))
-      | Boxed_number (Boxed_nativeint n1),
-          Boxed_number (Boxed_nativeint n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_nativeint.join_ty join_env n1 n2
-        in
-        Known (Boxed_number (Boxed_nativeint n))
-      | Closures closures1, Closures closures2 ->
-        let closures =
-          Closure_id.Map.union_merge
-            (fun (closures_entry1 : closures_entry)
-                 (closures_entry2 : closures_entry) : closures_entry ->
-              let set1 = closures_entry1.set_of_closures in
-              let set2 = closures_entry2.set_of_closures in
-              let set =
-                Meet_and_join_fabricated.join_ty join_env set1 set2
-              in
-              { set_of_closures = set; })
-            closures1
-            closures2
-        in
-        Known (Closures closures)
-      | String strs1, String strs2 ->
-        let strs = String_info.Set.union strs1 strs2 in
-        Known (String strs)
-      | (Blocks_and_tagged_immediates _
-          | Boxed_number _
-          | Closures _
-          | String _), _ ->
-        Unknown
+        E.Or_absorbing.create_absorbing ()
   end)
 
   include Meet_and_join_value
