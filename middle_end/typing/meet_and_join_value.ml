@@ -194,7 +194,7 @@ struct
     let meet_or_join_block_cases meet_or_join_env
           ((Blocks { by_length = by_length1; }) : block_cases)
           ((Blocks { by_length = by_length2; }) : block_cases)
-          : (block_cases * env_extension) Or_bottom.t =
+          : (block_cases * env_extension) E.Or_bottom.t =
       let equations = ref Typing_env_extension.empty in
       let by_length =
         E.Targetint.OCaml.Map.union_or_inter_both
@@ -224,7 +224,7 @@ struct
       else Ok (((Blocks { by_length; }) : block_cases), !equations)
 
     let meet_or_join_blocks meet_or_join_env blocks1 blocks2
-          : (blocks * env_extension) Or_bottom.t =
+          : (blocks * env_extension) E.Or_bottom.t =
       let equations = ref Typing_env_extension.empty in
       let blocks =
         E.Tag.Map.union_or_inter_both
@@ -257,16 +257,16 @@ struct
     let meet_or_join_blocks_and_tagged_immediates meet_or_join_env
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
-          : (blocks_and_tagged_immediates * env_extension) Or_bottom.t =
+          : (blocks_and_tagged_immediates * env_extension) E.Or_bottom.t =
       let (blocks : _ Or_unknown.t), equations =
         match blocks1, blocks2 with
         | Unknown, _ when E.unknown_is_identity ->
           blocks2, Typing_env_extension.empty
         | _, Unknown when E.unknown_is_identity ->
           blocks1, Typing_env_extension.empty
-        | Unknown, _ when E.unknown_is_absorbing ->
+        | Unknown, _ when E.unknown_is_bottom ->
           Unknown, Typing_env_extension.empty
-        | _, Unknown when E.unknown_is_absorbing ->
+        | _, Unknown when E.unknown_is_bottom ->
           Unknown, Typing_env_extension.empty
         | Known blocks1, Known blocks2 ->
           match meet_or_join_blocks meet_or_join_env blocks1 blocks2 with
@@ -279,8 +279,8 @@ struct
         match imms1, imms2 with
         | Unknown, _ when E.unknown_is_identity -> imms2
         | _, Unknown when E.unknown_is_identity -> imms1
-        | Unknown, _ when E.unknown_is_absorbing -> Unknown
-        | _, Unknown when E.unknown_is_absorbing -> Unknown
+        | Unknown, _ when E.unknown_is_bottom -> Unknown
+        | _, Unknown when E.unknown_is_bottom -> Unknown
         | Known imms1, Known imms2 ->
           match meet_immediates env imms1 imms2 with
           | Bottom -> Known Immediate.Map.empty
@@ -296,8 +296,6 @@ struct
              | Known _ | Unknown -> false
              end
       in
-      (* CR mshinwell: If we end up with [Bottom], should that be signalled
-         as a judgement? *)
       (* CR mshinwell: Should we propagate up the meet of equations across all
          blocks, rather than only propagating upwards in the singleton
          case? *)
@@ -339,7 +337,7 @@ struct
         in
         Ok ({ blocks; immediates; }, equations)
 
-    let meet_of_kind_foo meet_or_join_env
+    let meet_or_join_of_kind_foo meet_or_join_env
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * env_extension) E.Or_absorbing.t =
       match of_kind1, of_kind2 with
@@ -352,7 +350,7 @@ struct
         begin match blocks_imms with
         | Ok (blocks_imms, equations) ->
           Ok (Blocks_and_tagged_immediates blocks_imms, equations)
-        | Bottom -> Bottom
+        | Bottom -> Absorbing
         end
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
@@ -401,17 +399,17 @@ struct
             closures1
             closures2
         in
-        if Closure_id.Map.is_empty closures then Bottom
+        if Closure_id.Map.is_empty closures then Absorbing
         else Ok (Closures closures, !equations)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
-        if String_info.Set.is_empty strs then Bottom
+        if String_info.Set.is_empty strs then Absorbing
         else Ok (String strs, Typing_env_extension.empty)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closures _
           | String _), _ ->
-        E.Or_absorbing.create_absorbing ()
+        Absorbing
   end)
 
   include Meet_and_join_value
