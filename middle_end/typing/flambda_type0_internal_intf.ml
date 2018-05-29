@@ -152,7 +152,9 @@ end) = struct
        trivial functions such as [these_tagged_immediates]. *)
     env_extension : env_extension;
   }
- 
+
+  (* CR mshinwell: Consider replacing this by [Parameters.t].  Just need to
+     work out what to do about the mutable/immutable flags. *) 
   and singleton_block = {
     env_extension : env_extension;
     fields : t mutable_or_immutable array;
@@ -181,38 +183,37 @@ end) = struct
          : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
-  and inlinable_function_declaration = {
-    closure_origin : Closure_origin.t;
-    continuation_param : Continuation.t;
-    exn_continuation_param : Continuation.t;
-    is_classic_mode : bool;
-    params : (Parameter.t * t) list;
+  and function_body = {
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    return_values : Kinded_parameter.t list;
-    return_env_extension : env_extension;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
     specialise : specialise_attribute;
     is_a_functor : bool;
+  }
+
+  and function_declaration = {
+    closure_origin : Closure_origin.t;
+    continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
+    ty : dependent_function_type;
+    is_classic_mode : bool;
+    body : function_body option;
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
     direct_call_surrogate : Closure_id.t option;
     my_closure : Variable.t;
   }
 
-  and non_inlinable_function_declarations = {
-    params : t list;
-    result : t list;
-    result_env_extension : env_extension;
-    direct_call_surrogate : Closure_id.t option;
+  and closure = {
+    (** Any two [function_declaration]s in this map must satisfy
+        [function_declarations_compatible].  (For declarations that do not
+        satisfy this, their join can still be expressed using [Join], from
+        type [unknown_or_join] above.) *)
+    function_decls : function_declaration Closure_id.Map.t;
   }
-
-  and function_declarations =
-    | Non_inlinable of non_inlinable_function_declarations option
-    | Inlinable of inlinable_function_declaration
 
   and closures_entry = {
     set_of_closures : ty_fabricated;
@@ -240,10 +241,6 @@ end) = struct
   and set_of_closures = {
     closures : ty_fabricated Closure_id.Map.t extensibility;
     closure_elements : ty_value Var_within_closure.Map.t extensibility;
-  }
-
-  and closure = {
-    function_decls : function_declarations;
   }
 
   (* CR mshinwell: rename "typing_environment" -> "typing_env" *)
@@ -283,6 +280,11 @@ end) = struct
   and parameters = {
     params : Kinded_parameter.t list;
     env_extension : env_extension;
+  }
+
+  and dependent_function_type = {
+    params : parameters;
+    results : parameters;
   }
 
   type join_env = {

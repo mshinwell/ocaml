@@ -177,12 +177,12 @@ struct
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              let field, equations =
+              let field, new_equations =
                 E.Flambda_type.meet_or_join meet_or_join_env field1 field2
               in
               equations :=
-                E.Typing_env_extension.meet_or_join meet_or_join_env
-                  equations !equations;
+                Typing_env_extension.meet meet_or_join_env
+                  new_equations !equations;
               Immutable field)
           fields1
           fields2
@@ -214,7 +214,7 @@ struct
                 singleton_block1 singleton_block2
             in
             equations :=
-              E.Typing_env_extension.meet_or_join meet_or_join_env
+              Typing_env_extension.meet meet_or_join_env
                 new_equations !equations;
             singleton_block)
           by_length1

@@ -20,18 +20,25 @@
    [Meet_and_join_value] is unused) *)
 [@@@ocaml.warning "-60"]
 
+(* CR mshinwell: Add invariant check that one-case discriminants don't have
+   any equations (for all cases with equations) *)
+
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
-module Real_typing_environment0 = Typing_env
-module Real_typing_env_extension = Typing_env_extension
-module Real_meet_and_join_value = Meet_and_join_value
-module Real_meet_and_join_naked_number = Meet_and_join_naked_number
-module Real_meet_and_join_fabricated = Meet_and_join_fabricated
-module Real_type_equality = Type_equality
+module Outer_namespace = struct
+  module Join_env = Join_env
+  module Meet_and_join_value = Meet_and_join_value
+  module Meet_and_join_naked_number = Meet_and_join_naked_number
+  module Meet_and_join_fabricated = Meet_and_join_fabricated
+  module Paramters = Parameters
+  module Typing_environment0 = Typing_env
+  module Typing_env_extension = Typing_env_extension
+  module Type_equality = Type_equality
+end
 
 module Make (Expr : sig
   type t
@@ -2193,6 +2200,18 @@ result
     | Fabricated (Equals name, _) -> Some name
     | Fabricated _ -> None
 
+  (* CR mshinwell: Add comment that this forms an equivalence relation *)
+  let function_declarations_compatible (decl1 : function_declaration)
+        (decl2 : function_declaration) =
+    let check (params1 : parameters) (params2 : parameters) =
+      let arity1 = Kinded_parameter.arity params1.params in
+      let arity2 = Kinded_parameter.arity params2.params in
+      Flambda_arity.equal arity1 arity2
+        || (Flambda_arity.all_values arity1 && Flambda_arity.all_values arity2)
+    in
+    check decl1.ty.params decl2.ty.params
+      && check decl1.ty.result decl2.ty.result
+
   module T1 = struct
     include T
 
@@ -2665,7 +2684,7 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_value.Make (T2)
+  end = Outer_namespace.Meet_and_join_value.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join_naked_immediate)
     (Meet_and_join_naked_float)
@@ -2719,7 +2738,7 @@ result
         with type env_extension := env_extension
         with type 'a ty := 'a ty
     end
-  end = Real_meet_and_join_naked_number.Make (T2)
+  end = Outer_namespace.Meet_and_join_naked_number.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join)
     (Typing_env)
@@ -2767,7 +2786,7 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type 'a ty := 'a ty
-  end = Real_meet_and_join_fabricated.Make (T2)
+  end = Outer_namespace.Meet_and_join_fabricated.Make (T2)
     (Make_meet_and_join)
     (Meet_and_join_value)
     (Meet_and_join)
@@ -2782,20 +2801,30 @@ result
       with type t_in_context := t_in_context
       with type 'a ty = 'a ty
       with type 'a unknown_or_join = 'a unknown_or_join
-  end = Real_typing_environment0.Make (T2)
+  end = Outer_namespace.Typing_environment0.Make (T2)
     (Typing_env_extension) (Meet_and_join) (Type_equality)
   and Typing_env_extension : sig
     include Typing_env_extension_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
-  end = Real_typing_env_extension.Make (T2)
+  end = Outer_namespace.Typing_env_extension.Make (T2)
     (Typing_env) (Meet_and_join) (Type_equality)
   and Type_equality : sig
     include Type_equality_intf.S
       with type flambda_type := flambda_type
-  end = Real_type_equality.Make (T2) (Typing_env_extension)
+  end = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
+  and Join_env : sig
+    include Join_env_intf.S
+      with type ...
+  end = Outer_namespace.Join_env.Make (...)
+  and Parameters : sig
+    include Parameters_intf.S
+      with type parameters := parameters
+  end = Outer_namespace.Parameters.Make (T2)
   and T2 : sig
+    (* CR mshinwell: [@remove_aliases] can be removed once we rebase to
+       4.07 or later (this was here to work around a bug). *)
     include module type of struct include T1 end [@remove_aliases]
 
     val as_or_more_precise : typing_environment -> t -> than:t -> bool
@@ -2815,39 +2844,4 @@ result
 
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal
-
-  module Parameters = struct
-    type t = parameters
-
-    let create params : t =
-      { params;
-        env_extension = empty_env_extension;
-      }
-
-    let print ppf { params; env_extension; } =
-      Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(params@ %a)@]@ \
-          @[<hov 1>(env_extension@ %a)@])@]"
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          Kinded_parameter.print) params
-        print_typing_env_extension env_extension
-
-    let introduce t freshening env =
-      let scope_level = Typing_env.max_level env in
-      let env =
-        List.fold_left (fun env param ->
-            let name =
-              Freshening.apply_name freshening (Kinded_parameter.name param)
-            in
-            let kind = Kinded_parameter.kind param in
-            let ty = bottom kind in
-            Typing_env.add env name scope_level (Definition ty))
-          env
-          t.params
-      in
-      Typing_env.add_or_meet_env_extension ?freshening env
-        t.env_extension scope_level
-
-    let env_extension t = t.env_extension
-  end
 end

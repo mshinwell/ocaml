@@ -382,6 +382,40 @@ struct
             Ok (({ function_decls; } : closure), equations)
       end
 
+    let meet_or_join_closure meet_or_join_env
+          (closure1 : closure) (closure2 : closure)
+          : closure E.Or_absorbing.t =
+      if Join_env.fast_check_extensions_same_both_sides join_env
+        && closure1 == closure2
+      then begin
+        closure1
+      end else begin
+        let arities_ok =
+          let all_function_decls =
+            (Closure_id.Map.data closure1.function_decls)
+              @ (Closure_id.Map.data closure2.function_decls)
+          in
+          match all_function_decls with
+          | [] -> true
+          | function_decl::function_decls ->
+            (* We rely on [function_declarations_compatible] being an
+               equivalence relation. *)
+            List.for_all (fun function_decl' ->
+                T.function_declarations_compatible function_decl function_decl')
+              function_decls
+        in
+        if not arities_ok then Absorbing
+        else
+          let function_decls =
+            E.Closure_id.Map.union_or_inter_merge (fun decl1 decl2 ->
+                meet_or_join_function_declaration join_env decl1 decl2)
+              closure1.function_decls closure2.function_decls
+          in
+          { function_decls; }
+      end
+
+
+
     let join_closure join_env
           (closure1 : closure) (closure2 : closure)
           : closure =
