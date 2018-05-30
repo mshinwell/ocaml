@@ -183,7 +183,11 @@ end) = struct
          : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
-  and function_body = {
+  and inlinable_function_declaration = {
+    closure_origin : Closure_origin.t;
+    continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
+    is_classic_mode : bool;
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
@@ -192,34 +196,39 @@ end) = struct
     inline : inline_attribute;
     specialise : specialise_attribute;
     is_a_functor : bool;
-  }
-
-  and function_declaration = {
-    closure_origin : Closure_origin.t;
-    continuation_param : Continuation.t;
-    exn_continuation_param : Continuation.t;
-    ty : dependent_function_type;
-    is_classic_mode : bool;
-    body : function_body option;
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
     direct_call_surrogate : Closure_id.t option;
     my_closure : Variable.t;
   }
 
-  and closure = {
-    (** Any two [function_declaration]s in this map must satisfy
+  and non_inlinable_function_declarations = {
+    direct_call_surrogate : Closure_id.t option;
+  }
+
+  and function_declarations =
+    | Non_inlinable of non_inlinable_function_declarations
+    | Inlinable of inlinable_function_declaration list
+    (** Any two [function_declaration]s in this list must satisfy
         [function_declarations_compatible].  (For declarations that do not
         satisfy this, their join can still be expressed using [Join], from
         type [unknown_or_join] above.) *)
-    function_decls : function_declaration Closure_id.Map.t;
+
+  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
+     it is an empty type.  If this is changed then [Non_inlinable]'s
+     argument should be an [option]. *)
+  and closure = {
+    function_decls : function_declarations Closure_id.Map.t;
   }
 
   and closures_entry = {
     set_of_closures : ty_fabricated;
   }
 
-  and closures = closures_entry Closure_id.Map.t
+  and closures = {
+    ty : dependent_function_type;
+    by_closure_id : closures_entry Closure_id.Map.t;
+  }
 
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
