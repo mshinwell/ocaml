@@ -31,11 +31,6 @@ end) (Typing_env_extension : sig
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
     with type flambda_type := T.flambda_type
-end) (Meet_and_join : sig
-  include Meet_and_join_intf.S_for_types
-    with type typing_environment := T.typing_environment
-    with type env_extension := T.env_extension
-    with type flambda_type := T.flambda_type
 end) = struct
   open T
 
@@ -48,14 +43,6 @@ end) = struct
 
   type t = join_env
 
-  (* XXX rename:
-     env --> joined_env
-     env_plus_extension1 --> left_env
-     env_plus_extension2 --> right_env
-     etc.
-     As we go along, it's not expected that:
-       env + left_env = left_extension
-  *)
   let create env =
     { env;
       env_plus_extension1 = env;
@@ -67,9 +54,14 @@ end) = struct
   let invariant _t =
     ()
 
-  let add_extensions t ~holds_in_join ~holds_on_left ~holds_on_right =
+  let add_extensions t ~meet_or_join_env_extension ~holds_on_left
+        ~holds_on_right =
+    let holds_in_meet_or_join =
+      meet_or_join_env_extension t holds_on_left holds_on_right
+    in
     let env =
-      TE.add_or_meet_env_extension t.env holds_in_join (TE.max_level t.env)
+      TE.add_or_meet_env_extension t.env holds_in_meet_or_join
+        (TE.max_level t.env)
     in
     let env_plus_extension1 =
       TE.add_or_meet_env_extension t.env_plus_extension1 holds_on_left
@@ -90,7 +82,19 @@ end) = struct
     }
     in
     invariant t;
-    t
+    t, holds_in_meet_or_join
+
+  let add_extensions_and_return_meet t ~holds_on_left ~holds_on_right =
+    add_extensions t
+      ~meet_or_join_env_extension:Typing_env_extension.meet
+      ~holds_on_left ~holds_on_right
+
+  let add_extensions_and_return_meet t ~holds_on_left ~holds_on_right =
+    add_extensions t
+      ~meet_or_join_env_extension:Typing_env_extension.join
+      ~holds_on_left ~holds_on_right
+
+  let environment t = t.env
 
   let environment_on_left t = t.env_plus_extension1
 

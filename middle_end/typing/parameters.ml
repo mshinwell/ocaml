@@ -38,7 +38,9 @@ end) (Meet_and_join : sig
     with type flambda_type := T.flambda_type
 end) (Join_env : sig
   include Join_env_intf.S
-    with type ...
+    with type typing_environment := T.typing_environment
+    with type env_extension := T.env_extension
+    with type flambda_type := T.flambda_type
 end) = struct
   open T
 

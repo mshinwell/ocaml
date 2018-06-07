@@ -158,13 +158,9 @@ struct
              fields = fields2;
            } : singleton_block)
           : singleton_block * env_extension =
-      let env_extension =
-        E.Typing_env_extension.meet_or_join meet_or_join_env
-          env_extension1 env_extension2
-      in
-      let meet_or_join_env =
-        Meet_or_join_env.add_extensions meet_or_join_env
-          ~holds_for_meet_or_join:env_extension
+      let meet_or_join_env, env_extension =
+        E.Meet_or_join_env.add_extensions_and_return_meet_or_join
+          meet_or_join_env
           ~holds_on_left:env_extension1
           ~holds_on_right:env_extension2
       in

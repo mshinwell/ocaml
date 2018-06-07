@@ -33,20 +33,19 @@ module type S = sig
 
   val create : typing_environment -> t
 
-  val add_extensions
+  val add_extensions_and_return_meet
      : t
-    -> holds_for_meet_or_join:env_extension
     -> holds_on_left:env_extension
     -> holds_on_right:env_extension
-    -> t
+    -> t * env_extension
 
-  val add_definition_all_environments : t -> Name.t -> flambda_type -> t
+  val add_extensions_and_return_join
+     : t
+    -> holds_on_left:env_extension
+    -> holds_on_right:env_extension
+    -> t * env_extension
 
-  val add_definition_left_environment : t -> Name.t -> flambda_type -> t
-
-  val add_definition_right_environment : t -> Name.t -> flambda_type -> t
-
-  val joined_environment : t -> typing_environment
+  val environment : t -> typing_environment
 
   val environment_on_left : t -> typing_environment
 

@@ -2816,8 +2816,10 @@ result
   end = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
   and Join_env : sig
     include Join_env_intf.S
-      with type ...
-  end = Outer_namespace.Join_env.Make (...)
+      with type env_extension := env_extension
+      with type typing_environment := typing_environment
+      with type flambda_type := flambda_type
+  end = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
   and Parameters : sig
     include Parameters_intf.S
       with type parameters := parameters
