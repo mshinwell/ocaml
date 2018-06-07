@@ -73,8 +73,7 @@ module type S = sig
     -> Flambda_primitive.With_fixed_value.t
     -> t
 
-  (** Least upper bound of two environment extensions in the given typing
-      environment. *)
+  (** Least upper bound of two environment extensions. *)
   val meet : typing_environment -> t -> t -> t
 
   (** Greatest lower bound of two environment extensions. *)

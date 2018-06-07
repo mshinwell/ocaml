@@ -24,7 +24,6 @@ module type S = sig
   type env_extension
   type typing_environment
   type join_env
-  type flambda_type
 
   type t = join_env
 

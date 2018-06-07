@@ -24,13 +24,14 @@ end) (Typing_env : sig
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
     with type t_in_context := T.t_in_context
-    with type 'a ty = 'a T.ty
-    with type 'a unknown_or_join = 'a T.unknown_or_join
+    with type 'a ty := 'a T.ty
+    with type 'a unknown_or_join := 'a T.unknown_or_join
 end) (Typing_env_extension : sig
   include Typing_env_extension_intf.S
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
     with type flambda_type := T.flambda_type
+    with type join_env := T.join_env
 end) = struct
   open T
 
@@ -47,8 +48,8 @@ end) = struct
     { env;
       env_plus_extension1 = env;
       env_plus_extension2 = env;
-      extension1 = empty_env_extension;
-      extension2 = empty_env_extension;
+      extension1 = TEE.empty;
+      extension2 = TEE.empty;
     }
 
   let invariant _t =
@@ -86,10 +87,11 @@ end) = struct
 
   let add_extensions_and_return_meet t ~holds_on_left ~holds_on_right =
     add_extensions t
-      ~meet_or_join_env_extension:Typing_env_extension.meet
+      ~meet_or_join_env_extension:(fun t extension1 extension2 ->
+        Typing_env_extension.meet t.env extension1 extension2)
       ~holds_on_left ~holds_on_right
 
-  let add_extensions_and_return_meet t ~holds_on_left ~holds_on_right =
+  let add_extensions_and_return_join t ~holds_on_left ~holds_on_right =
     add_extensions t
       ~meet_or_join_env_extension:Typing_env_extension.join
       ~holds_on_left ~holds_on_right

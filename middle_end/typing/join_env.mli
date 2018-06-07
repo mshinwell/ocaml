@@ -20,14 +20,18 @@ module Make (T : sig
   include Flambda_type0_internal_intf.S
 end) (Typing_env : sig
   include Typing_env_intf.S
-    with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
+    with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
+    with type t_in_context := T.t_in_context
+    with type 'a ty := 'a T.ty
+    with type 'a unknown_or_join := 'a T.unknown_or_join
 end) (Typing_env_extension : sig
   include Typing_env_extension_intf.S
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
     with type flambda_type := T.flambda_type
+    with type join_env := T.join_env
 end) : sig
   include Join_env_intf.S
     with type typing_environment = T.typing_environment
