@@ -41,7 +41,7 @@ module type S = sig
     -> env_extension
     -> t
 
-  val introduce : t -> Freshening.t -> typing_environment -> t
+  val introduce : t -> typing_environment -> t
 
   val freshened_params : t -> Freshening.t -> t
 

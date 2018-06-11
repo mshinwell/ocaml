@@ -376,6 +376,8 @@ module type S = sig
     -> env_extension
     -> unit
 
+  val bottom : Flambda_kind.t -> t
+
   val alias_type_of : Flambda_kind.t -> Name.t -> t
 
   val free_names : flambda_type -> Name_occurrences.t

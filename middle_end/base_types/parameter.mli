@@ -29,6 +29,8 @@ type parameter = t
    default attributes" in the name, or similar. *)
 val wrap : Variable.t -> t
 
+val create : Name.t -> t
+
 val var : t -> Variable.t
 
 val name : t -> Name.t

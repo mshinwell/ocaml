@@ -48,6 +48,9 @@ val map_kind : t -> f:(Flambda_kind.t -> Flambda_kind.t) -> t
 (** Equality on kinded parameters. *)
 val equal : t -> t -> bool
 
+(** Returns [true] iff the provided kinded parameters have the same kind. *)
+val equal_kinds : t -> t -> bool
+
 val rename : t -> t
 
 module List : sig

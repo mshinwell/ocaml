@@ -46,6 +46,9 @@ let equal
   Parameter.equal param1 param2
     && Flambda_kind.equal kind1 kind2
 
+let equal_kinds t1 t2 =
+  Flambda_kind.equal t1.kind t2.kind
+
 let print ppf { param; kind; } =
   Format.fprintf ppf "(%a :@ %a)"
     Parameter.print param

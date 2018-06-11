@@ -14,15 +14,18 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
-[@@@ocaml.warning "+9"]
-(* Warning 9 is enabled to ensure correct update of each function when
-   a field is added to type parameter *)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type parameter = {
   var : Variable.t;
 }
+
+let create (name : Name.t) =
+  match name with
+  | Var var -> { var; }
+  | Symbol _ ->
+    Misc.fatal_errorf "Cannot create [Parameter]s from [Symbol]s: %a"
+      Name.print name
 
 let wrap var = { var; }
 

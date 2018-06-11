@@ -21,6 +21,7 @@ module Make (T : sig
 end) (Typing_env : sig
   include Typing_env_intf.S
     with type typing_environment := T.typing_environment
+    with type typing_environment_entry := T.typing_environment_entry
     with type env_extension := T.env_extension
     with type flambda_type := T.flambda_type
     with type t_in_context := T.t_in_context
@@ -30,6 +31,7 @@ end) (Typing_env_extension : sig
   include Typing_env_extension_intf.S
     with type env_extension := T.env_extension
     with type typing_environment := T.typing_environment
+    with type join_env := T.join_env
     with type flambda_type := T.flambda_type
 end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
@@ -70,25 +72,20 @@ end) = struct
         Kinded_parameter.print) params
       TEE.print env_extension
 
-  let introduce t freshening env =
+  let introduce (t : t) env =
     let scope_level = Typing_env.max_level env in
     let env =
       List.fold_left (fun env param ->
-          let name =
-            Freshening.apply_name freshening (Kinded_parameter.name param)
-          in
+          let name = Kinded_parameter.name param in
           let kind = Kinded_parameter.kind param in
           let ty = T.bottom kind in
-          Typing_env.add env name scope_level (Definition ty))
+          TE.add env name scope_level (Definition ty))
         env
         t.params
     in
-    Typing_env.add_or_meet_env_extension ?freshening env
-      t.env_extension scope_level
+    TE.add_or_meet_env_extension env t.env_extension scope_level
 
-  let env_extension t = t.env_extension
-
-  let check_arities_match t1 t2 =
+  let check_arities_match (t1 : t) (t2 : t) =
     let fail () =
       Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with \
           different arities:@ %a@ and@ %a"
@@ -112,7 +109,8 @@ end) = struct
     | Left
     | Right
 
-  let environment_for_meet_or_join ?(fresh_name_semantics = Fresh) env t1 t2 =
+  let environment_for_meet_or_join ?(fresh_name_semantics = Fresh) env
+        (t1 : t) (t2 : t) =
     let arity = check_arities_match t1 t2 in
     let fresh_params =
       match fresh_name_semantics with
@@ -132,28 +130,29 @@ end) = struct
         env
         fresh_params
     in
-    let add_definitions_and_equalities_to_extension t =
+    let add_definitions_and_equalities_to_extension (t : t) =
       List.fold_left (fun env_extension (our_param, fresh_param) ->
           assert (Kinded_parameter.equal_kinds our_param fresh_param);
+          let our_name = Kinded_parameter.name our_param in
+          let our_param_kind = Kinded_parameter.kind our_param in
           let env_extension =
             TEE.add_definition_at_beginning env_extension our_name
-              (T.bottom (Kinded_parameter.kind our_param))
+              (T.bottom our_param_kind)
           in
           let fresh_name = Kinded_parameter.name fresh_param in
-          let our_name = Kinded_parameter.name our_param in
-          let fresh_name_ty = T.alias_type_of our_name in
+          let fresh_name_ty = T.alias_type_of our_param_kind our_name in
           TEE.add_equation env_extension fresh_name fresh_name_ty)
         t.env_extension
         (List.combine t.params fresh_params)
     in
     let env_extension1 =
       match fresh_name_semantics with
-      | Fresh | Right -> add_equalities_to_extension t1
+      | Fresh | Right -> add_definitions_and_equalities_to_extension t1
       | Left -> t1.env_extension
     in
     let env_extension2 =
       match fresh_name_semantics with
-      | Fresh | Left -> add_equalities_to_extension t2
+      | Fresh | Left -> add_definitions_and_equalities_to_extension t2
       | Right -> t2.env_extension
     in
     env, env_extension1, env_extension2, fresh_params
