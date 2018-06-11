@@ -19,24 +19,15 @@
 (** Typing of join points---that is to say, the entry points of
     continuations. *)
 
-(** Using information collected across all use sites of a particular
-    continuation, calculate:
-    ... *)
-(* XXX update comment *)
-
 (* CR mshinwell: Rename [default_env]? *)
 val parameters_and_body_env
    : Continuation_uses.t
-  -> Freshening.t
-  -> arity:Flambda_arity.t
   -> continuation_env_of_definition:Flambda_type.Typing_env.t
   -> existing_continuation_params:Flambda_type.Parameters.t
   -> Flambda_type.Typing_env.t * Flambda_type.Parameters.t
 
 val parameters
    : Continuation_uses.t
-  -> Freshening.t
-  -> arity:Flambda_arity.t
   -> continuation_env_of_definition:Flambda_type.Typing_env.t
   -> existing_continuation_params:Flambda_type.Parameters.t
   -> Flambda_type.Parameters.t

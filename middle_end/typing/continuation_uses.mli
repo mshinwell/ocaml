@@ -47,6 +47,8 @@ module Use : sig
     (** The arguments seen at the given continuation use.  (If there is no
         information about the arguments, an empty list will be returned.) *)
     val args : t -> Simple.t list
+
+    val parameters -> t -> Flambda_type.Parameters.t
   end
 
   (** A single use of a continuation. *)

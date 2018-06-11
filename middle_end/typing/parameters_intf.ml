@@ -41,9 +41,11 @@ module type S = sig
     -> env_extension
     -> t
 
+  val create_same_params_no_extension : t -> t
+
   val introduce : t -> typing_environment -> t
 
-  val freshened_params : t -> Freshening.t -> t
+  val arity : t -> Flambda_arity.t
 
   type fresh_name_semantics =
     | Fresh

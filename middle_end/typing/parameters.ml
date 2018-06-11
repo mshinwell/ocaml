@@ -54,15 +54,29 @@ end) = struct
 
   type t = parameters
 
+  let invariant _t =
+    (* CR mshinwell: This should check that the [env_extension] never contains
+       [Definition]s for the [params]. *)
+    ()
+
   let create params : t =
     { params;
       env_extension = TEE.empty;
     }
 
-  let invariant _t =
-    (* CR mshinwell: This should check that the [env_extension] never contains
-       [Definition]s for the [params]. *)
-    ()
+  let create_with_env_extension params env_extension : t =
+    let t =
+      { params;
+        env_extension;
+      }
+    in
+    invariant t;
+    t
+
+  let create_same_params_no_extension (t : t) t =
+    { params = t.params;
+      env_extension = TEE.empty;
+    }
 
   let print ppf { params; env_extension; } =
     Format.fprintf ppf "@[<hov 1>(\
@@ -84,6 +98,9 @@ end) = struct
         t.params
     in
     TE.add_or_meet_env_extension env t.env_extension scope_level
+
+  let arity t =
+    List.map (fun kinded_param -> Kinded_parameter.kind kinded_param) t.params
 
   let check_arities_match (t1 : t) (t2 : t) =
     let fail () =
