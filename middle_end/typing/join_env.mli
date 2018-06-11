@@ -34,7 +34,7 @@ end) (Typing_env_extension : sig
     with type join_env := T.join_env
 end) : sig
   include Join_env_intf.S
-    with type typing_environment = T.typing_environment
-    with type env_extension = Typing_env_extension.t
-    with type join_env = T.join_env
+    with type typing_environment := T.typing_environment
+    with type env_extension := Typing_env_extension.t
+    with type join_env := T.join_env
 end

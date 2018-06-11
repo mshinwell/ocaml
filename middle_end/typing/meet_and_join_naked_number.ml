@@ -49,24 +49,25 @@ module Make (T : sig
   val force_to_kind_naked_nativeint
      : t
     -> Targetint.Set.t of_kind_naked_number ty
-end) (Make_meet_and_join : functor
-    (S : sig
-      include Meet_and_join_spec_intf.S
-        with type flambda_type := T.flambda_type
-        with type typing_environment := T.typing_environment
-        with type env_extension := T.env_extension
-        with type 'a ty := 'a T.ty
-     end)
-  -> sig
-       include Meet_and_join_intf.S
-         with type of_kind_foo := S.of_kind_foo
-         with type typing_environment := T.typing_environment
-         with type env_extension := T.env_extension
-         with type 'a ty := 'a T.ty
+end) (Make_meet_and_join : functor  (* CR mshinwell: Fix formatting *)
+      (S : sig
+        include Meet_and_join_spec_intf.S
+          with type flambda_type := T.flambda_type
+          with type join_env := T.join_env
+          with type env_extension := T.env_extension
+          with type 'a ty := 'a T.ty
+       end)
+    -> sig
+         include Meet_and_join_intf.S
+           with type of_kind_foo := S.of_kind_foo
+           with type env_extension := T.env_extension
+           with type join_env := T.join_env
+           with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
+        with type join_env := T.join_env
         with type flambda_type := T.flambda_type
     end) (Typing_env : sig
       include Typing_env_intf.S
@@ -83,9 +84,6 @@ end) (Make_meet_and_join : functor
         with type flambda_type := T.flambda_type
     end) (E : sig
       include Either_meet_or_join_intf.S
-        with type typing_environment := T.typing_environment
-        with type env_extension := T.env_extension
-        with type flambda_type := T.flambda_type
     end) =
 struct
   open T
@@ -208,7 +206,7 @@ struct
     let force_to_kind = force_to_kind_naked_nativeint
     let print_ty = print_ty_naked_number
 
-    let meet_of_kind_foo _meet_or_join_env
+    let meet_or_join_of_kind_foo _env
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : (Targetint.Set.t of_kind_naked_number * env_extension)

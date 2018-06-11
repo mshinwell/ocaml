@@ -17,8 +17,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
-  type typing_environment
   type env_extension
+  type join_env
 
   type 'a ty
 
@@ -26,18 +26,14 @@ module type S = sig
 
   (* Least upper bound of two types of a particular kind. *)
   val join_ty
-     : typing_environment
-    -> typing_environment
-    -> typing_environment
-    -> env_extension
-    -> env_extension
+     : join_env
     -> of_kind_foo ty
     -> of_kind_foo ty
     -> of_kind_foo ty
 
   (* Greatest lower bound of two types of a particular kind. *)
   val meet_ty
-     : typing_environment
+     : join_env
     -> of_kind_foo ty
     -> of_kind_foo ty
     -> of_kind_foo ty * env_extension
@@ -47,19 +43,17 @@ module type S_for_types = sig
   type flambda_type
   type typing_environment
   type env_extension
+  type join_env
 
   val meet
-     : typing_environment
+     : join_env
     -> flambda_type
     -> flambda_type
     -> flambda_type * env_extension
 
   val join
-     : typing_environment
-    -> typing_environment
-    -> typing_environment
-    -> env_extension
-    -> env_extension
+     : join_env
+    -> join_env
     -> flambda_type
     -> flambda_type
     -> flambda_type

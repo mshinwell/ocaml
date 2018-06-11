@@ -35,15 +35,18 @@ end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
     with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
+    with type join_env := T.join_env
     with type flambda_type := T.flambda_type
 end) (Join_env : sig
   include Join_env_intf.S
-    with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
+    with type typing_environment := T.typing_environment
+    with type join_env := T.join_env
     with type flambda_type := T.flambda_type
 end) = struct
   open T
 
+  module JE = Join_env
   module TE = Typing_env
   module TEE = Typing_env_extension
 
@@ -80,48 +83,69 @@ end) = struct
 
   let env_extension t = t.env_extension
 
-  let join join_env t1 t2 =
-    match use_the_same_fresh_names t1 t2 with
-    | None -> None
-    | Some (kinded_params, t1, t2) ->
-      let add_parameter_definitions join_env kinded_params ~add =
-        List.fold_left (fun join_env kinded_param ->
-            let name = Kinded_parameter.name kinded_param in
-            let kind = Kinded_parameter.kind kinded_param in
-            let ty = T.bottom kind in
-            add join_env name ty)
-          join_env
-          kinded_params
-      in
-      let join_env =
-        add_parameter_definitions join_env
-          kinded_params
-          ~add:Join_env.add_definition_all_environments
-      in
-      let join_env =
-        add_parameter_definitions join_env
-          (kinded_params t1)
-          ~add:Join_env.add_definition_left_environment
-      in
-      let join_env =
-        add_parameter_definitions join_env
-          (kinded_params t2)
-          ~add:Join_env.add_definition_right_environment
-      in
-      let joined_params_env_extension =
-        Typing_env_extension.join join_env
-          (env_extension t1)
-          (env_extension t2)
-      in
-      let t =
-        create_with_env_extension kinded_params
-          joined_params_env_extension
-      in
-      let join_env =
-        Join_env.add_extensions join_env
-          ~holds_in_join:(env_extension params)
-          ~holds_on_left:(env_extension t1)
-          ~holds_on_right:(env_extension t2)
-      in
-      t, join_env
+  let check_arities_match t1 t2 =
+    let fail () =
+      Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with
+          different arities:@ %a@ and@ %a"
+        print t1
+        print t2
+    in
+    if List.compare_lengths t1.params t2.params <> 0 then begin
+      fail ()
+    end;
+    List.map (fun (kinded_param1, kinded_param2) ->
+        let kind1 = Kinded_parameter.kind kinded_param1 in
+        let kind2 = Kinded_parameter.kind kinded_param2 in
+        if not (Flambda_kind.equal kind1 kind2) then begin
+          fail ()
+        end;
+        kind1)
+      (List.combine t1.params t2.params)
+
+  let meet env t1 t2 =
+    let arity = check_arities_match t1 t2 in
+    let env =
+      List.fold_left (fun env (kinded_param1, kinded_param2) ->
+          let name1 = Parameter.name (Kinded_parameter.param kinded_param1) in
+          let name2 = Parameter.name (Kinded_parameter.param kinded_param2) in
+          let name2_ty = T.alias_type_of name1 in
+          JE.add env name1 name2_ty)
+        env
+        (List.combine t1.params t2.params)
+    in
+
+
+  let join env t1 t2 =
+    let arity = check_arities_match t1 t2 in
+    let fresh_names =
+      List.map (fun _kind -> Name.var (Variable.create "join")) arity
+    in
+    let fresh_params =
+      List.map (fun (fresh_name, kind) ->
+          Kinded_parameter.create (Parameter.create fresh_name) kind)
+        (List.combine fresh_names arity)
+    in
+    let env =
+      List.fold_left (fun env (fresh_name, kind) ->
+          let ty = T.bottom kind in
+          JE.add_definition env fresh_name ty)
+        env
+        fresh_names_with_kinds
+    in
+    let add_equalities_to_extension t =
+      List.fold_left (fun env_extension (our_param, fresh_param) ->
+          assert (Kinded_parameter.equal_kinds our_param fresh_param);
+          let our_name = Kinded_parameter.name our_param in
+          let fresh_name = Kinded_parameter.name fresh_param in
+          let fresh_name_ty = T.alias_type_of our_name in
+          TEE.add_equation env_extension fresh_name fresh_name_ty)
+        t.env_extension
+        (List.combine t.params fresh_names_with_kinds)
+    in
+    let env_extension1 = add_equalities_to_extension t1 in
+    let env_extension2 = add_equalities_to_extension t2 in
+    let env_extension = TEE.join env_extension1 env_extension2 in
+    { params = fresh_params;
+      env_extension;
+    }
 end

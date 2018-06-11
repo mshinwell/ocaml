@@ -32,24 +32,24 @@ module type S = sig
 
   val create_with_env_extension
      : Kinded_parameter.t list
-    -> Typing_env_extension.t
+    -> env_extension
     -> t
 
   val kinded_params : t -> Kinded_parameter.t
 
-  val env_extension : t -> Typing_env_extension.t
+  val env_extension : t -> env_extension
 
   val use_the_same_fresh_names
      : t
     -> t
     -> (Kinded_parameter.t list
-      * Typing_env_extension.t
-      * Typing_env_extension.t) option
+      * env_extension
+      * env_extension) option
 
   val introduce_definitions
      : ?freshening:Freshening.t
     -> t
-    -> Typing_env.t
+    -> typing_environment
     -> t
 
   (** At the highest scope level in the given environment, introduce
@@ -58,13 +58,15 @@ module type S = sig
       (This will open any existentials in the extension.)
       Parameters and types will be freshened according to the provided
       [Freshening.t]. *)
-  val introduce : ?freshening:Freshening.t -> t -> Typing_env.t -> t
+  val introduce : ?freshening:Freshening.t -> t -> typing_environment -> t
 
   val freshened_params : t -> Freshening.t -> t
 
   val print : Format.formatter -> t -> unit
 
-  val join : Join_env.t -> t -> t -> t option
+  val meet : join_env -> t -> t -> t option
 
-  val join_and_introduce : Join_env.t -> t -> t -> (t * Join_env.t) option
+  val join : join_env -> t -> t -> t option
+
+  val join_and_introduce : join_env -> t -> t -> (t * join_env) option
 end

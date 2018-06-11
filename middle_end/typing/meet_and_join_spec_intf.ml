@@ -19,8 +19,8 @@
 (** The signature of a module that specifies meet and join operations for
     a particular kind of types. *)
 module type S = sig
-  type typing_environment
   type env_extension
+  type join_env
 
   type flambda_type
   type of_kind_foo
@@ -35,24 +35,9 @@ module type S = sig
 
   val print_ty : Format.formatter -> of_kind_foo ty -> unit
 
-  val meet_of_kind_foo
-     : typing_environment
+  val meet_or_join_of_kind_foo
+     : join_env
     -> of_kind_foo
     -> of_kind_foo
-    -> (of_kind_foo * env_extension) Or_bottom.t
-
-  (* If the supplied types are compatible, the join must be pushed inside
-     their structure, and [Ok] returned.  Otherwise [Unknown] must be
-     returned. *)
-  (* CR mshinwell: add comment about requirement for equivalence
-     relationness *)
-  val join_of_kind_foo
-     : typing_environment
-    -> typing_environment
-    -> typing_environment
-    -> env_extension
-    -> env_extension
-    -> of_kind_foo
-    -> of_kind_foo
-    -> of_kind_foo Or_unknown.t
+    -> (of_kind_foo * env_extension) Or_absorbing.t
 end

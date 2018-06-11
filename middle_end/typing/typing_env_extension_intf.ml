@@ -74,7 +74,7 @@ module type S = sig
     -> t
 
   (** Least upper bound of two environment extensions. *)
-  val meet : typing_environment -> t -> t -> t
+  val meet : join_env -> t -> t -> t
 
   (** Greatest lower bound of two environment extensions. *)
   val join : join_env -> t -> t -> t

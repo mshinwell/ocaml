@@ -27,6 +27,7 @@ end) (Meet_and_join : sig
   include Meet_and_join_intf.S_for_types
     with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
+    with type join_env := T.join_env
     with type flambda_type := T.flambda_type
 end) (Type_equality : sig
   include Type_equality_intf.S
@@ -374,7 +375,10 @@ end) = struct
 
   let invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
-    let meet_ty, _env_extension = Meet_and_join.meet t existing_ty ty in
+    let meet_ty, _env_extension =
+      let join_env = T.join_env_of_typing_env t in
+      Meet_and_join.meet join_env existing_ty ty
+    in
     let ty_must_be_strictly_more_precise, other_ty =
       match sense with
       | New_equation_must_be_more_precise -> ty, existing_ty
@@ -653,7 +657,8 @@ end) = struct
       | Some (existing_ty, _binding_type) ->
         let meet =
           let meet_ty, meet_env_extension =
-            Meet_and_join.meet t ty existing_ty
+            let join_env = join_env_of_typing_env t in
+            Meet_and_join.meet join_env ty existing_ty
           in
           let as_or_more_precise = Type_equality.equal meet_ty ty in
           let strictly_more_precise =

@@ -376,6 +376,8 @@ module type S = sig
     -> env_extension
     -> unit
 
+  val alias_type_of : Flambda_kind.t -> Name.t -> t
+
   val free_names : flambda_type -> Name_occurrences.t
 
   val free_names_set : flambda_type -> Name.Set.t
@@ -429,14 +431,7 @@ module type S = sig
 
   val get_alias : flambda_type -> Name.t option
 
-  (** Least upper bound of two types. *)
-  val join
-     : env:typing_environment
-    -> env_plus_extension1:typing_environment
-    -> env_plus_extension2:typing_environment
-    -> extension1:env_extension
-    -> extension2:env_extension
-    -> t
-    -> t
-    -> t
+  val join : join_env -> t -> t -> t
+
+  val join_env_of_typing_env : typing_environment -> join_env
 end

@@ -75,10 +75,9 @@ module type S = sig
   val extensibility_contents : 'a extensibility -> 'a
 
   type typing_environment
-
   type env_extension
-
   type parameters
+  type join_env
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
@@ -331,6 +330,13 @@ module type S = sig
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
+  end
+
+  module Join_env : sig
+    include Join_env_intf.S
+      with type join_env := join_env
+      with type env_extension := env_extension
+      with type typing_environment := typing_environment
   end
 
   module Parameters : sig
@@ -645,16 +651,8 @@ module type S = sig
       equations, which are returned as an environment extension. *)
   val meet : Typing_env.t -> t -> t -> t * Typing_env_extension.t
 
-  (** Least upper bound of two types. *)
-  val join
-     : env:Typing_env.t
-    -> env_plus_extension1:Typing_env.t
-    -> env_plus_extension2:Typing_env.t
-    -> extension1:Typing_env_extension.t
-    -> extension2:Typing_env_extension.t
-    -> t
-    -> t
-    -> t
+  (** Least upper bound of two types.  This never generates any equations. *)
+  val join : Join_env.t  -> t -> t -> t
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)

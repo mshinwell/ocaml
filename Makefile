@@ -273,6 +273,7 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/var_within_closure.cmo \
   middle_end/base_types/or_bottom.cmo \
   middle_end/base_types/or_unknown.cmo \
+  middle_end/base_types/or_absorbing.cmo \
   middle_end/base_types/name_occurrences.cmo
 
 MIDDLE_END_CODE_MOTION=\
@@ -321,6 +322,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/typing_env_extension_intf.cmo \
   middle_end/typing/typing_env.cmo \
   middle_end/typing/typing_env_extension.cmo \
+  middle_end/typing/either_meet_or_join_intf.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
   middle_end/typing/meet_and_join_naked_number.cmo \

@@ -24,6 +24,7 @@ module type S = sig
   type env_extension
   type typing_environment
   type join_env
+  type flambda_type
 
   type t = join_env
 
@@ -31,6 +32,15 @@ module type S = sig
   val invariant : t -> unit
 
   val create : typing_environment -> t
+
+  val add_definition : t -> Name.t -> flambda_type -> t
+
+  (** E + [X1 | X2] *)
+  val add_extensions
+     : t
+    -> holds_on_left:env_extension
+    -> holds_on_right:env_extension
+    -> t
 
   val add_extensions_and_return_meet
      : t
