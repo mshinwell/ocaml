@@ -33,7 +33,7 @@ module type S = sig
 
   val create : typing_environment -> t
 
-  val add_definition : t -> Name.t -> flambda_type -> t
+  val add_definition_central_environment : t -> Name.t -> flambda_type -> t
 
   (** E + [X1 | X2] *)
   val add_extensions
@@ -54,7 +54,7 @@ module type S = sig
     -> holds_on_right:env_extension
     -> t * env_extension
 
-  val environment : t -> typing_environment
+  val central_environment : t -> typing_environment
 
   val environment_on_left : t -> typing_environment
 

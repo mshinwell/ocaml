@@ -330,7 +330,7 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let env = JE.environment env in
+      let env = JE.central_environment env in
       let scope_level = Scope_level.next (TE.max_level env) in
       let env = TE.add_or_meet_env_extension env t1 scope_level in
       let env = TE.add_or_meet_env_extension env t2 scope_level in

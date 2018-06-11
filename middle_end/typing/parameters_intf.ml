@@ -16,8 +16,10 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** The abstraction used to represent parameters of functions, return
-    continuations, and so forth. *)
+(** The representation of an abstraction that binds a number of ordered
+    parameters along with their kinds.  Equations may be supplied upon the
+    parameters together with existential definitions.
+*)
 
 module type S = sig
   type env_extension
@@ -28,6 +30,10 @@ module type S = sig
 
   type t = parameters
 
+  val invariant : t -> unit
+
+  val print : Format.formatter -> t -> unit
+
   val create : Kinded_parameter.t list -> t
 
   val create_with_env_extension
@@ -35,38 +41,37 @@ module type S = sig
     -> env_extension
     -> t
 
-  val kinded_params : t -> Kinded_parameter.t
-
-  val env_extension : t -> env_extension
-
-  val use_the_same_fresh_names
-     : t
-    -> t
-    -> (Kinded_parameter.t list
-      * env_extension
-      * env_extension) option
-
-  val introduce_definitions
-     : ?freshening:Freshening.t
-    -> t
-    -> typing_environment
-    -> t
-
-  (** At the highest scope level in the given environment, introduce
-      definitions for the parameters inside [t]; and then add the
-      environment extension (using "meet") to yield another environment.
-      (This will open any existentials in the extension.)
-      Parameters and types will be freshened according to the provided
-      [Freshening.t]. *)
-  val introduce : ?freshening:Freshening.t -> t -> typing_environment -> t
+  val introduce : t -> Freshening.t -> typing_environment -> t
 
   val freshened_params : t -> Freshening.t -> t
 
-  val print : Format.formatter -> t -> unit
+  type fresh_name_semantics =
+    | Fresh
+      (** [meet] and [join] will generate fresh names and add equalities to
+          make them equal to the names in the [t]s as appropriate.  These
+          fresh names will be assigned to the [kinded_params] in the output
+          of [meet] and [join]. *)
+    | Left
+      (** [meet] and [join] will use the names in the left-hand [t] instead
+          of generating fresh names.  This means that the results of these
+          functions will produce values of type [t] whose [kinded_params]
+          correspond to those names. *)
+    | Right
+      (** As for [left], but uses names from the right-hand [t]. *)
 
-  val meet : join_env -> t -> t -> t option
+  (** Greatest lower bound of two parameter bindings. *)
+  val meet
+     : ?fresh_name_semantics:fresh_name_semantics
+    -> join_env
+    -> t
+    -> t
+    -> t
 
-  val join : join_env -> t -> t -> t option
-
-  val join_and_introduce : join_env -> t -> t -> (t * join_env) option
+  (** Least upper bound of two parameter bindings. *)
+  val join
+     : ?fresh_name_semantics:fresh_name_semantics
+    -> join_env
+    -> t
+    -> t
+    -> t
 end

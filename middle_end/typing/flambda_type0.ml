@@ -2109,8 +2109,7 @@ result
       if prim == prim' then entry
       else CSE prim'
 
-  (* XXX find a proper name for [for_join] *)
-  and rename_variables_env_extension ?for_join subst
+  and rename_variables_env_extension subst
         ({ first_definitions; at_or_after_cut_point; last_equations_rev;
            cse; } as env_extension) =
     let for_join =
@@ -2121,6 +2120,10 @@ result
     let first_definitions_changed = ref false in
     let first_definitions' =
       List.map (fun (name, t) ->
+          let name =
+            (* CR mshinwell: See CR below -- same thing happens here. *)
+            rename_variables_name subst name
+          in
           let t' = rename_variables subst t in
           if not (t == t') then begin
             first_definitions_changed := true
@@ -2132,32 +2135,34 @@ result
       Scope_level.Map.map_sharing (fun by_sublevel ->
           Scope_level.Sublevel.Map.map_sharing
             (fun ((name, (entry : typing_environment_entry)) as datum) ->
-              if for_join && Name.Map.mem name subst then datum
-              else
-                let name' =
-                  match entry with
-                  | Definition _ -> name
-                  | Equation _ | CSE _ -> rename_variables_name subst name
-                in
-                let entry' =
-                  rename_variables_typing_environment_entry subst entry
-                in
-                if name == name' && entry == entry' then datum
-                else name', entry')
+              let name' =
+                match entry with
+                | Definition _ ->
+                  (* CR mshinwell: This must do a renaming in case the
+                     unfreshened existential collides with another name
+                     which is being freshened (e.g. due to its context being
+                     inlined).  Maybe instead we should assign a fresh name
+                     here if [subst] maps [name] *)
+                  rename_variables_name subst name
+                | Equation _ | CSE _ -> rename_variables_name subst name
+              in
+              let entry' =
+                rename_variables_typing_environment_entry subst entry
+              in
+              if name == name' && entry == entry' then datum
+              else name', entry')
             by_sublevel)
         at_or_after_cut_point
     in
     let last_equations_rev_changed = ref false in
     let last_equations_rev' =
       List.map (fun ((name, t) as equation) ->
-          if for_join && Name.Map.mem name subst then equation
-          else
-            let name' = rename_variables_name subst name in
-            let t' = rename_variables subst t in
-            if (not (name == name')) || (not (t == t')) then begin
-              last_equations_rev_changed := true
-            end;
-            name', t')
+          let name' = rename_variables_name subst name in
+          let t' = rename_variables subst t in
+          if (not (name == name')) || (not (t == t')) then begin
+            last_equations_rev_changed := true
+          end;
+          name', t')
         last_equations_rev
     in
     let cse_changed = ref false in

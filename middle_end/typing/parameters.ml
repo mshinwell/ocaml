@@ -54,8 +54,13 @@ end) = struct
 
   let create params : t =
     { params;
-      env_extension = empty_env_extension;
+      env_extension = TEE.empty;
     }
+
+  let invariant _t =
+    (* CR mshinwell: This should check that the [env_extension] never contains
+       [Definition]s for the [params]. *)
+    ()
 
   let print ppf { params; env_extension; } =
     Format.fprintf ppf "@[<hov 1>(\
@@ -63,7 +68,7 @@ end) = struct
         @[<hov 1>(env_extension@ %a)@])@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         Kinded_parameter.print) params
-      print_typing_env_extension env_extension
+      TEE.print env_extension
 
   let introduce t freshening env =
     let scope_level = Typing_env.max_level env in
@@ -73,7 +78,7 @@ end) = struct
             Freshening.apply_name freshening (Kinded_parameter.name param)
           in
           let kind = Kinded_parameter.kind param in
-          let ty = bottom kind in
+          let ty = T.bottom kind in
           Typing_env.add env name scope_level (Definition ty))
         env
         t.params
@@ -85,7 +90,7 @@ end) = struct
 
   let check_arities_match t1 t2 =
     let fail () =
-      Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with
+      Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with \
           different arities:@ %a@ and@ %a"
         print t1
         print t2
@@ -102,50 +107,71 @@ end) = struct
         kind1)
       (List.combine t1.params t2.params)
 
-  let meet env t1 t2 =
-    let arity = check_arities_match t1 t2 in
-    let env =
-      List.fold_left (fun env (kinded_param1, kinded_param2) ->
-          let name1 = Parameter.name (Kinded_parameter.param kinded_param1) in
-          let name2 = Parameter.name (Kinded_parameter.param kinded_param2) in
-          let name2_ty = T.alias_type_of name1 in
-          JE.add env name1 name2_ty)
-        env
-        (List.combine t1.params t2.params)
-    in
+  type fresh_name_semantics =
+    | Fresh
+    | Left
+    | Right
 
-
-  let join env t1 t2 =
+  let environment_for_meet_or_join ?(fresh_name_semantics = Fresh) env t1 t2 =
     let arity = check_arities_match t1 t2 in
-    let fresh_names =
-      List.map (fun _kind -> Name.var (Variable.create "join")) arity
-    in
     let fresh_params =
-      List.map (fun (fresh_name, kind) ->
-          Kinded_parameter.create (Parameter.create fresh_name) kind)
-        (List.combine fresh_names arity)
+      match fresh_name_semantics with
+      | Fresh ->
+        List.map (fun kind ->
+            let fresh_name = Name.var (Variable.create "join") in
+            Kinded_parameter.create (Parameter.create fresh_name) kind)
+          arity
+      | Left -> t1.params
+      | Right -> t2.params
     in
     let env =
-      List.fold_left (fun env (fresh_name, kind) ->
-          let ty = T.bottom kind in
-          JE.add_definition env fresh_name ty)
+      List.fold_left (fun env fresh_param ->
+          let fresh_name = Kinded_parameter.name fresh_param in
+          let kind = Kinded_parameter.kind fresh_param in
+          JE.add_definition_central_environment env fresh_name (T.bottom kind))
         env
-        fresh_names_with_kinds
+        fresh_params
     in
-    let add_equalities_to_extension t =
+    let add_definitions_and_equalities_to_extension t =
       List.fold_left (fun env_extension (our_param, fresh_param) ->
           assert (Kinded_parameter.equal_kinds our_param fresh_param);
-          let our_name = Kinded_parameter.name our_param in
+          let env_extension =
+            TEE.add_definition_at_beginning env_extension our_name
+              (T.bottom (Kinded_parameter.kind our_param))
+          in
           let fresh_name = Kinded_parameter.name fresh_param in
+          let our_name = Kinded_parameter.name our_param in
           let fresh_name_ty = T.alias_type_of our_name in
           TEE.add_equation env_extension fresh_name fresh_name_ty)
         t.env_extension
-        (List.combine t.params fresh_names_with_kinds)
+        (List.combine t.params fresh_params)
     in
-    let env_extension1 = add_equalities_to_extension t1 in
-    let env_extension2 = add_equalities_to_extension t2 in
-    let env_extension = TEE.join env_extension1 env_extension2 in
-    { params = fresh_params;
-      env_extension;
-    }
+    let env_extension1 =
+      match fresh_name_semantics with
+      | Fresh | Right -> add_equalities_to_extension t1
+      | Left -> t1.env_extension
+    in
+    let env_extension2 =
+      match fresh_name_semantics with
+      | Fresh | Left -> add_equalities_to_extension t2
+      | Right -> t2.env_extension
+    in
+    env, env_extension1, env_extension2, fresh_params
+
+  let meet_or_join ?fresh_name_semantics env t1 t2 ~op =
+    if t1 == t2 then t1
+    else
+      let env, env_extension1, env_extension2, params =
+        environment_for_meet_or_join ?fresh_name_semantics env t1 t2
+      in
+      let env_extension = op env env_extension1 env_extension2 in
+      { params;
+        env_extension;
+      }
+
+  let meet ?fresh_name_semantics env t1 t2 =
+    meet_or_join ?fresh_name_semantics env t1 t2 ~op:TEE.meet
+
+  let join ?fresh_name_semantics env t1 t2 =
+    meet_or_join ?fresh_name_semantics env t1 t2 ~op:TEE.join
 end
