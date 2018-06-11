@@ -78,7 +78,9 @@ end) (Make_meet_and_join :
          with type typing_environment := T.typing_environment
          with type flambda_type := T.flambda_type
      end) (E : sig
-      include Either_meet_or_join_intf.S
+       include Either_meet_or_join_intf.S
+        with type env_extension := T.env_extension
+        with type join_env := T.join_env
      end)
  : sig
   module Naked_immediate : sig

@@ -84,6 +84,8 @@ end) (Make_meet_and_join : functor  (* CR mshinwell: Fix formatting *)
         with type flambda_type := T.flambda_type
     end) (E : sig
       include Either_meet_or_join_intf.S
+        with type env_extension := T.env_extension
+        with type join_env := T.join_env
     end) =
 struct
   open T

@@ -43,26 +43,25 @@ end) (Make_meet_and_join : functor
     (S : sig
       include Meet_and_join_spec_intf.S
         with type flambda_type := T.flambda_type
-        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
      end)
   -> sig
        include Meet_and_join_intf.S
          with type of_kind_foo := S.of_kind_foo
-         with type typing_environment := T.typing_environment
          with type env_extension := T.env_extension
          with type 'a ty := 'a T.ty
     end) (Meet_and_join_value : sig
       include Meet_and_join_intf.S
         with type of_kind_foo := T.of_kind_value
-        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
+        with type join_env := T.join_env
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
+        with type join_env := T.join_env
         with type flambda_type := T.flambda_type
     end) (Typing_env : sig
       include Typing_env_intf.S
@@ -77,14 +76,19 @@ end) (Make_meet_and_join : functor
       include Typing_env_extension_intf.S
         with type env_extension := T.env_extension
         with type typing_environment := T.typing_environment
+        with type join_env := T.join_env
         with type flambda_type := T.flambda_type
+    end) (E : sig
+      include Either_meet_or_join_intf.S
+        with type env_extension := T.env_extension
+        with type join_env := T.join_env
     end) =
 struct
   module rec Meet_and_join_fabricated : sig
     include Meet_and_join_intf.S
       with type of_kind_foo := T.of_kind_fabricated
-      with type typing_environment := T.typing_environment
       with type env_extension := T.env_extension
+      with type join_env := T.join_env
       with type 'a ty := 'a T.ty
   end = Make_meet_and_join (struct
     open T
@@ -103,6 +107,15 @@ struct
     let force_to_kind = force_to_kind_fabricated
     let print_ty = print_ty_fabricated
 
+    let meet_closure env
+          (closure1 : closure) (closure2 : closure)
+          : (closure * env_extension) Or_bottom.t =
+      if closure1 == closure2 then
+        Ok (closure1, Typing_env_extension.empty)
+      else
+        Misc.fatal_error "meet_closure: not yet implemented"
+
+(*
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
        function type (with a surrogate) propagated from the first round is
@@ -382,7 +395,7 @@ struct
             Ok (({ function_decls; } : closure), equations)
       end
 
-    let meet_or_join_closure meet_or_join_env
+    let meet_or_join_closure env
           (closure1 : closure) (closure2 : closure)
           : closure E.Or_absorbing.t =
       if Join_env.fast_check_extensions_same_both_sides join_env
@@ -605,10 +618,11 @@ struct
         in
         { function_decls; }
       end
+*)
 
-    let meet_or_join_set_of_closures meet_or_join_env
+    let meet_or_join_set_of_closures env
           (set1 : set_of_closures) (set2 : set_of_closures)
-          : (set_of_closures * env_extension) E.Or_absorbing.t =
+          : (set_of_closures * env_extension) Or_absorbing.t =
       let equations = ref (Typing_env_extension.empty) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
@@ -618,14 +632,14 @@ struct
             E.Closure_id.Map.union_or_inter
               (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
-                  Meet_and_join_fabricated.meet_or_join_ty meet_or_join_env
+                  Meet_and_join_fabricated.meet_or_join_ty env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet meet_or_join_env
+                    Typing_env_extension.meet env
                       new_equations !equations;
                   Some ty_fabricated
                 end)
@@ -651,16 +665,16 @@ struct
         | Open closures2, Exactly closures1 ->
           (* XXX  -- this used to go over [closures1] *)
           let closures =
-            E.Closure_id.Map.union_or_inter (fun closure_id ty1 ty2 ->
+            E.Closure_id.Map.union_or_inter (fun ty1 ty2 ->
                 let ty_fabricated, new_equations =
-                  E.Meet_and_join_fabricated.meet_or_join_ty meet_or_join_env
+                  Meet_and_join_fabricated.meet_or_join_ty env
                     ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet meet_or_join_env
+                    Typing_env_extension.meet env
                       new_equations !equations;
                   Some ty_fabricated
                 end)
@@ -669,17 +683,17 @@ struct
           Exactly closures
         | Open closures1, Open closures2 ->
           let closures =
-            E.Closure_id.Map.union_or_inter_merge
+            E.Closure_id.Map.union_or_inter
               (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
-                  Meet_and_join_fabricated.meet_ty env
+                  Meet_and_join_fabricated.meet_or_join_ty env
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   bottom_as_ty_fabricated ()
                 end else begin
                   equations :=
-                    Typing_env_extension.meet meet_or_join_env
+                    Typing_env_extension.meet env
                       new_equations !equations;
                   ty_fabricated
                 end)
@@ -694,14 +708,14 @@ struct
           let closure_elements =
             E.Var_within_closure.Map.union_or_inter (fun ty_value1 ty_value2 ->
                 let ty_value, new_equations =
-                  E.Meet_and_join_value.meet_or_join_ty meet_or_join_env
+                  E.Meet_and_join_value.meet_or_join_ty env
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet meet_or_join_env
+                    Typing_env_extension.meet env
                       new_equations !equations;
                   Some ty_value
                 end)
@@ -740,7 +754,7 @@ struct
                     None
                   end else begin
                     equations :=
-                      Typing_env_extension.meet meet_or_join_env
+                      Typing_env_extension.meet env
                         new_equations !equations;
                     Some ty_value
                   end)
@@ -752,14 +766,14 @@ struct
             E.Var_within_closure.Map.union_or_inter_merge
               (fun ty_value1 ty_value2 ->
                 let ty_value, new_equations =
-                  Meet_and_join_value.meet_or_join_ty meet_or_join_env
+                  Meet_and_join_value.meet_or_join_ty env
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   bottom_as_ty_value ()
                 end else begin
                   equations :=
-                    Typing_env_extension.meet meet_or_join_env
+                    Typing_env_extension.meet env
                       new_equations !equations;
                   ty_value
                 end)
@@ -786,11 +800,11 @@ struct
           Ok (set, !equations)
         end
 
-    let meet_or_join_of_kind_foo meet_or_join_env
+    let meet_or_join_of_kind_foo env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_absorbing.t =
       if
-        Meet_or_join_env.fast_check_extensions_same_both_sides meet_or_join_env
+        env.fast_check_extensions_same_both_sides env
           && of_kind1 == of_kind2
       then
         Ok (of_kind1, Typing_env_extension.empty)
@@ -803,14 +817,14 @@ struct
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
                   let env_extension =
-                    Meet_or_join_env.holds_on_left meet_or_join_env
+                    env.holds_on_left env
                   in
                   { env_extension; })
               ~in_right_only:
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
                   let env_extension =
-                    Meet_or_join_env.holds_on_right meet_or_join_env
+                    env.holds_on_right env
                   in
                   { env_extension; })
               ~in_both:
@@ -818,7 +832,7 @@ struct
                      ({ env_extension = env_extension2; } : discriminant_case)
                      : discriminant_case ->
                   let env_extension =
-                    E.Typing_env_extension.meet_or_join meet_or_join_env
+                    E.Typing_env_extension.meet_or_join env
                       env_extension1 env_extension2
                   in
                   { env_extension; })

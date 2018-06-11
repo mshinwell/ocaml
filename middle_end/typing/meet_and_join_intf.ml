@@ -24,19 +24,21 @@ module type S = sig
 
   type of_kind_foo
 
-  (* Least upper bound of two types of a particular kind. *)
-  val join_ty
+  val meet_or_join_ty
      : join_env
     -> of_kind_foo ty
     -> of_kind_foo ty
-    -> of_kind_foo ty
+    -> of_kind_foo ty * env_extension
 
+(*
+  (* Least upper bound of two types of a particular kind. *)
   (* Greatest lower bound of two types of a particular kind. *)
   val meet_ty
      : join_env
     -> of_kind_foo ty
     -> of_kind_foo ty
     -> of_kind_foo ty * env_extension
+*)
 end
 
 module type S_for_types = sig

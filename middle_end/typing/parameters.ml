@@ -73,7 +73,7 @@ end) = struct
     invariant t;
     t
 
-  let create_same_params_no_extension (t : t) t =
+  let create_same_params_no_extension (t : t) : t =
     { params = t.params;
       env_extension = TEE.empty;
     }
@@ -99,7 +99,7 @@ end) = struct
     in
     TE.add_or_meet_env_extension env t.env_extension scope_level
 
-  let arity t =
+  let arity (t : t) =
     List.map (fun kinded_param -> Kinded_parameter.kind kinded_param) t.params
 
   let check_arities_match (t1 : t) (t2 : t) =

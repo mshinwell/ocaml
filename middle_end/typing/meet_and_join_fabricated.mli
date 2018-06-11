@@ -41,26 +41,26 @@ end) (Make_meet_and_join : functor
     (S : sig
       include Meet_and_join_spec_intf.S
         with type flambda_type := T.flambda_type
-        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
      end)
   -> sig
        include Meet_and_join_intf.S
          with type of_kind_foo := S.of_kind_foo
-         with type typing_environment := T.typing_environment
          with type env_extension := T.env_extension
+         with type join_env := T.join_env
          with type 'a ty := 'a T.ty
     end) (Meet_and_join_value : sig
       include Meet_and_join_intf.S
         with type of_kind_foo := T.of_kind_value
-        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
+        with type join_env := T.join_env
         with type 'a ty := 'a T.ty
     end) (Meet_and_join : sig
       include Meet_and_join_intf.S_for_types
         with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
+        with type join_env := T.join_env
         with type flambda_type := T.flambda_type
     end) (Typing_env : sig
       include Typing_env_intf.S
@@ -76,11 +76,13 @@ end) (Make_meet_and_join : functor
         with type env_extension := T.env_extension
         with type typing_environment := T.typing_environment
         with type flambda_type := T.flambda_type
+    end) (E : sig
+      include Either_meet_or_join_intf.S
     end)
 : sig
   include Meet_and_join_intf.S
     with type of_kind_foo := T.of_kind_fabricated
-    with type typing_environment := T.typing_environment
     with type env_extension := T.env_extension
+    with type join_env := T.join_env
     with type 'a ty := 'a T.ty
 end

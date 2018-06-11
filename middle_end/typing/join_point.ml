@@ -23,21 +23,20 @@ module T = Flambda_type
    introduction at [Switch] time *)
 
 let parameters_and_body_env uses ~continuation_env_of_definition ~parameters =
-  let first_parameters, remaining_uses =
-    match Continuation_uses.uses uses with
-    | [] -> T.Parameters.create_same_params_no_extension parameters
-    | first_parameters::remaining_uses ->
-      Continuation_uses.Use.parameters first_use, remaining_uses
-  in
-  let env = JE.create continuation_env_of_definition in
-  let joined_parameters =
-    List.fold_left (fun joined_parameters use ->
-        let parameters = Continuation_uses.Use.parameters use in
-        T.Parameters.join env parameters joined_parameters)
-      first_parameters
-      remaining_uses
-  in
-  T.Parameters.meet env parameters joined_parameters
+  match Continuation_uses.uses uses with
+  | [] -> parameters
+  | first_use::remaining_uses ->
+    let first_parameters = Continuation_uses.Use.parameters first_use in
+    let env = JE.create continuation_env_of_definition in
+    let joined_parameters =
+      List.fold_left (fun joined_parameters use ->
+          let parameters = Continuation_uses.Use.parameters use in
+          T.Parameters.join env parameters joined_parameters)
+        first_parameters
+        remaining_uses
+    in
+    T.Parameters.meet ~fresh_name_semantics:Left
+      env parameters joined_parameters
 
 let parameters uses ~continuation_env_of_definition ~parameters =
   let _body_env, parameters =

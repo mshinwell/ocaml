@@ -58,4 +58,21 @@ module type S = sig
       val union_or_inter : t -> t -> t
     end
   end
+
+  module Closure_id : sig
+    module Map : sig
+      type 'a t = 'a Closure_id.Map.t
+
+      val union_or_inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    end
+  end
+
+  type env_extension
+  type join_env
+
+  module Typing_env_extension : sig
+    type t = env_extension
+
+    val meet_or_join : join_env -> t -> t -> t
+  end
 end

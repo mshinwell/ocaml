@@ -18,6 +18,7 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   module Kind = struct
@@ -54,10 +55,19 @@ module Use = struct
 
     let args t =
       match t with
+      | Not_inlinable_or_specialisable _ -> None
+      | Inlinable_and_specialisable args_and_tys
+      | Only_specialisable args_and_tys ->
+        Some (List.map (fun (arg, _ty) -> arg) args_and_tys)
+
+(*
+    let args t =
+      match t with
       | Not_inlinable_or_specialisable _ -> []
       | Inlinable_and_specialisable args_and_tys
       | Only_specialisable args_and_tys ->
         List.map (fun (arg, _ty) -> arg) args_and_tys
+*)
 
     let arg_tys t =
       match t with
@@ -66,6 +76,7 @@ module Use = struct
       | Only_specialisable args_and_tys ->
         List.map (fun (_arg, ty) -> ty) args_and_tys
 
+(*
     let args_with_tys t =
       match t with
       | Not_inlinable_or_specialisable args_tys ->
@@ -73,6 +84,7 @@ module Use = struct
       | Inlinable_and_specialisable args_and_tys
       | Only_specialisable args_and_tys ->
         List.map (fun (arg, ty) -> Some arg, ty) args_and_tys
+*)
 
     let is_inlinable t =
       match t with
@@ -80,34 +92,44 @@ module Use = struct
       | Inlinable_and_specialisable _ -> true
       | Only_specialisable _ -> false
 
+(*
     let is_specialisable t =
       match t with
       | Not_inlinable_or_specialisable _ -> None
       | Inlinable_and_specialisable args_and_tys
       | Only_specialisable args_and_tys -> Some args_and_tys
+*)
   end
 
   type t = {
     kind : Kind.t;
-    env : TE.t;
+    params : T.Parameters.t;
   }
 
-  let print ppf t =
-    Format.fprintf ppf "@[((kind@ %a)@ (env@ %a))@]"
-      Kind.print t.kind
-      TE.print t.env
+  let print ppf { kind; params; } =
+    Format.fprintf ppf "@[((kind@ %a)@ (params@ %a))@]"
+      Kind.print kind
+      T.Parameters.print tarams
+
+  let parameters t = t.params
 
   let args t = Kind.args t.kind
+
+(*
   let arg_tys t = Kind.arg_tys t.kind
   let args_with_tys t = Kind.args_with_tys t.kind
+*)
+
   let is_inlinable t = Kind.is_inlinable t.kind
+
+(*
   let is_specialisable t = Kind.is_specialisable t.kind
-  let typing_env t = t.env
+*)
 end
 
 type t = {
   continuation : Continuation.t;
-  params : Flambda.Typed_parameter.t list;
+  params : T.Parameters.t;
   definition_scope_level : Scope_level.t;
   uses : Use.t list;
 }
@@ -143,8 +165,49 @@ let print ppf t =
     (Format.pp_print_list Use.print) t.uses
 
 let add_use t env kind =
+  let cut_point = Scope_level.next t.definition_scope_level in
+  let env_extension =
+    TE.cut env ~existential_if_defined_at_or_later_than:cut_point
+  in
+  let arity = T.Parameters.arity t.params in
+  let arg_tys = Kind.arg_tys kind in
+  if List.compare_lengths arity arg_tys <> 0 then begin
+    Misc.fatal_errorf "Proposed use of continuation %a doesn't match arity \
+        %a: %a"
+      Continuation.print t.continuation
+      Flambda_arity.print arity
+      Kind.print kind
+  end;
+  let fresh_kinded_params =
+    List.mapi (fun index kind ->
+        let name =
+          Format.asprintf "%a_arg%d"
+            Continuation.print t.continuation
+            index
+        in
+        let param = Parameter.wrap (Variable.create name) in
+        Kinded_parameter.create param kind)
+      arity
+  in
+  let env_extension =
+    match Kind.args kind with
+    | None -> env_extension
+    | Some args_with_tys ->
+      List.fold_left
+        (fun env_extension (fresh_kinded_param, (arg, ty)) ->
+            let kind = Kinded_parameter.kind fresh_kinded_param in
+            assert (Flambda_kind.equal kind (T.kind ty));
+            TEE.add_equation env_extension
+              (Kinded_parameter.name fresh_kinded_param)
+              (T.alias_type_of kind arg))
+        env_extension
+        (List.combine fresh_kinded_params args_with_tys)
+  in
+  let params =
+    T.Parameters.create_with_env_extension fresh_kinded_params env_extension
+  in
   { t with
-    uses = { Use. env; kind; } :: t.uses;
+    uses = { Use. kind; params; } :: t.uses;
   }
 
 let num_uses' t : Num_continuation_uses.t =

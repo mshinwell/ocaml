@@ -24,6 +24,9 @@ module Use : sig
         to record a use using [add_use], below. *)
     type t
 
+    (* CR mshinwell: We might be able to do away with the [Flambda_type.t]
+       parts here *)
+
     (** Describe that a continuation's use is eligible neither for inlining
         nor for specialisation (for example, it might be a [Switch] arm).
         The types of the continuation's parameters, as currently known from
@@ -44,11 +47,11 @@ module Use : sig
        : args_with_tys:(Simple.t * Flambda_type.t) list
       -> t
 
+(*
     (** The arguments seen at the given continuation use.  (If there is no
         information about the arguments, an empty list will be returned.) *)
     val args : t -> Simple.t list
-
-    val parameters -> t -> Flambda_type.Parameters.t
+*)
   end
 
   (** A single use of a continuation. *)
@@ -57,26 +60,31 @@ module Use : sig
   (** Print information about the continuation's use to a formatter. *)
   val print : Format.formatter -> t -> unit
 
+(*
   (** The arguments seen at the given continuation use.  (If there is no
       information about the arguments, an empty list will be returned.) *)
   val args : t -> Simple.t list
+*)
 
+(*
   (** As for [args], but returns the types of the arguments. *)
   val arg_tys : t -> Flambda_type.t list
 
   (** The combination of the results of [args] and [arg_tys]. *)
   val args_with_tys : t -> (Simple.t option * Flambda_type.t) list
+*)
 
   (** Whether the given use is a potential inlining site. *)
   val is_inlinable : t -> bool
 
+(*
   (** Whether the given use is a potential specialisation site.  [None] is
       returned if it is not; otherwise [Some] is returned holding the
       use's arguments with types. *)
   val is_specialisable : t -> (Simple.t * Flambda_type.t) list option
+*)
 
-  (** The typing environment at the continuation's use. *)
-  val typing_env : t -> Flambda_type.Typing_env.t
+  val parameters : t -> Flambda_type.Parameters.t
 end
 
 (** A value of type [t] tracks the call sites of a single continuation. *)
@@ -109,7 +117,7 @@ val uses : t -> Use.t list
 val continuation : t -> Continuation.t
 
 (** The parameters of the continuation tracked by [t]. *)
-val params : t -> Flambda.Typed_parameter.t list
+val params : t -> Flambda_type.Parameters.t
 
 (** The definition scope level of the continuation tracked by [t]. *)
 val definition_scope_level : t -> Scope_level.t
@@ -131,6 +139,6 @@ val linearly_used : t -> bool
 val linearly_used_in_inlinable_position : t -> bool
 
 (* CR mshinwell: check we really need this, and clarify semantics *)
-(** Modify the list of parameters, without affecting the recorded use
+(** Modify the parameter information, without affecting the recorded use
     information, in the given use information structure. *)
-val update_parameters : t -> params:Flambda.Typed_parameter.t list -> t
+val update_parameters : t -> params:Flambda_type.Parameters.t list -> t
