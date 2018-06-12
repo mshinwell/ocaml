@@ -19,6 +19,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
+  val name : string
+
   module Immediate : sig
     module Set : sig
       type t = Immediate.Set.t

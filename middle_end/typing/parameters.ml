@@ -181,7 +181,10 @@ end) = struct
       }
 
   let meet ?fresh_name_semantics env t1 t2 =
-    meet_or_join ?fresh_name_semantics env t1 t2 ~op:TEE.meet
+    meet_or_join ?fresh_name_semantics env t1 t2
+      ~op:(fun join_env env_extension1 env_extension2 ->
+        TEE.meet (JE.central_environment join_env)
+          env_extension1 env_extension2)
 
   let join ?fresh_name_semantics env t1 t2 =
     meet_or_join ?fresh_name_semantics env t1 t2 ~op:TEE.join

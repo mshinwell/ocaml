@@ -2182,12 +2182,14 @@ result
         Meet_and_join_intf.S_for_types
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type flambda_type := flambda_type
     end
   = functor
     (E : Either_meet_or_join_intf.S
-      with type env_extension := env_extension
-      with type join_env := join_env)
+      with type typing_environment := typing_environment
+      with type join_env := join_env
+      with type env_extension := env_extension)
   -> struct
     (* CR mshinwell: Work out which properties we need to prove, e.g.
        Distributivity of meet over join:
@@ -2196,17 +2198,20 @@ result
       (S : Meet_and_join_spec_intf.S
           with type flambda_type := flambda_type
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty)
       ->
         Meet_and_join_intf.S
           with type of_kind_foo := S.of_kind_foo
           with type typing_environment := T.typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
       =
     functor (S : Meet_and_join_spec_intf.S
       with type flambda_type := flambda_type
       with type env_extension := env_extension
+      with type join_env := join_env
       with type 'a ty := 'a ty) ->
     struct
       let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
@@ -2287,14 +2292,14 @@ result
             (* CR mshinwell: The symmetrical cases ("is unknown") should be
                present on the [meet] function, below. *)
           | None ->
-            let alias1 = Name.Set.choose_opt all_aliases1 in
-            let alias2 = Name.Set.choose_opt all_aliases2 in
+            let alias1 = Simple.Set.choose_opt all_aliases1 in
+            let alias2 = Simple.Set.choose_opt all_aliases2 in
             match alias1, alias2 with
-            | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+            | Some simple1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
               (* CR mshinwell: Should we push down the env extension here? *)
-              Equals name1
-            | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
-              Equals name2
+              Equals simple1
+            | _, Some simple2 when unknown_or_join_is_bottom unknown_or_join1 ->
+              Equals simple2
             | None, None ->
               let unknown_or_join =
                 join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
@@ -2333,7 +2338,9 @@ result
                   let of_kind_foos =
                     Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                         let meet =
-                          S.meet_of_kind_foo env of_kind_foo of_kind_foo'
+                          let env = Join_env.create env in
+                          S.meet_or_join_of_kind_foo env
+                            of_kind_foo of_kind_foo'
                         in
                         match meet with
                         | Ok (of_kind_foo, new_env_extension_from_meet') ->
@@ -2342,7 +2349,7 @@ result
                               new_env_extension_from_meet'
                                 !new_env_extension_from_meet;
                           Some of_kind_foo
-                        | Bottom -> None)
+                        | Absorbing -> None)
                       of_kind_foos
                   in
                   let env_extension_from_meet =
@@ -2370,61 +2377,64 @@ result
         if or_alias1 == or_alias2 then begin
           or_alias1, Typing_env_extension.empty
         end else begin
-          let unknown_or_join1, canonical_name1 =
+          let unknown_or_join1, canonical_simple1 =
             Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
               ~force_to_kind:S.force_to_kind
               ~print_ty:S.print_ty
               or_alias1
           in
-          let unknown_or_join2, canonical_name2 =
+          let unknown_or_join2, canonical_simple2 =
             Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
               ~force_to_kind:S.force_to_kind
               ~print_ty:S.print_ty
               or_alias2
           in
-          (* CR mshinwell: When meeting, restrict each environment first to the
-             free names in the corresponding type. *)
-          match canonical_name1, canonical_name2 with
-          | Some name1, Some name2 when Name.equal name1 name2 ->
-            Equals name1, Typing_env_extension.empty
-          | Some name1, Some name2 ->
+          let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
+            match simple with
+            | Name name ->
+              Typing_env_extension.add_equation env_extension name ty
+            | Const _ | Discriminant _ -> env_extension
+          in
+          match canonical_simple1, canonical_simple2 with
+          | Some simple1, Some simple2 when Simple.equal simple1 simple2 ->
+            Equals simple1, Typing_env_extension.empty
+          | Some simple1, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
               meet_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
             let env_extension_from_meet =
-              Typing_env_extension.add_equation env_extension_from_meet
-                name1 meet_ty
+              add_equation_if_on_a_name env_extension_from_meet
+                simple1 meet_ty
             in
             let env_extension_from_meet =
-              Typing_env_extension.add_equation
-                env_extension_from_meet
-                name2 (S.to_type (Equals name1))
+              add_equation_if_on_a_name env_extension_from_meet
+                simple2 (S.to_type (Equals simple1))
             in
-            Equals name1, env_extension_from_meet
-          | Some name1, None ->
+            Equals simple1, env_extension_from_meet
+          | Some simple1, None ->
             let meet_unknown_or_join, env_extension_from_meet =
               meet_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
             let env_extension_from_meet =
-              Typing_env_extension.add_equation env_extension_from_meet
-                name1 meet_ty
+              add_equation_if_on_a_name env_extension_from_meet
+                simple1 meet_ty
             in
-            Equals name1, env_extension_from_meet
-          | None, Some name2 ->
+            Equals simple1, env_extension_from_meet
+          | None, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
               meet_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
             let env_extension_from_meet =
-              Typing_env_extension.add_equation env_extension_from_meet
-                name2 meet_ty
+              add_equation_if_on_a_name env_extension_from_meet
+                simple2 meet_ty
             in
-            Equals name2, env_extension_from_meet
+            Equals simple2, env_extension_from_meet
           | None, None ->
             let unknown_or_join, env_extension_from_meet =
               meet_on_unknown_or_join env
@@ -2708,6 +2718,7 @@ result
     Join_env_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
+      with type join_env := join_env
       with type flambda_type := flambda_type
     = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
   and Parameters :
@@ -2732,6 +2743,8 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
   = struct
+    let name = "meet"
+
     module Immediate = struct
       module Set = struct
         type t = Immediate.Set.t
@@ -2795,6 +2808,8 @@ result
       with type typing_environment := typing_environment
       with type env_extension := env_extension
   end = struct
+    let name = "join"
+
     module Immediate = struct
       module Set = struct
         type t = Immediate.Set.t

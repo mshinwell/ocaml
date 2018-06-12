@@ -241,7 +241,7 @@ module type S = sig
     -> print_ty:(Format.formatter -> 'a ty -> unit)
     -> force_to_kind:(flambda_type -> 'a ty)
     -> 'a ty
-    -> 'a unknown_or_join * (Name.t option)
+    -> 'a unknown_or_join * (Simple.t option)
 
   (** All names (not including the given name) which are known to be aliases
       of the given [Simple.t] in the given environment.  (For [Name]s this
