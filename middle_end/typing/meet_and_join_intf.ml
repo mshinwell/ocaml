@@ -18,21 +18,14 @@
 
 module type S = sig
   type env_extension
+  type typing_environment
   type join_env
 
   type 'a ty
 
   type of_kind_foo
 
-  (* Least upper bound of two types of a particular kind. *)
-  val join_ty
-     : join_env
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-
-  (* Greatest lower bound of two types of a particular kind. *)
-  val meet_ty
+  val meet_or_join_ty
      : join_env
     -> of_kind_foo ty
     -> of_kind_foo ty
@@ -45,18 +38,11 @@ module type S_for_types = sig
   type env_extension
   type join_env
 
-  val meet
+  val meet_or_join
      : join_env
     -> flambda_type
     -> flambda_type
     -> flambda_type * env_extension
-
-  val join
-     : join_env
-    -> join_env
-    -> flambda_type
-    -> flambda_type
-    -> flambda_type
 
   val as_or_more_precise
      : typing_environment

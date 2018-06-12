@@ -2251,554 +2251,525 @@ result
     let get_alias = get_alias
   end
 
-  (* CR mshinwell: Work out which properties we need to prove, e.g.
-     Distributivity of meet over join:
-       X n (X' u Y') == (X n X') u (X n Y'). *)
-  module rec Make_meet_and_join : functor
-       (S : sig
-         include Meet_and_join_spec_intf.S
-           with type flambda_type := flambda_type
-           with type typing_environment := typing_environment
-           with type env_extension := env_extension
-           with type 'a ty := 'a ty
-       end)
-    -> sig
-         include Meet_and_join_intf.S
-           with type of_kind_foo := S.of_kind_foo
-           with type typing_environment := T.typing_environment
-           with type env_extension := env_extension
-           with type 'a ty := 'a ty
-       end =
-  functor (S : sig
-    include Meet_and_join_spec_intf.S
-      with type flambda_type := flambda_type
+  module rec Make_meet_or_join : functor
+    (E : Either_meet_or_join_intf.S
       with type typing_environment := typing_environment
+      with type join_env := join_env
+      with type env_extension := env_extension)
+    ->
+    sig
+      module Meet_and_join : sig
+        include Meet_and_join_intf.S_for_types
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type flambda_type := flambda_type
+      end
+    end
+  = functor
+    (E : Either_meet_or_join_intf.S
       with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end) -> struct
-    let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
-      match uj with
-      | Join [] -> true
-      | Unknown | Join _ -> false
+      with type join_env := join_env)
+  -> struct
+    (* CR mshinwell: Work out which properties we need to prove, e.g.
+       Distributivity of meet over join:
+         X n (X' u Y') == (X n X') u (X n Y'). *)
+    module rec Make_meet_and_join : functor
+      (S : sig
+        include Meet_and_join_spec_intf.S
+          with type flambda_type := flambda_type
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      end)
+      ->
+      sig
+        include Meet_and_join_intf.S
+          with type of_kind_foo := S.of_kind_foo
+          with type typing_environment := T.typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      end =
+    functor (S : sig
+      include Meet_and_join_spec_intf.S
+        with type flambda_type := flambda_type
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type 'a ty := 'a ty
+    end) -> struct
+      let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
+        match uj with
+        | Join [] -> true
+        | Unknown | Join _ -> false
 
-    let rec join_on_unknown_or_join env env_plus_extension1 env_plus_extension2
-          env_extension1 env_extension2
-          (uj1 : S.of_kind_foo unknown_or_join)
-          (uj2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join =
-      if uj1 == uj2 then uj1
-      else
-        match uj1, uj2 with
-        | Unknown, _ | _, Unknown -> Unknown
-        | Join [], Join [] -> Join []
-        | Join of_kind_foos1, Join of_kind_foos2 ->
-          (* We rely on the invariant in flambda_type0_intf.ml.
-             Everything in [of_kind_foos1] is mutually incompatible with each
-             other; likewise in [of_kind_foos2]. *)
-          let of_kind_foos =
-            List.fold_left (fun of_kind_foos of_kind_foo ->
-                (* [of_kind_foo] can be compatible with at most one of the
-                   elements of [of_kind_foos]. *)
-                let found_one = ref false in
-                let joined =
-                  List.map (fun of_kind_foo' ->
-                      let join =
-                        S.join_of_kind_foo env
-                          env_plus_extension1 env_plus_extension2
-                          env_extension1 env_extension2
-                          of_kind_foo of_kind_foo'
-                      in
-                      match join with
-                      | Known of_kind_foo ->
-                        if !found_one then begin
-                          (* CR mshinwell: Add detail showing what was wrong. *)
-                          Misc.fatal_errorf "Invariant broken for [Join]"
-                        end;
-                        found_one := true;
-                        of_kind_foo
-                      | Unknown -> of_kind_foo')
-                    of_kind_foos
-                in
-                if not !found_one then of_kind_foo :: of_kind_foos
-                else joined)
-              of_kind_foos2
-              of_kind_foos1
+      let rec join_on_unknown_or_join env
+            (uj1 : S.of_kind_foo unknown_or_join)
+            (uj2 : S.of_kind_foo unknown_or_join)
+            : S.of_kind_foo unknown_or_join =
+        if uj1 == uj2 then uj1
+        else
+          match uj1, uj2 with
+          | Unknown, _ | _, Unknown -> Unknown
+          | Join [], Join [] -> Join []
+          | Join of_kind_foos1, Join of_kind_foos2 ->
+            (* We rely on the invariant in flambda_type0_intf.ml.
+               Everything in [of_kind_foos1] is mutually incompatible with each
+               other; likewise in [of_kind_foos2]. *)
+            let of_kind_foos =
+              List.fold_left (fun of_kind_foos of_kind_foo ->
+                  (* [of_kind_foo] can be compatible with at most one of the
+                     elements of [of_kind_foos]. *)
+                  let found_one = ref false in
+                  let joined =
+                    List.map (fun of_kind_foo' ->
+                        let join =
+                          S.meet_or_join_of_kind_foo env
+                            of_kind_foo of_kind_foo'
+                        in
+                        match join with
+                        | Known of_kind_foo ->
+                          if !found_one then begin
+                            (* CR mshinwell: Add detail showing what was wrong. *)
+                            Misc.fatal_errorf "Invariant broken for [Join]"
+                          end;
+                          found_one := true;
+                          of_kind_foo
+                        | Unknown -> of_kind_foo')
+                      of_kind_foos
+                  in
+                  if not !found_one then of_kind_foo :: of_kind_foos
+                  else joined)
+                of_kind_foos2
+                of_kind_foos1
+            in
+            Join of_kind_foos
+
+      and join_ty env
+            (or_alias1 : S.of_kind_foo ty) (or_alias2 : S.of_kind_foo ty)
+            : S.of_kind_foo ty =
+        if Join_env.fast_check_extensions_same_both_sides env
+          && or_alias1 == or_alias2
+        then or_alias1
+        else
+          let unknown_or_join1, all_aliases1 =
+            Typing_env.all_aliases_and_squash_unresolved_names_on_ty'
+              (Join_env.environment_on_left env)
+              ~force_to_kind:S.force_to_kind
+              ~print_ty:S.print_ty
+              or_alias1
           in
-          Join of_kind_foos
+          let unknown_or_join2, all_aliases2 =
+            Typing_env.all_aliases_and_squash_unresolved_names_on_ty'
+              (Join_env.environment_on_right env)
+              ~force_to_kind:S.force_to_kind
+              ~print_ty:S.print_ty
+              or_alias2
+          in
+          let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
+          let alias_both_sides = Name.Set.choose_opt all_aliases in
+          match alias_both_sides with
+          | Some name ->
+            assert (Typing_env.mem name (Join_env.central_environment env));
+            Equals name
+            (* CR mshinwell: The symmetrical cases ("is unknown") should be
+               present on the [meet] function, below. *)
+          | None ->
+            let alias1 = Name.Set.choose_opt all_aliases1 in
+            let alias2 = Name.Set.choose_opt all_aliases2 in
+            match alias1, alias2 with
+            | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+              (* CR mshinwell: Should we push down the env extension here? *)
+              Equals name1
+            | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
+              Equals name2
+            | None, None ->
+              let unknown_or_join =
+                join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+              in
+              if unknown_or_join == unknown_or_join1 then begin
+                assert (match or_alias1 with No_alias _ -> true | _ -> false);
+                or_alias1
+              end else if unknown_or_join == unknown_or_join2 then begin
+                assert (match or_alias2 with No_alias _ -> true | _ -> false);
+                or_alias2
+              end else begin
+                No_alias unknown_or_join
+              end
+            | _, _ ->
+              let unknown_or_join =
+                join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+              in
+              No_alias unknown_or_join
 
-    and join_ty join_env
-          (or_alias1 : S.of_kind_foo ty) (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty =
-      if Join_env.fast_check_extensions_same_both_sides join_env
-        && or_alias1 == or_alias2
-      then or_alias1
-      else
-        let unknown_or_join1, all_aliases1 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-            (Join_env.environment_on_left join_env)
-            ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
-            or_alias1
-        in
-        let unknown_or_join2, all_aliases2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-            (Join_env.environment_on_right join_env)
-            ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
-            or_alias2
-        in
-        let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
-        let alias_both_sides = Name.Set.choose_opt all_aliases in
-        match alias_both_sides with
-        | Some name ->
-          assert (Typing_env.mem name (Join_env.joined_environment join_env));
-          Equals name
-          (* CR mshinwell: The symmetrical cases ("is unknown") should be
-             present on the [meet] function, below. *)
-        | None ->
-          let alias1 = Name.Set.choose_opt all_aliases1 in
-          let alias2 = Name.Set.choose_opt all_aliases2 in
-          match alias1, alias2 with
-          | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
-            (* CR mshinwell: Should we push down the env extension here? *)
-            Equals name1
-          | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
-            Equals name2
+      let rec meet_on_unknown_or_join env
+            (ou1 : S.of_kind_foo unknown_or_join)
+            (ou2 : S.of_kind_foo unknown_or_join)
+            : S.of_kind_foo unknown_or_join * env_extension =
+        if ou1 == ou2 then ou1, Typing_env_extension.empty
+        else
+          match ou1, ou2 with
+          | Unknown, ou2 -> ou2, Typing_env_extension.empty
+          | ou1, Unknown -> ou1, Typing_env_extension.empty
+          | Join of_kind_foos1, Join of_kind_foos2 ->
+            let of_kind_foos, env_extension_from_meet =
+              List.fold_left
+                (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
+                  let new_env_extension_from_meet =
+                    ref (Typing_env_extension.empty)
+                  in
+                  let of_kind_foos =
+                    Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
+                        let meet =
+                          S.meet_of_kind_foo env of_kind_foo of_kind_foo'
+                        in
+                        match meet with
+                        | Ok (of_kind_foo, new_env_extension_from_meet') ->
+                          new_env_extension_from_meet :=
+                            Typing_env_extension.meet env
+                              new_env_extension_from_meet'
+                                !new_env_extension_from_meet;
+                          Some of_kind_foo
+                        | Bottom -> None)
+                      of_kind_foos
+                  in
+                  let env_extension_from_meet =
+                    Typing_env_extension.meet env
+                      env_extension_from_meet !new_env_extension_from_meet;
+                  in
+                  of_kind_foos, env_extension_from_meet)
+                (of_kind_foos2, Typing_env_extension.empty)
+                of_kind_foos1
+            in
+            let same_as input_of_kind_foos =
+              List.compare_lengths input_of_kind_foos of_kind_foos = 0
+                && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
+                       input_of_kind_foo == of_kind_foo)
+                     input_of_kind_foos of_kind_foos
+            in
+            if same_as of_kind_foos1 then ou1, env_extension_from_meet
+            else if same_as of_kind_foos2 then ou2, env_extension_from_meet
+            else Join of_kind_foos, env_extension_from_meet
+
+      and meet_ty env
+            (or_alias1 : S.of_kind_foo ty)
+            (or_alias2 : S.of_kind_foo ty)
+            : S.of_kind_foo ty * env_extension =
+        if or_alias1 == or_alias2 then begin
+          or_alias1, Typing_env_extension.empty
+        end else begin
+          let unknown_or_join1, canonical_name1 =
+            Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
+              ~force_to_kind:S.force_to_kind
+              ~print_ty:S.print_ty
+              or_alias1
+          in
+          let unknown_or_join2, canonical_name2 =
+            Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
+              ~force_to_kind:S.force_to_kind
+              ~print_ty:S.print_ty
+              or_alias2
+          in
+          (* CR mshinwell: When meeting, restrict each environment first to the
+             free names in the corresponding type. *)
+          match canonical_name1, canonical_name2 with
+          | Some name1, Some name2 when Name.equal name1 name2 ->
+            Equals name1, Typing_env_extension.empty
+          | Some name1, Some name2 ->
+            let meet_unknown_or_join, env_extension_from_meet =
+              meet_on_unknown_or_join env
+                unknown_or_join1 unknown_or_join2
+            in
+            let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+            let env_extension_from_meet =
+              Typing_env_extension.add_equation env_extension_from_meet
+                name1 meet_ty
+            in
+            let env_extension_from_meet =
+              Typing_env_extension.add_equation
+                env_extension_from_meet
+                name2 (S.to_type (Equals name1))
+            in
+            Equals name1, env_extension_from_meet
+          | Some name1, None ->
+            let meet_unknown_or_join, env_extension_from_meet =
+              meet_on_unknown_or_join env
+                unknown_or_join1 unknown_or_join2
+            in
+            let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+            let env_extension_from_meet =
+              Typing_env_extension.add_equation env_extension_from_meet
+                name1 meet_ty
+            in
+            Equals name1, env_extension_from_meet
+          | None, Some name2 ->
+            let meet_unknown_or_join, env_extension_from_meet =
+              meet_on_unknown_or_join env
+                unknown_or_join1 unknown_or_join2
+            in
+            let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+            let env_extension_from_meet =
+              Typing_env_extension.add_equation env_extension_from_meet
+                name2 meet_ty
+            in
+            Equals name2, env_extension_from_meet
           | None, None ->
-            let unknown_or_join =
-              join_on_unknown_or_join join_env
+            let unknown_or_join, env_extension_from_meet =
+              meet_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
               assert (match or_alias1 with No_alias _ -> true | _ -> false);
-              or_alias1
+              or_alias1, env_extension_from_meet
             end else if unknown_or_join == unknown_or_join2 then begin
               assert (match or_alias2 with No_alias _ -> true | _ -> false);
-              or_alias2
+              or_alias2, env_extension_from_meet
             end else begin
-              No_alias unknown_or_join
+              No_alias unknown_or_join, env_extension_from_meet
             end
-          | _, _ ->
-            let unknown_or_join =
-              join_on_unknown_or_join join_env
-                unknown_or_join1 unknown_or_join2
-            in
-            No_alias unknown_or_join
+        end
 
-    let rec meet_on_unknown_or_join env
-          (ou1 : S.of_kind_foo unknown_or_join)
-          (ou2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join * env_extension =
-      if ou1 == ou2 then ou1, Typing_env_extension.empty
-      else
-        match ou1, ou2 with
-        | Unknown, ou2 -> ou2, Typing_env_extension.empty
-        | ou1, Unknown -> ou1, Typing_env_extension.empty
-        | Join of_kind_foos1, Join of_kind_foos2 ->
-          let of_kind_foos, env_extension_from_meet =
-            List.fold_left
-              (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
-                let new_env_extension_from_meet =
-                  ref (Typing_env_extension.empty)
+      let meet_or_join_ty env or_alias1 or_alias2 =
+        E.switch meet_ty join_ty env or_alias1 or_alias2
+    end and Meet_and_join : sig
+      include Meet_and_join_intf.S_for_types
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type flambda_type := flambda_type
+    end = struct
+      let meet_or_join env t1 t2 : t * env_extension =
+        if Join_env.fast_check_extensions_same_both_sides env
+          && Type_equality.fast_equal t1 t2
+        then t1, Typing_env_extension.empty
+        else begin
+          Join_env.invariant env;
+          ensure_phantomness_matches t1 t2
+            (Printf.sprintf "kind mismatch upon %s" E.name);
+          let descr, equations =
+            match t1.descr, t2.descr with
+            | Value ty_value1, Value ty_value2 ->
+              let ty_value, equations =
+                Meet_and_join_value.meet_or_join_ty
+                  env ty_value1 ty_value2
+              in
+              if ty_value == ty_value1 then t1.descr, equations
+              else if ty_value == ty_value2 then t2.descr, equations
+              else Value ty_value, equations
+            | Naked_number (ty_naked_number1, kind1),
+                Naked_number (ty_naked_number2, kind2) ->
+              let module N = K.Naked_number in
+              begin match kind1, kind2 with
+              | N.Naked_immediate, N.Naked_immediate ->
+                let ty_naked_number, equations =
+                  E.switch
+                    Meet_and_join_naked_immediate.meet_ty
+                    Meet_and_join_naked_immediate.join_ty
+                    env ty_naked_number1 ty_naked_number2
                 in
-                let of_kind_foos =
-                  Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
-                      let meet =
-                        S.meet_of_kind_foo env of_kind_foo of_kind_foo'
-                      in
-                      match meet with
-                      | Ok (of_kind_foo, new_env_extension_from_meet') ->
-                        new_env_extension_from_meet :=
-                          Typing_env_extension.meet env
-                            new_env_extension_from_meet'
-                              !new_env_extension_from_meet;
-                        Some of_kind_foo
-                      | Bottom -> None)
-                    of_kind_foos
+                Naked_number (ty_naked_number, N.Naked_immediate),
+                  equations
+              | N.Naked_float, N.Naked_float ->
+                let ty_naked_number, equations =
+                  E.switch
+                    Meet_and_join_naked_float.meet_ty
+                    Meet_and_join_naked_float.join_ty
+                    env ty_naked_number1 ty_naked_number2
                 in
-                let env_extension_from_meet =
-                  Typing_env_extension.meet env
-                    env_extension_from_meet !new_env_extension_from_meet;
+                Naked_number (ty_naked_number, N.Naked_float),
+                  equations
+              | N.Naked_int32, N.Naked_int32 ->
+                let ty_naked_number, equations =
+                  E.switch
+                    Meet_and_join_naked_int32.meet_ty
+                    Meet_and_join_naked_int32.join_ty
+                    env ty_naked_number1 ty_naked_number2
                 in
-                of_kind_foos, env_extension_from_meet)
-              (of_kind_foos2, Typing_env_extension.empty)
-              of_kind_foos1
-          in
-          let same_as input_of_kind_foos =
-            List.compare_lengths input_of_kind_foos of_kind_foos = 0
-              && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
-                     input_of_kind_foo == of_kind_foo)
-                   input_of_kind_foos of_kind_foos
-          in
-          if same_as of_kind_foos1 then ou1, env_extension_from_meet
-          else if same_as of_kind_foos2 then ou2, env_extension_from_meet
-          else Join of_kind_foos, env_extension_from_meet
-
-    and meet_ty env
-          (or_alias1 : S.of_kind_foo ty)
-          (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty * env_extension =
-      if or_alias1 == or_alias2 then begin
-        or_alias1, Typing_env_extension.empty
-      end else begin
-        let unknown_or_join1, canonical_name1 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
-            ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
-            or_alias1
-        in
-        let unknown_or_join2, canonical_name2 =
-          Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
-            ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
-            or_alias2
-        in
-        (* CR mshinwell: When meeting, restrict each environment first to the
-           free names in the corresponding type. *)
-        match canonical_name1, canonical_name2 with
-        | Some name1, Some name2 when Name.equal name1 name2 ->
-          Equals name1, Typing_env_extension.empty
-        | Some name1, Some name2 ->
-          let meet_unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env
-              unknown_or_join1 unknown_or_join2
-          in
-          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let env_extension_from_meet =
-            Typing_env_extension.add_equation env_extension_from_meet
-              name1 meet_ty
-          in
-          let env_extension_from_meet =
-            Typing_env_extension.add_equation
-              env_extension_from_meet
-              name2 (S.to_type (Equals name1))
-          in
-          Equals name1, env_extension_from_meet
-        | Some name1, None ->
-          let meet_unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env
-              unknown_or_join1 unknown_or_join2
-          in
-          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let env_extension_from_meet =
-            Typing_env_extension.add_equation env_extension_from_meet
-              name1 meet_ty
-          in
-          Equals name1, env_extension_from_meet
-        | None, Some name2 ->
-          let meet_unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env
-              unknown_or_join1 unknown_or_join2
-          in
-          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-          let env_extension_from_meet =
-            Typing_env_extension.add_equation env_extension_from_meet
-              name2 meet_ty
-          in
-          Equals name2, env_extension_from_meet
-        | None, None ->
-          let unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env
-              unknown_or_join1 unknown_or_join2
-          in
-          if unknown_or_join == unknown_or_join1 then begin
-            assert (match or_alias1 with No_alias _ -> true | _ -> false);
-            or_alias1, env_extension_from_meet
-          end else if unknown_or_join == unknown_or_join2 then begin
-            assert (match or_alias2 with No_alias _ -> true | _ -> false);
-            or_alias2, env_extension_from_meet
-          end else begin
-            No_alias unknown_or_join, env_extension_from_meet
-          end
-      end
-  end and Meet_and_join : sig
-    include Meet_and_join_intf.S_for_types
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type flambda_type := flambda_type
-  end = struct
-    let meet env t1 t2 : t * env_extension =
-      if Type_equality.fast_equal t1 t2
-      then t1, Typing_env_extension.empty
-      else begin
-        Typing_env.invariant env;
-        ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
-        let descr, env_extension_from_meet =
-          match t1.descr, t2.descr with
-          | Value ty_value1, Value ty_value2 ->
-            let ty_value, env_extension_from_meet =
-              Meet_and_join_value.meet_ty env ty_value1 ty_value2
-            in
-            if ty_value == ty_value1 then t1.descr, env_extension_from_meet
-            else if ty_value == ty_value2 then t2.descr, env_extension_from_meet
-            else Value ty_value, env_extension_from_meet
-          | Naked_number (ty_naked_number1, kind1),
-              Naked_number (ty_naked_number2, kind2) ->
-            let module N = K.Naked_number in
-            begin match kind1, kind2 with
-            | N.Naked_immediate, N.Naked_immediate ->
-              let ty_naked_number, env_extension_from_meet =
-                Meet_and_join_naked_immediate.meet_ty env
-                  ty_naked_number1 ty_naked_number2
+                Naked_number (ty_naked_number, N.Naked_int32),
+                  equations
+              | N.Naked_int64, N.Naked_int64 ->
+                let ty_naked_number, equations =
+                  E.switch
+                    Meet_and_join_naked_int64.meet_ty
+                    Meet_and_join_naked_int64.join_ty
+                    env ty_naked_number1 ty_naked_number2
+                in
+                Naked_number (ty_naked_number, N.Naked_int64),
+                  equations
+              | N.Naked_nativeint, N.Naked_nativeint ->
+                let ty_naked_number, equations =
+                  E.switch
+                    Meet_and_join_naked_nativeint.meet_ty
+                    Meet_and_join_naked_nativeint.join_ty
+                    env ty_naked_number1 ty_naked_number2
+                in
+                Naked_number (ty_naked_number, N.Naked_nativeint),
+                  equations
+              | _, _ ->
+                Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
+                  E.name
+                  print t1
+                  print t2
+              end
+            | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+              let ty_fabricated, equations =
+                E.switch
+                  Meet_and_join_fabricated.meet_ty
+                  Meet_and_join_fabricated.join_ty
+                  env ty_fabricated1 ty_fabricated2
               in
-              Naked_number (ty_naked_number, N.Naked_immediate),
-                env_extension_from_meet
-            | N.Naked_float, N.Naked_float ->
-              let ty_naked_number, env_extension_from_meet =
-                Meet_and_join_naked_float.meet_ty env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_float),
-                env_extension_from_meet
-            | N.Naked_int32, N.Naked_int32 ->
-              let ty_naked_number, env_extension_from_meet =
-                Meet_and_join_naked_int32.meet_ty env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_int32),
-                env_extension_from_meet
-            | N.Naked_int64, N.Naked_int64 ->
-              let ty_naked_number, env_extension_from_meet =
-                Meet_and_join_naked_int64.meet_ty env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_int64),
-                env_extension_from_meet
-            | N.Naked_nativeint, N.Naked_nativeint ->
-              let ty_naked_number, env_extension_from_meet =
-                Meet_and_join_naked_nativeint.meet_ty env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_nativeint),
-                env_extension_from_meet
-            | _, _ ->
-              Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
+              if ty_fabricated == ty_fabricated1 then
+                t1.descr, equations
+              else if ty_fabricated == ty_fabricated2 then
+                t2.descr, equations
+              else
+                Fabricated ty_fabricated, equations
+            | (Value _ | Naked_number _ | Fabricated _), _ ->
+              Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
+                E.name
                 print t1
                 print t2
-            end
-          | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-            let ty_fabricated, env_extension_from_meet =
-              Meet_and_join_fabricated.meet_ty env
-                ty_fabricated1 ty_fabricated2
-            in
-            if ty_fabricated == ty_fabricated1 then
-              t1.descr, env_extension_from_meet
-            else if ty_fabricated == ty_fabricated2 then
-              t2.descr, env_extension_from_meet
-            else
-              Fabricated ty_fabricated, env_extension_from_meet
-          | (Value _ | Naked_number _ | Fabricated _), _ ->
-            Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
-              print t1
-              print t2
-        in
-        let t =
-          if t1.descr == descr then t1
-          else if t2.descr == descr then t2
-          else { t1 with descr; }
-        in
-        t, env_extension_from_meet
-      end
+          in
+          let t =
+            if t1.descr == descr then t1
+            else if t2.descr == descr then t2
+            else { t1 with descr; }
+          in
+          t, equations
+        end
 
-    let join join_env t1 t2 =
-      if Join_env.fast_check_extensions_same_both_sides joined_env
-        && Type_equality.fast_equal t1 t2
-      then t1
-      else begin
-        ensure_phantomness_matches t1 t2 "kind mismatch upon join";
-        let descr =
-          match t1.descr, t2.descr with
-          | Value ty_value1, Value ty_value2 ->
-            let ty_value =
-              Meet_and_join_value.join_ty join_env ty_value1 ty_value2
-            in
-            if ty_value == ty_value1 then t1.descr
-            else if ty_value == ty_value2 then t2.descr
-            else Value ty_value
-          | Naked_number (ty_naked_number1, kind1),
-              Naked_number (ty_naked_number2, kind2) ->
-            let module N = K.Naked_number in
-            begin match kind1, kind2 with
-            | N.Naked_immediate, N.Naked_immediate ->
-              let ty_naked_number =
-                Meet_and_join_naked_immediate.join_ty join_env
-                  ty_naked_number1 ty_naked_number2
-              in
-              (* CR mshinwell: add phys_equal checks as above *)
-              Naked_number (ty_naked_number, N.Naked_immediate)
-            | N.Naked_float, N.Naked_float ->
-              let ty_naked_number =
-                Meet_and_join_naked_float.join_ty join_env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_float)
-            | N.Naked_int32, N.Naked_int32 ->
-              let ty_naked_number =
-                Meet_and_join_naked_int32.join_ty join_env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_int32)
-            | N.Naked_int64, N.Naked_int64 ->
-              let ty_naked_number =
-                Meet_and_join_naked_int64.join_ty join_env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_int64)
-            | N.Naked_nativeint, N.Naked_nativeint ->
-              let ty_naked_number =
-                Meet_and_join_naked_nativeint.join_ty join_env
-                  ty_naked_number1 ty_naked_number2
-              in
-              Naked_number (ty_naked_number, N.Naked_nativeint)
-            | _, _ ->
-              Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
-                print t1
-                print t2
-            end
-          | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-            let ty_fabricated =
-              Meet_and_join_fabricated.join_ty join_env
-                ty_fabricated1 ty_fabricated2
-            in
-            if ty_fabricated == ty_fabricated1 then t1.descr
-            else if ty_fabricated == ty_fabricated2 then t2.descr
-            else Fabricated ty_fabricated
-          | (Value _ | Naked_number _ | Fabricated _), _ ->
-            Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
-              print t1
-              print t2
-        in
-        { t1 with descr; }
-      end
+      (* XXX These should move elsewhere *)
+      let as_or_more_precise env t1 ~than:t2 =
+        if Type_equality.fast_equal t1 t2 then true
+        else
+          let meet_t, _env_extension = meet env t1 t2 in
+          Type_equality.equal meet_t t1
 
-    let as_or_more_precise env t1 ~than:t2 =
-      if Type_equality.fast_equal t1 t2 then true
-      else
-        let meet_t, _env_extension = meet env t1 t2 in
-        Type_equality.equal meet_t t1
-
-    let strictly_more_precise env t1 ~than:t2 =
-      if Type_equality.fast_equal t1 t2 then false
-      else
-        let meet_t, _env_extension = meet env t1 t2 in
-        Type_equality.equal meet_t t1
-          && not (Type_equality.equal meet_t t2)
-  end and Meet_and_join_value : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := of_kind_value
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Outer_namespace.Meet_and_join_value.Make (T2)
-    (Make_meet_and_join)
-    (Meet_and_join_naked_immediate)
-    (Meet_and_join_naked_float)
-    (Meet_and_join_naked_int32)
-    (Meet_and_join_naked_int64)
-    (Meet_and_join_naked_nativeint)
-    (Meet_and_join_fabricated)
-    (Meet_and_join)
-    (Typing_env)
-    (Typing_env_extension)
-  and Meet_and_join_naked_number : sig
-    (* CR mshinwell: Deal with this signature somehow *)
-
-    module Naked_immediate : sig
-      include Meet_and_join_intf.S
+      let strictly_more_precise env t1 ~than:t2 =
+        if Type_equality.fast_equal t1 t2 then false
+        else
+          let meet_t, _env_extension = meet env t1 t2 in
+          Type_equality.equal meet_t t1
+            && not (Type_equality.equal meet_t t2)
+    end and Meet_for_types :
+      Meet_and_join_intf.S_for_types
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type flambda_type := flambda_type
+      = Meet_and_join_for_types (Meet_operations)
+    and Join_for_types :
+      Meet_and_join_intf.S_for_types
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type flambda_type := flambda_type
+      = Meet_and_join_for_types (Join_operations)
+    end and Meet_and_join_value :
+      Meet_and_join_intf.S
+        with type of_kind_foo := of_kind_value
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type 'a ty := 'a ty
+      = Outer_namespace.Meet_and_join_value.Make (T2)
+          (Make_meet_and_join) (Meet_and_join_naked_immediate)
+          (Meet_and_join_naked_float) (Meet_and_join_naked_int32)
+          (Meet_and_join_naked_int64) (Meet_and_join_naked_nativeint)
+          (Meet_and_join_fabricated) (Meet_and_join)
+          (Typing_env) (Typing_env_extension) (E)
+    and Meet_and_join_naked_number : sig
+      (* CR mshinwell: Deal with this signature somehow *)
+      module Naked_immediate :
+        Meet_and_join_intf.S
+          with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      module Naked_float :
+        Meet_and_join_intf.S
+          with type of_kind_foo :=
+            Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      module Naked_int32 :
+        Meet_and_join_intf.S
+          with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      module Naked_int64 :
+        Meet_and_join_intf.S
+          with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+      module Naked_nativeint :
+        Meet_and_join_intf.S
+          with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+          with type typing_environment := typing_environment
+          with type env_extension := env_extension
+          with type 'a ty := 'a ty
+    end = Outer_namespace.Meet_and_join_naked_number.Make
+      (T2) (Make_meet_and_join) (Meet_and_join) (Typing_env)
+      (Typing_env_extension) (E)
+    and Meet_and_join_naked_immediate :
+      Meet_and_join_intf.S
         with type of_kind_foo := Immediate.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
         with type 'a ty := 'a ty
-    end
-
-    module Naked_float : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo :=
-          Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+      = Meet_and_join_naked_number.Naked_immediate
+    and Meet_and_join_naked_float :
+      (* CR mshinwell: See if we can abstract these naked number cases some
+         more? *)
+      Meet_and_join_intf.S
+        with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
         with type 'a ty := 'a ty
-    end
-
-    module Naked_int32 : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
+      = Meet_and_join_naked_number.Naked_float
+    and Meet_and_join_naked_int32 :
+      Meet_and_join_intf.S
+        with type of_kind_foo := Int32.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
         with type 'a ty := 'a ty
-    end
-
-    module Naked_int64 : sig
-      include Meet_and_join_intf.S
-        with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
+      = Meet_and_join_naked_number.Naked_int32
+    and Meet_and_join_naked_int64 :
+      Meet_and_join_intf.S
+        with type of_kind_foo := Int64.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
         with type 'a ty := 'a ty
-    end
-
-    module Naked_nativeint : sig
-      include Meet_and_join_intf.S
+      = Meet_and_join_naked_number.Naked_int64
+    and Meet_and_join_naked_nativeint :
+      Meet_and_join_intf.S
         with type of_kind_foo := Targetint.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
         with type 'a ty := 'a ty
-    end
-  end = Outer_namespace.Meet_and_join_naked_number.Make (T2)
-    (Make_meet_and_join)
-    (Meet_and_join)
-    (Typing_env)
-    (Typing_env_extension)
-  and Meet_and_join_naked_immediate : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Meet_and_join_naked_number.Naked_immediate
-  and Meet_and_join_naked_float : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Meet_and_join_naked_number.Naked_float
-  and Meet_and_join_naked_int32 : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Int32.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Meet_and_join_naked_number.Naked_int32
-  and Meet_and_join_naked_int64 : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Int64.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Meet_and_join_naked_number.Naked_int64
-  and Meet_and_join_naked_nativeint : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Meet_and_join_naked_number.Naked_nativeint
-  and Meet_and_join_fabricated : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := of_kind_fabricated
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-      with type 'a ty := 'a ty
-  end = Outer_namespace.Meet_and_join_fabricated.Make (T2)
-    (Make_meet_and_join)
-    (Meet_and_join_value)
-    (Meet_and_join)
-    (Typing_env)
-    (Typing_env_extension)
-  and Typing_env : sig
-    include Typing_env_intf.S
+      = Meet_and_join_naked_number.Naked_nativeint
+    and Meet_and_join_fabricated :
+      Meet_and_join_intf.S
+        with type of_kind_foo := of_kind_fabricated
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type 'a ty := 'a ty
+      = Outer_namespace.Meet_and_join_fabricated.Make
+          (T2) (Make_meet_and_join) (Meet_and_join_value) (Meet_and_join)
+          (Typing_env) (Typing_env_extension) (E)
+  and Meet : sig
+    module Meet_and_join :
+      Meet_and_join_intf.S_for_types
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type flambda_type := flambda_type
+  end = Make_meet_or_join (For_meet)
+  and Join : sig
+    module Meet_and_join :
+      Meet_and_join_intf.S_for_types
+        with type typing_environment := typing_environment
+        with type env_extension := env_extension
+        with type flambda_type := flambda_type
+  end = Make_meet_or_join (For_join)
+  and Typing_env :
+    Typing_env_intf.S
       with type typing_environment := typing_environment
       with type typing_environment_entry = typing_environment_entry
       with type env_extension := env_extension
@@ -2806,29 +2777,29 @@ result
       with type t_in_context := t_in_context
       with type 'a ty = 'a ty
       with type 'a unknown_or_join = 'a unknown_or_join
-  end = Outer_namespace.Typing_environment0.Make (T2)
-    (Typing_env_extension) (Meet_and_join) (Type_equality)
-  and Typing_env_extension : sig
-    include Typing_env_extension_intf.S
+    = Outer_namespace.Typing_environment0.Make (T2)
+      (Typing_env_extension) (Meet_and_join) (Type_equality)
+  and Typing_env_extension :
+    Typing_env_extension_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
-  end = Outer_namespace.Typing_env_extension.Make (T2)
-    (Typing_env) (Meet_and_join) (Type_equality)
-  and Type_equality : sig
-    include Type_equality_intf.S
+    = Outer_namespace.Typing_env_extension.Make (T2)
+      (Typing_env) (Meet_for_types) (Type_equality)
+  and Type_equality :
+    Type_equality_intf.S
       with type flambda_type := flambda_type
-  end = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
-  and Join_env : sig
-    include Join_env_intf.S
+    = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
+  and Join_env :
+    Join_env_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
       with type flambda_type := flambda_type
-  end = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
-  and Parameters : sig
-    include Parameters_intf.S
+    = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
+  and Parameters :
+    Parameters_intf.S
       with type parameters := parameters
-  end = Outer_namespace.Parameters.Make (T2)
+    = Outer_namespace.Parameters.Make (T2)
   and T2 : sig
     (* CR mshinwell: [@remove_aliases] can be removed once we rebase to
        4.07 or later (this was here to work around a bug). *)
@@ -2841,13 +2812,141 @@ result
 
     let as_or_more_precise = Meet_and_join.as_or_more_precise
     let strictly_more_precise = Meet_and_join.strictly_more_precise
+  end and For_meet :
+    Either_meet_or_join_intf.S
+      with type join_env := join_env
+      with type typing_environment := typing_environment
+      with type env_extension := env_extension
+  = struct
+    module Immediate = struct
+      module Set = struct
+        type t = Immediate.Set.t
+        let union_or_inter = Immediate.Set.inter
+      end
+    end
+
+    module Float_by_bit_pattern = struct
+      module Set = struct
+        type t = Float_by_bit_pattern.Set.t
+        let union_or_inter = Float_by_bit_pattern.Set.inter
+      end
+    end
+
+    module Int32 = struct
+      module Set = struct
+        type t = Int32.Set.t
+        let union_or_inter = Int32.Set.inter
+      end
+    end
+
+    module Int64 = struct
+      module Set = struct
+        type t = Int64.Set.t
+        let union_or_inter = Int64.Set.inter
+      end
+    end
+
+    module Targetint = struct
+      module Set = struct
+        type t = Targetint.Set.t
+        let union_or_inter = Targetint.Set.inter
+      end
+    end
+
+    module Closure_id = struct
+      module Map = struct
+        type 'a t = 'a Closure_id.Map.t
+
+        let union_or_inter = Closure_id.Map.inter
+
+        let union_or_inter_and_left f t1 t2 = assert false
+      end
+    end
+
+    module Var_within_closure = struct
+      module Map = struct
+        type 'a t = 'a Var_within_closure.Map.t
+
+        let union_or_inter = Var_within_closure.Map.inter
+
+        let union_or_inter_and_left f t1 t2 = assert false
+      end
+    end
+
+    let switch meet _join join_env thing1 thing2 =
+      meet (Join_env.central_environment join_env) thing1 thing2
+  end and For_join : sig
+    include Either_meet_or_join_intf.S
+      with type join_env := join_env
+      with type typing_environment := typing_environment
+      with type env_extension := env_extension
+  end = struct
+    module Immediate = struct
+      module Set = struct
+        type t = Immediate.Set.t
+        let union_or_inter = Immediate.Set.union
+      end
+    end
+
+    module Float_by_bit_pattern = struct
+      module Set = struct
+        type t = Float_by_bit_pattern.Set.t
+        let union_or_inter = Float_by_bit_pattern.Set.union
+      end
+    end
+
+    module Int32 = struct
+      module Set = struct
+        type t = Int32.Set.t
+        let union_or_inter = Int32.Set.union
+      end
+    end
+
+    module Int64 = struct
+      module Set = struct
+        type t = Int64.Set.t
+        let union_or_inter = Int64.Set.union
+      end
+    end
+
+    module Targetint = struct
+      module Set = struct
+        type t = Targetint.Set.t
+        let union_or_inter = Targetint.Set.union
+      end
+    end
+
+    module Closure_id = struct
+      module Map = struct
+        type 'a t = 'a Closure_id.Map.t
+
+        let union_or_inter = Closure_id.Map.union
+
+        let union_or_inter_and_left _f t1 t2 =
+          Closure_id.Map.union t1 t2
+      end
+    end
+
+    module Var_within_closure = struct
+      module Map = struct
+        type 'a t = 'a Var_within_closure.Map.t
+
+        let union_or_inter = Var_within_closure.Map.union
+
+        let union_or_inter_and_left _f t1 t2 =
+          Var_within_closure.Map.union t1 t2
+      end
+    end
+
+    let switch _meet join join_env thing1 thing2 =
+      join join_env thing1 thing2, Typing_env_extension.empty
   end
 
-  let meet = Meet_and_join.meet
-  let join = Meet_and_join.join
+  let meet = Meet.Meet_and_join.meet_or_join
+  let join = Join.Meet_and_join.meet_or_join
 
-  let strictly_more_precise = Meet_and_join.strictly_more_precise
-  let as_or_more_precise = Meet_and_join.as_or_more_precise
+  let strictly_more_precise = Meet.Meet_and_join.strictly_more_precise
+  let as_or_more_precise = Meet.Meet_and_join.as_or_more_precise
 
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal

@@ -91,12 +91,15 @@ module type S = sig
     end
   end
 
-  type env_extension
   type join_env
+  type typing_environment
+  type env_extension
 
-  module Typing_env_extension : sig
-    type t = env_extension
-
-    val meet_or_join : join_env -> t -> t -> t
-  end
+  val switch
+     : (typing_environment -> 'a -> 'a -> 'a * env_extension)
+    -> (join_env -> 'a -> 'a -> 'a)
+    -> join_env
+    -> 'a
+    -> 'a
+    -> 'a * env_extension
 end

@@ -31,7 +31,6 @@ end) (Make_meet_and_join : functor
     (S : sig
       include Meet_and_join_spec_intf.S
         with type flambda_type := T.flambda_type
-        with type typing_environment := T.typing_environment
         with type env_extension := T.env_extension
         with type 'a ty := 'a T.ty
      end)
