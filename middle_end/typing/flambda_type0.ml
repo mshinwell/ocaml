@@ -34,7 +34,7 @@ module Outer_namespace = struct
   module Meet_and_join_value = Meet_and_join_value
   module Meet_and_join_naked_number = Meet_and_join_naked_number
   module Meet_and_join_fabricated = Meet_and_join_fabricated
-  module Paramters = Parameters
+  module Parameters = Parameters
   module Typing_environment0 = Typing_env
   module Typing_env_extension = Typing_env_extension
   module Type_equality = Type_equality
@@ -2144,6 +2144,9 @@ result
     let print_typing_environment_entry = print_typing_environment_entry
     let print_typing_environment = print_typing_environment
     let print_typing_env_extension = print_typing_env_extension
+    let print_parameters = print_parameters
+    let bottom = bottom
+    let alias_type_of = alias_type_of
     let free_names = free_names
     let free_names_set = free_names_set
     let unknown = unknown
@@ -2457,6 +2460,7 @@ result
       include Meet_and_join_intf.S_for_types
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type flambda_type := flambda_type
     end = struct
       let meet_or_join env t1 t2 : t * env_extension =
@@ -2471,8 +2475,7 @@ result
             match t1.descr, t2.descr with
             | Value ty_value1, Value ty_value2 ->
               let ty_value, equations =
-                Meet_and_join_value.meet_or_join_ty
-                  env ty_value1 ty_value2
+                Meet_and_join_value.meet_or_join_ty env ty_value1 ty_value2
               in
               if ty_value == ty_value1 then t1.descr, equations
               else if ty_value == ty_value2 then t2.descr, equations
@@ -2483,46 +2486,36 @@ result
               begin match kind1, kind2 with
               | N.Naked_immediate, N.Naked_immediate ->
                 let ty_naked_number, equations =
-                  E.switch
-                    Meet_and_join_naked_immediate.meet_ty
-                    Meet_and_join_naked_immediate.join_ty
-                    env ty_naked_number1 ty_naked_number2
+                  Meet_and_join_naked_immediate.meet_or_join_ty env
+                    ty_naked_number1 ty_naked_number2
                 in
                 Naked_number (ty_naked_number, N.Naked_immediate),
                   equations
               | N.Naked_float, N.Naked_float ->
                 let ty_naked_number, equations =
-                  E.switch
-                    Meet_and_join_naked_float.meet_ty
-                    Meet_and_join_naked_float.join_ty
-                    env ty_naked_number1 ty_naked_number2
+                  Meet_and_join_naked_float.meet_or_join_ty env
+                    ty_naked_number1 ty_naked_number2
                 in
                 Naked_number (ty_naked_number, N.Naked_float),
                   equations
               | N.Naked_int32, N.Naked_int32 ->
                 let ty_naked_number, equations =
-                  E.switch
-                    Meet_and_join_naked_int32.meet_ty
-                    Meet_and_join_naked_int32.join_ty
-                    env ty_naked_number1 ty_naked_number2
+                  Meet_and_join_naked_int32.meet_or_join_ty env
+                    ty_naked_number1 ty_naked_number2
                 in
                 Naked_number (ty_naked_number, N.Naked_int32),
                   equations
               | N.Naked_int64, N.Naked_int64 ->
                 let ty_naked_number, equations =
-                  E.switch
-                    Meet_and_join_naked_int64.meet_ty
-                    Meet_and_join_naked_int64.join_ty
-                    env ty_naked_number1 ty_naked_number2
+                  Meet_and_join_naked_int64.meet_or_join_ty env
+                    ty_naked_number1 ty_naked_number2
                 in
                 Naked_number (ty_naked_number, N.Naked_int64),
                   equations
               | N.Naked_nativeint, N.Naked_nativeint ->
                 let ty_naked_number, equations =
-                  E.switch
-                    Meet_and_join_naked_nativeint.meet_ty
-                    Meet_and_join_naked_nativeint.join_ty
-                    env ty_naked_number1 ty_naked_number2
+                  Meet_and_join_naked_nativeint.meet_or_join_ty env
+                    ty_naked_number1 ty_naked_number2
                 in
                 Naked_number (ty_naked_number, N.Naked_nativeint),
                   equations
@@ -2534,10 +2527,8 @@ result
               end
             | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
               let ty_fabricated, equations =
-                E.switch
-                  Meet_and_join_fabricated.meet_ty
-                  Meet_and_join_fabricated.join_ty
-                  env ty_fabricated1 ty_fabricated2
+                Meet_and_join_fabricated.meet_or_join_ty env
+                  ty_fabricated1 ty_fabricated2
               in
               if ty_fabricated == ty_fabricated1 then
                 t1.descr, equations
@@ -2558,37 +2549,12 @@ result
           in
           t, equations
         end
-
-      (* XXX These should move elsewhere *)
-      let as_or_more_precise env t1 ~than:t2 =
-        if Type_equality.fast_equal t1 t2 then true
-        else
-          let meet_t, _env_extension = meet env t1 t2 in
-          Type_equality.equal meet_t t1
-
-      let strictly_more_precise env t1 ~than:t2 =
-        if Type_equality.fast_equal t1 t2 then false
-        else
-          let meet_t, _env_extension = meet env t1 t2 in
-          Type_equality.equal meet_t t1
-            && not (Type_equality.equal meet_t t2)
-    end and Meet_for_types :
-      Meet_and_join_intf.S_for_types
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type flambda_type := flambda_type
-      = Meet_and_join_for_types (Meet_operations)
-    and Join_for_types :
-      Meet_and_join_intf.S_for_types
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type flambda_type := flambda_type
-      = Meet_and_join_for_types (Join_operations)
     end and Meet_and_join_value :
       Meet_and_join_intf.S
         with type of_kind_foo := of_kind_value
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Outer_namespace.Meet_and_join_value.Make (T2)
           (Make_meet_and_join) (Meet_and_join_naked_immediate)
@@ -2603,6 +2569,7 @@ result
           with type of_kind_foo := Immediate.Set.t of_kind_naked_number
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
       module Naked_float :
         Meet_and_join_intf.S
@@ -2610,24 +2577,28 @@ result
             Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
       module Naked_int32 :
         Meet_and_join_intf.S
           with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
       module Naked_int64 :
         Meet_and_join_intf.S
           with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
       module Naked_nativeint :
         Meet_and_join_intf.S
           with type of_kind_foo := Targetint.Set.t of_kind_naked_number
           with type typing_environment := typing_environment
           with type env_extension := env_extension
+          with type join_env := join_env
           with type 'a ty := 'a ty
     end = Outer_namespace.Meet_and_join_naked_number.Make
       (T2) (Make_meet_and_join) (Meet_and_join) (Typing_env)
@@ -2637,6 +2608,7 @@ result
         with type of_kind_foo := Immediate.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Meet_and_join_naked_number.Naked_immediate
     and Meet_and_join_naked_float :
@@ -2646,6 +2618,7 @@ result
         with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Meet_and_join_naked_number.Naked_float
     and Meet_and_join_naked_int32 :
@@ -2653,6 +2626,7 @@ result
         with type of_kind_foo := Int32.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Meet_and_join_naked_number.Naked_int32
     and Meet_and_join_naked_int64 :
@@ -2660,6 +2634,7 @@ result
         with type of_kind_foo := Int64.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Meet_and_join_naked_number.Naked_int64
     and Meet_and_join_naked_nativeint :
@@ -2667,6 +2642,7 @@ result
         with type of_kind_foo := Targetint.Set.t of_kind_naked_number
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Meet_and_join_naked_number.Naked_nativeint
     and Meet_and_join_fabricated :
@@ -2674,11 +2650,12 @@ result
         with type of_kind_foo := of_kind_fabricated
         with type typing_environment := typing_environment
         with type env_extension := env_extension
+        with type join_env := join_env
         with type 'a ty := 'a ty
       = Outer_namespace.Meet_and_join_fabricated.Make
           (T2) (Make_meet_and_join) (Meet_and_join_value) (Meet_and_join)
           (Typing_env) (Typing_env_extension) (E)
-  and Meet : sig
+  end and Meet : sig
     module Meet_and_join :
       Meet_and_join_intf.S_for_types
         with type typing_environment := typing_environment
@@ -2707,6 +2684,7 @@ result
     Typing_env_extension_intf.S
       with type env_extension := env_extension
       with type typing_environment := typing_environment
+      with type join_env := join_env
       with type flambda_type := flambda_type
     = Outer_namespace.Typing_env_extension.Make (T2)
       (Typing_env) (Meet_for_types) (Type_equality)
@@ -2874,8 +2852,18 @@ result
   let meet = Meet.Meet_and_join.meet_or_join
   let join = Join.Meet_and_join.meet_or_join
 
-  let strictly_more_precise = Meet.Meet_and_join.strictly_more_precise
-  let as_or_more_precise = Meet.Meet_and_join.as_or_more_precise
+  let as_or_more_precise env t1 ~than:t2 =
+    if Type_equality.fast_equal t1 t2 then true
+    else
+      let meet_t, _env_extension = meet env t1 t2 in
+      Type_equality.equal meet_t t1
+
+  let strictly_more_precise env t1 ~than:t2 =
+    if Type_equality.fast_equal t1 t2 then false
+    else
+      let meet_t, _env_extension = meet env t1 t2 in
+      Type_equality.equal meet_t t1
+        && not (Type_equality.equal meet_t t2)
 
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal

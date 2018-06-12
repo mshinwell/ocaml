@@ -379,7 +379,7 @@ module type S = sig
 
   val bottom : Flambda_kind.t -> t
 
-  val alias_type_of : Flambda_kind.t -> Name.t -> t
+  val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
   val free_names : flambda_type -> Name_occurrences.t
 
@@ -419,8 +419,7 @@ module type S = sig
   val rename_variables : t -> Name.t Name.Map.t -> t
 
   val rename_variables_env_extension
-     : ?for_join:unit
-    -> Name.t Name.Map.t
+     : Name.t Name.Map.t
     -> env_extension
     -> env_extension
 
@@ -432,9 +431,5 @@ module type S = sig
 
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
-  val get_alias : flambda_type -> Name.t option
-
-  val join : join_env -> t -> t -> t
-
-  val join_env_of_typing_env : typing_environment -> join_env
+  val get_alias : flambda_type -> Simple.t option
 end

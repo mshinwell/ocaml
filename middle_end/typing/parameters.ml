@@ -152,7 +152,9 @@ end) = struct
               (T.bottom our_param_kind)
           in
           let fresh_name = Kinded_parameter.name fresh_param in
-          let fresh_name_ty = T.alias_type_of our_param_kind our_name in
+          let fresh_name_ty =
+            T.alias_type_of our_param_kind (Simple.name our_name)
+          in
           TEE.add_equation env_extension fresh_name fresh_name_ty)
         t.env_extension
         (List.combine t.params fresh_params)
