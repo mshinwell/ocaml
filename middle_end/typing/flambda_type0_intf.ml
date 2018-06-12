@@ -324,11 +324,11 @@ module type S = sig
     *)
 
     include Typing_env_intf.S
-      with type typing_environment := typing_environment
-      with type typing_environment_entry := typing_environment_entry
-      with type env_extension := env_extension
-      with type flambda_type := flambda_type
-      with type t_in_context := t_in_context
+      with type T.typing_environment := typing_environment
+      with type T.typing_environment_entry := typing_environment_entry
+      with type T.env_extension := env_extension
+      with type T.flambda_type := flambda_type
+      with type T.t_in_context := t_in_context
   end
 
   module Typing_env_extension : sig

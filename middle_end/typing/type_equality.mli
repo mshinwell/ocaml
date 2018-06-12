@@ -16,14 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make (T : sig
-  include Flambda_type0_internal_intf.S
-end) (Typing_env_extension : sig
-  include Typing_env_extension_intf.S
-    with type env_extension := T.env_extension
-    with type typing_environment := T.typing_environment
-    with type flambda_type := T.flambda_type
-end) : sig
-  include Type_equality_intf.S
-    with type flambda_type := T.flambda_type
-end
+module Make
+    (T : Flambda_type0_internal_intf.S)
+    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+  : Type_equality_intf.S with module T := T

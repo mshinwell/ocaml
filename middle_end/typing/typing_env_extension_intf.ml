@@ -19,12 +19,14 @@
 (** The interface of typing environment extensions. *)
 
 module type S = sig
-  type env_extension
-  type typing_environment
-  type join_env
-  type flambda_type
+  module T : sig
+    type env_extension
+    type typing_environment
+    type join_env
+    type flambda_type
+  end
 
-  type t = env_extension
+  type t = T.env_extension
 
   (** Perform various invariant checks upon the given environment
       extension. *)
@@ -38,7 +40,7 @@ module type S = sig
       form of environment from the extensions; it's just a structural
       comparison. *)
   val equal
-     : equal_type:(flambda_type -> flambda_type -> bool)
+     : equal_type:(T.flambda_type -> T.flambda_type -> bool)
     -> t
     -> t
     -> bool
@@ -55,7 +57,7 @@ module type S = sig
   val add_definition_at_beginning
      : t
     -> Name.t
-    -> flambda_type
+    -> T.flambda_type
     -> t
 
   (** Add an equation (on a name that is either existentially bound in the
@@ -64,7 +66,7 @@ module type S = sig
   val add_equation
      : t
     -> Name.t
-    -> flambda_type
+    -> T.flambda_type
     -> t
 
   val add_cse
@@ -74,18 +76,18 @@ module type S = sig
     -> t
 
   (** Least upper bound of two environment extensions. *)
-  val meet : typing_environment -> t -> t -> t
+  val meet : T.typing_environment -> t -> t -> t
 
   (** Greatest lower bound of two environment extensions. *)
-  val join : join_env -> t -> t -> t
+  val join : T.join_env -> t -> t -> t
 
   val restrict_to_definitions : t -> t
 
   val restrict_names_to_those_occurring_in_types
      : t
-    -> typing_environment
-    -> typing_environment
-    -> flambda_type list
+    -> T.typing_environment
+    -> T.typing_environment
+    -> T.flambda_type list
     -> t
 
   (** [diff t env] computes the environment extension whose bindings are
@@ -93,7 +95,7 @@ module type S = sig
         - do not occur in [env]; or
         - do occur in [env] but where [t] contains a more precise type.
   *)
-  val diff : t -> typing_environment -> t
+  val diff : t -> T.typing_environment -> t
 
   val rename_names : ?for_join:unit -> t -> Name.t Name.Map.t -> t
 end

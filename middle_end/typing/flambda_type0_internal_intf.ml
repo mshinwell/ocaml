@@ -432,4 +432,13 @@ module type S = sig
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
   val get_alias : flambda_type -> Simple.t option
+
+  val print_ty_value
+     : Format.formatter
+    -> ty_value
+    -> unit
+
+  val ty_is_obviously_bottom : 'a ty -> bool
+
+  val force_to_kind_value : t -> of_kind_value ty
 end

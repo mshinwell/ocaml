@@ -2671,13 +2671,7 @@ result
   end = Make_meet_or_join (For_join)
   and Typing_env :
     Typing_env_intf.S
-      with type typing_environment := typing_environment
-      with type typing_environment_entry = typing_environment_entry
-      with type env_extension := env_extension
-      with type flambda_type := flambda_type
-      with type t_in_context := t_in_context
-      with type 'a ty = 'a ty
-      with type 'a unknown_or_join = 'a unknown_or_join
+      with module T := T2
     = Outer_namespace.Typing_environment0.Make (T2)
       (Typing_env_extension) (Meet_and_join) (Type_equality)
   and Typing_env_extension :

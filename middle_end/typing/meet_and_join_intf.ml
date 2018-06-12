@@ -17,42 +17,45 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
-  type env_extension
-  type typing_environment
-  type join_env
-
-  type 'a ty
+  module T : sig
+    type env_extension
+    type typing_environment
+    type join_env
+    type 'a ty
+  end
 
   type of_kind_foo
 
   val meet_or_join_ty
-     : join_env
-    -> of_kind_foo ty
-    -> of_kind_foo ty
-    -> of_kind_foo ty * env_extension
+     : T.join_env
+    -> of_kind_foo T.ty
+    -> of_kind_foo T.ty
+    -> of_kind_foo T.ty * T.env_extension
 end
 
 module type S_for_types = sig
-  type flambda_type
-  type typing_environment
-  type env_extension
-  type join_env
+  module T : sig
+    type flambda_type
+    type typing_environment
+    type env_extension
+    type join_env
+  end
 
   val meet_or_join
-     : join_env
-    -> flambda_type
-    -> flambda_type
-    -> flambda_type * env_extension
+     : T.join_env
+    -> T.flambda_type
+    -> T.flambda_type
+    -> T.flambda_type * T.env_extension
 
   val as_or_more_precise
-     : typing_environment
-    -> flambda_type
-    -> than:flambda_type
+     : T.typing_environment
+    -> T.flambda_type
+    -> than:T.flambda_type
     -> bool
 
   val strictly_more_precise
-     : typing_environment
-    -> flambda_type
-    -> than:flambda_type
+     : T.typing_environment
+    -> T.flambda_type
+    -> than:T.flambda_type
     -> bool
 end
