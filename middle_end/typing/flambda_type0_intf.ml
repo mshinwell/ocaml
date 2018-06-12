@@ -200,11 +200,8 @@ module type S = sig
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
-    params : parameters;
-    code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
-    results : parameters;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -223,24 +220,32 @@ module type S = sig
   (** A function declaration that is not inlinable (typically because the
       code is unknown, possibly due to being deliberately discarded). *)
   and non_inlinable_function_declarations = private {
-    params : parameters;
-    result : parameters;
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and function_declarations = private
-    | Non_inlinable of non_inlinable_function_declarations option
-    | Inlinable of inlinable_function_declaration
+  and function_declarations =
+    | Non_inlinable of non_inlinable_function_declarations
+    | Inlinable of inlinable_function_declaration list
+    (** Any two [function_declaration]s in this list must satisfy
+        [function_declarations_compatible].  (For declarations that do not
+        satisfy this, their join can still be expressed using [Join], from
+        type [unknown_or_join] above.) *)
 
-  (* CR mshinwell: should the closure types contain env_extension? *)
+  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
+     it is an empty type.  If this is changed then [Non_inlinable]'s
+     argument should be an [option]. *)
+  and closure = {
+    function_decls : function_declarations;
+  }
 
-  and closures_entry = private {
+  and closures_entry = {
     set_of_closures : ty_fabricated;
   }
 
-  (** The various closures which flow to a particular program point. *)
-  and closures =
-    closures_entry Closure_id.Map.t
+  and closures = {
+    ty : dependent_function_type;
+    by_closure_id : closures_entry Closure_id.Map.t;
+  }
 
   (* CR-soon mshinwell: Consider migrating closure elements and maybe even
      block fields to use environment extensions. *)
@@ -282,8 +287,9 @@ module type S = sig
     closure_elements : ty_value Var_within_closure.Map.t extensibility;
   }
 
-  and closure = private {
-    function_decls : function_declarations;
+  and dependent_function_type = {
+    params : parameters;
+    results : parameters;
   }
 
   module Name_or_export_id : sig
@@ -557,10 +563,7 @@ module type S = sig
     -> closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
-    -> params:(Parameter.t * t) list
     -> body:expr
-    -> result:t list
-    -> result_env_extension:env_extension
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -575,10 +578,7 @@ module type S = sig
   (** Create a description of a function declaration whose code is unknown.
       The lack of knowledge about the code will prevent inlining. *)
   val create_non_inlinable_function_declaration
-     : params:t list
-    -> result:t list
-    -> result_env_extension:env_extension
-    -> direct_call_surrogate:Closure_id.t option
+     : direct_call_surrogate:Closure_id.t option
     -> function_declarations
 
   (** Create a type of kind [Fabricated] describing a closure in terms of
@@ -598,9 +598,11 @@ module type S = sig
       function. *)
   val closures_entry : set_of_closures:ty_fabricated -> closures_entry
 
-  (** Create a type of kind [Value] describing the given possibilities for
-      closure value. *)
-  val closures : closures_entry Closure_id.Map.t -> t
+  (** Create a type of kind [Value] corresponding to one or more closures. *)
+  val closures
+     : dependent_function_type
+    -> closures_entry Closure_id.Map.t
+    -> t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)

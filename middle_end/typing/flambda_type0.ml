@@ -72,11 +72,11 @@ end) = struct
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
-    | Equals name ->
+    | Equals simple ->
       Format.fprintf ppf "@[(%s=%s %a)@]"
         (Misc_color.bold_red ())
         (Misc_color.reset ())
-        Name.print name
+        Simple.print simple
     | Type export_id ->
       Format.fprintf ppf "@[(%s=export_id%s %a)@]"
         (Misc_color.bold_red ())
@@ -229,9 +229,30 @@ end) = struct
         (print_ty_value_with_cache ~cache))
       (Array.to_list ty_values)
 
-  and print_closures ~cache ppf (closures : closures) =
-    Format.fprintf ppf "@[(Closures@ %a)@]"
-      (Closure_id.Map.print (print_closures_entry ~cache)) closures
+  and print_parameters ~cache ppf { params; env_extension; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(params@ %a)@]@ \
+        @[<hov 1>(env_extension@ %a)@])@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Kinded_parameter.print) params
+      (print_typing_env_extension_with_cache ~cache) env_extension
+
+  and print_dependent_function_type ~cache ppf
+        ({ params; results; } : dependent_function_type) =
+    Format.fprintf ppf
+      "@[<hov 1>(\
+         @[<hov 1>(params@ %a)@]@ \
+         @[<hov 1>(results@ %a)@])@]"
+      (print_parameters ~cache) params
+      (print_parameters ~cache) results
+
+  and print_closures ~cache ppf ({ ty; by_closure_id; } : closures) =
+    Format.fprintf ppf
+      "@[<hov 1>(closures@ \
+         @[<hov 1>(ty@ %a)@]@ \
+         @[<hov 1>(by_closure_id@ %a)@])@]"
+      (print_dependent_function_type ~cache) ty
+      (Closure_id.Map.print (print_closures_entry ~cache)) by_closure_id
 
   and print_closures_entry ~cache ppf (entry : closures_entry) =
     Format.fprintf ppf "@[(set_of_closures@ %a)@]"
@@ -246,11 +267,8 @@ end) = struct
           @[<hov 1>(continuation_param@ %a)@]@ \
           @[<hov 1>(exn_continuation_param@ %a)@]@ \
           @[<hov 1>(is_classic_mode@ %b)@]@ \
-          @[<hov 1>(params@ (%a))@]@ \
           @[<hov 1>(body@ %a)@]@ \
           @[<hov 1>(free_names_in_body@ %a)@]@ \
-          @[<hov 1>(result@ (%a))@]@ \
-          @[<hov 1>(result_env_extension@ (%a))@]@ \
           @[<hov 1>(stub@ %b)@]@ \
           @[<hov 1>(dbg@ %a)@]@ \
           @[<hov 1>(inline@ %a)@]@ \
@@ -264,18 +282,8 @@ end) = struct
         Continuation.print decl.continuation_param
         Continuation.print decl.exn_continuation_param
         decl.is_classic_mode
-        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-          (fun ppf (param, ty) ->
-            Format.fprintf ppf "@[<hov 1>(%a : %a)@]"
-              Parameter.print param
-              (print_with_cache ~cache) ty)) decl.params
         (Expr.print_with_cache ~cache) decl.body
         Name_occurrences.print decl.free_names_in_body
-        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-          (fun ppf ty ->
-            Format.fprintf ppf "%a"
-              print ty)) decl.result
-        (print_typing_env_extension_with_cache ~cache) decl.result_env_extension
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -295,25 +303,19 @@ end) = struct
         (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
       "@[(Non_inlinable@ \
-        @[(result (%a))@]@ \
         @[(direct_call_surrogate %a)@])@]"
-      (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-        (fun ppf ty ->
-          Format.fprintf ppf "%a"
-            (print_with_cache ~cache) ty)) decl.result
       (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
 
   and print_function_declarations ~cache ppf
         (decl : function_declarations) =
     match decl with
-    | Inlinable decl ->
-      print_inlinable_function_declaration_with_cache ~cache ppf decl
+    | Inlinable decls ->
+      Format.fprintf ppf "@[(%a)@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (print_inlinable_function_declaration_with_cache ~cache))
+        decls
     | Non_inlinable decl ->
-      begin match decl with
-      | None -> Format.fprintf ppf "Non_inlinable"
-      | Some decl ->
-        print_non_inlinable_function_declarations ~cache ppf decl
-      end
+      print_non_inlinable_function_declarations ~cache ppf decl
 
   and print_set_of_closures ~cache ppf (set : set_of_closures) =
     Printing_cache.with_cache cache ppf "set" set (fun ppf () ->
@@ -422,7 +424,7 @@ end) = struct
       ~cache:(Printing_cache.create ()) ppf entry
 
   and print_typing_environment_with_cache ~cache ppf
-        ({ resolver = _; names_to_types; cse_to_names; levels_to_entries;
+        ({ resolver = _; aliases; names_to_types; cse; levels_to_entries;
            next_sublevel_by_level = _; were_existentials; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
@@ -451,34 +453,38 @@ end) = struct
             levels_to_entries
         in
         if Name.Set.is_empty were_existentials
-             && Flambda_primitive.With_fixed_value.Map.is_empty cse_to_names
+             && Flambda_primitive.With_fixed_value.Map.is_empty cse
         then
           Format.fprintf ppf
             "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
                 @[<hov 1>(names_to_types@ %a)@]@ \
                 @[<hov 1>(levels_to_entries@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
             (Name.Map.print print_scope_level_and_entry0) names_to_types
             (print_levels_to_entries_with_cache ~cache) levels_to_entries
         else if Name.Set.is_empty were_existentials then
           Format.fprintf ppf
             "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
                 @[<hov 1>(names_to_types@ %a)@]@ \
-                @[<hov 1>(cse_to_names@ %a)@]@ \
+                @[<hov 1>(cse@ %a)@]@ \
                 @[<hov 1>(levels_to_entries@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
             (Name.Map.print print_scope_level_and_entry0) names_to_types
-            (Flambda_primitive.With_fixed_value.Map.print Name.print)
-              cse_to_names
+            (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
             (print_levels_to_entries_with_cache ~cache) levels_to_entries
         else
           Format.fprintf ppf
             "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
                 @[<hov 1>(names_to_types@ %a)@]@ \
-                @[<hov 1>(cse_to_names@ %a)@]@ \
+                @[<hov 1>(cse@ %a)@]@ \
                 @[<hov 1>(levels_to_names@ %a)@]@ \
                 @[<hov 1>(were_existentials@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
             (Name.Map.print print_scope_level_and_entry0) names_to_types
-            (Flambda_primitive.With_fixed_value.Map.print Name.print)
-              cse_to_names
+            (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
             (print_levels_to_entries_with_cache ~cache) levels_to_entries
             Name.Set.print were_existentials)
 
@@ -501,7 +507,7 @@ end) = struct
       print_binding_list first_definitions
       (print_levels_to_entries_with_cache ~cache) at_or_after_cut_point
       print_binding_list last_equations_rev
-      (Flambda_primitive.With_fixed_value.Map.print Name.print) cse
+      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
@@ -515,7 +521,10 @@ end) = struct
     match or_alias with
     | No_alias contents -> free_names_contents contents acc
     | Type _export_id -> acc
-    | Equals name -> Name.Set.add name acc
+    | Equals simple ->
+      match simple with
+      | Name name -> Name.Set.add name acc
+      | Const _ | Discriminant _ -> acc
 
   let free_names_unknown_or_join free_names_contents (o : _ unknown_or_join)
         acc =
@@ -580,12 +589,27 @@ end) = struct
       free_names_ty free_names_of_kind_naked_number n acc
     | Boxed_number (Boxed_nativeint n) ->
       free_names_ty free_names_of_kind_naked_number n acc
-    | Closures closures ->
+    | Closures { ty; by_closure_id; } ->
+      let acc = free_names_dependent_function_type ty acc in
       Closure_id.Map.fold (fun _closure_id (entry : closures_entry) acc ->
           free_names_ty free_names_of_kind_fabricated entry.set_of_closures acc)
-        closures
+        by_closure_id
         acc
     | String _ -> acc
+
+  and free_names_parameters ({ params; env_extension; } : parameters) acc =
+    let free_names_params =
+      Name.Set.of_list (
+        List.map (fun param -> Kinded_parameter.name param) params)
+    in
+    Name.Set.union acc
+      (Name.Set.diff (free_names_of_env_extension env_extension Name.Set.empty)
+        free_names_params)
+
+  and free_names_dependent_function_type
+        ({ params; results; } : dependent_function_type) acc =
+    free_names_parameters params
+      (free_names_parameters results acc)
 
   and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
     match of_kind with
@@ -606,41 +630,7 @@ end) = struct
         (extensibility_contents set.closure_elements) acc
     | Closure closure -> free_names_of_closure closure acc
 
-  and free_names_of_closure (closure : closure) acc =
-    match closure.function_decls with
-    | Inlinable decl ->
-      let param_names =
-        List.fold_left (fun param_names (param, _t) ->
-            let name = Parameter.name param in
-            Name.Set.add name param_names)
-          Name.Set.empty
-          decl.params
-      in
-      let free_names_result =
-        List.fold_left (fun acc t ->
-          free_names t acc)
-          Name.Set.empty
-          decl.result
-      in
-      let free_names_result_env_extension =
-        free_names_of_env_extension decl.result_env_extension Name.Set.empty
-      in
-      let acc =
-        Name.Set.union acc
-          (Name.Set.diff
-            (Name.Set.union free_names_result free_names_result_env_extension)
-            param_names)
-      in
-      List.fold_left (fun acc (_param, t) ->
-          free_names t acc)
-        acc
-        decl.params
-    | Non_inlinable None -> acc
-    | Non_inlinable (Some decls) ->
-      List.fold_left (fun acc t ->
-        free_names t acc)
-        acc
-        decls.result
+  and free_names_of_closure (_closure : closure) acc = acc
 
   and free_names_of_env_extension
         { first_definitions; at_or_after_cut_point; last_equations_rev;
@@ -691,12 +681,16 @@ end) = struct
         last_equations_rev
     in
     let free_names_last_equations_rev_and_cse =
-      Flambda_primitive.With_fixed_value.Map.fold (fun prim name acc ->
-          let acc =
-            Name.Set.union acc
-              (Flambda_primitive.With_fixed_value.free_names prim)
-          in
-          Name.Set.add name acc)
+      Flambda_primitive.With_fixed_value.Map.fold
+        (fun prim (simple : Simple.t) acc ->
+          match simple with
+          | Const _ | Discriminant _ -> acc
+          | Name name ->
+            let acc =
+              Name.Set.union acc
+                (Flambda_primitive.With_fixed_value.free_names prim)
+            in
+            Name.Set.add name acc)
         cse
         free_names_last_equations_rev
     in
@@ -1626,34 +1620,17 @@ result
   let bottom_like t = bottom (kind t)
   let unknown_like t = unknown (kind t)
 
-(*
-  let is_unknown (env, ty) =
-    let ty, _canonical_name = resolve_aliases (env, ty) in
-    match ty.descr with
-    | Value (No_alias Unknown) -> true
-    | Naked_number (No_alias Unknown, _) -> true
-    | Fabricated (No_alias Unknown) -> true
-    | Value _ -> false
-    | Naked_number _ -> false
-    | Fabricated _ -> false
-*)
-
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
-        ~continuation_param ~exn_continuation_param
-        ~params ~body ~result ~result_env_extension ~stub ~dbg ~inline
+        ~continuation_param ~exn_continuation_param ~body ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
         ~my_closure : function_declarations =
-    Inlinable {
+    Inlinable [{
       closure_origin;
       continuation_param;
       exn_continuation_param;
       is_classic_mode;
-      params;
       body;
-      code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      result_env_extension;
-      result;
       stub;
       dbg;
       inline;
@@ -1663,19 +1640,15 @@ result
       size;
       direct_call_surrogate;
       my_closure;
-    }
+    }]
 
-  let create_non_inlinable_function_declaration ~params ~result
-        ~result_env_extension ~direct_call_surrogate
+  let create_non_inlinable_function_declaration ~direct_call_surrogate
         : function_declarations =
     let decl : non_inlinable_function_declarations =
-      { params;
-        result;
-        result_env_extension;
-        direct_call_surrogate;
+      { direct_call_surrogate;
       }
     in
-    Non_inlinable (Some decl)
+    Non_inlinable decl
 
   let closure function_decls : ty_fabricated =
     No_alias (Join [Closure { function_decls; }])
@@ -1683,8 +1656,8 @@ result
   let closures_entry ~set_of_closures : closures_entry =
     { set_of_closures; }
 
-  let closures by_closure_id : t =
-    { descr = Value (No_alias (Join [Closures by_closure_id]));
+  let closures ty by_closure_id : t =
+    { descr = Value (No_alias (Join [Closures { ty; by_closure_id; }]));
       phantom = None;
     }
 
@@ -1724,6 +1697,14 @@ result
     match Name.Map.find name subst with
     | exception Not_found -> name
     | name -> name
+
+  let rename_variables_simple subst (simple : Simple.t) =
+    match simple with
+    | Name name ->
+      let name' = rename_variables_name subst name in
+      if name == name' then simple
+      else Simple.name name'
+    | Const _ | Discriminant _ -> simple
 
   let rename_variables_extensibility rename_contents subst
         (ext : _ extensibility) =
@@ -1767,10 +1748,10 @@ result
       if unknown_or_join == unknown_or_join' then ty
       else No_alias unknown_or_join'
     | Type _ -> ty
-    | Equals name ->
-      let name' = rename_variables_name subst name in
-      if name == name' then ty
-      else Equals name'
+    | Equals simple ->
+      let simple' = rename_variables_simple subst simple in
+      if simple == simple' then ty
+      else Equals simple'
 
   let rename_variables_of_kind_naked_number (type n)
        _subst (of_kind_naked_number : n of_kind_naked_number) =
@@ -1915,14 +1896,61 @@ result
     else
       { env_extension = env_extension'; fields; }
 
-  and rename_variables_closures subst closures =
-    let closures' =
+  and rename_variables_parameters subst
+        (({ params; env_extension; } : parameters) as parameters)
+        : parameters =
+    (* CR mshinwell: Same comment as in the CR in
+       [rename_variables_env_extension] applies here! *)
+    let params_changed = ref false in
+    let params =
+      List.map (fun param ->
+          match Name.Map.find (Kinded_parameter.name param) subst with
+          | exception Not_found -> param
+          | name ->
+            params_changed := true;
+            let new_var =
+              match name with
+              | Var var -> var
+              | _ ->
+                (* CR mshinwell: see CR in kinded_parameter.mli *)
+                assert false
+            in
+            Kinded_parameter.map_var param ~f:(fun _old_var -> new_var))
+        params
+    in
+    let env_extension' =
+      rename_variables_env_extension subst env_extension
+    in
+    if (not !params_changed) && env_extension == env_extension' then
+      parameters
+    else
+      { params;
+        env_extension = env_extension';
+      }
+
+  and rename_variables_dependent_function_type subst
+        (({ params; results; } : dependent_function_type)
+          as dependent_function_type) =
+    let params' = rename_variables_parameters subst params in
+    let results' = rename_variables_parameters subst results in
+    if params == params' && results == results' then dependent_function_type
+    else
+      { params = params';
+        results = results';
+      }
+
+  and rename_variables_closures subst
+        (({ ty; by_closure_id; } : closures) as closures) : closures =
+    let ty' =
+      rename_variables_dependent_function_type subst ty
+    in
+    let by_closure_id' =
       Closure_id.Map.map_sharing (fun closures_entry ->
           rename_variables_closures_entry subst closures_entry)
-        closures
+        by_closure_id
     in
-    if closures == closures' then closures
-    else closures'
+    if ty == ty' && by_closure_id == by_closure_id' then closures
+    else { ty = ty'; by_closure_id = by_closure_id'; }
 
   and rename_variables_closures_entry subst
         (( { set_of_closures; } : closures_entry) as closures_entry)
@@ -2258,12 +2286,11 @@ result
       with type env_extension := env_extension)
     ->
     sig
-      module Meet_and_join : sig
-        include Meet_and_join_intf.S_for_types
+      module Meet_and_join :
+        Meet_and_join_intf.S_for_types
           with type typing_environment := typing_environment
           with type env_extension := env_extension
           with type flambda_type := flambda_type
-      end
     end
   = functor
     (E : Either_meet_or_join_intf.S
@@ -2274,28 +2301,24 @@ result
        Distributivity of meet over join:
          X n (X' u Y') == (X n X') u (X n Y'). *)
     module rec Make_meet_and_join : functor
-      (S : sig
-        include Meet_and_join_spec_intf.S
+      (S : Meet_and_join_spec_intf.S
           with type flambda_type := flambda_type
           with type typing_environment := typing_environment
           with type env_extension := env_extension
-          with type 'a ty := 'a ty
-      end)
+          with type 'a ty := 'a ty)
       ->
-      sig
-        include Meet_and_join_intf.S
+        Meet_and_join_intf.S
           with type of_kind_foo := S.of_kind_foo
           with type typing_environment := T.typing_environment
           with type env_extension := env_extension
           with type 'a ty := 'a ty
-      end =
-    functor (S : sig
-      include Meet_and_join_spec_intf.S
-        with type flambda_type := flambda_type
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type 'a ty := 'a ty
-    end) -> struct
+      =
+    functor (S : Meet_and_join_spec_intf.S
+      with type flambda_type := flambda_type
+      with type typing_environment := typing_environment
+      with type env_extension := env_extension
+      with type 'a ty := 'a ty) ->
+    struct
       let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
         match uj with
         | Join [] -> true

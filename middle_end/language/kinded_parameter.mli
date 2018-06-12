@@ -39,6 +39,8 @@ val kind : t -> Flambda_kind.t
 (** Replace the kind of the given parameter. *)
 val with_kind : t -> Flambda_kind.t -> t
 
+(* CR mshinwell: We should use [Name.t] underneath *)
+
 (** Map the underlying variable of the given parameter. *)
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 

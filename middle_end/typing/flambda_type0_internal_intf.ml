@@ -103,7 +103,7 @@ end) = struct
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
-    | Equals of Name.t
+    | Equals of Simple.t
 
   type 'a extensibility =
     | Open of 'a
@@ -188,7 +188,6 @@ end) = struct
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
     is_classic_mode : bool;
-    code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
@@ -209,16 +208,12 @@ end) = struct
   and function_declarations =
     | Non_inlinable of non_inlinable_function_declarations
     | Inlinable of inlinable_function_declaration list
-    (** Any two [function_declaration]s in this list must satisfy
-        [function_declarations_compatible].  (For declarations that do not
-        satisfy this, their join can still be expressed using [Join], from
-        type [unknown_or_join] above.) *)
 
   (* CR-soon mshinwell: It's not clear that this needs to be a type, since
      it is an empty type.  If this is changed then [Non_inlinable]'s
      argument should be an [option]. *)
   and closure = {
-    function_decls : function_declarations Closure_id.Map.t;
+    function_decls : function_declarations;
   }
 
   and closures_entry = {
@@ -374,6 +369,12 @@ module type S = sig
   val print_typing_env_extension
      : Format.formatter
     -> env_extension
+    -> unit
+
+  val print_parameters
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> parameters
     -> unit
 
   val bottom : Flambda_kind.t -> t

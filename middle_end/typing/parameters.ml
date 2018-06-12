@@ -78,13 +78,8 @@ end) = struct
       env_extension = TEE.empty;
     }
 
-  let print ppf { params; env_extension; } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(params@ %a)@]@ \
-        @[<hov 1>(env_extension@ %a)@])@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Kinded_parameter.print) params
-      TEE.print env_extension
+  let print ppf t =
+    T.print_parameters ~cache:(Printing_cache.create ()) ppf t
 
   let introduce (t : t) env =
     let scope_level = Typing_env.max_level env in
