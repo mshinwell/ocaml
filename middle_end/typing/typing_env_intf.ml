@@ -226,6 +226,15 @@ module type S = sig
     -> t_in_context
     -> flambda_type * (Name.t option)
 
+  (* CR mshinwell: Rename these next two *)
+  val all_aliases_and_squash_unresolved_names_on_ty'
+     : t
+    -> ?bound_name:Name.t
+    -> print_ty:(Format.formatter -> 'a ty -> unit)
+    -> force_to_kind:(flambda_type -> 'a ty)
+    -> 'a ty
+    -> 'a unknown_or_join * Simple.Set.t
+
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t
     -> ?bound_name:Name.t

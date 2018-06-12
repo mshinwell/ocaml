@@ -1909,7 +1909,7 @@ result
           | name ->
             params_changed := true;
             let new_var =
-              match name with
+              match (name : Name.t) with
               | Var var -> var
               | _ ->
                 (* CR mshinwell: see CR in kinded_parameter.mli *)
@@ -2010,115 +2010,9 @@ result
     if function_decls == function_decls' then closure
     else { function_decls = function_decls'; }
 
-  and rename_variables_function_decls subst function_decls =
-    match function_decls with
-    | Non_inlinable None -> function_decls
-    | Non_inlinable (Some non_inlinable) ->
-      let non_inlinable' =
-        rename_variables_non_inlinable_function_decls subst non_inlinable
-      in
-      if non_inlinable == non_inlinable' then function_decls
-      else Non_inlinable (Some non_inlinable')
-    | Inlinable inlinable ->
-      let inlinable' =
-        rename_variables_inlinable_function_decl subst inlinable
-      in
-      if inlinable == inlinable' then function_decls
-      else Inlinable inlinable'
-
-  and rename_variables_non_inlinable_function_decls subst
-        (({ params;
-            result;
-            result_env_extension;
-            direct_call_surrogate = _;
-          } : non_inlinable_function_declarations) as non_inlinable) =
-    let params_changed = ref false in
-    let params' =
-      List.map (fun t ->
-          let t' = rename_variables subst t in
-          if not (t == t') then begin
-            params_changed := true
-          end;
-          t')
-        params
-    in
-    let result_changed = ref false in
-    let result' =
-      List.map (fun t ->
-          let t' = rename_variables subst t in
-          if not (t == t') then begin
-            result_changed := true
-          end;
-          t')
-        result
-    in
-    let result_env_extension' =
-      rename_variables_env_extension subst result_env_extension
-    in
-    if (not !params_changed) && (not !result_changed)
-      && result_env_extension == result_env_extension'
-    then non_inlinable
-    else
-      { non_inlinable with
-        params = params';
-        result = result';
-        result_env_extension = result_env_extension';
-      }
-
-  and rename_variables_inlinable_function_decl subst
-        (({ closure_origin = _;
-            continuation_param = _;
-            exn_continuation_param = _;
-            is_classic_mode = _;
-            params;
-            code_id = _;
-            body = _;
-            free_names_in_body = _;
-            result;
-            result_env_extension;
-            stub = _;
-            dbg = _;
-            inline = _;
-            specialise = _;
-            is_a_functor = _;
-            invariant_params = _;
-            size = _;
-            direct_call_surrogate = _;
-            my_closure = _;
-          } : inlinable_function_declaration) as inlinable)
-        : inlinable_function_declaration =
-    let params_changed = ref false in
-    let params' =
-      List.map (fun (param, t) ->
-          let t' = rename_variables subst t in
-          if not (t == t') then begin
-            params_changed := true
-          end;
-          param, t')
-        params
-    in
-    let result_changed = ref false in
-    let result' =
-      List.map (fun t ->
-          let t' = rename_variables subst t in
-          if not (t == t') then begin
-            result_changed := true
-          end;
-          t')
-        result
-    in
-    let result_env_extension' =
-      rename_variables_env_extension subst result_env_extension
-    in
-    if (not !params_changed) && (not !result_changed)
-      && result_env_extension == result_env_extension'
-    then inlinable
-    else
-      { inlinable with
-        params = params';
-        result = result';
-        result_env_extension = result_env_extension';
-      }
+  and rename_variables_function_decls _subst function_decls =
+    (* CR mshinwell: Be sure it's ok to not traverse any [body] here *)
+    function_decls
 
   and rename_variables_typing_environment_entry subst
         (entry : typing_environment_entry)
@@ -2140,11 +2034,6 @@ result
   and rename_variables_env_extension subst
         ({ first_definitions; at_or_after_cut_point; last_equations_rev;
            cse; } as env_extension) =
-    let for_join =
-      match for_join with
-      | None -> false
-      | Some () -> true
-    in
     let first_definitions_changed = ref false in
     let first_definitions' =
       List.map (fun (name, t) ->
@@ -2195,15 +2084,15 @@ result
     in
     let cse_changed = ref false in
     let cse' =
-      Flambda_primitive.With_fixed_value.Map.fold (fun prim name cse' ->
-          let name' = rename_variables_name subst name in
+      Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
+          let simple' = rename_variables_simple subst simple in
           let prim' =
             Flambda_primitive.With_fixed_value.rename_names prim subst
           in
-          if (not (name == name')) || (not (prim == prim')) then begin
+          if (not (simple == simple')) || (not (prim == prim')) then begin
             cse_changed := true
           end;
-          Flambda_primitive.With_fixed_value.Map.add prim' name' cse')
+          Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
         cse
         Flambda_primitive.With_fixed_value.Map.empty
     in
@@ -2226,15 +2115,17 @@ result
 
   let get_alias t =
     match t.descr with
-    | Value (Equals name) -> Some name
+    | Value (Equals simple) -> Some simple
     | Value _ -> None
-    | Naked_number (Equals name, _) -> Some name
+    | Naked_number (Equals simple, _) -> Some simple
     | Naked_number _ -> None
-    | Fabricated (Equals name, _) -> Some name
+    | Fabricated (Equals simple) -> Some simple
     | Fabricated _ -> None
 
+(*
   (* CR mshinwell: Add comment that this forms an equivalence relation *)
-  let function_declarations_compatible (decl1 : function_declaration)
+  let function_declarations_compatible
+        (decl1 : function_declaration)
         (decl2 : function_declaration) =
     let check (params1 : parameters) (params2 : parameters) =
       let arity1 = Kinded_parameter.arity params1.params in
@@ -2244,6 +2135,7 @@ result
     in
     check decl1.ty.params decl2.ty.params
       && check decl1.ty.result decl2.ty.result
+*)
 
   module T1 = struct
     include T
@@ -2303,7 +2195,6 @@ result
     module rec Make_meet_and_join : functor
       (S : Meet_and_join_spec_intf.S
           with type flambda_type := flambda_type
-          with type typing_environment := typing_environment
           with type env_extension := env_extension
           with type 'a ty := 'a ty)
       ->
@@ -2315,7 +2206,6 @@ result
       =
     functor (S : Meet_and_join_spec_intf.S
       with type flambda_type := flambda_type
-      with type typing_environment := typing_environment
       with type env_extension := env_extension
       with type 'a ty := 'a ty) ->
     struct
@@ -2345,18 +2235,21 @@ result
                   let joined =
                     List.map (fun of_kind_foo' ->
                         let join =
+                          (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
+                             must be a "join" operation. *)
                           S.meet_or_join_of_kind_foo env
                             of_kind_foo of_kind_foo'
                         in
                         match join with
-                        | Known of_kind_foo ->
+                        | Ok (of_kind_foo, _env_extension) ->
                           if !found_one then begin
-                            (* CR mshinwell: Add detail showing what was wrong. *)
+                            (* CR mshinwell: Add detail showing what was
+                               wrong. *)
                             Misc.fatal_errorf "Invariant broken for [Join]"
                           end;
                           found_one := true;
                           of_kind_foo
-                        | Unknown -> of_kind_foo')
+                        | Absorbing -> of_kind_foo')
                       of_kind_foos
                   in
                   if not !found_one then of_kind_foo :: of_kind_foos
@@ -2387,12 +2280,10 @@ result
               ~print_ty:S.print_ty
               or_alias2
           in
-          let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
-          let alias_both_sides = Name.Set.choose_opt all_aliases in
+          let all_aliases = Simple.Set.inter all_aliases1 all_aliases2 in
+          let alias_both_sides = Simple.Set.choose_opt all_aliases in
           match alias_both_sides with
-          | Some name ->
-            assert (Typing_env.mem name (Join_env.central_environment env));
-            Equals name
+          | Some simple -> Equals simple
             (* CR mshinwell: The symmetrical cases ("is unknown") should be
                present on the [meet] function, below. *)
           | None ->
