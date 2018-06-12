@@ -16,105 +16,36 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make (T : sig
-  include Flambda_type0_internal_intf.S
-
-  val print_ty_naked_number
-     : Format.formatter
-    -> 'a ty_naked_number
-    -> unit
-
-  val force_to_kind_naked_immediate
-     : t
-    -> Immediate.Set.t of_kind_naked_number ty
-
-  val force_to_kind_naked_float
-     : t
-    -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number ty
-
-  val force_to_kind_naked_int32
-     : t
-    -> Numbers.Int32.Set.t of_kind_naked_number ty
-
-  val force_to_kind_naked_int64
-     : t
-    -> Numbers.Int64.Set.t of_kind_naked_number ty
-
-  val force_to_kind_naked_nativeint
-     : t
-    -> Targetint.Set.t of_kind_naked_number ty
-end) (Make_meet_and_join :
-       functor (S : sig
-          include Meet_and_join_spec_intf.S
-            with type flambda_type := T.flambda_type
-            with type join_env := T.join_env
-            with type env_extension := T.env_extension
-            with type 'a ty := 'a T.ty
-         end)
-       -> sig
-            include Meet_and_join_intf.S
-              with type of_kind_foo := S.of_kind_foo
-              with type env_extension := T.env_extension
-              with type join_env := T.join_env
-              with type 'a ty := 'a T.ty
-          end)
-     (Meet_and_join : sig
-       include Meet_and_join_intf.S_for_types
-         with type typing_environment := T.typing_environment
-         with type env_extension := T.env_extension
-         with type join_env := T.join_env
-         with type flambda_type := T.flambda_type
-     end)
-  (Typing_env : Typing_env_intf.S with module T := T)
-     (Typing_env_extension : sig
-       include Typing_env_extension_intf.S
-         with type env_extension := T.env_extension
-         with type typing_environment := T.typing_environment
-         with type flambda_type := T.flambda_type
-     end) (E : sig
-       include Either_meet_or_join_intf.S
-        with type env_extension := T.env_extension
-        with type join_env := T.join_env
-     end)
- : sig
-  module Naked_immediate : sig
-    include Meet_and_join_intf.S
+module Make
+    (T : Flambda_type0_internal_intf.S)
+    (Make_meet_and_join :
+       functor (S : Meet_and_join_spec_intf.S with module T := T)
+        -> Meet_and_join_intf.S
+             with module T := T
+             with type of_kind_foo := S.of_kind_foo)
+    (Meet_and_join : Meet_and_join_intf.S_for_types with module T := T)
+    (Typing_env : Typing_env_intf.S with module T := T)
+    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+    (E : Either_meet_or_join_intf.S with module T := T)
+  : sig
+    module Naked_immediate : Meet_and_join_intf.S
+      with module T := T
       with type of_kind_foo := Immediate.Set.t T.of_kind_naked_number
-      with type env_extension := T.env_extension
-      with type join_env := T.join_env
-      with type 'a ty := 'a T.ty
-  end
 
-  module Naked_float : sig
-    include Meet_and_join_intf.S
+    module Naked_float : Meet_and_join_intf.S
+      with module T := T
       with type of_kind_foo :=
         Numbers.Float_by_bit_pattern.Set.t T.of_kind_naked_number
-      with type env_extension := T.env_extension
-      with type join_env := T.join_env
-      with type 'a ty := 'a T.ty
-  end
 
-  module Naked_int32 : sig
-    include Meet_and_join_intf.S
+    module Naked_int32 : Meet_and_join_intf.S
+      with module T := T
       with type of_kind_foo := Numbers.Int32.Set.t T.of_kind_naked_number
-      with type env_extension := T.env_extension
-      with type join_env := T.join_env
-      with type 'a ty := 'a T.ty
-  end
 
-  module Naked_int64 : sig
-    include Meet_and_join_intf.S
+    module Naked_int64 : Meet_and_join_intf.S
+      with module T := T
       with type of_kind_foo := Numbers.Int64.Set.t T.of_kind_naked_number
-      with type env_extension := T.env_extension
-      with type join_env := T.join_env
-      with type 'a ty := 'a T.ty
-  end
 
-  module Naked_nativeint : sig
-    include Meet_and_join_intf.S
+    module Naked_nativeint : Meet_and_join_intf.S
+      with module T := T
       with type of_kind_foo := Targetint.Set.t T.of_kind_naked_number
-      with type env_extension := T.env_extension
-      with type join_env := T.join_env
-      with type 'a ty := 'a T.ty
   end
-end

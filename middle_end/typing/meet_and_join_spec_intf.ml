@@ -19,25 +19,26 @@
 (** The signature of a module that specifies meet and join operations for
     a particular kind of types. *)
 module type S = sig
-  type env_extension
-  type join_env
+  module T : sig
+    type env_extension
+    type join_env
+    type flambda_type
+    type 'a ty
+  end
 
-  type flambda_type
   type of_kind_foo
-
-  type 'a ty
 
   val kind : Flambda_kind.t
 
-  val to_type : of_kind_foo ty -> flambda_type
+  val to_type : of_kind_foo T.ty -> T.flambda_type
 
-  val force_to_kind : flambda_type -> of_kind_foo ty
+  val force_to_kind : T.flambda_type -> of_kind_foo T.ty
 
-  val print_ty : Format.formatter -> of_kind_foo ty -> unit
+  val print_ty : Format.formatter -> of_kind_foo T.ty -> unit
 
   val meet_or_join_of_kind_foo
-     : join_env
+     : T.join_env
     -> of_kind_foo
     -> of_kind_foo
-    -> (of_kind_foo * env_extension) Or_absorbing.t
+    -> (of_kind_foo * T.env_extension) Or_absorbing.t
 end

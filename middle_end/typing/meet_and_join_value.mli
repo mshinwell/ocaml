@@ -19,8 +19,10 @@
 module Make
     (T : Flambda_type0_internal_intf.S)
     (Make_meet_and_join : functor
-      (S : Meet_and_join_spec_intf.S with module T := T
-        -> Meet_and_join_intf.S with module T := T)
+      (S : Meet_and_join_spec_intf.S with module T := T)
+        -> Meet_and_join_intf.S
+             with module T := T
+             with type of_kind_foo := S.of_kind_foo)
     (Meet_and_join_naked_immediate : Meet_and_join_intf.S with module T := T)
     (Meet_and_join_naked_float : Meet_and_join_intf.S with module T := T)
     (Meet_and_join_naked_int32 : Meet_and_join_intf.S with module T := T)

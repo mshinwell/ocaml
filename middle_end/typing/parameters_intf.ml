@@ -22,13 +22,15 @@
 *)
 
 module type S = sig
-  type env_extension
-  type typing_environment
-  type join_env
-  type flambda_type
-  type parameters
+  module T : sig
+    type env_extension
+    type typing_environment
+    type join_env
+    type flambda_type
+    type parameters
+  end
 
-  type t = parameters
+  type t = T.parameters
 
   val invariant : t -> unit
 
@@ -38,10 +40,10 @@ module type S = sig
 
   val create_with_env_extension
      : Kinded_parameter.t list
-    -> env_extension
+    -> T.env_extension
     -> t
 
-  val introduce : t -> typing_environment -> t
+  val introduce : t -> T.typing_environment -> t
 
   val arity : t -> Flambda_arity.t
 
@@ -62,7 +64,7 @@ module type S = sig
   (** Greatest lower bound of two parameter bindings. *)
   val meet
      : ?fresh_name_semantics:fresh_name_semantics
-    -> join_env
+    -> T.join_env
     -> t
     -> t
     -> t
@@ -70,7 +72,7 @@ module type S = sig
   (** Least upper bound of two parameter bindings. *)
   val join
      : ?fresh_name_semantics:fresh_name_semantics
-    -> join_env
+    -> T.join_env
     -> t
     -> t
     -> t

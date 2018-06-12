@@ -333,25 +333,25 @@ module type S = sig
 
   module Typing_env_extension : sig
     include Typing_env_extension_intf.S
-      with type env_extension := env_extension
-      with type typing_environment := typing_environment
-      with type flambda_type := flambda_type
+      with type T.env_extension := env_extension
+      with type T.typing_environment := typing_environment
+      with type T.flambda_type := flambda_type
   end
 
   module Join_env : sig
     include Join_env_intf.S
-      with type join_env := join_env
-      with type env_extension := env_extension
-      with type typing_environment := typing_environment
+      with type T.join_env := join_env
+      with type T.env_extension := env_extension
+      with type T.typing_environment := typing_environment
   end
 
   module Parameters : sig
     include Parameters_intf.S
-      with type env_extension := env_extension
-      with type typing_environment := typing_environment
-      with type join_env := join_env
-      with type flambda_type := flambda_type
-      with type parameters := parameters
+      with type T.env_extension := env_extension
+      with type T.typing_environment := typing_environment
+      with type T.join_env := join_env
+      with type T.flambda_type := flambda_type
+      with type T.parameters := parameters
   end
 
   (** Annotation for functions that may require examination of the current

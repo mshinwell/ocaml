@@ -440,5 +440,15 @@ module type S = sig
 
   val ty_is_obviously_bottom : 'a ty -> bool
 
-  val force_to_kind_value : t -> of_kind_value ty
+  val print_ty_naked_number
+     : Format.formatter
+    -> 'a ty_naked_number
+    -> unit
+
+  val print_ty_fabricated
+     : Format.formatter
+    -> ty_fabricated
+    -> unit
+
+  val is_obviously_bottom : flambda_type -> bool
 end

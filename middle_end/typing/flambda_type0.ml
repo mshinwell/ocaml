@@ -2175,47 +2175,26 @@ result
   end
 
   module rec Make_meet_or_join : functor
-    (E : Either_meet_or_join_intf.S
-      with type typing_environment := typing_environment
-      with type join_env := join_env
-      with type env_extension := env_extension)
-    ->
-    sig
-      module Meet_and_join :
-        Meet_and_join_intf.S_for_types
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type flambda_type := flambda_type
-    end
+    (E : Either_meet_or_join_intf.S with module T := T2)
+      ->
+      sig
+        module Meet_and_join : Meet_and_join_intf.S_for_types
+          with module T := T2
+      end
   = functor
-    (E : Either_meet_or_join_intf.S
-      with type typing_environment := typing_environment
-      with type join_env := join_env
-      with type env_extension := env_extension)
+    (E : Either_meet_or_join_intf.S with module T := T2)
   -> struct
     (* CR mshinwell: Work out which properties we need to prove, e.g.
        Distributivity of meet over join:
          X n (X' u Y') == (X n X') u (X n Y'). *)
     module rec Make_meet_and_join : functor
-      (S : Meet_and_join_spec_intf.S
-          with type flambda_type := flambda_type
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty)
-      ->
+      (S : Meet_and_join_spec_intf.S with module T := T2)
+        ->
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo := S.of_kind_foo
-          with type typing_environment := T.typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
       =
-    functor (S : Meet_and_join_spec_intf.S
-      with type flambda_type := flambda_type
-      with type env_extension := env_extension
-      with type join_env := join_env
-      with type 'a ty := 'a ty) ->
+    functor (S : Meet_and_join_spec_intf.S with module T := T2) ->
     struct
       let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
         match uj with
@@ -2457,11 +2436,7 @@ result
       let meet_or_join_ty env or_alias1 or_alias2 =
         E.switch meet_ty join_ty env or_alias1 or_alias2
     end and Meet_and_join : sig
-      include Meet_and_join_intf.S_for_types
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type flambda_type := flambda_type
+      include Meet_and_join_intf.S_for_types with module T := T2
     end = struct
       let meet_or_join env t1 t2 : t * env_extension =
         if Join_env.fast_check_extensions_same_both_sides env
@@ -2551,11 +2526,8 @@ result
         end
     end and Meet_and_join_value :
       Meet_and_join_intf.S
+        with module T := T2
         with type of_kind_foo := of_kind_value
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
       = Outer_namespace.Meet_and_join_value.Make (T2)
           (Make_meet_and_join) (Meet_and_join_naked_immediate)
           (Meet_and_join_naked_float) (Meet_and_join_naked_int32)
@@ -2566,136 +2538,84 @@ result
       (* CR mshinwell: Deal with this signature somehow *)
       module Naked_immediate :
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
       module Naked_float :
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo :=
             Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
       module Naked_int32 :
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
       module Naked_int64 :
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
       module Naked_nativeint :
         Meet_and_join_intf.S
+          with module T := T2
           with type of_kind_foo := Targetint.Set.t of_kind_naked_number
-          with type typing_environment := typing_environment
-          with type env_extension := env_extension
-          with type join_env := join_env
-          with type 'a ty := 'a ty
     end = Outer_namespace.Meet_and_join_naked_number.Make
       (T2) (Make_meet_and_join) (Meet_and_join) (Typing_env)
       (Typing_env_extension) (E)
     and Meet_and_join_naked_immediate :
       Meet_and_join_intf.S
-        with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = Immediate.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_immediate
     and Meet_and_join_naked_float :
       (* CR mshinwell: See if we can abstract these naked number cases some
          more? *)
       Meet_and_join_intf.S
-        with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_float
     and Meet_and_join_naked_int32 :
       Meet_and_join_intf.S
-        with type of_kind_foo := Int32.Set.t of_kind_naked_number
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = Int32.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_int32
     and Meet_and_join_naked_int64 :
       Meet_and_join_intf.S
-        with type of_kind_foo := Int64.Set.t of_kind_naked_number
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = Int64.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_int64
     and Meet_and_join_naked_nativeint :
       Meet_and_join_intf.S
-        with type of_kind_foo := Targetint.Set.t of_kind_naked_number
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = Targetint.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_nativeint
     and Meet_and_join_fabricated :
       Meet_and_join_intf.S
-        with type of_kind_foo := of_kind_fabricated
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type join_env := join_env
-        with type 'a ty := 'a ty
+        with module T := T2
+        with type of_kind_foo = of_kind_fabricated
       = Outer_namespace.Meet_and_join_fabricated.Make
           (T2) (Make_meet_and_join) (Meet_and_join_value) (Meet_and_join)
           (Typing_env) (Typing_env_extension) (E)
   end and Meet : sig
-    module Meet_and_join :
-      Meet_and_join_intf.S_for_types
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type flambda_type := flambda_type
+    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
   end = Make_meet_or_join (For_meet)
   and Join : sig
-    module Meet_and_join :
-      Meet_and_join_intf.S_for_types
-        with type typing_environment := typing_environment
-        with type env_extension := env_extension
-        with type flambda_type := flambda_type
+    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
   end = Make_meet_or_join (For_join)
   and Typing_env :
-    Typing_env_intf.S
-      with module T := T2
-    = Outer_namespace.Typing_environment0.Make (T2)
-      (Typing_env_extension) (Meet_and_join) (Type_equality)
+    Typing_env_intf.S with module T := T2
+      = Outer_namespace.Typing_environment0.Make (T2)
+        (Typing_env_extension) (Meet_and_join) (Type_equality)
   and Typing_env_extension :
-    Typing_env_extension_intf.S
-      with type env_extension := env_extension
-      with type typing_environment := typing_environment
-      with type join_env := join_env
-      with type flambda_type := flambda_type
-    = Outer_namespace.Typing_env_extension.Make (T2)
-      (Typing_env) (Meet_for_types) (Type_equality)
+    Typing_env_extension_intf.S with module T := T2
+      = Outer_namespace.Typing_env_extension.Make (T2)
+        (Typing_env) (Meet_for_types) (Type_equality)
   and Type_equality :
-    Type_equality_intf.S
-      with type flambda_type := flambda_type
-    = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
+    Type_equality_intf.S with module T := T2
+      = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
   and Join_env :
-    Join_env_intf.S
-      with type env_extension := env_extension
-      with type typing_environment := typing_environment
-      with type join_env := join_env
-      with type flambda_type := flambda_type
+    Join_env_intf.S with module T := T2
     = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
   and Parameters :
-    Parameters_intf.S
-      with type parameters := parameters
+    Parameters_intf.S with module T := T2
     = Outer_namespace.Parameters.Make (T2)
   and T2 : sig
     (* CR mshinwell: [@remove_aliases] can be removed once we rebase to
@@ -2709,11 +2629,7 @@ result
 
     let as_or_more_precise = Meet_and_join.as_or_more_precise
     let strictly_more_precise = Meet_and_join.strictly_more_precise
-  end and For_meet :
-    Either_meet_or_join_intf.S
-      with type join_env := join_env
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
+  end and For_meet : Either_meet_or_join_intf.S with module T := T2
   = struct
     let name = "meet"
 
@@ -2774,12 +2690,8 @@ result
 
     let switch meet _join join_env thing1 thing2 =
       meet (Join_env.central_environment join_env) thing1 thing2
-  end and For_join : sig
-    include Either_meet_or_join_intf.S
-      with type join_env := join_env
-      with type typing_environment := typing_environment
-      with type env_extension := env_extension
-  end = struct
+  end and For_join : Either_meet_or_join_intf.S with module T := T2
+  = struct
     let name = "join"
 
     module Immediate = struct
