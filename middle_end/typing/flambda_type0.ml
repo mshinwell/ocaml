@@ -2648,7 +2648,7 @@ result
           (Typing_env) (Both_meet_and_join) (Type_equality) (Join_env)
   and Type_equality :
     Type_equality_intf.S with module T := T2
-      = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
+      = Outer_namespace.Type_equality.Make (T2) (Expr) (Typing_env_extension)
   and Join_env :
     Join_env_intf.S with module T := T2
     = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)

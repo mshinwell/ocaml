@@ -188,6 +188,10 @@ end) = struct
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
     is_classic_mode : bool;
+    (* CR-soon mshinwell: We may need some kind of identifier to help us
+       stop comparing [expr]s in the intermediate world before "let code".
+       We should find out how often we do such comparisons before adding
+       such identifier, though. *)
     body : expr;
     free_names_in_body : Name_occurrences.t;
     stub : bool;

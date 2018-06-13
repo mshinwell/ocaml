@@ -24,8 +24,5 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 (** The type system is parameterised over the expression language. *)
-module Make (Expr : sig
-  type t
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val free_names : t -> Name_occurrences.t
-end) : Flambda_type0_intf.S with type expr = Expr.t
+module Make (Expr : Expr_intf.S with type flambda_type := Flambda_type.t)
+  : Flambda_type0_intf.S with type expr = Expr.t

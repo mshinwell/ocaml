@@ -19,14 +19,13 @@
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
-module Make (T : sig
-  include Flambda_type0_internal_intf.S
-end) (Typing_env_extension : sig
-  include Typing_env_extension_intf.S
-    with type env_extension := T.env_extension
-    with type typing_environment := T.typing_environment
-    with type flambda_type := T.flambda_type
-end) = struct
+module Make
+    (T : Flambda_type0_internal_intf.S)
+    (Expr : Expr_intf.S
+      with type flambda_type := T.flambda_type
+      with type t := T.expr)
+    (Typing_env_extension : Typing_env_extension_intf.S with module T := T) =
+struct
   open T
 
   let fast_equal (t1 : t) (t2 : t) =
@@ -46,7 +45,7 @@ end) = struct
     | No_alias contents1, No_alias contents2 ->
       equal_contents contents1 contents2
     | Type export_id1, Type export_id2 -> Export_id.equal export_id1 export_id2
-    | Equals name1, Equals name2 -> Name.equal name1 name2
+    | Equals simple1, Equals simple2 -> Simple.equal simple1 simple2
     | (No_alias _ | Type _ | Equals _), _ -> false
 
   let equal_extensibility equal_contents
@@ -177,91 +176,71 @@ end) = struct
         (decl1 : function_declarations)
         (decl2 : function_declarations) =
     match decl1, decl2 with
-    | Inlinable {
-        closure_origin = closure_origin1;
-        continuation_param = continuation_param1;
-        exn_continuation_param = exn_continuation_param1;
-        is_classic_mode = is_classic_mode1;
-        params = params1;
-        code_id = code_id1;
-        body = _;
-        free_names_in_body = _;
-        result = result1;
-        result_env_extension = result_env_extension1;
-        stub = stub1;
-        dbg = dbg1;
-        inline = inline1;
-        specialise = specialise1;
-        is_a_functor = is_a_functor1;
-        invariant_params = invariant_params1;
-        size = size1;
-        direct_call_surrogate = direct_call_surrogate1;
-        my_closure = my_closure1;
-      },
-      Inlinable {
-        closure_origin = closure_origin2;
-        continuation_param = continuation_param2;
-        exn_continuation_param = exn_continuation_param2;
-        is_classic_mode = is_classic_mode2;
-        params = params2;
-        code_id = code_id2;
-        body = _;
-        free_names_in_body = _;
-        result = result2;
-        result_env_extension = result_env_extension2;
-        stub = stub2;
-        dbg = dbg2;
-        inline = inline2;
-        specialise = specialise2;
-        is_a_functor = is_a_functor2;
-        invariant_params = invariant_params2;
-        size = size2;
-        direct_call_surrogate = direct_call_surrogate2;
-        my_closure = my_closure2;
-      } ->
-      Closure_origin.equal closure_origin1 closure_origin2
-        && Continuation.equal continuation_param1 continuation_param2
-        && Continuation.equal exn_continuation_param1 exn_continuation_param2
-        && Pervasives.compare is_classic_mode1 is_classic_mode2 = 0
-        && Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
-            Parameter.equal param1 param2 && equal t1 t2)
-          params1 params2
-        && Code_id.equal code_id1 code_id2
-        && Misc.Stdlib.List.equal equal result1 result2
-        && equal_env_extension result_env_extension1 result_env_extension2
-        && Pervasives.compare stub1 stub2 = 0
-        && Debuginfo.equal dbg1 dbg2
-        && Pervasives.compare inline1 inline2 = 0
-        && Pervasives.compare specialise1 specialise2 = 0
-        && Pervasives.compare is_a_functor1 is_a_functor2 = 0
-        && Variable.Set.equal (Lazy.force invariant_params1)
-             (Lazy.force invariant_params2)
-        && Misc.Stdlib.Option.equal Numbers.Int.equal
-             (Lazy.force size1) (Lazy.force size2)
-        && Misc.Stdlib.Option.equal Closure_id.equal
-          direct_call_surrogate1 direct_call_surrogate2
-        && Variable.equal my_closure1 my_closure2
-    | Non_inlinable None, Non_inlinable None -> true
-    | Non_inlinable None, Non_inlinable (Some _)
-    | Non_inlinable (Some _), Non_inlinable None -> false
-    | Non_inlinable (Some {
-        params = params1;
-        result = result1;
-        result_env_extension = result_env_extension1;
+    | Inlinable decls1, Inlinable decls2 ->
+      (* CR-soon mshinwell: It doesn't seem great that these lists are
+         ordered. *)
+      List.for_all2 (fun
+          { closure_origin = closure_origin1;
+            continuation_param = continuation_param1;
+            exn_continuation_param = exn_continuation_param1;
+            is_classic_mode = is_classic_mode1;
+            body = body1;
+            free_names_in_body = free_names_in_body1;
+            stub = stub1;
+            dbg = dbg1;
+            inline = inline1;
+            specialise = specialise1;
+            is_a_functor = is_a_functor1;
+            invariant_params = invariant_params1;
+            size = size1;
+            direct_call_surrogate = direct_call_surrogate1;
+            my_closure = my_closure1;
+          }
+          { closure_origin = closure_origin2;
+            continuation_param = continuation_param2;
+            exn_continuation_param = exn_continuation_param2;
+            is_classic_mode = is_classic_mode2;
+            body = body2;
+            free_names_in_body = free_names_in_body2;
+            stub = stub2;
+            dbg = dbg2;
+            inline = inline2;
+            specialise = specialise2;
+            is_a_functor = is_a_functor2;
+            invariant_params = invariant_params2;
+            size = size2;
+            direct_call_surrogate = direct_call_surrogate2;
+            my_closure = my_closure2;
+          } ->
+        Closure_origin.equal closure_origin1 closure_origin2
+          && Continuation.equal continuation_param1 continuation_param2
+          && Continuation.equal exn_continuation_param1 exn_continuation_param2
+          && Pervasives.compare is_classic_mode1 is_classic_mode2 = 0
+          && Pervasives.compare stub1 stub2 = 0
+          && Debuginfo.equal dbg1 dbg2
+          && Pervasives.compare inline1 inline2 = 0
+          && Pervasives.compare specialise1 specialise2 = 0
+          && Pervasives.compare is_a_functor1 is_a_functor2 = 0
+          && Variable.Set.equal (Lazy.force invariant_params1)
+               (Lazy.force invariant_params2)
+          && Misc.Stdlib.Option.equal Numbers.Int.equal
+               (Lazy.force size1) (Lazy.force size2)
+          && Misc.Stdlib.Option.equal Closure_id.equal
+            direct_call_surrogate1 direct_call_surrogate2
+          && Variable.equal my_closure1 my_closure2
+          (* We try to find differences in free variables (and indeed anything
+             else first) to avoid comparing terms. *)
+          && Name_occurrences.equal free_names_in_body1 free_names_in_body2
+          && Expr.equal ~equal_type:equal body1 body2)
+        decls1 decls2
+    | Non_inlinable ({
         direct_call_surrogate = direct_call_surrogate1;
       }),
-      Non_inlinable (Some {
-        params = params2;
-        result = result2;
-        result_env_extension = result_env_extension2;
+      Non_inlinable ({
         direct_call_surrogate = direct_call_surrogate2;
       }) ->
-      Misc.Stdlib.List.equal (fun param1 param2 -> equal param1 param2)
-          params1 params2
-        && Misc.Stdlib.List.equal equal result1 result2
-        && equal_env_extension result_env_extension1 result_env_extension2
-        && Misc.Stdlib.Option.equal Closure_id.equal
-          direct_call_surrogate1 direct_call_surrogate2
+      Misc.Stdlib.Option.equal Closure_id.equal
+        direct_call_surrogate1 direct_call_surrogate2
     | Inlinable _, Non_inlinable _
     | Non_inlinable _, Inlinable _ -> false
 
@@ -270,8 +249,11 @@ end) = struct
         ({ set_of_closures = set_of_closures2; } : closures_entry) =
     equal_ty_fabricated set_of_closures1 set_of_closures2
 
-  and equal_closures closures1 closures2 =
-    Closure_id.Map.equal equal_closures_entry closures1 closures2
+  and equal_closures
+        ({ ty = ty1; by_closure_id = by_closure_id1; } : closures)
+        ({ ty = ty2; by_closure_id = by_closure_id2; } : closures) =
+    equal_dependent_function_type ty1 ty2
+      && Closure_id.Map.equal equal_closures_entry by_closure_id1 by_closure_id2
 
   and equal_of_kind_naked_number : type a b.
     a of_kind_naked_number -> b of_kind_naked_number -> bool =
@@ -323,4 +305,15 @@ end) = struct
 
   and equal_env_extension env_extension1 env_extension2 =
     Typing_env_extension.equal ~equal_type:equal env_extension1 env_extension2
+
+  and equal_parameters
+        ({ params = params1; env_extension = env_extension1; } : parameters)
+        ({ params = params2; env_extension = env_extension2; } : parameters) =
+    Misc.Stdlib.List.equal Kinded_parameter.equal params1 params2
+      && equal_env_extension env_extension1 env_extension2
+
+  and equal_dependent_function_type
+        ({ params = params1; results = results1; } : dependent_function_type)
+        ({ params = params2; results = results2; } : dependent_function_type) =
+    equal_parameters params1 params2 && equal_parameters results1 results2
 end

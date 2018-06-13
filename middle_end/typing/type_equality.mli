@@ -18,5 +18,8 @@
 
 module Make
     (T : Flambda_type0_internal_intf.S)
+    (Expr : Expr_intf.S
+      with type flambda_type := T.flambda_type
+      with type t := T.expr)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
   : Type_equality_intf.S with module T := T
