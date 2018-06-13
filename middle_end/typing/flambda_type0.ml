@@ -2676,6 +2676,9 @@ result
   = struct
     let name = "meet"
 
+    let unknown_is_identity = true
+    let unknown_is_absorbing = false
+
     module Immediate = struct
       module Set = struct
         type t = Immediate.Set.t
@@ -2739,6 +2742,9 @@ result
   end and For_join : Either_meet_or_join_intf.S with module T := T2
   = struct
     let name = "join"
+
+    let unknown_is_identity = false
+    let unknown_is_absorbing = true
 
     module Immediate = struct
       module Set = struct

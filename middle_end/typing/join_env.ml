@@ -14,33 +14,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : sig
-  include Flambda_type0_internal_intf.S
-end) (Typing_env : sig
-  include Typing_env_intf.S
-    with type typing_environment := T.typing_environment
-    with type env_extension := T.env_extension
-    with type flambda_type := T.flambda_type
-    with type t_in_context := T.t_in_context
-    with type 'a ty := 'a T.ty
-    with type 'a unknown_or_join := 'a T.unknown_or_join
-end) (Typing_env_extension : sig
-  include Typing_env_extension_intf.S
-    with type env_extension := T.env_extension
-    with type typing_environment := T.typing_environment
-    with type flambda_type := T.flambda_type
-    with type join_env := T.join_env
-end) = struct
+module Make
+  (T : Flambda_type0_internal_intf.S)
+  (Typing_env : Typing_env_intf.S with module T := T)
+  (Typing_env_extension : Typing_env_extension_intf.S with module T := T) =
+struct
   open T
 
   module TE = Typing_env
   module TEE = Typing_env_extension
-
-  type typing_environment = TE.t
-  type env_extension = TEE.t
-  type join_env = T.join_env
 
   type t = join_env
 
@@ -55,15 +39,7 @@ end) = struct
   let invariant _t =
     ()
 
-  let add_extensions t ~meet_or_join_env_extension ~holds_on_left
-        ~holds_on_right =
-    let holds_in_meet_or_join =
-      meet_or_join_env_extension t holds_on_left holds_on_right
-    in
-    let env =
-      TE.add_or_meet_env_extension t.env holds_in_meet_or_join
-        (TE.max_level t.env)
-    in
+  let add_extensions t ~holds_on_left ~holds_on_right =
     let env_plus_extension1 =
       TE.add_or_meet_env_extension t.env_plus_extension1 holds_on_left
         (TE.max_level t.env)
@@ -83,18 +59,16 @@ end) = struct
     }
     in
     invariant t;
-    t, holds_in_meet_or_join
+    t
 
-  let add_extensions_and_return_meet t ~holds_on_left ~holds_on_right =
-    add_extensions t
-      ~meet_or_join_env_extension:(fun t extension1 extension2 ->
-        Typing_env_extension.meet t.env extension1 extension2)
-      ~holds_on_left ~holds_on_right
-
-  let add_extensions_and_return_join t ~holds_on_left ~holds_on_right =
-    add_extensions t
-      ~meet_or_join_env_extension:Typing_env_extension.join
-      ~holds_on_left ~holds_on_right
+  let add_extensions_and_extend_central_environment t
+        ~holds_on_left ~holds_on_right ~central_extension =
+    let env =
+      TE.add_or_meet_env_extension t.env central_extension (T.max_level t.env)
+    in
+    let t = { t with env; } in
+    invariant t;
+    add_extensions t ~holds_on_left ~holds_on_right
 
   let environment t = t.env
 

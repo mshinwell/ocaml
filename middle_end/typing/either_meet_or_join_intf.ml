@@ -21,6 +21,9 @@
 module type S = sig
   val name : string
 
+  val unknown_is_identity : bool
+  val unknown_is_absorbing : bool
+
   module Immediate : sig
     module Set : sig
       type t = Immediate.Set.t

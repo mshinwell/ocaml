@@ -93,11 +93,14 @@ struct
              fields = fields2;
            } : singleton_block)
           : singleton_block * env_extension =
-      let env, env_extension =
-        JE.add_extensions_and_return_meet_or_join
-          env
+      let env_extension =
+        E.switch' TEE.meet TEE.join env env_extension1 env_extension2
+      in
+      let env =
+        JE.add_extensions_and_extend_central_environment env
           ~holds_on_left:env_extension1
           ~holds_on_right:env_extension2
+          ~central_extension:env_extension
       in
       assert (Array.length fields1 = Array.length fields2);
       let equations = ref TEE.empty in
@@ -109,7 +112,7 @@ struct
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
               let field, new_equations =
-                E.Flambda_type.meet_or_join env field1 field2
+                E.switch Meet_or_join.meet Meet_or_join.join env field1 field2
               in
               equations :=
                 TEE.meet (JE.central_environment env)
@@ -199,9 +202,9 @@ struct
           blocks2, TEE.empty
         | _, Unknown when E.unknown_is_identity ->
           blocks1, TEE.empty
-        | Unknown, _ when E.unknown_is_bottom ->
+        | Unknown, _ when E.unknown_is_absorbing ->
           Unknown, TEE.empty
-        | _, Unknown when E.unknown_is_bottom ->
+        | _, Unknown when E.unknown_is_absorbing ->
           Unknown, TEE.empty
         | Known blocks1, Known blocks2 ->
           match meet_or_join_blocks env blocks1 blocks2 with
@@ -214,8 +217,8 @@ struct
         match imms1, imms2 with
         | Unknown, _ when E.unknown_is_identity -> imms2
         | _, Unknown when E.unknown_is_identity -> imms1
-        | Unknown, _ when E.unknown_is_bottom -> Unknown
-        | _, Unknown when E.unknown_is_bottom -> Unknown
+        | Unknown, _ when E.unknown_is_absorbing -> Unknown
+        | _, Unknown when E.unknown_is_absorbing -> Unknown
         | Known imms1, Known imms2 ->
           match meet_immediates env imms1 imms2 with
           | Bottom -> Known Immediate.Map.empty
@@ -253,7 +256,7 @@ struct
                   | None -> equations, Or_unknown.Known blocks
                   | Some (length, singleton_block) ->
                     let equations =
-                      TEE.meet env
+                      TEE.meet (JE.central_environment env)
                         singleton_block.env_extension equations
                     in
                     let singleton_block : singleton_block =
@@ -290,44 +293,45 @@ struct
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
         let (n : _ ty_naked_number), equations =
-          E.Meet_and_join_naked_float.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_float.meet_or_join_ty env n1 n2
         in
         Ok (Boxed_number (Boxed_float n), equations)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let (n : _ ty_naked_number), equations =
-          E.Meet_and_join_naked_int32.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_int32.meet_or_join_ty env n1 n2
         in
         Ok (Boxed_number (Boxed_int32 n), equations)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let (n : _ ty_naked_number), equations =
-          E.Meet_and_join_naked_int64.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_int64.meet_or_join_ty env n1 n2
         in
         Ok (Boxed_number (Boxed_int64 n), equations)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let (n : _ ty_naked_number), equations =
-          E.Meet_and_join_naked_nativeint.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_nativeint.meet_or_join_ty env n1 n2
         in
         Ok (Boxed_number (Boxed_nativeint n), equations)
       | Closures closures1, Closures closures2 ->
         let equations = ref (TEE.empty) in
         let closures =
           E.Closure_id.Map.union_or_inter
-            (fun (closures_entry1 : closures_entry)
+            (fun _closure_id
+                 (closures_entry1 : closures_entry)
                  (closures_entry2 : closures_entry) : closures_entry option ->
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
               let set, new_equations =
-                E.Meet_and_join_fabricated.meet_or_join_ty env
+                Meet_and_join_fabricated.meet_or_join_ty env
                   set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None
               end else begin
                 equations :=
-                  TEE.meet_or_join env
+                  TEE.meet (JE.central_environment env)
                     new_equations !equations;
                 Some { set_of_closures = set; }
               end)

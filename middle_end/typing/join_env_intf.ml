@@ -44,17 +44,12 @@ module type S = sig
     -> holds_on_right:T.env_extension
     -> t
 
-  val add_extensions_and_return_meet
+  val add_extensions_and_extend_central_environment
      : t
     -> holds_on_left:T.env_extension
     -> holds_on_right:T.env_extension
-    -> t * T.env_extension
-
-  val add_extensions_and_return_join
-     : t
-    -> holds_on_left:T.env_extension
-    -> holds_on_right:T.env_extension
-    -> t * T.env_extension
+    -> central_extension:T.env_extension
+    -> t
 
   val central_environment : t -> T.typing_environment
 
