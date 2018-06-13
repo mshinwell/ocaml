@@ -202,9 +202,7 @@ module type S = sig
   (** As for [add_or_meet_env_extension], but also returns the freshening
       used to open existentials in the supplied extension. *)
   val add_or_meet_env_extension'
-     : ?don't_freshen:unit
-    -> ?freshening:Freshening.t
-    -> t
+     : t
     -> T.env_extension
     -> Scope_level.t
     -> t * (Name.t Name.Map.t)
@@ -225,16 +223,7 @@ module type S = sig
   val resolve_aliases
      : ?bound_name:Name.t
     -> T.t_in_context
-    -> T.flambda_type * (Name.t option)
-
-  (* CR mshinwell: Rename these next two *)
-  val all_aliases_and_squash_unresolved_names_on_ty'
-     : t
-    -> ?bound_name:Name.t
-    -> print_ty:(Format.formatter -> 'a T.ty -> unit)
-    -> force_to_kind:(T.flambda_type -> 'a T.ty)
-    -> 'a T.ty
-    -> 'a T.unknown_or_join * Simple.Set.t
+    -> T.flambda_type * (Simple.t option)
 
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t

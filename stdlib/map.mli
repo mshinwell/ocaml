@@ -339,7 +339,7 @@ module type S =
 
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 
-    val inter : ('a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
+    val inter : (key -> 'a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t
 
     val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
 

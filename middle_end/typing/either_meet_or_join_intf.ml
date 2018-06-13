@@ -65,13 +65,17 @@ module type S = sig
     module Map : sig
       type 'a t = 'a Closure_id.Map.t
 
-      val union_or_inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+      val union_or_inter
+         : (Closure_id.t -> 'a -> 'a -> 'a)
+        -> 'a t
+        -> 'a t
+        -> 'a t
 
       (** When this operation is "intersection" it also copies through from
           the inputs [t1] and [t2] those bindings in [t1] that do not occur
           in [t2]. *)
       val union_or_inter_and_left
-         : ('a -> 'a -> 'a option)
+         : (Closure_id.t -> 'a -> 'a -> 'a option)
         -> 'a t
         -> 'a t
         -> 'a t
@@ -82,11 +86,15 @@ module type S = sig
     module Map : sig
       type 'a t = 'a Var_within_closure.Map.t
 
-      val union_or_inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+      val union_or_inter
+         : (Var_within_closure.t -> 'a -> 'a -> 'a)
+        -> 'a t
+        -> 'a t
+        -> 'a t
 
       (** As for [Closure_id.union_or_inter_and_left], above. *)
       val union_or_inter_and_left
-         : ('a -> 'a -> 'a option)
+         : (Var_within_closure.t -> 'a -> 'a -> 'a option)
         -> 'a t
         -> 'a t
         -> 'a t

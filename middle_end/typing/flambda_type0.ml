@@ -2253,19 +2253,31 @@ result
           && or_alias1 == or_alias2
         then or_alias1
         else
-          let unknown_or_join1, all_aliases1 =
-            Typing_env.all_aliases_and_squash_unresolved_names_on_ty'
+          let unknown_or_join1, canonical_simple1 =
+            Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
               (Join_env.environment_on_left env)
               ~force_to_kind:S.force_to_kind
               ~print_ty:S.print_ty
               or_alias1
           in
-          let unknown_or_join2, all_aliases2 =
-            Typing_env.all_aliases_and_squash_unresolved_names_on_ty'
+          let unknown_or_join2, canonical_simple2 =
+            Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
               (Join_env.environment_on_right env)
               ~force_to_kind:S.force_to_kind
               ~print_ty:S.print_ty
               or_alias2
+          in
+          let all_aliases1 =
+            match canonical_simple1 with
+            | None -> Simple.Set.empty
+            | Some canonical_simple ->
+              Typing_env.aliases_of_simple canonical_simple
+          in
+          let all_aliases2 =
+            match canonical_simple2 with
+            | None -> Simple.Set.empty
+            | Some canonical_simple ->
+              Typing_env.aliases_of_simple canonical_simple
           in
           let all_aliases = Simple.Set.inter all_aliases1 all_aliases2 in
           let alias_both_sides = Simple.Set.choose_opt all_aliases in

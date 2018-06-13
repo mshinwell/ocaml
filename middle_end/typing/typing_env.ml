@@ -16,35 +16,15 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make (T : sig
-  include Flambda_type0_internal_intf.S
-end) (Typing_env_extension : sig
-  include Typing_env_extension_intf.S
-    with type env_extension := T.env_extension
-    with type typing_environment := T.typing_environment
-    with type flambda_type := T.flambda_type
-end) (Meet_and_join : sig
-  include Meet_and_join_intf.S_for_types
-    with type typing_environment := T.typing_environment
-    with type env_extension := T.env_extension
-    with type join_env := T.join_env
-    with type flambda_type := T.flambda_type
-end) (Type_equality : sig
-  include Type_equality_intf.S
-    with type flambda_type := T.flambda_type
-end) = struct
+module Make
+    (T : Flambda_type0_internal_intf.S)
+    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+    (Type_equality : Type_equality_intf.S with module T := T) =
+struct
   open T
 
   type t = T.typing_environment
-
-  type typing_environment = T.typing_environment
-  type typing_environment_entry = T.typing_environment_entry
-  type typing_environment_entry0 = T.typing_environment_entry0
-  type env_extension = Typing_env_extension.t
-  type flambda_type = T.flambda_type
-  type t_in_context = T.t_in_context
-  type 'a ty = 'a T.ty
-  type 'a unknown_or_join = 'a T.unknown_or_join
 
   let print = print_typing_environment
 
@@ -92,39 +72,41 @@ end) = struct
 
   let resolve_aliases_on_ty0 (type a) t ?bound_name ~force_to_kind
         (ty : a ty)
-        : (a ty) * (Name.t option) * Name_or_export_id.Set.t
+        : (a ty) * (Simple.t option) * Name_or_export_id.Set.t
             * still_unresolved =
-    let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
+    let rec resolve_aliases names_seen ~canonical_simple (ty : a ty) =
       let resolve (name : Name_or_export_id.t) : _ * _ * _ * still_unresolved =
         if Name_or_export_id.Set.mem name names_seen then begin
           Misc.fatal_errorf "Loop on %a whilst resolving aliases"
             Name_or_export_id.print name
         end;
-        let continue_resolving t ~canonical_name =
+        let continue_resolving t ~canonical_simple =
           let names_seen = Name_or_export_id.Set.add name names_seen in
           let ty = force_to_kind t in
-          resolve_aliases names_seen ~canonical_name ty
+          resolve_aliases names_seen ~canonical_simple ty
         in
         match name with
         | Name name ->
           let ty, _binding_type = find_exn t name in
-          continue_resolving ty ~canonical_name:(Some name)
+          continue_resolving ty ~canonical_simple:(Some (Simple.name name))
         | Export_id export_id ->
           match t.resolver export_id with
-          | Some ty -> continue_resolving ty ~canonical_name
+          | Some ty -> continue_resolving ty ~canonical_simple
           | None -> ty, None, Name_or_export_id.Set.empty, Still_unresolved
       in
       match ty with
-      | No_alias _ -> ty, canonical_name, names_seen, Resolved
+      | No_alias _ -> ty, canonical_simple, names_seen, Resolved
       | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
-      | Equals name -> resolve (Name_or_export_id.Name name)
+      | Equals (Name name) -> resolve (Name_or_export_id.Name name)
+      | Equals ((Const _ | Discriminant _) as simple) ->
+        ty, Some simple, names_seen, Resolved
     in
     let seen =
       match bound_name with
       | None -> Name_or_export_id.Set.empty
       | Some bound_name -> Name_or_export_id.Set.singleton (Name bound_name)
     in
-    resolve_aliases seen ~canonical_name:None ty
+    resolve_aliases seen ~canonical_simple:None ty
 
   let resolve_aliases_on_ty t ?bound_name ~force_to_kind ty =
     let ty, canonical_name, names_seen, _still_unresolved =
@@ -134,7 +116,7 @@ end) = struct
 
   let resolve_aliases_and_squash_unresolved_names_on_ty' env ?bound_name
         ~print_ty ~force_to_kind ty
-        : _ unknown_or_join * (Name.t option) =
+        : _ unknown_or_join * (Simple.t option) =
     let ty, canonical_name, _names_seen, _still_unresolved =
       try resolve_aliases_on_ty0 env ?bound_name ~force_to_kind ty
       with Misc.Fatal_error -> begin
@@ -156,7 +138,7 @@ end) = struct
      check on the end of this function) that if a canonical name is returned
      then the original type was an [Equals] or a [Type].  This fact
      should also be documented in the interface. *)
-  let resolve_aliases ?bound_name (t, ty) : flambda_type * (Name.t option) =
+  let resolve_aliases ?bound_name (t, ty) : flambda_type * (Simple.t option) =
     match ty.descr with
     | Value ty_value ->
       let force_to_kind = force_to_kind_value in
@@ -375,10 +357,7 @@ end) = struct
 
   let invariant_for_new_equation t name (ty : flambda_type) ~sense =
     let existing_ty, _binding_type = find_exn t name in
-    let meet_ty, _env_extension =
-      let join_env = T.join_env_of_typing_env t in
-      Meet_and_join.meet join_env existing_ty ty
-    in
+    let meet_ty, _env_extension = Meet_and_join.meet t existing_ty ty in
     let ty_must_be_strictly_more_precise, other_ty =
       match sense with
       | New_equation_must_be_more_precise -> ty, existing_ty
@@ -468,8 +447,8 @@ end) = struct
       match binding with
       | Equation _ ->
         begin match alias with
-        | None -> false
-        | Some alias ->
+        | None | Some (Const _ | Discriminant _) -> false
+        | Some (Name alias) ->
           Name.Set.mem alias (aliases_of_simple t (Simple.name name))
         end
       | Definition _ | CSE _ -> false
@@ -481,7 +460,7 @@ end) = struct
         match alias with
         | None -> t.aliases
         | Some alias ->
-          Simple.Map.update (Simple.name alias) (function
+          Simple.Map.update alias (function
               | None -> Some (Name.Set.singleton name)
               | Some aliases -> Some (Name.Set.add name aliases))
             t.aliases
@@ -634,11 +613,8 @@ end) = struct
     let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
     restrict_to_names0 t allowed
 
-  (* XXX [don't_freshen] needs sorting properly *)
-  let rec add_or_meet_env_extension' ?don't_freshen ?freshening
-        t env_extension scope_level =
+  let rec add_or_meet_env_extension' t env_extension scope_level =
     let original_t = t in
-    let original_freshening = freshening in
     let rename_name (name : Name.t) freshening =
       match Name.Map.find name freshening with
       | exception Not_found -> name
@@ -657,8 +633,7 @@ end) = struct
       | Some (existing_ty, _binding_type) ->
         let meet =
           let meet_ty, meet_env_extension =
-            let join_env = join_env_of_typing_env t in
-            Meet_and_join.meet join_env ty existing_ty
+            Meet_and_join.meet t ty existing_ty
           in
           let as_or_more_precise = Type_equality.equal meet_ty ty in
           let strictly_more_precise =
@@ -671,22 +646,16 @@ end) = struct
         | None -> t
         | Some (new_ty, new_env_extension)->
           let t, _freshening =
-            add_or_meet_env_extension' ?don't_freshen
-              ?freshening:original_freshening
-              t new_env_extension scope_level
+            add_or_meet_env_extension' t new_env_extension scope_level
           in
           add t name scope_level (Equation new_ty)
     in
     let add_definition t freshening (name : Name.t) ty =
       let ty = T.rename_variables ty freshening in
       let freshening, fresh_name =
-        match don't_freshen with
-        | None ->
-          let fresh_name = Name.rename name in
-          let freshening = Name.Map.add name fresh_name freshening in
-          freshening, fresh_name
-        | Some () ->
-          freshening, name
+        let fresh_name = Name.rename name in
+        let freshening = Name.Map.add name fresh_name freshening in
+        freshening, fresh_name
       in
 (*
 Format.eprintf "Opening existential %a -> %a\n%!"
@@ -697,30 +666,26 @@ Format.eprintf "Opening existential %a -> %a\n%!"
       else
         let t = add t fresh_name scope_level (Definition ty) in
         let t =
-          match don't_freshen with
-          | None ->
-            begin match fresh_name with
-            | Var _ -> ()
-            | Symbol sym ->
-              Misc.fatal_errorf "Definitions of symbols should never occur \
-                  in environment extensions: symbol %a, env@ %a,@ \
-                  env_extension@ %a"
-                Symbol.print sym
-                print original_t
-                Typing_env_extension.print env_extension
-            end;
-            { t with
-              were_existentials = Name.Set.add fresh_name t.were_existentials;
-            }
-          | Some () -> t
+          begin match fresh_name with
+          | Var _ -> ()
+          | Symbol sym ->
+            Misc.fatal_errorf "Definitions of symbols should never occur \
+                in environment extensions: symbol %a, env@ %a,@ \
+                env_extension@ %a"
+              Symbol.print sym
+              print original_t
+              Typing_env_extension.print env_extension
+          end;
+          { t with
+            were_existentials = Name.Set.add fresh_name t.were_existentials;
+          }
         in
         freshening, t
     in
     let add_cse (t : t) freshening bound_to prim =
       let bound_to = rename_simple bound_to freshening in
       let prim =
-        Flambda_primitive.With_fixed_value.rename_names prim
-          freshening
+        Flambda_primitive.With_fixed_value.rename_names prim freshening
       in
       match
         Flambda_primitive.With_fixed_value.Map.find prim t.cse
@@ -740,14 +705,9 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         t
     in
     let freshening, t =
-      let freshening =
-        match freshening with
-        | None -> Name.Map.empty
-        | Some freshening -> Freshening.name_substitution freshening
-      in
       List.fold_left (fun (freshening, t) (name, ty) ->
           add_definition t freshening name ty)
-        (freshening, t)
+        (Name.Map.empty, t)
         (List.rev env_extension.first_definitions)
     in
     let freshening, t =
