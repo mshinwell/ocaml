@@ -40,11 +40,7 @@ module Outer_namespace = struct
   module Type_equality = Type_equality
 end
 
-module Make (Expr : sig
-  type t
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val free_names : t -> Name_occurrences.t
-end) = struct
+module Make (Expr : Expr_intf.S) = struct
   module T = Flambda_type0_internal_intf.S_impl (Expr)
   include T
 
@@ -2175,27 +2171,29 @@ result
   end
 
   module rec Make_meet_or_join : functor
-    (E : Either_meet_or_join_intf.S with module T := T2)
+    (E : Either_meet_or_join_intf.S with module T := T1)
       ->
       sig
         module Meet_and_join : Meet_and_join_intf.S_for_types
-          with module T := T2
+          with module T := T1
       end
   = functor
-    (E : Either_meet_or_join_intf.S with module T := T2)
+    (E : Either_meet_or_join_intf.S with module T := T1)
   -> struct
     (* CR mshinwell: Work out which properties we need to prove, e.g.
        Distributivity of meet over join:
          X n (X' u Y') == (X n X') u (X n Y'). *)
     module rec Make_meet_and_join : functor
-      (S : Meet_and_join_spec_intf.S with module T := T2)
+      (S : Meet_and_join_spec_intf.S with module T := T1)
         ->
         Meet_and_join_intf.S
-          with module T := T2
-          with type of_kind_foo := S.of_kind_foo
+          with module T := T1
+          with type of_kind_foo = S.of_kind_foo
       =
-    functor (S : Meet_and_join_spec_intf.S with module T := T2) ->
+    functor (S : Meet_and_join_spec_intf.S with module T := T1) ->
     struct
+      type of_kind_foo = S.of_kind_foo
+
       let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
         match uj with
         | Join [] -> true
@@ -2269,31 +2267,33 @@ result
           in
           let all_aliases1 =
             match canonical_simple1 with
-            | None -> Simple.Set.empty
+            | None -> Name.Set.empty
             | Some canonical_simple ->
-              Typing_env.aliases_of_simple canonical_simple
+              Typing_env.aliases_of_simple (Join_env.environment_on_left env)
+                canonical_simple
           in
           let all_aliases2 =
             match canonical_simple2 with
-            | None -> Simple.Set.empty
+            | None -> Name.Set.empty
             | Some canonical_simple ->
-              Typing_env.aliases_of_simple canonical_simple
+              Typing_env.aliases_of_simple (Join_env.environment_on_right env)
+                canonical_simple
           in
-          let all_aliases = Simple.Set.inter all_aliases1 all_aliases2 in
-          let alias_both_sides = Simple.Set.choose_opt all_aliases in
+          let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
+          let alias_both_sides = Name.Set.choose_opt all_aliases in
           match alias_both_sides with
-          | Some simple -> Equals simple
+          | Some name -> Equals (Simple.name name)
             (* CR mshinwell: The symmetrical cases ("is unknown") should be
                present on the [meet] function, below. *)
           | None ->
-            let alias1 = Simple.Set.choose_opt all_aliases1 in
-            let alias2 = Simple.Set.choose_opt all_aliases2 in
+            let alias1 = Name.Set.choose_opt all_aliases1 in
+            let alias2 = Name.Set.choose_opt all_aliases2 in
             match alias1, alias2 with
-            | Some simple1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+            | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
               (* CR mshinwell: Should we push down the env extension here? *)
-              Equals simple1
-            | _, Some simple2 when unknown_or_join_is_bottom unknown_or_join1 ->
-              Equals simple2
+              Equals (Simple.name name1)
+            | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
+              Equals (Simple.name name2)
             | None, None ->
               let unknown_or_join =
                 join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
@@ -2448,7 +2448,7 @@ result
       let meet_or_join_ty env or_alias1 or_alias2 =
         E.switch meet_ty join_ty env or_alias1 or_alias2
     end and Meet_and_join : sig
-      include Meet_and_join_intf.S_for_types with module T := T2
+      include Meet_and_join_intf.S_for_types with module T := T1
     end = struct
       let meet_or_join env t1 t2 : t * env_extension =
         if Join_env.fast_check_extensions_same_both_sides env
@@ -2538,83 +2538,82 @@ result
         end
     end and Meet_and_join_value :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = of_kind_value
-      = Outer_namespace.Meet_and_join_value.Make (T2)
+      = Outer_namespace.Meet_and_join_value.Make (T1)
           (Make_meet_and_join) (Meet_and_join_naked_immediate)
           (Meet_and_join_naked_float) (Meet_and_join_naked_int32)
           (Meet_and_join_naked_int64) (Meet_and_join_naked_nativeint)
-          (Meet_and_join_fabricated) (Meet_and_join)
+          (Meet_and_join_fabricated) (Both_meet_and_join)
           (Typing_env) (Typing_env_extension) (Join_env) (Parameters) (E)
     and Meet_and_join_naked_number : sig
       (* CR mshinwell: Deal with this signature somehow *)
       module Naked_immediate :
         Meet_and_join_intf.S
-          with module T := T2
+          with module T := T1
           with type of_kind_foo = Immediate.Set.t of_kind_naked_number
       module Naked_float :
         Meet_and_join_intf.S
-          with module T := T2
+          with module T := T1
           with type of_kind_foo =
             Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
       module Naked_int32 :
         Meet_and_join_intf.S
-          with module T := T2
+          with module T := T1
           with type of_kind_foo = Numbers.Int32.Set.t of_kind_naked_number
       module Naked_int64 :
         Meet_and_join_intf.S
-          with module T := T2
+          with module T := T1
           with type of_kind_foo = Numbers.Int64.Set.t of_kind_naked_number
       module Naked_nativeint :
         Meet_and_join_intf.S
-          with module T := T2
+          with module T := T1
           with type of_kind_foo = Targetint.Set.t of_kind_naked_number
     end = Outer_namespace.Meet_and_join_naked_number.Make
-      (T2) (Make_meet_and_join) (Meet_and_join) (Typing_env)
-      (Typing_env_extension) (E)
+      (T1) (Make_meet_and_join) (Typing_env) (Typing_env_extension) (E)
     and Meet_and_join_naked_immediate :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = Immediate.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_immediate
     and Meet_and_join_naked_float :
       (* CR mshinwell: See if we can abstract these naked number cases some
          more? *)
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_float
     and Meet_and_join_naked_int32 :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = Int32.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_int32
     and Meet_and_join_naked_int64 :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = Int64.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_int64
     and Meet_and_join_naked_nativeint :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = Targetint.Set.t of_kind_naked_number
       = Meet_and_join_naked_number.Naked_nativeint
     and Meet_and_join_fabricated :
       Meet_and_join_intf.S
-        with module T := T2
+        with module T := T1
         with type of_kind_foo = of_kind_fabricated
       = Outer_namespace.Meet_and_join_fabricated.Make
-          (T2) (Make_meet_and_join) (Meet_and_join_value) (Meet_and_join)
+          (T1) (Make_meet_and_join) (Meet_and_join_value) (Both_meet_and_join)
           (Typing_env) (Typing_env_extension) (Join_env) (E)
   end and Meet : sig
-    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
+    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T1
   end = Make_meet_or_join (For_meet)
   and Join : sig
-    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
+    module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T1
   end = Make_meet_or_join (For_join)
-  and Both_meet_and_join : Meet_and_join_intf.S_both with module T := T2
+  and Both_meet_and_join : Meet_and_join_intf.S_both with module T := T1
     = struct
-      module T = T2
+      module T = T1
 
       let meet env t1 t2 =
         Meet.Meet_and_join.meet_or_join (Join_env.create env) t1 t2
@@ -2639,40 +2638,24 @@ result
             && not (Type_equality.equal meet_t t2)
     end
   and Typing_env :
-    Typing_env_intf.S with module T := T2
-      = Outer_namespace.Typing_environment0.Make (T2)
+    Typing_env_intf.S with module T := T1
+      = Outer_namespace.Typing_environment0.Make (T1)
           (Typing_env_extension) (Both_meet_and_join) (Type_equality)
   and Typing_env_extension :
-    Typing_env_extension_intf.S with module T := T2
-      = Outer_namespace.Typing_env_extension.Make (T2)
+    Typing_env_extension_intf.S with module T := T1
+      = Outer_namespace.Typing_env_extension.Make (T1)
           (Typing_env) (Both_meet_and_join) (Type_equality) (Join_env)
   and Type_equality :
-    Type_equality_intf.S with module T := T2
-      = Outer_namespace.Type_equality.Make (T2) (Expr) (Typing_env_extension)
+    Type_equality_intf.S with module T := T1
+      = Outer_namespace.Type_equality.Make (T1) (Expr) (Typing_env_extension)
   and Join_env :
-    Join_env_intf.S with module T := T2
-    = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
+    Join_env_intf.S with module T := T1
+    = Outer_namespace.Join_env.Make (T1) (Typing_env) (Typing_env_extension)
   and Parameters :
-    Parameters_intf.S with module T := T2
-    = Outer_namespace.Parameters.Make (T2) (Typing_env) (Typing_env_extension)
+    Parameters_intf.S with module T := T1
+    = Outer_namespace.Parameters.Make (T1) (Typing_env) (Typing_env_extension)
         (Both_meet_and_join) (Join_env)
-  and T2 : sig
-    (* CR mshinwell: [@remove_aliases] can be removed once we rebase to
-       4.07 or later (this was here to work around a bug). *)
-    include module type of struct include T1 end [@remove_aliases]
-
-(*
-    val as_or_more_precise : typing_environment -> t -> than:t -> bool
-    val strictly_more_precise : typing_environment -> t -> than:t -> bool
-*)
-  end = struct
-    include T1
-
-(*
-    let as_or_more_precise = Meet_and_join.as_or_more_precise
-    let strictly_more_precise = Meet_and_join.strictly_more_precise
-*)
-  end and For_meet : Either_meet_or_join_intf.S with module T := T2
+  and For_meet : Either_meet_or_join_intf.S with module T := T1
   = struct
     let name = "meet"
 
@@ -2739,7 +2722,7 @@ result
 
     let switch' meet _join join_env thing1 thing2 =
       meet (Join_env.central_environment join_env) thing1 thing2
-  end and For_join : Either_meet_or_join_intf.S with module T := T2
+  end and For_join : Either_meet_or_join_intf.S with module T := T1
   = struct
     let name = "join"
 
