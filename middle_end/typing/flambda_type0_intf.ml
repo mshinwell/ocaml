@@ -66,7 +66,7 @@ module type S = sig
   type 'a or_alias = private
     | No_alias of 'a
     | Type of Export_id.t
-    | Equals of Name.t
+    | Equals of Simple.t
 
   type 'a extensibility =
     | Open of 'a
@@ -308,12 +308,30 @@ module type S = sig
     -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
+  type typing_environment_entry0 =
+    | Definition of t
+    | Equation of t
+
   type typing_environment_entry =
     (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
        change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
     | Definition of t
     | Equation of t
     | CSE of Flambda_primitive.With_fixed_value.t
+
+  (* CR mshinwell: Try to do away with this *)
+  module T2 : sig
+    type nonrec typing_environment = typing_environment
+    type nonrec typing_environment_entry = typing_environment_entry
+    type nonrec typing_environment_entry0 = typing_environment_entry0
+    type nonrec env_extension = env_extension
+    type nonrec flambda_type = flambda_type
+    type nonrec t_in_context = t_in_context
+    type nonrec join_env = join_env
+    type nonrec parameters = parameters
+    type nonrec 'a ty = 'a ty
+    type nonrec 'a unknown_or_join = 'a unknown_or_join
+  end
 
   module Typing_env : sig
     (** A "traditional" typing environment or context: an assignment from
@@ -324,35 +342,19 @@ module type S = sig
         Typing environments must be closed.
     *)
 
-    include Typing_env_intf.S
-      with type T.typing_environment := typing_environment
-      with type T.typing_environment_entry := typing_environment_entry
-      with type T.env_extension := env_extension
-      with type T.flambda_type := flambda_type
-      with type T.t_in_context := t_in_context
+    include Typing_env_intf.S with module T := T2
   end
 
   module Typing_env_extension : sig
-    include Typing_env_extension_intf.S
-      with type T.env_extension := env_extension
-      with type T.typing_environment := typing_environment
-      with type T.flambda_type := flambda_type
+    include Typing_env_extension_intf.S with module T := T2
   end
 
   module Join_env : sig
-    include Join_env_intf.S
-      with type T.join_env := join_env
-      with type T.env_extension := env_extension
-      with type T.typing_environment := typing_environment
+    include Join_env_intf.S with module T := T2
   end
 
   module Parameters : sig
-    include Parameters_intf.S
-      with type T.env_extension := env_extension
-      with type T.typing_environment := typing_environment
-      with type T.join_env := join_env
-      with type T.flambda_type := flambda_type
-      with type T.parameters := parameters
+    include Parameters_intf.S with module T := T2
   end
 
   (** Annotation for functions that may require examination of the current
@@ -530,14 +532,14 @@ module type S = sig
   (** Like [block], except that the field types are statically known to be
       of kind [Value]). *)
   val block_of_values
-     : Tag.Scannable.t
+     : Tag.t
     -> fields:ty_value mutable_or_immutable array
     -> t
 
   (** The type of a block with a known tag and size but unknown content,
       save that the contents are all of kind [Value]. *)
   val block_of_unknown_values
-     : Tag.Scannable.t
+     : Tag.t
     -> size:int
     -> t
 
@@ -565,6 +567,7 @@ module type S = sig
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
     -> body:expr
+    -> code_id:Code_id.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -607,14 +610,14 @@ module type S = sig
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
-  val alias_type_of : Flambda_kind.t -> Name.t -> t
+  val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
   (** Like [alias_type_of], but for types of kind [Value], and returns the
       [ty] rather than a [t]. *)
-  val alias_type_of_as_ty_value : Name.t -> ty_value
+  val alias_type_of_as_ty_value : Simple.t -> ty_value
 
   (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
-  val alias_type_of_as_ty_fabricated : Name.t -> ty_fabricated
+  val alias_type_of_as_ty_fabricated : Simple.t -> ty_fabricated
 
   (** The type that is equal to another type, found in a .cmx file, named
       by export identifier. *)

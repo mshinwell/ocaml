@@ -332,7 +332,7 @@ module type S =
     val union_both
        : in_left_only:('a -> 'a)
       -> in_right_only:('a -> 'a)
-      -> in_both:('a -> 'a -> 'a option)
+      -> in_both:(key -> 'a -> 'a -> 'a option)
       -> 'a t
       -> 'a t
       -> 'a t

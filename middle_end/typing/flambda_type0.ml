@@ -59,7 +59,7 @@ module Make (Expr : Expr_intf.S) = struct
     | Exactly contents ->
       Format.fprintf ppf "@[(Exactly@ %a)@]" print_contents contents
 
-  let print_mutable_or_immutable print_contents ppf
+  let _print_mutable_or_immutable print_contents ppf
         (mut : _ mutable_or_immutable) =
     match mut with
     | Immutable contents -> print_contents ppf contents
@@ -140,23 +140,19 @@ module Make (Expr : Expr_intf.S) = struct
     Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
       (print_typing_env_extension_with_cache ~cache) env_extension
 
+(*
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.fprintf ppf ";@ ")
         (print_mutable_or_immutable (print_with_cache ~cache)))
       (Array.to_list fields)
+*)
 
-  and print_singleton_block ~cache ppf { env_extension; fields; } =
-    let no_env_extension = is_empty_env_extension env_extension in
-    if no_env_extension then
-      print_fields ~cache ppf fields
-    else
-      Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(env_extension@ %a)@]@ \
-          @[<hov 1>(fields@ %a)@])@]"
-        (print_typing_env_extension_with_cache ~cache) env_extension
-        (print_fields ~cache) fields
+  and print_singleton_block ~cache ppf { fields; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(fields@ %a)@])@]"
+      (print_parameters ~cache) fields
 
   and print_block_cases ~cache ppf ((Blocks { by_length; }) : block_cases) =
     match Targetint.OCaml.Map.get_singleton by_length with
@@ -295,7 +291,7 @@ module Make (Expr : Expr_intf.S) = struct
       ~cache:(Printing_cache.create ())
       ppf decl
 
-  and print_non_inlinable_function_declarations ppf ~cache
+  and print_non_inlinable_function_declarations ppf ~cache:_
         (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
       "@[(Non_inlinable@ \
@@ -555,15 +551,8 @@ module Make (Expr : Expr_intf.S) = struct
         | Known blocks ->
           Tag.Map.fold (fun _tag ((Blocks { by_length; }) : block_cases) acc ->
               Targetint.OCaml.Map.fold
-                (fun _length (singleton : singleton_block) acc ->
-                  let acc =
-                    free_names_of_env_extension singleton.env_extension acc
-                  in
-                  Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
-                      match field with
-                      | Immutable t -> free_names t acc
-                      | Mutable -> acc)
-                    acc singleton.fields)
+                (fun _length ({ fields; } : singleton_block) acc ->
+                  free_names_parameters fields acc)
                 by_length
                 acc)
             blocks
@@ -1414,164 +1403,6 @@ result
       phantom = None;
     }
 
-  let mutable_float_array ~size : t =
-    let fields =
-      Array.init (Targetint.OCaml.to_int size)
-        (fun _index : _ mutable_or_immutable -> Mutable)
-    in
-    let singleton_block : singleton_block =
-      { env_extension = empty_env_extension;
-        fields;
-      }
-    in
-    let by_length =
-      Targetint.OCaml.Map.add size singleton_block
-        Targetint.OCaml.Map.empty
-    in
-    let block_cases : block_cases = Blocks { by_length; } in
-    let blocks =
-      Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
-    in
-    let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Known Immediate.Map.empty;
-        blocks = Known blocks;
-      }
-    in
-    { descr =
-        Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-      phantom = None;
-    }
-
-  let immutable_float_array fields : t =
-    match Targetint.OCaml.of_int_option (Array.length fields) with
-    | None ->
-      Misc.fatal_error "Immutable float array too long for target"
-    | Some length ->
-      let fields =
-        Array.map (fun ty_naked_number : _ mutable_or_immutable ->
-            let t : t =
-              { descr =
-                  Naked_number (ty_naked_number, K.Naked_number.Naked_float);
-                phantom = None;
-              }
-            in
-            Immutable t)
-          fields
-      in
-      let singleton_block : singleton_block =
-        { env_extension = empty_env_extension;
-          fields;
-        }
-      in
-      let by_length =
-        Targetint.OCaml.Map.add length singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
-      let blocks =
-        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
-      in
-      let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
-        }
-      in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
-      }
-
-  let this_immutable_float_array fields : t =
-    let make_field f : _ ty_naked_number =
-      No_alias (Join [Float (Float_by_bit_pattern.Set.singleton f)])
-    in
-    let fields = Array.map make_field fields in
-    immutable_float_array fields
-
-  let block tag ~fields =
-    (* CR mshinwell: We should check the field kinds against the tag. *)
-    match Targetint.OCaml.of_int_option (Array.length fields) with
-    | None ->
-      Misc.fatal_error "Block too long for target"
-    | Some length ->
-      let fields =
-        Array.map
-          (fun (field : _ mutable_or_immutable) : t mutable_or_immutable ->
-            match field with
-            | Immutable t -> Immutable t
-            | Mutable -> Mutable)
-          fields
-      in
-      let singleton_block : singleton_block =
-        { env_extension = empty_env_extension;
-          fields;
-        }
-      in
-      let by_length =
-        Targetint.OCaml.Map.add length singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
-      let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
-      let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
-        }
-      in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
-      }
-
-  let block_of_values tag ~fields =
-    (* CR mshinwell: Express in terms of the new [block] function above *)
-    let tag = Tag.Scannable.to_tag tag in
-    match Targetint.OCaml.of_int_option (Array.length fields) with
-    | None ->
-      Misc.fatal_error "Block of values too long for target"
-    | Some length ->
-      let fields =
-        Array.map
-          (fun (field : _ mutable_or_immutable) : t mutable_or_immutable ->
-            match field with
-            | Immutable ty_value ->
-              Immutable { descr = Value ty_value; phantom = None; }
-            | Mutable -> Mutable)
-          fields
-      in
-      let singleton_block : singleton_block =
-        { env_extension = empty_env_extension;
-          fields;
-        }
-      in
-      let by_length =
-        Targetint.OCaml.Map.add length singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
-      let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
-      let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
-        }
-      in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
-      }
-
-  let block_of_unknown_values tag ~size =
-    let fields =
-      Array.init size (fun _index : _ mutable_or_immutable ->
-        Immutable (any_value_as_ty_value ()))
-    in
-    block_of_values tag ~fields
-
-  let any_boxed_float () = box_float (any_naked_float ())
-  let any_boxed_int32 () = box_int32 (any_naked_int32 ())
-  let any_boxed_int64 () = box_int64 (any_naked_int64 ())
-  let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
-
   let kind (t : t) =
     match t.phantom with
     | None ->
@@ -1604,6 +1435,155 @@ result
       match occurrences with
       | In_types -> K.phantom In_types phantom_kind
       | Debug_only -> K.phantom Debug_only phantom_kind
+
+  let create_parameters_from_types ts : parameters =
+    let params =
+      List.mapi (fun index t ->
+          let kind = kind t in
+          let var = Variable.create (Format.sprintf "param%d" index) in
+          let parameter = Parameter.wrap var in
+          Kinded_parameter.create parameter kind)
+        ts
+    in
+    { params;
+      env_extension = empty_env_extension;
+    }
+
+  let mutable_float_array ~size : t =
+    match Targetint.OCaml.to_int_option size with
+    | None ->
+      Misc.fatal_error "Mutable float array too long for host"
+    | Some size ->
+      let field_tys = List.init size (fun _index -> any_naked_float ()) in
+      let fields = create_parameters_from_types field_tys in
+      let singleton_block : singleton_block =
+        { fields;
+        }
+      in
+      let size = Targetint.OCaml.of_int size in
+      let by_length =
+        Targetint.OCaml.Map.add size singleton_block
+          Targetint.OCaml.Map.empty
+      in
+      let block_cases : block_cases = Blocks { by_length; } in
+      let blocks =
+        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
+      in
+      let blocks_imms : blocks_and_tagged_immediates =
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+        }
+      in
+      { descr =
+          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
+        phantom = None;
+      }
+
+  let immutable_float_array fields : t =
+    match Targetint.OCaml.of_int_option (Array.length fields) with
+    | None ->
+      Misc.fatal_error "Immutable float array too long for target"
+    | Some length ->
+      let fields =
+        Array.map (fun ty_naked_number : t ->
+            { descr =
+                Naked_number (ty_naked_number, K.Naked_number.Naked_float);
+              phantom = None;
+            })
+          fields
+      in
+      let fields = create_parameters_from_types (Array.to_list fields) in
+      let singleton_block : singleton_block =
+        { fields;
+        }
+      in
+      let by_length =
+        Targetint.OCaml.Map.add length singleton_block
+          Targetint.OCaml.Map.empty
+      in
+      let block_cases : block_cases = Blocks { by_length; } in
+      let blocks =
+        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
+      in
+      let blocks_imms : blocks_and_tagged_immediates =
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+        }
+      in
+      { descr =
+          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
+        phantom = None;
+      }
+
+  let this_immutable_float_array fields : t =
+    let make_field f : _ ty_naked_number =
+      No_alias (Join [Float (Float_by_bit_pattern.Set.singleton f)])
+    in
+    let fields = Array.map make_field fields in
+    immutable_float_array fields
+
+  let block tag ~(fields : t mutable_or_immutable array) =
+    (* CR mshinwell: We should check the field kinds against the tag. *)
+    match Targetint.OCaml.of_int_option (Array.length fields) with
+    | None ->
+      Misc.fatal_error "Block too long for target"
+    | Some length ->
+      let fields =
+        Array.map
+          (fun (field : _ mutable_or_immutable) : t ->
+            match field with
+            | Immutable t -> t
+            | Mutable -> any_value ())
+          fields
+      in
+      let fields = create_parameters_from_types (Array.to_list fields) in
+      let singleton_block : singleton_block =
+        { fields;
+        }
+      in
+      let by_length =
+        Targetint.OCaml.Map.add length singleton_block
+          Targetint.OCaml.Map.empty
+      in
+      let block_cases : block_cases = Blocks { by_length; } in
+      let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
+      let blocks_imms : blocks_and_tagged_immediates =
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+        }
+      in
+      { descr =
+          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
+        phantom = None;
+      }
+
+  (* CR mshinwell: bad name *)
+  let block_of_values tag ~(fields : ty_value mutable_or_immutable array) =
+    let fields =
+      Array.map
+        (fun (field : _ mutable_or_immutable) : t mutable_or_immutable ->
+          match field with
+          | Immutable ty_value ->
+            Immutable {
+              descr = Value ty_value;
+              phantom = None;
+            }
+          | Mutable -> Mutable)
+        fields
+    in
+    block tag ~fields
+
+  let block_of_unknown_values tag ~size =
+    let fields =
+      Array.init size (fun _index : _ mutable_or_immutable ->
+        Immutable (any_value_as_ty_value ()))
+    in
+    block_of_values tag ~fields
+
+  let any_boxed_float () = box_float (any_naked_float ())
+  let any_boxed_int32 () = box_int32 (any_naked_int32 ())
+  let any_boxed_int64 () = box_int64 (any_naked_int64 ())
+  let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
   let check_of_kind t (expected_kind : K.t) =
     let actual_kind = kind t in
@@ -1870,28 +1850,12 @@ result
     else Blocks { by_length = by_length'; }
 
   and rename_variables_singleton_block subst
-        (({ env_extension; fields; } : singleton_block) as singleton_block) =
-    let env_extension' =
-      rename_variables_env_extension subst env_extension
-    in
-    let fields_changed = ref false in
-    let fields =
-      Array.map
-        (fun (field : t mutable_or_immutable) : t mutable_or_immutable ->
-          match field with
-          | Immutable t ->
-            let t' = rename_variables subst t in
-            if not (t == t') then begin
-              fields_changed := true;
-            end;
-            Immutable t'
-          | Mutable -> field)
-        fields
-    in
-    if env_extension == env_extension' && not !fields_changed then
+        (({ fields; } : singleton_block) as singleton_block) =
+    let fields' = rename_variables_parameters subst fields in
+    if fields == fields' then
       singleton_block
     else
-      { env_extension = env_extension'; fields; }
+      { fields = fields'; }
 
   and rename_variables_parameters subst
         (({ params; env_extension; } : parameters) as parameters)
@@ -2070,7 +2034,7 @@ result
     in
     let last_equations_rev_changed = ref false in
     let last_equations_rev' =
-      List.map (fun ((name, t) as equation) ->
+      List.map (fun (name, t) ->
           let name' = rename_variables_name subst name in
           let t' = rename_variables subst t in
           if (not (name == name')) || (not (t == t')) then begin
@@ -2169,6 +2133,7 @@ result
     let bottom_as_ty_fabricated = bottom_as_ty_fabricated
     let is_obviously_bottom = is_obviously_bottom
     let get_alias = get_alias
+    let create_parameters_from_types = create_parameters_from_types
   end
 
   module rec Make_meet_or_join : functor
@@ -2722,7 +2687,7 @@ result
         let union_or_inter = Closure_id.Map.inter
 
         (* CR mshinwell: implement these *)
-        let union_or_inter_and_left f t1 t2 = assert false
+        let union_or_inter_and_left _f _t1 _t2 = assert false
       end
     end
 
@@ -2732,7 +2697,7 @@ result
 
         let union_or_inter = Var_within_closure.Map.inter
 
-        let union_or_inter_and_left f t1 t2 = assert false
+        let union_or_inter_and_left _f _t1 _t2 = assert false
       end
     end
 
@@ -2772,6 +2737,12 @@ result
       module Set = struct
         type t = Immediate.Set.t
         let union_or_inter = Immediate.Set.union
+      end
+
+      module Map = struct
+        type 'a t = 'a Immediate.Map.t
+
+        let union_or_inter = Immediate.Map.union
       end
     end
 
@@ -2817,8 +2788,8 @@ result
 
         let union_or_inter = Closure_id.Map.union
 
-        let union_or_inter_and_left _f t1 t2 =
-          Closure_id.Map.union t1 t2
+        let union_or_inter_and_left f t1 t2 =
+          Closure_id.Map.union f t1 t2
       end
     end
 
@@ -2828,8 +2799,8 @@ result
 
         let union_or_inter = Var_within_closure.Map.union
 
-        let union_or_inter_and_left _f t1 t2 =
-          Var_within_closure.Map.union t1 t2
+        let union_or_inter_and_left f t1 t2 =
+          Var_within_closure.Map.union f t1 t2
       end
     end
 
@@ -2862,4 +2833,17 @@ result
   let strictly_more_precise = Both_meet_and_join.strictly_more_precise
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal
+
+  module T2 = struct
+    type nonrec typing_environment = typing_environment
+    type nonrec typing_environment_entry = typing_environment_entry
+    type nonrec typing_environment_entry0 = typing_environment_entry0
+    type nonrec env_extension = env_extension
+    type nonrec flambda_type = flambda_type
+    type nonrec t_in_context = t_in_context
+    type nonrec join_env = join_env
+    type nonrec parameters = parameters
+    type nonrec 'a ty = 'a ty
+    type nonrec 'a unknown_or_join = 'a unknown_or_join
+  end
 end

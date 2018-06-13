@@ -87,4 +87,6 @@ module type S = sig
 
   (** Like [meet_fresh] but for [join]. *)
   val join_fresh : T.join_env -> t -> t -> t
+
+  val standalone_extension : t -> T.env_extension
 end

@@ -55,16 +55,7 @@ module Make
       env_extension = TEE.empty;
     }
 
-  let create_from_types tys =
-    let params =
-      List.mapi (fun index ty ->
-          let kind = T.kind ty in
-          let var = Variable.create (Format.sprintf "param%d" index) in
-          let parameter = Parameter.wrap var in
-          Kinded_parameter.create parameter kind)
-        tys
-    in
-    create params
+  let create_from_types = T.create_parameters_from_types
 
   let print ppf t =
     T.print_parameters ~cache:(Printing_cache.create ()) ppf t
@@ -187,4 +178,15 @@ module Make
 
   let meet_fresh env t1 t2 : t = meet env t1 t2
   let join_fresh env t1 t2 : t = join env t1 t2
+
+  let standalone_extension t =
+    (* CR mshinwell: Maybe the extension should always contain these
+        bindings? *)
+    List.fold_left (fun env_extension param ->
+        let name = Kinded_parameter.name param in
+        let param_kind = Kinded_parameter.kind param in
+        TEE.add_definition_at_beginning env_extension name
+          (T.bottom param_kind))
+      t.env_extension
+      t.params
 end

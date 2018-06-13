@@ -241,15 +241,22 @@ struct
                   match Targetint.OCaml.Map.get_singleton by_length with
                   | None -> equations, Or_unknown.Known blocks
                   | Some (length, singleton_block) ->
+                    let env_extension =
+                      (* CR mshinwell: This seems wasteful -- we just don't
+                         need the existentially-bound names *)
+                      Parameters.standalone_extension singleton_block.fields
+                    in
                     let equations =
                       TEE.meet (JE.central_environment env)
-                        singleton_block.env_extension equations
+                        env_extension equations
                     in
+(*
                     let singleton_block : singleton_block =
                       { singleton_block with
                         env_extension = TEE.empty;
                       }
                     in
+*)
                     let by_length =
                       Targetint.OCaml.Map.singleton length singleton_block
                     in

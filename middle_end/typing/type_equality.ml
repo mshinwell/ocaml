@@ -29,7 +29,7 @@ struct
   let fast_equal (t1 : t) (t2 : t) =
     t1 == t2
 
-  let equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
+  let _equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
         (mut2 : _ mutable_or_immutable) =
     match mut1, mut2 with
     | Immutable contents1, Immutable contents2 ->
@@ -149,14 +149,9 @@ struct
     equal_env_extension env_extension1 env_extension2
 
   and equal_singleton_block
-        ({ env_extension = env_extension1; fields = fields1; }
-          : singleton_block)
-        ({ env_extension = env_extension2; fields = fields2; }
-          : singleton_block)
-        =
-    equal_env_extension env_extension1 env_extension2
-      && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
-           fields1 fields2
+        ({ fields = fields1; } : singleton_block)
+        ({ fields = fields2; } : singleton_block) =
+    equal_parameters fields1 fields2
 
   and equal_block_cases (Blocks { by_length = by_length1; })
         (Blocks { by_length = by_length2; }) =

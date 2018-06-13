@@ -68,7 +68,7 @@ module type S =
     val union_both
        : in_left_only:('a -> 'a)
       -> in_right_only:('a -> 'a)
-      -> in_both:('a -> 'a -> 'a option)
+      -> in_both:(key -> 'a -> 'a -> 'a option)
       -> 'a t
       -> 'a t
       -> 'a t
@@ -547,12 +547,12 @@ module Make(Ord: OrderedType) = struct
       merge aux m1 m2
 
     let union_both ~in_left_only ~in_right_only ~in_both m1 m2 =
-      let aux _ m1 m2 =
+      let aux key m1 m2 =
         match m1, m2 with
         | None, None -> None
         | None, Some m -> Some (in_right_only m)
         | Some m, None -> Some (in_left_only m)
-        | Some m1, Some m2 -> in_both m1 m2
+        | Some m1, Some m2 -> in_both key m1 m2
       in
       merge aux m1 m2
 

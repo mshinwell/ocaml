@@ -470,4 +470,6 @@ module type S = sig
     -> unit
 
   val is_obviously_bottom : flambda_type -> bool
+
+  val create_parameters_from_types : flambda_type list -> parameters
 end
