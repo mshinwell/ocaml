@@ -412,9 +412,11 @@ module type S = sig
 
   val is_empty_typing_environment : typing_environment -> bool
 
+(*
   val as_or_more_precise : typing_environment -> t -> than:t -> bool
 
   val strictly_more_precise : typing_environment -> t -> than:t -> bool
+*)
 
   val rename_variables : t -> Name.t Name.Map.t -> t
 

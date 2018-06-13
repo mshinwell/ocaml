@@ -22,6 +22,6 @@
 module Make
     (T : Flambda_type0_internal_intf.S)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_for_types with module T := T)
+    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
     (Type_equality : Type_equality_intf.S with module T := T)
   : Typing_env_intf.S with module T := T

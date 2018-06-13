@@ -2527,7 +2527,7 @@ result
     end and Meet_and_join_value :
       Meet_and_join_intf.S
         with module T := T2
-        with type of_kind_foo := of_kind_value
+        with type of_kind_foo = of_kind_value
       = Outer_namespace.Meet_and_join_value.Make (T2)
           (Make_meet_and_join) (Meet_and_join_naked_immediate)
           (Meet_and_join_naked_float) (Meet_and_join_naked_int32)
@@ -2539,24 +2539,24 @@ result
       module Naked_immediate :
         Meet_and_join_intf.S
           with module T := T2
-          with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+          with type of_kind_foo = Immediate.Set.t of_kind_naked_number
       module Naked_float :
         Meet_and_join_intf.S
           with module T := T2
-          with type of_kind_foo :=
+          with type of_kind_foo =
             Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
       module Naked_int32 :
         Meet_and_join_intf.S
           with module T := T2
-          with type of_kind_foo := Numbers.Int32.Set.t of_kind_naked_number
+          with type of_kind_foo = Numbers.Int32.Set.t of_kind_naked_number
       module Naked_int64 :
         Meet_and_join_intf.S
           with module T := T2
-          with type of_kind_foo := Numbers.Int64.Set.t of_kind_naked_number
+          with type of_kind_foo = Numbers.Int64.Set.t of_kind_naked_number
       module Naked_nativeint :
         Meet_and_join_intf.S
           with module T := T2
-          with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+          with type of_kind_foo = Targetint.Set.t of_kind_naked_number
     end = Outer_namespace.Meet_and_join_naked_number.Make
       (T2) (Make_meet_and_join) (Meet_and_join) (Typing_env)
       (Typing_env_extension) (E)
@@ -2600,14 +2600,27 @@ result
   and Join : sig
     module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
   end = Make_meet_or_join (For_join)
+  and Both_meet_and_join : Meet_and_join_intf.S_both with module T := T2
+    = struct
+      module T = T2
+
+      let meet env t1 t2 =
+        Meet.Meet_and_join.meet_or_join (Join_env.create env) t1 t2
+
+      let join env t1 t2 =
+        let join_ty, _env_extension =
+          Join.Meet_and_join.meet_or_join env t1 t2
+        in
+        join_ty
+    end
   and Typing_env :
     Typing_env_intf.S with module T := T2
       = Outer_namespace.Typing_environment0.Make (T2)
-        (Typing_env_extension) (Meet_and_join) (Type_equality)
+          (Typing_env_extension) (Both_meet_and_join) (Type_equality)
   and Typing_env_extension :
     Typing_env_extension_intf.S with module T := T2
       = Outer_namespace.Typing_env_extension.Make (T2)
-        (Typing_env) (Meet_for_types) (Type_equality)
+          (Typing_env) (Both_meet_and_join) (Type_equality) (Join_env)
   and Type_equality :
     Type_equality_intf.S with module T := T2
       = Outer_namespace.Type_equality.Make (T2) (Typing_env_extension)
@@ -2616,19 +2629,24 @@ result
     = Outer_namespace.Join_env.Make (T2) (Typing_env) (Typing_env_extension)
   and Parameters :
     Parameters_intf.S with module T := T2
-    = Outer_namespace.Parameters.Make (T2)
+    = Outer_namespace.Parameters.Make (T2) (Typing_env) (Typing_env_extension)
+        (Both_meet_and_join) (Join_env)
   and T2 : sig
     (* CR mshinwell: [@remove_aliases] can be removed once we rebase to
        4.07 or later (this was here to work around a bug). *)
     include module type of struct include T1 end [@remove_aliases]
 
+(*
     val as_or_more_precise : typing_environment -> t -> than:t -> bool
     val strictly_more_precise : typing_environment -> t -> than:t -> bool
+*)
   end = struct
     include T1
 
+(*
     let as_or_more_precise = Meet_and_join.as_or_more_precise
     let strictly_more_precise = Meet_and_join.strictly_more_precise
+*)
   end and For_meet : Either_meet_or_join_intf.S with module T := T2
   = struct
     let name = "meet"
@@ -2755,8 +2773,8 @@ result
       join join_env thing1 thing2, Typing_env_extension.empty
   end
 
-  let meet = Meet.Meet_and_join.meet_or_join
-  let join = Join.Meet_and_join.meet_or_join
+  let meet = Both_meet_and_join.meet
+  let join = Both_meet_and_join.join
 
   let as_or_more_precise env t1 ~than:t2 =
     if Type_equality.fast_equal t1 t2 then true

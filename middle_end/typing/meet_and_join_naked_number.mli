@@ -30,22 +30,22 @@ module Make
   : sig
     module Naked_immediate : Meet_and_join_intf.S
       with module T := T
-      with type of_kind_foo := Immediate.Set.t T.of_kind_naked_number
+      with type of_kind_foo = Immediate.Set.t T.of_kind_naked_number
 
     module Naked_float : Meet_and_join_intf.S
       with module T := T
-      with type of_kind_foo :=
+      with type of_kind_foo =
         Numbers.Float_by_bit_pattern.Set.t T.of_kind_naked_number
 
     module Naked_int32 : Meet_and_join_intf.S
       with module T := T
-      with type of_kind_foo := Numbers.Int32.Set.t T.of_kind_naked_number
+      with type of_kind_foo = Numbers.Int32.Set.t T.of_kind_naked_number
 
     module Naked_int64 : Meet_and_join_intf.S
       with module T := T
-      with type of_kind_foo := Numbers.Int64.Set.t T.of_kind_naked_number
+      with type of_kind_foo = Numbers.Int64.Set.t T.of_kind_naked_number
 
     module Naked_nativeint : Meet_and_join_intf.S
       with module T := T
-      with type of_kind_foo := Targetint.Set.t T.of_kind_naked_number
+      with type of_kind_foo = Targetint.Set.t T.of_kind_naked_number
   end

@@ -20,10 +20,14 @@ module Make
     (T : Flambda_type0_internal_intf.S)
     (Make_meet_and_join : functor
       (S : Meet_and_join_spec_intf.S with module T := T)
-        -> Meet_and_join_intf.S with module T := T)
+        -> Meet_and_join_intf.S
+             with module T := T
+             with type of_kind_foo := S.of_kind_foo)
     (Meet_and_join_value : Meet_and_join_intf.S with module T := T)
     (Meet_and_join : Meet_and_join_intf.S_for_types with module T := T)
     (Typing_env : Typing_env_intf.S with module T := T)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
     (E : Either_meet_or_join_intf.S with module T := T)
-  : Meet_and_join_intf.S with module T := T
+  : Meet_and_join_intf.S
+      with module T := T
+      with type of_kind_foo = T.of_kind_fabricated
