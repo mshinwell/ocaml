@@ -27,6 +27,16 @@ module type S = sig
 
       val union_or_inter : t -> t -> t
     end
+
+    module Map : sig
+      type 'a t = 'a Immediate.Map.t
+
+      val union_or_inter
+         : (Immediate.t -> 'a -> 'a -> 'a option)
+        -> 'a t
+        -> 'a t
+        -> 'a t
+    end
   end
 
   module Float_by_bit_pattern : sig

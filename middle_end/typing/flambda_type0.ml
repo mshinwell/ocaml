@@ -2545,7 +2545,7 @@ result
           (Meet_and_join_naked_float) (Meet_and_join_naked_int32)
           (Meet_and_join_naked_int64) (Meet_and_join_naked_nativeint)
           (Meet_and_join_fabricated) (Meet_and_join)
-          (Typing_env) (Typing_env_extension) (E)
+          (Typing_env) (Typing_env_extension) (Join_env) (E)
     and Meet_and_join_naked_number : sig
       (* CR mshinwell: Deal with this signature somehow *)
       module Naked_immediate :

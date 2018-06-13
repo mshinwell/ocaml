@@ -233,6 +233,21 @@ end) = struct
     | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
+  and of_kind_naked_immediate =
+    Immediate.Set.t of_kind_naked_number
+
+  and of_kind_naked_float =
+    Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+
+  and of_kind_naked_int32 =
+    Int32.Set.t of_kind_naked_number
+
+  and of_kind_naked_int64 =
+    Int64.Set.t of_kind_naked_number
+
+  and of_kind_naked_nativeint =
+    Targetint.Set.t of_kind_naked_number
+
   and discriminant_case = {
     env_extension : env_extension;
   }
