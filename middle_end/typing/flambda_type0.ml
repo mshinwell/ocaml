@@ -2733,6 +2733,9 @@ result
 
     let switch meet _join join_env thing1 thing2 =
       meet (Join_env.central_environment join_env) thing1 thing2
+
+    let switch' meet _join join_env thing1 thing2 =
+      meet (Join_env.central_environment join_env) thing1 thing2
   end and For_join : Either_meet_or_join_intf.S with module T := T2
   = struct
     let name = "join"
@@ -2796,6 +2799,9 @@ result
 
     let switch _meet join join_env thing1 thing2 =
       join join_env thing1 thing2, Typing_env_extension.empty
+
+    let switch' _meet join join_env thing1 thing2 =
+      join join_env thing1 thing2
   end
 
   let meet = Both_meet_and_join.meet

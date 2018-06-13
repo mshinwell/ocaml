@@ -66,7 +66,7 @@ module type S = sig
       type 'a t = 'a Closure_id.Map.t
 
       val union_or_inter
-         : (Closure_id.t -> 'a -> 'a -> 'a)
+         : (Closure_id.t -> 'a -> 'a -> 'a option)
         -> 'a t
         -> 'a t
         -> 'a t
@@ -87,7 +87,7 @@ module type S = sig
       type 'a t = 'a Var_within_closure.Map.t
 
       val union_or_inter
-         : (Var_within_closure.t -> 'a -> 'a -> 'a)
+         : (Var_within_closure.t -> 'a -> 'a -> 'a option)
         -> 'a t
         -> 'a t
         -> 'a t
@@ -98,6 +98,20 @@ module type S = sig
         -> 'a t
         -> 'a t
         -> 'a t
+    end
+  end
+
+  module Discriminant : sig
+    module Map : sig
+      type 'a t = 'a Discriminant.Map.t
+
+      val union_or_inter_both
+        : in_left_only:('a -> 'a)
+       -> in_right_only:('a -> 'a)
+       -> in_both:('a -> 'a -> 'a)
+       -> 'a t
+       -> 'a t
+       -> 'a t
     end
   end
 
@@ -114,4 +128,12 @@ module type S = sig
     -> 'a
     -> 'a
     -> 'a * T.env_extension
+
+  val switch'
+     : (T.typing_environment -> 'a -> 'a -> 'a)
+    -> (T.join_env -> 'a -> 'a -> 'a)
+    -> T.join_env
+    -> 'a
+    -> 'a
+    -> 'a
 end

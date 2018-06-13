@@ -25,7 +25,9 @@ module Make
         -> Meet_and_join_intf.S
              with module T := T
              with type of_kind_foo = S.of_kind_foo)
-    (Meet_and_join_value : Meet_and_join_intf.S with module T := T)
+    (Meet_and_join_value : Meet_and_join_intf.S
+       with module T := T
+       with type of_kind_foo = T.of_kind_value)
     (Meet_and_join : Meet_and_join_intf.S_for_types with module T := T)
     (Typing_env : Typing_env_intf.S with module T := T)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
@@ -40,10 +42,9 @@ struct
     open T
 
     module JE = Join_env
+    module TEE = Typing_env_extension
 
-    type env_extension = T.env_extension
-
-    type of_kind_foo = of_kind_fabricated
+    type of_kind_foo = T.of_kind_fabricated
 
     let kind = K.fabricated ()
 
@@ -55,15 +56,16 @@ struct
     let force_to_kind = force_to_kind_fabricated
     let print_ty = print_ty_fabricated
 
-    let meet_closure env
+    let meet_or_join_closure _env
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_absorbing.t =
       if closure1 == closure2 then
-        Ok (closure1, Typing_env_extension.empty)
+        Ok (closure1, TEE.empty)
       else
         Misc.fatal_error "meet_closure: not yet implemented"
 
-(*
+(* XXX To be fixed and re-enabled
+
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
        function type (with a surrogate) propagated from the first round is
@@ -73,14 +75,14 @@ struct
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_bottom.t =
       if closure1 == closure2 then begin
-        Ok (closure1, Typing_env_extension.empty)
+        Ok (closure1, TEE.empty)
       end else begin
         let cannot_prove_different ~params1 ~params2
               ~param_names1 ~param_names2 ~result1 ~result2
               ~result_env_extension1 ~result_env_extension2 : _ Or_bottom.t =
           let same_arity = List.compare_lengths params1 params2 = 0 in
           let same_num_results = List.compare_lengths result1 result2 = 0 in
-          let equations = ref (Typing_env_extension.empty) in
+          let equations = ref (TEE.empty) in
           let has_bottom params = List.exists is_obviously_bottom params in
           let params_changed = ref Neither in
           let params : _ Or_bottom.t =
@@ -119,7 +121,7 @@ struct
                       params_changed := join_changes !params_changed Right
                     end;
                     equations :=
-                      Typing_env_extension.meet env
+                      TEE.meet env
                         new_equations !equations;
                     t)
                   params1
@@ -146,20 +148,20 @@ struct
                 let result_env_extension2 =
                   (* XXX Check that [rename_names] has the correct
                      semantics *)
-                  Typing_env_extension.rename_names
+                  TEE.rename_names
                     result_env_extension2 params2_to_params1_freshening
                 in
                 let result_env_extension =
-                  Typing_env_extension.meet env_with_params
+                  TEE.meet env_with_params
                     result_env_extension1 result_env_extension2
                 in
                 let result_env_extension_changed : changes =
                   let changed1 =
-                    not (Typing_env_extension.fast_equal
+                    not (TEE.fast_equal
                       result_env_extension1 result_env_extension)
                   in
                   let changed2 =
-                    not (Typing_env_extension.fast_equal
+                    not (TEE.fast_equal
                       result_env_extension2 result_env_extension)
                   in
                   match changed1, changed2 with
@@ -184,7 +186,7 @@ struct
                         result_changed := join_changes !result_changed Right
                       end;
                       equations :=
-                        Typing_env_extension.meet result_env
+                        TEE.meet result_env
                           new_equations !equations;
                       t)
                     result1
@@ -257,17 +259,17 @@ struct
               Bottom
             end
           | Non_inlinable None, Non_inlinable None ->
-            Ok (Non_inlinable None, Typing_env_extension.empty)
+            Ok (Non_inlinable None, TEE.empty)
           | Non_inlinable (Some non_inlinable), Non_inlinable None
           | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
             (* We can arbitrarily pick one side or the other: we choose the
                side which gives a more precise type. *)
             Ok (Non_inlinable (Some non_inlinable),
-              Typing_env_extension.empty)
+              TEE.empty)
           | Non_inlinable None, Inlinable inlinable
           | Inlinable inlinable, Non_inlinable None ->
             (* Likewise. *)
-            Ok (Inlinable inlinable, Typing_env_extension.empty)
+            Ok (Inlinable inlinable, TEE.empty)
           | Non_inlinable (Some non_inlinable1),
               Non_inlinable (Some non_inlinable2) ->
             let result =
@@ -505,7 +507,7 @@ struct
                   params
               in
               let result_env_extension =
-                Typing_env_extension.join env_with_params
+                TEE.join env_with_params
                   env_extension1
                   env_extension2
                   inlinable1.result_env_extension
@@ -518,11 +520,11 @@ struct
                     scope_level
                 in
                 let result_env_extension1 =
-                  Typing_env_extension.diff inlinable1.result_env_extension
+                  TEE.diff inlinable1.result_env_extension
                     result_env
                 in
                 let result_env_extension2 =
-                  Typing_env_extension.diff inlinable2.result_env_extension
+                  TEE.diff inlinable2.result_env_extension
                     result_env
                 in
                 List.map2 (fun t1 t2 ->
@@ -571,14 +573,14 @@ struct
     let meet_or_join_set_of_closures env
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * env_extension) Or_absorbing.t =
-      let equations = ref (Typing_env_extension.empty) in
+      let equations = ref (TEE.empty) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
         match set1.closures, set2.closures with
         | Exactly closures1, Exactly closures2 ->
           let closures =
             E.Closure_id.Map.union_or_inter
-              (fun ty_fabricated1 ty_fabricated2 ->
+              (fun _closure_id ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
                   Meet_and_join_fabricated.meet_or_join_ty env
                     ty_fabricated1 ty_fabricated2
@@ -587,7 +589,7 @@ struct
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
                   Some ty_fabricated
                 end)
@@ -612,7 +614,8 @@ struct
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
           let closures =
-            E.Closure_id.Map.union_or_inter_and_left (fun ty1 ty2 ->
+            E.Closure_id.Map.union_or_inter_and_left
+              (fun _closure_id ty1 ty2 ->
                 let ty_fabricated, new_equations =
                   Meet_and_join_fabricated.meet_or_join_ty env
                     ty1 ty2
@@ -621,7 +624,7 @@ struct
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
                   Some ty_fabricated
                 end)
@@ -631,7 +634,7 @@ struct
         | Open closures1, Open closures2 ->
           let closures =
             E.Closure_id.Map.union_or_inter
-              (fun ty_fabricated1 ty_fabricated2 ->
+              (fun _closure_id ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
                   Meet_and_join_fabricated.meet_or_join_ty env
                     ty_fabricated1 ty_fabricated2
@@ -640,7 +643,7 @@ struct
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
                   Some ty_fabricated
                 end)
@@ -653,7 +656,8 @@ struct
         match set1.closure_elements, set2.closure_elements with
         | Exactly closure_elements1, Exactly closure_elements2 ->
           let closure_elements =
-            E.Var_within_closure.Map.union_or_inter (fun ty_value1 ty_value2 ->
+            E.Var_within_closure.Map.union_or_inter
+              (fun _var_within_closure ty_value1 ty_value2 ->
                 let ty_value, new_equations =
                   Meet_and_join_value.meet_or_join_ty env
                     ty_value1 ty_value2
@@ -662,7 +666,7 @@ struct
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
                   Some ty_value
                 end)
@@ -687,7 +691,8 @@ struct
         | Exactly closure_elements1, Open closure_elements2
         | Open closure_elements2, Exactly closure_elements1 ->
           let closures =
-            E.Var_within_closure.Map.union_or_inter_and_left (fun ty1 ty2 ->
+            E.Var_within_closure.Map.union_or_inter_and_left
+              (fun _var_within_closure ty1 ty2 ->
                 let ty_value, new_equations =
                   Meet_and_join_value.meet_or_join_ty env
                     ty1 ty2
@@ -696,28 +701,29 @@ struct
                   None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
                   Some ty_value
                 end)
-              closures1 closures2  (* N.B. the order matters on this line *)
+              closure_elements1  (* N.B. The order matters here *)
+              closure_elements2
           in
           Exactly closures
         | Open closure_elements1, Open closure_elements2 ->
           let closure_elements =
             E.Var_within_closure.Map.union_or_inter
-              (fun ty_value1 ty_value2 ->
+              (fun _var_within_closure ty_value1 ty_value2 ->
                 let ty_value, new_equations =
                   Meet_and_join_value.meet_or_join_ty env
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
-                  bottom_as_ty_value ()
+                  None
                 end else begin
                   equations :=
-                    Typing_env_extension.meet env
+                    TEE.meet (JE.central_environment env)
                       new_equations !equations;
-                  ty_value
+                  Some ty_value
                 end)
               closure_elements1
               closure_elements2
@@ -745,11 +751,9 @@ struct
     let meet_or_join_of_kind_foo env
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_absorbing.t =
-      if
-        env.fast_check_extensions_same_both_sides env
-          && of_kind1 == of_kind2
+      if JE.fast_check_extensions_same_both_sides env && of_kind1 == of_kind2
       then
-        Ok (of_kind1, Typing_env_extension.empty)
+        Ok (of_kind1, TEE.empty)
       else
         match of_kind1, of_kind2 with
         | Discriminant discriminants1, Discriminant discriminants2 ->
@@ -758,39 +762,48 @@ struct
               ~in_left_only:
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
-                  let env_extension = JE.holds_on_left env in
+                  let env_extension =
+                    TEE.meet (JE.central_environment env)
+                      env_extension (JE.holds_on_left env)
+                  in
                   { env_extension; })
               ~in_right_only:
                 (fun ({ env_extension; } : discriminant_case)
                       : discriminant_case ->
-                  let env_extension = JE.holds_on_right env in
+                  let env_extension =
+                    TEE.meet (JE.central_environment env)
+                      env_extension (JE.holds_on_right env)
+                  in
                   { env_extension; })
               ~in_both:
                 (fun ({ env_extension = env_extension1; } : discriminant_case)
                      ({ env_extension = env_extension2; } : discriminant_case)
                      : discriminant_case ->
                   let env_extension =
-                    E.Typing_env_extension.meet_or_join env
+                    E.switch'
+                      TEE.meet TEE.join
+                      env
                       env_extension1 env_extension2
                   in
                   { env_extension; })
+              discriminants1 discriminants2
           in
           begin match Discriminant.Map.get_singleton discriminants with
           | None ->
             if Discriminant.Map.is_empty discriminants then
               Absorbing
             else
-              Ok (Discriminant discriminants, Typing_env_extension.empty)
+              Ok (Discriminant discriminants, TEE.empty)
           | Some (discriminant, discriminant_case) ->
             let discriminants =
               Discriminant.Map.singleton discriminant
-                ({ env_extension = Typing_env_extension.empty; }
+                ({ env_extension = TEE.empty; }
                   : discriminant_case)
             in
             Ok (Discriminant discriminants, discriminant_case.env_extension)
           end
         | Set_of_closures set1, Set_of_closures set2 ->
-          begin match meet_set_of_closures env set1 set2 with
+          begin match meet_or_join_set_of_closures env set1 set2 with
           | Ok (set_of_closures, equations) ->
             if set_of_closures == set1 then
               Ok (of_kind1, equations)
@@ -801,10 +814,13 @@ struct
           | Absorbing ->
             (* CR mshinwell: Here and elsewhere we are relying on this case
                never been taken for [join] *)
+            (* XXX We need to review when things should be [Bottom] and when
+               they should be [Absorbing].  e.g. no closures in the set should
+               be [Bottom] *)
             Absorbing
           end
         | Closure closure1, Closure closure2 ->
-          begin match meet_closure env closure1 closure2 with
+          begin match meet_or_join_closure env closure1 closure2 with
           | Ok (closure, equations) ->
             if closure == closure1 then
               Ok (of_kind1, equations)
