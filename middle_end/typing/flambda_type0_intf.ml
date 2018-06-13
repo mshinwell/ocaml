@@ -145,10 +145,10 @@ module type S = sig
  
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
-    env_extension : env_extension;
+    (* CR mshinwell: Mutability information has been removed for now *)
     (* CR mshinwell: We should note explicitly that these are logical fields
        (I think this only matters for float arrays on 32-bit targets) *)
-    fields : t mutable_or_immutable array;
+    fields : parameters;
   }
 
   and block_cases = private
@@ -201,6 +201,7 @@ module type S = sig
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
     body : expr;
+    code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
     dbg : Debuginfo.t;

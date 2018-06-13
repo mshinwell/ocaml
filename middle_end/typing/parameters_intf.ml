@@ -43,6 +43,8 @@ module type S = sig
     -> T.env_extension
     -> t
 
+  val create_from_types : T.flambda_type list -> t
+
   val introduce : t -> T.typing_environment -> t
 
   val arity : t -> Flambda_arity.t
@@ -76,6 +78,8 @@ module type S = sig
     -> t
     -> t
     -> t
+
+  val add_or_meet_equations : t -> T.typing_environment -> T.env_extension -> t
 
   (** As for [meet] with [Fresh] semantics, but without the optional argument,
       to avoid warning 48. *)

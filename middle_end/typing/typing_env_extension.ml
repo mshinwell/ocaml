@@ -35,6 +35,7 @@ module Make
   let fast_equal t1 t2 = (t1 == t2)
 
   let equal ~equal_type t1 t2 =
+    (* CR mshinwell: This should be improved *)
     let equal_names_and_types (name1, ty1) (name2, ty2) =
       Name.equal name1 name2 && equal_type ty1 ty2
     in

@@ -21,9 +21,7 @@ module Int64 = Numbers.Int64
 
 module Make
     (T : Flambda_type0_internal_intf.S)
-    (Expr : Expr_intf.S
-      with type flambda_type := T.flambda_type
-      with type t := T.expr)
+    (Expr : Expr_intf.S with type t := T.expr)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T) =
 struct
   open T
@@ -184,8 +182,9 @@ struct
             continuation_param = continuation_param1;
             exn_continuation_param = exn_continuation_param1;
             is_classic_mode = is_classic_mode1;
-            body = body1;
-            free_names_in_body = free_names_in_body1;
+            body = _;
+            free_names_in_body = _;
+            code_id = code_id1;
             stub = stub1;
             dbg = dbg1;
             inline = inline1;
@@ -200,8 +199,9 @@ struct
             continuation_param = continuation_param2;
             exn_continuation_param = exn_continuation_param2;
             is_classic_mode = is_classic_mode2;
-            body = body2;
-            free_names_in_body = free_names_in_body2;
+            body = _;
+            free_names_in_body = _;
+            code_id = code_id2;
             stub = stub2;
             dbg = dbg2;
             inline = inline2;
@@ -216,6 +216,7 @@ struct
           && Continuation.equal continuation_param1 continuation_param2
           && Continuation.equal exn_continuation_param1 exn_continuation_param2
           && Pervasives.compare is_classic_mode1 is_classic_mode2 = 0
+          && Code_id.equal code_id1 code_id2
           && Pervasives.compare stub1 stub2 = 0
           && Debuginfo.equal dbg1 dbg2
           && Pervasives.compare inline1 inline2 = 0
@@ -227,11 +228,7 @@ struct
                (Lazy.force size1) (Lazy.force size2)
           && Misc.Stdlib.Option.equal Closure_id.equal
             direct_call_surrogate1 direct_call_surrogate2
-          && Variable.equal my_closure1 my_closure2
-          (* We try to find differences in free variables (and indeed anything
-             else first) to avoid comparing terms. *)
-          && Name_occurrences.equal free_names_in_body1 free_names_in_body2
-          && Expr.equal ~equal_type:equal body1 body2)
+          && Variable.equal my_closure1 my_closure2)
         decls1 decls2
     | Non_inlinable ({
         direct_call_surrogate = direct_call_surrogate1;

@@ -89,45 +89,14 @@ struct
       else Ok immediates
 
     let meet_or_join_singleton_block env
-          ({ env_extension = env_extension1;
-             fields = fields1;
-           } : singleton_block)
-          ({ env_extension = env_extension2;
-             fields = fields2;
-           } : singleton_block)
-          : singleton_block * env_extension =
-      let env_extension =
-        E.switch' TEE.meet TEE.join env env_extension1 env_extension2
-      in
-      let env =
-        JE.add_extensions_and_extend_central_environment env
-          ~holds_on_left:env_extension1
-          ~holds_on_right:env_extension2
-          ~central_extension:env_extension
-      in
-      assert (Array.length fields1 = Array.length fields2);
-      let equations = ref TEE.empty in
+          ({ fields = fields1; } : singleton_block)
+          ({ fields = fields2; } : singleton_block)
+          : singleton_block =
       let fields =
-        Array.map2
-          (fun (field1 : _ mutable_or_immutable)
-               (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
-            match field1, field2 with
-            | Mutable, _ | _, Mutable -> Mutable
-            | Immutable field1, Immutable field2 ->
-              let field, new_equations =
-                E.switch Meet_and_join.meet Meet_and_join.join
-                  env field1 field2
-              in
-              equations :=
-                TEE.meet (JE.central_environment env)
-                  new_equations !equations;
-              Immutable field)
-          fields1
-          fields2
+        E.switch' Parameters.meet_fresh Parameters.join_fresh
+          env fields1 fields2
       in
-      { env_extension;
-        fields;
-      }, !equations
+      { fields; }
 
     let meet_or_join_block_cases env
           ((Blocks { by_length = by_length1; }) : block_cases)
@@ -136,26 +105,25 @@ struct
       let equations = ref TEE.empty in
       let by_length =
         E.Targetint.OCaml.Map.union_or_inter_both
-          ~in_left_only:(fun { env_extension; fields; } : singleton_block ->
-            let env_extension =
-              TEE.meet (JE.central_environment env)
-                env_extension (JE.holds_on_left env)
+          ~in_left_only:(fun { fields; } : singleton_block ->
+            let fields =
+              Parameters.add_or_meet_equations fields
+                (JE.central_environment env)
+                (JE.holds_on_left env)
             in
-            { env_extension; fields; })
-          ~in_right_only:(fun { env_extension; fields; } : singleton_block ->
-            let env_extension =
-              TEE.meet (JE.central_environment env)
-                env_extension (JE.holds_on_right env)
+            { fields; })
+          ~in_right_only:(fun { fields; } : singleton_block ->
+            let fields =
+              Parameters.add_or_meet_equations fields
+                (JE.central_environment env)
+                (JE.holds_on_right env)
             in
-            { env_extension; fields; })
-          ~in_both:(fun singleton_block1 singleton_block2 ->
-            let singleton_block, new_equations =
+            { fields; })
+          ~in_both:(fun _length singleton_block1 singleton_block2 ->
+            let singleton_block =
               meet_or_join_singleton_block env
                 singleton_block1 singleton_block2
             in
-            equations :=
-              TEE.meet (JE.central_environment env)
-                new_equations !equations;
             Some singleton_block)
           by_length1
           by_length2
@@ -163,11 +131,15 @@ struct
       if Targetint.OCaml.Map.is_empty by_length then Bottom
       else Ok (((Blocks { by_length; }) : block_cases), !equations)
 
-    let push_equations_into_block_cases by_length env env_extension' =
+    let push_equations_into_block_cases by_length env env_extension =
       Targetint.OCaml.Map.map
-        (fun ({ env_extension; fields; } : singleton_block) ->
-          let env_extension = TEE.meet env env_extension env_extension' in
-          { env_extension; fields; })
+        (fun ({ fields; } : singleton_block) ->
+          let fields =
+            Parameters.add_or_meet_equations fields
+              (JE.central_environment env)
+              env_extension
+          in
+          { fields; })
         by_length
 
     let meet_or_join_blocks env blocks1 blocks2 : _ Or_bottom.t =
@@ -177,18 +149,16 @@ struct
           ~in_left_only:(fun (Blocks { by_length; } : block_cases) ->
             let by_length =
               push_equations_into_block_cases by_length
-                (JE.central_environment env)
-                (JE.holds_on_left env)
+                env (JE.holds_on_left env)
             in
             Blocks { by_length; })
           ~in_right_only:(fun (Blocks { by_length; } : block_cases) ->
             let by_length =
               push_equations_into_block_cases by_length
-                (JE.central_environment env)
-                (JE.holds_on_right env)
+                env (JE.holds_on_right env)
             in
             Blocks { by_length; })
-          ~in_both:(fun block_cases1 block_cases2 ->
+          ~in_both:(fun _tag block_cases1 block_cases2 ->
             match meet_or_join_block_cases env block_cases1 block_cases2 with
             | Ok (block_cases, new_equations) ->
               equations :=

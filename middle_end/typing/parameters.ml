@@ -55,6 +55,17 @@ module Make
       env_extension = TEE.empty;
     }
 
+  let create_from_types tys =
+    let params =
+      List.mapi (fun index ty ->
+          let kind = T.kind ty in
+          let var = Variable.create (Format.sprintf "param%d" index) in
+          let parameter = Parameter.wrap var in
+          Kinded_parameter.create parameter kind)
+        tys
+    in
+    create params
+
   let print ppf t =
     T.print_parameters ~cache:(Printing_cache.create ()) ppf t
 
@@ -92,6 +103,11 @@ module Make
         end;
         kind1)
       (List.combine t1.params t2.params)
+
+  let add_or_meet_equations t env env_extension =
+    { t with
+      env_extension = TEE.meet env t.env_extension env_extension;
+    }
 
   type fresh_name_semantics =
     | Fresh

@@ -66,20 +66,6 @@ module type S = sig
     end
   end
 
-  module Tag : sig
-    module Map : sig
-      type 'a t = 'a Tag.Map.t
-
-      val union_or_inter_both
-        : in_left_only:('a -> 'a)
-       -> in_right_only:('a -> 'a)
-       -> in_both:('a -> 'a -> 'a option)
-       -> 'a t
-       -> 'a t
-       -> 'a t
-    end
-  end
-
   module Targetint : sig
     module Set : sig
       type t = Targetint.Set.t
@@ -94,7 +80,7 @@ module type S = sig
         val union_or_inter_both
           : in_left_only:('a -> 'a)
          -> in_right_only:('a -> 'a)
-         -> in_both:('a -> 'a -> 'a option)
+         -> in_both:(Targetint.OCaml.t -> 'a -> 'a -> 'a option)
          -> 'a t
          -> 'a t
          -> 'a t
@@ -142,6 +128,20 @@ module type S = sig
     end
   end
 
+  module Tag : sig
+    module Map : sig
+      type 'a t = 'a Tag.Map.t
+
+      val union_or_inter_both
+        : in_left_only:('a -> 'a)
+       -> in_right_only:('a -> 'a)
+       -> in_both:(Tag.t -> 'a -> 'a -> 'a option)
+       -> 'a t
+       -> 'a t
+       -> 'a t
+    end
+  end
+
   module Discriminant : sig
     module Map : sig
       type 'a t = 'a Discriminant.Map.t
@@ -149,7 +149,7 @@ module type S = sig
       val union_or_inter_both
         : in_left_only:('a -> 'a)
        -> in_right_only:('a -> 'a)
-       -> in_both:('a -> 'a -> 'a option)
+       -> in_both:(Discriminant.t -> 'a -> 'a -> 'a option)
        -> 'a t
        -> 'a t
        -> 'a t

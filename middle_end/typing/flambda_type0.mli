@@ -24,5 +24,5 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 (** The type system is parameterised over the expression language. *)
-module Make (Expr : Expr_intf.S with type flambda_type := Flambda_type.t)
+module Make (Expr : Expr_intf.S)
   : Flambda_type0_intf.S with type expr = Expr.t

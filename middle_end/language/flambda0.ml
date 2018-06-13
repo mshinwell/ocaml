@@ -1608,6 +1608,7 @@ end and Function_declaration : sig
     return_arity : Flambda_arity.t;
     params : Typed_parameter.t list;
     body : Expr.t;
+    code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
     dbg : Debuginfo.t;
@@ -1682,6 +1683,7 @@ end = struct
       exn_continuation_param;
       return_arity;
       body;
+      code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
       stub;
       dbg;
@@ -1698,6 +1700,7 @@ end = struct
       exn_continuation_param = t.exn_continuation_param;
       return_arity = t.return_arity;
       body;
+      code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
       stub = t.stub;
       dbg = t.dbg;
@@ -1714,13 +1717,16 @@ end = struct
       exn_continuation_param = t.exn_continuation_param;
       return_arity = t.return_arity;
       body;
+      code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
       specialise = t.specialise;
       is_a_functor = t.is_a_functor;
-      my_closure = t.my_closure; (* XXX Updating that field is probably needed also *)
+      my_closure = t.my_closure;
+      (* CR pchambart: Updating that field ([my_closure]) is probably needed
+         also *)
     }
 
   let update_params t ~params =
@@ -1743,7 +1749,8 @@ end = struct
           exn_continuation_param = exn_continuation_param1;
           return_arity = return_arity1;
           params = params1;
-          body = body1;
+          body = _;
+          code_id = code_id1;
           free_names_in_body = free_names_in_body1;
           stub = stub1;
           dbg = dbg1;
@@ -1757,7 +1764,8 @@ end = struct
           exn_continuation_param = exn_continuation_param2;
           return_arity = return_arity2;
           params = params2;
-          body = body2;
+          body = _;
+          code_id = code_id2;
           free_names_in_body = free_names_in_body2;
           stub = stub2;
           dbg = dbg2;
@@ -1771,7 +1779,7 @@ end = struct
       && Continuation.equal exn_continuation_param1 exn_continuation_param2
       && Flambda_arity.equal return_arity1 return_arity2
       && Typed_parameter.List.equal ~equal_type params1 params2
-      && Expr.equal ~equal_type body1 body2
+      && Code_id.equal code_id1 code_id2
       && Name_occurrences.equal free_names_in_body1 free_names_in_body2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2

@@ -18,15 +18,8 @@
 
 module type S = sig
   type t
-  type flambda_type
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val free_names : t -> Name_occurrences.t
-
-  val equal
-     : equal_type:(flambda_type -> flambda_type -> bool)
-    -> t
-    -> t
-    -> bool
 end

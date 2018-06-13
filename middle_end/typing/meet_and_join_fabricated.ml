@@ -776,7 +776,8 @@ struct
                   in
                   { env_extension; })
               ~in_both:
-                (fun ({ env_extension = env_extension1; } : discriminant_case)
+                (fun _discriminant
+                     ({ env_extension = env_extension1; } : discriminant_case)
                      ({ env_extension = env_extension2; } : discriminant_case)
                      : discriminant_case option ->
                   let env_extension =

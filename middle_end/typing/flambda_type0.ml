@@ -1617,15 +1617,16 @@ result
   let unknown_like t = unknown (kind t)
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
-        ~continuation_param ~exn_continuation_param ~body ~stub ~dbg ~inline
-        ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
-        ~my_closure : function_declarations =
-    Inlinable [{
+        ~continuation_param ~exn_continuation_param ~body ~code_id ~stub
+        ~dbg ~inline ~specialise ~is_a_functor ~invariant_params ~size
+        ~direct_call_surrogate ~my_closure : function_declarations =
+    Inlinable [({
       closure_origin;
       continuation_param;
       exn_continuation_param;
       is_classic_mode;
       body;
+      code_id;
       free_names_in_body = Expr.free_names body;
       stub;
       dbg;
@@ -1636,7 +1637,7 @@ result
       size;
       direct_call_surrogate;
       my_closure;
-    }]
+    } : inlinable_function_declaration)]
 
   let create_non_inlinable_function_declaration ~direct_call_surrogate
         : function_declarations =
@@ -2662,10 +2663,17 @@ result
     let unknown_is_identity = true
     let unknown_is_absorbing = false
 
+    (* CR mshinwell: Write functors to generate these patterns *)
     module Immediate = struct
       module Set = struct
         type t = Immediate.Set.t
         let union_or_inter = Immediate.Set.inter
+      end
+
+      module Map = struct
+        type 'a t = 'a Immediate.Map.t
+
+        let union_or_inter = Immediate.Map.inter
       end
     end
 
@@ -2695,6 +2703,16 @@ result
         type t = Targetint.Set.t
         let union_or_inter = Targetint.Set.inter
       end
+
+      module OCaml = struct
+        module Map = struct
+          type 'a t = 'a Targetint.OCaml.Map.t
+
+          let union_or_inter_both ~in_left_only:_ ~in_right_only:_ ~in_both
+                t1 t2 =
+            Targetint.OCaml.Map.inter in_both t1 t2
+        end
+      end
     end
 
     module Closure_id = struct
@@ -2703,6 +2721,7 @@ result
 
         let union_or_inter = Closure_id.Map.inter
 
+        (* CR mshinwell: implement these *)
         let union_or_inter_and_left f t1 t2 = assert false
       end
     end
@@ -2714,6 +2733,26 @@ result
         let union_or_inter = Var_within_closure.Map.inter
 
         let union_or_inter_and_left f t1 t2 = assert false
+      end
+    end
+
+    module Tag = struct
+      module Map = struct
+        type 'a t = 'a Tag.Map.t
+
+        let union_or_inter_both ~in_left_only:_ ~in_right_only:_ ~in_both
+              t1 t2 =
+          Tag.Map.inter in_both t1 t2
+      end
+    end
+
+    module Discriminant = struct
+      module Map = struct
+        type 'a t = 'a Discriminant.Map.t
+
+        let union_or_inter_both ~in_left_only:_ ~in_right_only:_ ~in_both
+              t1 t2 =
+          Discriminant.Map.inter in_both t1 t2
       end
     end
 
@@ -2762,6 +2801,14 @@ result
         type t = Targetint.Set.t
         let union_or_inter = Targetint.Set.union
       end
+
+      module OCaml = struct
+        module Map = struct
+          type 'a t = 'a Targetint.OCaml.Map.t
+
+          let union_or_inter_both = Targetint.OCaml.Map.union_both
+        end
+      end
     end
 
     module Closure_id = struct
@@ -2783,6 +2830,22 @@ result
 
         let union_or_inter_and_left _f t1 t2 =
           Var_within_closure.Map.union t1 t2
+      end
+    end
+
+    module Tag = struct
+      module Map = struct
+        type 'a t = 'a Tag.Map.t
+
+        let union_or_inter_both = Tag.Map.union_both
+      end
+    end
+
+    module Discriminant = struct
+      module Map = struct
+        type 'a t = 'a Discriminant.Map.t
+
+        let union_or_inter_both = Discriminant.Map.union_both
       end
     end
 

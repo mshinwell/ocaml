@@ -153,11 +153,8 @@ end) = struct
     env_extension : env_extension;
   }
 
-  (* CR mshinwell: Consider replacing this by [Parameters.t].  Just need to
-     work out what to do about the mutable/immutable flags. *) 
   and singleton_block = {
-    env_extension : env_extension;
-    fields : t mutable_or_immutable array;
+    fields : parameters;
   }
 
   and block_cases =
@@ -193,6 +190,7 @@ end) = struct
        We should find out how often we do such comparisons before adding
        such identifier, though. *)
     body : expr;
+    code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
     dbg : Debuginfo.t;

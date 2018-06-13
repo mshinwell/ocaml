@@ -616,6 +616,9 @@ end and Function_declaration : sig
         indicate previous specialisation of the function. *)
     body : Expr.t;
     (** The code of the function's body. *)
+    code_id : Code_id.t;
+    (** An identifier to provide fast (conservative) equality checking for
+        function bodies. *)
     free_names_in_body : Name_occurrences.t;
     (** All free names in the function's body (that is to say, treating
         parameters etc. bound by the function as free).  (See [free_names],
