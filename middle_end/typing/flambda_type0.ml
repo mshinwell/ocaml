@@ -2605,7 +2605,7 @@ result
         with type of_kind_foo = of_kind_fabricated
       = Outer_namespace.Meet_and_join_fabricated.Make
           (T2) (Make_meet_and_join) (Meet_and_join_value) (Meet_and_join)
-          (Typing_env) (Typing_env_extension) (E)
+          (Typing_env) (Typing_env_extension) (Join_env) (E)
   end and Meet : sig
     module Meet_and_join : Meet_and_join_intf.S_for_types with module T := T2
   end = Make_meet_or_join (For_meet)
@@ -2624,6 +2624,19 @@ result
           Join.Meet_and_join.meet_or_join env t1 t2
         in
         join_ty
+
+      let as_or_more_precise env t1 ~than:t2 =
+        if Type_equality.fast_equal t1 t2 then true
+        else
+          let meet_t, _env_extension = meet env t1 t2 in
+          Type_equality.equal meet_t t1
+
+      let strictly_more_precise env t1 ~than:t2 =
+        if Type_equality.fast_equal t1 t2 then false
+        else
+          let meet_t, _env_extension = meet env t1 t2 in
+          Type_equality.equal meet_t t1
+            && not (Type_equality.equal meet_t t2)
     end
   and Typing_env :
     Typing_env_intf.S with module T := T2
@@ -2787,20 +2800,8 @@ result
 
   let meet = Both_meet_and_join.meet
   let join = Both_meet_and_join.join
-
-  let as_or_more_precise env t1 ~than:t2 =
-    if Type_equality.fast_equal t1 t2 then true
-    else
-      let meet_t, _env_extension = meet env t1 t2 in
-      Type_equality.equal meet_t t1
-
-  let strictly_more_precise env t1 ~than:t2 =
-    if Type_equality.fast_equal t1 t2 then false
-    else
-      let meet_t, _env_extension = meet env t1 t2 in
-      Type_equality.equal meet_t t1
-        && not (Type_equality.equal meet_t t2)
-
+  let as_or_more_precise = Both_meet_and_join.as_or_more_precise
+  let strictly_more_precise = Both_meet_and_join.strictly_more_precise
   let fast_equal = Type_equality.fast_equal
   let equal = Type_equality.equal
 end

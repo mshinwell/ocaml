@@ -25,11 +25,6 @@ module Make
 = struct
   open T
 
-  type env_extension = T.env_extension
-  type typing_environment = T.typing_environment
-  type flambda_type = T.flambda_type
-  type join_env = T.join_env
-
   type t = env_extension
 
   module JE = Join_env
@@ -308,18 +303,17 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
   (* CR-someday mshinwell: Attempt to produce a single piece of code that can
      be specialised to produce both [meet] and [join], as we do elsewhere. *)
 
-  let meet (env : join_env) (t1 : t) (t2 : t) : t =
+  let meet (env : TE.t) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let env = JE.central_environment env in
       let scope_level = Scope_level.next (TE.max_level env) in
       let env = TE.add_or_meet_env_extension env t1 scope_level in
       let env = TE.add_or_meet_env_extension env t2 scope_level in
       TE.cut env ~existential_if_defined_at_or_later_than:scope_level
 
-  let join (env : join_env) (t1 : t) (t2 : t) : t =
+  let join (env : JE.t) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then empty
     else if is_empty t2 then empty
@@ -334,7 +328,7 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         Name.Set.fold (fun name t ->
             let ty1 = find t1 name in
             let ty2 = find t2 name in
-            let join_ty = T.join env ty1 ty2 in
+            let join_ty = Meet_and_join.join env ty1 ty2 in
             add_equation t name join_ty)
           names_in_join
           empty
@@ -419,7 +413,7 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
               let more_precise_using_old_types_for_free_names =
                 (* XXX Not sure [env] is right: shouldn't it contain names
                    from the extension too? *)
-                T.strictly_more_precise env ty ~than:old_ty
+                Meet_and_join.strictly_more_precise env ty ~than:old_ty
               in
               if more_precise_using_old_types_for_free_names then
                 let names_more_precise =
@@ -446,6 +440,6 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
 
-  let rename_names ?for_join t subst =
-    T.rename_variables_env_extension ?for_join subst t
+  let rename_names t subst =
+    T.rename_variables_env_extension subst t
 end

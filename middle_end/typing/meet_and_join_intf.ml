@@ -46,20 +46,6 @@ module type S_for_types = sig
     -> T.flambda_type
     -> T.flambda_type
     -> T.flambda_type * T.env_extension
-
-(*
-  val as_or_more_precise
-     : T.typing_environment
-    -> T.flambda_type
-    -> than:T.flambda_type
-    -> bool
-
-  val strictly_more_precise
-     : T.typing_environment
-    -> T.flambda_type
-    -> than:T.flambda_type
-    -> bool
-*)
 end
 
 module type S_both = sig
@@ -81,4 +67,16 @@ module type S_both = sig
     -> T.flambda_type
     -> T.flambda_type
     -> T.flambda_type
+
+  val as_or_more_precise
+     : T.typing_environment
+    -> T.flambda_type
+    -> than:T.flambda_type
+    -> bool
+
+  val strictly_more_precise
+     : T.typing_environment
+    -> T.flambda_type
+    -> than:T.flambda_type
+    -> bool
 end

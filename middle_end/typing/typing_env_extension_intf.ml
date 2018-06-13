@@ -97,5 +97,5 @@ module type S = sig
   *)
   val diff : t -> T.typing_environment -> t
 
-  val rename_names : ?for_join:unit -> t -> Name.t Name.Map.t -> t
+  val rename_names : t -> Name.t Name.Map.t -> t
 end
