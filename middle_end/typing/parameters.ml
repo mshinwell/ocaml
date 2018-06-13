@@ -160,6 +160,7 @@ module Make
       }
 
   let meet ?fresh_name_semantics env t1 t2 =
+    let env = JE.create env in
     meet_or_join ?fresh_name_semantics env t1 t2
       ~op:(fun join_env env_extension1 env_extension2 ->
         TEE.meet (JE.central_environment join_env)
@@ -167,4 +168,7 @@ module Make
 
   let join ?fresh_name_semantics env t1 t2 =
     meet_or_join ?fresh_name_semantics env t1 t2 ~op:TEE.join
+
+  let meet_fresh env t1 t2 : t = meet env t1 t2
+  let join_fresh env t1 t2 : t = join env t1 t2
 end

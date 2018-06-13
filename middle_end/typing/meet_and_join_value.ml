@@ -24,7 +24,7 @@ module Make
       (S : Meet_and_join_spec_intf.S with module T := T)
         -> Meet_and_join_intf.S
              with module T := T
-             with type of_kind_foo := S.of_kind_foo)
+             with type of_kind_foo = S.of_kind_foo)
     (Meet_and_join_naked_immediate : Meet_and_join_intf.S
       with module T := T
       with type of_kind_foo = T.of_kind_naked_immediate)
@@ -40,11 +40,14 @@ module Make
     (Meet_and_join_naked_nativeint : Meet_and_join_intf.S
       with module T := T
       with type of_kind_foo = T.of_kind_naked_nativeint)
-    (Meet_and_join_fabricated : Meet_and_join_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_for_types with module T := T)
+    (Meet_and_join_fabricated : Meet_and_join_intf.S
+      with module T := T
+      with type of_kind_foo = T.of_kind_fabricated)
+    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
     (Typing_env : Typing_env_intf.S with module T := T)
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
     (Join_env : Join_env_intf.S with module T := T)
+    (Parameters : Parameters_intf.S with module T := T)
     (E : Either_meet_or_join_intf.S with module T := T) =
 struct
   module rec Meet_and_join_value : sig
@@ -57,7 +60,7 @@ struct
     module JE = Join_env
     module TEE = Typing_env_extension
 
-    type of_kind_foo = of_kind_value
+    type of_kind_foo = T.of_kind_value
 
     let kind = K.value ()
 
@@ -112,7 +115,8 @@ struct
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
               let field, new_equations =
-                E.switch Meet_or_join.meet Meet_or_join.join env field1 field2
+                E.switch Meet_and_join.meet Meet_and_join.join
+                  env field1 field2
               in
               equations :=
                 TEE.meet (JE.central_environment env)
@@ -128,22 +132,22 @@ struct
     let meet_or_join_block_cases env
           ((Blocks { by_length = by_length1; }) : block_cases)
           ((Blocks { by_length = by_length2; }) : block_cases)
-          : (block_cases * env_extension) E.Or_bottom.t =
+          : (block_cases * env_extension) Or_bottom.t =
       let equations = ref TEE.empty in
       let by_length =
         E.Targetint.OCaml.Map.union_or_inter_both
-          ~in_left_only:(fun { env_extension; _ } : singleton_block ->
+          ~in_left_only:(fun { env_extension; fields; } : singleton_block ->
             let env_extension =
               TEE.meet (JE.central_environment env)
                 env_extension (JE.holds_on_left env)
             in
-            { singleton_block with env_extension; })
-          ~in_right_only:(fun { env_extension; _ } : singleton_block ->
+            { env_extension; fields; })
+          ~in_right_only:(fun { env_extension; fields; } : singleton_block ->
             let env_extension =
               TEE.meet (JE.central_environment env)
                 env_extension (JE.holds_on_right env)
             in
-            { singleton_block with env_extension; })
+            { env_extension; fields; })
           ~in_both:(fun singleton_block1 singleton_block2 ->
             let singleton_block, new_equations =
               meet_or_join_singleton_block env
@@ -152,42 +156,48 @@ struct
             equations :=
               TEE.meet (JE.central_environment env)
                 new_equations !equations;
-            singleton_block)
+            Some singleton_block)
           by_length1
           by_length2
       in
       if Targetint.OCaml.Map.is_empty by_length then Bottom
       else Ok (((Blocks { by_length; }) : block_cases), !equations)
 
-    let meet_or_join_blocks env blocks1 blocks2
-          : (blocks * env_extension) E.Or_bottom.t =
+    let push_equations_into_block_cases by_length env env_extension' =
+      Targetint.OCaml.Map.map
+        (fun ({ env_extension; fields; } : singleton_block) ->
+          let env_extension = TEE.meet env env_extension env_extension' in
+          { env_extension; fields; })
+        by_length
+
+    let meet_or_join_blocks env blocks1 blocks2 : _ Or_bottom.t =
       let equations = ref TEE.empty in
       let blocks =
         E.Tag.Map.union_or_inter_both
-          ~in_left_only:(fun { env_extension; _ } : block_cases ->
-            let env_extension =
-              TEE.meet (JE.central_environment env)
-                env_extension (JE.holds_on_left env)
+          ~in_left_only:(fun (Blocks { by_length; } : block_cases) ->
+            let by_length =
+              push_equations_into_block_cases by_length
+                (JE.central_environment env)
+                (JE.holds_on_left env)
             in
-            { block_cases with env_extension; })
-          ~in_right_only:(fun { env_extension; _ } : block_cases ->
-            let env_extension =
-              TEE.meet (JE.central_environment env)
-                env_extension (JE.holds_on_right env)
+            Blocks { by_length; })
+          ~in_right_only:(fun (Blocks { by_length; } : block_cases) ->
+            let by_length =
+              push_equations_into_block_cases by_length
+                (JE.central_environment env)
+                (JE.holds_on_right env)
             in
-            { block_cases with env_extension; })
+            Blocks { by_length; })
           ~in_both:(fun block_cases1 block_cases2 ->
-            match meet_or_join_block_cases env
-              block_cases1 block_cases2
-            with
+            match meet_or_join_block_cases env block_cases1 block_cases2 with
             | Ok (block_cases, new_equations) ->
               equations :=
                 TEE.meet (JE.central_environment env)
                   new_equations !equations;
               Some block_cases
             | Bottom -> None)
-          by_length1
-          by_length2
+          blocks1
+          blocks2
       in
       if Tag.Map.is_empty blocks then Bottom
       else Ok (blocks, !equations)
@@ -195,17 +205,19 @@ struct
     let meet_or_join_blocks_and_tagged_immediates env
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
-          : (blocks_and_tagged_immediates * env_extension) E.Or_bottom.t =
+          : (blocks_and_tagged_immediates * env_extension) Or_absorbing.t =
       let (blocks : _ Or_unknown.t), equations =
         match blocks1, blocks2 with
         | Unknown, _ when E.unknown_is_identity ->
           blocks2, TEE.empty
         | _, Unknown when E.unknown_is_identity ->
           blocks1, TEE.empty
-        | Unknown, _ when E.unknown_is_absorbing ->
-          Unknown, TEE.empty
-        | _, Unknown when E.unknown_is_absorbing ->
-          Unknown, TEE.empty
+        | Unknown, _ ->
+          assert E.unknown_is_absorbing;
+          Or_unknown.Unknown, TEE.empty
+        | _, Unknown ->
+          assert E.unknown_is_absorbing;
+          Or_unknown.Unknown, TEE.empty
         | Known blocks1, Known blocks2 ->
           match meet_or_join_blocks env blocks1 blocks2 with
           | Bottom ->
@@ -217,10 +229,14 @@ struct
         match imms1, imms2 with
         | Unknown, _ when E.unknown_is_identity -> imms2
         | _, Unknown when E.unknown_is_identity -> imms1
-        | Unknown, _ when E.unknown_is_absorbing -> Unknown
-        | _, Unknown when E.unknown_is_absorbing -> Unknown
+        | Unknown, _ ->
+          assert E.unknown_is_absorbing;
+          Unknown
+        | _, Unknown ->
+          assert E.unknown_is_absorbing;
+          Unknown
         | Known imms1, Known imms2 ->
-          match meet_immediates env imms1 imms2 with
+          match meet_or_join_immediates env imms1 imms2 with
           | Bottom -> Known Immediate.Map.empty
           | Ok immediates -> Known immediates
       in
@@ -237,7 +253,7 @@ struct
       (* CR mshinwell: Should we propagate up the meet of equations across all
          blocks, rather than only propagating upwards in the singleton
          case? *)
-      if is_bottom then Bottom
+      if is_bottom then Absorbing
       else
         let equations, blocks =
           match immediates with
@@ -277,7 +293,7 @@ struct
 
     let meet_or_join_of_kind_foo env
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value * env_extension) E.Or_absorbing.t =
+          : (of_kind_value * env_extension) Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -288,7 +304,7 @@ struct
         begin match blocks_imms with
         | Ok (blocks_imms, equations) ->
           Ok (Blocks_and_tagged_immediates blocks_imms, equations)
-        | Bottom -> Absorbing
+        | Absorbing -> Absorbing
         end
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
@@ -315,8 +331,17 @@ struct
         in
         Ok (Boxed_number (Boxed_nativeint n), equations)
       | Closures closures1, Closures closures2 ->
-        let equations = ref (TEE.empty) in
-        let closures =
+        let equations = ref TEE.empty in
+        let params =
+          E.switch' Parameters.meet_fresh Parameters.join_fresh
+            env closures1.ty.params closures2.ty.params
+        in
+        let results =
+          E.switch' Parameters.meet_fresh Parameters.join_fresh
+            env closures1.ty.results closures2.ty.results
+        in
+        let ty : T.dependent_function_type = { params; results; } in
+        let by_closure_id =
           E.Closure_id.Map.union_or_inter
             (fun _closure_id
                  (closures_entry1 : closures_entry)
@@ -324,8 +349,7 @@ struct
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
               let set, new_equations =
-                Meet_and_join_fabricated.meet_or_join_ty env
-                  set1 set2
+                Meet_and_join_fabricated.meet_or_join_ty env set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None
@@ -335,11 +359,11 @@ struct
                     new_equations !equations;
                 Some { set_of_closures = set; }
               end)
-            closures1
-            closures2
+            closures1.by_closure_id
+            closures2.by_closure_id
         in
-        if Closure_id.Map.is_empty closures then Absorbing
-        else Ok (Closures closures, !equations)
+        if Closure_id.Map.is_empty by_closure_id then Absorbing
+        else Ok (Closures { ty; by_closure_id; }, !equations)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Absorbing

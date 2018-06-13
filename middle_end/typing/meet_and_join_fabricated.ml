@@ -778,14 +778,14 @@ struct
               ~in_both:
                 (fun ({ env_extension = env_extension1; } : discriminant_case)
                      ({ env_extension = env_extension2; } : discriminant_case)
-                     : discriminant_case ->
+                     : discriminant_case option ->
                   let env_extension =
                     E.switch'
                       TEE.meet TEE.join
                       env
                       env_extension1 env_extension2
                   in
-                  { env_extension; })
+                  Some { env_extension; })
               discriminants1 discriminants2
           in
           begin match Discriminant.Map.get_singleton discriminants with

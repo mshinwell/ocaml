@@ -64,7 +64,7 @@ module type S = sig
   (** Greatest lower bound of two parameter bindings. *)
   val meet
      : ?fresh_name_semantics:fresh_name_semantics
-    -> T.join_env
+    -> T.typing_environment
     -> t
     -> t
     -> t
@@ -76,4 +76,11 @@ module type S = sig
     -> t
     -> t
     -> t
+
+  (** As for [meet] with [Fresh] semantics, but without the optional argument,
+      to avoid warning 48. *)
+  val meet_fresh : T.typing_environment -> t -> t -> t
+
+  (** Like [meet_fresh] but for [join]. *)
+  val join_fresh : T.join_env -> t -> t -> t
 end

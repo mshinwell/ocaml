@@ -68,7 +68,7 @@ module type S =
     val union_both
        : in_left_only:('a -> 'a)
       -> in_right_only:('a -> 'a)
-      -> in_both:('a -> 'a -> 'a)
+      -> in_both:('a -> 'a -> 'a option)
       -> 'a t
       -> 'a t
       -> 'a t
@@ -552,7 +552,7 @@ module Make(Ord: OrderedType) = struct
         | None, None -> None
         | None, Some m -> Some (in_right_only m)
         | Some m, None -> Some (in_left_only m)
-        | Some m1, Some m2 -> Some (in_both m1 m2)
+        | Some m1, Some m2 -> in_both m1 m2
       in
       merge aux m1 m2
 
