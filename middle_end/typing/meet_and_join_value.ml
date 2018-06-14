@@ -88,6 +88,64 @@ struct
       if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
+    let meet_or_join_blocks env
+          ({ known_tags_and_sizes = known_tags_and_sizes1;
+             size_at_least_n = size_at_least_n1;
+           } : blocks)
+          ({ known_tags_and_sizes = known_tags_and_sizes2;
+             size_at_least_n = size_at_least_n2;
+           } : blocks) : blocks Or_bottom.t =
+      let apply_size_at_least_n size_at_least_n params =
+        let num_params = Parameters.size params in
+        Targetint.OCaml.Map.fold (fun params size extra_params ->
+           ...) 
+      in
+      let known_tags_and_sizes =
+        Targetint.OCaml.merge
+          (fun _tag_and_size left_params right_params ->
+            match left_params, right_params with
+            | None, Some right_params ->
+
+
+            | Some left_params, None ->
+
+
+            | Some left_params, Some right_params ->
+              E.switch' Parameters.meet_fresh Parameters.join_fresh
+                env left_params, right_params
+            | None, None -> None)
+
+          ~in_left:(fun params ->
+            apply_size_at_least_n size_at_least_n2 params)
+          ~in_right:(fun params ->
+            apply_size_at_least_n size_at_least_n1 params)
+          ~in_both:(fun _tag_and_size params1 params2 ->
+          known_tags_and_sizes1 known_tags_and_sizes2
+      in
+      let size_at_least_n =
+        E.Targetint.OCaml.Map.union_or_inter_both
+          ~in_left:(fun params ->
+
+            )
+          ~in_right:(fun params ->
+
+            )
+          ~in_both:(fun _size params1 params2 ->
+            E.switch' Parameters.meet_fresh Parameters.join_fresh
+              env params1 params2)
+          size_at_least_n1 size_at_least_n2
+      in
+      if Tag_and_size.Map.is_empty known_tags_and_sizes
+        || Targetint.OCaml.Map.is_empty size_at_least_n
+      then Bottom
+      else
+        Ok {
+          known_tags_and_sizes;
+          size_at_least_n;
+        }
+
+
+
     let meet_or_join_singleton_block env
           ({ fields = fields1; } : singleton_block)
           ({ fields = fields2; } : singleton_block)

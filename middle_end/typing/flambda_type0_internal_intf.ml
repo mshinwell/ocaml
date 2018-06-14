@@ -153,16 +153,17 @@ end) = struct
     env_extension : env_extension;
   }
 
-  and singleton_block = {
-    fields : parameters;
+  (* CR mshinwell: Add invariant function on [blocks] *)
+  and blocks = {
+    known_tags_and_sizes : parameters Tag_and_size.Map.t;
+    size_at_least_n : parameters Targetint.OCaml.Map.t;
+    (* [size_at_least_n] is required since [Pfield] in [Lambda] does not
+       specify the tag and size of the block being projected from. *)
   }
-
-  and block_cases =
-    | Blocks of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t Or_unknown.t;
-    blocks : block_cases Tag.Map.t Or_unknown.t;
+    blocks : blocks Or_unknown.t;
   }
 
   and 'a of_kind_value_boxed_number =
