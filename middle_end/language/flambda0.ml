@@ -591,25 +591,15 @@ end = struct
         end
       | Let_cont { handlers; body; } ->
         aux body;
-        (* CR-soon mshinwell: Move the following into a separate function in
-           the [Let_cont] module. *)
-        let handle_params params =
-          List.iter (fun param ->
-              let var = Typed_parameter.var param in
-              let ty = Typed_parameter.ty param in
-              bound_name_in_term (Name.var var);
-              free_names (Flambda_type.free_names ty))
-            params
-        in
         begin match handlers with
         | Non_recursive { name = _; handler = { Continuation_handler.
             params; handler; _ }; } ->
-          handle_params params;
+          free_names (Flambda_type.Parameters.free_names params);
           aux handler
         | Recursive handlers ->
           Continuation.Map.iter (fun _name { Continuation_handler.
             params; handler; _ } ->
-              handle_params params;
+              free_names (Flambda_type.Parameters.free_names params);
               aux handler)
             handlers
         end
@@ -1311,15 +1301,13 @@ end = struct
         name;
         handler = { params; stub; handler; is_exn_handler; };
       } ->
-      fprintf ppf "@[<v 2>%swhere%s %a%s%s@ %s@[%a@]%s =@ %a@]"
+      fprintf ppf "@[<v 2>%swhere%s %a%s%s@ @[%a@] =@ %a@]"
         (Misc_color.bold_cyan ())
         (Misc_color.reset ())
         Continuation.print name
         (if stub then " *stub*" else "")
         (if is_exn_handler then "*exn* " else "")
-        (match params with [] -> "" | _ -> "(")
-        (Typed_parameter.List.print_with_cache ~cache) params
-        (match params with [] -> "" | _ -> ")")
+        (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
         (Expr.print_with_cache ~cache) handler
     | Recursive handlers ->
       let first = ref true in
@@ -1330,14 +1318,12 @@ end = struct
               { Continuation_handler. params; stub; is_exn_handler;
                 handler; } ->
           if not !first then fprintf ppf "@ ";
-          fprintf ppf "@[%s%a%s%s%s@[%a@]%s@] =@ %a"
+          fprintf ppf "@[%s%a%s%s@[%a@]@] =@ %a"
             (if !first then "" else "and ")
             Continuation.print name
             (if stub then " *stub*" else "")
             (if is_exn_handler then "*exn* " else "")
-            (match params with [] -> "" | _ -> " (")
-            (Typed_parameter.List.print_with_cache ~cache) params
-            (match params with [] -> "" | _ -> ")")
+            (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
             (Expr.print_with_cache ~cache) handler;
           first := false)
         handlers;
@@ -1347,13 +1333,11 @@ end = struct
     match t with
     | Non_recursive { name; handler = {
         params; stub; handler; is_exn_handler; }; } ->
-      fprintf ppf "%a@ %s%s%s%a%s=@ %a"
+      fprintf ppf "%a@ %s%s%a=@ %a"
         Continuation.print name
         (if stub then "*stub* " else "")
         (if is_exn_handler then "*exn* " else "")
-        (match params with [] -> "" | _ -> "(")
-        (Typed_parameter.List.print_with_cache ~cache) params
-        (match params with [] -> "" | _ -> ") ")
+        (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
         (Expr.print_with_cache ~cache) handler
     | Recursive handlers ->
       let first = ref true in
@@ -1364,13 +1348,11 @@ end = struct
           end else begin
             fprintf ppf "@;and "
           end;
-          fprintf ppf "%a@ %s%s%s%a%s=@ %a"
+          fprintf ppf "%a@ %s%s%a=@ %a"
             Continuation.print name
             (if stub then "*stub* " else "")
             (if is_exn_handler then "*exn* " else "")
-            (match params with [] -> "" | _ -> "(")
-            (Typed_parameter.List.print_with_cache ~cache) params
-            (match params with [] -> "" | _ -> ") ")
+            (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
             (Expr.print_with_cache ~cache) handler;
           first := false)
         handlers
@@ -1391,8 +1373,7 @@ end = struct
     Continuation.Map.equal (Continuation_handler.equal ~equal_type) t1 t2
 end and Continuation_handler : sig
   type t = {
-    params : Kinded_parameter.t list;
-    env_extension : Flambda_type.Typing_env_extension.t;
+    params : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
     handler : Expr.t;
@@ -1410,25 +1391,20 @@ end = struct
   include Continuation_handler
 
   let equal ~equal_type
-        { params = params1; env_extension = env_extension1; stub = stub1;
+        { params = params1; stub = stub1;
           is_exn_handler = is_exn_handler1; handler = handler1; }
-        { params = params2; env_extension = env_extension2; stub = stub2;
+        { params = params2; stub = stub2;
           is_exn_handler = is_exn_handler2; handler = handler2; } =
-    Kinded_parameter.List.equal ~equal_type params1 params2
-      && Flambda_type.Typing_env_extension.equal env_extension1 env_extension2
+    Flambda_type.Parameters.equal params1 params2
       && Pervasives.compare stub1 stub2 = 0
       && Pervasives.compare is_exn_handler1 is_exn_handler2 = 0
       && Expr.equal ~equal_type handler1 handler2
 
-  let print_with_cache ~cache:_ ppf
-        { params; env_extension; stub; handler; is_exn_handler; } =
-    fprintf ppf "%s%s%s%a@ %a@ %s=@ %a"
+  let print_with_cache ~cache ppf { params; stub; handler; is_exn_handler; } =
+    fprintf ppf "%s%s%a@ =@ %a"
       (if stub then "*stub* " else "")
       (if is_exn_handler then "*exn* " else "")
-      (match params with [] -> "" | _ -> "(")
-      Kinded_parameter.List.print params
-      Flambda_type.Typing_env_extension.print env_extension
-      (match params with [] -> "" | _ -> ") ")
+      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
       Expr.print handler
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -1605,11 +1581,11 @@ end and Function_declaration : sig
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
-    return_arity : Flambda_arity.t;
-    params : Typed_parameter.t list;
+    params : Flambda_type.Parameters.t;
     body : Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
+    results : Flambda_type.Parameters.t;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -1619,24 +1595,24 @@ end and Function_declaration : sig
   }
 
   val create
-     : params:Typed_parameter.t list
+     : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
-    -> return_arity:Flambda_arity.t
-    -> my_closure:Variable.t
+    -> params:Flambda_type.Parameters.t
     -> body:Expr.t
+    -> results:Flambda_type.Parameters.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
     -> specialise:specialise_attribute
     -> is_a_functor:bool
-    -> closure_origin:Closure_origin.t
+    -> my_closure:Variable.t
     -> t
   val update_body : t -> body:Expr.t -> t
-  val update_params : t -> params:Typed_parameter.t list -> t
+  val update_params : t -> params:Flambda_type.Parameters.t -> t
   val update_params_and_body
     : t
-    -> params:Typed_parameter.t list
+    -> params:Flambda_type.Parameters.t
     -> body:Expr.t
     -> t
   val used_params : t -> Variable.Set.t
@@ -1656,11 +1632,11 @@ end and Function_declaration : sig
 end = struct
   include Function_declaration
 
-  let create ~params ~continuation_param ~exn_continuation_param
-        ~return_arity ~my_closure ~body ~stub ~dbg
+  let create ~closure_origin ~continuation_param ~exn_continuation_param
+        ~params ~body ~results ~stub ~dbg
         ~(inline : inline_attribute)
-        ~(specialise : specialise_attribute) ~is_a_functor
-        ~closure_origin : t =
+        ~(specialise : specialise_attribute)
+        ~is_a_functor ~my_closure : t =
     begin match stub, inline with
     | true, (Never_inline | Default_inline)
     | false, (Never_inline | Default_inline | Always_inline | Unroll _) -> ()
@@ -1678,13 +1654,13 @@ end = struct
         Expr.print body
     end;
     { closure_origin;
-      params;
       continuation_param;
       exn_continuation_param;
-      return_arity;
+      params;
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
+      results;
       stub;
       dbg;
       inline;
@@ -1698,10 +1674,10 @@ end = struct
       params = t.params;
       continuation_param = t.continuation_param;
       exn_continuation_param = t.exn_continuation_param;
-      return_arity = t.return_arity;
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
+      results = t.results;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
@@ -1715,10 +1691,10 @@ end = struct
       params;
       continuation_param = t.continuation_param;
       exn_continuation_param = t.exn_continuation_param;
-      return_arity = t.return_arity;
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
+      results = t.results;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
@@ -1733,25 +1709,21 @@ end = struct
     update_params_and_body t ~params ~body:t.body
 
   let free_names t =
-    let my_closure = Name.var t.my_closure in
-    let free_in_params = Typed_parameter.List.free_names t.params in
-    let free = Name_occurrences.union free_in_params t.free_names_in_body in
-    let bound_in_params = Typed_parameter.List.bound_names t.params in
-    let bound = Name_occurrences.add bound_in_params my_closure In_terms in
-    (* CR mshinwell: We should have a check somewhere to make sure that
-       free names of function declarations / sets of closures are
-       reasonable (e.g. no access to random variables). *)
-    Name_occurrences.diff free bound
+    let bound_in_params = Flambda_type.Parameters.bound_names t.params in
+    let free_in_params = Flambda_type.Parameters.free_names t.params in
+    let free_in_results = Flambda_type.Parameters.free_names t.results in
+    Name_occurrences.union free_in_params
+      (Name_occurrences.diff free_in_results bound_in_params)
 
-  let equal ~equal_type
+  let equal ~equal_type:_
         { closure_origin = closure_origin1;
           continuation_param = continuation_param1;
           exn_continuation_param = exn_continuation_param1;
-          return_arity = return_arity1;
           params = params1;
           body = _;
           code_id = code_id1;
           free_names_in_body = free_names_in_body1;
+          results = results1;
           stub = stub1;
           dbg = dbg1;
           inline = inline1;
@@ -1762,11 +1734,11 @@ end = struct
         { closure_origin = closure_origin2;
           continuation_param = continuation_param2;
           exn_continuation_param = exn_continuation_param2;
-          return_arity = return_arity2;
           params = params2;
           body = _;
           code_id = code_id2;
           free_names_in_body = free_names_in_body2;
+          results = results2;
           stub = stub2;
           dbg = dbg2;
           inline = inline2;
@@ -1777,10 +1749,10 @@ end = struct
     Closure_origin.equal closure_origin1 closure_origin2
       && Continuation.equal continuation_param1 continuation_param2
       && Continuation.equal exn_continuation_param1 exn_continuation_param2
-      && Flambda_arity.equal return_arity1 return_arity2
-      && Typed_parameter.List.equal ~equal_type params1 params2
+      && Flambda_type.Parameters.equal params1 params2
       && Code_id.equal code_id1 code_id2
       && Name_occurrences.equal free_names_in_body1 free_names_in_body2
+      && Flambda_type.Parameters.equal results1 results2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2
       && Pervasives.compare inline1 inline2 = 0
@@ -1826,152 +1798,13 @@ end = struct
       (Misc_color.reset ())
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param
-      (Typed_parameter.List.print_with_cache ~cache) f.params
+      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.params
       (Misc_color.bold_white ())
-      Flambda_arity.print f.return_arity
+      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.results
       (Misc_color.reset ())
       (Expr.print_with_cache ~cache) f.body
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
-end and Typed_parameter : sig
-  type t
-  val create : Parameter.t -> Flambda_type.t -> t
-  val param : t -> Parameter.t
-  val var : t -> Variable.t
-  val name : t -> Name.t
-  val simple : t -> Simple.t
-  val ty : t -> Flambda_type.t
-  val kind : t -> Flambda_kind.t
-  val with_type : t -> Flambda_type.t -> t
-  val map_var : t -> f:(Variable.t -> Variable.t) -> t
-  val map_type : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
-  val free_names : t -> Name_occurrences.t
-  val equal
-     : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
-    -> t
-    -> t
-    -> bool
-  val rename : t -> t
-  module List : sig
-    type nonrec t = t list
-    val create : (Parameter.t * Flambda_type.t) list -> t
-    val vars : t -> Variable.t list
-    val simples : t -> Simple.t list
-    val var_set : t -> Variable.Set.t
-    val name_set : t -> Name.Set.t
-    val param_set : t -> Parameter.Set.t
-    val equal_vars : t -> Variable.t list -> bool
-    val rename : t -> t
-    val arity : t -> Flambda_kind.t list
-    val free_names : t -> Name_occurrences.t
-    val bound_names : t -> Name_occurrences.t
-    val print_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
-    val print : Format.formatter -> t -> unit
-    val equal
-       : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
-      -> t
-      -> t
-      -> bool
-  end
-(*  include Hashtbl.With_map with type t := t *)
-(*
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t
-    -> unit
-*)
-  val print : Format.formatter -> t -> unit
-end = struct
-  type t = {
-    param : Parameter.t;
-    (* CR mshinwell: Add an invariant check that [kind] matches [ty] *)
-    ty : Flambda_type.t;
-  }
-
-  let create param ty =
-    { param;
-      ty;
-    }
-
-  let param t = t.param
-  let var t = Parameter.var t.param
-  let name t = Name.var (var t)
-  let simple t = Simple.var (var t)
-  let ty t = t.ty
-  let kind t = Flambda_type.kind t.ty
-
-  let with_type t ty = { t with ty; }
-
-  let rename t = { t with param = Parameter.rename t.param; }
-
-  let map_var t ~f = { t with param = Parameter.map_var f t.param; }
-
-  let map_type t ~f = { t with ty = f t.ty; }
-
-  let free_names t =
-    (* The variable within [t] is always presumed to be a binding
-       occurrence. *)
-    Flambda_type.free_names t.ty
-
-  let equal ~equal_type
-        { param = param1; ty = ty1; }
-        { param = param2; ty = ty2; } =
-    Parameter.equal param1 param2
-      && equal_type ty1 ty2
-
-  let print_with_cache ~cache ppf { param; ty; } =
-    Format.fprintf ppf "(%a :@ %a)"
-      Parameter.print param
-      (Flambda_type.print_with_cache ~cache) ty
-
-  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
-
-  module List = struct
-    type nonrec t = t list
-
-    let create params_and_tys =
-      List.map (fun (param, ty) -> create param ty) params_and_tys
-
-    let vars t = List.map var t
-
-    let simples t = List.map simple t
-
-    let equal_vars t1 t2 =
-      List.length t1 = List.length t2
-        && List.for_all2 (fun param1 var2 -> Variable.equal (var param1) var2)
-             t1 t2
-
-    let var_set t = Variable.Set.of_list (vars t)
-
-    let name_set t = Name.Set.of_list (List.map Name.var (vars t))
-
-    let param_set t = Parameter.Set.of_list (List.map param t)
-
-    let rename t = List.map (fun t -> rename t) t
-
-    let arity t = List.map (fun t -> kind t) t
-
-    let free_names t =
-      List.fold_left (fun names t ->
-          Name_occurrences.union names (free_names t))
-        (Name_occurrences.create ())
-        t
-
-    let bound_names t =
-      Name_occurrences.create_from_set_in_terms (name_set t)
-
-    let equal ~equal_type t1 t2 =
-      List.compare_lengths t1 t2 = 0
-        && List.for_all2 (equal ~equal_type) t1 t2
-
-    let print_with_cache ~cache ppf t =
-      Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (print_with_cache ~cache) ppf t
-
-    let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
-  end
 end and Flambda_type : sig
   include Flambda_type0_intf.S with type expr := Expr.t
 end = Flambda_type0.Make (Expr)

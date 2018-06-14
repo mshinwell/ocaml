@@ -2165,6 +2165,11 @@ result
         | Join [] -> true
         | Unknown | Join _ -> false
 
+      let unknown_or_join_is_unknown (uj : _ unknown_or_join) =
+        match uj with
+        | Join _ -> false
+        | Unknown -> true
+
       let rec join_on_unknown_or_join env
             (uj1 : S.of_kind_foo unknown_or_join)
             (uj2 : S.of_kind_foo unknown_or_join)
@@ -2249,14 +2254,11 @@ result
           let alias_both_sides = Name.Set.choose_opt all_aliases in
           match alias_both_sides with
           | Some name -> Equals (Simple.name name)
-            (* CR mshinwell: The symmetrical cases ("is unknown") should be
-               present on the [meet] function, below. *)
           | None ->
             let alias1 = Name.Set.choose_opt all_aliases1 in
             let alias2 = Name.Set.choose_opt all_aliases2 in
             match alias1, alias2 with
             | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
-              (* CR mshinwell: Should we push down the env extension here? *)
               Equals (Simple.name name1)
             | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
               Equals (Simple.name name2)
@@ -2358,6 +2360,10 @@ result
           match canonical_simple1, canonical_simple2 with
           | Some simple1, Some simple2 when Simple.equal simple1 simple2 ->
             Equals simple1, Typing_env_extension.empty
+          | Some simple1, _ when unknown_or_join_is_unknown unknown_or_join2 ->
+            Equals simple1, Typing_env_extension.empty
+          | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
+            Equals simple2, Typing_env_extension.empty
           | Some simple1, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
               meet_on_unknown_or_join env

@@ -623,7 +623,7 @@ end and Function_declaration : sig
     (** All free names in the function's body (that is to say, treating
         parameters etc. bound by the function as free).  (See [free_names],
         below.) *)
-    result : Flambda_type.Parameters.t;
+    results : Flambda_type.Parameters.t;
     (** The type(s) of the value(s) returned by the function (which types
         are those of the parameters of the return continuation). *)
     stub : bool;
@@ -659,31 +659,30 @@ end and Function_declaration : sig
       existing [closure_origin].
   *)
   val create
-     : params:Flambda_type.Parameters.t
+     : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
-    -> return_arity:Flambda_arity.t
-    -> my_closure:Variable.t
+    -> params:Flambda_type.Parameters.t
     -> body:Expr.t
+    -> results:Flambda_type.Parameters.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
     -> specialise:specialise_attribute
     -> is_a_functor:bool
-    (* CR mshinwell for pchambart: check Closure_origin stuff *)
-    -> closure_origin:Closure_origin.t
+    -> my_closure:Variable.t
     -> t
 
   (** Change only the code of a function declaration. *)
   val update_body : t -> body:Expr.t -> t
 
   (** Change only the parameters of a function declaration. *)
-  val update_params : t -> Flambda_type.Parameters.t -> t
+  val update_params : t -> params:Flambda_type.Parameters.t -> t
 
   (** Change only the code and parameters of a function declaration. *)
   val update_params_and_body
      : t
-    -> Flambda_type.Parameters.t
+    -> params:Flambda_type.Parameters.t
     -> body:Expr.t
     -> t
 

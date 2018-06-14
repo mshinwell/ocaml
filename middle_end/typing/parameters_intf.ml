@@ -32,21 +32,40 @@ module type S = sig
 
   type t = T.parameters
 
+  (** Perform invariant checks upon the given parameters value. *)
   val invariant : t -> unit
 
+  (** Format the given parameters value as an s-expression. *)
   val print : Format.formatter -> t -> unit
 
+  (** As for [print], but uses a printing cache, and prints nothing if the
+      supplied parameters value contains no parameters. *)
+  val print_or_omit_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
+
+  (** A parameters value, with bottom types for the parameters, using the
+      given names and kinds (in the given order). *)
   val create : Kinded_parameter.t list -> t
 
+  (** Like [create] but also accepts equations about the parameters (which
+      may of course involve existentially-bound names in the supplied
+      extension). *)
   val create_with_env_extension
      : Kinded_parameter.t list
     -> T.env_extension
     -> t
 
+  (** A parameters value, with fresh names for the parameters, assigning the
+      given types (in the given order) to such parameters. *)
   val create_from_types : T.flambda_type list -> t
 
-  val introduce : t -> T.typing_environment -> t
+  (** A conservative approximation to equality. *)
+  val equal : t -> t -> bool
 
+  (** The kinds of the parameters, in order. *)
   val arity : t -> Flambda_arity.t
 
   type fresh_name_semantics =
@@ -79,8 +98,6 @@ module type S = sig
     -> t
     -> t
 
-  val add_or_meet_equations : t -> T.typing_environment -> T.env_extension -> t
-
   (** As for [meet] with [Fresh] semantics, but without the optional argument,
       to avoid warning 48. *)
   val meet_fresh : T.typing_environment -> t -> t -> t
@@ -88,5 +105,23 @@ module type S = sig
   (** Like [meet_fresh] but for [join]. *)
   val join_fresh : T.join_env -> t -> t -> t
 
+  (** Add or meet more equations into the environment extension associated with
+      the given parameters. *)
+  val add_or_meet_equations : t -> T.typing_environment -> T.env_extension -> t
+
+  (** All free names occurring in the given parameters value. *)
+  val free_names : t -> Name_occurrences.t
+
+  (** All bound names (that is to say, the kinded parameters) occurring in
+      the given parameters value. *)
+  val bound_names : t -> Name_occurrences.t
+
+  (** The environment extension associated with the given parameters, including
+      at the start, definitions of such parameters to bottom (hence the
+      name "standalone"). *)
   val standalone_extension : t -> T.env_extension
+
+  (** Add or meet the definitions and equations from the given parameters value
+      into the given typing environment. *)
+  val introduce : t -> T.typing_environment -> t
 end
