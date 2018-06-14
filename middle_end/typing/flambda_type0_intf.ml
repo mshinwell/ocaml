@@ -200,10 +200,12 @@ module type S = sig
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
+    params : parameters;
     body : expr;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
+    results : parameters;
     dbg : Debuginfo.t;
     inline : inline_attribute;
     specialise : specialise_attribute;
@@ -566,8 +568,10 @@ module type S = sig
     -> closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
+    -> params:Parameters.t
     -> body:expr
     -> code_id:Code_id.t
+    -> results:Parameters.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute

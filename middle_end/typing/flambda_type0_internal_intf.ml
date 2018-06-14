@@ -189,10 +189,12 @@ end) = struct
        stop comparing [expr]s in the intermediate world before "let code".
        We should find out how often we do such comparisons before adding
        such identifier, though. *)
+    params : parameters;
     body : expr;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
+    results : parameters;
     dbg : Debuginfo.t;
     inline : inline_attribute;
     specialise : specialise_attribute;

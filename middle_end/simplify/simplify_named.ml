@@ -275,11 +275,27 @@ Format.eprintf "function body starts at level %a\n%!"
         T.alias_type_of_as_ty_value (Name.var var))
       set_of_closures.free_vars
   in
-  let ty =
-    T.set_of_closures ~closures:(Exactly closures)
-      ~closure_elements:(Exactly closure_elements)
-  in
-  set_of_closures, ty, r
+  let can_lift = Var_within_closure.Map.is_empty closure_elements in
+  if not can_lift then begin
+    let ty =
+      T.set_of_closures ~closures:(Exactly closures)
+        ~closure_elements:(Exactly closure_elements)
+    in
+    let term : Named.t = Set_of_closures set_of_closures in
+    term, ty, r
+  end else begin
+    let symbol, r =
+      let name = Variable.unique_name result_var in
+      let static_part =
+        Flambda_static0.Static_part.Set_of_closures set_of_closures
+      in
+      R.new_lifted_constant r ~name ty static_part
+    in
+    let simple = Simple.name (Name.symbol symbol) in
+    let ty = T.alias_type_of (Flambda_kind.fabricated ()) simple in
+    let term : Named.t = Simple simple in
+    term, ty, r
+  end
 
 let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
       ~remove_term ~can_lift =
@@ -330,19 +346,7 @@ let simplify_named env r (tree : Named.t) ~result_var =
     let backend = E.backend env in
     let cont_usage_snapshot = R.snapshot_continuation_uses r in
 *)
-    let set_of_closures, ty, r =
-      simplify_set_of_closures env r set_of_closures
-    in
-    let term : Named.t = Set_of_closures set_of_closures in
-    let remove_primitive () =
-      R.map_benefit r (B.remove_code_named term)
-    in
-    let can_lift =
-      Var_within_closure.Map.is_empty set_of_closures.free_vars
-    in
-    try_to_reify (E.get_typing_environment env) r ty
-      ~term:(Flambda.Reachable.reachable term)
-      ~result_var ~remove_term:remove_primitive ~can_lift
+    simplify_set_of_closures env r set_of_closures
 (* XXX Disabled just for the moment -- mshinwell
     let simplify env r ~bindings ~set_of_closures ~pass_name =
       (* If simplifying a set of closures more than once during any given round

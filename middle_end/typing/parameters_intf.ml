@@ -68,6 +68,10 @@ module type S = sig
   (** The kinds of the parameters, in order. *)
   val arity : t -> Flambda_arity.t
 
+  (** The parameter with the given index, 0-based.  [None] is returned iff
+      the index is out of range. *)
+  val nth : t -> Targetint.OCaml.t -> Kinded_parameter.t option
+
   type fresh_name_semantics =
     | Fresh
       (** [meet] and [join] will generate fresh names and add equalities to

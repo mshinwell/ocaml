@@ -1597,17 +1597,20 @@ result
   let unknown_like t = unknown (kind t)
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
-        ~continuation_param ~exn_continuation_param ~body ~code_id ~stub
-        ~dbg ~inline ~specialise ~is_a_functor ~invariant_params ~size
+        ~continuation_param ~exn_continuation_param ~params ~body ~code_id
+        ~results ~stub ~dbg ~inline ~specialise ~is_a_functor
+        ~invariant_params ~size
         ~direct_call_surrogate ~my_closure : function_declarations =
     Inlinable [({
       closure_origin;
       continuation_param;
       exn_continuation_param;
       is_classic_mode;
+      params;
       body;
       code_id;
       free_names_in_body = Expr.free_names body;
+      results;
       stub;
       dbg;
       inline;
