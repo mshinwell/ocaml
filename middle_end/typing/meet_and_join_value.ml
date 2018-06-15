@@ -119,39 +119,33 @@ struct
           Some (Parameters.join env params from_size_at_least_n2)
         end
       in
+      let merge_function size params1 params2 =
+        match params1, params2 with
+        | Some params1, None ->
+          assert (size = Parameters.size params1);
+          one_side_only params1 size_at_least_n2
+            ~get_equations_to_deposit1:JE.holds_on_left
+        | None, Some params2 ->
+          assert (size = Parameters.size params2);
+          one_side_only params2 size_at_least_n1
+            ~get_equations_to_deposit1:JE.holds_on_right
+        | Some params1, Some params2 ->
+          assert (size = Parameters.size params1);
+          assert (size = Parameters.size params2);
+          E.switch' Parameters.meet_fresh Parameters.join_fresh
+            env params1, params2
+        | None, None -> None
+      in
       let known_tags_and_sizes =
-        Targetint.OCaml.merge (fun _tag_and_size params1 params2 ->
-            match params1, params2 with
-            | Some params1, None ->
-              one_side_only params1 size_at_least_n2
-                ~get_equations_to_deposit1:JE.holds_on_left
-            | None, Some params2 ->
-              one_side_only params2 size_at_least_n1
-                ~get_equations_to_deposit1:JE.holds_on_right
-            | Some params1, Some params2 ->
-              E.switch' Parameters.meet_fresh Parameters.join_fresh
-                env params1, params2
-            | None, None -> None)
+        Tag_and_size.Map.merge (fun tag_and_size params1 params2 ->
+            let size = Tag_and_size.size tag_and_size in
+            merge_function size params1 params2)
           known_tags_and_sizes1
           known_tags_and_sizes2
       in
       let size_at_least_n =
-        Targetint.OCaml.merge (fun size params1 params2 ->
-            match params1, params2 with
-            | Some params1, None ->
-              assert (size = Parameters.size params1);
-              one_side_only size1 params1 size_at_least_n2
-                ~get_equations_to_deposit1:JE.holds_on_left
-            | None, Some params2 ->
-              assert (size = Parameters.size params2);
-              one_side_only size2 params2 size_at_least_n1
-                ~get_equations_to_deposit1:JE.holds_on_right
-            | Some params1, Some params2 ->
-              assert (size = Parameters.size params1);
-              assert (size = Parameters.size params2);
-              E.switch' Parameters.meet_fresh Parameters.join_fresh
-                env params1, params2
-            | None, None -> None)
+        Targetint.OCaml.Map.merge (fun size params1 params2 ->
+            merge_function size params1 params2)
           size_at_least_n1
           size_at_least_n2
       in
