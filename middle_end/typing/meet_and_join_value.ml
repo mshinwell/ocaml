@@ -206,9 +206,6 @@ struct
              | Known _ | Unknown -> false
              end
       in
-      (* CR mshinwell: Should we propagate up the meet of equations across all
-         blocks, rather than only propagating upwards in the singleton
-         case? *)
       if is_bottom then Absorbing
       else
         let equations, blocks =
@@ -221,36 +218,17 @@ struct
               match blocks with
               | Unknown -> equations, blocks
               | Known blocks ->
-                match Tag.Map.get_singleton blocks with
+                match Tag_and_size.Map.get_singleton blocks with
                 | None -> equations, Or_unknown.Known blocks
-                | Some (tag, Blocks { by_length; }) ->
-                  match Targetint.OCaml.Map.get_singleton by_length with
-                  | None -> equations, Or_unknown.Known blocks
-                  | Some (length, singleton_block) ->
-                    let env_extension =
-                      (* CR mshinwell: This seems wasteful -- we just don't
-                         need the existentially-bound names *)
-                      Parameters.standalone_extension singleton_block.fields
-                    in
-                    let equations =
-                      TEE.meet (JE.central_environment env)
-                        env_extension equations
-                    in
-(*
-                    let singleton_block : singleton_block =
-                      { singleton_block with
-                        env_extension = TEE.empty;
-                      }
-                    in
-*)
-                    let by_length =
-                      Targetint.OCaml.Map.singleton length singleton_block
-                    in
-                    let block_cases : block_cases = Blocks { by_length; } in
-                    let blocks : _ Or_unknown.t =
-                      Known (Tag.Map.singleton tag block_cases)
-                    in
-                    equations, blocks
+                | Some (_tag_and_size, parameters) ->
+                  let env_extension =
+                    Parameters.standalone_extension singleton_block.fields
+                  in
+                  let equations =
+                    TEE.meet (JE.central_environment env)
+                      env_extension equations
+                  in
+                  equations, Or_unknown.Known blocks
         in
         Ok ({ blocks; immediates; }, equations)
 
