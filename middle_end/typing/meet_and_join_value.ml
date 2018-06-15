@@ -95,45 +95,65 @@ struct
           ({ known_tags_and_sizes = known_tags_and_sizes2;
              size_at_least_n = size_at_least_n2;
            } : blocks) : blocks Or_bottom.t =
-      let apply_size_at_least_n size_at_least_n params =
-        let num_params = Parameters.size params in
-        Targetint.OCaml.Map.fold (fun params size extra_params ->
-           ...) 
+      let one_side_only params1 size_at_least_n2 ~get_equations_to_deposit1 =
+        let size1 = Parameters.size params1 in
+        let from_size_at_least_n2 =
+          Targetint.OCaml.Map.find_last_opt
+            (fun size -> Targetint.OCaml.(<=) size size1)
+            size_at_least_n2
+        in
+        begin match from_size_at_least_n2 with
+        | None ->
+          begin match E.op with
+          | Meet -> None
+          | Join ->
+            let params1 =
+              Parameters.add_or_meet_equations
+                (JE.central_environment env)
+                params1
+                (get_equations_to_deposit1 env)
+            in
+            Some params1
+          end
+        | Some from_size_at_least_n2 ->
+          Some (Parameters.join env params from_size_at_least_n2)
+        end
       in
       let known_tags_and_sizes =
-        Targetint.OCaml.merge
-          (fun _tag_and_size left_params right_params ->
-            match left_params, right_params with
-            | None, Some right_params ->
-
-
-            | Some left_params, None ->
-
-
-            | Some left_params, Some right_params ->
+        Targetint.OCaml.merge (fun _tag_and_size params1 params2 ->
+            match params1, params2 with
+            | Some params1, None ->
+              one_side_only params1 size_at_least_n2
+                ~get_equations_to_deposit1:JE.holds_on_left
+            | None, Some params2 ->
+              one_side_only params2 size_at_least_n1
+                ~get_equations_to_deposit1:JE.holds_on_right
+            | Some params1, Some params2 ->
               E.switch' Parameters.meet_fresh Parameters.join_fresh
-                env left_params, right_params
+                env params1, params2
             | None, None -> None)
-
-          ~in_left:(fun params ->
-            apply_size_at_least_n size_at_least_n2 params)
-          ~in_right:(fun params ->
-            apply_size_at_least_n size_at_least_n1 params)
-          ~in_both:(fun _tag_and_size params1 params2 ->
-          known_tags_and_sizes1 known_tags_and_sizes2
+          known_tags_and_sizes1
+          known_tags_and_sizes2
       in
       let size_at_least_n =
-        E.Targetint.OCaml.Map.union_or_inter_both
-          ~in_left:(fun params ->
-
-            )
-          ~in_right:(fun params ->
-
-            )
-          ~in_both:(fun _size params1 params2 ->
-            E.switch' Parameters.meet_fresh Parameters.join_fresh
-              env params1 params2)
-          size_at_least_n1 size_at_least_n2
+        Targetint.OCaml.merge (fun size params1 params2 ->
+            match params1, params2 with
+            | Some params1, None ->
+              assert (size = Parameters.size params1);
+              one_side_only size1 params1 size_at_least_n2
+                ~get_equations_to_deposit1:JE.holds_on_left
+            | None, Some params2 ->
+              assert (size = Parameters.size params2);
+              one_side_only size2 params2 size_at_least_n1
+                ~get_equations_to_deposit1:JE.holds_on_right
+            | Some params1, Some params2 ->
+              assert (size = Parameters.size params1);
+              assert (size = Parameters.size params2);
+              E.switch' Parameters.meet_fresh Parameters.join_fresh
+                env params1, params2
+            | None, None -> None)
+          size_at_least_n1
+          size_at_least_n2
       in
       if Tag_and_size.Map.is_empty known_tags_and_sizes
         || Targetint.OCaml.Map.is_empty size_at_least_n
@@ -143,92 +163,6 @@ struct
           known_tags_and_sizes;
           size_at_least_n;
         }
-
-
-
-    let meet_or_join_singleton_block env
-          ({ fields = fields1; } : singleton_block)
-          ({ fields = fields2; } : singleton_block)
-          : singleton_block =
-      let fields =
-        E.switch' Parameters.meet_fresh Parameters.join_fresh
-          env fields1 fields2
-      in
-      { fields; }
-
-    let meet_or_join_block_cases env
-          ((Blocks { by_length = by_length1; }) : block_cases)
-          ((Blocks { by_length = by_length2; }) : block_cases)
-          : (block_cases * env_extension) Or_bottom.t =
-      let equations = ref TEE.empty in
-      let by_length =
-        E.Targetint.OCaml.Map.union_or_inter_both
-          ~in_left_only:(fun { fields; } : singleton_block ->
-            let fields =
-              Parameters.add_or_meet_equations fields
-                (JE.central_environment env)
-                (JE.holds_on_left env)
-            in
-            { fields; })
-          ~in_right_only:(fun { fields; } : singleton_block ->
-            let fields =
-              Parameters.add_or_meet_equations fields
-                (JE.central_environment env)
-                (JE.holds_on_right env)
-            in
-            { fields; })
-          ~in_both:(fun _length singleton_block1 singleton_block2 ->
-            let singleton_block =
-              meet_or_join_singleton_block env
-                singleton_block1 singleton_block2
-            in
-            Some singleton_block)
-          by_length1
-          by_length2
-      in
-      if Targetint.OCaml.Map.is_empty by_length then Bottom
-      else Ok (((Blocks { by_length; }) : block_cases), !equations)
-
-    let push_equations_into_block_cases by_length env env_extension =
-      Targetint.OCaml.Map.map
-        (fun ({ fields; } : singleton_block) ->
-          let fields =
-            Parameters.add_or_meet_equations fields
-              (JE.central_environment env)
-              env_extension
-          in
-          { fields; })
-        by_length
-
-    let meet_or_join_blocks env blocks1 blocks2 : _ Or_bottom.t =
-      let equations = ref TEE.empty in
-      let blocks =
-        E.Tag.Map.union_or_inter_both
-          ~in_left_only:(fun (Blocks { by_length; } : block_cases) ->
-            let by_length =
-              push_equations_into_block_cases by_length
-                env (JE.holds_on_left env)
-            in
-            Blocks { by_length; })
-          ~in_right_only:(fun (Blocks { by_length; } : block_cases) ->
-            let by_length =
-              push_equations_into_block_cases by_length
-                env (JE.holds_on_right env)
-            in
-            Blocks { by_length; })
-          ~in_both:(fun _tag block_cases1 block_cases2 ->
-            match meet_or_join_block_cases env block_cases1 block_cases2 with
-            | Ok (block_cases, new_equations) ->
-              equations :=
-                TEE.meet (JE.central_environment env)
-                  new_equations !equations;
-              Some block_cases
-            | Bottom -> None)
-          blocks1
-          blocks2
-      in
-      if Tag.Map.is_empty blocks then Bottom
-      else Ok (blocks, !equations)
 
     let meet_or_join_blocks_and_tagged_immediates env
           { blocks = blocks1; immediates = imms1; }

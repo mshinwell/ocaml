@@ -21,6 +21,10 @@
 module type S = sig
   val name : string
 
+  type meet_or_join = private Meet | Join
+
+  val op : meet_or_join
+
   val unknown_is_identity : bool
   val unknown_is_absorbing : bool
 

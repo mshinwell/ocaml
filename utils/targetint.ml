@@ -93,6 +93,7 @@ module type S = sig
     val one : t
     val ten : t
     val hex_ff : t
+    val (<=) : t -> t -> t
     val bottom_byte_to_int : t -> int
     val of_char : char -> t
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
@@ -241,6 +242,8 @@ module Int32 = struct
     let min_value = Int32.min_int
     let max_value = Int32.max_int
 
+    let (<=) t1 t2 = Int32.compare t1 t2 <= 0
+
     let sub = Int32.sub
     let neg = Int32.neg
 
@@ -366,6 +369,8 @@ module Int64 = struct
   let of_int64 x = x
   let to_int64 x = x
   let repr x = Int64 x
+
+  let (<=) t1 t2 = Int64.compare t1 t2 <= 0
 
   include Hashtbl.Make_with_map (struct
     type nonrec t = t
