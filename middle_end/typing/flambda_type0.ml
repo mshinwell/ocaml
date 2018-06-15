@@ -140,27 +140,6 @@ module Make (Expr : Expr_intf.S) = struct
     Format.fprintf ppf "@[<hov 1>(env_extension@ %a)@]"
       (print_typing_env_extension_with_cache ~cache) env_extension
 
-(*
-  and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
-    Format.fprintf ppf "@[[| %a |]@]"
-      (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.fprintf ppf ";@ ")
-        (print_mutable_or_immutable (print_with_cache ~cache)))
-      (Array.to_list fields)
-*)
-
-  and print_singleton_block ~cache ppf { fields; } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(fields@ %a)@])@]"
-      (print_parameters ~cache) fields
-
-  and print_block_cases ~cache ppf ((Blocks { by_length; }) : block_cases) =
-    match Targetint.OCaml.Map.get_singleton by_length with
-    | Some (_length, block) -> print_singleton_block ~cache ppf block
-    | None ->
-      Format.fprintf ppf "@[(Join (by_length@ %a))@]"
-        (Targetint.OCaml.Map.print (print_singleton_block ~cache)) by_length
-
   and print_immediates ~cache ppf cases =
     let no_env_extension =
       Immediate.Map.for_all (fun _imm ({ env_extension; } : immediate_case) ->
@@ -172,20 +151,31 @@ module Make (Expr : Expr_intf.S) = struct
     else
       Immediate.Map.print (print_immediate_case ~cache) ppf cases
 
-  and print_blocks ~cache ppf cases =
-    Tag.Map.print (print_block_cases ~cache) ppf cases
+  and print_blocks ~cache ppf
+        ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
+    Format.fprintf ppf 
+      "@[<hov 1>(\
+         @[<hov 1>(known_tags_and_sizes@ %a)@]@ \
+         @[<hov 1>(size_at_least_n@ %a)@])@]"
+      (Tag_and_size.Map.print (print_parameters ~cache)) known_tags_and_sizes
+      (Targetint.OCaml.Map.print (print_parameters ~cache)) size_at_least_n
 
   and print_of_kind_value ~cache ppf (of_kind_value : of_kind_value) =
+    let blocks_empty
+          ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
+      Tag_and_size.Map.is_empty known_tags_and_sizes
+        && Targetint.OCaml.Map.is_empty size_at_least_n
+    in
     match of_kind_value with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       begin match blocks, immediates with
       | Known blocks, Known immediates
-          when not (Tag.Map.is_empty blocks)
+          when not (blocks_empty blocks)
             && Immediate.Map.is_empty immediates ->
         Format.fprintf ppf "@[<hv 1>(blocks@ @[%a@])@])@]"
           (print_blocks ~cache) blocks
       | Known blocks, Known immediates
-          when Tag.Map.is_empty blocks
+          when blocks_empty blocks
             && not (Immediate.Map.is_empty immediates)
             && Immediate.Map.for_all
                  (fun _imm ({ env_extension; } : immediate_case) ->
@@ -2634,6 +2624,10 @@ result
   = struct
     let name = "meet"
 
+    type meet_or_join = Meet | Join
+
+    let op = Meet
+
     let unknown_is_identity = true
     let unknown_is_absorbing = false
 
@@ -2738,6 +2732,10 @@ result
   end and For_join : Either_meet_or_join_intf.S with module T := T1
   = struct
     let name = "join"
+
+    type meet_or_join = Meet | Join
+
+    let op = Join
 
     let unknown_is_identity = false
     let unknown_is_absorbing = true

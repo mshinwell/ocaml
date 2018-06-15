@@ -15,3 +15,10 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+
+include Hashtbl.With_map
+
+val create : Tag.t -> Targetint.OCaml.t -> t
+
+val tag : t -> Tag.t
+val size : t -> Targetint.OCaml.t

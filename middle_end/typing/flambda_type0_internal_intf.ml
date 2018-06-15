@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32

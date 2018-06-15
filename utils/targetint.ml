@@ -93,7 +93,7 @@ module type S = sig
     val one : t
     val ten : t
     val hex_ff : t
-    val (<=) : t -> t -> t
+    val (<=) : t -> t -> bool
     val bottom_byte_to_int : t -> int
     val of_char : char -> t
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
@@ -370,7 +370,11 @@ module Int64 = struct
   let to_int64 x = x
   let repr x = Int64 x
 
-  let (<=) t1 t2 = Int64.compare t1 t2 <= 0
+  let min t1 t2 =
+    if compare t1 t2 <= 0 then t1 else t2
+
+  let max t1 t2 =
+    if compare t1 t2 <= 0 then t2 else t1
 
   include Hashtbl.Make_with_map (struct
     type nonrec t = t
@@ -378,12 +382,6 @@ module Int64 = struct
     let hash = Hashtbl.hash
     let print ppf t = Format.fprintf ppf "%Ld" t
   end)
-
-  let min t1 t2 =
-    if compare t1 t2 <= 0 then t1 else t2
-
-  let max t1 t2 =
-    if compare t1 t2 <= 0 then t2 else t1
 
   module Targetint_set = Set
 
@@ -424,6 +422,8 @@ module Int64 = struct
     let one = 1L
     let ten = 10L
     let hex_ff = 0xffL
+
+    let (<=) t1 t2 = Pervasives.(<=) (compare t1 t2) 0
 
     (* XXX Implement correctly *)
     let min_value = Int64.min_int

@@ -148,21 +148,25 @@ struct
         ({ env_extension = env_extension2; } : immediate_case) =
     equal_env_extension env_extension1 env_extension2
 
-  and equal_singleton_block
-        ({ fields = fields1; } : singleton_block)
-        ({ fields = fields2; } : singleton_block) =
-    equal_parameters fields1 fields2
-
-  and equal_block_cases (Blocks { by_length = by_length1; })
-        (Blocks { by_length = by_length2; }) =
-    Targetint.OCaml.Map.equal equal_singleton_block by_length1 by_length2
+  and equal_blocks
+        ({ known_tags_and_sizes = known_tags_and_sizes1;
+           size_at_least_n = size_at_least_n1;
+         } : blocks)
+        ({ known_tags_and_sizes = known_tags_and_sizes2;
+           size_at_least_n = size_at_least_n2;
+         } : blocks) =
+    Tag_and_size.Map.equal equal_parameters
+        known_tags_and_sizes1 known_tags_and_sizes2
+      &&
+        Targetint.OCaml.Map.equal equal_parameters
+          size_at_least_n1 size_at_least_n2
 
   and equal_blocks_and_tagged_immediates
         ({ immediates = immediates1; blocks = blocks1; })
         ({ immediates = immediates2; blocks = blocks2; }) =
     equal_or_unknown (Immediate.Map.equal equal_immediate_case)
         immediates1 immediates2
-      && equal_or_unknown (Tag.Map.equal equal_block_cases)
+      && equal_or_unknown equal_blocks
            blocks1 blocks2
 
   and equal_function_declarations

@@ -274,7 +274,8 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/or_bottom.cmo \
   middle_end/base_types/or_unknown.cmo \
   middle_end/base_types/or_absorbing.cmo \
-  middle_end/base_types/name_occurrences.cmo
+  middle_end/base_types/name_occurrences.cmo \
+  middle_end/base_types/tag_and_size.cmo
 
 MIDDLE_END_CODE_MOTION=\
   middle_end/code_motion/lift_let_cont.cmo \

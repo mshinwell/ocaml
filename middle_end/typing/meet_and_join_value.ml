@@ -94,7 +94,7 @@ struct
            } : blocks)
           ({ known_tags_and_sizes = known_tags_and_sizes2;
              size_at_least_n = size_at_least_n2;
-           } : blocks) : blocks Or_bottom.t =
+           } : blocks) : blocks =
       let one_side_only params1 size_at_least_n2 ~get_equations_to_deposit1 =
         let size1 = Parameters.size params1 in
         let from_size_at_least_n2 =
@@ -108,18 +108,18 @@ struct
           | Meet -> None
           | Join ->
             let params1 =
-              Parameters.add_or_meet_equations
+              Parameters.add_or_meet_equations params1
                 (JE.central_environment env)
-                params1
                 (get_equations_to_deposit1 env)
             in
             Some params1
           end
-        | Some from_size_at_least_n2 ->
-          Some (Parameters.join env params from_size_at_least_n2)
+        | Some (size2, from_size_at_least_n2) ->
+          assert (Targetint.OCaml.(<=) size2 size1);
+          Some (Parameters.join env params1 from_size_at_least_n2)
         end
       in
-      let merge_function size params1 params2 =
+      let merge size params1 params2 =
         match params1, params2 with
         | Some params1, None ->
           assert (size = Parameters.size params1);
@@ -132,31 +132,26 @@ struct
         | Some params1, Some params2 ->
           assert (size = Parameters.size params1);
           assert (size = Parameters.size params2);
-          E.switch' Parameters.meet_fresh Parameters.join_fresh
-            env params1, params2
+          Some (E.switch' Parameters.meet_fresh Parameters.join_fresh
+            env params1 params2)
         | None, None -> None
       in
       let known_tags_and_sizes =
         Tag_and_size.Map.merge (fun tag_and_size params1 params2 ->
             let size = Tag_and_size.size tag_and_size in
-            merge_function size params1 params2)
+            merge size params1 params2)
           known_tags_and_sizes1
           known_tags_and_sizes2
       in
       let size_at_least_n =
         Targetint.OCaml.Map.merge (fun size params1 params2 ->
-            merge_function size params1 params2)
+            merge size params1 params2)
           size_at_least_n1
           size_at_least_n2
       in
-      if Tag_and_size.Map.is_empty known_tags_and_sizes
-        || Targetint.OCaml.Map.is_empty size_at_least_n
-      then Bottom
-      else
-        Ok {
-          known_tags_and_sizes;
-          size_at_least_n;
-        }
+      { known_tags_and_sizes;
+        size_at_least_n;
+      }
 
     let meet_or_join_blocks_and_tagged_immediates env
           { blocks = blocks1; immediates = imms1; }
@@ -175,11 +170,7 @@ struct
           assert E.unknown_is_absorbing;
           Or_unknown.Unknown, TEE.empty
         | Known blocks1, Known blocks2 ->
-          match meet_or_join_blocks env blocks1 blocks2 with
-          | Bottom ->
-            Or_unknown.Known Tag.Map.empty, TEE.empty
-          | Ok (blocks, equations) ->
-            Or_unknown.Known blocks, equations
+          Or_unknown.Known (meet_or_join_blocks env blocks1 blocks2), TEE.empty
       in
       let immediates : _ Or_unknown.t =
         match imms1, imms2 with
@@ -198,7 +189,9 @@ struct
       in
       let is_bottom =
         begin match blocks with
-        | Known blocks when Tag.Map.is_empty blocks -> true
+        | Known { known_tags_and_sizes; size_at_least_n; }
+            when Tag_and_size.Map.is_empty known_tags_and_sizes
+              && Targetint.OCaml.Map.is_empty size_at_least_n -> true
         | Known _ | Unknown -> false
         end
           && begin match immediates with
@@ -217,18 +210,18 @@ struct
             else
               match blocks with
               | Unknown -> equations, blocks
-              | Known blocks ->
-                match Tag_and_size.Map.get_singleton blocks with
-                | None -> equations, Or_unknown.Known blocks
+              | Known { known_tags_and_sizes; _ } ->
+                match Tag_and_size.Map.get_singleton known_tags_and_sizes with
+                | None -> equations, blocks
                 | Some (_tag_and_size, parameters) ->
                   let env_extension =
-                    Parameters.standalone_extension singleton_block.fields
+                    Parameters.standalone_extension parameters
                   in
                   let equations =
                     TEE.meet (JE.central_environment env)
                       env_extension equations
                   in
-                  equations, Or_unknown.Known blocks
+                  equations, blocks
         in
         Ok ({ blocks; immediates; }, equations)
 

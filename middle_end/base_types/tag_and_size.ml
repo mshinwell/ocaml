@@ -16,17 +16,24 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T = struct
-  type t = Tag.t * Targetint.OCaml.t
+type t = Tag.t * Targetint.OCaml.t
+
+include Hashtbl.Make_with_map (struct
+  type nonrec t = t
 
   let compare (tag1, size1) (tag2, size2) =
     let c = Tag.compare tag1 tag2 in
     if c <> 0 then c
     else Targetint.OCaml.compare size1 size2
-end
 
-include T
-include Identifiable.Make (T)
+  let hash (tag, size) =
+    Hashtbl.hash (Tag.hash tag, Targetint.OCaml.hash size)
+
+  let print ppf (tag, size) =
+    Format.fprintf ppf "@[((tag %a) (size %a))@]"
+      Tag.print tag
+      Targetint.OCaml.print size
+end)
 
 let create tag size = tag, size
 
