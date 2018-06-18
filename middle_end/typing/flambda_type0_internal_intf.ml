@@ -445,6 +445,11 @@ module type S = sig
     -> env_extension
     -> env_extension
 
+  val rename_variables_parameters
+     : Name.t Name.Map.t
+    -> parameters
+    -> parameters
+
   val any_value_as_ty_value : unit -> ty_value
 
   val any_fabricated_as_ty_fabricated : unit -> ty_fabricated

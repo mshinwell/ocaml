@@ -916,6 +916,7 @@ and simplify_partial_application env r ~callee
           Typed_parameter.create param (T.unknown kind))
         remaining_args
     in
+    (* XXX this all needs rewriting *)
     (* CR mshinwell: [make_closure_declaration] is only used here and it also
        calls [toplevel_substitution].  We should alter that function or else
        inline it here.  Note that the boxing stuff in that function isn't

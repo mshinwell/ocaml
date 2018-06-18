@@ -18,6 +18,7 @@
 
 module F0 = Flambda0
 module K = Flambda_kind
+module T = F0.Flambda_type
 
 type assign = F0.assign
 type mutable_or_immutable = Flambda0.mutable_or_immutable
@@ -108,10 +109,6 @@ module Reachable = struct
     | Invalid sem -> Flambda0.print_invalid_term_semantics ppf sem
 end
 
-module Typed_parameter = struct
-  include Flambda0.Typed_parameter
-end
-
 module rec Expr : sig
   include module type of F0.Expr
 
@@ -122,19 +119,6 @@ module rec Expr : sig
     -> if_false:Continuation.t
     -> t
   val no_effects_or_coeffects : t -> bool
-  val make_closure_declaration
-     : id:Variable.t
-    -> free_variable_kind:(Variable.t -> K.t)
-    -> body:t
-    -> params:Typed_parameter.t list
-    -> continuation_param:Continuation.t
-    -> exn_continuation_param:Continuation.t
-    (* CR mshinwell: update comment. *)
-    -> stub:bool
-    -> continuation:Continuation.t
-    -> return_arity:Flambda_arity.t
-    -> dbg:Debuginfo.t
-    -> t
   val toplevel_substitution
      : Name.t Name.Map.t
     -> t
@@ -693,15 +677,6 @@ end = struct
       | Var var -> var
       | Symbol _ -> Misc.fatal_error "Symbols not allowed here"
     in
-    let substitute_type ty =
-      Flambda_type.rename_variables ty sb'
-    in
-    let substitute_params_list params =
-      List.map (fun param ->
-          Typed_parameter.map_type param ~f:(fun ty ->
-            substitute_type ty))
-        params
-    in
     let substitute_args_list args =
       List.map (fun arg -> Simple.map_name arg ~f:sb) args
     in
@@ -725,7 +700,8 @@ end = struct
           Continuation.Map.map (fun (handler : Continuation_handler.t)
                   : Continuation_handler.t ->
               { handler with
-                params = substitute_params_list handler.params;
+                params =
+                  Flambda_type.Parameters.rename_variables handler.params sb';
               })
             handlers
         in
@@ -747,9 +723,9 @@ end = struct
         Assign { being_assigned; new_value; }
       | Set_of_closures set_of_closures ->
         let function_decls =
-          Function_declarations.map_parameter_types
+          Function_declarations.rename_names
             set_of_closures.function_decls
-            ~f:(fun ty -> substitute_type ty)
+            sb'
         in
         let set_of_closures =
           Set_of_closures.create
@@ -768,152 +744,6 @@ end = struct
     in
     if Name.Map.is_empty sb' then tree
     else Mappers.Toplevel_only.map aux aux_named tree
-
-  let make_closure_declaration ~id
-        ~(free_variable_kind : Variable.t -> K.t) ~body ~params
-        ~continuation_param ~exn_continuation_param ~stub ~continuation
-        ~return_arity ~dbg : Expr.t =
-    let my_closure = Variable.rename id in
-    let closure_id = Closure_id.wrap id in
-    let free_variables =
-      Name_occurrences.variables_only (Expr.free_names body)
-    in
-    let in_types = Name_occurrences.in_types free_variables in
-    let in_debug_only = Name_occurrences.in_debug_only free_variables in
-    if not (Name.Set.is_empty in_types) then begin
-      Misc.fatal_errorf "Cannot create closure declaration with free \
-          [In_types] names %a: %a"
-        Name.Set.print in_types
-        Expr.print body
-    end;
-    if not (Name.Set.is_empty in_debug_only) then begin
-      Misc.fatal_errorf "Cannot create closure declaration with free \
-          [In_debug_only] names %a: %a"
-        Name.Set.print in_debug_only
-        Expr.print body
-    end;
-    let free_variables =
-      Name.set_to_var_set (Name_occurrences.in_terms free_variables)
-    in
-    let sb =
-      Variable.Set.fold (fun id sb ->
-          Name.Map.add (Name.var id) (Name.var (Variable.rename id)) sb)
-        free_variables
-        Name.Map.empty
-    in
-    (* CR-soon mshinwell: try to eliminate this [toplevel_substitution].  This
-       function is only called from [Simplify], so we should be able
-       to do something similar to what happens in [Inlining_transforms] now. *)
-    let body = toplevel_substitution sb body in
-    let param_set = Typed_parameter.List.var_set params in
-    let vars_within_closure =
-      Variable.Map.of_set Var_within_closure.wrap
-        (Variable.Set.diff free_variables param_set)
-    in
-    let body =
-      Variable.Map.fold (fun var var_within_closure body ->
-          let new_var =
-            (* CR mshinwell: tidy up *)
-            match Name.Map.find (Name.var var) sb with
-            | exception Not_found ->
-              Misc.fatal_errorf "Variable missing from freshening: %a"
-                Variable.print var
-            | Var var -> var
-            | Symbol sym ->
-              Misc.fatal_errorf "Freshening should not yield a symbol: %a"
-                Symbol.print sym
-          in
-          let kind : K.t = free_variable_kind var in
-          let projection : Named.t =
-            let my_closure = Simple.var my_closure in
-            Prim (Unary (Project_var (closure_id, var_within_closure),
-              my_closure), dbg)
-          in
-          match kind with
-          | Value ->
-            Expr.create_let new_var kind projection body
-          | Naked_number _ ->
-            let boxed_var = Variable.rename new_var in
-            let unbox, boxed_kind =
-              Named.unbox_value (Name.var boxed_var) kind dbg
-            in
-            Expr.create_let boxed_var boxed_kind projection
-              (Expr.create_let new_var kind unbox body)
-          | Fabricated | Phantom _ ->
-            Misc.fatal_error "Not yet implemented" (* XXX *) )
-        vars_within_closure body
-    in
-    let subst var =
-      (* CR mshinwell: messy, as above *)
-      match Name.Map.find (Name.var var) sb with
-      | exception Not_found ->
-        Misc.fatal_errorf "Variable missing from freshening: %a"
-          Variable.print var
-      | Var var -> var
-      | Symbol sym ->
-        Misc.fatal_errorf "Freshening should not yield a symbol: %a"
-          Symbol.print sym
-    in
-    let subst_param param = Typed_parameter.map_var param ~f:subst in
-    let function_declaration : Function_declaration.t =
-      Function_declaration.create
-        ~params:(List.map subst_param params)
-        ~continuation_param ~exn_continuation_param
-        ~return_arity ~body ~stub ~dbg:Debuginfo.none
-        ~inline:Default_inline ~specialise:Default_specialise
-        ~is_a_functor:false
-        ~closure_origin:(Closure_origin.create closure_id)
-        ~my_closure
-    in
-    let in_closure, boxed_vars =
-      Variable.Map.fold (fun id var_within_closure (in_closure, boxed_vars) ->
-          let var, boxed_vars =
-            let kind = free_variable_kind id in
-            match kind with
-            | Value ->
-              id, boxed_vars
-            | Naked_number _ ->
-              let boxed_var = Variable.rename id in
-              let box, boxed_kind = Named.box_value (Name.var id) kind dbg in
-              boxed_var, (boxed_var, boxed_kind, box) :: boxed_vars
-            | Phantom _ | Fabricated ->
-              Misc.fatal_error "Not yet implemented" (* XXX *)
-          in
-          let free_var = Free_var.create var in
-          let in_closure =
-            Var_within_closure.Map.add var_within_closure free_var in_closure
-          in
-          in_closure, boxed_vars)
-        vars_within_closure
-        (Var_within_closure.Map.empty, [])
-    in
-    let current_compilation_unit = Compilation_unit.get_current_exn () in
-    let set_of_closures_var =
-      Variable.create "set_of_closures" ~current_compilation_unit
-    in
-    let set_of_closures =
-      let function_decls =
-        Function_declarations.create
-          ~funs:(Closure_id.Map.singleton closure_id function_declaration)
-      in
-      Set_of_closures.create ~function_decls ~in_closure
-        ~direct_call_surrogates:Closure_id.Map.empty
-    in
-    let project_closure : Named.t =
-      let set_of_closures = Simple.var set_of_closures_var in
-      Prim (Unary (Project_closure closure_id, set_of_closures), dbg)
-    in
-    let project_closure_var =
-      Variable.create "project_closure" ~current_compilation_unit
-    in
-    let body =
-      Expr.create_let set_of_closures_var (K.value ())
-        (Set_of_closures set_of_closures)
-        (Expr.create_let project_closure_var (K.value ())
-          project_closure
-          (Apply_cont (continuation, None, [Simple.var project_closure_var])))
-    in
-    Expr.bind ~bindings:boxed_vars ~body
 
   let all_defined_continuations_toplevel expr =
     let defined_continuations = ref Continuation.Set.empty in
@@ -959,13 +789,10 @@ end = struct
         reason
         print expr
     in
-    let add_typed_parameters t params =
-      List.fold_left (fun t param ->
-          let var = Typed_parameter.var param in
-          let kind = Typed_parameter.kind param in
-          E.add_variable t var kind)
-        t
-        params
+    let add_parameters env params =
+      (* CR mshinwell: Need to think carefully about exactly what the
+         freshness criterion is for [Parameters] *)
+      E.add_kinded_parameters env (T.Parameters.kinded_params params)
     in
     let rec loop env (t : t) : unit =
       match t with
@@ -1024,8 +851,8 @@ end = struct
               if handler.is_exn_handler then Exn_handler else Normal
             in
             let params = handler.params in
-            let arity = Typed_parameter.List.arity params in
-            let env = add_typed_parameters env params in
+            let arity = T.Parameters.arity params in
+            let env = add_parameters env params in
             let env = E.set_current_continuation_stack env handler_stack in
             loop env handler.handler;
             E.add_continuation env name arity kind handler_stack
@@ -1033,7 +860,7 @@ end = struct
             let recursive_env =
               Continuation.Map.fold
                 (fun cont (handler : Continuation_handler.t) env ->
-                  let arity = Typed_parameter.List.arity handler.params in
+                  let arity = T.Parameters.arity handler.params in
                   let kind : Invariant_env.continuation_kind =
                     if handler.is_exn_handler then Exn_handler else Normal
                   in
@@ -1049,7 +876,7 @@ end = struct
                       but is an exception handler"
                     Continuation.print name
                 end;
-                let env = add_typed_parameters recursive_env params in
+                let env = add_parameters recursive_env params in
                 let env = E.set_current_continuation_stack env handler_stack in
                 loop env handler;
                 ignore (stub : bool))
@@ -1464,7 +1291,7 @@ end = struct
   include F0.Continuation_handler
 
   let no_effects_or_coeffects t = Expr.no_effects_or_coeffects t.handler
-  let param_arity t = List.map Typed_parameter.kind t.params
+  let param_arity t = T.Parameters.arity t.params
 end and Continuation_handlers : sig
   include module type of F0.Continuation_handlers
 
@@ -1532,8 +1359,9 @@ end = struct
   module Iterators = struct
     let iter_function_bodies t ~f =
       Closure_id.Map.iter (fun _ (function_decl : Function_declaration.t) ->
-          f ~continuation_arity:function_decl.return_arity
-            function_decl.continuation_param function_decl.body)
+          let continuation_arity = T.Parameters.arity function_decl.results in
+          f ~continuation_arity function_decl.continuation_param
+            function_decl.body)
         t.function_decls.funs
   end
 
@@ -1570,8 +1398,10 @@ end = struct
                   Expr.Mappers.map_function_bodies ?ignore_stubs
                     function_decl.body ~f
                 in
-                f ~continuation_arity:function_decl.return_arity
-                  function_decl.continuation_param body
+                let continuation_arity =
+                  T.Parameters.arity function_decl.results
+                in
+                f ~continuation_arity function_decl.continuation_param body
             in
             if new_body == function_decl.body then
               function_decl
@@ -1601,7 +1431,7 @@ end = struct
   end
 
   let invariant env
-        ({ function_decls; free_vars; direct_call_surrogates = _; } as t) =
+        { function_decls; free_vars; direct_call_surrogates = _; } =
     (* CR mshinwell: Some of this should move into
        [Function_declarations.invariant] *)
     let module E = Invariant_env in
@@ -1623,11 +1453,12 @@ end = struct
       Closure_id.Map.fold (fun fun_var function_decl acc ->
           let all_params, all_free_vars = acc in
           (* CR-soon mshinwell: check function_decl.all_symbols *)
-          let { Function_declaration.params; body; stub; dbg; my_closure;
+          let { Function_declaration. params; body; stub; dbg; my_closure;
                 continuation_param = return_cont;
-                exn_continuation_param; return_arity; _ } =
+                exn_continuation_param; results; _ } =
             function_decl
           in
+          let return_arity = T.Parameters.arity results in
           (* CR mshinwell: Check arity of [exn_continuation_param] *)
           if Continuation.equal return_cont exn_continuation_param
           then begin
@@ -1643,19 +1474,20 @@ end = struct
             Name.set_to_var_set
               (Name_occurrences.everything (Expr.free_names body))
           in
+          let kinded_params = T.Parameters.kinded_params params in
           (* Check that every variable free in the body of the function is
              either the distinguished "own closure" variable or one of the
              function's parameters. *)
           let allowed_free_variables =
-            Variable.Set.add my_closure
-              (Typed_parameter.List.var_set params)
+            Variable.Set.add my_closure (
+              Kinded_parameter.List.var_set kinded_params)
           in
           let parameters_with_kinds =
             List.map (fun param ->
-                let var = Typed_parameter.var param in
-                let kind = Typed_parameter.kind param in
+                let var = Kinded_parameter.var param in
+                let kind = Kinded_parameter.kind param in
                 var, kind)
-              params
+              kinded_params
           in
           let bad =
             Variable.Set.diff free_variables allowed_free_variables
@@ -1672,6 +1504,7 @@ end = struct
              in the parameter list.  Parameters' types maybe can also depend
              on [my_closure]? *)
           (* Check that free names in parameters' types are bound. *)
+(* XXX temporarily disabled
           List.iter (fun param ->
               let ty = Typed_parameter.ty param in
               let fns = Flambda_type.free_names ty in
@@ -1687,6 +1520,7 @@ end = struct
           (* Check that projections on parameters only describe projections
              from other parameters of the same function. *)
           let params' = Typed_parameter.List.var_set params in
+*)
 (*
           List.iter (fun param ->
               match Typed_parameter.equalities param with
@@ -1704,7 +1538,6 @@ end = struct
                     print t
                 end *)  )
             params;
-*)
           (* Check that parameters are unique across all functions in the
              declaration. *)
           let old_all_params_size = Variable.Set.cardinal all_params in
@@ -1717,6 +1550,7 @@ end = struct
                 parameters: %a"
               print t
           end;
+*)
           (* Check the body of the function. *)
           let body_env =
             E.prepare_for_function_body env
@@ -1768,8 +1602,8 @@ end and Function_declarations : sig
     -> Closure_id.Set.t
   val all_functions_parameters : t -> Variable.Set.t
   val contains_stub : t -> bool
-  val map_parameter_types : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
-  val freshen : t -> Freshening.t -> t * Freshening.t
+  val freshen : t -> Freshening.t -> t
+  val rename_names : t -> Name.t Name.Map.t -> t
 end = struct
   include F0.Function_declarations
 
@@ -1839,7 +1673,8 @@ end = struct
   let all_functions_parameters (function_decls : t) =
     Closure_id.Map.fold
       (fun _ ({ params; _ } : Function_declaration.t) set ->
-        Variable.Set.union set (Typed_parameter.List.var_set params))
+        let params = T.Parameters.kinded_params params in
+        Variable.Set.union set (Kinded_parameter.List.var_set params))
       function_decls.funs Variable.Set.empty
 
   let contains_stub (fun_decls : t) =
@@ -1851,6 +1686,7 @@ end = struct
     in
     number_of_stub_functions > 0
 
+(*
   let map_parameter_types t ~f =
     let funs =
       Closure_id.Map.map (fun (decl : Function_declaration.t) ->
@@ -1858,68 +1694,64 @@ end = struct
         t.funs
     in
     update t ~funs
+*)
 
-  let freshen (func_decls : t) freshening =
-    let freshen_func_decl (func_decl : Function_declaration.t)
-          freshening =
-      let params_rev, freshening =
-        List.fold_left (fun (params_rev, freshening) param ->
+  (* CR mshinwell: Tidy up, stop computing the [subst] that used to be
+     returned *)
+  let rename_names (func_decls : t) subst =
+    let freshen_func_decl (func_decl : Function_declaration.t) subst =
+(*
+      let params_rev, subst =
+        List.fold_left (fun (params_rev, subst) param ->
             let var = Typed_parameter.var param in
-            let fresh_var, freshening =
-              Freshening.add_variable freshening var
+            let fresh_var, subst =
+              Freshening.add_variable subst var
             in
             let param =
-              (* CR mshinwell: Add [Typed_parameter.replace_var] *)
               Typed_parameter.map_var ~f:(fun _var -> fresh_var) param
             in
-            param :: params_rev, freshening)
-          ([], freshening)
+            param :: params_rev, subst)
+          ([], subst)
           func_decl.params
       in
-      let params = List.rev params_rev in
+*)
+      let params = T.Parameters.rename_variables func_decl.params subst in
+      let results = T.Parameters.rename_variables func_decl.results subst in
       (* Since all parameters are distinct, even between functions, we can
          just use a single substitution. *)
       (* CR mshinwell: Why does this [toplevel_substitution] need to happen?
-         Can't this freshening be put into the environment and then applied
+         Can't this subst be put into the environment and then applied
          as needed? *)
       let body =
-        Expr.toplevel_substitution
-          (Freshening.name_substitution freshening)
+        Expr.toplevel_substitution subst
           func_decl.body
       in
       let function_decl =
-        Function_declaration.update_params_and_body func_decl ~params ~body
+        Function_declaration.update_params_results_and_body func_decl
+          ~params ~body ~results
       in
-      function_decl, freshening
+      function_decl, subst
     in
-    let funs, freshening =
-      Closure_id.Map.fold (fun closure_id func_decl (funs, freshening) ->
-          let func_decl, freshening =
-            freshen_func_decl func_decl freshening
+    let funs, _subst =
+      Closure_id.Map.fold (fun closure_id func_decl (funs, subst) ->
+          let func_decl, subst =
+            freshen_func_decl func_decl subst
           in
-          Closure_id.Map.add closure_id func_decl funs, freshening)
+          Closure_id.Map.add closure_id func_decl funs, subst)
         func_decls.funs
-        (Closure_id.Map.empty, freshening)
+        (Closure_id.Map.empty, subst)
     in
-    let function_decls = update func_decls ~funs in
-    function_decls, freshening
+    update func_decls ~funs
+
+  let freshen t freshening =
+    let subst = Freshening.name_substitution freshening in
+    rename_names t subst
 end and Function_declaration : sig
   include module type of F0.Function_declaration
 
-  val function_arity : t -> int
-  (* val num_variables_in_closure *)
-  (*    : t *)
-  (*   -> function_decls:Function_declarations.t *)
-  (*   -> int *)
-  val map_parameter_types : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
+  val function_arity : t -> Flambda_arity.t
 end = struct
   include F0.Function_declaration
 
-  let function_arity t = List.length t.params
-
-  let map_parameter_types t ~f =
-    let params =
-      List.map (fun param -> Typed_parameter.map_type param ~f) t.params
-    in
-    Function_declaration.update_params t ~params
+  let function_arity t = T.Parameters.arity t.params
 end

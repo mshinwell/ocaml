@@ -50,6 +50,8 @@ val add_variable : t -> Variable.t -> Flambda_kind.t -> t
 
 val add_variables : t -> (Variable.t * Flambda_kind.t) list -> t
 
+val add_kinded_parameters : t -> Kinded_parameter.t list -> t
+
 val add_mutable_variable
    : t
   -> Mutable_variable.t

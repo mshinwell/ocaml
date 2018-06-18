@@ -75,6 +75,9 @@ module type S = sig
       the index is out of the range [0 .. size t). *)
   val nth : t -> Targetint.OCaml.t -> Kinded_parameter.t option
 
+  (** All of the parameters, in order. *)
+  val kinded_params : t -> Kinded_parameter.t list
+
   type fresh_name_semantics =
     | Fresh
       (** [meet] and [join] will generate fresh names and add equalities to
@@ -131,4 +134,6 @@ module type S = sig
   (** Add or meet the definitions and equations from the given parameters value
       into the given typing environment. *)
   val introduce : t -> T.typing_environment -> t
+
+  val rename_variables : t -> Name.t Name.Map.t -> t
 end

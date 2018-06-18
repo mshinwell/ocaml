@@ -139,3 +139,8 @@ let rename t =
   match t with
   | Var var -> Var (Variable.rename var)
   | Symbol sym -> Symbol (Symbol.rename sym)
+
+let in_compilation_unit t =
+  match t with
+  | Var var -> Variable.in_compilation_unit var
+  | Symbol sym -> Symbol.in_compilation_unit sym

@@ -47,3 +47,5 @@ val set_to_symbol_set : Set.t -> Symbol.Set.t
 val is_predefined_exception : t -> bool
 
 val rename : t -> t
+
+val in_compilation_unit : t -> Compilation_unit.t -> bool

@@ -679,11 +679,13 @@ end and Function_declaration : sig
   (** Change only the parameters of a function declaration. *)
   val update_params : t -> params:Flambda_type.Parameters.t -> t
 
-  (** Change only the code and parameters of a function declaration. *)
-  val update_params_and_body
+  (** Change only the code, parameters and result types of a function
+      declaration. *)
+  val update_params_results_and_body
      : t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
+    -> results:Flambda_type.Parameters.t
     -> t
 
   (** All names free in the function declaration.  (Note that this may be

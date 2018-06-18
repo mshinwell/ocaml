@@ -118,28 +118,6 @@ module rec Expr : sig
   (* CR-someday mshinwell: What about checks for shadowed variables and
      symbols? *)
 
-  (* Given an expression, freshen all variables within it, and form a function
-     whose body is the resulting expression.  The variables specified by
-     [params] will become the parameters of the function; the closure will be
-     identified by [id].  [params] must only reference variables that are
-     free variables of [body]. *)
-  (* CR-soon mshinwell: consider improving name and names of arguments
-     lwhite: the params restriction seems odd, perhaps give a reason
-     in the comment. *)
-  val make_closure_declaration
-     : id:Variable.t
-    -> free_variable_kind:(Variable.t -> Flambda_kind.t)
-    -> body:t
-    -> params:Flambda_type.Parameters.t
-    -> continuation_param:Continuation.t
-    -> exn_continuation_param:Continuation.t
-    (* CR mshinwell: update comment. *)
-    -> stub:bool
-    -> continuation:Continuation.t
-    -> return_arity:Flambda_arity.t
-    -> dbg:Debuginfo.t
-    -> t
-
   val toplevel_substitution : Name.t Name.Map.t -> t -> t
 
   val description_of_toplevel_node : t -> string
@@ -425,18 +403,9 @@ end and Function_declarations : sig
 
   val contains_stub : t -> bool
 
-  val freshen : t -> Freshening.t -> t * Freshening.t
+  val freshen : t -> Freshening.t -> t
 end and Function_declaration : sig
   include module type of struct include F0.Function_declaration end
 
-  val function_arity : t -> int
-
-  (* (\** The number of variables in the function's closure.  Such variables are *)
-  (*     taken to be the free variables of the function's body but ignoring *)
-  (*     variables that are either function parameters or the name of one of *)
-  (*     the other functions simultaneously-defined with [t]. *\) *)
-  (* val num_variables_in_closure *)
-  (*    : t *)
-  (*   -> function_decls:Function_declarations.t *)
-  (*   -> int *)
+  val function_arity : t -> Flambda_arity.t
 end

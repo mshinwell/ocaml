@@ -1610,10 +1610,11 @@ end and Function_declaration : sig
     -> t
   val update_body : t -> body:Expr.t -> t
   val update_params : t -> params:Flambda_type.Parameters.t -> t
-  val update_params_and_body
-    : t
+  val update_params_results_and_body
+     : t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
+    -> results:Flambda_type.Parameters.t
     -> t
   val used_params : t -> Variable.Set.t
   val free_names : t -> Name_occurrences.t
@@ -1686,7 +1687,7 @@ end = struct
       my_closure = t.my_closure
     }
 
-  let update_params_and_body t ~params ~body : t =
+  let update_params_results_and_body t ~params ~body ~results : t =
     { closure_origin = t.closure_origin;
       params;
       continuation_param = t.continuation_param;
@@ -1694,7 +1695,7 @@ end = struct
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      results = t.results;
+      results;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
@@ -1706,7 +1707,7 @@ end = struct
     }
 
   let update_params t ~params =
-    update_params_and_body t ~params ~body:t.body
+    update_params_results_and_body t ~params ~body:t.body ~results:t.results
 
   let free_names t =
     let bound_in_params = Flambda_type.Parameters.bound_names t.params in

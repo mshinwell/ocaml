@@ -128,35 +128,44 @@ let create () =
     continuation_stack = Continuation_stack.var ();
   }
 
-let add_variable t var kind =
-  let name = Name.var var in
+let add_name t name kind =
 (*Format.eprintf "add_variable %a :: %a\n%s\n%!"
   Variable.print var Flambda_kind.print kind
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 50));*)
   if Name.Map.mem name t.names then begin
-    Misc.fatal_errorf "Duplicate binding of variable %a which is already \
+    Misc.fatal_errorf "Duplicate binding of name %a which is already \
         bound in the current scope"
-      Variable.print var
+      Name.print name
   end;
   if Name.Set.mem name !(t.all_names_seen) then begin
-    Misc.fatal_errorf "Duplicate binding of variable %a which is bound \
+    Misc.fatal_errorf "Duplicate binding of name %a which is bound \
         in some other scope"
-      Variable.print var
+      Name.print name
   end;
   let compilation_unit = Compilation_unit.get_current_exn () in
-  if not (Variable.in_compilation_unit var compilation_unit) then begin
-    Misc.fatal_errorf "Binding occurrence of variable %a cannot occur in \
-        this compilation unit since the variable is from another compilation \
+  if not (Name.in_compilation_unit name compilation_unit) then begin
+    Misc.fatal_errorf "Binding occurrence of name %a cannot occur in \
+        this compilation unit since the name is from another compilation \
         unit"
-      Variable.print var
+      Name.print name
   end;
   t.all_names_seen := Name.Set.add name !(t.all_names_seen);
   { t with
     names = Name.Map.add name kind t.names;
   }
 
+let add_variable t var kind =
+  add_name t (Name.var var) kind
+
 let add_variables t vars_and_kinds =
   List.fold_left (fun t (var, kind) -> add_variable t var kind) t vars_and_kinds
+
+let add_kinded_parameters t kinded_params =
+  List.fold_left (fun t kinded_param ->
+      add_name t (Kinded_parameter.name kinded_param)
+        (Kinded_parameter.kind kinded_param))
+    t
+    kinded_params
 
 let add_mutable_variable t var kind =
   if Mutable_variable.Map.mem var t.mutable_variables then begin

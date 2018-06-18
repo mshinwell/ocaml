@@ -76,6 +76,23 @@ module Make
   let arity (t : t) =
     List.map (fun kinded_param -> Kinded_parameter.kind kinded_param) t.params
 
+  let kinded_params t = t.params
+
+  let nth t index =
+    match Targetint.OCaml.to_int_option index with
+    | Some n ->
+      begin match List.nth_opt t.params n with
+      | Some param -> param
+      | None ->
+        Misc.fatal_errorf "Parameters.nth: index %d out of range:@ %a"
+          n
+          print t
+      end
+    | None ->
+      Misc.fatal_errorf "Parameters.nth: too many parameters (%a) for host:@ %a"
+        Targetint.OCaml.print index
+        print t
+
   let check_arities_match (t1 : t) (t2 : t) =
     let fail () =
       Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with \
@@ -189,4 +206,7 @@ module Make
           (T.bottom param_kind))
       t.env_extension
       t.params
+
+  let rename_variables t subst =
+    rename_variables_parameters t subst
 end
