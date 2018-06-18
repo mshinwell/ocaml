@@ -28,6 +28,8 @@ module Int64 = Numbers.Int64
 
 include F0.Flambda_type
 
+module JE = Join_env
+
 let bottom_types_from_arity t =
   List.map (fun kind -> bottom kind) t
 
@@ -349,6 +351,10 @@ let prove_closure env t : _ proof =
   | Value _ -> wrong_kind ()
   | Simplified_type.Naked_number _ -> wrong_kind ()
 
+let no_blocks ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
+  Tag_and_size.Map.is_empty known_tags_and_sizes
+    && Targetint.OCaml.Map.is_empty size_at_least_n
+
 type reification_result =
   | Term of Simple.t * t
   | Lift of Flambda_static0.Static_part.t
@@ -402,7 +408,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           begin match blocks_imms.blocks with
           | Unknown -> try_canonical_var ()
           | Known blocks ->
-            if not (Tag.Map.is_empty blocks) then try_canonical_var ()
+            if not (no_blocks blocks) then try_canonical_var ()
             else
               begin match blocks_imms.immediates with
               | Unknown -> try_canonical_var ()
@@ -520,7 +526,7 @@ let prove_tagged_immediate env t
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        match no_blocks blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
         | false, false -> Unknown
         | true, false -> Proved (Immediate.Map.keys imms)
@@ -554,7 +560,7 @@ let prove_tagged_immediate_as_discriminants env t
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        match no_blocks blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
         | false, false -> Unknown
         | true, false ->
@@ -604,7 +610,7 @@ let prove_is_tagged_immediate env t : is_tagged_immediate proof =
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        match no_blocks blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
         | false, false -> Unknown
         | true, false -> Proved Always_a_tagged_immediate
@@ -627,7 +633,46 @@ let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
     Misc.fatal_errorf "Bad kind for block field: %a"
       K.print field_kind
 
-let prove_get_field_from_block env t ~index ~field_kind : t proof =
+let field_n_of_block env ({ known_tags_and_sizes; size_at_least_n; } : blocks)
+      ~index ~field_kind =
+  let params =
+    Tag_and_size.Map.fold (fun acc tag_and_size params ->
+        let tag = Tag_and_size.tag tag_and_size in
+        if not (valid_block_tag_for_kind ~tag ~field_kind) then acc
+        else
+          let size = Tag_and_size.size tag_and_size in
+          if Targetint.OCaml.(<) index size then params::acc
+          else acc)
+      []
+      known_tags_and_sizes
+  in
+  let from_size_at_least_n =
+    Targetint.OCaml.Map.find_first_opt
+      (fun size -> Targetint.OCaml.(<) index size)
+      size_at_least_n
+  in
+  let params =
+    match from_size_at_least_n with
+    | None -> params
+    | Some (_size, new_params) -> new_params::params
+  in
+  let env = JE.create env in
+  match params with
+  | [] -> None
+  | params0::params ->
+    let params =
+      List.fold_left (fun joined_params params ->
+          Parameters.join env joined_params params)
+        params0
+        params
+    in
+    let kinded_param = Parameters.nth params in
+    let name = Kinded_parameter.name kinded_param in
+    let env_extension = Parameters.standalone_extension params in
+    Some (name, env_extension)
+
+let prove_get_field_from_block env t ~index ~field_kind
+      : (Name.t * Typing_env_extension.t) proof =
 (*
 Format.eprintf "get_field_from_block index %a type@ %a\n"
   Targetint.OCaml.print index print t;
@@ -649,59 +694,11 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
         begin match blocks_imms.blocks with
         | Unknown -> Unknown
         | Known blocks ->
-          assert (not (Tag.Map.is_empty blocks));
-          let field_ty =
-            Tag.Map.fold
-              (fun tag ((Blocks { by_length; }) : block_cases) field_ty ->
-                let tag_is_valid =
-                  valid_block_tag_for_kind ~tag ~field_kind
-                in
-                if not tag_is_valid then field_ty
-                else
-                  Targetint.OCaml.Map.fold
-                    (fun len (block : singleton_block) field_ty ->
-                      if Targetint.OCaml.compare index len >= 0 then begin
-                        None
-                      end else begin
-                        (* CR mshinwell: Should this check the kind of all
-                           fields, like [prove_is_a_block] below? *)
-                        (* CR mshinwell: should use more robust conversion *)
-                        let index = Targetint.OCaml.to_int index in
-                        assert (Array.length block.fields > index);
-                        let this_field_ty =
-                          match block.fields.(index) with
-                          | Immutable this_field_ty ->
-(*
-                            Format.eprintf "this_field_ty index %d: %a\n%!"
-                              index
-                              print this_field_ty;
-*)
-                            this_field_ty
-                          | Mutable -> unknown field_kind
-                        in
-                        match field_ty with
-                        | None -> None
-                        | Some field_ty ->
-                          let field_ty =
-                            join env
-                              Typing_env_extension.empty
-                              Typing_env_extension.empty
-                              this_field_ty field_ty
-                          in
-                          Some field_ty
-                      end)
-                    by_length
-                    field_ty)
-              blocks
-              (Some (bottom field_kind))
-          in
-(*
-Format.eprintf "returned field type is %a\n"
-  (Misc.Stdlib.Option.print print) field_ty;
-*)
-          match field_ty with
+          assert (not (no_blocks blocks));
+          begin match field_n_of_block env blocks ~index ~field_kind with
           | None -> Invalid
-          | Some field_ty -> Proved field_ty
+          | Some result -> Proved result
+          end
         end 
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -749,7 +746,7 @@ let prove_must_be_a_block env t ~kind_of_all_fields : unit proof =
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        match no_blocks blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
         | false, false -> Unknown
         | true, false -> Invalid
@@ -791,7 +788,7 @@ let prove_unboxable_variant_or_block_of_values env t
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        if Tag.Map.is_empty blocks then
+        if no_blocks blocks then
           Proved Not_unboxable
         else
           let cannot_unbox = ref false in
@@ -850,7 +847,7 @@ let prove_float_array env t : float_array_proof proof =
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        if Tag.Map.is_empty blocks
+        if no_blocks blocks
           || not (Immediate.Map.is_empty imms)
         then Invalid
         else
@@ -1096,7 +1093,7 @@ let prove_lengths_of_arrays_or_blocks env t
         match blocks_imms.blocks with
         | Unknown -> Unknown
         | Known blocks ->
-          assert (not (Tag.Map.is_empty blocks));
+          assert (not (no_blocks blocks));
           let lengths =
             Tag.Map.fold
               (fun _tag ((Blocks { by_length; }) : block_cases) result ->

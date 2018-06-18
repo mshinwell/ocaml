@@ -249,6 +249,7 @@ module OCaml : sig
   val hex_ff : t
 
   val (<=) : t -> t -> bool
+  val (<) : t -> t -> bool
 
   val bottom_byte_to_int : t -> int
 

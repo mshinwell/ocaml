@@ -143,30 +143,22 @@ module type S = sig
     env_extension : env_extension;
   }
  
-  and singleton_block = private {
-    (* CR mshinwell: Should this indicate if the block is an array? *)
-    (* CR mshinwell: Mutability information has been removed for now *)
-    (* CR mshinwell: We should note explicitly that these are logical fields
-       (I think this only matters for float arrays on 32-bit targets) *)
-    fields : parameters;
+  (* CR mshinwell: Should this indicate if the block is an array? *)
+  (* CR mshinwell: Mutability information has been removed for now *)
+  (* CR mshinwell: We should note explicitly that these are logical fields
+     (I think this only matters for float arrays on 32-bit targets) *)
+  and blocks = private {
+    known_tags_and_sizes : parameters Tag_and_size.Map.t;
+    size_at_least_n : parameters Targetint.OCaml.Map.t;
+    (* [size_at_least_n] is required since [Pfield] in [Lambda] does not
+       specify the tag and size of the block being projected from. *)
   }
-
-  and block_cases = private
-    (* CR mshinwell: This should use a different type which is capped at
-       max array / block size *)
-    | Blocks of { by_length : singleton_block Targetint.OCaml.Map.t; }
-    (** This is similar to the [Join] case at the top level of types:
-        no two [singleton_block]s in one of these [Join]s can have a
-        compatible structure.
-        The only thing which determines the compatibility in this case is
-        the length, which we can make explicit using a map.
-        Invariant: the map is always non-empty. *)
 
   and blocks_and_tagged_immediates = private {
     immediates : immediate_case Immediate.Map.t Or_unknown.t;
     (** Cases for constant constructors (in the case of variants) and
         arbitrary tagged immediates. *)
-    blocks : block_cases Tag.Map.t Or_unknown.t;
+    blocks : blocks Or_unknown.t;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
   }

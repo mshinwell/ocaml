@@ -94,6 +94,7 @@ module type S = sig
     val ten : t
     val hex_ff : t
     val (<=) : t -> t -> bool
+    val (<) : t -> t -> bool
     val bottom_byte_to_int : t -> int
     val of_char : char -> t
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
@@ -242,8 +243,6 @@ module Int32 = struct
     let min_value = Int32.min_int
     let max_value = Int32.max_int
 
-    let (<=) t1 t2 = Int32.compare t1 t2 <= 0
-
     let sub = Int32.sub
     let neg = Int32.neg
 
@@ -356,6 +355,9 @@ module Int32 = struct
           | Unknown -> Format.pp_print_string ppf "Unknown"
       end)
     end
+
+    let (<=) t1 t2 = Int32.compare t1 t2 <= 0
+    let (<) t1 t2 = Int32.compare t1 t2 < 0
   end
 end
 
@@ -422,8 +424,6 @@ module Int64 = struct
     let one = 1L
     let ten = 10L
     let hex_ff = 0xffL
-
-    let (<=) t1 t2 = Pervasives.(<=) (compare t1 t2) 0
 
     (* XXX Implement correctly *)
     let min_value = Int64.min_int
@@ -534,6 +534,9 @@ module Int64 = struct
           | Unknown -> Format.pp_print_string ppf "Unknown"
       end)
     end
+
+    let (<=) t1 t2 = Pervasives.(<=) (compare t1 t2) 0
+    let (<) t1 t2 = Pervasives.(<) (compare t1 t2) 0
   end
 end
 

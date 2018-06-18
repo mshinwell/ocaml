@@ -166,7 +166,7 @@ val prove_get_field_from_block
    : (t
     -> index:Targetint.OCaml.t
     -> field_kind:Flambda_kind.t
-    -> t proof) type_accessor
+    -> (Name.t * Typing_env_extension.t) proof) type_accessor
 
 val prove_must_be_a_block
    : (t

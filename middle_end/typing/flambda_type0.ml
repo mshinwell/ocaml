@@ -538,14 +538,16 @@ module Make (Expr : Expr_intf.S) = struct
       let acc =
         match blocks with
         | Unknown -> acc
-        | Known blocks ->
-          Tag.Map.fold (fun _tag ((Blocks { by_length; }) : block_cases) acc ->
-              Targetint.OCaml.Map.fold
-                (fun _length ({ fields; } : singleton_block) acc ->
-                  free_names_parameters fields acc)
-                by_length
-                acc)
-            blocks
+        | Known { known_tags_and_sizes; size_at_least_n; } ->
+          let acc =
+            Tag_and_size.Map.fold (fun _tag_and_size params acc ->
+                free_names_parameters params acc)
+              known_tags_and_sizes
+              acc
+          in
+          Targetint.OCaml.Map.fold (fun _size params acc ->
+              free_names_parameters params acc)
+            size_at_least_n
             acc
       in
       begin match immediates with
@@ -1020,11 +1022,16 @@ result
       phantom = None;
     }
 
+  let no_blocks : blocks =
+    { known_tags_and_sizes = Tag_and_size.Map.empty;
+      size_at_least_n = Targetint.OCaml.Map.empty;
+    }
+
   let any_tagged_immediate () : t =
     { descr =
         Value (No_alias (Join [Blocks_and_tagged_immediates {
           immediates = Unknown;
-          blocks = Known Tag.Map.empty;
+          blocks = Known no_blocks;
         }]));
       phantom = None;
     }
@@ -1269,10 +1276,9 @@ result
           imms
           Immediate.Map.empty
       in
-      (* CR mshinwell: See if we can have a creation function for this *)
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
         { immediates = Known immediates;
-          blocks = Known Tag.Map.empty;
+          blocks = Known no_blocks;
         }
       in
       { descr =
@@ -1293,7 +1299,7 @@ result
       in
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
         { immediates = Known immediates;
-          blocks = Known Tag.Map.empty;
+          blocks = Known no_blocks;
         }
       in
       { descr =
@@ -1439,26 +1445,25 @@ result
       env_extension = empty_env_extension;
     }
 
+  let create_blocks ~tag ~size ~field_tys : blocks =
+    let fields = create_parameters_from_types field_tys in
+    let known_tags_and_sizes =
+      Tag_and_size.Map.singleton (Tag_and_size.create tag size) fields
+    in
+    { known_tags_and_sizes;
+      size_at_least_n = Targetint.OCaml.Map.empty;
+    }
+
   let mutable_float_array ~size : t =
     match Targetint.OCaml.to_int_option size with
     | None ->
+      (* CR mshinwell: Here and below, this should be a normal compilation
+         error, not a fatal error. *)
       Misc.fatal_error "Mutable float array too long for host"
     | Some size ->
       let field_tys = List.init size (fun _index -> any_naked_float ()) in
-      let fields = create_parameters_from_types field_tys in
-      let singleton_block : singleton_block =
-        { fields;
-        }
-      in
       let size = Targetint.OCaml.of_int size in
-      let by_length =
-        Targetint.OCaml.Map.add size singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
-      let blocks =
-        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
-      in
+      let blocks = create_blocks ~tag:Tag.double_array_tag ~size ~field_tys in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
           blocks = Known blocks;
@@ -1473,8 +1478,8 @@ result
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Immutable float array too long for target"
-    | Some length ->
-      let fields =
+    | Some size ->
+      let field_tys =
         Array.map (fun ty_naked_number : t ->
             { descr =
                 Naked_number (ty_naked_number, K.Naked_number.Naked_float);
@@ -1482,18 +1487,9 @@ result
             })
           fields
       in
-      let fields = create_parameters_from_types (Array.to_list fields) in
-      let singleton_block : singleton_block =
-        { fields;
-        }
-      in
-      let by_length =
-        Targetint.OCaml.Map.add length singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
       let blocks =
-        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
+        create_blocks ~tag:Tag.double_array_tag ~size
+          ~field_tys:(Array.to_list field_tys)
       in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
@@ -1517,8 +1513,8 @@ result
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Block too long for target"
-    | Some length ->
-      let fields =
+    | Some size ->
+      let field_tys =
         Array.map
           (fun (field : _ mutable_or_immutable) : t ->
             match field with
@@ -1526,17 +1522,9 @@ result
             | Mutable -> any_value ())
           fields
       in
-      let fields = create_parameters_from_types (Array.to_list fields) in
-      let singleton_block : singleton_block =
-        { fields;
-        }
+      let blocks =
+        create_blocks ~tag ~size ~field_tys:(Array.to_list field_tys)
       in
-      let by_length =
-        Targetint.OCaml.Map.add length singleton_block
-          Targetint.OCaml.Map.empty
-      in
-      let block_cases : block_cases = Blocks { by_length; } in
-      let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
           blocks = Known blocks;
@@ -1823,32 +1811,26 @@ result
   and rename_variables_blocks subst (blocks : _ Or_unknown.t) =
     match blocks with
     | Unknown -> blocks
-    | Known by_tag ->
-      let by_tag' =
-        Tag.Map.map_sharing (fun block_cases ->
-            rename_variables_block_cases subst block_cases)
-          by_tag
+    | Known { known_tags_and_sizes; size_at_least_n; } ->
+      let known_tags_and_sizes' =
+        Tag_and_size.Map.map_sharing (fun params ->
+            rename_variables_parameters subst params)
+          known_tags_and_sizes
       in
-      if by_tag == by_tag' then blocks
-      else Or_unknown.Known by_tag'
-
-  and rename_variables_block_cases subst
-        ((Blocks { by_length; }) as block_cases) =
-    let by_length' =
-      Targetint.OCaml.Map.map_sharing (fun singleton_block ->
-          rename_variables_singleton_block subst singleton_block)
-        by_length
-    in
-    if by_length == by_length' then block_cases
-    else Blocks { by_length = by_length'; }
-
-  and rename_variables_singleton_block subst
-        (({ fields; } : singleton_block) as singleton_block) =
-    let fields' = rename_variables_parameters subst fields in
-    if fields == fields' then
-      singleton_block
-    else
-      { fields = fields'; }
+      let size_at_least_n' =
+        Targetint.OCaml.Map.map_sharing (fun params ->
+            rename_variables_parameters subst params)
+          size_at_least_n
+      in
+      if known_tags_and_sizes == known_tags_and_sizes'
+        && size_at_least_n == size_at_least_n'
+      then
+        blocks
+      else
+        Or_unknown.Known {
+          known_tags_and_sizes = known_tags_and_sizes';
+          size_at_least_n = size_at_least_n';
+        }
 
   and rename_variables_parameters subst
         (({ params; env_extension; } : parameters) as parameters)
@@ -2626,7 +2608,8 @@ result
 
     type meet_or_join = Meet | Join
 
-    let op = Meet
+    let op : meet_or_join = Meet
+    let (_ : meet_or_join) = Join
 
     let unknown_is_identity = true
     let unknown_is_absorbing = false
@@ -2735,7 +2718,8 @@ result
 
     type meet_or_join = Meet | Join
 
-    let op = Join
+    let op : meet_or_join = Join
+    let (_ : meet_or_join) = Meet
 
     let unknown_is_identity = false
     let unknown_is_absorbing = true
