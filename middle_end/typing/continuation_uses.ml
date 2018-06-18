@@ -46,44 +46,43 @@ module Use = struct
       | Not_inlinable_or_specialisable args_tys ->
         Format.fprintf ppf "(Not_inlinable_or_specialisable (%a))"
           (Format.pp_print_list T.print) args_tys
-      | Inlinable_and_specialisable args_and_tys ->
+      | Inlinable_and_specialisable args_with_tys ->
         Format.fprintf ppf "(Inlinable_and_specialisable (%a))"
-          (Format.pp_print_list print_arg_and_ty) args_and_tys
-      | Only_specialisable args_and_tys ->
+          (Format.pp_print_list print_arg_and_ty) args_with_tys
+      | Only_specialisable args_with_tys ->
         Format.fprintf ppf "(Only_specialisable (%a))"
-          (Format.pp_print_list print_arg_and_ty) args_and_tys
+          (Format.pp_print_list print_arg_and_ty) args_with_tys
 
-    let args t =
+    let args_with_tys t =
       match t with
       | Not_inlinable_or_specialisable _ -> None
-      | Inlinable_and_specialisable args_and_tys
-      | Only_specialisable args_and_tys ->
-        Some (List.map (fun (arg, _ty) -> arg) args_and_tys)
+      | Inlinable_and_specialisable args_with_tys
+      | Only_specialisable args_with_tys -> Some args_with_tys
 
 (*
     let args t =
       match t with
       | Not_inlinable_or_specialisable _ -> []
-      | Inlinable_and_specialisable args_and_tys
-      | Only_specialisable args_and_tys ->
-        List.map (fun (arg, _ty) -> arg) args_and_tys
+      | Inlinable_and_specialisable args_with_tys
+      | Only_specialisable args_with_tys ->
+        List.map (fun (arg, _ty) -> arg) args_with_tys
 *)
 
     let arg_tys t =
       match t with
       | Not_inlinable_or_specialisable args_tys -> args_tys
-      | Inlinable_and_specialisable args_and_tys
-      | Only_specialisable args_and_tys ->
-        List.map (fun (_arg, ty) -> ty) args_and_tys
+      | Inlinable_and_specialisable args_with_tys
+      | Only_specialisable args_with_tys ->
+        List.map (fun (_arg, ty) -> ty) args_with_tys
 
 (*
     let args_with_tys t =
       match t with
       | Not_inlinable_or_specialisable args_tys ->
         List.map (fun ty -> None, ty) args_tys
-      | Inlinable_and_specialisable args_and_tys
-      | Only_specialisable args_and_tys ->
-        List.map (fun (arg, ty) -> Some arg, ty) args_and_tys
+      | Inlinable_and_specialisable args_with_tys
+      | Only_specialisable args_with_tys ->
+        List.map (fun (arg, ty) -> Some arg, ty) args_with_tys
 *)
 
     let is_inlinable t =
@@ -96,8 +95,8 @@ module Use = struct
     let is_specialisable t =
       match t with
       | Not_inlinable_or_specialisable _ -> None
-      | Inlinable_and_specialisable args_and_tys
-      | Only_specialisable args_and_tys -> Some args_and_tys
+      | Inlinable_and_specialisable args_with_tys
+      | Only_specialisable args_with_tys -> Some args_with_tys
 *)
   end
 
@@ -109,11 +108,9 @@ module Use = struct
   let print ppf { kind; params; } =
     Format.fprintf ppf "@[((kind@ %a)@ (params@ %a))@]"
       Kind.print kind
-      T.Parameters.print tarams
+      T.Parameters.print params
 
   let parameters t = t.params
-
-  let args t = Kind.args t.kind
 
 (*
   let arg_tys t = Kind.arg_tys t.kind
@@ -165,18 +162,19 @@ let print ppf t =
     (Format.pp_print_list Use.print) t.uses
 
 let add_use t env kind =
+  (* CR mshinwell: Instead, consider cutting further down. *)
   let cut_point = Scope_level.next t.definition_scope_level in
   let env_extension =
     TE.cut env ~existential_if_defined_at_or_later_than:cut_point
   in
   let arity = T.Parameters.arity t.params in
-  let arg_tys = Kind.arg_tys kind in
+  let arg_tys = Use.Kind.arg_tys kind in
   if List.compare_lengths arity arg_tys <> 0 then begin
     Misc.fatal_errorf "Proposed use of continuation %a doesn't match arity \
         %a: %a"
       Continuation.print t.continuation
       Flambda_arity.print arity
-      Kind.print kind
+      Use.Kind.print kind
   end;
   let fresh_kinded_params =
     List.mapi (fun index kind ->
@@ -190,7 +188,7 @@ let add_use t env kind =
       arity
   in
   let env_extension =
-    match Kind.args kind with
+    match Use.Kind.args_with_tys kind with
     | None -> env_extension
     | Some args_with_tys ->
       List.fold_left

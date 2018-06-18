@@ -133,7 +133,7 @@ module type S = sig
 
   (** Add or meet the definitions and equations from the given parameters value
       into the given typing environment. *)
-  val introduce : t -> T.typing_environment -> t
+  val introduce : t -> T.typing_environment -> T.typing_environment
 
   val rename_variables : t -> Name.t Name.Map.t -> t
 end

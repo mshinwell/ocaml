@@ -19,27 +19,34 @@
 module JE = Flambda_type.Join_env
 module T = Flambda_type
 
-(* CR-soon mshinwell: Consider lwhite's suggestion of doing the existential
-   introduction at [Switch] time *)
-
-let parameters_and_body_env uses ~continuation_env_of_definition ~parameters =
+let parameters_and_body_env uses ~continuation_env_of_definition
+      ~existing_continuation_params =
   match Continuation_uses.uses uses with
-  | [] -> parameters
+  | [] -> continuation_env_of_definition, existing_continuation_params
   | first_use::remaining_uses ->
     let first_parameters = Continuation_uses.Use.parameters first_use in
-    let env = JE.create continuation_env_of_definition in
     let joined_parameters =
+      let env = JE.create continuation_env_of_definition in
       List.fold_left (fun joined_parameters use ->
           let parameters = Continuation_uses.Use.parameters use in
           T.Parameters.join env parameters joined_parameters)
         first_parameters
         remaining_uses
     in
-    T.Parameters.meet ~fresh_name_semantics:Left
-      env parameters joined_parameters
+    let parameters =
+      T.Parameters.meet ~fresh_name_semantics:Left
+        continuation_env_of_definition
+        existing_continuation_params joined_parameters
+    in
+    let body_env =
+      T.Parameters.introduce parameters continuation_env_of_definition
+    in
+    body_env, parameters
 
-let parameters uses ~continuation_env_of_definition ~parameters =
+let parameters uses ~continuation_env_of_definition
+      ~existing_continuation_params =
   let _body_env, parameters =
-    parameters_and_body_env uses ~continuation_env_of_definition ~parameters
+    parameters_and_body_env uses ~continuation_env_of_definition
+      ~existing_continuation_params
   in
   parameters

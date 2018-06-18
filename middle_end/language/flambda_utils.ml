@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -37,53 +37,6 @@ let make_variables_symbol vars =
       (List.map (fun var -> Variable.unique_name (Variable.rename var)) vars)
   in
   Symbol.create (Compilation_unit.get_current_exn ()) (Linkage_name.create name)
-
-(*
-type sharing_key = Continuation.t
-let make_key cont = Some cont
-let compare_key = Continuation.compare
-
-module Switch_storer =
-  Switch.Store
-    (struct
-      (* CR mshinwell: Check if this thing uses polymorphic comparison.
-         Should be ok if so, at the moment, but should be fixed.
-         vlaviron: the addition of a compare function to the signature should
-         fix the problem. *)
-      type t = Continuation.t
-      type key = sharing_key
-      let make_key = make_key
-      let compare_key = compare_key
-    end)
-*)
-(*
-type specialised_to_same_as =
-  | Not_specialised
-  | Specialised_and_aliased_to of Variable.Set.t
-
-let parameters_specialised_to_the_same_variable
-      ~(function_decls : Flambda.Function_declarations.t)
-      ~(specialised_args : Flambda.specialised_to Variable.Map.t) =
-  let specialised_arg_aliasing =
-    (* For each external variable involved in a specialisation, which
-       internal variable(s) it maps to via that specialisation. *)
-    Variable.Map.transpose_keys_and_data_set
-      (Variable.Map.filter_map specialised_args
-        ~f:(fun _param ({ var; _ } : Flambda.specialised_to) -> var))
-  in
-  Variable.Map.map (fun ({ params; _ } : Flambda.Function_declaration.t) ->
-      List.map (fun param ->
-          match Variable.Map.find (Parameter.var param) specialised_args with
-          | exception Not_found -> Not_specialised
-          | { var; _ } ->
-            match var with
-            | None -> Not_specialised
-            | Some var ->
-              Specialised_and_aliased_to
-                (Variable.Map.find var specialised_arg_aliasing))
-        params)
-    function_decls.funs
-*)
 
 let create_wrapper_params ~params ~freshening_already_assigned =
   let module Typed_parameter = Flambda.Typed_parameter in

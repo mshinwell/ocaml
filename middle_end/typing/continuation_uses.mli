@@ -95,7 +95,7 @@ type t
     corresponding [Let_cont] term. *)
 val create
    : continuation:Continuation.t
-  -> params:Flambda.Typed_parameter.t list
+  -> params:Flambda_type.Parameters.t
   -> definition_scope_level:Scope_level.t
   -> t
 
@@ -141,4 +141,4 @@ val linearly_used_in_inlinable_position : t -> bool
 (* CR mshinwell: check we really need this, and clarify semantics *)
 (** Modify the parameter information, without affecting the recorded use
     information, in the given use information structure. *)
-val update_parameters : t -> params:Flambda_type.Parameters.t list -> t
+val update_parameters : t -> params:Flambda_type.Parameters.t -> t
