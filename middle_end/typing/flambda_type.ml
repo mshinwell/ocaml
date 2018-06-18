@@ -384,7 +384,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       match canonical_simple with
       | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
         Some (Term (simple, alias_type_of (kind t) simple)), None
-      | Some ((Name ((Var var) as name)) as simple) ->
+      | Some ((Name ((Var _) as name)) as simple) ->
         if allow_free_variables
           && (not (Typing_env.was_existential_exn env name))
         then None, Some simple
@@ -636,15 +636,15 @@ let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
 let field_n_of_block env ({ known_tags_and_sizes; size_at_least_n; } : blocks)
       ~index ~field_kind =
   let params =
-    Tag_and_size.Map.fold (fun acc tag_and_size params ->
+    Tag_and_size.Map.fold (fun tag_and_size params acc ->
         let tag = Tag_and_size.tag tag_and_size in
         if not (valid_block_tag_for_kind ~tag ~field_kind) then acc
         else
           let size = Tag_and_size.size tag_and_size in
           if Targetint.OCaml.(<) index size then params::acc
           else acc)
-      []
       known_tags_and_sizes
+      []
   in
   let from_size_at_least_n =
     Targetint.OCaml.Map.find_first_opt
@@ -666,10 +666,15 @@ let field_n_of_block env ({ known_tags_and_sizes; size_at_least_n; } : blocks)
         params0
         params
     in
-    let kinded_param = Parameters.nth params in
-    let name = Kinded_parameter.name kinded_param in
-    let env_extension = Parameters.standalone_extension params in
-    Some (name, env_extension)
+    match Parameters.nth params index with
+    | Some kinded_param ->
+      let name = Kinded_parameter.name kinded_param in
+      let env_extension = Parameters.standalone_extension params in
+      Some (name, env_extension)
+    | None ->
+      Misc.fatal_errorf "[Parameters.t] should contain index %a:@ %a"
+        Targetint.OCaml.print index
+        Parameters.print params
 
 let prove_get_field_from_block env t ~index ~field_kind
       : (Name.t * Typing_env_extension.t) proof =
@@ -706,7 +711,9 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let tags_all_valid t blocks ~kind_of_all_fields =
+(* XXX re-enable *)
+let tags_all_valid _t (_blocks : blocks) ~kind_of_all_fields:_ = true
+(*
   Tag.Map.for_all (fun tag ((Blocks { by_length; }) : block_cases) ->
       Targetint.OCaml.Map.iter
         (fun _length (block : singleton_block) ->
@@ -729,6 +736,7 @@ let tags_all_valid t blocks ~kind_of_all_fields =
         by_length;
       valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
     blocks
+*)
 
 let prove_must_be_a_block env t ~kind_of_all_fields : unit proof =
   let wrong_kind () =
@@ -787,37 +795,53 @@ let prove_unboxable_variant_or_block_of_values env t
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
-      | Known blocks, Known imms ->
-        if no_blocks blocks then
+      | Known { known_tags_and_sizes; size_at_least_n; }, Known imms ->
+        if not (Targetint.OCaml.Map.is_empty size_at_least_n) then
           Proved Not_unboxable
         else
-          let cannot_unbox = ref false in
           let block_sizes_by_tag =
-            Tag.Map.fold (fun tag (Blocks { by_length; }) blocks ->
-                match Targetint.OCaml.Map.get_singleton by_length with
-                | Some (length, _) ->
-                  begin match Tag.Scannable.of_tag tag with
+            Tag_and_size.Map.fold
+              (fun tag_and_size _params block_sizes_by_tag ->
+                match block_sizes_by_tag with
+                | None -> None
+                | Some block_sizes_by_tag ->
+                  let tag = Tag_and_size.tag tag_and_size in
+                  match Tag.Scannable.of_tag tag with
+                  | None -> None
                   | Some tag ->
-                    Tag.Scannable.Map.add tag length blocks
-                  | None ->
-                    cannot_unbox := true;
-                    blocks
-                  end
-                | None ->
-                  cannot_unbox := true;
-                  blocks)
-              blocks
-              Tag.Scannable.Map.empty
+                    let size = Tag_and_size.size tag_and_size in
+                    let size_mismatch = ref false in
+                    let block_sizes_by_tag =
+                      Tag.Scannable.Map.update tag (function
+                          | None -> Some size
+                          | Some size' ->
+                            if Targetint.OCaml.equal size size' then begin
+                              Some size
+                            end else begin
+                              size_mismatch := true;
+                              None
+                            end)
+                        block_sizes_by_tag
+                    in
+                    if !size_mismatch then None
+                    else Some block_sizes_by_tag)
+              known_tags_and_sizes
+              (Some Tag.Scannable.Map.empty)
           in
-          if !cannot_unbox then Proved Not_unboxable
-          else
+          match block_sizes_by_tag with
+          | None -> Proved Not_unboxable
+          | Some block_sizes_by_tag ->
             let imms = Immediate.Map.keys imms in
+(* XXX re-enable
             if tags_all_valid t blocks ~kind_of_all_fields:(K.value ()) then
+*)
               Proved (Unboxable {
                 block_sizes_by_tag;
                 constant_ctors = imms;
               })
+(*
             else Proved Not_unboxable
+*)
       end
     | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
     end
@@ -828,9 +852,14 @@ type float_array_proof =
   | Of_length of Targetint.OCaml.t
   | Not_unique_length
 
+let _ = Of_length Targetint.OCaml.zero
+let _ = Not_unique_length
+
 (* CR mshinwell: This should probably return the field types rather than
    just the length; then it can be exposed in the .mli. *)
-let prove_float_array env t : float_array_proof proof =
+let prove_float_array _env _t : float_array_proof proof =
+  Misc.fatal_error "Not yet implemented"
+(* XXX
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a float array: \
         %a"
@@ -879,6 +908,7 @@ let prove_float_array env t : float_array_proof proof =
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
+*)
 
 type tags =
   | Tags of Tag.Set.t
@@ -903,7 +933,17 @@ let prove_tags env t : tags proof =
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       begin match blocks_imms.blocks with
-      | Known blocks -> Proved (Tags (Tag.Map.keys blocks))
+      | Known { known_tags_and_sizes; size_at_least_n; } ->
+        if not (Targetint.OCaml.Map.is_empty size_at_least_n) then Unknown
+        else
+          let tags_and_sizes = Tag_and_size.Map.keys known_tags_and_sizes in
+          let tags =
+            Tag_and_size.Set.fold (fun tag_and_size tags ->
+                Tag.Set.add (Tag_and_size.tag tag_and_size) tags)
+              tags_and_sizes
+              Tag.Set.empty
+          in
+          Proved (Tags tags)
       | Unknown -> Unknown
       end
     | Ok (Boxed_number (Boxed_float _)) ->
@@ -1055,7 +1095,11 @@ let prove_sets_of_closures env t : _ proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Set_of_closures set_of_closures) ->
-      Proved (canonical_simple, set_of_closures)
+      begin match canonical_simple with
+      | None -> Proved (None, set_of_closures)
+      | Some (Name name) -> Proved (Some name, set_of_closures)
+      | Some (Const _ | Discriminant _) -> Invalid
+      end
     | Ok _ -> Invalid
     end
   | Value _ -> wrong_kind ()
@@ -1092,20 +1136,18 @@ let prove_lengths_of_arrays_or_blocks env t
       end else begin
         match blocks_imms.blocks with
         | Unknown -> Unknown
-        | Known blocks ->
-          assert (not (no_blocks blocks));
-          let lengths =
-            Tag.Map.fold
-              (fun _tag ((Blocks { by_length; }) : block_cases) result ->
-                Targetint.OCaml.Map.fold (fun length _block result ->
-                    Targetint.OCaml.Set.add length result)
-                  by_length
-                  result)
-              blocks
-              Targetint.OCaml.Set.empty
-          in
-          assert (not (Targetint.OCaml.Set.is_empty lengths));
-          Proved lengths
+        | Known { known_tags_and_sizes; size_at_least_n; } ->
+          if not (Targetint.OCaml.Map.is_empty size_at_least_n) then Unknown
+          else
+            let tags_and_sizes = Tag_and_size.Map.keys known_tags_and_sizes in
+            let sizes =
+              Tag_and_size.Set.fold (fun tag_and_size sizes ->
+                  Targetint.OCaml.Set.add (Tag_and_size.size tag_and_size)
+                    sizes)
+                tags_and_sizes
+                Targetint.OCaml.Set.empty
+            in
+            Proved sizes
       end
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -1151,13 +1193,13 @@ let values_physically_equal (t1 : t) (t2 : t) =
       (* CR mshinwell: Presumably we could look up the Export_id.t in the
          environment and continue?  Maybe not worth it. *)
       false
-    | Equals name1, Equals name2 ->
+    | Equals simple1, Equals simple2 ->
       (* CR mshinwell: (see comment in simplify_primitives.ml in the existing
          Flambda)  We didn't used to check equality on variable aliases in case
          the variables weren't bound.  However everything should be bound now,
          so this seems like it should be ok.  (Remember that Name covers both
          variables and symbols.) *)
-      Name.equal name1 name2
+      Simple.equal simple1 simple2
   in
   match t1.phantom, t2.phantom with
   | Some _, _ | _, Some _ -> false
@@ -1198,22 +1240,33 @@ Format.eprintf "SD check: %a vs %a\n%!" print t1 print t2;
           (* CR-someday mshinwell: This could be improved if required. *)
           begin match blocks1, blocks2 with
           | Unknown, _ | _, Unknown -> false
-          | Known blocks1, Known blocks2 ->
+          | Known { known_tags_and_sizes = known_tags_and_sizes1;
+                    size_at_least_n = size_at_least_n1;
+                  },
+            Known { known_tags_and_sizes = known_tags_and_sizes2;
+                    size_at_least_n = size_at_least_n2;
+                  } ->
             begin match imms1, imms2 with
             | Unknown, _ | _, Unknown -> false
             | Known imms1, Known imms2 ->
-              (* CR mshinwell: This should actually collect a set of
-                 (tag, block length) pairs and prove the intersection of two
-                 such sets is empty. *)
-              let tag_intersection =
-                Tag.Set.inter (Tag.Map.keys blocks1) (Tag.Map.keys blocks2)
-              in
               let imm_intersection =
                 Immediate.Set.inter (Immediate.Map.keys imms1)
                   (Immediate.Map.keys imms2)
               in
-              Tag.Set.is_empty tag_intersection
-                && Immediate.Set.is_empty imm_intersection
+              if (not (Immediate.Set.is_empty imm_intersection))
+                || (not (Targetint.OCaml.Map.is_empty size_at_least_n1))
+                || (not (Targetint.OCaml.Map.is_empty size_at_least_n2))
+              then
+                false
+              else
+                let tags_and_sizes1 =
+                  Tag_and_size.Map.keys known_tags_and_sizes1
+                in
+                let tags_and_sizes2 =
+                  Tag_and_size.Map.keys known_tags_and_sizes2
+                in
+                Tag_and_size.Set.is_empty
+                  (Tag_and_size.Set.inter tags_and_sizes1 tags_and_sizes2)
             end
           end
         | Blocks_and_tagged_immediates _, _
