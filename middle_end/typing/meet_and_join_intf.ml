@@ -28,6 +28,8 @@ module type S = sig
 
   val meet_or_join_ty
      : T.join_env
+    -> Name_permutation.t
+    -> Name_permutation.t
     -> of_kind_foo T.ty
     -> of_kind_foo T.ty
     -> of_kind_foo T.ty * T.env_extension

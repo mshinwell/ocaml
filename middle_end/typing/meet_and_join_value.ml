@@ -64,38 +64,45 @@ struct
 
     let kind = K.value ()
 
-    let to_type ty : t = { descr = Value ty; phantom = None; }
+    let to_type ty : t =
+      { descr = Value ty;
+      }
+
     let force_to_kind = force_to_kind_value
     let print_ty = print_ty_value
 
-    let meet_or_join_immediate_case env
+    let meet_or_join_immediate_case env perm1 perm2
           ({ env_extension = env_extension1; } : immediate_case)
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
+      let env_extension1 = TEE.apply_name_permutation env_extension1 perm1 in
+      let env_extension2 = TEE.apply_name_permutation env_extension2 perm2 in
       let env_extension =
         E.switch' TEE.meet TEE.join env env_extension1 env_extension2
       in
       { env_extension; }
 
-    let meet_or_join_immediates env immediates1 immediates2
+    let meet_or_join_immediates env perm1 perm2 immediates1 immediates2
           : _ Or_bottom.t =
       let immediates =
         E.Immediate.Map.union_or_inter (fun _imm imm_case1 imm_case2 ->
-            Some (meet_or_join_immediate_case env imm_case1 imm_case2))
+            Some (meet_or_join_immediate_case env perm1 perm2
+              imm_case1 imm_case2))
           immediates1
           immediates2
       in
       if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
-    let meet_or_join_blocks env
+    let meet_or_join_blocks env perm1 perm2
           ({ known_tags_and_sizes = known_tags_and_sizes1;
              size_at_least_n = size_at_least_n1;
            } : blocks)
           ({ known_tags_and_sizes = known_tags_and_sizes2;
              size_at_least_n = size_at_least_n2;
            } : blocks) : blocks =
-      let one_side_only params1 size_at_least_n2 ~get_equations_to_deposit1 =
+      let one_side_only params1 perm1
+            size_at_least_n2 ~get_equations_to_deposit1 =
         let size1 = Parameters.size params1 in
         let from_size_at_least_n2 =
           Targetint.OCaml.Map.find_last_opt
@@ -108,7 +115,8 @@ struct
           | Meet -> None
           | Join ->
             let params1 =
-              Parameters.add_or_meet_equations params1
+              Parameters.add_or_meet_equations
+                (Parameters.apply_name_permutation params1 perm1)
                 (JE.central_environment env)
                 (get_equations_to_deposit1 env)
             in
@@ -116,6 +124,7 @@ struct
           end
         | Some (size2, from_size_at_least_n2) ->
           assert (Targetint.OCaml.(<=) size2 size1);
+          let params1 = Parameters.apply_name_permutation params1 perm1 in
           Some (Parameters.join env params1 from_size_at_least_n2)
         end
       in
@@ -123,15 +132,17 @@ struct
         match params1, params2 with
         | Some params1, None ->
           assert (size = Parameters.size params1);
-          one_side_only params1 size_at_least_n2
+          one_side_only params1 perm1 size_at_least_n2
             ~get_equations_to_deposit1:JE.holds_on_left
         | None, Some params2 ->
           assert (size = Parameters.size params2);
-          one_side_only params2 size_at_least_n1
+          one_side_only params2 perm2 size_at_least_n1
             ~get_equations_to_deposit1:JE.holds_on_right
         | Some params1, Some params2 ->
           assert (size = Parameters.size params1);
           assert (size = Parameters.size params2);
+          let params1 = Parameters.apply_name_permutation params1 perm1 in
+          let params2 = Parameters.apply_name_permutation params2 perm2 in
           Some (E.switch' Parameters.meet_fresh Parameters.join_fresh
             env params1 params2)
         | None, None -> None
@@ -153,7 +164,7 @@ struct
         size_at_least_n;
       }
 
-    let meet_or_join_blocks_and_tagged_immediates env
+    let meet_or_join_blocks_and_tagged_immediates env perm1 perm2
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
           : (blocks_and_tagged_immediates * env_extension) Or_absorbing.t =
@@ -170,7 +181,10 @@ struct
           assert E.unknown_is_absorbing;
           Or_unknown.Unknown, TEE.empty
         | Known blocks1, Known blocks2 ->
-          Or_unknown.Known (meet_or_join_blocks env blocks1 blocks2), TEE.empty
+          let blocks =
+            meet_or_join_blocks env perm1 perm2 blocks1 blocks2
+          in
+          Or_unknown.Known blocks, TEE.empty
       in
       let immediates : _ Or_unknown.t =
         match imms1, imms2 with
@@ -183,7 +197,7 @@ struct
           assert E.unknown_is_absorbing;
           Unknown
         | Known imms1, Known imms2 ->
-          match meet_or_join_immediates env imms1 imms2 with
+          match meet_or_join_immediates env perm1 perm2 imms1 imms2 with
           | Bottom -> Known Immediate.Map.empty
           | Ok immediates -> Known immediates
       in
@@ -225,14 +239,14 @@ struct
         in
         Ok ({ blocks; immediates; }, equations)
 
-    let meet_or_join_of_kind_foo env
+    let meet_or_join_of_kind_foo env perm1 perm2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * env_extension) Or_absorbing.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
         let blocks_imms =
-          meet_or_join_blocks_and_tagged_immediates env
+          meet_or_join_blocks_and_tagged_immediates env perm1 perm2
             blocks_imms1 blocks_imms2
         in
         begin match blocks_imms with
@@ -243,36 +257,48 @@ struct
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
         let (n : _ ty_naked_number), equations =
-          Meet_and_join_naked_float.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2 n1 n2
         in
         Ok (Boxed_number (Boxed_float n), equations)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let (n : _ ty_naked_number), equations =
-          Meet_and_join_naked_int32.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2 n1 n2
         in
         Ok (Boxed_number (Boxed_int32 n), equations)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let (n : _ ty_naked_number), equations =
-          Meet_and_join_naked_int64.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2 n1 n2
         in
         Ok (Boxed_number (Boxed_int64 n), equations)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let (n : _ ty_naked_number), equations =
-          Meet_and_join_naked_nativeint.meet_or_join_ty env n1 n2
+          Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2 n1 n2
         in
         Ok (Boxed_number (Boxed_nativeint n), equations)
       | Closures closures1, Closures closures2 ->
         let equations = ref TEE.empty in
+        let params1 =
+          Parameters.apply_name_permutation closures1.ty.params perm1
+        in
+        let params2 =
+          Parameters.apply_name_permutation closures2.ty.params perm2
+        in
         let params =
           E.switch' Parameters.meet_fresh Parameters.join_fresh
-            env closures1.ty.params closures2.ty.params
+            env params1 params2
+        in
+        let results1 =
+          Parameters.apply_name_permutation closures1.ty.results perm1
+        in
+        let results2 =
+          Parameters.apply_name_permutation closures2.ty.results perm2
         in
         let results =
           E.switch' Parameters.meet_fresh Parameters.join_fresh
-            env closures1.ty.results closures2.ty.results
+            env results1 results2
         in
         let ty : T.dependent_function_type = { params; results; } in
         let by_closure_id =
@@ -283,7 +309,8 @@ struct
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
               let set, new_equations =
-                Meet_and_join_fabricated.meet_or_join_ty env set1 set2
+                Meet_and_join_fabricated.meet_or_join_ty env perm1 perm2
+                  set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None

@@ -642,6 +642,7 @@ module Make_printable (T : sig
 end) = struct
   (* N.B. In general it is not correct to use "t1 == t2" here (e.g. for NaNs).
      Any phys-equal shortcuts should be in [compare]. *)
+  (* XXX This is still wrong, we need to decide what to do here *)
   let equal t1 t2 =
     T.compare t1 t2 = 0
 

@@ -145,20 +145,20 @@ struct
       let ty_value, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
       in
-      { ty with descr = Value ty_value; }, canonical_name
+      { descr = Value ty_value; }, canonical_name
     | Naked_number (ty_naked_number, kind) ->
       let force_to_kind = force_to_kind_naked_number kind in
       let ty_naked_number, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
       in
-      { ty with descr = Naked_number (ty_naked_number, kind); },
+      { descr = Naked_number (ty_naked_number, kind); },
         canonical_name
     | Fabricated ty_fabricated ->
       let force_to_kind = force_to_kind_fabricated in
       let ty_fabricated, canonical_name, _names_seen =
         resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
       in
-      { ty with descr = Fabricated ty_fabricated; }, canonical_name
+      { descr = Fabricated ty_fabricated; }, canonical_name
 
   let fold_all t ~init ~f =
     Scope_level.Map.fold (fun level by_sublevel acc ->
@@ -615,19 +615,9 @@ struct
 
   let rec add_or_meet_env_extension' t env_extension scope_level =
     let original_t = t in
-    let rename_name (name : Name.t) freshening =
-      match Name.Map.find name freshening with
-      | exception Not_found -> name
-      | name -> name
-    in
-    let rename_simple (simple : Simple.t) freshening =
-      match simple with
-      | Name name -> Simple.name (rename_name name freshening)
-      | Const _ | Discriminant _ -> simple
-    in
     let add_equation t freshening name ty =
-      let name = rename_name name freshening in
-      let ty = T.rename_variables ty freshening in
+      let name = Freshening.apply_name freshening name in
+      let ty = T.apply_freshening ty freshening in
       match find_opt t name with
       | None -> add t name scope_level (Equation ty)
       | Some (existing_ty, _binding_type) ->
@@ -651,16 +641,8 @@ struct
           add t name scope_level (Equation new_ty)
     in
     let add_definition t freshening (name : Name.t) ty =
-      let ty = T.rename_variables ty freshening in
-      let freshening, fresh_name =
-        let fresh_name = Name.rename name in
-        let freshening = Name.Map.add name fresh_name freshening in
-        freshening, fresh_name
-      in
-(*
-Format.eprintf "Opening existential %a -> %a\n%!"
-  Name.print name Name.print fresh_name;
-*)
+      let ty = T.apply_freshening ty freshening in
+      let fresh_name, freshening = Freshening.freshen_name freshening name in
       if mem t fresh_name then
         freshening, add_equation t freshening name ty
       else
@@ -683,9 +665,9 @@ Format.eprintf "Opening existential %a -> %a\n%!"
         freshening, t
     in
     let add_cse (t : t) freshening bound_to prim =
-      let bound_to = rename_simple bound_to freshening in
+      let bound_to = Freshening.apply_simple freshening bound_to in
       let prim =
-        Flambda_primitive.With_fixed_value.rename_names prim freshening
+        Flambda_primitive.With_fixed_value.apply_freshening prim freshening
       in
       match
         Flambda_primitive.With_fixed_value.Map.find prim t.cse
@@ -707,7 +689,7 @@ Format.eprintf "Opening existential %a -> %a\n%!"
     let freshening, t =
       List.fold_left (fun (freshening, t) (name, ty) ->
           add_definition t freshening name ty)
-        (Name.Map.empty, t)
+        (Freshening.create (), t)
         (List.rev env_extension.first_definitions)
     in
     let freshening, t =

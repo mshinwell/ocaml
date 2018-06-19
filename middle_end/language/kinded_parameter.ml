@@ -21,6 +21,25 @@ type t = {
   kind : Flambda_kind.t;
 }
 
+include Hashtbl.Make_with_map (struct
+  type nonrec t = t
+
+  let compare 
+        { param = param1; kind = kind1; }
+        { param = param2; kind = kind2; } =
+    let c = Parameter.compare param1 param2 in
+    if c <> 0 then c
+    else Flambda_kind.compare kind1 kind2
+
+  let hash { param; kind; } =
+    Hashtbl.hash (Parameter.hash param, Flambda_kind.hash kind)
+
+  let print ppf { param; kind; } =
+    Format.fprintf ppf "(%a :@ %a)"
+      Parameter.print param
+      Flambda_kind.print kind
+end)
+
 let create param kind =
   { param;
     kind;
@@ -40,19 +59,8 @@ let map_var t ~f = { t with param = Parameter.map_var f t.param; }
 
 let map_kind t ~f = { t with kind = f t.kind; }
 
-let equal 
-      { param = param1; kind = kind1; }
-      { param = param2; kind = kind2; } =
-  Parameter.equal param1 param2
-    && Flambda_kind.equal kind1 kind2
-
 let equal_kinds t1 t2 =
   Flambda_kind.equal t1.kind t2.kind
-
-let print ppf { param; kind; } =
-  Format.fprintf ppf "(%a :@ %a)"
-    Parameter.print param
-    Flambda_kind.print kind
 
 module List = struct
   type nonrec t = t list

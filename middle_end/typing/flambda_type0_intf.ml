@@ -110,7 +110,7 @@ module type S = sig
   and 'a unknown_or_join = private
     | Unknown
     (** "Any value can flow to this point": the top element. *)
-    | Join of 'a list
+    | Join of ('a * Name_permutation.t) list
     (** - The list being empty means bottom, the least element: "no value can
           flow to this point".
         - The list containing a single element is the usual case where there is
@@ -120,7 +120,7 @@ module type S = sig
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
           of the type.
-        Invariant: every member of a [Join] is mutually incompatible with the
+        Invariant: every member of a [Join] is strongly incompatible with the
         other members. *)
     (* XXX "incompatible" should also include e.g. functions with different
        arities (params or return values) *)
@@ -664,9 +664,11 @@ module type S = sig
       information about the corresponding value than the type [than]. *)
   val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
 
-  (* CR mshinwell: Rename -- it shouldn't say "variables" since this works
-     on Name.t values now *)
-  (* CR mshinwell: Make this take Freshening.t instead.  We should only have
-     one type for renaming maps *)
-  val rename_variables : t -> Name.t Name.Map.t -> t
+  (** Apply the given name permutation throughout the given type.  This
+      function runs in constant time. *)
+  val apply_name_permutation : t -> Name_permutation.t -> t
+
+  (** Apply the given freshening throughout the given type.  This function
+      runs in constant time. *)
+  val apply_freshening : t -> Freshening.t -> t
 end

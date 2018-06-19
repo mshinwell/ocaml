@@ -669,31 +669,22 @@ end = struct
   end
 
   (* CR-soon mshinwell: this should use the explicit ignore functions *)
-  let toplevel_substitution sb tree =
-    let sb' = sb in
-    let sb name : Name.t = try Name.Map.find name sb with Not_found -> name in
-    let sb_var name =
-      match sb name with
-      | Var var -> var
-      | Symbol _ -> Misc.fatal_error "Symbols not allowed here"
-    in
-    let substitute_args_list args =
-      List.map (fun arg -> Simple.map_name arg ~f:sb) args
-    in
+  let apply_name_permutation_toplevel t perm =
     let aux (expr : t) : t =
       (* Note that this does not have to traverse subexpressions; the call to
          [map_toplevel] below will deal with that. *)
       match expr with
       | Let_mutable mutable_let ->
-        let initial_value = Simple.map_name mutable_let.initial_value ~f:sb in
+        let initial_value =
+          Name_permutation.apply_simple perm mutable_let.initial_value
+        in
         Let_mutable { mutable_let with initial_value }
       | Apply apply ->
-        Apply (Apply.rename_names apply ~f:sb)
+        Apply (Apply.apply_name_permutation apply perm)
       | Switch (cond, sw) ->
-        let cond = sb cond in
-        Switch (cond, sw)
+        Switch (Name_permutation.apply_name perm cond, sw)
       | Apply_cont (cont, trap_action, args) ->
-        let args = substitute_args_list args in
+        let args = Name_permutation.apply_simples perm args in
         Apply_cont (cont, trap_action, args)
       | Let_cont { body; handlers; } ->
         let f handlers =
@@ -714,36 +705,36 @@ end = struct
     let aux_named (named : Named.t) : Named.t =
       match named with
       | Simple simple ->
-        let simple' = Simple.map_name simple ~f:sb in
+        let simple' = Name_permutation.apply_simple perm simple in
         if simple == simple' then named
         else Simple simple'
       | Read_mutable _ -> named
       | Assign { being_assigned; new_value; } ->
-        let new_value = Simple.map_name new_value ~f:sb in
+        let being_assigned =
+          Name_permutation.apply_mutable_variable perm being_assigned
+        in
+        let new_value = Name_permutation.apply_simple perm new_value in
         Assign { being_assigned; new_value; }
       | Set_of_closures set_of_closures ->
         let function_decls =
-          Function_declarations.rename_names
+          Function_declarations.apply_name_permutation perm
             set_of_closures.function_decls
             sb'
         in
         let set_of_closures =
-          Set_of_closures.create
-            ~function_decls
+          Set_of_closures.create ~function_decls
             ~in_closure:
-              (Var_within_closure.Map.map (fun (free_var : Free_var.t) ->
-                  { free_var with
-                    var = sb_var (Name.var free_var.var);
-                  })
+              (Var_within_closure.Map.map (fun free_var ->
+                  Free_var.apply_name_permutation free_var perm)
                 set_of_closures.free_vars)
             ~direct_call_surrogates:set_of_closures.direct_call_surrogates
         in
         Set_of_closures set_of_closures
       | Prim (prim, dbg) ->
-        Prim (Flambda_primitive.rename_names prim ~f:sb, dbg)
+        Prim (Flambda_primitive.apply_name_permutation prim perm, dbg)
     in
-    if Name.Map.is_empty sb' then tree
-    else Mappers.Toplevel_only.map aux aux_named tree
+    if Name.Map.is_empty perm then t
+    else Mappers.Toplevel_only.map aux aux_named t
 
   let all_defined_continuations_toplevel expr =
     let defined_continuations = ref Continuation.Set.empty in

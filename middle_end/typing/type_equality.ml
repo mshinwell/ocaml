@@ -73,13 +73,11 @@ struct
   let equal_ty equal_of_kind_foo ty1 ty2 =
     equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
 
-  let rec equal (({ descr = descr1; phantom = phantom1; } : t) as t1)
-        (({ descr = descr2; phantom = phantom2; } : t) as t2) =
+  let rec equal (({ descr = descr1; } : t) as t1)
+        (({ descr = descr2; } : t) as t2) =
     if fast_equal t1 t2 then true
     else
       equal_descr descr1 descr2
-        && Misc.Stdlib.Option.equal Flambda_kind.Phantom_kind.equal_occurrences
-          phantom1 phantom2
 
   and equal_descr (descr1 : descr) (descr2 : descr) =
     match descr1, descr2 with
@@ -119,11 +117,12 @@ struct
   and equal_ty_fabricated ty_fabricated1 ty_fabricated2 =
     equal_ty equal_of_kind_fabricated ty_fabricated1 ty_fabricated2
 
-  and equal_of_kind_value (v1 : of_kind_value) (v2 : of_kind_value) =
+  and equal_of_kind_value ((v1 : of_kind_value), perm1)
+        ((v2 : of_kind_value), perm2) =
     match v1, v2 with
     | Blocks_and_tagged_immediates blocks1,
         Blocks_and_tagged_immediates blocks2 ->
-      equal_blocks_and_tagged_immediates blocks1 blocks2
+      equal_blocks_and_tagged_immediates perm1 perm2 blocks1 blocks2
     | Boxed_number (Boxed_float ty_naked_number1),
         Boxed_number (Boxed_float ty_naked_number2) ->
       equal_ty_naked_number ty_naked_number1 ty_naked_number2
@@ -143,33 +142,39 @@ struct
     | (Blocks_and_tagged_immediates _ | Boxed_number _
         | Closures _ | String _), _ -> false
 
-  and equal_immediate_case
+  and equal_immediate_case perm1 perm2
         ({ env_extension = env_extension1; } : immediate_case)
         ({ env_extension = env_extension2; } : immediate_case) =
+    let env_extension1 = T.apply_name_permutation env_extension1 perm1 in
+    let env_extension2 = T.apply_name_permutation env_extension2 perm2 in
     equal_env_extension env_extension1 env_extension2
 
-  and equal_blocks
+  and equal_blocks perm1 perm2
         ({ known_tags_and_sizes = known_tags_and_sizes1;
            size_at_least_n = size_at_least_n1;
          } : blocks)
         ({ known_tags_and_sizes = known_tags_and_sizes2;
            size_at_least_n = size_at_least_n2;
          } : blocks) =
-    Tag_and_size.Map.equal equal_parameters
+    let apply_perm_then_equal_parameters params1 params2 =
+      let params1 = Parameters.apply_name_permutation perm1 params1 in
+      let params2 = Parameters.apply_name_permutation perm2 params2 in
+      equal_parameters params1 params2
+    in
+    Tag_and_size.Map.equal apply_perm_then_equal_parameters
         known_tags_and_sizes1 known_tags_and_sizes2
       &&
-        Targetint.OCaml.Map.equal equal_parameters
+        Targetint.OCaml.Map.equal apply_perm_then_equal_parameters
           size_at_least_n1 size_at_least_n2
 
-  and equal_blocks_and_tagged_immediates
+  and equal_blocks_and_tagged_immediates perm1 perm2
         ({ immediates = immediates1; blocks = blocks1; })
         ({ immediates = immediates2; blocks = blocks2; }) =
-    equal_or_unknown (Immediate.Map.equal equal_immediate_case)
+    equal_or_unknown (Immediate.Map.equal (equal_immediate_case perm1 perm2))
         immediates1 immediates2
-      && equal_or_unknown equal_blocks
-           blocks1 blocks2
+      && equal_or_unknown (equal_blocks perm1 perm2) blocks1 blocks2
 
-  and equal_function_declarations
+  and equal_function_declarations perm1 perm2
         (decl1 : function_declarations)
         (decl2 : function_declarations) =
     match decl1, decl2 with
@@ -211,6 +216,22 @@ struct
             direct_call_surrogate = direct_call_surrogate2;
             my_closure = my_closure2;
           } ->
+        let module NP = Name_permutation in
+        let continuation_param1 =
+          Name_permutation.apply_continuation perm1 continuation_param1
+        in
+        let continuation_param2 =
+          Name_permutation.apply_continuation perm2 continuation_param2
+        in
+        let exn_continuation_param1 =
+          Name_permutation.apply_continuation perm1 exn_continuation_param1
+        in
+        let exn_continuation_param2 =
+          Name_permutation.apply_continuation perm2 exn_continuation_param2
+        in
+        let my_closure1 = Name_permutation.apply_variable perm1 my_closure1 in
+        let my_closure2 = Name_permutation.apply_variable perm2 my_closure2 in
+        ...
         Closure_origin.equal closure_origin1 closure_origin2
           && Continuation.equal continuation_param1 continuation_param2
           && Continuation.equal exn_continuation_param1 exn_continuation_param2

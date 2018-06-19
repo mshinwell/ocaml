@@ -47,9 +47,6 @@ val map_var : t -> f:(Variable.t -> Variable.t) -> t
 (** Map the kind of the given parameter. *)
 val map_kind : t -> f:(Flambda_kind.t -> Flambda_kind.t) -> t
 
-(** Equality on kinded parameters. *)
-val equal : t -> t -> bool
-
 (** Returns [true] iff the provided kinded parameters have the same kind. *)
 val equal_kinds : t -> t -> bool
 
@@ -87,4 +84,4 @@ module List : sig
   val equal : t -> t -> bool
 end
 
-val print : Format.formatter -> t -> unit
+include Hashtbl.With_map with type t := t

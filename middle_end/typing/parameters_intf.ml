@@ -135,5 +135,11 @@ module type S = sig
       into the given typing environment. *)
   val introduce : t -> T.typing_environment -> T.typing_environment
 
-  val rename_variables : t -> Name.t Name.Map.t -> t
+  (** Apply a name permutation throughout the given parameters value (to both
+      free and bound names). *)
+  val apply_name_permutation : t -> Name_permutation.t -> t
+
+  (** Return a new parameters value which is like the input but has the
+      kinded parameters freshened. *)
+  val freshen : t -> t
 end

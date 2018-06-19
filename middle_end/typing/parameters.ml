@@ -207,6 +207,12 @@ module Make
       t.env_extension
       t.params
 
-  let rename_variables t subst =
-    rename_variables_parameters t subst
+  let apply_name_permutation t perm =
+    apply_name_permutation_parameters t perm
+
+  let freshen t perm =
+    let fresh_params =
+      Freshening.freshen_kinded_parameters (Freshening.create ()) t.params
+    in
+    apply_name_permutation (Freshening.name_permutation fresh_params)
 end

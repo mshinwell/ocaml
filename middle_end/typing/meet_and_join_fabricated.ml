@@ -50,16 +50,15 @@ struct
 
     let to_type ty : t =
       { descr = Fabricated ty;
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_fabricated
     let print_ty = print_ty_fabricated
 
-    let meet_or_join_closure _env
+    let meet_or_join_closure _env _perm1 _perm2
           (closure1 : closure) (closure2 : closure)
           : (closure * env_extension) Or_absorbing.t =
-      if closure1 == closure2 then
+      if closure1 == closure2 then (* XXX *)
         Ok (closure1, TEE.empty)
       else
         Misc.fatal_error "meet_closure: not yet implemented"
@@ -570,7 +569,7 @@ struct
       end
 *)
 
-    let meet_or_join_set_of_closures env
+    let meet_or_join_set_of_closures env perm1 perm2
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * env_extension) Or_absorbing.t =
       let equations = ref (TEE.empty) in
@@ -582,7 +581,7 @@ struct
             E.Closure_id.Map.union_or_inter
               (fun _closure_id ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
-                  Meet_and_join_fabricated.meet_or_join_ty env
+                  Meet_and_join_fabricated.meet_or_join_ty env perm1 perm2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
@@ -617,7 +616,7 @@ struct
             E.Closure_id.Map.union_or_inter_and_left
               (fun _closure_id ty1 ty2 ->
                 let ty_fabricated, new_equations =
-                  Meet_and_join_fabricated.meet_or_join_ty env
+                  Meet_and_join_fabricated.meet_or_join_ty env perm1 perm2
                     ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
@@ -636,7 +635,7 @@ struct
             E.Closure_id.Map.union_or_inter
               (fun _closure_id ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_equations =
-                  Meet_and_join_fabricated.meet_or_join_ty env
+                  Meet_and_join_fabricated.meet_or_join_ty env perm1 perm2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
@@ -659,7 +658,7 @@ struct
             E.Var_within_closure.Map.union_or_inter
               (fun _var_within_closure ty_value1 ty_value2 ->
                 let ty_value, new_equations =
-                  Meet_and_join_value.meet_or_join_ty env
+                  Meet_and_join_value.meet_or_join_ty env perm1 perm2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
@@ -694,7 +693,7 @@ struct
             E.Var_within_closure.Map.union_or_inter_and_left
               (fun _var_within_closure ty1 ty2 ->
                 let ty_value, new_equations =
-                  Meet_and_join_value.meet_or_join_ty env
+                  Meet_and_join_value.meet_or_join_ty env perm1 perm2
                     ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_value then begin
@@ -714,7 +713,7 @@ struct
             E.Var_within_closure.Map.union_or_inter
               (fun _var_within_closure ty_value1 ty_value2 ->
                 let ty_value, new_equations =
-                  Meet_and_join_value.meet_or_join_ty env
+                  Meet_and_join_value.meet_or_join_ty env perm1 perm2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
@@ -748,10 +747,12 @@ struct
           Ok (set, !equations)
         end
 
-    let meet_or_join_of_kind_foo env
+    let meet_or_join_of_kind_foo env perm1 perm2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * env_extension) Or_absorbing.t =
-      if JE.fast_check_extensions_same_both_sides env && of_kind1 == of_kind2
+      if JE.fast_check_extensions_same_both_sides env
+        && perm1 == perm2
+        && of_kind1 == of_kind2
       then
         Ok (of_kind1, TEE.empty)
       else
@@ -764,7 +765,8 @@ struct
                       : discriminant_case ->
                   let env_extension =
                     TEE.meet (JE.central_environment env)
-                      env_extension (JE.holds_on_left env)
+                      (TEE.apply_name_permutation env_extension perm1)
+                      (JE.holds_on_left env)
                   in
                   { env_extension; })
               ~in_right_only:
@@ -772,7 +774,8 @@ struct
                       : discriminant_case ->
                   let env_extension =
                     TEE.meet (JE.central_environment env)
-                      env_extension (JE.holds_on_right env)
+                      (TEE.apply_name_permutation env_extension perm2)
+                      (JE.holds_on_right env)
                   in
                   { env_extension; })
               ~in_both:
@@ -784,7 +787,8 @@ struct
                     E.switch'
                       TEE.meet TEE.join
                       env
-                      env_extension1 env_extension2
+                      (TEE.apply_name_permutation env_extension1 perm1)
+                      (TEE.apply_name_permutation env_extension2 perm2)
                   in
                   Some { env_extension; })
               discriminants1 discriminants2
@@ -804,7 +808,9 @@ struct
             Ok (Discriminant discriminants, discriminant_case.env_extension)
           end
         | Set_of_closures set1, Set_of_closures set2 ->
-          begin match meet_or_join_set_of_closures env set1 set2 with
+          begin
+            match meet_or_join_set_of_closures env perm1 perm2 set1 set2
+          with
           | Ok (set_of_closures, equations) ->
             if set_of_closures == set1 then
               Ok (of_kind1, equations)
@@ -821,7 +827,9 @@ struct
             Absorbing
           end
         | Closure closure1, Closure closure2 ->
-          begin match meet_or_join_closure env closure1 closure2 with
+          begin
+            match meet_or_join_closure env perm1 perm2 closure1 closure2
+          with
           | Ok (closure, equations) ->
             if closure == closure1 then
               Ok (of_kind1, equations)

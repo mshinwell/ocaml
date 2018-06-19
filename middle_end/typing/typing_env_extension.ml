@@ -378,14 +378,15 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
   let diff t env : t =
     let names_more_precise, _freshened_names_more_precise, _freshening =
       fold t
-        ~init:(Name.Set.empty, Name.Set.empty, Name.Map.empty)
+        ~init:(Name.Set.empty, Name.Set.empty, Freshening.create ())
         ~f:(fun (names_more_precise, freshened_names_more_precise, freshening)
                 (name : Name.t)
                 (info : fold_info) ->
           match info with
           | Definition_in_extension _ty ->
-            let fresh_name = Name.rename name in
-            let freshening = Name.Map.add name fresh_name freshening in
+            let fresh_name, freshening =
+              Freshening.freshen_name freshening name
+            in
             let names_more_precise =
               Name.Set.add name names_more_precise
             in
@@ -395,12 +396,8 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
             names_more_precise, freshened_names_more_precise, freshening
           | Equation ty ->
             let unfreshened_name = name in
-            let name =
-              match Name.Map.find name freshening with
-              | exception Not_found -> name
-              | name -> name
-            in
-            let ty = T.rename_variables ty freshening in
+            let name = Freshening.apply_name freshening name in
+            let ty = T.apply_freshening ty freshening in
             match TE.find_opt env name with
             | None ->
               let names_more_precise =
@@ -441,6 +438,87 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     restrict_to_names t
       (Name_occurrences.create_from_set_in_types names_more_precise)
 
-  let rename_names t subst =
-    T.rename_variables_env_extension subst t
+  let apply_permutation_typing_environment_entry
+        (entry : typing_environment_entry) perm
+        : typing_environment_entry =
+    match entry with
+    | Definition t ->
+      let t' = T.apply_name_permutation t perm in
+      if t == t' then entry
+      else Definition t'
+    | Equation t ->
+      let t' = T.apply_name_permutation t perm in
+      if t == t' then entry
+      else Equation t'
+    | CSE prim ->
+      let prim' =
+        Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
+      in
+      if prim == prim' then entry
+      else CSE prim'
+
+  let apply_name_permutation
+        ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+           cse; } as t)
+        perm : t =
+    let first_definitions_changed = ref false in
+    let first_definitions' =
+      List.map (fun (name, t) ->
+          let name' = Name_permutation.apply_name perm name in
+          let t' = T.apply_name_permutation t perm in
+          if (not (name == name')) && (not (t == t')) then begin
+            first_definitions_changed := true
+          end;
+          name', t')
+        first_definitions
+    in
+    let at_or_after_cut_point' =
+      Scope_level.Map.map_sharing (fun by_sublevel ->
+          Scope_level.Sublevel.Map.map_sharing
+            (fun ((name, (entry : typing_environment_entry)) as datum) ->
+              let name' = Name_permutation.apply_name perm name in
+              let entry' =
+                apply_permutation_typing_environment_entry entry perm
+              in
+              if name == name' && entry == entry' then datum
+              else name', entry')
+            by_sublevel)
+        at_or_after_cut_point
+    in
+    let last_equations_rev_changed = ref false in
+    let last_equations_rev' =
+      List.map (fun (name, t) ->
+          let name' = Name_permutation.apply_name perm name in
+          let t' = T.apply_name_permutation t perm in
+          if (not (name == name')) || (not (t == t')) then begin
+            last_equations_rev_changed := true
+          end;
+          name', t')
+        last_equations_rev
+    in
+    let cse_changed = ref false in
+    let cse' =
+      Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
+          let simple' = Name_permutation.apply_simple perm simple in
+          let prim' =
+            Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
+          in
+          if (not (simple == simple')) || (not (prim == prim')) then begin
+            cse_changed := true
+          end;
+          Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
+        cse
+        Flambda_primitive.With_fixed_value.Map.empty
+    in
+    if (not !first_definitions_changed)
+      && at_or_after_cut_point == at_or_after_cut_point'
+      && (not !last_equations_rev_changed)
+      && (not !cse_changed)
+    then t
+    else 
+      { first_definitions = first_definitions';
+        at_or_after_cut_point = at_or_after_cut_point';
+        last_equations_rev = last_equations_rev';
+        cse = cse';
+      }
 end

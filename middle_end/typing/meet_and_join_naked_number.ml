@@ -44,14 +44,13 @@ struct
 
     let to_type ty : t =
       { descr = Naked_number (ty, Naked_immediate);
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_naked_immediate
 
     let print_ty = print_ty_naked_number
 
-    let meet_or_join_of_kind_foo _meet_or_join_env
+    let meet_or_join_of_kind_foo _meet_or_join_env _perm1 _perm2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : (Immediate.Set.t of_kind_naked_number * env_extension)
@@ -71,13 +70,12 @@ struct
 
     let to_type ty =
       { descr = Naked_number (ty, Naked_float);
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_naked_float
     let print_ty = print_ty_naked_number
 
-    let meet_or_join_of_kind_foo _meet_or_join_env
+    let meet_or_join_of_kind_foo _meet_or_join_env _perm1 _perm2
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : (Float_by_bit_pattern.Set.t of_kind_naked_number
@@ -97,13 +95,12 @@ struct
 
     let to_type ty : t =
       { descr = Naked_number (ty, Naked_int32);
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_naked_int32
     let print_ty = print_ty_naked_number
 
-    let meet_or_join_of_kind_foo _meet_or_join_env
+    let meet_or_join_of_kind_foo _meet_or_join_env _perm1 _perm2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
           : (Int32.Set.t of_kind_naked_number * env_extension) Or_absorbing.t =
@@ -122,13 +119,12 @@ struct
 
     let to_type ty : t =
       { descr = Naked_number (ty, Naked_int64);
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_naked_int64
     let print_ty = print_ty_naked_number
 
-    let meet_or_join_of_kind_foo _env
+    let meet_or_join_of_kind_foo _env _perm1 _perm2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
           : (Int64.Set.t of_kind_naked_number * env_extension) Or_absorbing.t =
@@ -147,13 +143,12 @@ struct
 
     let to_type ty : t =
       { descr = Naked_number (ty, Naked_nativeint);
-        phantom = None;
       }
 
     let force_to_kind = force_to_kind_naked_nativeint
     let print_ty = print_ty_naked_number
 
-    let meet_or_join_of_kind_foo _env
+    let meet_or_join_of_kind_foo _env _perm1 _perm2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : (Targetint.Set.t of_kind_naked_number * env_extension)

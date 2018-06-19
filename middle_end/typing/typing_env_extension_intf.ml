@@ -97,5 +97,7 @@ module type S = sig
   *)
   val diff : t -> T.typing_environment -> t
 
-  val rename_names : t -> Name.t Name.Map.t -> t
+  (** Apply the given name permutation throughout the given environment
+      extension. *)
+  val apply_name_permutation : t -> Name_permutation.t -> t
 end

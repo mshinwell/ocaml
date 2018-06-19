@@ -205,7 +205,7 @@ module type S = sig
      : t
     -> T.env_extension
     -> Scope_level.t
-    -> t * (Name.t Name.Map.t)
+    -> t * Freshening.t
 
   (** Follow chains of aliases until either a [No_alias] type is reached
       or a name cannot be resolved.

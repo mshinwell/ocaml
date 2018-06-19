@@ -1101,18 +1101,17 @@ let free_names t =
       (Name.Set.union (Simple.free_names x1) (Simple.free_names x2))
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
-(* CR mshinwell: This should maybe just take [Name.t Name.Map.t]
-   rather than [f]. *)
-let rename_names t ~f =
+let apply_name_permutation t perm =
+  let apply = Name_permutation.apply_simple perm in
   match t with
-  | Unary (prim, x0) -> Unary (prim, Simple.map_name x0 ~f)
-  | Binary (prim, x0, x1) ->
-    Binary (prim, Simple.map_name x0 ~f, Simple.map_name x1 ~f)
-  | Ternary (prim, x0, x1, x2) ->
-    Ternary (prim, Simple.map_name x0 ~f, Simple.map_name x1 ~f,
-      Simple.map_name x2 ~f)
+  | Unary (prim, x0) -> Unary (prim, apply x0)
+  | Binary (prim, x0, x1) -> Binary (prim, apply x0, apply x1)
+  | Ternary (prim, x0, x1, x2) -> Ternary (prim, apply x0, apply x1, apply x2)
   | Variadic (prim, xs) ->
-    Variadic (prim, List.map (fun x -> Simple.map_name x ~f) xs)
+    Variadic (prim, Name_permutation.apply_simples perm xs)
+
+let apply_freshening t freshening =
+  apply_name_permutation t (Freshening.name_permutation freshening)
 
 let result_kind (t : t) =
   match t with
@@ -1163,12 +1162,8 @@ module With_fixed_value = struct
   let to_primitive t = t
 
   let free_names = free_names
-
-  let rename_names t subst =
-    rename_names t ~f:(fun name ->
-      match Name.Map.find name subst with
-      | exception Not_found -> name
-      | name -> name)
+  let apply_name_permutation = apply_name_permutation
+  let apply_freshening = apply_freshening
 
   include Stdlib.Map.Make_with_set (struct
     type nonrec t = t

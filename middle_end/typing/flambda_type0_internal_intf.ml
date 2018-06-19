@@ -115,7 +115,6 @@ end) = struct
 
   type t = {
     descr : descr;
-    phantom : Flambda_kind.Phantom_kind.occurrences option;
   }
 
   and flambda_type = t
@@ -138,7 +137,7 @@ end) = struct
 
   and 'a unknown_or_join =
     | Unknown
-    | Join of 'a list
+    | Join of ('a * Name_permutation.t) list
 
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -432,24 +431,6 @@ module type S = sig
 
   val is_empty_typing_environment : typing_environment -> bool
 
-(*
-  val as_or_more_precise : typing_environment -> t -> than:t -> bool
-
-  val strictly_more_precise : typing_environment -> t -> than:t -> bool
-*)
-
-  val rename_variables : t -> Name.t Name.Map.t -> t
-
-  val rename_variables_env_extension
-     : Name.t Name.Map.t
-    -> env_extension
-    -> env_extension
-
-  val rename_variables_parameters
-     : Name.t Name.Map.t
-    -> parameters
-    -> parameters
-
   val any_value_as_ty_value : unit -> ty_value
 
   val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
@@ -480,4 +461,8 @@ module type S = sig
   val is_obviously_bottom : flambda_type -> bool
 
   val create_parameters_from_types : flambda_type list -> parameters
+
+  val apply_name_permutation : t -> Name_permutation.t -> t
+
+  val apply_freshening : t -> Freshening.t -> t
 end

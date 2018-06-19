@@ -39,5 +39,5 @@ val create_wrapper_params
 val make_let_cont_alias
    : name:Continuation.t
   -> alias_of:Continuation.t
-  -> parameter_types:Flambda_type.t list
+  -> params:Parameters.t
   -> Flambda.Let_cont_handlers.t

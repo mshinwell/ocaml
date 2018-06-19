@@ -1471,7 +1471,6 @@ result
       in
       { descr =
           Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
       }
 
   let immutable_float_array fields : t =
@@ -1498,7 +1497,6 @@ result
       in
       { descr =
           Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
       }
 
   let this_immutable_float_array fields : t =
@@ -1544,7 +1542,6 @@ result
           | Immutable ty_value ->
             Immutable {
               descr = Value ty_value;
-              phantom = None;
             }
           | Mutable -> Mutable)
         fields
@@ -1616,7 +1613,6 @@ result
 
   let closures ty by_closure_id : t =
     { descr = Value (No_alias (Join [Closures { ty; by_closure_id; }]));
-      phantom = None;
     }
 
   let set_of_closures ~closures ~closure_elements =
@@ -1637,417 +1633,58 @@ result
         Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
     in
     { descr;
-      phantom = None;
     }
 
-  let ensure_phantomness_matches t1 t2 reason =
-    match t1.phantom, t2.phantom with
-    | None, None
-    | Some In_types, Some In_types
-    | Some Debug_only, Some Debug_only -> ()
-    | _, _ ->
-      Misc.fatal_errorf "Phantom kind mismatch (%s): %a vs. %a"
-        reason
-        print t1
-        print t2
-
-  let rename_variables_name subst (name : Name.t) =
-    match Name.Map.find name subst with
-    | exception Not_found -> name
-    | name -> name
-
-  let rename_variables_simple subst (simple : Simple.t) =
-    match simple with
-    | Name name ->
-      let name' = rename_variables_name subst name in
-      if name == name' then simple
-      else Simple.name name'
-    | Const _ | Discriminant _ -> simple
-
-  let rename_variables_extensibility rename_contents subst
-        (ext : _ extensibility) =
-    match ext with
-    | Open contents ->
-      let contents' = rename_contents subst contents in
-      if contents == contents' then ext
-      else Open contents'
-    | Exactly contents ->
-      let contents' = rename_contents subst contents in
-      if contents == contents' then ext
-      else Exactly contents'
-
-  let rename_variables_unknown_or_join rename_variables_of_kind_foo
-        subst unknown_or_join =
+  let apply_name_permutation_unknown_or_join unknown_or_join perm =
     match unknown_or_join with
     | Unknown -> unknown_or_join
     | Join of_kind_foos ->
       let something_changed = ref false in
       let of_kind_foos =
-        List.map (fun of_kind_foo ->
-            let of_kind_foo' =
-              rename_variables_of_kind_foo subst of_kind_foo
-            in
-            if not (of_kind_foo == of_kind_foo') then begin
+        List.map (fun (of_kind_foo, existing_perm) ->
+            let new_perm = Name_permutation.compose existing_perm new_perm in
+            if not (new_perm == existing_perm) then begin
               something_changed := true
             end;
-            of_kind_foo')
+            of_kind_foo, new_perm)
           of_kind_foos
       in
       if not !something_changed then unknown_or_join
       else Join of_kind_foos
 
-  let rename_variables_ty rename_variables_of_kind_foo subst ty =
+  let apply_name_permutation_ty ty perm =
     match ty with
     | No_alias unknown_or_join ->
       let unknown_or_join' =
-        rename_variables_unknown_or_join rename_variables_of_kind_foo subst
-          unknown_or_join
+        apply_name_permutation_unknown_or_join unknown_or_join perm
       in
       if unknown_or_join == unknown_or_join' then ty
       else No_alias unknown_or_join'
     | Type _ -> ty
     | Equals simple ->
-      let simple' = rename_variables_simple subst simple in
+      let simple' = Name_permutation.apply_simple perm simple in
       if simple == simple' then ty
       else Equals simple'
 
-  let rename_variables_of_kind_naked_number (type n)
-       _subst (of_kind_naked_number : n of_kind_naked_number) =
-    of_kind_naked_number
-
-  let rec rename_variables subst ({ descr; phantom; } as t) =
-    let descr' = rename_variables_descr subst descr in
-    if descr == descr' then t
-    else { descr = descr'; phantom; }
-
-  and rename_variables_descr subst descr =
+  let apply_name_permutation_descr descr perm =
     match descr with
     | Value ty_value ->
-      let ty_value' =
-        rename_variables_ty rename_variables_of_kind_value subst
-          ty_value
-      in
+      let ty_value' = apply_name_permutation_ty ty_value perm in
       if ty_value == ty_value' then descr
       else Value ty_value'
     | Naked_number (ty_naked_number, kind) ->
-      let ty_naked_number' =
-        rename_variables_ty rename_variables_of_kind_naked_number subst
-          ty_naked_number
-      in
+      let ty_naked_number' = apply_name_permutation_ty ty_naked_number perm in
       if ty_naked_number == ty_naked_number' then descr
       else Naked_number (ty_naked_number', kind)
     | Fabricated ty_fabricated ->
-      let ty_fabricated' =
-        rename_variables_ty rename_variables_of_kind_fabricated subst
-          ty_fabricated
-      in
+      let ty_fabricated' = apply_name_permutation_ty ty_fabricated perm in
       if ty_fabricated == ty_fabricated' then descr
       else Fabricated ty_fabricated'
 
-  and rename_variables_of_kind_value subst of_kind_value =
-    match of_kind_value with
-    | Blocks_and_tagged_immediates blocks_and_tagged_immediates ->
-      let blocks_and_tagged_immediates' =
-        rename_variables_blocks_and_tagged_immediates subst
-          blocks_and_tagged_immediates
-      in
-      if blocks_and_tagged_immediates == blocks_and_tagged_immediates'
-      then of_kind_value
-      else Blocks_and_tagged_immediates blocks_and_tagged_immediates'
-    | Boxed_number _ -> of_kind_value
-    | Closures closures ->
-      let closures' = rename_variables_closures subst closures in
-      if closures == closures' then of_kind_value
-      else Closures closures'
-    | String _ -> of_kind_value
-
-  and rename_variables_of_kind_fabricated subst of_kind_fabricated =
-    match of_kind_fabricated with
-    | Discriminant discriminants ->
-      let discriminants' =
-        rename_variables_discriminants subst discriminants
-      in
-      if discriminants == discriminants' then of_kind_fabricated
-      else Discriminant discriminants'
-    | Set_of_closures set ->
-      let set' = rename_variables_set_of_closures subst set in
-      if set == set' then of_kind_fabricated
-      else Set_of_closures set'
-    | Closure closure ->
-      let closure' = rename_variables_closure subst closure in
-      if closure == closure' then of_kind_fabricated
-      else Closure closure'
-
-  and rename_variables_blocks_and_tagged_immediates subst
-        ({ immediates; blocks; } as blocks_and_tagged_immediates) =
-    let immediates' = rename_variables_immediates subst immediates in
-    let blocks' = rename_variables_blocks subst blocks in
-    if immediates == immediates' && blocks == blocks' then
-      blocks_and_tagged_immediates
-    else
-      { immediates = immediates'; blocks = blocks'; }
-
-  and rename_variables_immediates subst (immediates : _ Or_unknown.t) =
-    match immediates with
-    | Unknown -> immediates
-    | Known by_immediate ->
-      let by_immediate' =
-        Immediate.Map.map_sharing (fun immediate_case ->
-            rename_variables_immediate_case subst immediate_case)
-          by_immediate
-      in
-      if by_immediate == by_immediate' then immediates
-      else Or_unknown.Known by_immediate'
-
-  and rename_variables_immediate_case subst
-        (({ env_extension; } : immediate_case) as immediate_case)
-        : immediate_case =
-    let env_extension' =
-      rename_variables_env_extension subst env_extension
-    in
-    if env_extension == env_extension' then immediate_case
-    else { env_extension = env_extension'; }
-
-  and rename_variables_blocks subst (blocks : _ Or_unknown.t) =
-    match blocks with
-    | Unknown -> blocks
-    | Known { known_tags_and_sizes; size_at_least_n; } ->
-      let known_tags_and_sizes' =
-        Tag_and_size.Map.map_sharing (fun params ->
-            rename_variables_parameters subst params)
-          known_tags_and_sizes
-      in
-      let size_at_least_n' =
-        Targetint.OCaml.Map.map_sharing (fun params ->
-            rename_variables_parameters subst params)
-          size_at_least_n
-      in
-      if known_tags_and_sizes == known_tags_and_sizes'
-        && size_at_least_n == size_at_least_n'
-      then
-        blocks
-      else
-        Or_unknown.Known {
-          known_tags_and_sizes = known_tags_and_sizes';
-          size_at_least_n = size_at_least_n';
-        }
-
-  and rename_variables_parameters subst
-        (({ params; env_extension; } : parameters) as parameters)
-        : parameters =
-    (* CR mshinwell: Same comment as in the CR in
-       [rename_variables_env_extension] applies here! *)
-    let params_changed = ref false in
-    let params =
-      List.map (fun param ->
-          match Name.Map.find (Kinded_parameter.name param) subst with
-          | exception Not_found -> param
-          | name ->
-            params_changed := true;
-            let new_var =
-              match (name : Name.t) with
-              | Var var -> var
-              | _ ->
-                (* CR mshinwell: see CR in kinded_parameter.mli *)
-                assert false
-            in
-            Kinded_parameter.map_var param ~f:(fun _old_var -> new_var))
-        params
-    in
-    let env_extension' =
-      rename_variables_env_extension subst env_extension
-    in
-    if (not !params_changed) && env_extension == env_extension' then
-      parameters
-    else
-      { params;
-        env_extension = env_extension';
-      }
-
-  and rename_variables_dependent_function_type subst
-        (({ params; results; } : dependent_function_type)
-          as dependent_function_type) =
-    let params' = rename_variables_parameters subst params in
-    let results' = rename_variables_parameters subst results in
-    if params == params' && results == results' then dependent_function_type
-    else
-      { params = params';
-        results = results';
-      }
-
-  and rename_variables_closures subst
-        (({ ty; by_closure_id; } : closures) as closures) : closures =
-    let ty' =
-      rename_variables_dependent_function_type subst ty
-    in
-    let by_closure_id' =
-      Closure_id.Map.map_sharing (fun closures_entry ->
-          rename_variables_closures_entry subst closures_entry)
-        by_closure_id
-    in
-    if ty == ty' && by_closure_id == by_closure_id' then closures
-    else { ty = ty'; by_closure_id = by_closure_id'; }
-
-  and rename_variables_closures_entry subst
-        (( { set_of_closures; } : closures_entry) as closures_entry)
-        : closures_entry =
-    let set_of_closures' =
-      rename_variables_ty rename_variables_of_kind_fabricated subst
-        set_of_closures
-    in
-    if set_of_closures == set_of_closures' then closures_entry
-    else { set_of_closures = set_of_closures'; }
-
-  and rename_variables_discriminants subst discriminants =
-    Discriminant.Map.map_sharing (fun discriminant_case ->
-        rename_variables_discriminant_case subst discriminant_case)
-      discriminants
-
-  and rename_variables_discriminant_case subst
-        (({ env_extension; } : discriminant_case) as discriminant_case)
-        : discriminant_case =
-    let env_extension' =
-      rename_variables_env_extension subst env_extension
-    in
-    if env_extension == env_extension' then discriminant_case
-    else { env_extension = env_extension'; }
-
-  and rename_variables_set_of_closures subst
-        (({ closures; closure_elements; } : set_of_closures)
-          as set_of_closures)
-        : set_of_closures =
-    let closures' =
-      rename_variables_extensibility (fun subst closures ->
-          Closure_id.Map.map_sharing (fun ty_fabricated ->
-              rename_variables_ty rename_variables_of_kind_fabricated
-                subst ty_fabricated)
-            closures)
-        subst
-        closures
-    in
-    let closure_elements' =
-      rename_variables_extensibility (fun subst closure_elements ->
-          Var_within_closure.Map.map_sharing (fun ty_value ->
-              rename_variables_ty rename_variables_of_kind_value
-                subst ty_value)
-            closure_elements)
-        subst
-        closure_elements
-    in
-    if closures == closures' && closure_elements == closure_elements'
-    then set_of_closures
-    else { closures = closures'; closure_elements = closure_elements'; }
-
-  and rename_variables_closure subst
-        (({ function_decls; } : closure) as closure) =
-    let function_decls' =
-      rename_variables_function_decls subst function_decls
-    in
-    if function_decls == function_decls' then closure
-    else { function_decls = function_decls'; }
-
-  and rename_variables_function_decls _subst function_decls =
-    (* CR mshinwell: Be sure it's ok to not traverse any [body] here *)
-    function_decls
-
-  and rename_variables_typing_environment_entry subst
-        (entry : typing_environment_entry)
-        : typing_environment_entry =
-    match entry with
-    | Definition t ->
-      let t' = rename_variables subst t in
-      if t == t' then entry
-      else Definition t'
-    | Equation t ->
-      let t' = rename_variables subst t in
-      if t == t' then entry
-      else Equation t'
-    | CSE prim ->
-      let prim' = Flambda_primitive.With_fixed_value.rename_names prim subst in
-      if prim == prim' then entry
-      else CSE prim'
-
-  and rename_variables_env_extension subst
-        ({ first_definitions; at_or_after_cut_point; last_equations_rev;
-           cse; } as env_extension) =
-    let first_definitions_changed = ref false in
-    let first_definitions' =
-      List.map (fun (name, t) ->
-          let name =
-            (* CR mshinwell: See CR below -- same thing happens here. *)
-            rename_variables_name subst name
-          in
-          let t' = rename_variables subst t in
-          if not (t == t') then begin
-            first_definitions_changed := true
-          end;
-          name, t')
-        first_definitions
-    in
-    let at_or_after_cut_point' =
-      Scope_level.Map.map_sharing (fun by_sublevel ->
-          Scope_level.Sublevel.Map.map_sharing
-            (fun ((name, (entry : typing_environment_entry)) as datum) ->
-              let name' =
-                match entry with
-                | Definition _ ->
-                  (* CR mshinwell: This must do a renaming in case the
-                     unfreshened existential collides with another name
-                     which is being freshened (e.g. due to its context being
-                     inlined).  Maybe instead we should assign a fresh name
-                     here if [subst] maps [name] *)
-                  rename_variables_name subst name
-                | Equation _ | CSE _ -> rename_variables_name subst name
-              in
-              let entry' =
-                rename_variables_typing_environment_entry subst entry
-              in
-              if name == name' && entry == entry' then datum
-              else name', entry')
-            by_sublevel)
-        at_or_after_cut_point
-    in
-    let last_equations_rev_changed = ref false in
-    let last_equations_rev' =
-      List.map (fun (name, t) ->
-          let name' = rename_variables_name subst name in
-          let t' = rename_variables subst t in
-          if (not (name == name')) || (not (t == t')) then begin
-            last_equations_rev_changed := true
-          end;
-          name', t')
-        last_equations_rev
-    in
-    let cse_changed = ref false in
-    let cse' =
-      Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
-          let simple' = rename_variables_simple subst simple in
-          let prim' =
-            Flambda_primitive.With_fixed_value.rename_names prim subst
-          in
-          if (not (simple == simple')) || (not (prim == prim')) then begin
-            cse_changed := true
-          end;
-          Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
-        cse
-        Flambda_primitive.With_fixed_value.Map.empty
-    in
-    if (not !first_definitions_changed)
-      && at_or_after_cut_point == at_or_after_cut_point'
-      && (not !last_equations_rev_changed)
-      && (not !cse_changed)
-    then env_extension
-    else 
-      { first_definitions = first_definitions';
-        at_or_after_cut_point = at_or_after_cut_point';
-        last_equations_rev = last_equations_rev';
-        cse = cse';
-      }
-
-  (* CR mshinwell: Move [subst] second in the above functions' parameters
-     then delete this *)
-  let rename_variables t subst =
-    rename_variables subst t
+  let apply_name_permutation ({ descr; } as t) perm =
+    let descr' = apply_name_permutation_descr descr perm in
+    if descr == descr' then t
+    else { descr = descr'; }
 
   let get_alias t =
     match t.descr with
@@ -2160,16 +1797,16 @@ result
                Everything in [of_kind_foos1] is mutually incompatible with each
                other; likewise in [of_kind_foos2]. *)
             let of_kind_foos =
-              List.fold_left (fun of_kind_foos of_kind_foo ->
+              List.fold_left (fun of_kind_foos (of_kind_foo, perm) ->
                   (* [of_kind_foo] can be compatible with at most one of the
                      elements of [of_kind_foos]. *)
                   let found_one = ref false in
                   let joined =
-                    List.map (fun of_kind_foo' ->
+                    List.map (fun (of_kind_foo', perm') ->
                         let join =
                           (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
                              must be a "join" operation. *)
-                          S.meet_or_join_of_kind_foo env
+                          S.meet_or_join_of_kind_foo env perm perm'
                             of_kind_foo of_kind_foo'
                         in
                         match join with
@@ -2180,11 +1817,11 @@ result
                             Misc.fatal_errorf "Invariant broken for [Join]"
                           end;
                           found_one := true;
-                          of_kind_foo
-                        | Absorbing -> of_kind_foo')
+                          of_kind_foo, Name_permutation.create ()
+                        | Absorbing -> of_kind_foo', perm')
                       of_kind_foos
                   in
-                  if not !found_one then of_kind_foo :: of_kind_foos
+                  if not !found_one then (of_kind_foo, perm) :: of_kind_foos
                   else joined)
                 of_kind_foos2
                 of_kind_foos1
@@ -2240,7 +1877,8 @@ result
               Equals (Simple.name name2)
             | None, None ->
               let unknown_or_join =
-                join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+                join_on_unknown_or_join env perm1 perm2
+                  unknown_or_join1 unknown_or_join2
               in
               if unknown_or_join == unknown_or_join1 then begin
                 assert (match or_alias1 with No_alias _ -> true | _ -> false);
@@ -2253,15 +1891,17 @@ result
               end
             | _, _ ->
               let unknown_or_join =
-                join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+                join_on_unknown_or_join env perm1 perm2
+                  unknown_or_join1 unknown_or_join2
               in
               No_alias unknown_or_join
 
-      let rec meet_on_unknown_or_join env
+      let rec meet_on_unknown_or_join env perm1 perm2
             (ou1 : S.of_kind_foo unknown_or_join)
             (ou2 : S.of_kind_foo unknown_or_join)
             : S.of_kind_foo unknown_or_join * env_extension =
-        if ou1 == ou2 then ou1, Typing_env_extension.empty
+        if ou1 == ou2 then
+          ou1, Typing_env_extension.empty
         else
           match ou1, ou2 with
           | Unknown, ou2 -> ou2, Typing_env_extension.empty
@@ -2277,7 +1917,7 @@ result
                     Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                         let meet =
                           let env = Join_env.create env in
-                          S.meet_or_join_of_kind_foo env
+                          S.meet_or_join_of_kind_foo env perm1 perm2
                             of_kind_foo of_kind_foo'
                         in
                         match meet with
@@ -2308,7 +1948,7 @@ result
             else if same_as of_kind_foos2 then ou2, env_extension_from_meet
             else Join of_kind_foos, env_extension_from_meet
 
-      and meet_ty env
+      and meet_ty env perm1 perm2
             (or_alias1 : S.of_kind_foo ty)
             (or_alias2 : S.of_kind_foo ty)
             : S.of_kind_foo ty * env_extension =
@@ -2342,7 +1982,7 @@ result
             Equals simple2, Typing_env_extension.empty
           | Some simple1, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
-              meet_on_unknown_or_join env
+              meet_on_unknown_or_join env perm1 perm2
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -2357,7 +1997,7 @@ result
             Equals simple1, env_extension_from_meet
           | Some simple1, None ->
             let meet_unknown_or_join, env_extension_from_meet =
-              meet_on_unknown_or_join env
+              meet_on_unknown_or_join env perm1 perm2
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -2368,7 +2008,7 @@ result
             Equals simple1, env_extension_from_meet
           | None, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
-              meet_on_unknown_or_join env
+              meet_on_unknown_or_join env perm1 perm2
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -2379,7 +2019,7 @@ result
             Equals simple2, env_extension_from_meet
           | None, None ->
             let unknown_or_join, env_extension_from_meet =
-              meet_on_unknown_or_join env
+              meet_on_unknown_or_join env perm1 perm2
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
@@ -2410,7 +2050,8 @@ result
             match t1.descr, t2.descr with
             | Value ty_value1, Value ty_value2 ->
               let ty_value, equations =
-                Meet_and_join_value.meet_or_join_ty env ty_value1 ty_value2
+                Meet_and_join_value.meet_or_join_ty env perm1 perm2
+                  ty_value1 ty_value2
               in
               if ty_value == ty_value1 then t1.descr, equations
               else if ty_value == ty_value2 then t2.descr, equations
@@ -2421,39 +2062,34 @@ result
               begin match kind1, kind2 with
               | N.Naked_immediate, N.Naked_immediate ->
                 let ty_naked_number, equations =
-                  Meet_and_join_naked_immediate.meet_or_join_ty env
+                  Meet_and_join_naked_immediate.meet_or_join_ty env perm1 perm2
                     ty_naked_number1 ty_naked_number2
                 in
-                Naked_number (ty_naked_number, N.Naked_immediate),
-                  equations
+                Naked_number (ty_naked_number, N.Naked_immediate), equations
               | N.Naked_float, N.Naked_float ->
                 let ty_naked_number, equations =
-                  Meet_and_join_naked_float.meet_or_join_ty env
+                  Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2
                     ty_naked_number1 ty_naked_number2
                 in
-                Naked_number (ty_naked_number, N.Naked_float),
-                  equations
+                Naked_number (ty_naked_number, N.Naked_float), equations
               | N.Naked_int32, N.Naked_int32 ->
                 let ty_naked_number, equations =
-                  Meet_and_join_naked_int32.meet_or_join_ty env
+                  Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2
                     ty_naked_number1 ty_naked_number2
                 in
-                Naked_number (ty_naked_number, N.Naked_int32),
-                  equations
+                Naked_number (ty_naked_number, N.Naked_int32), equations
               | N.Naked_int64, N.Naked_int64 ->
                 let ty_naked_number, equations =
-                  Meet_and_join_naked_int64.meet_or_join_ty env
+                  Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2
                     ty_naked_number1 ty_naked_number2
                 in
-                Naked_number (ty_naked_number, N.Naked_int64),
-                  equations
+                Naked_number (ty_naked_number, N.Naked_int64), equations
               | N.Naked_nativeint, N.Naked_nativeint ->
                 let ty_naked_number, equations =
-                  Meet_and_join_naked_nativeint.meet_or_join_ty env
+                  Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2
                     ty_naked_number1 ty_naked_number2
                 in
-                Naked_number (ty_naked_number, N.Naked_nativeint),
-                  equations
+                Naked_number (ty_naked_number, N.Naked_nativeint), equations
               | _, _ ->
                 Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
                   E.name
@@ -2462,7 +2098,7 @@ result
               end
             | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
               let ty_fabricated, equations =
-                Meet_and_join_fabricated.meet_or_join_ty env
+                Meet_and_join_fabricated.meet_or_join_ty env perm1 perm2
                   ty_fabricated1 ty_fabricated2
               in
               if ty_fabricated == ty_fabricated1 then
@@ -2480,7 +2116,9 @@ result
           let t =
             if t1.descr == descr then t1
             else if t2.descr == descr then t2
-            else { t1 with descr; }
+            else {
+              descr;
+            }
           in
           t, equations
         end

@@ -38,7 +38,9 @@ let make_variables_symbol vars =
   in
   Symbol.create (Compilation_unit.get_current_exn ()) (Linkage_name.create name)
 
-let create_wrapper_params ~params ~freshening_already_assigned =
+let create_wrapper_params ~params:_ ~freshening_already_assigned:_ = (* XXX *)
+  assert false
+(*
   let module Typed_parameter = Flambda.Typed_parameter in
   let renaming =
     List.map (fun typed_param ->
@@ -58,25 +60,21 @@ let create_wrapper_params ~params ~freshening_already_assigned =
   in
   let wrapper_params = List.map freshen_typed_param params in
   renaming_map, wrapper_params
+*)
 
-let make_let_cont_alias ~name ~alias_of
-      ~parameter_types : Flambda.Let_cont_handlers.t =
-  let handler_params, apply_params =
-    let param_and_var_for ty =
-      let ty = Flambda_type.unknown_like ty in
-      let var = Variable.create "let_cont_alias" in
-      let param = Parameter.wrap var in
-      let typed_param = Flambda.Typed_parameter.create param ty in
-      typed_param, Simple.var var
-    in
-    List.split (List.map param_and_var_for parameter_types)
+let make_let_cont_alias ~name ~alias_of ~params : Flambda.Let_cont_handlers.t =
+  let args =
+    List.mapi (fun index _kinded_param ->
+        let name = Format.sprintf "let_cont_alias_%d" index in
+        Simple.var (Variable.create name))
+      (Parameters.kinded_params params)
   in
   Non_recursive {
     name;
     handler = {
-      params = handler_params;
+      params = Parameters.freshen parameters;
       stub = true;
       is_exn_handler = false;
-      handler = Apply_cont (alias_of, None, apply_params);
+      handler = Apply_cont (alias_of, None, args);
     };
   }
