@@ -198,7 +198,7 @@ module Make
 
   let standalone_extension t =
     (* CR mshinwell: Maybe the extension should always contain these
-        bindings? *)
+       bindings? *)
     List.fold_left (fun env_extension param ->
         let name = Kinded_parameter.name param in
         let param_kind = Kinded_parameter.kind param in

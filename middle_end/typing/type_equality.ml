@@ -231,7 +231,6 @@ struct
         in
         let my_closure1 = Name_permutation.apply_variable perm1 my_closure1 in
         let my_closure2 = Name_permutation.apply_variable perm2 my_closure2 in
-        ...
         Closure_origin.equal closure_origin1 closure_origin2
           && Continuation.equal continuation_param1 continuation_param2
           && Continuation.equal exn_continuation_param1 exn_continuation_param2

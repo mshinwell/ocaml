@@ -78,6 +78,8 @@ module type S = sig
   type env_extension
   type parameters
   type join_env
+  type blocks
+  type closure_elements
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
@@ -143,16 +145,11 @@ module type S = sig
     env_extension : env_extension;
   }
  
-  (* CR mshinwell: Should this indicate if the block is an array? *)
-  (* CR mshinwell: Mutability information has been removed for now *)
-  (* CR mshinwell: We should note explicitly that these are logical fields
-     (I think this only matters for float arrays on 32-bit targets) *)
-  and blocks = private {
-    known_tags_and_sizes : parameters Tag_and_size.Map.t;
-    size_at_least_n : parameters Targetint.OCaml.Map.t;
-    (* [size_at_least_n] is required since [Pfield] in [Lambda] does not
-       specify the tag and size of the block being projected from. *)
-  }
+  (* CR mshinwell: Should we indicate if blocks are arrays? *)
+  (* CR mshinwell: Mutability information has been removed from block types
+     for now *)
+  (* CR mshinwell: We should note explicitly that block fields are logical
+     fields (I think this only matters for float arrays on 32-bit targets) *)
 
   and blocks_and_tagged_immediates = private {
     immediates : immediate_case Immediate.Map.t Or_unknown.t;
@@ -226,13 +223,6 @@ module type S = sig
         satisfy this, their join can still be expressed using [Join], from
         type [unknown_or_join] above.) *)
 
-  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
-     it is an empty type.  If this is changed then [Non_inlinable]'s
-     argument should be an [option]. *)
-  and closure = {
-    function_decls : function_declarations;
-  }
-
   and closures_entry = {
     set_of_closures : ty_fabricated;
   }
@@ -240,10 +230,8 @@ module type S = sig
   and closures = {
     ty : dependent_function_type;
     by_closure_id : closures_entry Closure_id.Map.t;
+    closure_elements : closure_elements;
   }
-
-  (* CR-soon mshinwell: Consider migrating closure elements and maybe even
-     block fields to use environment extensions. *)
 
   (** Unboxed ("naked") integer and floating-point numbers together with
       any information known about which particular numbers they might be. *)
@@ -277,9 +265,16 @@ module type S = sig
       (** One element of a set of closures.  (Note that this is distinct
           from the [Closures] case, above, in kind [Value].) *)
 
+  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
+     it is an empty type.  If this is changed then [Non_inlinable]'s
+     argument should be an [option]. *)
+  and closure = private {
+    function_decls : function_declarations;
+  }
+
   and set_of_closures = private {
-    closures : ty_fabricated Closure_id.Map.t extensibility;
-    closure_elements : ty_value Var_within_closure.Map.t extensibility;
+    closures : ty_fabricated Closure_id.Map.t;
+    closure_elements : closure_elements;
   }
 
   and dependent_function_type = {

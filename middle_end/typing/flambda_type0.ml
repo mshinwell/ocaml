@@ -151,15 +151,6 @@ module Make (Expr : Expr_intf.S) = struct
     else
       Immediate.Map.print (print_immediate_case ~cache) ppf cases
 
-  and print_blocks ~cache ppf
-        ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
-    Format.fprintf ppf 
-      "@[<hov 1>(\
-         @[<hov 1>(known_tags_and_sizes@ %a)@]@ \
-         @[<hov 1>(size_at_least_n@ %a)@])@]"
-      (Tag_and_size.Map.print (print_parameters ~cache)) known_tags_and_sizes
-      (Targetint.OCaml.Map.print (print_parameters ~cache)) size_at_least_n
-
   and print_of_kind_value ~cache ppf (of_kind_value : of_kind_value) =
     let blocks_empty
           ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
