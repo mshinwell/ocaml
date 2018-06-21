@@ -152,14 +152,6 @@ end) = struct
     env_extension : env_extension;
   }
 
-  (* CR mshinwell: Add invariant function on [blocks] *)
-  and blocks = {
-    known_tags_and_sizes : parameters Tag_and_size.Map.t;
-    size_at_least_n : parameters Targetint.OCaml.Map.t;
-    (* [size_at_least_n] is required since [Pfield] in [Lambda] does not
-       specify the tag and size of the block being projected from. *)
-  }
-
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t Or_unknown.t;
     blocks : blocks Or_unknown.t;
@@ -213,13 +205,6 @@ end) = struct
     | Non_inlinable of non_inlinable_function_declarations
     | Inlinable of inlinable_function_declaration list
 
-  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
-     it is an empty type.  If this is changed then [Non_inlinable]'s
-     argument should be an [option]. *)
-  and closure = {
-    function_decls : function_declarations;
-  }
-
   and closures_entry = {
     set_of_closures : ty_fabricated;
   }
@@ -227,6 +212,7 @@ end) = struct
   and closures = {
     ty : dependent_function_type;
     by_closure_id : closures_entry Closure_id.Map.t;
+    closure_elements : closure_elements;
   }
 
   and 'a of_kind_naked_number =
@@ -261,9 +247,16 @@ end) = struct
     | Set_of_closures of set_of_closures
     | Closure of closure
 
+  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
+     it is an empty type.  If this is changed then [Non_inlinable]'s
+     argument should be an [option]. *)
+  and closure = {
+    function_decls : function_declarations;
+  }
+
   and set_of_closures = {
     closures : ty_fabricated Closure_id.Map.t extensibility;
-    closure_elements : ty_value Var_within_closure.Map.t extensibility;
+    closure_elements : closure_elements;
   }
 
   (* CR mshinwell: rename "typing_environment" -> "typing_env" *)
@@ -300,15 +293,19 @@ end) = struct
     cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
   }
 
-  and parameters = {
+  and 'a parameters0 = {
     params : Kinded_parameter.t list;
     env_extension : env_extension;
   }
+
+  and parameters = Kinded_parameter.t list parameters0
 
   and dependent_function_type = {
     params : parameters;
     results : parameters;
   }
+
+  type closure_elements = Var_within_closure.Map.t parameters0
 
   type join_env = {
     env : typing_environment;

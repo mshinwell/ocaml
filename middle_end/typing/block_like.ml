@@ -21,9 +21,9 @@
 module Make (Index : sig
     type t
 
-    val compare : t -> t -> t
+    include Hashtbl.With_map with type t = t
 
-    module Map : Map.S with type t = t
+    val apply_name_permutation : t -> Name_permutation.t -> t
   end)
   (T : Flambda_type0_internal_intf.S)
   (Join_env : Join_env_intf.S with module T := T)
@@ -33,12 +33,13 @@ struct
   module Tag_and_index = struct
     type t = Tag.t * Index.t
 
-    include Map.With_set (...
-
-    )
+    include Hashtbl.Make_with_map_pair (Tag) (Index)
 
     let create tag index = tag, index
     let index (_tag, index) = index
+
+    let apply_name_permutation (tag, index) perm =
+      tag, Index.apply_name_permutation index perm
   end
 
   module JE = Join_env
@@ -64,11 +65,39 @@ struct
 
   let create_with_known_types tag index field_tys =
     let tag_and_index = Tag_and_index.create tag index in
+    let params = Parameters.create_from_types field_tys in
     { known = Tag_and_index.Map.singleton tag_and_index params;
-      at_least = 
+      at_least = Index.Map.empty;
+    }
 
   let is_empty { known; at_least; } =
     Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
+
+  let apply_name_permutation { known; at_least; } perm =
+    let known =
+      Tag_and_index.Map.fold (fun tag_and_index params known ->
+          let tag_and_index =
+            Tag_and_index.apply_name_permutation tag_and_index perm
+          in
+          let params = P.apply_name_permutation params perm in
+          Tag_and_index.Map.add tag_and_index params known)
+        known
+        Tag_and_index.Map.empty
+    in
+    let at_least =
+      Index.Map.fold (fun index params at_least ->
+          let index = Index.apply_name_permutation index perm in
+          let params = P.apply_name_permutation params perm in
+          Index.Map.add index params at_least)
+        at_least
+        Index.Map.empty
+    in
+    { known;
+      at_least;
+    }
+
+  let apply_freshening t freshening =
+    apply_name_permutation t (Freshening.name_permutation freshening)
 
   let meet_or_join env perm1 perm2
         ({ known = known1; at_least = at_least1; } : t)

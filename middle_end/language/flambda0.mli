@@ -100,39 +100,6 @@ type assign = {
   new_value : Simple.t;
 }
 
-module Free_var : sig
-  type t = {
-    var : Variable.t;
-    (* XXX [equalities] isn't right now.  Think about what should replace it
-       (maybe nothing?) *)
-    equalities : Flambda_primitive.With_fixed_value.Set.t;
-  }
-
-  val create : Variable.t -> t
-
-  val print : Format.formatter -> t -> unit
-end
-
-module Free_vars : sig
-  (** For closures: map from variables in a closure to "outer" variables.
-
-      The [Var_within_closure.t] values should not be used as keys to keep
-      track of information associated with closure variables, since the
-      _same_ such values may be bound by multiple different sets of closures
-      binding some particular closure ID.  Instead use the corresponding
-      [Variable.t] in the [Free_var.t]. *)
-  (* CR mshinwell: This makes me think we should rename [Var_within_closure].
-     Maybe just to [In_closure]? *)
-
-  type t = Free_var.t Var_within_closure.Map.t
-
-  val find_by_variable : t -> Variable.t -> Var_within_closure.t option
-
-  val all_outer_variables : t -> Variable.Set.t
-
-  val map_vars : t -> f:(Variable.t -> Variable.t) -> t
-end
-
 (** Actions affecting exception traps on the stack.  These are always
     associated with an [Apply_cont] node; the trap action is executed before
     the application of the continuation.
@@ -501,21 +468,7 @@ end and Continuation_handler : sig
 end and Set_of_closures : sig
   type t = private {
     function_decls : Function_declarations.t;
-    (* CR-soon mshinwell: consider renaming [free_vars].  Also, it's still
-       really confusing which side of this map to use when.  "Vars bound by the
-       closure" is the domain.
-       Another example of when this is confusing:
-         let bound_vars_approx =
-           Variable.Map.map (Env.find_approx env) set.free_vars
-         in
-       in [Build_export_info]. *)
-    (* CR mshinwell: Now that we've changed the meaning, this should definitely
-       be renamed. *)
-    free_vars : Free_vars.t;
-    (** Mapping from all variables free in the body of the [function_decls] to
-        variables in scope at the definition point of the [set_of_closures].
-        The domain of this map is sometimes known as the "variables bound by
-        the closure". *)
+    closure_elements : Flambda_type.Closure_elements.t;
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
     (** If [direct_call_surrogates] maps [closure_id1] to [closure_id2] then
         direct calls to [closure_id1] should be redirected to [closure_id2].
@@ -529,7 +482,7 @@ end and Set_of_closures : sig
       are reasonable. *)
   val create
      : function_decls:Function_declarations.t
-    -> in_closure:Free_vars.t
+    -> closure_elements:Flambda_type.Closure_elements.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
 

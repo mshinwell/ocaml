@@ -16,7 +16,9 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make
+module Make (Index_container : sig
+    ...
+  end)
   (T : Flambda_type0_internal_intf.S)
   (Typing_env : Typing_env_intf.S with module T := T)
   (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
@@ -29,7 +31,7 @@ module Make
   module TE = Typing_env
   module TEE = Typing_env_extension
 
-  type t = parameters
+  type t = Index.t parameters0
 
   let invariant _t =
     (* CR mshinwell: This should check that the [env_extension] never contains

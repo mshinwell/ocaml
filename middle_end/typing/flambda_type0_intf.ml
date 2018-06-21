@@ -265,9 +265,6 @@ module type S = sig
       (** One element of a set of closures.  (Note that this is distinct
           from the [Closures] case, above, in kind [Value].) *)
 
-  (* CR-soon mshinwell: It's not clear that this needs to be a type, since
-     it is an empty type.  If this is changed then [Non_inlinable]'s
-     argument should be an [option]. *)
   and closure = private {
     function_decls : function_declarations;
   }
@@ -322,29 +319,17 @@ module type S = sig
     type nonrec 'a unknown_or_join = 'a unknown_or_join
   end
 
-  module Typing_env : sig
-    (** A "traditional" typing environment or context: an assignment from
-        names to types.  The environment also encapsulates the knowledge,
-        via the [resolver], required to import types from .cmx files (or
-        other external source).
+  module Typing_env : Typing_env_intf.S with module T := T2
+  module Typing_env_extension : Typing_env_extension_intf.S with module T := T2
+  module Join_env : Join_env_intf.S with module T := T2
 
-        Typing environments must be closed.
-    *)
+  module Parameters : Parameters_intf.S
+    with module T := T2
+    with module Index_container := Kinded_parameter
 
-    include Typing_env_intf.S with module T := T2
-  end
-
-  module Typing_env_extension : sig
-    include Typing_env_extension_intf.S with module T := T2
-  end
-
-  module Join_env : sig
-    include Join_env_intf.S with module T := T2
-  end
-
-  module Parameters : sig
-    include Parameters_intf.S with module T := T2
-  end
+  module Closure_elements : Parameters_intf.S
+    with module T := T2
+    with module Index_container := Var_within_closure
 
   (** Annotation for functions that may require examination of the current
       environment (in particular to resolve [Type] or [Equals] aliases). *)
