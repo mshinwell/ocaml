@@ -1806,9 +1806,8 @@ end = struct
       (Expr.print_with_cache ~cache) f.body
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
-end and Flambda_type : sig
-  include Flambda_type0_intf.S with type expr := Expr.t
-end = Flambda_type0.Make (Expr)
+end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
+  = Flambda_type0.Make (Expr)
 
 module With_free_names = struct
   type 'a t =

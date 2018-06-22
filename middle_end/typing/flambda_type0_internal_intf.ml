@@ -22,9 +22,14 @@ module Int64 = Numbers.Int64
 
 type binding_type = Normal | Was_existential
 
-module S_impl (Expr : sig
-  type t
-end) = struct
+module S_impl (Expr : sig type t end)
+  (Typing_env : sig type t end)
+  (Typing_env_extension : sig type t end)
+  (Join_env : sig type t end)
+  (Parameters : sig type t end)
+  (Blocks : sig type t end)
+  (Closure_elements : sig type t end)
+= struct
   type expr = Expr.t
 
   type inline_attribute =
@@ -239,7 +244,7 @@ end) = struct
     Targetint.Set.t of_kind_naked_number
 
   and discriminant_case = {
-    env_extension : env_extension;
+    env_extension : Typing_env_extension.t;
   }
 
   and of_kind_fabricated =
@@ -274,46 +279,12 @@ end) = struct
     (Name.t * typing_environment_entry)
       Scope_level.Sublevel.Map.t Scope_level.Map.t
 
-  and typing_environment = {
-    resolver : (Export_id.t -> t option);
-    aliases : Name.Set.t Simple.Map.t;
-    (* CR mshinwell: Rename names_to_types -> names_to_entries *)
-    names_to_types :
-      (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
-    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
-    levels_to_entries : levels_to_entries;
-    next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
-    were_existentials : Name.Set.t;
-  }
-
-  and env_extension = {
-    first_definitions : (Name.t * t) list;
-    at_or_after_cut_point : levels_to_entries;
-    last_equations_rev : (Name.t * t) list;
-    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
-  }
-
-  and 'a parameters0 = {
-    params : Kinded_parameter.t list;
-    env_extension : env_extension;
-  }
-
-  and parameters = Kinded_parameter.t list parameters0
-
   and dependent_function_type = {
     params : parameters;
     results : parameters;
   }
 
   type closure_elements = Var_within_closure.Map.t parameters0
-
-  type join_env = {
-    env : typing_environment;
-    env_plus_extension1 : typing_environment;
-    env_plus_extension2 : typing_environment;
-    extension1 : env_extension;
-    extension2 : env_extension;
-  }
 
   module Name_or_export_id = struct
     type t =
@@ -365,10 +336,18 @@ end) = struct
 end
 
 module type S = sig
-  type expr
+  module Expr : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+  module Join_env : sig type t end
+  module Parameters : sig type t end
+  module Blocks : sig type t end
+  module Closure_elements : sig type t end
 
-  include module type of struct include S_impl (struct type t = expr end) end
-    with type expr := expr
+  include module type of struct
+    include S_impl (Expr) (Typing_env) (Typing_env_extension) (Join_env)
+      (Parameters) (Blocks) (Closure_elements)
+  end
 
   val print : Format.formatter -> t -> unit
 

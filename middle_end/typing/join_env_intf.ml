@@ -21,45 +21,40 @@
     whilst carrying out join operations (on types, etc). *)
 
 module type S = sig
-  module T : sig
-    type env_extension
-    type typing_environment
-    type join_env
-    type flambda_type
-  end
+  module T : Flambda_type0_internal_intf.S
 
-  type t = T.join_env
+  type t
 
   (** Perform various invariant checks upon the given join environment. *)
   val invariant : t -> unit
 
-  val create : T.typing_environment -> t
+  val create : T.Typing_env.t -> t
 
-  val add_definition_central_environment : t -> Name.t -> T.flambda_type -> t
+  val add_definition_central_environment : t -> Name.t -> T.t -> t
 
   (** E + [X1 | X2] *)
   val add_extensions
      : t
-    -> holds_on_left:T.env_extension
-    -> holds_on_right:T.env_extension
+    -> holds_on_left:T.Typing_env_extension.t
+    -> holds_on_right:T.Typing_env_extension.t
     -> t
 
   val add_extensions_and_extend_central_environment
      : t
-    -> holds_on_left:T.env_extension
-    -> holds_on_right:T.env_extension
-    -> central_extension:T.env_extension
+    -> holds_on_left:T.Typing_env_extension.t
+    -> holds_on_right:T.Typing_env_extension.t
+    -> central_extension:T.Typing_env_extension.t
     -> t
 
-  val central_environment : t -> T.typing_environment
+  val central_environment : t -> T.Typing_env.t
 
-  val environment_on_left : t -> T.typing_environment
+  val environment_on_left : t -> T.Typing_env.t
 
-  val environment_on_right : t -> T.typing_environment
+  val environment_on_right : t -> T.Typing_env.t
 
-  val holds_on_left : t -> T.env_extension
+  val holds_on_left : t -> T.Typing_env_extension.t
 
-  val holds_on_right : t -> T.env_extension
+  val holds_on_right : t -> T.Typing_env_extension.t
 
   val fast_check_extensions_same_both_sides : t -> bool
 end

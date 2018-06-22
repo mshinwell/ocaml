@@ -647,9 +647,7 @@ end and Function_declaration : sig
   val free_names : t -> Name_occurrences.t
 
   val print : Closure_id.t -> Format.formatter -> t -> unit
-end and Flambda_type : sig
-  include Flambda_type0_intf.S with type expr := Expr.t
-end
+end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
 
 (** A module for the manipulation of terms where the recomputation of free
     name sets is to be kept to a minimum. *)

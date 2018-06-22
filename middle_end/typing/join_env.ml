@@ -26,7 +26,13 @@ struct
   module TE = Typing_env
   module TEE = Typing_env_extension
 
-  type t = join_env
+  type t = {
+    env : TE.t;
+    env_plus_extension1 : TE.t;
+    env_plus_extension2 : TE.t;
+    extension1 : TEE.t;
+    extension2 : TEE.t;
+  }
 
   let create env =
     { env;

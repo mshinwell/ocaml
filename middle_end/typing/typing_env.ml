@@ -24,9 +24,120 @@ module Make
 struct
   open T
 
-  type t = T.typing_environment
+  type t = {
+    resolver : (Export_id.t -> t option);
+    aliases : Name.Set.t Simple.Map.t;
+    (* CR mshinwell: Rename names_to_types -> names_to_entries *)
+    names_to_types :
+      (Scope_level.With_sublevel.t * typing_environment_entry0) Name.Map.t;
+    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
+    levels_to_entries : levels_to_entries;
+    next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
+    were_existentials : Name.Set.t;
+  }
 
-  let print = print_typing_environment
+  let print_typing_environment_entry0_with_cache ~cache ppf
+        (entry : typing_environment_entry0) =
+    match entry with
+    | Definition ty ->
+      Format.fprintf ppf "@[(Definition %a)@]"
+        (print_with_cache ~cache) ty
+    | Equation ty ->
+      Format.fprintf ppf "@[(Equation %a)@]"
+        (print_with_cache ~cache) ty
+
+  let print_typing_environment_entry_with_cache ~cache ppf
+        (entry : typing_environment_entry) =
+    match entry with
+    | Definition ty ->
+      print_typing_environment_entry0_with_cache ~cache ppf
+        ((Definition ty) : typing_environment_entry0)
+    | Equation ty ->
+      print_typing_environment_entry0_with_cache ~cache ppf
+        ((Equation ty) : typing_environment_entry0)
+    | CSE with_fixed_value ->
+      Format.fprintf ppf "@[(CSE %a)@]"
+        Flambda_primitive.With_fixed_value.print with_fixed_value
+
+  let print_typing_environment_entry ppf entry =
+    print_typing_environment_entry_with_cache
+      ~cache:(Printing_cache.create ()) ppf entry
+
+  let print_levels_to_entries_with_cache ~cache ppf levels_to_entries =
+    Scope_level.Map.print (
+      Scope_level.Sublevel.Map.print (fun ppf (name, entry) ->
+        Format.fprintf ppf "@[(%a %a)@]"
+          Name.print name
+          (print_typing_environment_entry_with_cache ~cache) entry))
+      ppf levels_to_entries
+
+  let print_with_cache ~cache ppf
+        ({ resolver = _; aliases; names_to_types; cse; levels_to_entries;
+          next_sublevel_by_level = _; were_existentials; } as t) =
+    if Name.Map.is_empty names_to_types then
+      Format.pp_print_string ppf "Empty"
+    else
+      Printing_cache.with_cache cache ppf "env" t (fun ppf () ->
+        let print_scope_level_and_entry0 ppf (_scope_level, entry) =
+          print_typing_environment_entry0_with_cache ~cache ppf entry
+        in
+        (* CR mshinwell: Add flag to disable this filtering *)
+        let names_to_types =
+          Name.Map.filter (fun name _entry ->
+              not (Name.is_predefined_exception name))
+            names_to_types
+        in
+        let levels_to_entries =
+          Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
+              let by_sublevel =
+                Scope_level.Sublevel.Map.filter_map
+                  (fun _sublevel ((name, _) as entry) ->
+                    if not (Name.is_predefined_exception name) then Some entry
+                    else None)
+                by_sublevel
+              in
+              if Scope_level.Sublevel.Map.is_empty by_sublevel then None
+              else Some by_sublevel)
+            levels_to_entries
+        in
+        if Name.Set.is_empty were_existentials
+            && Flambda_primitive.With_fixed_value.Map.is_empty cse
+        then
+          Format.fprintf ppf
+            "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
+                @[<hov 1>(names_to_types@ %a)@]@ \
+                @[<hov 1>(levels_to_entries@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
+            (Name.Map.print print_scope_level_and_entry0) names_to_types
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
+        else if Name.Set.is_empty were_existentials then
+          Format.fprintf ppf
+            "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
+                @[<hov 1>(names_to_types@ %a)@]@ \
+                @[<hov 1>(cse@ %a)@]@ \
+                @[<hov 1>(levels_to_entries@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
+            (Name.Map.print print_scope_level_and_entry0) names_to_types
+            (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
+        else
+          Format.fprintf ppf
+            "@[<hov 1>(\
+                @[<hov 1>(aliases@ %a)@]@ \
+                @[<hov 1>(names_to_types@ %a)@]@ \
+                @[<hov 1>(cse@ %a)@]@ \
+                @[<hov 1>(levels_to_names@ %a)@]@ \
+                @[<hov 1>(were_existentials@ %a)@])@]"
+            (Simple.Map.print Name.Set.print) aliases
+            (Name.Map.print print_scope_level_and_entry0) names_to_types
+            (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+            (print_levels_to_entries_with_cache ~cache) levels_to_entries
+            Name.Set.print were_existentials)
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create ~resolver =
     { resolver;

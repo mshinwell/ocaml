@@ -19,14 +19,9 @@
 (** The interface of typing environment extensions. *)
 
 module type S = sig
-  module T : sig
-    type env_extension
-    type typing_environment
-    type join_env
-    type flambda_type
-  end
+  module T : Flambda_type0_internal_intf.S
 
-  type t = T.env_extension
+  type t
 
   (** Perform various invariant checks upon the given environment
       extension. *)

@@ -16,8 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make
-    (T : Flambda_type0_internal_intf.S)
+module Make (T : Flambda_type0_internal_intf.S)
     (Typing_env : Typing_env_intf.S with module T := T)
     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
     (Type_equality : Type_equality_intf.S with module T := T)
@@ -25,12 +24,39 @@ module Make
 = struct
   open T
 
-  type t = env_extension
+  type t = {
+    first_definitions : (Name.t * t) list;
+    at_or_after_cut_point : levels_to_entries;
+    last_equations_rev : (Name.t * t) list;
+    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
+  }
 
   module JE = Join_env
   module TE = Typing_env
 
-  let print ppf t = T.print_typing_env_extension ppf t
+  let print_with_cache ~cache ppf
+        ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+           cse; } : t) =
+    let print_binding_list =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space
+        (fun ppf (name, ty) ->
+          Format.fprintf ppf "@[(%a %a)@]"
+            Name.print name
+            (print_with_cache ~cache) ty)
+    in
+    Format.fprintf ppf
+      "@[<hov 1>(\
+          @[<hov 1>(first_definitions@ %a)@]@ \
+          @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
+          @[<hov 1>(last_equations_rev@ %a)@]@ \
+          @[<hov 1>(cse@ %a)@])@]"
+      print_binding_list first_definitions
+      (print_levels_to_entries_with_cache ~cache) at_or_after_cut_point
+      print_binding_list last_equations_rev
+      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let fast_equal t1 t2 = (t1 == t2)
 
