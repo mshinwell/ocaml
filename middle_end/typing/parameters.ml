@@ -391,4 +391,8 @@ end
 2. Var_within_closure.t, without ordering (for closure elements)
 3. Targetint.OCaml.t, with ordering (for blocks)
 
+1. doesn't need names assigning to the indexes.  2. and 3. do, however.
+So maybe there should be an intermediate functor which does name assignment,
+which would only be used for 2. and 3.
+
 *)
