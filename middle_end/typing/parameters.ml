@@ -17,7 +17,50 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module Make (Index : sig
-    include Hashtbl.With_map
+    type t
+
+    val name : t -> Name.t
+    val kind : t -> Flambda_kind.t
+
+    val freshen : t -> t
+
+    type container
+    type pair_container
+
+    module Container : sig
+      type t = container
+
+      val nth : t -> index:Targetint.OCaml.t -> Index.t option
+
+      val augment_map : t -> f:(Index.t -> Index.t) -> pair_container
+
+      val fold
+         : t
+        -> init:'a
+        -> f:('a -> Index.t -> 'a)
+        -> 'a
+
+      val inter_and_check_kinds : t -> t -> t
+      val union_and_check_kinds : t -> t -> t
+
+      val apply_name_permutation : t -> Name_permutation.t -> t
+      val apply_freshening : t -> Freshening.t -> t
+    end
+
+    module Pair_container : sig
+      type t = pair_container
+
+      val fold
+         : t
+        -> init:'a
+        -> f:('a -> Index.t * Index.t -> 'a)
+        -> 'a
+
+      val filter_map_pair_to_singleton
+         : t
+        -> f:(Index.t * Index.t -> Index.t option)
+        -> container
+    end
   end)
   (T : Flambda_type0_internal_intf.S)
   (Typing_env : Typing_env_intf.S with module T := T)
@@ -32,7 +75,7 @@ module Make (Index : sig
   module TEE = Typing_env_extension
 
   type t = {
-    params : Kinded_parameter.t list; (* XXX *)
+    params : Index.Container.t;
     env_extension : TEE.t;
   }
 
@@ -68,13 +111,13 @@ module Make (Index : sig
   let introduce (t : t) env =
     let scope_level = Typing_env.max_level env in
     let env =
-      List.fold_left (fun env param ->
-          let name = Kinded_parameter.name param in
-          let kind = Kinded_parameter.kind param in
+      Index.Container.fold t.params
+        ~init:env
+        ~f:(fun env param ->
+          let name = Index.name param in
+          let kind = Index.kind param in
           let ty = T.bottom kind in
           TE.add env name scope_level (Definition ty))
-        env
-        t.params
     in
     TE.add_or_meet_env_extension env t.env_extension scope_level
 
@@ -83,39 +126,7 @@ module Make (Index : sig
 
   let kinded_params t = t.params
 
-  let nth t index =
-    match Targetint.OCaml.to_int_option index with
-    | Some n ->
-      begin match List.nth_opt t.params n with
-      | Some param -> param
-      | None ->
-        Misc.fatal_errorf "Parameters.nth: index %d out of range:@ %a"
-          n
-          print t
-      end
-    | None ->
-      Misc.fatal_errorf "Parameters.nth: too many parameters (%a) for host:@ %a"
-        Targetint.OCaml.print index
-        print t
-
-  let check_arities_match (t1 : t) (t2 : t) =
-    let fail () =
-      Misc.fatal_errorf "Cannot meet or join [Parameters.t] values with \
-          different arities:@ %a@ and@ %a"
-        print t1
-        print t2
-    in
-    if List.compare_lengths t1.params t2.params <> 0 then begin
-      fail ()
-    end;
-    List.map (fun (kinded_param1, kinded_param2) ->
-        let kind1 = Kinded_parameter.kind kinded_param1 in
-        let kind2 = Kinded_parameter.kind kinded_param2 in
-        if not (Flambda_kind.equal kind1 kind2) then begin
-          fail ()
-        end;
-        kind1)
-      (List.combine t1.params t2.params)
+  let nth t index = Index.Container.nth t.params ~index
 
   let add_or_meet_equations t env env_extension =
     { t with
@@ -127,43 +138,52 @@ module Make (Index : sig
     | Left
     | Right
 
-  let environment_for_meet_or_join ?(fresh_name_semantics = Fresh) env
-        (t1 : t) (t2 : t) =
-    let arity = check_arities_match t1 t2 in
-    let fresh_params =
+  type meet_or_join =
+    | Meet
+    | Join
+
+  let environment_for_meet_or_join ?(fresh_name_semantics = Fresh)
+        (op : meet_or_join) (t1 : t) (t2 : t) =
+    let all_params =
+      Index.Container.union_and_check_kinds t1.params t2.params
+    in
+    let params_to_bind =
+      match op with
+      | Meet -> Index.Container.inter_and_check_kinds t1.params t2.params
+      | Join -> all_params
+    in
+    let with_fresh_params =
       match fresh_name_semantics with
       | Fresh ->
-        List.map (fun kind ->
-            let fresh_name = Name.var (Variable.create "join") in
-            Kinded_parameter.create (Parameter.create fresh_name) kind)
-          arity
-      | Left -> t1.params
-      | Right -> t2.params
+        Index.Container.augment_map with_fresh_params ~f:(fun param ->
+          Index.freshen_name param)
+      | Left -> Index.Container.augment_map t1.params ~f:(fun param -> param)
+      | Right -> Index.Container.augment_map t2.params ~f:(fun param -> param)
     in
     let env =
-      List.fold_left (fun env fresh_param ->
-          let fresh_name = Kinded_parameter.name fresh_param in
-          let kind = Kinded_parameter.kind fresh_param in
+      Index.Container.fold with_fresh_params
+        ~init:env
+        ~f:(fun env (_our_param, fresh_param) ->
+          let fresh_name = Index.name fresh_param in
+          let kind = Index.kind fresh_param in
           JE.add_definition_central_environment env fresh_name (T.bottom kind))
-        env
-        fresh_params
     in
     let add_definitions_and_equalities_to_extension (t : t) =
-      List.fold_left (fun env_extension (our_param, fresh_param) ->
-          assert (Kinded_parameter.equal_kinds our_param fresh_param);
-          let our_name = Kinded_parameter.name our_param in
-          let our_param_kind = Kinded_parameter.kind our_param in
+      Index.Container.fold with_fresh_params
+        ~init:t.env_extension
+        ~f:(fun env_extension (our_param, fresh_param) ->
+          assert (Index.equal_kinds our_param fresh_param);
+          let our_name = Index.name our_param in
+          let our_param_kind = Index.kind our_param in
           let env_extension =
             TEE.add_definition_at_beginning env_extension our_name
               (T.bottom our_param_kind)
           in
-          let fresh_name = Kinded_parameter.name fresh_param in
+          let fresh_name = Index.name fresh_param in
           let fresh_name_ty =
             T.alias_type_of our_param_kind (Simple.name our_name)
           in
           TEE.add_equation env_extension fresh_name fresh_name_ty)
-        t.env_extension
-        (List.combine t.params fresh_params)
     in
     let env_extension1 =
       match fresh_name_semantics with
@@ -175,7 +195,13 @@ module Make (Index : sig
       | Fresh | Left -> add_definitions_and_equalities_to_extension t2
       | Right -> t2.env_extension
     in
-    env, env_extension1, env_extension2, fresh_params
+    let fresh_params_to_bind =
+      Index.Container.filter_map_pair_to_singleton with_fresh_params
+        ~f:(fun (our_param, fresh_param) ->
+          if Index.Container.mem params_to_bind our_param then Some fresh_param
+          else None)
+    in
+    env, env_extension1, env_extension2, fresh_params_to_bind
 
   let meet_or_join ?fresh_name_semantics env t1 t2 ~op =
     if t1 == t2 then t1
@@ -202,18 +228,18 @@ module Make (Index : sig
   let join_fresh env t1 t2 : t = join env t1 t2
 
   let standalone_extension t =
-    (* CR mshinwell: Maybe the extension should always contain these
-       bindings? *)
-    List.fold_left (fun env_extension param ->
-        let name = Kinded_parameter.name param in
-        let param_kind = Kinded_parameter.kind param in
+    Index.Container.fold t.params
+      ~init:t.env_extension
+      ~f:(fun env_extension param ->
+        let name = Index.name param in
+        let param_kind = Index.kind param in
         TEE.add_definition_at_beginning env_extension name
           (T.bottom param_kind))
-      t.env_extension
-      t.params
 
-  let apply_name_permutation t perm =
-    apply_name_permutation_parameters t perm
+  let apply_name_permutation { params; env_extension; } perm =
+    { params = Index.Container.apply_name_permutation params perm;
+      env_extension = TEE.apply_name_permutation env_extension perm;
+    }
 
   let freshen t perm =
     let fresh_params =
@@ -221,3 +247,148 @@ module Make (Index : sig
     in
     apply_name_permutation (Freshening.name_permutation fresh_params)
 end
+
+(*
+    match Targetint.OCaml.to_int_option index with
+    | Some n ->
+      begin match List.nth_opt t.params n with
+      | Some param -> param
+      | None ->
+        Misc.fatal_errorf "Parameters.nth: index %d out of range:@ %a"
+          n
+          print t
+      end
+    | None ->
+      Misc.fatal_errorf "Parameters.nth: too many parameters (%a) for host:@ %a"
+        Targetint.OCaml.print index
+        print t
+*)
+
+module Ordered_kinded_parameters = struct
+  type t = Kinded_parameter.t
+
+  let name t = Kinded_parameter.name t
+  let kind t = Kinded_parameter.kind t
+
+  let freshen_name t = Kinded_parameter.freshen t
+
+  type container = Kinded_parameter.t array
+  type pair_container = (Kinded_parameter.t * Kinded_parameter.t) array
+
+  module Container = struct
+    type t = container
+
+    let nth t ~index =
+      match Targetint.OCaml.to_int_opt index with
+      | Some index ->
+        if index < 0 || index >= Array.length t then begin
+          Misc.fatal_error "Index %d out of range" index
+        end;
+        t.(index)
+      | None ->
+        (* CR mshinwell: This should be a proper compilation error *)
+        Misc.fatal_error "Parameter list too long for host"
+
+    let augment_map t ~f =
+      Array.map (fun param -> param, f param) t
+
+    let fold t ~init ~f =
+      Array.fold_left (fun acc param -> f acc param) init t
+
+    let inter_and_check_kinds t1 t2 =
+
+    let union_and_check_kinds t1 t2 =
+
+    let apply_name_permutation t perm =
+      Array.map (fun param ->
+          Kinded_parameter.apply_name_permutation param perm)
+        t
+
+    let apply_freshening t freshening =
+      apply_name_permutation t (Freshening.name_permutation freshening)
+  end
+
+  module Pair_container = struct
+    type t = pair_container
+
+    let fold t ~init ~f =
+      Array.fold_left (fun acc param_pair -> f acc param_pair) init t
+
+    let filter_map_pair_to_singleton t ~f =
+      Array.of_list (Misc.Stdlib.List.filter_map f (Array.to_list t))
+  end
+end
+
+module Unordered_vars_within_closure = struct
+  module Named_var_within_closure =
+    type t = Var_within_closure.t * Name.t
+    include Hashtbl.Make_with_map_pair (Var_within_closure) (Name)
+  end
+
+  type t = {
+    vars_within_closure : Var_within_closure.
+  }
+
+  let name (_var, name) = name
+  let kind _ = Flambda_kind.value ()
+
+  let freshen_name (var, name) = var, Name.rename name
+
+  type container = Singleton.Set.t
+  type pair_container = Pair.Set.t
+
+  module Container = struct
+    type t = container
+
+    include Singleton
+
+    let nth t ~index =
+      match Targetint.OCaml.to_int_opt index with
+      | Some index ->
+        if index < 0 || index >= Array.length t then begin
+          Misc.fatal_error "Index %d out of range" index
+        end;
+        t.(index)
+      | None ->
+        (* CR mshinwell: This should be a proper compilation error *)
+        Misc.fatal_error "Parameter list too long for host"
+
+    let augment_map t ~f =
+      Array.map (fun param -> param, f param) t
+
+    let fold t ~init ~f =
+      Array.fold_left (fun acc param -> f acc param) init t
+
+    let inter_and_check_kinds t1 t2 =
+
+    let union_and_check_kinds t1 t2 =
+
+    let apply_name_permutation t perm =
+      Array.map (fun param ->
+          Kinded_parameter.apply_name_permutation param perm)
+        t
+
+    let apply_freshening t freshening =
+      apply_name_permutation t (Freshening.name_permutation freshening)
+  end
+
+  module Pair_container = struct
+    type t = pair_container
+
+    include Pair
+
+    let fold t ~init ~f =
+      Array.fold_left (fun acc param_pair -> f acc param_pair) init t
+
+    let filter_map_pair_to_singleton t ~f =
+      Array.of_list (Misc.Stdlib.List.filter_map f (Array.to_list t))
+  end
+end
+
+(* Thinking again, we need three of these, indexed by:
+
+1. Kinded_parameter.t, with ordering (for parameters / results)
+2. Var_within_closure.t, without ordering (for closure elements)
+3. Targetint.OCaml.t, with ordering (for blocks)
+
+*)
