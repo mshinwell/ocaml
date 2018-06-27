@@ -16,7 +16,17 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make (Index : sig
+(* Next attempt:
+
+- always use Kinded_parameter.t
+- parameterise the main thing on the singleton container.  We should be
+  able to derive all of the operations.  The only point of the parameterisation
+  is to impose the ordering, or not.
+  * In fact: it should take the _functor_ to make the container
+- then have the extra layer which keeps track of the <thing> -> KP map *)
+
+module Make0
+  (Index : sig
     type t
 
     val name : t -> Name.t
@@ -74,8 +84,24 @@ module Make (Index : sig
   module TE = Typing_env
   module TEE = Typing_env_extension
 
+  module Pair_container =
+    Make_pair_container (Kinded_parameter) (Kinded_parameter)
+
+  module Singleton_container = struct
+    include Make_container (Kinded_parameter)
+
+    let augment_map t ~f =
+      fold (fun index pair_container ->
+          Pair_container.add (index, f index) pair_container)
+        t
+        Pair_container.empty
+  end
+
+  module SC = Singleton_container
+  module PC = Pair_container
+
   type t = {
-    params : Index.Container.t;
+    params : SC.t;
     env_extension : TEE.t;
   }
 
@@ -111,7 +137,7 @@ module Make (Index : sig
   let introduce (t : t) env =
     let scope_level = Typing_env.max_level env in
     let env =
-      Index.Container.fold t.params
+      SC.fold t.params
         ~init:env
         ~f:(fun env param ->
           let name = Index.name param in
@@ -126,7 +152,7 @@ module Make (Index : sig
 
   let kinded_params t = t.params
 
-  let nth t index = Index.Container.nth t.params ~index
+  let nth t index = SC.nth t.params ~index
 
   let add_or_meet_equations t env env_extension =
     { t with
@@ -145,23 +171,23 @@ module Make (Index : sig
   let environment_for_meet_or_join ?(fresh_name_semantics = Fresh)
         (op : meet_or_join) (t1 : t) (t2 : t) =
     let all_params =
-      Index.Container.union_and_check_kinds t1.params t2.params
+      SC.union_and_check_kinds t1.params t2.params
     in
     let params_to_bind =
       match op with
-      | Meet -> Index.Container.inter_and_check_kinds t1.params t2.params
+      | Meet -> SC.inter_and_check_kinds t1.params t2.params
       | Join -> all_params
     in
     let with_fresh_params =
       match fresh_name_semantics with
       | Fresh ->
-        Index.Container.augment_map with_fresh_params ~f:(fun param ->
+        SC.augment_map with_fresh_params ~f:(fun param ->
           Index.freshen_name param)
-      | Left -> Index.Container.augment_map t1.params ~f:(fun param -> param)
-      | Right -> Index.Container.augment_map t2.params ~f:(fun param -> param)
+      | Left -> SC.augment_map t1.params ~f:(fun param -> param)
+      | Right -> SC.augment_map t2.params ~f:(fun param -> param)
     in
     let env =
-      Index.Container.fold with_fresh_params
+      SC.fold with_fresh_params
         ~init:env
         ~f:(fun env (_our_param, fresh_param) ->
           let fresh_name = Index.name fresh_param in
@@ -169,7 +195,7 @@ module Make (Index : sig
           JE.add_definition_central_environment env fresh_name (T.bottom kind))
     in
     let add_definitions_and_equalities_to_extension (t : t) =
-      Index.Container.fold with_fresh_params
+      SC.fold with_fresh_params
         ~init:t.env_extension
         ~f:(fun env_extension (our_param, fresh_param) ->
           assert (Index.equal_kinds our_param fresh_param);
@@ -196,9 +222,9 @@ module Make (Index : sig
       | Right -> t2.env_extension
     in
     let fresh_params_to_bind =
-      Index.Container.filter_map_pair_to_singleton with_fresh_params
+      SC.filter_map_pair_to_singleton with_fresh_params
         ~f:(fun (our_param, fresh_param) ->
-          if Index.Container.mem params_to_bind our_param then Some fresh_param
+          if SC.mem params_to_bind our_param then Some fresh_param
           else None)
     in
     env, env_extension1, env_extension2, fresh_params_to_bind
@@ -228,7 +254,7 @@ module Make (Index : sig
   let join_fresh env t1 t2 : t = join env t1 t2
 
   let standalone_extension t =
-    Index.Container.fold t.params
+    SC.fold t.params
       ~init:t.env_extension
       ~f:(fun env_extension param ->
         let name = Index.name param in
@@ -237,7 +263,7 @@ module Make (Index : sig
           (T.bottom param_kind))
 
   let apply_name_permutation { params; env_extension; } perm =
-    { params = Index.Container.apply_name_permutation params perm;
+    { params = SC.apply_name_permutation params perm;
       env_extension = TEE.apply_name_permutation env_extension perm;
     }
 
@@ -248,21 +274,96 @@ module Make (Index : sig
     apply_name_permutation (Freshening.name_permutation fresh_params)
 end
 
-(*
-    match Targetint.OCaml.to_int_option index with
-    | Some n ->
-      begin match List.nth_opt t.params n with
-      | Some param -> param
-      | None ->
-        Misc.fatal_errorf "Parameters.nth: index %d out of range:@ %a"
-          n
-          print t
-      end
-    | None ->
-      Misc.fatal_errorf "Parameters.nth: too many parameters (%a) for host:@ %a"
-        Targetint.OCaml.print index
-        print t
-*)
+module With_names
+  (Index : sig
+    (* Values of type [t] must not contain any names. *)
+    type t
+
+    val kind : t -> Flambda_kind.t
+
+    type container
+    type pair_container
+
+    module Container : sig
+      type t = container
+
+      val nth : t -> index:Targetint.OCaml.t -> Index.t option
+
+      val augment_map : t -> f:(Index.t -> Index.t) -> pair_container
+
+      val fold
+         : t
+        -> init:'a
+        -> f:('a -> Index.t -> 'a)
+        -> 'a
+
+      val inter_and_check_kinds : t -> t -> t
+      val union_and_check_kinds : t -> t -> t
+    end
+
+    module Pair_container : sig
+      type t = pair_container
+
+      val fold
+         : t
+        -> init:'a
+        -> f:('a -> Index.t * Index.t -> 'a)
+        -> 'a
+
+      val filter_map_pair_to_singleton
+         : t
+        -> f:(Index.t * Index.t -> Index.t option)
+        -> container
+    end
+  end)
+= struct
+  type t = Index.t * Name.t
+
+  type container = {
+    container : Index.Container.t;
+    indexes_to_names : Name.t Index.Map.t;
+  }
+
+  type pair_container = {
+    container : Index.Pair_container.t;
+    indexes_to_names : Name.t Index.Map.t;
+  }
+
+  module Container = struct
+    type t = container
+
+    let nth t ~index =
+      Index.Container.nth t.container ~index
+
+    let augment_map t ~f : pair_container =
+      { container = Index.Container.augment_map t.container;
+        indexes_to_names = t.indexes_to_names;
+      }
+
+    let fold t ~init ~f =
+      Index.Container.fold t ~init ~f:(fun acc index ->
+          let name =
+            match Index.Map.find index t.indexes_to_names with
+            | name -> name
+            | exception Not_found ->
+              Misc.fatal_errorf "No name found for index %a"
+                Index.print index
+          in
+          f (index, name))
+
+    let inter_and_check_kinds
+          { container = container1; indexes_to_names = indexes_to_names1; }
+          { container = container2; indexes_to_names = indexes_to_names2; } =
+      { container =
+          Index.Container.inter_and_check_kinds container1 container2;
+        indexes_to_names =
+          Index.Map.inter ...; (* XXX *)
+      }
+
+    let union_and_check_kinds ... = ...
+  end
+
+end
 
 module Ordered_kinded_parameters = struct
   type t = Kinded_parameter.t
@@ -320,21 +421,15 @@ module Ordered_kinded_parameters = struct
 end
 
 module Unordered_vars_within_closure = struct
-  module Named_var_within_closure =
-    type t = Var_within_closure.t * Name.t
-    include Hashtbl.Make_with_map_pair (Var_within_closure) (Name)
-  end
+  type t = Var_within_closure.t
 
-  type t = {
-    vars_within_closure : Var_within_closure.
-  }
-
-  let name (_var, name) = name
   let kind _ = Flambda_kind.value ()
 
-  let freshen_name (var, name) = var, Name.rename name
+  type container = Var_within_closure.Set.t
 
-  type container = Singleton.Set.t
+  module Pair =
+    Hashtbl.With_map.Make_pair (Var_within_closure) (Var_within_closure)
+
   type pair_container = Pair.Set.t
 
   module Container = struct
@@ -362,14 +457,6 @@ module Unordered_vars_within_closure = struct
     let inter_and_check_kinds t1 t2 =
 
     let union_and_check_kinds t1 t2 =
-
-    let apply_name_permutation t perm =
-      Array.map (fun param ->
-          Kinded_parameter.apply_name_permutation param perm)
-        t
-
-    let apply_freshening t freshening =
-      apply_name_permutation t (Freshening.name_permutation freshening)
   end
 
   module Pair_container = struct
