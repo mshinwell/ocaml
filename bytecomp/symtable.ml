@@ -365,6 +365,11 @@ let filter_global_map p gmap =
     gmap.num_tbl;
   {num_cnt = gmap.num_cnt; num_tbl = !newtbl}
 
+let is_defined_in_global_map gmap id =
+  Tbl.mem id gmap.num_tbl
+
+let empty_global_map = empty_numtable
+
 (* Error report *)
 
 open Format

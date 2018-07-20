@@ -4,7 +4,7 @@
 (*                                 OCaml                                  *)
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                   Mark Shinwell, Jane Street Europe                    *)
+(*              Mark Shinwell and Leo White, Jane Street Europe           *)
 (*                                                                        *)
 (*   Copyright 1996 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
@@ -24,8 +24,8 @@ module DC = Dynlink_common
 
 type global_map = {
   name : string;
-  crc_intf : Digest.t;
-  crc_impl : Digest.t;
+  crc_intf : Digest.t option;
+  crc_impl : Digest.t option;
   syms : string list
 }
 
@@ -53,11 +53,6 @@ module Native = struct
 
   let init () = ()
 
-  type state = unit
-
-  let snapshot_state () = ()
-  let restore_state () = ()
-
   let is_native = true
   let adapt_filename f = Filename.chop_extension f ^ ".cmxs"
 
@@ -66,16 +61,21 @@ module Native = struct
   (* Copied from config.ml to avoid dependencies *)
   let cmxs_magic_number = "Caml2007D002"
 
-  let iter_default_available_units f =
+  let iter_initial_units f =
     let rank = ref 0 in
     List.iter (fun { name; crc_intf; crc_impl; syms; } ->
-        rank := !rank + List.length syms;
-        f ~comp_unit:name ~interface:crc_intf
-          ~implementation:(Some (crc_impl, DC.Check_inited !rank))
-          ~defined_symbols:syms)
+      rank := !rank + List.length syms;
+      let implementation =
+        match crc_impl with
+        | None -> None
+        | Some _ as crco ->
+            Some(crco, DC.Check_inited !rank)
+      in
+      f ~comp_unit:name ~interface:crc_intf
+          ~implementation ~defined_symbols:syms)
       (ndl_getmap ())
 
-  let run handle ~unit_header =
+  let run handle ~unit_header ~priv:_ =
     ndl_run handle "_shared_startup";
     List.iter (fun cu -> ndl_run handle cu)
       (Unit_header.defined_symbols unit_header)

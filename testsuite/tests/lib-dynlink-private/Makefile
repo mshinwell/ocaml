@@ -15,6 +15,7 @@
 #*                                                                        *
 #**************************************************************************
 
+BASEDIR=../..
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/dynlink
 LD_PATH=.:$(TOPDIR)/otherlibs/dynlink
 
@@ -37,18 +38,36 @@ default:
 compile:
 	@$(OCAMLC) -c sheep.mli
 	@$(OCAMLC) -c sheep.ml
+	@$(OCAMLC) -c pig.mli
 	@$(OCAMLC) -c test.ml
-	@$(OCAMLC) -c plugin/sheep.mli
-	@$(OCAMLC) -o plugin/sheep.cmo -c plugin/sheep.ml
+	@$(OCAMLC) -c plugin1/sheep.mli
+	@$(OCAMLC) -I plugin1 -o plugin1/sheep.cmo -c plugin1/sheep.ml
+	@$(OCAMLC) -c plugin2/cow.mli
+	@$(OCAMLC) -I plugin2 -o plugin2/cow.cmo -c plugin2/cow.ml
+	@$(OCAMLC) -c plugin3/pig.mli
+	@$(OCAMLC) -I plugin3 -o plugin3/pig.cmo -c plugin3/pig.ml
+	@$(OCAMLC) -c plugin4/chicken.mli
+	@$(OCAMLC) -I plugin4 -o plugin4/chicken.cmo -c plugin4/chicken.ml
+	@$(OCAMLC) -c plugin5/chicken.mli
+	@$(OCAMLC) -I plugin5 -o plugin5/chicken.cmo -c plugin5/chicken.ml
 	@$(OCAMLC) -o test.byte dynlink.cma sheep.cmo test.cmo
 
 .PHONY: compile_opt
 compile_opt:
 	@$(OCAMLOPT) -c sheep.mli
 	@$(OCAMLOPT) -c sheep.ml
+	@$(OCAMLOPT) -c pig.mli
 	@$(OCAMLOPT) -c test.ml
-	@$(OCAMLOPT) -c plugin/sheep.mli
-	@$(OCAMLOPT) -o plugin/sheep.cmxs -shared plugin/sheep.ml
+	@$(OCAMLOPT) -c plugin1/sheep.mli
+	@$(OCAMLOPT) -I plugin1 -o plugin1/sheep.cmxs -shared plugin1/sheep.ml
+	@$(OCAMLOPT) -c plugin2/cow.mli
+	@$(OCAMLOPT) -I plugin2 -o plugin2/cow.cmxs -shared plugin2/cow.ml
+	@$(OCAMLOPT) -c plugin3/pig.mli
+	@$(OCAMLOPT) -I plugin3 -o plugin3/pig.cmxs -shared plugin3/pig.ml
+	@$(OCAMLOPT) -c plugin4/chicken.mli
+	@$(OCAMLOPT) -I plugin4 -o plugin4/chicken.cmxs -shared plugin4/chicken.ml
+	@$(OCAMLOPT) -c plugin5/chicken.mli
+	@$(OCAMLOPT) -I plugin5 -o plugin5/chicken.cmxs -shared plugin5/chicken.ml
 	@$(OCAMLOPT) -o test.exe dynlink.cmxa sheep.cmx test.cmx
 
 .PHONY: run1
@@ -65,5 +84,15 @@ promote: defaultpromote
 .PHONY: clean
 clean: defaultclean
 	@rm -f main main.native
+	@rm -f plugin1/*.cmo plugin1/*.cmi plugin1/*.cmx plugin1/*.cmxs
+	@rm -f plugin1/*.$(O) plugin1/*.$(SO)
+	@rm -f plugin2/*.cmo plugin2/*.cmi plugin2/*.cmx plugin2/*.cmxs
+	@rm -f plugin2/*.$(O) plugin2/*.$(SO)
+	@rm -f plugin3/*.cmo plugin3/*.cmi plugin3/*.cmx plugin3/*.cmxs
+	@rm -f plugin3/*.$(O) plugin3/*.$(SO)
+	@rm -f plugin4/*.cmo plugin4/*.cmi plugin4/*.cmx plugin4/*.cmxs
+	@rm -f plugin4/*.$(O) plugin4/*.$(SO)
+	@rm -f plugin5/*.cmo plugin5/*.cmi plugin5/*.cmx plugin5/*.cmxs
+	@rm -f plugin5/*.$(O) plugin5/*.$(SO)
 
 include $(BASEDIR)/makefiles/Makefile.common

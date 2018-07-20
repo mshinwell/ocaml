@@ -4,7 +4,7 @@
 (*                                 OCaml                                  *)
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                   Mark Shinwell, Jane Street Europe                    *)
+(*              Mark Shinwell and Leo White, Jane Street Europe           *)
 (*                                                                        *)
 (*   Copyright 1996 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
@@ -35,17 +35,12 @@ module Not_available = struct
 
   let init () = not_available ()
 
-  type state = unit
-
-  let snapshot_state () = ()
-  let restore_state _ = ()
-
   let is_native = false
   let adapt_filename f = f
 
-  let iter_default_available_units _ = ()
+  let iter_initial_units _ = ()
 
-  let run _ ~unit_header:_ = not_available ()
+  let run _ ~unit_header:_ ~priv:_ = not_available ()
   let load ~filename:_ ~priv:_ = not_available ()
   let finish _ = not_available ()
 end

@@ -44,10 +44,12 @@ val defined_globals: (reloc_info * int) list -> Ident.t list
 
 type global_map
 
+val empty_global_map: global_map
 val current_state: unit -> global_map
 val restore_state: global_map -> unit
 val hide_additions: global_map -> unit
 val filter_global_map: (Ident.t -> bool) -> global_map -> global_map
+val is_defined_in_global_map: global_map -> Ident.t -> bool
 
 (* Error report *)
 

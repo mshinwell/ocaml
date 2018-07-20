@@ -1,1 +1,1 @@
-Fatal error: exception Dynlink.Error(Dynlink.Inconsistent_import "Config")
+Fatal error: exception Dynlink.Error(Dynlink.Module_already_loaded "Config")

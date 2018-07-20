@@ -15,7 +15,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Dynamic loading of .cmo and .cmxs files. *)
+(** Dynamic loading of .cmo, .cma and .cmxs files. *)
 
 val is_native : bool
 (** [true] if the program is native,
@@ -32,34 +32,39 @@ val loadfile : string -> unit
     All toplevel expressions in the loaded compilation units
     are evaluated. No facilities are provided to
     access value names defined by the unit. Therefore, the unit
-    must register itself its entry points with the main program (or a
+    must itself register its entry points with the main program (or a
     previously-loaded library) e.g. by modifying tables of functions.
 
-    An exception will be raised if the given library defines toplevel modules
-    (for example the name of a compilation unit "Foo" or some module in a pack
-    "Pack.Foo") whose names clash with modules existing either in the main
-    program or a previously-loaded shared library loaded with [loadfile].
-    Shared libraries loaded with [loadfile_private], below, are not subject
-    to this restriction.
+    An exception will be raised if the given library defines toplevel
+    modules whose names clash with modules existing either in the main
+    program or a shared library previously loaded with [loadfile].
+    Modules from shared libraries previously loaded with
+    [loadfile_private] are not included in this restriction.
 
     The compilation units loaded by this function are added to the
-    "allowed units" list (see below). *)
+    "allowed units" list (see {!set_allowed_units}). *)
 
 val loadfile_private : string -> unit
 (** Same as [loadfile], except that the compilation units just loaded
     are hidden (cannot be referenced) from other modules dynamically
-    loaded afterwards.  The compilation units may define toplevel modules
-    with the same name as other modules already existing in the program (see
-    documentation above for [loadfile]).
+    loaded afterwards.
 
-    An exception will be raised if a shared library being loaded privately
-    using this function implements an interface that has already been depended
-    upon by either the main program or a previously-loaded shared library.
-    This applies even if such dependency is only a "module alias" dependency
-    (i.e. just on the name rather than the contents of an interface).
+    An exception will be raised if the given library defines toplevel
+    modules whose names clash with modules existing in either the main
+    program or a shared library previously loaded with [loadfile].
+    Modules from shared libraries previously loaded with
+    [loadfile_private] are not included in this restriction.
 
-    For avoidance of doubt: this function does not add the loaded units to the
-    "allowed units" list. *)
+    An exception will also be raised if the given library defines
+    toplevel modules whose name matches that of an interface depended
+    on by a module existing in either the main program or a shared
+    library previously loaded with [loadfile]. This applies even if
+    such dependency is only a "module alias" dependency (i.e. just on
+    the name rather than the contents of the interface).
+
+    The compilation units loaded by this function are not added to the
+    "allowed units" list (see {!set_allowed_units}) since they cannot
+    be referenced from other compilation units. *)
 
 val adapt_filename : string -> string
 (** In bytecode, the identity function. In native code, replace the last
@@ -78,7 +83,7 @@ val set_allowed_units : string list -> unit
     dynamically-linked code, and prevent access to all other units,
     e.g. private, internal modules of the running program.
 
-    Note that [loadfile], above, changes the allowed-units list. *)
+    Note that {!loadfile} changes the allowed-units list. *)
 
 val allow_only: string list -> unit
 (** [allow_only units] sets the list of allowed units to be the intersection
@@ -112,8 +117,6 @@ val allow_unsafe_modules : bool -> unit
     By default, dynamic linking of unsafe object files is
     not allowed. In native code, this function does nothing; object files
     with external functions are always allowed to be dynamically linked. *)
-
-(* XXX add a test case for Private_library_cannot_implement_interface. *)
 
 (** {6 Error reporting} *)
 

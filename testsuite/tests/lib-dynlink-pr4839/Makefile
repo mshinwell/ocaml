@@ -17,6 +17,8 @@
 #*                                                                        *
 #**************************************************************************
 
+BASEDIR=../..
+
 .PHONY: default
 default:
 	@if ! $(SUPPORTS_SHARED_LIBRARIES); then \
@@ -35,7 +37,7 @@ default:
 .PHONY: compile
 compile:
 	@(cd host; make compile)
-	@(cd plugin; make compile)
+	@(cd plugin1; make compile)
 	@(cd plugin2; make compile)
 	@(cd plugin3; make compile)
 	@(cd plugin4; make compile)
@@ -43,33 +45,33 @@ compile:
 .PHONY: compile_opt
 compile_opt:
 	@(cd host; make compile_opt)
-	@(cd plugin; make compile_opt)
+	@(cd plugin1; make compile_opt)
 	@(cd plugin2; make compile_opt)
 	@(cd plugin3; make compile_opt)
 	@(cd plugin4; make compile_opt)
 
 .PHONY: run
 run:
-	@(cd host; ./host.byt ../plugin/plugin.cmo > ../result.byte 2>&1)
-	@(cd host; ./host.byt ../plugin2/plugin.cmo >> ../result.byte 2>&1)
-	@(cd host; ./host.byt ../plugin3/plugin.cmo >> ../result.byte 2>&1)
-	@(cd host; ./host.byt ../plugin4/plugin.cmo >> ../result.byte 2>&1)
-	@$(DIFF) byte.reference result.byte >/dev/null \
+	@(cd host; ./host.byt ../plugin1/plugin.cma > ../byte.result 2>&1)
+	@(cd host; ./host.byt ../plugin2/plugin.cma >> ../byte.result 2>&1)
+	@(cd host; ./host.byt ../plugin3/plugin.cma >> ../byte.result 2>&1)
+	@(cd host; ./host.byt ../plugin4/plugin.cma >> ../byte.result 2>&1)
+	@$(DIFF) byte.reference byte.result >/dev/null \
 		&& echo " => passed" || echo " => failed"
 
 .PHONY: run_opt
 run_opt:
-	@(cd host; ./host.exe ../plugin/plugin.cmxs > ../result.native 2>&1)
-	@(cd host; ./host.exe ../plugin2/plugin.cmxs >> ../result.native 2>&1)
-	@(cd host; ./host.exe ../plugin3/plugin.cmxs >> ../result.native 2>&1)
-	@(cd host; ./host.exe ../plugin4/plugin.cmxs >> ../result.native 2>&1)
-	@$(DIFF) native.reference result.native >/dev/null \
+	@(cd host; ./host.exe ../plugin1/plugin.cmxs > ../native.result 2>&1)
+	@(cd host; ./host.exe ../plugin2/plugin.cmxs >> ../native.result 2>&1)
+	@(cd host; ./host.exe ../plugin3/plugin.cmxs >> ../native.result 2>&1)
+	@(cd host; ./host.exe ../plugin4/plugin.cmxs >> ../native.result 2>&1)
+	@$(DIFF) native.reference native.result >/dev/null \
 		&& echo " => passed" || echo " => failed"
 
 .PHONY: clean
 clean:
 	@(cd host; make clean)
-	@(cd plugin; make clean)
+	@(cd plugin1; make clean)
 	@(cd plugin2; make clean)
 	@(cd plugin3; make clean)
 	@(cd plugin4; make clean)

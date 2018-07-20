@@ -4,7 +4,7 @@
 (*                                 OCaml                                  *)
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                   Mark Shinwell, Jane Street Europe                    *)
+(*              Mark Shinwell and Leo White, Jane Street Europe           *)
 (*                                                                        *)
 (*   Copyright 1996 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
@@ -47,18 +47,15 @@ module Bytecode = struct
   type handle = Pervasives.in_channel * filename * Digest.t
 
   let default_crcs = ref []
+  let default_global_map = ref Symtable.empty_global_map
 
   let init () =
     if !Sys.interactive then begin (* PR#6802 *)
       invalid_arg "The dynlink.cma library cannot be used \
         inside the OCaml toplevel"
     end;
-    default_crcs := Symtable.init_toplevel()
-
-  type state = Symtable.global_map
-
-  let snapshot_state () = Symtable.current_state ()
-  let restore_state state = Symtable.restore_state state
+    default_crcs := Symtable.init_toplevel();
+    default_global_map := Symtable.current_state ()
 
   let is_native = false
   let adapt_filename f = f
@@ -66,17 +63,25 @@ module Bytecode = struct
   let num_globals_inited () =
     Misc.fatal_error "Should never be called for bytecode dynlink"
 
-  let iter_default_available_units f =
-    List.iter (fun (comp_unit, crc_intf) ->
-       match crc_intf with
-        | None -> ()
-        | Some crc ->
-          f ~comp_unit ~interface:crc ~implementation:None
-            (* CR mshinwell: not sure about this [defined_symbols] *)
-            ~defined_symbols:[comp_unit])
+  let iter_initial_units f =
+    List.iter (fun (comp_unit, interface) ->
+      let id = Ident.create_persistent comp_unit in
+      let defined =
+        Symtable.is_defined_in_global_map !default_global_map id
+      in
+      let implementation =
+        if defined then Some(None, DC.Loaded)
+        else None
+      in
+      let defined_symbols =
+        if defined then [comp_unit]
+        else []
+      in
+      f ~comp_unit ~interface ~implementation ~defined_symbols)
       !default_crcs
 
-  let run (ic, file_name, file_digest) ~unit_header =
+  let run (ic, file_name, file_digest) ~unit_header ~priv =
+    let old_state = Symtable.current_state () in
     let compunit : Cmo_format.compilation_unit = unit_header in
     seek_in ic compunit.cu_pos;
     let code_size = compunit.cu_codesize + 8 in
@@ -116,6 +121,7 @@ module Bytecode = struct
         [| input_value ic |]
       end in
     Meta.add_debug_info code code_size events;
+    if priv then Symtable.hide_additions old_state;
     ignore((Meta.reify_bytecode code code_size) ())
 
   let load ~filename:file_name ~priv:_ =

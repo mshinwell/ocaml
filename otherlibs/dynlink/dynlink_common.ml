@@ -1,3 +1,4 @@
+#2 "otherlibs/dynlink/dynlink_common.ml"
 (**************************************************************************)
 (*                                                                        *)
 (*                                 OCaml                                  *)
@@ -162,21 +163,16 @@ module type Dynlink_platform = sig
 
   val num_globals_inited : unit -> int
 
-  type state
-
-  val snapshot_state : unit -> state
-  val restore_state : state -> unit
-
-  val iter_default_available_units
+  val iter_initial_units
      : (comp_unit:string
-      -> interface:Digest.t
-      -> implementation:(Digest.t * implem_state) option
+      -> interface:Digest.t option
+      -> implementation:(Digest.t option * implem_state) option
       -> defined_symbols:string list
       -> unit)
     -> unit
 
   val load : filename:string -> priv:bool -> handle * (Unit_header.t list)
-  val run : handle -> unit_header:Unit_header.t -> unit
+  val run : handle -> unit_header:Unit_header.t -> priv:bool -> unit
   val finish : handle -> unit
 end
 
@@ -213,7 +209,9 @@ module Make (P : Dynlink_platform) = struct
     let implems = String.Map.keys state.implems in
     assert (String.Set.subset implems ifaces);
     assert (String.Set.subset state.main_program_units ifaces);
-    assert (String.Set.subset state.main_program_units implems)
+    assert (String.Set.subset state.main_program_units implems);
+    assert (String.Set.subset state.public_dynamically_loaded_units ifaces);
+    assert (String.Set.subset state.public_dynamically_loaded_units implems)
 
   let empty_state = {
     ifaces = String.Map.empty;
@@ -252,15 +250,19 @@ module Make (P : Dynlink_platform) = struct
     let ifaces = ref String.Map.empty in
     let implems = ref String.Map.empty in
     let defined_symbols = ref String.Set.empty in
-    P.iter_default_available_units
+    P.iter_initial_units
       (fun ~comp_unit ~interface ~implementation ~defined_symbols:symbols ->
-        ifaces := String.Map.add comp_unit (Contents interface, exe) !ifaces;
-        let crc, state =
-          match implementation with
-          | None -> None, Loaded
-          | Some (crc, state) -> Some crc, state
-        in
-        implems := String.Map.add comp_unit (crc, exe, state) !implems;
+        begin match interface with
+        | None ->
+            ifaces := String.Map.add comp_unit (Name, exe) !ifaces
+        | Some crc ->
+            ifaces := String.Map.add comp_unit (Contents crc, exe) !ifaces
+        end;
+        begin match implementation with
+        | None -> ()
+        | Some(crc, state) ->
+            implems := String.Map.add comp_unit (crc, exe, state) !implems
+        end;
         let symbols = String.Set.of_list symbols in
         check_symbols_disjoint ~descr:(lazy "in the executable file")
           symbols !defined_symbols;
@@ -285,12 +287,10 @@ module Make (P : Dynlink_platform) = struct
       inited := true
     end
 
-  let check_ifaces filename ui ifaces ~allowed_units =
+  let check_interface_imports filename ui ifaces ~allowed_units =
     List.fold_left (fun ifaces (name, crc) ->
         let add_interface crc =
-          if name = UH.name ui
-            || String.Set.mem name allowed_units
-          then
+          if String.Set.mem name allowed_units then
             String.Map.add name (crc, filename) ifaces
           else
             raise (Error (Unavailable_unit name))
@@ -311,7 +311,7 @@ module Make (P : Dynlink_platform) = struct
       ifaces
       (UH.interface_imports ui)
 
-  let check_implems filename ui ifaces implems ~priv =
+  let check_implementation_imports filename ui implems =
     List.iter (fun (name, crc) ->
         match String.Map.find name implems with
         | exception Not_found -> raise (Error (Unavailable_unit name))
@@ -335,16 +335,15 @@ module Make (P : Dynlink_platform) = struct
                 filename, Uninitialized_global name)))
             end
           | Loaded -> ())
-      (UH.implementation_imports ui);
+      (UH.implementation_imports ui)
+
+  let check_name filename ui priv ifaces implems =
     let name = UH.name ui in
+    if String.Map.mem name implems then begin
+      raise (Error (Module_already_loaded name))
+    end;
     if priv && String.Map.mem name ifaces then begin
       raise (Error (Private_library_cannot_implement_interface name))
-    end;
-    if not priv then begin
-      (* This relies on the semantics of RTLD_LOCAL (or equivalent). *)
-      if String.Map.mem name implems then begin
-        raise (Error (Module_already_loaded name))
-      end;
     end;
     String.Map.add name (UH.crc ui, filename, Not_initialized) implems
 
@@ -355,16 +354,25 @@ module Make (P : Dynlink_platform) = struct
 
   let check filename (units : UH.t list) state ~priv =
     List.iter (fun ui -> check_unsafe_module ui) units;
-    let new_ifaces =
-      List.fold_left (fun ifaces ui ->
-          check_ifaces filename ui ifaces ~allowed_units:state.allowed_units)
-        state.ifaces units
+    let new_units =
+      String.Set.of_list (List.map (fun ui -> UH.name ui) units)
     in
-    let new_implems =
-      List.fold_left (fun implems ui ->
-          check_implems filename ui new_ifaces implems ~priv)
+    let implems =
+      List.fold_left
+        (fun implems ui -> check_name filename ui priv state.ifaces implems)
         state.implems units
     in
+    let allowed_units = String.Set.union state.allowed_units new_units in
+    let ifaces =
+      List.fold_left
+        (fun ifaces ui ->
+           check_interface_imports filename ui ifaces
+             ~allowed_units:allowed_units)
+        state.ifaces units
+    in
+    List.iter
+      (fun ui -> check_implementation_imports filename ui implems)
+      units;
     let defined_symbols =
       List.fold_left (fun defined_symbols ui ->
           let descr =
@@ -376,33 +384,26 @@ module Make (P : Dynlink_platform) = struct
           in
           let symbols = String.Set.of_list (UH.defined_symbols ui) in
           check_symbols_disjoint ~descr symbols defined_symbols;
-          if priv then defined_symbols
-          else String.Set.union symbols defined_symbols)
+          String.Set.union symbols defined_symbols)
         state.defined_symbols
         units
     in
-    let new_units =
-      String.Set.of_list (List.map (fun ui -> UH.name ui) units)
-    in
-    let allowed_units =
-      if priv then state.allowed_units
-      else String.Set.union state.allowed_units new_units
-    in
-    let public_dynamically_loaded_units =
-      if priv then state.public_dynamically_loaded_units
-      else String.Set.union state.public_dynamically_loaded_units new_units
-    in
-    let state =
-      { state with
-        implems = new_implems;
-        ifaces = new_ifaces;
-        defined_symbols;
-        allowed_units;
-        public_dynamically_loaded_units;
-      }
-    in
-    invariant state;
-    state
+    if priv then state
+    else begin
+      let public_dynamically_loaded_units =
+        String.Set.union state.public_dynamically_loaded_units new_units
+      in
+      let state =
+        { state with
+          implems;
+          ifaces;
+          defined_symbols;
+          allowed_units;
+          public_dynamically_loaded_units; }
+      in
+      invariant state;
+      state
+    end
 
   let set_allowed_units allowed_units =
     let allowed_units = String.Set.of_list allowed_units in
@@ -452,39 +453,37 @@ module Make (P : Dynlink_platform) = struct
     if Filename.is_implicit fname then Filename.concat (Sys.getcwd ()) fname
     else fname
 
+  let set_loaded filename units state =
+    let implems =
+      List.fold_left
+        (fun implems ui ->
+           String.Map.add (UH.name ui) (UH.crc ui, filename, Loaded)
+             implems)
+        state.implems units
+    in
+    { state with implems; }
+
+  let run_units handle priv units =
+    try
+      List.iter (fun unit_header -> P.run handle ~unit_header ~priv) units
+    with exn ->
+      raise (Error (Library's_module_initializers_failed exn))
+
   let load priv filename =
     init ();
     let filename = dll_filename filename in
-    let old_platform_state = P.snapshot_state () in
     match P.load ~filename ~priv with
     | exception exn -> raise (Error (Cannot_open_dynamic_library exn))
     | handle, units ->
-      let old_global_state = !global_state in
-      global_state := check filename units !global_state ~priv;
-      let exn =
         try
-          List.iter (fun unit_header -> P.run handle ~unit_header) units;
-          None
-        with exn -> Some exn
-      in
-      P.finish handle;
-      if priv then begin
-        P.restore_state old_platform_state;
-        global_state := old_global_state
-      end;
-      match exn with
-      | None ->
-        if not priv then begin
-          let implems =
-            List.fold_left (fun implems ui ->
-                String.Map.add (UH.name ui) (UH.crc ui, filename, Loaded)
-                  implems)
-              (!global_state).implems units
-          in
-          global_state := { !global_state with implems; }
-        end
-      | Some exn ->
-        raise (Error (Library's_module_initializers_failed exn))
+          global_state := check filename units !global_state ~priv;
+          run_units handle priv units;
+          if not priv then
+            global_state := set_loaded filename units !global_state;
+          P.finish handle
+        with exn ->
+          P.finish handle;
+          raise exn
 
   let loadfile filename = load false filename
   let loadfile_private filename = load true filename

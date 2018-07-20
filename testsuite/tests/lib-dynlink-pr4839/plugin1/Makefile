@@ -17,11 +17,12 @@
 #*                                                                        *
 #**************************************************************************
 
+BASEDIR=../../..
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/dynlink
 LD_PATH=.:$(TOPDIR)/otherlibs/dynlink
 
 .PHONY: compile
-compile: plugin.cmo
+compile: plugin.cma
 
 .PHONY: compile_opt
 compile_opt: plugin.cmxs
@@ -46,6 +47,9 @@ plugin.cmo: packed.cmo plugin.ml
 
 plugin.cmx: packed.cmo plugin.ml
 	@$(OCAMLOPT) -c plugin.ml
+
+plugin.cma: packed.cmo plugin.cmo
+	@$(OCAMLC) -a -o $@ plugin.cmo
 
 plugin.cmxs: packed.cmx plugin.cmx
 	@$(OCAMLOPT) -shared -o $@ plugin.cmx

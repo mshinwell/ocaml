@@ -65,9 +65,7 @@ let print_crc unit =
     prerr_endline unit;
     begin match exn with
       Sys_error msg -> prerr_endline msg
-    | Dynlink.Error(Dynlink.Cannot_open_dynamic_library exn) ->
-      Printf.eprintf "Cannot load library: %s\n" (Printexc.to_string exn)
-    | Dynlink.Error _ | Corrupted_interface ->
+    | Corrupted_interface ->
       Printf.eprintf "Ill-formed .cmi file (%s)\n" (Printexc.to_string exn)
     | _ -> raise exn
     end;

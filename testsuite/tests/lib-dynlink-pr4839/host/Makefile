@@ -17,6 +17,7 @@
 #*                                                                        *
 #**************************************************************************
 
+BASEDIR=../../..
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/dynlink
 LD_PATH=.:$(TOPDIR)/otherlibs/dynlink
 
