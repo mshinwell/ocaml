@@ -18,38 +18,40 @@
 
 module LV = Logical_variable
 
+module type Make_structure_arg = sig
+  include Set.OrderedType
+  val print : Format.formatter -> t -> unit
+end
+
+module type External_var_sig = sig
+  type t
+
+  include Map.With_set with type t := t
+  include Contains_names.S with type t := t
+
+  val kind : t -> Flambda_kind.t
+end
+
 module Make
-  (T : Flambda_type0_internal_intf.S)
-  (Typing_env : Typing_env_intf.S with module T := T)
-  (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-  (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
-  (Join_env : Join_env_intf.S with module T := T)
-  (External_var : sig
-    type t
-    include Map.With_set with type t := t
-
-    val kind : t -> Flambda_kind.t
-
-    val apply_name_permutation_map
-       : 'a Map.t
-      -> f:('a -> 'a)
-      -> Name_permutation.t
-      -> 'a Map.t
-  end)
+  (External_var : External_var_sig)
   (Make_structure : functor
-    Set.OrderedType
+    Make_structure_arg
     ->
     sig
       type t
 
       val print : Format.formatter -> t -> unit
       val fold : ('a -> External_type.t -> 'a) -> 'a -> t -> 'a
-
-      val meet : t -> t -> t
-      val join : t -> t -> t
-
       val to_set : t -> External_type.Set.t
+
+      val meet : t -> t -> t Or_bottom.t
+      val join : t -> t -> t Or_unknown.t
     end)
+  (T : Flambda_type0_internal_intf.S)
+  (Typing_env : Typing_env_intf.S with module T := T)
+  (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+  (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+  (Join_env : Join_env_intf.S with module T := T)
 = struct
   open T
 
@@ -71,46 +73,48 @@ module Make
        [Definition]s for the [logical_vars]. *)
     ()
 
-  let create logical_vars : t =
-    let t =
-      { logical_vars;
-        env_extension = TEE.empty;
-      }
+  let create_with_env_extension external_structure env_extension : t =
+    let logical_vars =
+      let external_vars = EVS.to_set external_structure in
+      EV.Set.fold (fun external_var logical_vars ->
+          let kind = EV.kind external_var in
+          let fresh_logical_var = LV.create kind in
+          let logical_vars =
+            EV.Map.add external_var fresh_logical_var logical_vars_in_result
+          in
+          logical_vars)
+        external_vars
+        EV.Map.empty
     in
-    invariant t;
-    t
-
-  let create_with_env_extension logical_vars env_extension : t =
     let t =
-      { logical_vars;
+      { external_structure;
+        logical_vars;
         env_extension;
       }
     in
     invariant t;
     t
 
-  let print ppf { logical_vars; env_extension; } =
+  let create external_structure =
+    create_with_env_extension external_structure TEE.empty
 
-
-    T.print_parameters ~cache:(Printing_cache.create ()) ppf t
+  let print ppf { external_structure; logical_vars; env_extension; } =
+    Format.fprintf ppf
+      "@[<hov 1>(\
+        @[<hov 1>(external_structure@ %a)@]@ \
+        @[<hov 1>(logical_vars@ %a)@]@ \
+        @[<hov 1>(env_extension@ %a)@])@]"
+      EVS.print external_structure
+      (EV.Map.print LV.print) logical_vars
+      TEE.print env_extension
 
   let external_structure t = t.external_structure
-
-  let add_or_meet_equations t env env_extension =
-    { t with
-      env_extension = TEE.meet env t.env_extension env_extension;
-    }
 
   type meet_or_join =
     | Meet
     | Join
 
-  let environment_for_meet_or_join (op : meet_or_join) (t1 : t) (t2 : t) =
-    let external_structure =
-      match op with
-      | Meet -> EVS.meet t1.external_structure t2.external_structure
-      | Join -> EVS.join t1.external_structure t2.external_structure
-    in
+  let environment_for_meet_or_join (t1 : t) (t2 : t) ~external_structure =
     let external_vars_in_result = EVS.to_set external_structure in
     let logical_vars_in_result, env =
       EV.Set.fold (fun external_var (logical_vars_in_result, env) ->
@@ -150,28 +154,48 @@ module Make
     env, env_extension1, env_extension2, external_structure,
       logical_vars_in_result
 
-  let meet_or_join env t1 t2 ~op =
-    if t1 == t2 then t1
+  let meet env t1 t2 : _ Or_bottom.t =
+    if t1 == t2 then Ok t1
     else
-      let env, env_extension1, env_extension2, logical_vars,
-          external_structure =
-        environment_for_meet_or_join env t1 t2
-      in
-      let env_extension = op env env_extension1 env_extension2 in
-      { external_structure;
-        logical_vars;
-        env_extension;
-      }
+      let env = JE.create env in
+      match EVS.meet t1.external_structure t2.external_structure with
+      | None -> Bottom
+      | Ok external_structure ->
+        let env, env_extension1, env_extension2, logical_vars =
+          environment_for_meet_or_join env t1 t2 ~external_structure
+        in
+        let env_extension =
+          TEE.meet (JE.central_environment env) env_extension1 env_extension2
+        in
+        Ok {
+          external_structure;
+          logical_vars;
+          env_extension;
+        }
 
-  let meet env t1 t2 =
-    let env = JE.create env in
-    meet_or_join env t1 t2
-      ~op:(fun join_env env_extension1 env_extension2 ->
-        TEE.meet (JE.central_environment join_env)
-          env_extension1 env_extension2)
+  let join env t1 t2 : _ Or_unknown.t =
+    if t1 == t2 then Ok t1
+    else
+      let env = JE.create env in
+      match EVS.join t1.external_structure t2.external_structure with
+      | Unknown -> Unknown
+      | Ok external_structure ->
+        let env, env_extension1, env_extension2, logical_vars =
+          environment_for_meet_or_join env t1 t2 ~external_structure
+        in
+        let env_extension =
+          TEE.join (JE.central_environment env) env_extension1 env_extension2
+        in
+        Ok {
+          external_structure;
+          logical_vars;
+          env_extension;
+        }
 
-  let join env t1 t2 =
-    meet_or_join env t1 t2 ~op:TEE.join
+  let add_or_meet_equations t env env_extension =
+    { t with
+      env_extension = TEE.meet env t.env_extension env_extension;
+    }
 
   let standalone_extension t =
     EV.Map.fold (fun _external_var logical_var env_extension ->
@@ -182,9 +206,25 @@ module Make
       t.logical_vars
       t.env_extension
 
-  let introduce (t : t) env =
+  let introduce t env =
     let scope_level = Typing_env.max_level env in
     TE.add_or_meet_env_extension env (standalone_extension t) scope_level
+
+  let free_names { external_structure = _; logical_vars; env_extension; } =
+    let free_names = TEE.free_names env_extension in
+    let all_logical_vars = EV.Map.data logical_vars in
+    LV.Set.fold (fun logical_var free_names ->
+        Name.Set.union (LV.free_names logical_var) free_names)
+      all_logical_vars
+      free_names
+
+  let bound_names { external_structure; logical_vars = _;
+        env_extension = _; } =
+    let external_vars = EVS.to_set external_structure in
+    EV.Set.fold (fun external_var bound_names ->
+        Name.Set.union (EV.free_names external_var) bound_names)
+      external_vars
+      Name.Set.empty
 
   let apply_name_permutation
         { external_structure; logical_vars; env_extension; } perm =
@@ -192,12 +232,64 @@ module Make
       EVS.apply_name_permutation external_structure perm
     in
     let logical_vars =
-      EV.apply_name_permutation_map logical_vars
-        ~f:(fun logical_var -> LV.apply_name_permutation logical_var perm)
+      EV.Map.fold (fun external_var logical_var logical_vars ->
+          let external_var = EV.apply_name_permutation external_var perm in
+          let logical_var = LV.apply_name_permutation logical_var perm in
+          EV.Map.add external_var logical_var logical_vars)
+        logical_vars
+        EV.Map.empty
     in
     let env_extension = TEE.apply_name_permutation env_extension perm in
     { external_structure;
       logical_vars;
       env_extension;
     }
+
+  let freshen t freshening =
+    apply_name_permutation t (Freshening.name_permutation freshening)
 end
+
+module Targetint_ocaml_external_var = struct
+  include Targetint.OCaml
+
+  let free_names _ = Name.Set.empty
+  let bound_names _ = Name.Set.empty
+  let apply_name_permutation t _perm = t
+  let freshen t _freshening = t
+end
+
+module List_structure (EV : External_var_sig) = struct
+  type t = EV.t list
+
+  let fold f init t = List.fold_left f init t
+  let to_set t = EV.Set.of_list t
+
+  let meet t1 t2 : _ Or_bottom.t =
+    if Misc.Stdlib.List.compare EV.compare t1 t2 = 0 then Ok t1
+    else Bottom
+
+  let join t1 t2 : _ Or_unknown.t =
+    if Misc.Stdlib.List.compare EV.compare t1 t2 = 0 then Ok t1
+    else Unknown
+end
+
+module Set_structure (EV : External_var_sig) = struct
+  type t = EV.Set.t
+
+  let fold f init t = EV.Set.fold f init t
+  let to_set t = t
+
+  let meet t1 t2 : _ Or_bottom.t =
+    let t = EV.Set.inter t1 t2 in
+    if is_empty t then Bottom
+    else Ok t
+
+  let join t1 t2 : _ Or_unknown.t =
+    Ok (EV.Set.union t1 t2)
+end
+
+module Function_parameters = Make (Kinded_parameter) (List_structure)
+module Function_results = Make (Kinded_parameter) (List_structure)
+module Continuation_parameters = Make (Kinded_parameter) (List_structure)
+module Block_fields = Make (Targetint_ocaml_external_var) (List_structure)
+module Closure_elements = Make (Var_within_closure) (Set_structure)

@@ -16,9 +16,16 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** The representation of an abstraction that binds a number of ordered
-    parameters along with their kinds.  Equations may be supplied upon the
-    parameters together with existential definitions.
+(** The representation of an abstraction that existentially binds a number of
+    logical variables whilst at the same time holding equations upon such
+    variables.
+
+    The external view of this structure is determined by the caller.  This is
+    done by providing a type of "external variables", which will be in
+    bijection with the logical variables, and an algebraic structure upon
+    them that provides a container (typically lists or sets).  External
+    variables are treated as bound names; they must be maintained fresh by
+    the caller.
 *)
 
 module type S = sig
@@ -27,10 +34,36 @@ module type S = sig
     type typing_environment
     type join_env
     type flambda_type
-    type parameters
   end
 
-  type t = T.parameters
+  module External_var : sig
+    type t
+
+    include Map.With_set with type t := t
+    include Contains_names.S with type t := t
+
+    val kind : t -> Flambda_kind.t
+  end
+
+  module Make_structure : functor
+    Set.OrderedType
+    ->
+    sig
+      type t
+
+      val print : Format.formatter -> t -> unit
+      val fold : ('a -> External_type.t -> 'a) -> 'a -> t -> 'a
+      val to_set : t -> External_type.Set.t
+
+      val meet : t -> t -> t Or_bottom.t
+      val join : t -> t -> t Or_unknown.t
+    end
+
+  module EVS = Make_structure (External_var)
+
+  type t
+
+  include Contains_names.S with type t := t
 
   (** Perform invariant checks upon the given parameters value. *)
   val invariant : t -> unit
@@ -38,93 +71,34 @@ module type S = sig
   (** Format the given parameters value as an s-expression. *)
   val print : Format.formatter -> t -> unit
 
-  (** As for [print], but uses a printing cache, and prints nothing if the
-      supplied parameters value contains no parameters. *)
-  val print_or_omit_with_cache
-     : cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
+  val create : EVS.t -> t
 
-  (** A parameters value, with bottom types for the parameters, using the
-      given names and kinds (in the given order). *)
-  val create : Kinded_parameter.t list -> t
-
-  (** Like [create] but also accepts equations about the parameters (which
-      may of course involve existentially-bound names in the supplied
-      extension). *)
-  val create_with_env_extension
-     : Kinded_parameter.t list
-    -> T.env_extension
-    -> t
-
-  (** A parameters value, with fresh names for the parameters, assigning the
-      given types (in the given order) to such parameters. *)
-  val create_from_types : T.flambda_type list -> t
+  (** Like [create] but also accepts equations on the logical variables. *)
+  val create_with_env_extension : EVS.t -> T.env_extension -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
 
-  (** The kinds of the parameters, in order. *)
-  val arity : t -> Flambda_arity.t
-
-  (** The number of parameters. *)
-  val size : t -> Targetint.OCaml.t
-
-  (** The parameter with the given index, 0-based.  [None] is returned iff
-      the index is out of the range [0 .. size t). *)
-  val nth : t -> Targetint.OCaml.t -> Kinded_parameter.t option
-
-  (** All of the parameters, in order. *)
-  val kinded_params : t -> Kinded_parameter.t list
-
-  type fresh_name_semantics =
-    | Fresh
-      (** [meet] and [join] will generate fresh names and add equalities to
-          make them equal to the names in the [t]s as appropriate.  These
-          fresh names will be assigned to the [kinded_params] in the output
-          of [meet] and [join]. *)
-    | Left
-      (** [meet] and [join] will use the names in the left-hand [t] instead
-          of generating fresh names.  This means that the results of these
-          functions will produce values of type [t] whose [kinded_params]
-          correspond to those names. *)
-    | Right
-      (** As for [left], but uses names from the right-hand [t]. *)
+  (** The external variables in the appropriate algebraic structure. *)
+  val external_structure : t -> EVS.t
 
   (** Greatest lower bound of two parameter bindings. *)
   val meet
-     : ?fresh_name_semantics:fresh_name_semantics
-    -> T.typing_environment
+     : T.typing_environment
     -> t
     -> t
-    -> t
+    -> t Or_bottom.t
 
   (** Least upper bound of two parameter bindings. *)
   val join
-     : ?fresh_name_semantics:fresh_name_semantics
-    -> T.join_env
+     : T.join_env
     -> t
     -> t
-    -> t
-
-  (** As for [meet] with [Fresh] semantics, but without the optional argument,
-      to avoid warning 48. *)
-  val meet_fresh : T.typing_environment -> t -> t -> t
-
-  (** Like [meet_fresh] but for [join]. *)
-  val join_fresh : T.join_env -> t -> t -> t
+    -> t Or_unknown.t
 
   (** Add or meet more equations into the environment extension associated with
       the given parameters. *)
   val add_or_meet_equations : t -> T.typing_environment -> T.env_extension -> t
-
-  (** All free names occurring in the given parameters value. *)
-  val free_names : t -> Name_occurrences.t
-
-  (** All bound names (that is to say, the kinded parameters) occurring in
-      the given parameters value. *)
-  val bound_names : t -> Name_occurrences.t
 
   (** The environment extension associated with the given parameters, including
       at the start, definitions of such parameters to bottom (hence the
@@ -134,12 +108,4 @@ module type S = sig
   (** Add or meet the definitions and equations from the given parameters value
       into the given typing environment. *)
   val introduce : t -> T.typing_environment -> T.typing_environment
-
-  (** Apply a name permutation throughout the given parameters value (to both
-      free and bound names). *)
-  val apply_name_permutation : t -> Name_permutation.t -> t
-
-  (** Return a new parameters value which is like the input but has the
-      kinded parameters freshened. *)
-  val freshen : t -> t
 end

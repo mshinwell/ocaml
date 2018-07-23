@@ -22,4 +22,30 @@ module Make
     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
     (Join_env : Join_env_intf.S with module T := T)
+    (External_var : sig
+      type t
+      include Map.With_set with type t := t
+
+      val kind : t -> Flambda_kind.t
+
+      val apply_name_permutation_map
+         : 'a Map.t
+        -> f:('a -> 'a)
+        -> Name_permutation.t
+        -> 'a Map.t
+    end)
+    (Make_structure : functor
+      Set.OrderedType
+      ->
+      sig
+        type t
+
+        val print : Format.formatter -> t -> unit
+        val fold : ('a -> External_type.t -> 'a) -> 'a -> t -> 'a
+
+        val meet : t -> t -> t
+        val join : t -> t -> t
+
+        val to_set : t -> External_type.Set.t
+      end)
   : Parameters_intf.S with module T := T
