@@ -39,6 +39,7 @@ module type S = sig
   end
 
   module EVS : sig
+    (** The algebraic structure on external variables. *)
     type t
   end
 

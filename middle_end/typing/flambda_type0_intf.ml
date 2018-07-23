@@ -184,12 +184,12 @@ module type S = sig
       is_classic_mode : bool;
       (** Whether the file from which this function declaration originated was
           compiled in classic mode. *)
-      params : Parameters.t;
+      params : Function_parameters.t;
       body : Expr.t;
       code_id : Code_id.t;
       free_names_in_body : Name_occurrences.t;
       stub : bool;
-      results : Parameters.t;
+      results : Function_results.t;
       dbg : Debuginfo.t;
       inline : inline_attribute;
       specialise : specialise_attribute;
@@ -506,10 +506,10 @@ module type S = sig
       -> closure_origin:Closure_origin.t
       -> continuation_param:Continuation.t
       -> exn_continuation_param:Continuation.t
-      -> params:Parameters.t
+      -> params:Function_parameters.t
       -> body:expr
       -> code_id:Code_id.t
-      -> results:Parameters.t
+      -> results:Function_results.t
       -> stub:bool
       -> dbg:Debuginfo.t
       -> inline:inline_attribute
@@ -621,11 +621,16 @@ module type S = sig
   and Typing_env : (Typing_env_intf.S with module T := T)
   and Typing_env_extension : (Typing_env_extension_intf.S with module T := T)
   and Join_env : (Join_env_intf.S with module T := T)
-  and Parameters : (Parameters_intf.S
+  and Function_parameters : (Parameters_intf.S
     with module T := T
-    with module Index := Kinded_parameter)
+    with type EVS.t := Kinded_parameter.t list)
+  and Function_results : (Parameters_intf.S
+    with module T := T
+    with type EVS.t := Kinded_parameter.t list)
   and Closure_elements : (Parameters_intf.S
     with module T := T
-    with module Index := Var_within_closure)
-  and Blocks : (Parameters_intf.S with module T := T)
+    with type EVS.t := Var_within_closure.Set.t)
+  and Block_fields : (Parameters_intf.S
+    with module T := T
+    with type EVS.t := Targetint.OCaml.t list)
 end

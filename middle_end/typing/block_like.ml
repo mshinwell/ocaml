@@ -46,6 +46,7 @@ struct
   module P = Parameters.Make (Index)
 
   type t = {
+    (* XXX "index" is confusing -- it's the size! *)
     known : P.t Tag_and_index.Map.t;
     at_least : P.t Index.Map.t;
   }

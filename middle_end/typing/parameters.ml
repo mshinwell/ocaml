@@ -18,11 +18,6 @@
 
 module LV = Logical_variable
 
-module type Make_structure_arg = sig
-  include Set.OrderedType
-  val print : Format.formatter -> t -> unit
-end
-
 module type External_var_sig = sig
   type t
 
@@ -35,7 +30,7 @@ end
 module Make
   (External_var : External_var_sig)
   (Make_structure : functor
-    Make_structure_arg
+    External_var_sig with type t = External_var.t
     ->
     sig
       type t
@@ -210,21 +205,32 @@ module Make
     let scope_level = Typing_env.max_level env in
     TE.add_or_meet_env_extension env (standalone_extension t) scope_level
 
-  let free_names { external_structure = _; logical_vars; env_extension; } =
-    let free_names = TEE.free_names env_extension in
-    let all_logical_vars = EV.Map.data logical_vars in
+  let free_names_in_logical_vars t =
     LV.Set.fold (fun logical_var free_names ->
-        Name.Set.union (LV.free_names logical_var) free_names)
-      all_logical_vars
+        Name_occurrences.union (LV.free_names logical_var) free_names)
+      (EV.Map.data t.logical_vars)
       free_names
 
-  let bound_names { external_structure; logical_vars = _;
-        env_extension = _; } =
-    let external_vars = EVS.to_set external_structure in
+  let free_names { external_structure = _; logical_vars; env_extension; } =
+    let free_names = TEE.free_names env_extension in
+    let bound_names = free_names_in_logical_vars t in
+    Name_occurrences.diff free_names bound_names
+
+  (* CR mshinwell: Do we really need [bound_names]?  It seems like this
+     might be problematic with the two notions of freshness (the usual one
+     for terms; and for existentials, which are binding but not freshened
+     until opened). *)
+  let bound_names { external_structure; logical_vars; env_extension = _; } =
+    let bound_names =
+      Name_occurrences.create ()
+      (* XXX Have removed until CR above is resolved.  The logical var
+         names aren't fresh.
+         free_names_in_logical_vars t *)
+    in
     EV.Set.fold (fun external_var bound_names ->
-        Name.Set.union (EV.free_names external_var) bound_names)
-      external_vars
-      Name.Set.empty
+        Name_occurrences.union (EV.free_names external_var) bound_names)
+      (EVS.to_set external_structure)
+      bound_names
 
   let apply_name_permutation
         { external_structure; logical_vars; env_extension; } perm =
@@ -249,7 +255,7 @@ module Make
     apply_name_permutation t (Freshening.name_permutation freshening)
 end
 
-module Targetint_ocaml_external_var = struct
+module Targetint_dot_ocaml = struct
   include Targetint.OCaml
 
   let free_names _ = Name.Set.empty
@@ -291,5 +297,5 @@ end
 module Function_parameters = Make (Kinded_parameter) (List_structure)
 module Function_results = Make (Kinded_parameter) (List_structure)
 module Continuation_parameters = Make (Kinded_parameter) (List_structure)
-module Block_fields = Make (Targetint_ocaml_external_var) (Set_structure)
+module Block_fields = Make (Targetint_dot_ocaml) (Set_structure)
 module Closure_elements = Make (Var_within_closure) (Set_structure)
