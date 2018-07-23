@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* CR mshinwell: This needs a more appropriate name than "Parameters". *)
+
 (** The representation of an abstraction that existentially binds a number of
     logical variables whilst at the same time holding equations upon such
     variables.
@@ -36,30 +38,9 @@ module type S = sig
     type flambda_type
   end
 
-  module External_var : sig
+  module EVS : sig
     type t
-
-    include Map.With_set with type t := t
-    include Contains_names.S with type t := t
-
-    val kind : t -> Flambda_kind.t
   end
-
-  module Make_structure : functor
-    Set.OrderedType
-    ->
-    sig
-      type t
-
-      val print : Format.formatter -> t -> unit
-      val fold : ('a -> External_type.t -> 'a) -> 'a -> t -> 'a
-      val to_set : t -> External_type.Set.t
-
-      val meet : t -> t -> t Or_bottom.t
-      val join : t -> t -> t Or_unknown.t
-    end
-
-  module EVS = Make_structure (External_var)
 
   type t
 
@@ -71,6 +52,7 @@ module type S = sig
   (** Format the given parameters value as an s-expression. *)
   val print : Format.formatter -> t -> unit
 
+  (** Create a parameters value given the external structure. *)
   val create : EVS.t -> t
 
   (** Like [create] but also accepts equations on the logical variables. *)

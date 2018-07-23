@@ -291,5 +291,5 @@ end
 module Function_parameters = Make (Kinded_parameter) (List_structure)
 module Function_results = Make (Kinded_parameter) (List_structure)
 module Continuation_parameters = Make (Kinded_parameter) (List_structure)
-module Block_fields = Make (Targetint_ocaml_external_var) (List_structure)
+module Block_fields = Make (Targetint_ocaml_external_var) (Set_structure)
 module Closure_elements = Make (Var_within_closure) (Set_structure)

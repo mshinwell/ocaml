@@ -16,36 +16,65 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make
-    (T : Flambda_type0_internal_intf.S)
-    (Typing_env : Typing_env_intf.S with module T := T)
-    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
-    (Join_env : Join_env_intf.S with module T := T)
-    (External_var : sig
-      type t
-      include Map.With_set with type t := t
+(* CR-someday mshinwell: Try to find a way of factorising out the common
+   parts of the module types below. *)
 
-      val kind : t -> Flambda_kind.t
+module Function_parameters : sig
+  functor
+     (T : Flambda_type0_internal_intf.S)
+     (Typing_env : Typing_env_intf.S with module T := T)
+     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+     (Join_env : Join_env_intf.S with module T := T)
+  ->
+    Parameters_intf.S
+      with module T := T
+      with type EVS.t = Kinded_parameter.t list
 
-      val apply_name_permutation_map
-         : 'a Map.t
-        -> f:('a -> 'a)
-        -> Name_permutation.t
-        -> 'a Map.t
-    end)
-    (Make_structure : functor
-      Set.OrderedType
-      ->
-      sig
-        type t
+module Function_results : sig
+  functor
+     (T : Flambda_type0_internal_intf.S)
+     (Typing_env : Typing_env_intf.S with module T := T)
+     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+     (Join_env : Join_env_intf.S with module T := T)
+  ->
+    Parameters_intf.S
+      with module T := T
+      with type EVS.t = Kinded_parameter.t list
 
-        val print : Format.formatter -> t -> unit
-        val fold : ('a -> External_type.t -> 'a) -> 'a -> t -> 'a
+module Continuation_parameters : sig
+  functor
+     (T : Flambda_type0_internal_intf.S)
+     (Typing_env : Typing_env_intf.S with module T := T)
+     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+     (Join_env : Join_env_intf.S with module T := T)
+  ->
+    Parameters_intf.S
+      with module T := T
+      with type EVS.t = Kinded_parameter.t list
 
-        val meet : t -> t -> t
-        val join : t -> t -> t
+module Block_fields : sig
+  functor
+     (T : Flambda_type0_internal_intf.S)
+     (Typing_env : Typing_env_intf.S with module T := T)
+     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+     (Join_env : Join_env_intf.S with module T := T)
+  ->
+    Parameters_intf.S
+      with module T := T
+      with type EVS.t = Targetint.OCaml.Set.t
 
-        val to_set : t -> External_type.Set.t
-      end)
-  : Parameters_intf.S with module T := T
+module Closure_elements : sig
+  functor
+     (T : Flambda_type0_internal_intf.S)
+     (Typing_env : Typing_env_intf.S with module T := T)
+     (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
+     (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
+     (Join_env : Join_env_intf.S with module T := T)
+  ->
+    Parameters_intf.S
+      with module T := T
+      with type EVS.t = Var_within_closure.Set.t
