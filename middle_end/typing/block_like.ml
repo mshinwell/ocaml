@@ -125,7 +125,7 @@ struct
       | Some (index2, from_at_least2) ->
         assert (Index.compare index2 index1 <= 0);
         let params1 = P.apply_name_permutation params1 perm1 in
-        Some (P.join env params1 from_at_least2)
+        Some (E.switch' P.meet P.join env params1 from_at_least2)
       end
     in
     let merge index params1 params2 =
@@ -143,7 +143,7 @@ struct
         assert (Index.equal index (P.index params2));
         let params1 = P.apply_name_permutation params1 perm1 in
         let params2 = P.apply_name_permutation params2 perm2 in
-        Some (E.switch' P.meet_fresh P.join_fresh env params1 params2)
+        Some (E.switch' P.meet P.join env params1 params2)
       | None, None -> None
     in
     let known =
