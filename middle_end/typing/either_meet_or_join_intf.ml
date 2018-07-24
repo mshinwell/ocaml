@@ -160,24 +160,22 @@ module type S = sig
     end
   end
 
-  module T : sig
-    type join_env
-    type typing_environment
-    type env_extension
-  end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+  module Join_env : sig type t end
 
   val switch
-     : (T.typing_environment -> 'a -> 'a -> 'a * T.env_extension)
-    -> (T.join_env -> 'a -> 'a -> 'a)
-    -> T.join_env
+     : (Typing_env.t -> 'a -> 'a -> 'a * Typing_env_extension.t)
+    -> (Join_env.t -> 'a -> 'a -> 'a)
+    -> Join_env.t
     -> 'a
     -> 'a
-    -> 'a * T.env_extension
+    -> 'a * Typing_env_extension.t
 
   val switch'
-     : (T.typing_environment -> 'a -> 'a -> 'a)
-    -> (T.join_env -> 'a -> 'a -> 'a)
-    -> T.join_env
+     : (Typing_env.t -> 'a -> 'a -> 'a)
+    -> (Join_env.t -> 'a -> 'a -> 'a)
+    -> Join_env.t
     -> 'a
     -> 'a
     -> 'a

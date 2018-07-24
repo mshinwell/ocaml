@@ -270,8 +270,8 @@ module type S = sig
     }
 
     and dependent_function_type = {
-      params : Parameters.t;
-      results : Parameters.t;
+      params : Function_parameters.t;
+      results : Function_results.t;
     }
 
     module Name_or_export_id : sig

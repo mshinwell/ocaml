@@ -293,9 +293,3 @@ module Set_structure (EV : External_var_sig) = struct
   let join t1 t2 : _ Or_unknown.t =
     Ok (EV.Set.union t1 t2)
 end
-
-module Function_parameters = Make (Kinded_parameter) (List_structure)
-module Function_results = Make (Kinded_parameter) (List_structure)
-module Continuation_parameters = Make (Kinded_parameter) (List_structure)
-module Block_fields = Make (Targetint_dot_ocaml) (Set_structure)
-module Closure_elements = Make (Var_within_closure) (Set_structure)

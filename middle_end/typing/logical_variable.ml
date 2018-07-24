@@ -14,20 +14,43 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR mshinwell: This needs a more appropriate name than "Parameters". *)
-
-(** The representation of an abstraction that existentially binds a number of
-    logical variables whilst at the same time holding equations upon such
-    variables.
-
-    The external view of this structure is determined by the caller.  This is
-    done by providing a type of "external variables", which will be in
-    bijection with the logical variables, and an algebraic structure upon
-    them that provides a container (typically lists or sets).  External
-    variables are treated as bound names; they must be maintained fresh by
-    the caller.
-*)
-
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-include Parameters_intf.S
+type t = {
+  name : Name.t;
+  kind : Flambda_kind.t;
+}
+
+include Hashtbl.Make_with_map (struct
+  type nonrec t = t
+
+  let compare 
+        { name = name1; kind = kind1; }
+        { name = name2; kind = kind2; } =
+    let c = Name.compare name1 name2 in
+    if c <> 0 then c
+    else Flambda_kind.compare kind1 kind2
+
+  let hash { name; kind; } =
+    Hashtbl.hash (Name.hash name, Flambda_kind.hash kind)
+
+  let print ppf { name; kind; } =
+    Format.fprintf ppf "@[(%a ::@ %a)@]"
+      Name.print name
+      Flambda_kind.print kind
+end)
+
+let create kind =
+  { name = Name.var (Variable.create "lv");
+    kind;
+  }
+
+let name t = t.name
+let kind t = t.kind
+
+let apply_name_permutation { name; kind; } perm =
+  let name = Name_permutation.apply_name perm name in
+  { name; kind; }
+
+let freshen t freshening =
+  apply_name_permutation t (Freshening.name_permutation freshening)

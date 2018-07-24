@@ -14,20 +14,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR mshinwell: This needs a more appropriate name than "Parameters". *)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** The representation of an abstraction that existentially binds a number of
-    logical variables whilst at the same time holding equations upon such
-    variables.
+type t
 
-    The external view of this structure is determined by the caller.  This is
-    done by providing a type of "external variables", which will be in
-    bijection with the logical variables, and an algebraic structure upon
-    them that provides a container (typically lists or sets).  External
-    variables are treated as bound names; they must be maintained fresh by
-    the caller.
-*)
+val create : Flambda_kind.t -> t
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+val name : t -> Name.t
 
-include Parameters_intf.S
+val kind : t -> Flambda_kind.t
+
+include Hashtbl.With_map with type t := t
+include Contains_names.S with type t := t
