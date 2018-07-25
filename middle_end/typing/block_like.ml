@@ -43,7 +43,7 @@ struct
   module JE = Join_env
 
   module P =
-    Parameters.Make (Index) (Parameters.Set_structure)
+    Parameters.Make (Index) (Logical_variable)
       (T) (Typing_env) (Typing_env_extension) (Meet_and_join) (Join_env)
 
   type t = {

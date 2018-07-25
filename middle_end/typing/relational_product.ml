@@ -15,18 +15,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A "relational product" represents the indexed product of a number of
-    components:
-
-       ------
-        |  |
-        |  |     (component_i : Component)
-      i : Index
-
-    together with relational information between the components expressed
-    as a typing environment extension.
-*)
-
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type Name_like = sig
@@ -49,7 +37,6 @@ module Make
   (T : Flambda_type0_internal_intf.S)
   (Typing_env : Typing_env_intf.S with module T := T)
   (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-  (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
   (Join_env : Join_env_intf.S with module T := T)
 = struct
   open T
@@ -98,6 +85,16 @@ module Make
         @[<hov 1>(env_extension@ %a)@])@]"
       (Index.Map.print Component.print) components_by_index
       TEE.print env_extension
+
+  let equal
+        { components_by_index = components_by_index1;
+          env_extension = env_extension1;
+        }
+        { components_by_index = components_by_index2;
+          env_extension = env_extension2;
+        } =
+    Index.Map.equal Component.equal components_by_index1 components_by_index2
+      && TEE.equal env_extension1 env_extension2
 
   let indexes t = Index.Map.keys t.components_by_index
 
@@ -192,8 +189,8 @@ module Make
           env_extension;
         }
 
-  let join env t1 t2 ~fresh_component_semantics : _ Or_unknown.t =
-    if t1 == t2 then Ok t1
+  let join env t1 t2 ~fresh_component_semantics =
+    if t1 == t2 then t1
     else
       let env = JE.create env in
       let indexes = Index.Set.union (indexes t1) (indexes t2) in
@@ -204,8 +201,7 @@ module Make
       let env_extension =
         TEE.join (JE.central_environment env) env_extension1 env_extension2
       in
-      Ok {
-        components_by_index;
+      { components_by_index;
         env_extension;
       }
 

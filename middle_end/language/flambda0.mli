@@ -563,10 +563,9 @@ end and Function_declaration : sig
     exn_continuation_param : Continuation.t;
     (** To where we must jump if application of the function raises an
         exception. *)
-    params : Flambda_type.Parameters.t;
-    (** The normal (variable) parameters of the function together with their
-        types.  Some of the parameters may have non-trivial types that
-        indicate previous specialisation of the function. *)
+    params : Flambda_type.Function_parameters.t;
+    (** Relational product holding the function's parameters and equations
+        thereon. *)
     body : Expr.t;
     (** The code of the function's body. *)
     code_id : Code_id.t;
@@ -576,9 +575,8 @@ end and Function_declaration : sig
     (** All free names in the function's body (that is to say, treating
         parameters etc. bound by the function as free).  (See [free_names],
         below.) *)
-    results : Flambda_type.Parameters.t;
-    (** The type(s) of the value(s) returned by the function (which types
-        are those of the parameters of the return continuation). *)
+    result_arity : Flambda_arity.t;
+    (** The arity of the return continuation of the function. *)
     stub : bool;
     (** A stub function is a generated function used to prepare arguments or
         return values to allow indirect calls to functions with a special
