@@ -36,7 +36,7 @@
     where the outer (dependent) product corresponds to the list structure.
 *)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type Name_like = sig
   type t
@@ -55,11 +55,7 @@ module Make
 
     val create : unit -> t
   end)
-  (* XXX take a recursive module here *)
-  (T : Flambda_type0_internal_intf.S)
-  (Typing_env : Typing_env_intf.S with module T := T)
-  (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-  (Join_env : Join_env_intf.S with module T := T) :
+  (T : Typing_world.S) :
 sig
   type t
 
@@ -78,7 +74,7 @@ sig
   (** Like [create] but also accepts equations on the (names within the)
       components. *)
   val create_with_env_extensions
-     : (Index.Set.t * Typing_env_extension.t) list
+     : (Index.Set.t * T.Typing_env_extension.t) list
     -> t
 
   (** A conservative approximation to equality. *)
@@ -101,7 +97,7 @@ sig
 
   (** Greatest lower bound of two parameter bindings. *)
   val meet
-     : Typing_env.t
+     : T.Typing_env.t
     -> t
     -> t
     -> fresh_component_semantics:fresh_component_semantics
@@ -109,7 +105,7 @@ sig
 
   (** Least upper bound of two parameter bindings. *)
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> fresh_component_semantics:fresh_component_semantics
@@ -118,9 +114,9 @@ sig
   (** The environment extension associated with the given relational product,
       including at the start, definitions of each component to bottom
       (hence the name "standalone"). *)
-  val standalone_extension : t -> Typing_env.t -> Typing_env_extension.t
+  val standalone_extension : t -> T.Typing_env.t -> T.Typing_env_extension.t
 
   (** Add or meet the definitions and equations from the given relational
       product value into the given typing environment. *)
-  val introduce : t -> Typing_env.t -> Typing_env.t
+  val introduce : t -> T.Typing_env.t -> T.Typing_env.t
 end

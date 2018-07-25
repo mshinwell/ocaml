@@ -34,10 +34,7 @@ module Make
 
     val create : unit -> t
   end)
-  (T : Flambda_type0_internal_intf.S)
-  (Typing_env : Typing_env_intf.S with module T := T)
-  (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-  (Join_env : Join_env_intf.S with module T := T)
+  (T : Typing_world.S)
 = struct
   open T
 
