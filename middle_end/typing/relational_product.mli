@@ -55,6 +55,7 @@ module Make
 
     val create : unit -> t
   end)
+  (* XXX take a recursive module here *)
   (T : Flambda_type0_internal_intf.S)
   (Typing_env : Typing_env_intf.S with module T := T)
   (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
