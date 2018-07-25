@@ -76,9 +76,8 @@ sig
 
   (** Like [create] but also accepts equations on the (names within the)
       components. *)
-  val create_with_env_extension
-     : Index.Set.t list
-    -> Typing_env_extension.t
+  val create_with_env_extensions
+     : (Index.Set.t * Typing_env_extension.t) list
     -> t
 
   (** A conservative approximation to equality. *)
@@ -115,18 +114,10 @@ sig
     -> fresh_component_semantics:fresh_component_semantics
     -> t
 
-  (** Add or meet more equations into the environment extension associated
-      with the given relational product. *)
-  val add_or_meet_equations
-     : t
-    -> Typing_env.t
-    -> Typing_env_extension.t
-    -> t
-
   (** The environment extension associated with the given relational product,
       including at the start, definitions of each component to bottom
       (hence the name "standalone"). *)
-  val standalone_extension : t -> Typing_env_extension.t
+  val standalone_extension : t -> Typing_env.t -> Typing_env_extension.t
 
   (** Add or meet the definitions and equations from the given relational
       product value into the given typing environment. *)
