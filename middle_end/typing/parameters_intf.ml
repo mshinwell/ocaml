@@ -88,11 +88,17 @@ module type S = sig
     (** The external variables in the appropriate algebraic structure. *)
     val external_structure : t -> EVS.t
 
+    type fresh_component_semantics =
+      | Fresh
+      | Left
+      | Right
+
     (** Greatest lower bound of two parameter bindings. *)
     val meet
        : T.typing_environment
       -> t
       -> t
+      -> fresh_component_semantics:fresh_component_semantics
       -> t Or_bottom.t
 
     (** Least upper bound of two parameter bindings. *)
@@ -100,6 +106,7 @@ module type S = sig
        : T.join_env
       -> t
       -> t
+      -> fresh_component_semantics:fresh_component_semantics
       -> t Or_unknown.t
 
     (** Add or meet more equations into the environment extension associated
