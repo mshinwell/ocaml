@@ -16,11 +16,15 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
+module Float = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
+module Blocks : sig type t end
+module Discriminants : sig type t end
 module Expr : sig type t end
+module Function_parameters : sig type t end
+module Immediates : sig type t end
 module Join_env : sig type t end
 module Typing_env : sig type t end
 module Typing_env_extension : sig type t end
@@ -36,7 +40,6 @@ type t =
       'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
   | Fabricated of ty_fabricated
 
-and flambda_type = t
 and ty_value = of_kind_value ty
 and 'a ty_naked_number = 'a of_kind_naked_number ty
 and ty_fabricated = of_kind_fabricated ty
@@ -53,20 +56,15 @@ and of_kind_value =
   | Closures of closures
   | String of String_info.Set.t
 
-and immediate_case = {
-  env_extension : env_extension;
-}
-
 and blocks_and_tagged_immediates = {
-  immediates : immediate_case Immediate.Map.t Or_unknown.t;
-  blocks : T.Blocks.t;
+  immediates : Immediates.t;
+  blocks : Blocks.t;
 }
 
 and 'a of_kind_value_boxed_number =
   | Boxed_float
-       : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
-      -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
-           of_kind_value_boxed_number
+       : Float.Set.t ty_naked_number
+      -> Float.Set.t ty_naked_number of_kind_value_boxed_number
   | Boxed_int32
        : Int32.Set.t ty_naked_number
       -> Int32.Set.t ty_naked_number of_kind_value_boxed_number
@@ -82,8 +80,8 @@ and inlinable_function_declaration = {
   continuation_param : Continuation.t;
   exn_continuation_param : Continuation.t;
   is_classic_mode : bool;
-  params : T.Function_parameters.t;
-  body : expr;
+  params : Function_parameters.t;
+  body : Expr.t;
   code_id : Code_id.t;
   free_names_in_body : Name_occurrences.t;
   stub : bool;
@@ -110,44 +108,29 @@ and closure = {
   ty : T.Function_type.t;
   function_decls : function_declarations;
   closure_elements : T.Closure_elements.t;
+  set_of_closures : ty_fabricated;
 }
 
 and closures = {
   by_closure_id : T.Closure_ids_with_elements.t;
-  set_of_closures_by_closure_id : ty_fabricated Closure_id.Map.t;
 }
 
 and 'a of_kind_naked_number =
   | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
-  | Float : Numbers.Float_by_bit_pattern.Set.t
-      -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+  | Float : Float.Set.t -> Float.Set.t of_kind_naked_number
   | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
   | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
   | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-and of_kind_naked_immediate =
-  Immediate.Set.t of_kind_naked_number
-
-and of_kind_naked_float =
-  Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
-
-and of_kind_naked_int32 =
-  Int32.Set.t of_kind_naked_number
-
-and of_kind_naked_int64 =
-  Int64.Set.t of_kind_naked_number
-
-and of_kind_naked_nativeint =
-  Targetint.Set.t of_kind_naked_number
-
-and discriminant_case = {
-  env_extension : Typing_env_extension.t;
-}
+and of_kind_naked_immediate = Immediate.Set.t of_kind_naked_number
+and of_kind_naked_float = Float.Set.t of_kind_naked_number
+and of_kind_naked_int32 = Int32.Set.t of_kind_naked_number
+and of_kind_naked_int64 = Int64.Set.t of_kind_naked_number
+and of_kind_naked_nativeint = Targetint.Set.t of_kind_naked_number
 
 and of_kind_fabricated =
-  | Discriminant of discriminant_case Discriminant.Map.t
+  | Discriminant of Discriminants.t
   | Set_of_closures of set_of_closures
-  | Function_decls of function_declarations
 
 and set_of_closures = {
   closures : ty_value T.Closure_ids.t;
