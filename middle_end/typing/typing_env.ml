@@ -16,16 +16,28 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make
-    (T : Flambda_type0_internal_intf.S)
-    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
-    (Type_equality : Type_equality_intf.S with module T := T) =
-struct
+module Make (T : Typing_world.S) = struct
   open T
 
+  type binding_type = Normal | Was_existential
+
+  (* CR mshinwell: rename "typing_environment" -> "typing_env" *)
+
+  type typing_environment_entry0 =
+    | Definition of Flambda_type.t
+    | Equation of Flambda_type.t
+
+  type typing_environment_entry =
+    | Definition of Flambda_type.t
+    | Equation of Flambda_type.t
+    | CSE of Flambda_primitive.With_fixed_value.t
+
+  type levels_to_entries =
+    (Name.t * typing_environment_entry)
+      Scope_level.Sublevel.Map.t Scope_level.Map.t
+
   type t = {
-    resolver : (Export_id.t -> t option);
+    resolver : (Export_id.t -> Flambda_type.t option);
     aliases : Name.Set.t Simple.Map.t;
     (* CR mshinwell: Rename names_to_types -> names_to_entries *)
     names_to_types :

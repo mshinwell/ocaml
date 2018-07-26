@@ -27,4 +27,28 @@ module type S = sig
     with module Flambda_type := Flambda_type
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
+  and Function_parameters : Relational_product_intf.S
+    with module Index := Targetint.OCaml
+    with module Component := Logical_variable
+  and Continuation_parameters : Relational_product_intf.S
+    with module Index := Targetint.OCaml
+    with module Component := Logical_variable
+  and Block_relational_product : Relational_product_intf.S
+    with module Index := Targetint.OCaml
+    with module Component := Logical_variable
+  and Blocks : Row_like_intf.S
+    with module Tag := Tag
+    with module Index := Targetint.OCaml
+    with module Maps_to := Block_relational_product
+  and Closure_element_relational_product : Relational_product_intf.S
+    with module Index := Var_within_closure.Set
+    with module Component := Logical_variable
+  and Closure_ids_with_elements : Row_like_intf.S
+    with module Tag := Closure_id
+    with module Index := Var_within_closure.Set
+    with module Maps_to := Flambda_type.closure
+  and Closure_ids : Row_like_intf.S
+    with module Tag := Unit
+    with module Index := Closure_id.Set
+    with module Maps_to := Flambda_type.ty_value
 end
