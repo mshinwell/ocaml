@@ -14,10 +14,19 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** The common dependencies of individual typing/ files. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
   module rec Flambda_type : Flambda_type0_internal_intf.S
+    with module Blocks := Blocks
+    with module Discriminants := Discriminants
+    with module Expr := Expr
+    with module Function_parameters := Function_parameters
+    with module Immediates := Immediates
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
   and Typing_env : Typing_env_intf.S
     with module Flambda_type := Flambda_type

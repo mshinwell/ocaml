@@ -14,12 +14,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Typing environment extensions. *)
 
-module Make
-    (T : Flambda_type0_internal_intf.S)
-    (Typing_env : Typing_env_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
-    (Type_equality : Type_equality_intf.S with module T := T)
-    (Join_env : Join_env_intf.S with module T := T)
-  : Typing_env_extension_intf.S with module T := T
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
+module Make (T : Typing_world.S)
+  : Typing_env_extension_intf.S
+      with Flambda_type := T.Flambda_type
+      with Function_parameters := T.Function_parameters
+      with Join_env := T.Join_env
+      with Typing_env := T.Typing_env
+      with Typing_env_extension := T.Typing_env_extension

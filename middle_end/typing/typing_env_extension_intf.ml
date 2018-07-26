@@ -14,9 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
 (** The interface of typing environment extensions. *)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
   module Flambda_type : sig type t end
@@ -24,6 +24,8 @@ module type S = sig
   module Join_env : sig type t end
 
   type t
+
+  include Contains_names.S with type t := t
 
   (** Perform various invariant checks upon the given environment
       extension. *)
@@ -77,8 +79,4 @@ module type S = sig
         - do occur in [env] but where [t] contains a more precise type.
   *)
   val diff : t -> Typing_env.t -> t
-
-  (** Apply the given name permutation throughout the given environment
-      extension. *)
-  val apply_name_permutation : t -> Name_permutation.t -> t
 end
