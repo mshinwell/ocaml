@@ -71,10 +71,10 @@ module Make (T : Typing_world.S) = struct
   (* CR mshinwell: We should note explicitly that block fields are logical
       fields (I think this only matters for float arrays on 32-bit targets) *)
   and blocks_and_tagged_immediates = {
-    immediates : Immediates.t;
+    immediates : T.Immediates.t;
     (** Cases for constant constructors (in the case of variants) and
         arbitrary tagged immediates. *)
-    blocks : Blocks.t;
+    blocks : T.Blocks.t;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
   }
@@ -107,7 +107,7 @@ module Make (T : Typing_world.S) = struct
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
-    params : Function_parameters.t;
+    params : T.Function_parameters.t;
     body : Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;

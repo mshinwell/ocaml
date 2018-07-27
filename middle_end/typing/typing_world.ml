@@ -42,14 +42,14 @@ module type S = sig
   and Continuation_parameters : Relational_product_intf.S
     with module Index := Targetint.OCaml
     with module Component := Logical_variable
-  and Block_relational_product : Relational_product_intf.S
+  and Block_fields : Relational_product_intf.S
     with module Index := Targetint.OCaml
     with module Component := Logical_variable
   and Blocks : Row_like_intf.S
     with module Tag := Tag
     with module Index := Targetint.OCaml
-    with module Maps_to := Block_relational_product
-  and Closure_element_relational_product : Relational_product_intf.S
+    with module Maps_to := Block_fields
+  and Closure_elements : Relational_product_intf.S
     with module Index := Var_within_closure.Set
     with module Component := Logical_variable
   and Closure_ids_with_elements : Row_like_intf.S
@@ -60,4 +60,18 @@ module type S = sig
     with module Tag := Unit
     with module Index := Closure_id.Set
     with module Maps_to := Flambda_type.ty_value
+  and Immediates_relational_product : Relational_product_intf.S
+    with module Index := Targetint.OCaml.Set
+    with module Component := Logical_variable
+  and Immediates : Row_like_intf.S
+    with module Tag := Unit
+    with module Index := Targetint.OCaml.Set
+    with module Maps_to := Immediates_relational_product
+  and Discriminants_relational_product : Relational_product_intf.S
+    with module Index := Discriminant.Set
+    with module Component := Logical_variable
+  and Discriminants : Row_like_intf.S
+    with module Tag := Unit
+    with module Index := Discriminant.Set
+    with module Maps_to := Discriminants_relational_product
 end
