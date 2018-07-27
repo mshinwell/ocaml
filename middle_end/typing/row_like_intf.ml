@@ -58,7 +58,11 @@ module type S = sig
 
   val create_at_least : Index.t -> Maps_to.t -> t
 
-  val is_empty : t -> bool
+  val create_unknown : unit -> t
+
+  val is_bottom : t -> bool
+
+  val get_singleton : t -> Maps_to.t option
 
   val meet
      : Typing_env.t
@@ -66,7 +70,7 @@ module type S = sig
     -> Name_permutation.t
     -> t
     -> t
-    -> t
+    -> t Or_bottom.t
 
   val join
      : Join_env.t

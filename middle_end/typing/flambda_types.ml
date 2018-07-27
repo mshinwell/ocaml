@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,22 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** The language of Flambda types. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Float = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
-
-module type S = sig
-  module Blocks : sig type t end
-  module Discriminants : sig type t end
-  module Expr : sig type t end
-  module Function_parameters : sig type t end
-  module Immediates : sig type t end
-  module Join_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+module Make (T : Typing_world.S) = struct
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
@@ -47,9 +36,26 @@ module type S = sig
 
   and 'a ty = 'a unknown_or_join or_alias
 
-  and 'a unknown_or_join =
+  (** For each kind there is a lattice of types. *)
+  and 'a unknown_or_join = private
     | Unknown
+    (** "Any value can flow to this point": the top element. *)
     | Join of ('a * Name_permutation.t) list
+    (** - The list being empty means bottom, the least element: "no value can
+          flow to this point".
+        - The list containing a single element is the usual case where there
+          is no join between incompatible types.
+        - If the list contains more than one element:
+          A join, between incompatible types, which has been remembered
+          in case it is refined by a subsequent meet.  Joins between
+          compatible types are immediately pushed down through the top level
+          structure of the type.
+
+        The [Name_permutation.t] is a delayed permutation which must be
+        pushed down through the structure of the type as it is examined.
+
+        Invariant: every member of a [Join] is strongly incompatible with the
+        other members. *)
 
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -57,30 +63,50 @@ module type S = sig
     | Closures of closures
     | String of String_info.Set.t
 
+  (* CR mshinwell: There needs to be an invariant function which checks that
+      any possible "bottom" case here is represented instead by "Join []". *)
+  (* CR mshinwell: Should we indicate if blocks are arrays? *)
+  (* CR mshinwell: Mutability information has been removed from block types
+      for now *)
+  (* CR mshinwell: We should note explicitly that block fields are logical
+      fields (I think this only matters for float arrays on 32-bit targets) *)
   and blocks_and_tagged_immediates = {
     immediates : Immediates.t;
+    (** Cases for constant constructors (in the case of variants) and
+        arbitrary tagged immediates. *)
     blocks : Blocks.t;
+    (** Cases for non-constant constructors (in the case of variants) and
+        normal blocks. *)
   }
 
+  (** Boxed integer and floating-point numbers together with the types
+      of their contents. *)
   and 'a of_kind_value_boxed_number =
     | Boxed_float
-         : Float.Set.t ty_naked_number
+        : Float.Set.t ty_naked_number
         -> Float.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_int32
-         : Int32.Set.t ty_naked_number
+        : Int32.Set.t ty_naked_number
         -> Int32.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_int64
-         : Int64.Set.t ty_naked_number
+        : Int64.Set.t ty_naked_number
         -> Int64.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_nativeint
-         : Targetint.Set.t ty_naked_number
+        : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
+  (** A function declaration which is inlinable (which in particular implies
+      that the code of the function's body is known). *)
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
+    (* CR-someday mshinwell: [is_classic_mode] should be changed to use a
+        new type which records the combination of inlining (etc) options
+        applied to the originating source file. *)
     is_classic_mode : bool;
+    (** Whether the file from which this function declaration originated was
+        compiled in classic mode. *)
     params : Function_parameters.t;
     body : Expr.t;
     code_id : Code_id.t;
@@ -91,12 +117,18 @@ module type S = sig
     inline : inline_attribute;
     specialise : specialise_attribute;
     is_a_functor : bool;
+    (* CR mshinwell: try to change these to [Misc.Stdlib.Set_once.t]?
+        (ask xclerc) *)
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
+    (** For functions that are very likely to be inlined, the size of the
+        function's body. *)
     direct_call_surrogate : Closure_id.t option;
     my_closure : Variable.t;
   }
 
+  (** A function declaration that is not inlinable (typically because the
+      code is unknown, possibly due to being deliberately discarded). *)
   and non_inlinable_function_declarations = {
     direct_call_surrogate : Closure_id.t option;
   }
@@ -104,6 +136,10 @@ module type S = sig
   and function_declarations =
     | Non_inlinable of non_inlinable_function_declarations Or_unknown.t;
     | Inlinable of inlinable_function_declaration list
+      (** Any two [function_declaration]s in this list must satisfy
+          [function_declarations_compatible].  (For declarations that do not
+          satisfy this, their join can still be expressed using [Join], from
+          type [unknown_or_join] above.) *)
 
   and closure = {
     ty : T.Function_type.t;
@@ -116,6 +152,8 @@ module type S = sig
     by_closure_id : T.Closure_ids_with_elements.t;
   }
 
+  (** Unboxed ("naked") integer and floating-point numbers together with
+      any information known about which particular numbers they might be. *)
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
     | Float : Float.Set.t -> Float.Set.t of_kind_naked_number
@@ -130,74 +168,19 @@ module type S = sig
   and of_kind_naked_nativeint = Targetint.Set.t of_kind_naked_number
 
   and of_kind_fabricated =
+    (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
+        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
+        top element) *)
     | Discriminant of Discriminants.t
+      (** A discriminant is either:
+          - a block tag, as returned by the [Get_tag] primitive; or
+          - a constant constructor which has undergone a kind-cast to kind
+            [Fabricated] using the [Discriminant_of_int] primitive. *)
     | Set_of_closures of set_of_closures
+      (** A possibly mutually-recursive collection of closure values, which
+          at runtime will be represented by a single block. *)
 
   and set_of_closures = {
     closures : ty_value T.Closure_ids.t;
   }
-
-  include Contains_names.S with type t := t
-
-  module Closure : sig
-    type t = closure
-
-    val add_or_meet_equations
-       : t
-      -> Typing_env.t
-      -> Typing_env_extension.t
-      -> t
-
-    include Contains_names.S with type t := t
-  end
-
-  module Ty_value : sig
-    type t = ty_value
-
-    val add_or_meet_equations
-       : t
-      -> Typing_env.t
-      -> Typing_env_extension.t
-      -> t
-
-    include Contains_names.S with type t := t
-  end
-
-  val print : Format.formatter -> t -> unit
-
-  val print_ty_value : Format.formatter -> ty_value -> unit
-  val print_ty_naked_number : Format.formatter -> 'a ty_naked_number -> unit
-  val print_ty_fabricated : Format.formatter -> ty_fabricated -> unit
-
-  val kind : flambda_type -> Flambda_kind.t
-  val get_alias : flambda_type -> Simple.t option
-
-  val bottom : Flambda_kind.t -> t
-  val unknown : Flambda_kind.t -> t
-
-  val alias_type_of : Flambda_kind.t -> Simple.t -> t
-
-  val free_names : flambda_type -> Name_occurrences.t
-  val free_names_set : flambda_type -> Name.Set.t
-
-  val force_to_kind_value : t -> of_kind_value ty
-  val force_to_kind_naked_number
-     : 'a Flambda_kind.Naked_number.t
-    -> t
-    -> 'a of_kind_naked_number ty
-  val force_to_kind_naked_int32 : t -> Int32.Set.t ty_naked_number
-  val force_to_kind_naked_int64 : t -> Int64.Set.t ty_naked_number
-  val force_to_kind_naked_nativeint : t -> Targetint.Set.t ty_naked_number
-  val force_to_kind_naked_float : t -> Float.Set.t ty_naked_number
-  val force_to_kind_naked_immediate : t -> Immediate.Set.t ty_naked_number
-  val force_to_kind_fabricated : t -> of_kind_fabricated ty
-
-  val any_value_as_ty_value : unit -> ty_value
-  val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
-
-  val bottom_as_ty_value : unit -> ty_value
-  val bottom_as_ty_fabricated : unit -> ty_fabricated
-
-  val ty_is_obviously_bottom : 'a ty -> bool
-  val is_obviously_bottom : flambda_type -> bool
 end

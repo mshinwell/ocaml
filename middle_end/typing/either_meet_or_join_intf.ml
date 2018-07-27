@@ -14,11 +14,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Functions over which meet and join code is parameterised. *)
-
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+  module Join_env : sig type t end
+
   val name : string
 
   type meet_or_join = private Meet | Join
@@ -159,10 +161,6 @@ module type S = sig
        -> 'a t
     end
   end
-
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-  module Join_env : sig type t end
 
   val switch
      : (Typing_env.t -> 'a -> 'a -> 'a * Typing_env_extension.t)

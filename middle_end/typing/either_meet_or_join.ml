@@ -16,17 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet
-    (T : Flambda_type0_internal_intf.S)
-    (Typing_env : Typing_env_intf.S with module T := T)
-    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-    (Join_env : Join_env_intf.S with module T := T)
-  : Either_meet_or_join_intf.S
-    with module T := T
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
-    with module Join_env := Join_env =
-struct
+module For_meet (T : Typing_world.S) = struct
   let name = "meet"
 
   type meet_or_join = Meet | Join
@@ -137,17 +127,7 @@ struct
     meet (Join_env.central_environment join_env) thing1 thing2
 end
 
-module For_join
-    (T : Flambda_type0_internal_intf.S)
-    (Typing_env : Typing_env_intf.S with module T := T)
-    (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-    (Join_env : Join_env_intf.S with module T := T)
-  : Either_meet_or_join_intf.S
-    with module T := T
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
-    with module Join_env := Join_env =
-struct
+module For_join (T : Typing_world.S) = struct
   let name = "join"
 
   type meet_or_join = Meet | Join

@@ -14,14 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Flambda_type0_internal_intf.S)
-    (Typing_env : Typing_env_intf.S with module T := T)
-    (Meet_and_join : Meet_and_join_intf.S_both with module T := T)
-    (Type_equality : Type_equality_intf.S with module T := T)
-    (Join_env : Join_env_intf.S with module T := T)
-= struct
+module Make (T : Typing_world.S) = struct
   open T
 
   type t = {

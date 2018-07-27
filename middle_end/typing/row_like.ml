@@ -100,7 +100,7 @@ struct
   struct
     let meet_or_join env perm1 perm2
           ({ known = known1; at_least = at_least1; } : t)
-          ({ known = known2; at_least = at_least2; } : t) : t =
+          ({ known = known2; at_least = at_least2; } : t) : t Or_bottom.t =
       let one_side_only params1 perm1 at_least2 ~get_equations_to_deposit1 =
         let index1 = MT.index params1 in
         let from_at_least2 =
@@ -158,9 +158,13 @@ struct
           at_least1
           at_least2
       in
-      { known;
-        at_least;
-      }
+      if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then
+        Bottom
+      else
+        Ok {
+          known;
+          at_least;
+        }
   end
 
   module For_meet =

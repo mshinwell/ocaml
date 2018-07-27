@@ -16,8 +16,11 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Make
-  (T : Flambda_type0_internal_intf.S)
-  (Typing_env : Typing_env_intf.S with module T := T)
-  (Typing_env_extension : Typing_env_extension_intf.S with module T := T)
-: Join_env_intf.S with module T := T
+(** "Join environments": structures which keep track of the various
+    typing environments and environment extensions that are required whilst
+    carrying out join operations (on types, etc). *)
+
+module Make (T : Typing_world.S)
+  : Join_env_intf.S
+      with module Typing_env := T.Typing_env
+      with module Typing_env_extension := T.Typing_env_extension
