@@ -18,40 +18,15 @@
 
 module type S = sig
   module Flambda_type : sig type t end
-  module Typing_env : sig type t end
   module Join_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+  module Thing_without_names : Map.With_set
 
-  module Tag : sig
-    type t
-    include Contains_names.S with type t := t
-  end
-
-  module Index : sig
-    type t
-
-    val equal : t -> t -> bool
-    val compare : t -> t -> int
+  module Closure_id_and_vars_within_closure : sig
+    type t = Closure_id.t * Var_within_closure.Set.t
 
     include Map.With_set with type t := t
-    include Contains_names.S with type t := t
-  end
-
-  module Tag_and_index : sig
-    type t = Tag.t * Index.t
-
-    include Map.With_set with type t := t
-    include Contains_names.S with type t := t
-  end
-
-  module Maps_to : sig
-    type t
-
-    val add_or_meet_equations
-       : t
-      -> Typing_env.t
-      -> Typing_env_extension.t
-      -> t
-
     include Contains_names.S with type t := t
   end
 
@@ -59,22 +34,20 @@ module type S = sig
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val create : unit -> t
+  (** Describe one or more closures by giving for each one the closure ID
+      and the set of variables in the closure. *)
+  val create_exactly_multiple
+     : Flambda_type.Closures_entry.t Closure_id_and_vars_within_closure.Map.t
+    -> t
 
-  val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
+  (** Describe one closure that contains at least the given closure
+      variables. *)
+  val create_open
+     : Var_within_closure.Set.t
+    -> Flambda_type.Closures_entry.t 
+    -> t
 
-  val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
-
-  val create_at_least : Index.t -> Maps_to.t -> t
-
-  val create_at_least_multiple : Maps_to.t Index.Map.t -> t
-
-  val create_unknown : unit -> t
-
-  val is_bottom : t -> bool
-
-  val get_singleton : t -> Maps_to.t option
-
+  (** Greatest lower bound of two values of type [t]. *)
   val meet
      : Typing_env.t
     -> Name_permutation.t
@@ -83,6 +56,7 @@ module type S = sig
     -> t
     -> t Or_bottom.t
 
+  (** Least upper bound of two values of type [t]. *)
   val join
      : Join_env.t
     -> Name_permutation.t

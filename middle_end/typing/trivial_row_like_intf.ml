@@ -23,12 +23,31 @@ module type S = sig
   module Typing_env_extension : sig type t end
   module Thing_without_names : Map.With_set
 
-  include Row_like_intf.S
-    with module Tag := Unit
-    with module Index := Thing_without_names.Set
-    with module Maps_to := Typing_env_extension
-    with module Flambda_type := Flambda_type
-    with module Join_env := Join_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
+  type t
+
+  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val create : Thing_without_names.Set.t -> t
+
+  val create_with_equations
+     : Typing_env_extension.t Thing_without_names.Map.t
+    -> t
+
+  val meet
+     : Typing_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> t
+    -> t
+    -> t Or_bottom.t
+
+  val join
+     : Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> t
+    -> t
+    -> t
+
+  include Contains_names.S with type t := t
 end

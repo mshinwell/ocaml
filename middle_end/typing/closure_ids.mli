@@ -16,39 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  module Flambda_type = T.Flambda_type
-  module Join_env = T.Join_env
-  module Relational_product = T.Relational_product
-  module Typing_env = T.Typing_env
-  module Typing_env_extension = T.Typing_env_extension
-
-  module RL =
-    Row_like.Make (Unit) (Closure_id.Set)
-      (Flambda_type.Set_of_closures_entry) (T)
-
-  module TEE = Typing_env_extension
-
-  type t = RL.t
-
-  type open_or_closed = Open | Closed
-
-  let create closure_ids_map open_or_closed =
-    match open_or_closed with
-    | Open -> RL.create_at_least_multiple closure_ids_map
-    | Closed ->
-      let closure_ids_map =
-        Closure_id.Map.fold (fun closure_ids set_of_closures_entry result ->
-            RL.Tag_and_index.Map.add ((), closure_ids) set_of_closures_entry
-              result)
-          closure_ids_map
-          RL.Tag_and_index.Map.empty
-      in
-      RL.create_exactly () closure_ids_map
-
-  let invariant = RL.invariant
-  let meet = RL.meet
-  let join = RL.join
-  let apply_name_permutation t = RL.apply_name_permutation
-  let freshen t = RL.freshen
-end
+module Make (T : Typing_world.S) :
+  Closure_ids_intf.S
+    with module Flambda_type := T.Flambda_type
+    with module Join_env := T.Join_env
+    with module Relational_product := T.Relational_product
+    with module Typing_env := T.Typing_env
+    with module Typing_env_extension := T.Typing_env_extension

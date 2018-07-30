@@ -16,43 +16,28 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (Thing_without_names0 : Map.With_set) (T : Typing_world.S) = struct
+module Make (T : Typing_world.S) = struct
   module Flambda_type = T.Flambda_type
   module Join_env = T.Join_env
+  module Relational_product = T.Relational_product
   module Typing_env = T.Typing_env
   module Typing_env_extension = T.Typing_env_extension
 
-  module Thing_without_names = struct
-    include Thing_without_names0
+  module RL =
+    Row_like.Make (Closure_id.t) (Var_within_closure.Set)
+      (Flambda_type.Closures_entry) (T)
 
-    let apply_name_permutation t _ = t
-    let freshen t _ = t
-  end
-
-  module TEE = struct
-    include Typing_env_extension
-
-    let add_or_meet_equations t env t' = meet env t t'
-  end
-
-  module RL = Row_like.Make (Thing_without_names) (Unit) (TEE) (T)
+  module Closure_id_and_var_within_closure = RL.Tag_and_index
 
   type t = RL.t
 
-  let create_with_equations things_with_env_extensions =
-    let things_with_env_extensions =
-      Thing_without_names.Map.fold (fun thing extension result ->
-          RL.Tag_and_index.Map.add (thing, ()) extension result)
-        things_with_env_extensions
-        RL.Tag_and_index.Map.empty
-    in
-    RL.create_exactly_multiple things_with_env_extensions
+  type open_or_closed = Open | Closed
 
-  let create things =
-    let things_with_env_extensions =
-      Thing_without_names.Map.of_set (fun _thing -> TEE.empty) things
-    in
-    create_with_equations things_with_env_extensions
+  let create_closed closure_id_and_vars_within_closure_map =
+    RL.create_exactly_multiple closure_id_and_vars_within_closure_map
+
+  let create_open vars_within_closure_map =
+    RL.create_at_least_multiple vars_within_closure_map
 
   let invariant = RL.invariant
   let meet = RL.meet

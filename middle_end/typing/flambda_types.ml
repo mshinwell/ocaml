@@ -129,27 +129,32 @@ module Make (T : Typing_world.S) = struct
 
   (** A function declaration that is not inlinable (typically because the
       code is unknown, possibly due to being deliberately discarded). *)
-  and non_inlinable_function_declarations = {
+  and non_inlinable_function_declaration = {
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and function_declarations =
-    | Non_inlinable of non_inlinable_function_declarations Or_unknown.t;
-    | Inlinable of inlinable_function_declaration list
-      (** Any two [function_declaration]s in this list must satisfy
-          [function_declarations_compatible].  (For declarations that do not
-          satisfy this, their join can still be expressed using [Join], from
-          type [unknown_or_join] above.) *)
+  and function_declaration =
+    | Non_inlinable of non_inlinable_function_declaration
+    | Inlinable of inlinable_function_declaration
 
-  and closure = {
+  and closures_entry = {
+    function_decl : function_declaration;
+    (** Information from the term language about the function declaration
+        associated with the closure (call it [C]) described by a
+        [closures_entry]. *)
     ty : T.Function_type.t;
-    function_decls : function_declarations;
+    (** The type of the function associated with [C]. *)
     closure_elements : T.Closure_elements.t;
+    (** Relational product describing the variables within a closure and
+        equations between them. *)
     set_of_closures : ty_fabricated;
+    (** Link back to the type of the set of closures containing [C]. *)
   }
 
   and closures = {
-    by_closure_id : T.Closure_ids_with_elements.t;
+    by_closure_id : T.Closures_entry_by_closure_id.t;
+    (** Row-like structure that selects [closures_entry] structures based
+        on closure ID and the set of variables in the closure. *)
   }
 
   (** Unboxed ("naked") integer and floating-point numbers together with
@@ -180,7 +185,15 @@ module Make (T : Typing_world.S) = struct
       (** A possibly mutually-recursive collection of closure values, which
           at runtime will be represented by a single block. *)
 
+  and set_of_closures_entry = {
+    by_closure_id : T.Ty_value_by_closure_id.t;
+    (** Relational product, indexed by individual closure IDs, that describes
+        the makeup of a set of closures. *)
+  }
+
   and set_of_closures = {
     closures : T.Closure_ids.t;
+    (** Row-like structure that maps _sets_ of [Closure_id.t]s to
+        [set_of_closures_entry] structures. *)
   }
 end
