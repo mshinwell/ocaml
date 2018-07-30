@@ -143,7 +143,8 @@ module Make (T : Typing_world.S) = struct
         associated with the closure (call it [C]) described by a
         [closures_entry]. *)
     ty : T.Function_type.t;
-    (** The type of the function associated with [C]. *)
+    (** The type of the function associated with [C].
+        Note: function parameter types are covariant! *)
     closure_elements : T.Closure_elements.t;
     (** Relational product describing the variables within a closure and
         equations between them. *)
@@ -186,9 +187,9 @@ module Make (T : Typing_world.S) = struct
           at runtime will be represented by a single block. *)
 
   and set_of_closures_entry = {
-    by_closure_id : T.Ty_value_by_closure_id.t;
-    (** Relational product, indexed by individual closure IDs, that describes
-        the makeup of a set of closures. *)
+    by_closure_id : T.Types_by_closure_id.t;
+    (** Relational product, indexed by individual closure IDs, that (via
+        logical variables) describes the makeup of a set of closures. *)
   }
 
   and set_of_closures = {

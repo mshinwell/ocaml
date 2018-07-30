@@ -16,23 +16,36 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Neither | Left | Right | Both
+module Make (T : Typing_world.S) = struct
+  module Flambda_type = T.Flambda_type
+  module Join_env = T.Join_env
+  module Relational_product = T.Relational_product
+  module Typing_env = T.Typing_env
+  module Typing_env_extension = T.Typing_env_extension
 
-let join (t1 : t) (t2 : t) =
-  match t1, t2 with
-  | Neither, Neither -> Neither
-  | Neither, Left -> Left
-  | Neither, Right -> Right
-  | Neither, Both -> Both
-  | Left, Neither -> Left
-  | Left, Left -> Left
-  | Left, Right -> Both
-  | Left, Both -> Both
-  | Right, Neither -> Right
-  | Right, Left -> Both
-  | Right, Right -> Right
-  | Right, Both -> Both
-  | Both, Neither -> Both
-  | Both, Left -> Both
-  | Both, Right -> Both
-  | Both, Both -> Both
+  module RP = Relational_product.Make (Closure_id) (Logical_variable) (T)
+
+  let create closure_ids_to_tys =
+    let closure_ids_to_logical_variables =
+      Closure_id.Map.map (fun _ty -> Logical_variable.create ())
+        closure_ids
+    in
+    let env_extension =
+      Closure_id.Map.fold (fun closure_id ty env_extension ->
+          let logical_var =
+            Closure_id.Map.find closure_id closure_ids_to_logical_variables
+          in
+          TEE.add_equation env_extension (Name.logical_var logical_var) ty)
+        closure_ids
+        TEE.empty
+    in
+    RP.create [
+      closure_ids_to_logical_variables, env_extension;
+    ]
+
+  let invariant = RP.invariant
+  let meet = RP.meet
+  let join = RP.join
+  let apply_name_permutation t = RP.apply_name_permutation
+  let freshen t = RP.freshen
+end

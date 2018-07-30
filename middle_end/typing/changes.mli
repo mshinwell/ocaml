@@ -14,25 +14,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Type used to assist with physical equality optimisations during meet
+    and join operations. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = Neither | Left | Right | Both
+(** Ordering on [t]:
 
-let join (t1 : t) (t2 : t) =
-  match t1, t2 with
-  | Neither, Neither -> Neither
-  | Neither, Left -> Left
-  | Neither, Right -> Right
-  | Neither, Both -> Both
-  | Left, Neither -> Left
-  | Left, Left -> Left
-  | Left, Right -> Both
-  | Left, Both -> Both
-  | Right, Neither -> Right
-  | Right, Left -> Both
-  | Right, Right -> Right
-  | Right, Both -> Both
-  | Both, Neither -> Both
-  | Both, Left -> Both
-  | Both, Right -> Both
-  | Both, Both -> Both
+          Both
+          ^  ^
+         /    \
+     Left      Right
+        ^      ^
+         \    /
+          None
+*)
+
+(** Least upper bound of two values of type [t]. *)
+val join : t -> t -> t
