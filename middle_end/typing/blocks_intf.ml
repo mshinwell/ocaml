@@ -16,33 +16,25 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-    (Tag : sig
-      type t
-      include Contains_names.S with type t := t
-    end)
-    (Index : sig
-      type t
+module type S = sig
+  module Flambda_type : sig type t end
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
 
-      val equal : t -> t -> bool
-      val compare : t -> t -> int
+  module RP : Relational_product_intf.S
+    with module Index := Targetint.OCaml
+    with module Component := Logical_variable
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
 
-      include Map.With_set with type t := t
-      include Contains_names.S with type t := t
-    end)
-    (Maps_to : sig
-      type t
-
-      val add_or_meet_equations
-        : t
-        -> Typing_env.t
-        -> Typing_env_extension.t
-        -> t
-
-      include Contains_names.S with type t := t
-    end)
-    (T : Typing_world.S) :
-  Row_like_intf.S
-    with module Flambda_type := T.Flambda_type
-    with module Typing_env := T.Typing_env
-    with module Join_env := T.Join_env
+  include Row_like_intf.S
+    with module Tag := Tag
+    with module Index := Targetint.OCaml
+    with module Maps_to := RP
+    with module Flambda_type := Flambda_type
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
+end

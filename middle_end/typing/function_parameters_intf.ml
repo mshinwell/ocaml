@@ -14,35 +14,33 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** The representation of function parameters and equations upon them in the
+    term language. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-    (Tag : sig
-      type t
-      include Contains_names.S with type t := t
-    end)
-    (Index : sig
-      type t
+module type S = sig
+  module Flambda_type : sig type t end
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
 
-      val equal : t -> t -> bool
-      val compare : t -> t -> int
+  type t
 
-      include Map.With_set with type t := t
-      include Contains_names.S with type t := t
-    end)
-    (Maps_to : sig
-      type t
+  include Contains_names.S with type t := t
 
-      val add_or_meet_equations
-        : t
-        -> Typing_env.t
-        -> Typing_env_extension.t
-        -> t
+  (** Perform invariant checks upon the given function type. *)
+  val invariant : t -> unit
 
-      include Contains_names.S with type t := t
-    end)
-    (T : Typing_world.S) :
-  Row_like_intf.S
-    with module Flambda_type := T.Flambda_type
-    with module Typing_env := T.Typing_env
-    with module Join_env := T.Join_env
+  (** Create a representation of the names, order and type of a function's
+      parameters. *)
+  val create : (Kinded_parameter.t * Flambda_type.t) list -> t
+
+  (** A conservative approximation to equality. *)
+  val equal : t -> t -> bool
+
+  (** Greatest lower bound of two parameter lists. *)
+  val meet : Typing_env.t -> t -> t -> t Or_bottom.t
+
+  (** Least upper bound of two parameter lists. *)
+  val join : Join_env.t -> t -> t -> t
+end

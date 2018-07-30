@@ -64,12 +64,12 @@ module Make (T : Typing_world.S) = struct
     | String of String_info.Set.t
 
   (* CR mshinwell: There needs to be an invariant function which checks that
-      any possible "bottom" case here is represented instead by "Join []". *)
+     any possible "bottom" case here is represented instead by "Join []". *)
   (* CR mshinwell: Should we indicate if blocks are arrays? *)
   (* CR mshinwell: Mutability information has been removed from block types
-      for now *)
+     for now *)
   (* CR mshinwell: We should note explicitly that block fields are logical
-      fields (I think this only matters for float arrays on 32-bit targets) *)
+     fields (I think this only matters for float arrays on 32-bit targets) *)
   and blocks_and_tagged_immediates = {
     immediates : T.Immediates.t;
     (** Cases for constant constructors (in the case of variants) and
@@ -102,8 +102,8 @@ module Make (T : Typing_world.S) = struct
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
     (* CR-someday mshinwell: [is_classic_mode] should be changed to use a
-        new type which records the combination of inlining (etc) options
-        applied to the originating source file. *)
+       new type which records the combination of inlining (etc) options
+       applied to the originating source file. *)
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
@@ -118,7 +118,7 @@ module Make (T : Typing_world.S) = struct
     specialise : specialise_attribute;
     is_a_functor : bool;
     (* CR mshinwell: try to change these to [Misc.Stdlib.Set_once.t]?
-        (ask xclerc) *)
+       (ask xclerc) *)
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
     (** For functions that are very likely to be inlined, the size of the
@@ -169,9 +169,9 @@ module Make (T : Typing_world.S) = struct
 
   and of_kind_fabricated =
     (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
-        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
-        top element) *)
-    | Discriminant of Discriminants.t
+       troublesome since the obvious Fabricated_kind.t wouldn't have a unique
+       top element) *)
+    | Discriminant of T.Discriminants.t
       (** A discriminant is either:
           - a block tag, as returned by the [Get_tag] primitive; or
           - a constant constructor which has undergone a kind-cast to kind
@@ -181,6 +181,6 @@ module Make (T : Typing_world.S) = struct
           at runtime will be represented by a single block. *)
 
   and set_of_closures = {
-    closures : ty_value T.Closure_ids.t;
+    closures : T.Closure_ids.t;
   }
 end

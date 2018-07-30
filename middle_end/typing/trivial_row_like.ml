@@ -16,33 +16,43 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-    (Tag : sig
-      type t
-      include Contains_names.S with type t := t
-    end)
-    (Index : sig
-      type t
+module Make (Thing_without_names : Map.With_set) (T : Typing_world.S) = struct
+  module Flambda_type = T.Flambda_type
+  module Join_env = T.Join_env
+  module Typing_env = T.Typing_env
+  module Typing_env_extension = T.Typing_env_extension
 
-      val equal : t -> t -> bool
-      val compare : t -> t -> int
+  module Index = struct
+    include Thing_without_names
 
-      include Map.With_set with type t := t
-      include Contains_names.S with type t := t
-    end)
-    (Maps_to : sig
-      type t
+    let apply_name_permutation t _ = t
+    let freshen t _ = t
+  end
 
-      val add_or_meet_equations
-        : t
-        -> Typing_env.t
-        -> Typing_env_extension.t
-        -> t
+  module TEE = struct
+    include Typing_env_extension
 
-      include Contains_names.S with type t := t
-    end)
-    (T : Typing_world.S) :
-  Row_like_intf.S
-    with module Flambda_type := T.Flambda_type
-    with module Typing_env := T.Typing_env
-    with module Join_env := T.Join_env
+    let add_or_meet_equations t env t' = meet env t t'
+  end
+
+  module RL = Row_like.Make (Unit) (Index.Set) (TEE) (T)
+
+  type t = RL.t
+
+  type open_or_closed = Open | Closed
+
+  let create_with_equations things env_extension open_or_closed =
+    let size = List.length field_tys in
+    match open_or_closed with
+    | Open -> RL.create_at_least things env_extension
+    | Closed -> RL.create_exactly () things env_extension
+
+  let create things open_or_closed =
+    create_with_equations things TEE.empty open_or_closed
+
+  let invariant = RL.invariant
+  let meet = RL.meet
+  let join = RL.join
+  let apply_name_permutation t = RL.apply_name_permutation
+  let freshen t = RL.freshen
+end

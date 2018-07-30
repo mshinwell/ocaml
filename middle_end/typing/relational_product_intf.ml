@@ -30,6 +30,8 @@ module type S = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
   module Join_env : sig type t end
+  module Index : Name_like
+  module Component : Name_like
 
   type t
 
@@ -41,15 +43,12 @@ module type S = sig
   (** Format the given relational product value as an s-expression. *)
   val print : Format.formatter -> t -> unit
 
-  (** Create a relational product value given the indexes for each of the
-      indexed products. *)
-  val create : Index.Set.t list -> t
-
-  (** Like [create] but also accepts equations on the (names within the)
-      components. *)
-  val create_with_env_extensions
-     : (Index.Set.t * Typing_env_extension.t) list
-    -> t
+  (** Create a relational product value given:
+      - the indexes (with associated components) for each of the indexed
+        products;
+      - the equations that hold between the components in each of the indexed
+        products. *)
+  val create : (Component.t Index.Map.t * Typing_env_extension.t) list -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool

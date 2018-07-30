@@ -22,9 +22,11 @@
 type t = private
   | Var of Variable.t
   | Symbol of Symbol.t
+  | Logical_var of Logical_variable.t
 
 val var : Variable.t -> t
 val symbol : Symbol.t -> t
+val logical_var : Logical_variable.t -> t
 
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 
