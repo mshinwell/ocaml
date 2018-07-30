@@ -265,6 +265,7 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/mutable_variable.cmo \
   middle_end/base_types/num_continuation_uses.cmo \
   middle_end/base_types/symbol.cmo \
+  middle_end/base_types/logical_variable.cmo \
   middle_end/base_types/name.cmo \
   middle_end/base_types/parameter.cmo \
   middle_end/base_types/scope_level.cmo \
@@ -276,7 +277,8 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/or_absorbing.cmo \
   middle_end/base_types/name_occurrences.cmo \
   middle_end/base_types/tag_and_size.cmo \
-  middle_end/base_types/contains_names.cmo
+  middle_end/base_types/contains_names.cmo \
+  middle_end/base_types/changes.cmo
 
 MIDDLE_END_CODE_MOTION=\
   middle_end/code_motion/lift_let_cont.cmo \
@@ -317,23 +319,34 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/freshening.cmo \
   middle_end/typing/flambda_arity.cmo \
   middle_end/language/flambda_primitive.cmo \
+  middle_end/typing/string_info.cmo \
   middle_end/language/allocated_const.cmo \
   middle_end/language/kinded_parameter.cmo \
   middle_end/language/expr_intf.cmo \
-  middle_end/typing/flambda_type0_intf.cmo \
-  middle_end/typing/flambda_type0_internal_intf.cmo \
-  middle_end/typing/typing_env_intf.cmo \
-  middle_end/typing/typing_env_extension_intf.cmo \
-  middle_end/typing/typing_env.cmo \
-  middle_end/typing/typing_env_extension.cmo \
-  middle_end/typing/either_meet_or_join_intf.cmo \
+  middle_end/typing/relational_product.cmo
+  middle_end/typing/row_like.cmo \
+  middle_end/typing/either_meet_or_join.cmo \
+  middle_end/typing/blocks.cmo \
+  middle_end/typing/trivial_row_like.cmo \
+  middle_end/typing/closure_elements.cmo \
+  middle_end/typing/closure_ids.cmo \
+  middle_end/typing/closures_entry_by_closure_id.cmo \
+  middle_end/typing/discriminants.cmo \
+  middle_end/typing/function_parameters.cmo \
+  middle_end/typing/function_type.cmo \
+  middle_end/typing/immediates.cmo \
+  middle_end/typing/types_by_closure_id.cmo \
+  middle_end/typing/flambda_types.cmo \
+  middle_end/typing/flambda_type0_core.cmo \
+  middle_end/typing/join_env.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
-  middle_end/typing/meet_and_join_naked_number.cmo \
-  middle_end/typing/meet_and_join_fabricated.cmo \
+  middle_end/typing/meet_and_join_fabricated.cmo
+  middle_end/typing/meet_and_join_naked_number.cmo
   middle_end/typing/meet_and_join_value.cmo \
-  middle_end/typing/type_equality_intf.cmo \
   middle_end/typing/type_equality.cmo \
+  middle_end/typing/type_free_names.cmo \
+  middle_end/typing/type_printers.cmo \
   middle_end/typing/flambda_type0.cmo \
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \
@@ -341,8 +354,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/number_adjuncts.cmo \
   middle_end/language/invariant_env.cmo \
   middle_end/language/flambda.cmo \
-  middle_end/typing/continuation_uses.cmo \
-  middle_end/typing/join_point.cmo \
   middle_end/language/flambda_static.cmo \
   middle_end/language/flambda_utils.cmo
 
@@ -357,6 +368,8 @@ MIDDLE_END_REMOVAL=\
   # middle_end/removal/unrecursify.cmo
 
 MIDDLE_END_SIMPLIFY=\
+  middle_end/simplify/continuation_uses.cmo \
+  middle_end/simplify/join_point.cmo \
   middle_end/simplify/simplify_simple.cmo \
   middle_end/simplify/simplify_generic_array.cmo \
   middle_end/simplify/simplify_unary_primitive.cmo \

@@ -16,51 +16,27 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type string_contents =
-  | Contents of string
-  | Unknown_or_mutable
-
-type t = {
-  contents : string_contents;
-  size : Targetint.OCaml.t;
-}
-
-let create ~contents ~size =
-  { contents;
-    size;
-  }
-
-let contents t = t.contents
-let size t = t.size
+type t =
+  | Name of Name.t
+  | Export_id of Export_id.t
 
 include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
   let compare t1 t2 =
-    let c =
-      match t1.contents, t2.contents with
-      | Contents s1, Contents s2 -> String.compare s1 s2
-      | Unknown_or_mutable, Unknown_or_mutable -> 0
-      | Contents _, Unknown_or_mutable -> -1
-      | Unknown_or_mutable, Contents _ -> 1
-    in
-    if c <> 0 then c
-    else Pervasives.compare t1.size t2.size
+    match t1, t2 with
+    | Name _, Export_id _ -> -1
+    | Export_id _, Name _ -> 1
+    | Name name1, Name name2 -> Name.compare name1 name2
+    | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
 
-  let hash t = Hashtbl.hash t
+  let hash t =
+    match t with
+    | Name name -> Hashtbl.hash (0, Name.hash name)
+    | Export_id id -> Hashtbl.hash (1, Export_id.hash id)
 
-  let print ppf { contents; size; } =
-    match contents with
-    | Unknown_or_mutable ->
-      Format.fprintf ppf "(size %a)" Targetint.OCaml.print size
-    | Contents s ->
-      let s, dots =
-        let max_size = Targetint.OCaml.ten in
-        let long = Targetint.OCaml.compare size max_size > 0 in
-        if long then String.sub s 0 8, "..."
-        else s, ""
-      in
-      Format.fprintf ppf "(size %a) (contents \"%S\"%s)"
-        Targetint.OCaml.print size
-        s dots
+  let print ppf t =
+    match t with
+    | Name name -> Name.print ppf name
+    | Export_id id -> Export_id.print ppf id
 end)
