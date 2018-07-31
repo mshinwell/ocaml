@@ -325,8 +325,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/allocated_const.cmo \
   middle_end/language/kinded_parameter.cmo \
   middle_end/language/expr_intf.cmo \
-  middle_end/typing/relational_product_intf.cmo
-  middle_end/typing/relational_product.cmo
+  middle_end/typing/relational_product_intf.cmo \
+  middle_end/typing/relational_product.cmo \
   middle_end/typing/row_like_intf.cmo \
   middle_end/typing/row_like.cmo \
   middle_end/typing/either_meet_or_join_intf.cmo \
@@ -358,8 +358,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/meet_and_join.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
-  middle_end/typing/meet_and_join_fabricated.cmo
-  middle_end/typing/meet_and_join_naked_number.cmo
+  middle_end/typing/meet_and_join_fabricated.cmo \
+  middle_end/typing/meet_and_join_naked_number.cmo \
   middle_end/typing/meet_and_join_value.cmo \
   middle_end/typing/type_equality_intf.cmo \
   middle_end/typing/type_equality.cmo \
