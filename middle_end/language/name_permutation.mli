@@ -45,6 +45,17 @@ val apply_kinded_parameter
   -> Kinded_parameter.t
   -> Kinded_parameter.t
 
+val add_logical_variable
+   : t
+  -> Logical_variable.t
+  -> Logical_variable.t
+  -> t
+
+val apply_logical_variable
+   : t
+  -> Logical_variable.t
+  -> Logical_variable.t
+
 val add_mutable_variable
    : t
   -> Mutable_variable.t

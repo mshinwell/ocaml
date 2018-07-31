@@ -52,6 +52,7 @@ end
 
 module Continuations = Make (Continuation)
 module Kinded_parameters = Make (Kinded_parameter)
+module Logical_variables = Make (Logical_variable)
 module Mutable_variables = Make (Mutable_variable)
 module Names = Make (Name)
 module Symbols = Make (Symbol)
@@ -61,6 +62,7 @@ module Variables = Make (Variable)
 type t = {
   continuations : Continuations.t;
   kinded_parameters : Kinded_parameters.t;
+  logical_variables : Logical_variables.t;
   mutable_variables : Mutable_variables.t;
   names : Names.t;
   symbols : Symbols.t;
@@ -71,6 +73,7 @@ type t = {
 let create () =
   { continuations = Continuations.create ();
     kinded_parameters = Kinded_parameters.create ();
+    logical_variables = Logical_variables.create ();
     mutable_variables = Mutable_variables.create ();
     names = Names.create ();
     symbols = Symbols.create ();
@@ -83,6 +86,7 @@ let print ppf { continuations; kinded_parameters; mutable_variables;
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
       @[<hov 1>(kinded_parameters@ %a)@]@ \
+      @[<hov 1>(logical_variables@ %a)@]@ \
       @[<hov 1>(mutable_variables@ %a)@]@ \
       @[<hov 1>(names@ %a)@]@ \
       @[<hov 1>(symbols@ %a)@]@ \
@@ -90,16 +94,18 @@ let print ppf { continuations; kinded_parameters; mutable_variables;
       @[<hov 1>(variables@ %a)@])@]"
     Continuations.print continuations
     Kinded_parameters.print kinded_parameters
+    Logical_variables.print logical_variables
     Mutable_variables.print mutable_variables
     Names.print names
     Symbols.print symbols
     Trap_ids.print trap_ids
     Variables.print variables
 
-let is_empty { continuations; kinded_parameters; mutable_variables;
-      names; symbols; trap_ids; variables; } =
+let is_empty { continuations; kinded_parameters; logical_variables;
+      mutable_variables; names; symbols; trap_ids; variables; } =
   Continuations.is_empty continuations
     && Kinded_parameters.is_empty kinded_parameters
+    && Logical_variables.is_empty logical_variables
     && Mutable_variables.is_empty mutable_variables
     && Names.is_empty names
     && Symbols.is_empty symbols
@@ -109,6 +115,7 @@ let is_empty { continuations; kinded_parameters; mutable_variables;
 let compose
       { continuations = continuations1;
         kinded_parameters = kinded_parameters1;
+        logical_variables = logical_variables1;
         mutable_variables = mutable_variables1;
         names = names1;
         symbols = symbols1;
@@ -117,6 +124,7 @@ let compose
       }
       { continuations = continuations2;
         kinded_parameters = kinded_parameters2;
+        logical_variables = logical_variables2;
         mutable_variables = mutable_variables2;
         names = names2;
         symbols = symbols2;
@@ -126,6 +134,8 @@ let compose
   { continuations = Continuations.compose continuations1 continuations2;
     kinded_parameters =
       Kinded_parameters.compose kinded_parameters1 kinded_parameters2;
+    logical_variables =
+      logical_variables.compose logical_variables1 logical_variables2;
     mutable_variables =
       Mutable_variables.compose mutable_variables1 mutable_variables2;
     names = Names.compose names1 names2;
@@ -149,6 +159,14 @@ let add_kinded_parameter t p1 p2 =
 
 let apply_kinded_parameter t p =
   Kinded_parameters.apply t.kinded_parameters p
+
+let add_logical_variable t p1 p2 =
+  { t with
+    logical_variables = Logical_variables.add t.logical_variables p1 p2;
+  }
+
+let apply_logical_variable t p =
+  Logical_variables.apply t.logical_variables p
 
 let add_mutable_variable t v1 v2 =
   { t with

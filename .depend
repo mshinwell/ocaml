@@ -1263,18 +1263,13 @@ middle_end/base_types/linkage_name.cmx : \
     middle_end/base_types/linkage_name.cmi
 middle_end/base_types/linkage_name.cmi :
 middle_end/base_types/logical_variable.cmo : \
-    middle_end/base_types/variable.cmi \
-    middle_end/language/name_permutation.cmi middle_end/base_types/name.cmi \
-    middle_end/language/freshening.cmi middle_end/typing/flambda_kind.cmi \
+    middle_end/base_types/variable.cmi middle_end/typing/flambda_kind.cmi \
     middle_end/base_types/logical_variable.cmi
 middle_end/base_types/logical_variable.cmx : \
-    middle_end/base_types/variable.cmx \
-    middle_end/language/name_permutation.cmx middle_end/base_types/name.cmx \
-    middle_end/language/freshening.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/base_types/variable.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/base_types/logical_variable.cmi
-middle_end/base_types/logical_variable.cmi : middle_end/base_types/name.cmi \
-    middle_end/typing/flambda_kind.cmi \
-    middle_end/base_types/contains_names.cmi
+middle_end/base_types/logical_variable.cmi : \
+    middle_end/typing/flambda_kind.cmi
 middle_end/base_types/mutable_variable.cmo : typing/ident.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/mutable_variable.cmi
@@ -2082,12 +2077,12 @@ middle_end/language/kinded_parameter.cmx : \
 middle_end/language/kinded_parameter.cmi : \
     middle_end/base_types/variable.cmi middle_end/language/simple.cmi \
     middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
-    middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/base_types/contains_names.cmi
+    middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi
 middle_end/language/name_permutation.cmo : \
     middle_end/base_types/variable.cmi middle_end/base_types/trap_id.cmi \
     middle_end/base_types/symbol.cmi middle_end/language/simple.cmi \
     middle_end/base_types/name.cmi middle_end/base_types/mutable_variable.cmi \
+    middle_end/base_types/logical_variable.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/base_types/continuation.cmi \
     middle_end/language/name_permutation.cmi
@@ -2095,6 +2090,7 @@ middle_end/language/name_permutation.cmx : \
     middle_end/base_types/variable.cmx middle_end/base_types/trap_id.cmx \
     middle_end/base_types/symbol.cmx middle_end/language/simple.cmx \
     middle_end/base_types/name.cmx middle_end/base_types/mutable_variable.cmx \
+    middle_end/base_types/logical_variable.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/base_types/continuation.cmx \
     middle_end/language/name_permutation.cmi
@@ -2102,6 +2098,7 @@ middle_end/language/name_permutation.cmi : \
     middle_end/base_types/variable.cmi middle_end/base_types/symbol.cmi \
     middle_end/language/simple.cmi middle_end/base_types/name.cmi \
     middle_end/base_types/mutable_variable.cmi \
+    middle_end/base_types/logical_variable.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/base_types/continuation.cmi
 middle_end/language/number_adjuncts.cmo : utils/targetint.cmi \
@@ -2963,18 +2960,13 @@ middle_end/base_types/linkage_name.cmx : \
     middle_end/base_types/linkage_name.cmi
 middle_end/base_types/linkage_name.cmi :
 middle_end/base_types/logical_variable.cmo : \
-    middle_end/base_types/variable.cmi \
-    middle_end/language/name_permutation.cmi middle_end/base_types/name.cmi \
-    middle_end/language/freshening.cmi middle_end/typing/flambda_kind.cmi \
+    middle_end/base_types/variable.cmi middle_end/typing/flambda_kind.cmi \
     middle_end/base_types/logical_variable.cmi
 middle_end/base_types/logical_variable.cmx : \
-    middle_end/base_types/variable.cmx \
-    middle_end/language/name_permutation.cmx middle_end/base_types/name.cmx \
-    middle_end/language/freshening.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/base_types/variable.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/base_types/logical_variable.cmi
-middle_end/base_types/logical_variable.cmi : middle_end/base_types/name.cmi \
-    middle_end/typing/flambda_kind.cmi \
-    middle_end/base_types/contains_names.cmi
+middle_end/base_types/logical_variable.cmi : \
+    middle_end/typing/flambda_kind.cmi
 middle_end/base_types/mutable_variable.cmo : typing/ident.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/mutable_variable.cmi
@@ -3238,18 +3230,13 @@ middle_end/base_types/linkage_name.cmx : \
     middle_end/base_types/linkage_name.cmi
 middle_end/base_types/linkage_name.cmi :
 middle_end/base_types/logical_variable.cmo : \
-    middle_end/base_types/variable.cmi \
-    middle_end/language/name_permutation.cmi middle_end/base_types/name.cmi \
-    middle_end/language/freshening.cmi middle_end/typing/flambda_kind.cmi \
+    middle_end/base_types/variable.cmi middle_end/typing/flambda_kind.cmi \
     middle_end/base_types/logical_variable.cmi
 middle_end/base_types/logical_variable.cmx : \
-    middle_end/base_types/variable.cmx \
-    middle_end/language/name_permutation.cmx middle_end/base_types/name.cmx \
-    middle_end/language/freshening.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/base_types/variable.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/base_types/logical_variable.cmi
-middle_end/base_types/logical_variable.cmi : middle_end/base_types/name.cmi \
-    middle_end/typing/flambda_kind.cmi \
-    middle_end/base_types/contains_names.cmi
+middle_end/base_types/logical_variable.cmi : \
+    middle_end/typing/flambda_kind.cmi
 middle_end/base_types/mutable_variable.cmo : typing/ident.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/mutable_variable.cmi
@@ -4057,12 +4044,12 @@ middle_end/language/kinded_parameter.cmx : \
 middle_end/language/kinded_parameter.cmi : \
     middle_end/base_types/variable.cmi middle_end/language/simple.cmi \
     middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
-    middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/base_types/contains_names.cmi
+    middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi
 middle_end/language/name_permutation.cmo : \
     middle_end/base_types/variable.cmi middle_end/base_types/trap_id.cmi \
     middle_end/base_types/symbol.cmi middle_end/language/simple.cmi \
     middle_end/base_types/name.cmi middle_end/base_types/mutable_variable.cmi \
+    middle_end/base_types/logical_variable.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/base_types/continuation.cmi \
     middle_end/language/name_permutation.cmi
@@ -4070,6 +4057,7 @@ middle_end/language/name_permutation.cmx : \
     middle_end/base_types/variable.cmx middle_end/base_types/trap_id.cmx \
     middle_end/base_types/symbol.cmx middle_end/language/simple.cmx \
     middle_end/base_types/name.cmx middle_end/base_types/mutable_variable.cmx \
+    middle_end/base_types/logical_variable.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/base_types/continuation.cmx \
     middle_end/language/name_permutation.cmi
@@ -4077,6 +4065,7 @@ middle_end/language/name_permutation.cmi : \
     middle_end/base_types/variable.cmi middle_end/base_types/symbol.cmi \
     middle_end/language/simple.cmi middle_end/base_types/name.cmi \
     middle_end/base_types/mutable_variable.cmi \
+    middle_end/base_types/logical_variable.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/base_types/continuation.cmi
 middle_end/language/number_adjuncts.cmo : utils/targetint.cmi \

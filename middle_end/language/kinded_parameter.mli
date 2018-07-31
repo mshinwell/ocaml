@@ -85,4 +85,3 @@ module List : sig
 end
 
 include Hashtbl.With_map with type t := t
-include Contains_names.S with type t := t

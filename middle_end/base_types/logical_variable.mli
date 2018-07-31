@@ -19,10 +19,6 @@
 type t
 
 val create : Flambda_kind.t -> t
-
-val name : t -> Name.t
-
 val kind : t -> Flambda_kind.t
 
 include Hashtbl.With_map with type t := t
-include Contains_names.S with type t := t
