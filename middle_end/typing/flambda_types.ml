@@ -173,7 +173,7 @@ module Make (T : Typing_world.S) = struct
     (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
        top element) *)
-    | Discriminant of T.Discriminants.t
+    | Discriminants of T.Discriminants.t
       (** A discriminant is either:
           - a block tag, as returned by the [Get_tag] primitive; or
           - a constant constructor which has undergone a kind-cast to kind

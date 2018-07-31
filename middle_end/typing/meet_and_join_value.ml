@@ -52,7 +52,7 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
             match T.Immediates.get_singleton immediates with
             | None -> TEE.empty
             | Some block_fields ->
-              Block_fields.standalone_extension block_fields
+              T.Immediates.RP.standalone_extension block_fields
         in
         let env_extension_blocks =
           if not (T.Immediates.is_empty immediates) then TEE.empty
@@ -60,7 +60,7 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
             match T.Blocks.get_singleton blocks with
             | None -> TEE.empty
             | Some immediates ->
-              T.Immediates.standalone_extension immediates
+              T.Blocks.RP.standalone_extension immediates
         in
         let env_extension =
           TEE.meet env (TEE.meet env env_extension1 env_extension2)
