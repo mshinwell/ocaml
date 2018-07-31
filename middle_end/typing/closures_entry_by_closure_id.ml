@@ -24,7 +24,7 @@ module Make (T : Typing_world.S) = struct
   module Typing_env_extension = T.Typing_env_extension
 
   module RL =
-    Row_like.Make (Closure_id.t) (Var_within_closure.Set)
+    Row_like.Make (Closure_id) (Var_within_closure.Set)
       (Flambda_type.Closures_entry) (T)
 
   module Closure_id_and_var_within_closure = RL.Tag_and_index

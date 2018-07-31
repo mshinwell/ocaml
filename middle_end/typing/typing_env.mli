@@ -20,8 +20,8 @@
 
 module Make (T : Typing_world.S)
   : Typing_env_intf.S
-      with Flambda_type := T.Flambda_type
-      with Function_parameters := T.Function_parameters
-      with Join_env := T.Join_env
-      with Typing_env := T.Typing_env
-      with Typing_env_extension := T.Typing_env_extension
+      with module Flambda_type := T.Flambda_type
+      with module Function_parameters := T.Function_parameters
+      with module Join_env := T.Join_env
+      with module Typing_env := T.Typing_env
+      with module Typing_env_extension := T.Typing_env_extension

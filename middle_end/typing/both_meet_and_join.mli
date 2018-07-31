@@ -14,13 +14,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The types of heap blocks. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make (T : Typing_world.S) :
-  Blocks_intf.S
-    with module Flambda_type := T.Flambda_type
+  Both_meet_and_join_intf.S
+    with module Flambda_type0_core := T.Flambda_type0_core
     with module Join_env := T.Join_env
+    with module Type_equality := T.Type_equality
     with module Typing_env := T.Typing_env
     with module Typing_env_extension := T.Typing_env_extension
+

@@ -40,7 +40,7 @@ module Make (T : Typing_world.S) = struct
             let index = Targetint.OCaml.of_int index in
             let logical_var = Logical_variable.create () in
             index, logical_var)
-          field_tys
+          field_tys)
     in
     let env_extension, _index =
       List.fold_left (fun (env_extension, index) field_ty ->

@@ -19,7 +19,7 @@
 (** The representation of function (and continuation) parameters and
     equations upon them in the term language. *)
 
-module Make (T : Typing_world.S) : sig
+module Make (T : Typing_world.S) :
   Parameters_intf.S
     with module Flambda_type := T.Flambda_type
     with module Join_env := T.Join_env

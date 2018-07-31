@@ -35,7 +35,7 @@ module Make (T : Typing_world.S) = struct
             let index = Targetint.OCaml.of_int index in
             let logical_var = Logical_variable.create () in
             index, logical_var)
-          tys
+          tys)
     in
     let create_equations tys indexes_to_vars =
       let env_extension, _index =

@@ -25,6 +25,12 @@ module type S = sig
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
+  and Both_meet_and_join : Both_meet_and_join_intf.S
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Join_env := Join_env
+    with module Type_equality := Type_equality
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
   and Closure_elements : Closure_elements_intf.S
     with module Index := Var_within_closure.Set
     with module Component := Logical_variable

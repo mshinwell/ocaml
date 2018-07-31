@@ -48,7 +48,11 @@ module Make (Expr : Expr_intf.S) = struct
     = Outer_namespace.Blocks.Make (W)
   and Both_meet_and_join0
     : Both_meet_and_join_intf.S
-
+        with module Flambda_type0_core := Flambda_type0_core0
+        with module Join_env := Join_env0
+        with module Type_equality := Type_equality0
+        with module Typing_env := Typing_env0
+        with module Typing_env_extension := Typing_env_extension0
     = Outer_namespace.Both_meet_and_join.Make (W)
   and Closure_elements0
     : Closure_elements_intf.S
@@ -108,6 +112,7 @@ module Make (Expr : Expr_intf.S) = struct
     : Meet_and_join_intf.S
         with module Flambda_type0_core := Flambda_type0_core0
         with type of_kind_foo = Flambda_type0_core0.of_kind_value
+    = Outer_namespace.Meet_and_join_value.Make (W)
   and Meet_and_join_naked_number : sig
       module Naked_immediate :
         Meet_and_join_intf.S
@@ -141,6 +146,7 @@ module Make (Expr : Expr_intf.S) = struct
     : Meet_and_join_intf.S
         with module Flambda_type0_core := Flambda_type0_core0
         with type of_kind_foo = Flambda_type0_core0.of_kind_fabricated
+    = Outer_namespace.Meet_and_join_fabricated.Make (W)
   and Relational_product0
     : Relational_product_intf.S
         with module Join_env := Join_env0
