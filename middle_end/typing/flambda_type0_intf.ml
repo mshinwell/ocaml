@@ -64,8 +64,8 @@ module type S = sig
           The [Name_permutation.t] is a delayed permutation which must be
           pushed down through the structure of the type as it is examined.
 
-          Invariant: every member of a [Join] is strongly incompatible with the
-          other members. *)
+          Invariant: every member of a [Join] is incompatible with the other
+          members. *)
 
     and of_kind_value = private
       | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -116,8 +116,8 @@ module type S = sig
       stub : bool;
       result_arity : Flambda_arity.t;
       dbg : Debuginfo.t;
-      inline : inline_attribute;
-      specialise : specialise_attribute;
+      inline : Inline_attribute.t;
+      specialise : Specialise_attribute.t;
       is_a_functor : bool;
       invariant_params : Variable.Set.t lazy_t;
       size : int option lazy_t;
@@ -203,7 +203,7 @@ module type S = sig
   and Typing_env : (Typing_env_intf.S with module T := T)
   and Typing_env_extension : (Typing_env_extension_intf.S with module T := T)
   and Join_env : (Join_env_intf.S with module T := T)
-  (* ... *)
+  (* ... [should be Typing_world.S pretty much] *)
 
   include module type of struct include T end
 
@@ -305,7 +305,9 @@ module type S = sig
   (** A type representing a set of tagged immediates combined with typing
       judgements that will be used if the set contains, or is subsequently
       refined to contain, only a unique element. *)
-  val these_tagged_immediates_with_envs : env_extension Immediate.Map.t -> t
+  val these_tagged_immediates_with_envs
+     : Typing_env_extension.t Immediate.Map.t
+    -> t
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
