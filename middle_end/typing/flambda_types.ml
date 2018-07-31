@@ -36,26 +36,9 @@ module Make (T : Typing_world.S) = struct
 
   and 'a ty = 'a unknown_or_join or_alias
 
-  (** For each kind there is a lattice of types. *)
-  and 'a unknown_or_join = private
+  and 'a unknown_or_join =
     | Unknown
-    (** "Any value can flow to this point": the top element. *)
     | Join of ('a * Name_permutation.t) list
-    (** - The list being empty means bottom, the least element: "no value can
-          flow to this point".
-        - The list containing a single element is the usual case where there
-          is no join between incompatible types.
-        - If the list contains more than one element:
-          A join, between incompatible types, which has been remembered
-          in case it is refined by a subsequent meet.  Joins between
-          compatible types are immediately pushed down through the top level
-          structure of the type.
-
-        The [Name_permutation.t] is a delayed permutation which must be
-        pushed down through the structure of the type as it is examined.
-
-        Invariant: every member of a [Join] is strongly incompatible with the
-        other members. *)
 
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -72,15 +55,9 @@ module Make (T : Typing_world.S) = struct
      fields (I think this only matters for float arrays on 32-bit targets) *)
   and blocks_and_tagged_immediates = {
     immediates : T.Immediates.t;
-    (** Cases for constant constructors (in the case of variants) and
-        arbitrary tagged immediates. *)
     blocks : T.Blocks.t;
-    (** Cases for non-constant constructors (in the case of variants) and
-        normal blocks. *)
   }
 
-  (** Boxed integer and floating-point numbers together with the types
-      of their contents. *)
   and 'a of_kind_value_boxed_number =
     | Boxed_float
         : Float.Set.t ty_naked_number
@@ -95,9 +72,6 @@ module Make (T : Typing_world.S) = struct
         : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
-  (** A function declaration which is inlinable (which in particular implies
-      that the code of the function's body is known).  Such declarations are
-      completely closed entities in terms of names. *)
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
@@ -106,10 +80,7 @@ module Make (T : Typing_world.S) = struct
        new type which records the combination of inlining (etc) options
        applied to the originating source file. *)
     is_classic_mode : bool;
-    (** Whether the file from which this function declaration originated was
-        compiled in classic mode. *)
     params : Kinded_parameter.t list;
-    (** The parameters of the function, in order. *)
     body : Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
@@ -123,8 +94,6 @@ module Make (T : Typing_world.S) = struct
        (ask xclerc) *)
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
-    (** For functions that are very likely to be inlined, the size of the
-        function's body. *)
     direct_call_surrogate : Closure_id.t option;
     my_closure : Variable.t;
   }
@@ -135,27 +104,15 @@ module Make (T : Typing_world.S) = struct
 
   and closures_entry = {
     function_decl : function_declaration;
-    (** Information from the term language about the function declaration
-        associated with the closure (call it [C]) described by a
-        [closures_entry]. *)
     ty : T.Function_type.t;
-    (** The type of the function associated with [C].
-        Note: function parameter types are covariant! *)
     closure_elements : T.Closure_elements.t;
-    (** Relational product describing the variables within a closure and
-        equations between them. *)
     set_of_closures : ty_fabricated;
-    (** Link back to the type of the set of closures containing [C]. *)
   }
 
   and closures = {
     by_closure_id : T.Closures_entry_by_closure_id.t;
-    (** Row-like structure that selects [closures_entry] structures based
-        on closure ID and the set of variables in the closure. *)
   }
 
-  (** Unboxed ("naked") integer and floating-point numbers together with
-      any information known about which particular numbers they might be. *)
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
     | Float : Float.Set.t -> Float.Set.t of_kind_naked_number
@@ -174,23 +131,13 @@ module Make (T : Typing_world.S) = struct
        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
        top element) *)
     | Discriminants of T.Discriminants.t
-      (** A discriminant is either:
-          - a block tag, as returned by the [Get_tag] primitive; or
-          - a constant constructor which has undergone a kind-cast to kind
-            [Fabricated] using the [Discriminant_of_int] primitive. *)
     | Set_of_closures of set_of_closures
-      (** A possibly mutually-recursive collection of closure values, which
-          at runtime will be represented by a single block. *)
 
   and set_of_closures_entry = {
     by_closure_id : T.Types_by_closure_id.t;
-    (** Relational product, indexed by individual closure IDs, that (via
-        logical variables) describes the makeup of a set of closures. *)
   }
 
   and set_of_closures = {
     closures : T.Closure_ids.t;
-    (** Row-like structure that maps _sets_ of [Closure_id.t]s to
-        [set_of_closures_entry] structures. *)
   }
 end

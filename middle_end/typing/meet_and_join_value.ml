@@ -185,59 +185,66 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
     let meet_or_join_of_kind_foo env perm1 perm2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * env_extension) Or_absorbing.t =
-      match of_kind1, of_kind2 with
-      | Blocks_and_tagged_immediates blocks_imms1,
-          Blocks_and_tagged_immediates blocks_imms2 ->
-        let blocks_imms =
-          meet_or_join_blocks_and_tagged_immediates env perm1 perm2
-            blocks_imms1 blocks_imms2
-        in
-        begin match blocks_imms with
-        | Ok (blocks_imms, equations) ->
-          Ok (Blocks_and_tagged_immediates blocks_imms, equations)
-        | Bottom -> Absorbing
-        end
-      | Boxed_number (Boxed_float n1),
-          Boxed_number (Boxed_float n2) ->
-        let (n : _ ty_naked_number), equations =
-          T.Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2 n1 n2
-        in
-        Ok (Boxed_number (Boxed_float n), equations)
-      | Boxed_number (Boxed_int32 n1),
-        Boxed_number (Boxed_int32 n2) ->
-        let (n : _ ty_naked_number), equations =
-          T.Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2 n1 n2
-        in
-        Ok (Boxed_number (Boxed_int32 n), equations)
-      | Boxed_number (Boxed_int64 n1),
-          Boxed_number (Boxed_int64 n2) ->
-        let (n : _ ty_naked_number), equations =
-          T.Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2 n1 n2
-        in
-        Ok (Boxed_number (Boxed_int64 n), equations)
-      | Boxed_number (Boxed_nativeint n1),
-          Boxed_number (Boxed_nativeint n2) ->
-        let (n : _ ty_naked_number), equations =
-          T.Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2 n1 n2
-        in
-        Ok (Boxed_number (Boxed_nativeint n), equations)
-      | Closures closures1, Closures closures2 ->
-        let closures =
-          E.switch T.Closures_entry_by_closure_id.meet
-            T.Closures_entry_by_closure_id.join
-            env perm1 perm2 closures1 closures2
-        in
-        begin match closures with
-        | Ok closures -> Ok (Closures closures)
-        | Bottom -> Absorbing
-        end
-      | String strs1, String strs2 ->
-        let strs = String_info.Set.inter strs1 strs2 in
-        if String_info.Set.is_empty strs then Absorbing
-        else Ok (String strs, TEE.empty)
-      | (Blocks_and_tagged_immediates _
-          | Boxed_number _
-          | Closures _
-          | String _), _ ->
-        Absorbing
+      if JE.fast_check_extensions_same_both_sides env
+        && perm1 == perm2
+        && of_kind1 == of_kind2
+      then
+        Ok (of_kind1, TEE.empty)
+      else
+        match of_kind1, of_kind2 with
+        | Blocks_and_tagged_immediates blocks_imms1,
+            Blocks_and_tagged_immediates blocks_imms2 ->
+          let blocks_imms =
+            meet_or_join_blocks_and_tagged_immediates env perm1 perm2
+              blocks_imms1 blocks_imms2
+          in
+          begin match blocks_imms with
+          | Ok (blocks_imms, equations) ->
+            Ok (Blocks_and_tagged_immediates blocks_imms, equations)
+          | Bottom -> Absorbing
+          end
+        | Boxed_number (Boxed_float n1),
+            Boxed_number (Boxed_float n2) ->
+          let (n : _ ty_naked_number), equations =
+            T.Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2 n1 n2
+          in
+          Ok (Boxed_number (Boxed_float n), equations)
+        | Boxed_number (Boxed_int32 n1),
+          Boxed_number (Boxed_int32 n2) ->
+          let (n : _ ty_naked_number), equations =
+            T.Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2 n1 n2
+          in
+          Ok (Boxed_number (Boxed_int32 n), equations)
+        | Boxed_number (Boxed_int64 n1),
+            Boxed_number (Boxed_int64 n2) ->
+          let (n : _ ty_naked_number), equations =
+            T.Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2 n1 n2
+          in
+          Ok (Boxed_number (Boxed_int64 n), equations)
+        | Boxed_number (Boxed_nativeint n1),
+            Boxed_number (Boxed_nativeint n2) ->
+          let (n : _ ty_naked_number), equations =
+            T.Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2
+              n1 n2
+          in
+          Ok (Boxed_number (Boxed_nativeint n), equations)
+        | Closures closures1, Closures closures2 ->
+          let closures =
+            E.switch T.Closures_entry_by_closure_id.meet
+              T.Closures_entry_by_closure_id.join
+              env perm1 perm2 closures1 closures2
+          in
+          begin match closures with
+          | Ok closures -> Ok (Closures closures)
+          | Bottom -> Absorbing
+          end
+        | String strs1, String strs2 ->
+          let strs = String_info.Set.inter strs1 strs2 in
+          if String_info.Set.is_empty strs then Absorbing
+          else Ok (String strs, TEE.empty)
+        | (Blocks_and_tagged_immediates _
+            | Boxed_number _
+            | Closures _
+            | String _), _ ->
+          Absorbing
   end)

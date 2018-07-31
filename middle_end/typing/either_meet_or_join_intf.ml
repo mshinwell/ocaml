@@ -48,7 +48,7 @@ module type S = sig
     end
   end
 
-  module Float_by_bit_pattern : sig
+  module Float : sig
     module Set : sig
       type t = Numbers.Float_by_bit_pattern.Set.t
 
