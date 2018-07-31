@@ -43,7 +43,7 @@ module Make
       -> t
 
     include Contains_names.S with type t := t
-  end)
+  end) =
 struct
   open T
 

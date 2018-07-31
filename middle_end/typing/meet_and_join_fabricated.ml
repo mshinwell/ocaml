@@ -73,4 +73,4 @@ struct
         | Ok closures -> Ok (Set_of_closures { closures; })
         end
       | (Discriminant _ | Set_of_closures _), _ -> Absorbing
-end)
+end
