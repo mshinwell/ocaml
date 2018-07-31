@@ -25,11 +25,12 @@ module S_impl
   (Expr : sig type t end)
   (Function_type : sig type t end)
   (Immediates : sig type t end)
-  (Join_env : sig type t end)
-  (Types_by_closure_id : sig type t end)
-  (Typing_env : sig type t end)
-  (Typing_env_extension : sig type t end) =
+  (Types_by_closure_id : sig type t end) =
 struct
+  module Float = Numbers.Float_by_bit_pattern
+  module Int32 = Numbers.Int32
+  module Int64 = Numbers.Int64
+
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
@@ -38,7 +39,7 @@ struct
   type t =
     | Value of ty_value
     | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
 
   and ty_value = of_kind_value ty

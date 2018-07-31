@@ -4478,7 +4478,8 @@ middle_end/typing/flambda_type0_intf.cmx : \
 middle_end/typing/flambda_types.cmo : middle_end/base_types/variable.cmi \
     utils/targetint.cmi middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \
-    middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
+    middle_end/language/simple.cmi utils/numbers.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/base_types/name_occurrences.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/language/inline_attribute.cmi \
@@ -4491,7 +4492,8 @@ middle_end/typing/flambda_types.cmo : middle_end/base_types/variable.cmi \
 middle_end/typing/flambda_types.cmx : middle_end/base_types/variable.cmx \
     utils/targetint.cmx middle_end/typing/string_info.cmx \
     middle_end/language/specialise_attribute.cmx \
-    middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
+    middle_end/language/simple.cmx utils/numbers.cmx \
+    middle_end/language/name_permutation.cmx \
     middle_end/base_types/name_occurrences.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/language/inline_attribute.cmx \

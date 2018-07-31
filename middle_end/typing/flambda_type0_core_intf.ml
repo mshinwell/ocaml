@@ -25,7 +25,6 @@ module type S = sig
   module Expr : sig type t end
   module Function_type : sig type t end
   module Immediates : sig type t end
-  module Join_env : sig type t end
   module Types_by_closure_id : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
@@ -40,14 +39,12 @@ module type S = sig
       (Expr)
       (Function_type)
       (Immediates)
-      (Join_env)
       (Types_by_closure_id)
-      (Typing_env)
-      (Typing_env_extension)
   end
 
   include Contains_names.S with type t := t
 
+(* XXX
   module Closure : sig
     type t = closure
 
@@ -59,6 +56,7 @@ module type S = sig
 
     include Contains_names.S with type t := t
   end
+*)
 
   module Ty_value : sig
     type t = ty_value
@@ -78,16 +76,16 @@ module type S = sig
   val print_ty_naked_number : Format.formatter -> 'a ty_naked_number -> unit
   val print_ty_fabricated : Format.formatter -> ty_fabricated -> unit
 
-  val kind : flambda_type -> Flambda_kind.t
-  val get_alias : flambda_type -> Simple.t option
+  val kind : t -> Flambda_kind.t
+  val get_alias : t -> Simple.t option
 
   val bottom : Flambda_kind.t -> t
   val unknown : Flambda_kind.t -> t
 
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
-  val free_names : flambda_type -> Name_occurrences.t
-  val free_names_set : flambda_type -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
+  val free_names_set : t -> Name.Set.t
 
   val force_to_kind_value : t -> of_kind_value ty
   val force_to_kind_naked_number
@@ -108,5 +106,5 @@ module type S = sig
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
   val ty_is_obviously_bottom : 'a ty -> bool
-  val is_obviously_bottom : flambda_type -> bool
+  val is_obviously_bottom : t -> bool
 end

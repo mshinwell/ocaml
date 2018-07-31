@@ -325,50 +325,50 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/allocated_const.cmo \
   middle_end/language/kinded_parameter.cmo \
   middle_end/language/expr_intf.cmo \
-  middle_end/typing/relational_product_intf.cmo \
-  middle_end/typing/relational_product.cmo \
-  middle_end/typing/row_like_intf.cmo \
-  middle_end/typing/row_like.cmo \
-  middle_end/typing/either_meet_or_join_intf.cmo \
-  middle_end/typing/either_meet_or_join.cmo \
-  middle_end/typing/blocks_intf.cmo \
-  middle_end/typing/blocks.cmo \
-  middle_end/typing/trivial_row_like_intf.cmo \
-  middle_end/typing/trivial_row_like.cmo \
-  middle_end/typing/closure_elements_intf.cmo \
-  middle_end/typing/closure_elements.cmo \
   middle_end/typing/closure_ids_intf.cmo \
-  middle_end/typing/closure_ids.cmo \
   middle_end/typing/closures_entry_by_closure_id_intf.cmo \
+  middle_end/typing/function_type_intf.cmo \
+  middle_end/typing/meet_and_join_intf.cmo \
+  middle_end/typing/meet_and_join_spec_intf.cmo \
+  middle_end/typing/types_by_closure_id_intf.cmo \
+  middle_end/typing/closure_elements_intf.cmo \
+  middle_end/typing/trivial_row_like_intf.cmo \
+  middle_end/typing/either_meet_or_join_intf.cmo \
+  middle_end/typing/relational_product_intf.cmo \
+  middle_end/typing/type_equality_intf.cmo \
+  middle_end/typing/type_free_names_intf.cmo \
+  middle_end/typing/type_printers_intf.cmo \
+  middle_end/typing/flambda_type0_intf.cmo \
+  middle_end/typing/row_like_intf.cmo \
+  middle_end/typing/function_parameters_intf.cmo \
+  middle_end/typing/flambda_type0_core_intf.cmo \
+  middle_end/typing/blocks_intf.cmo \
+  middle_end/typing/join_env_intf.cmo \
+  middle_end/typing/typing_world.cmo \
+  middle_end/typing/relational_product.cmo \
+  middle_end/typing/row_like.cmo \
+  middle_end/typing/either_meet_or_join.cmo \
+  middle_end/typing/blocks.cmo \
+  middle_end/typing/trivial_row_like.cmo \
+  middle_end/typing/closure_elements.cmo \
+  middle_end/typing/closure_ids.cmo \
   middle_end/typing/closures_entry_by_closure_id.cmo \
   middle_end/typing/discriminants.cmo \
-  middle_end/typing/function_parameters_intf.cmo \
   middle_end/typing/function_parameters.cmo \
-  middle_end/typing/function_type_intf.cmo \
   middle_end/typing/function_type.cmo \
   middle_end/typing/immediates.cmo \
-  middle_end/typing/types_by_closure_id_intf.cmo \
   middle_end/typing/types_by_closure_id.cmo \
   middle_end/typing/flambda_types.cmo \
-  middle_end/typing/flambda_type0_core_intf.cmo \
   middle_end/typing/flambda_type0_core.cmo \
-  middle_end/typing/join_env_intf.cmo \
   middle_end/typing/join_env.cmo \
   middle_end/typing/make_meet_or_join.cmo \
   middle_end/typing/meet_and_join.cmo \
-  middle_end/typing/meet_and_join_intf.cmo \
-  middle_end/typing/meet_and_join_spec_intf.cmo \
   middle_end/typing/meet_and_join_fabricated.cmo \
   middle_end/typing/meet_and_join_naked_number.cmo \
   middle_end/typing/meet_and_join_value.cmo \
-  middle_end/typing/type_equality_intf.cmo \
   middle_end/typing/type_equality.cmo \
-  middle_end/typing/type_free_names_intf.cmo \
   middle_end/typing/type_free_names.cmo \
-  middle_end/typing/type_printers_intf.cmo \
   middle_end/typing/type_printers.cmo \
-  middle_end/typing/typing_world.cmo \
-  middle_end/typing/flambda_type0_intf.cmo \
   middle_end/typing/flambda_type0.cmo \
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \
