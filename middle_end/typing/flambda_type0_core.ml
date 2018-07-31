@@ -17,7 +17,22 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make (T : Typing_world.S) = struct
-  include Flambda_types.Make (T)
+  module Flambda_types =
+    Flambda_types.S_impl
+      (T.Blocks)
+      (T.Closure_elements)
+      (T.Closure_ids)
+      (T.Closures_entry_by_closure_id)
+      (T.Discriminants)
+      (T.Expr)
+      (T.Function_type)
+      (T.Immediates)
+      (T.Join_env)
+      (T.Types_by_closure_id)
+      (T.Typing_env)
+      (T.Typing_env_extension)
+
+  include Flambda_types
 
   let print = Type_printers.print
   let print_with_cache = Type_printers.print_with_cache

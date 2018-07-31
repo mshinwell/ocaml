@@ -37,7 +37,7 @@ module type S = sig
     type t = private
       | Value of ty_value
       | Naked_number :
-          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
+          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
       | Fabricated of ty_fabricated
 
     and ty_value = of_kind_value ty
@@ -74,10 +74,10 @@ module type S = sig
       | String of String_info.Set.t
 
     and blocks_and_tagged_immediates = private {
-      immediates : T.Immediates.t;
+      immediates : Immediates.t;
       (** Cases for constant constructors (in the case of variants) and
           arbitrary tagged immediates. *)
-      blocks : T.Blocks.t;
+      blocks : Blocks.t;
       (** Cases for non-constant constructors (in the case of variants) and
           normal blocks. *)
     }
@@ -188,22 +188,77 @@ module type S = sig
       (** Row-like structure that maps _sets_ of [Closure_id.t]s to
           [set_of_closures_entry] structures. *)
     }
-
-    type typing_environment_entry0 =
-      | Definition of t
-      | Equation of t
-
-    type typing_environment_entry =
-      (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
-        change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
-      | Definition of t
-      | Equation of t
-      | CSE of Flambda_primitive.With_fixed_value.t
   end
-  and Typing_env : (Typing_env_intf.S with module T := T)
-  and Typing_env_extension : (Typing_env_extension_intf.S with module T := T)
-  and Join_env : (Join_env_intf.S with module T := T)
-  (* ... [should be Typing_world.S pretty much] *)
+  and Blocks : (Blocks_intf.S
+    with module Flambda_type := Flambda_type
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Both_meet_and_join : (Both_meet_and_join_intf.S
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Join_env := Join_env
+    with module Type_equality := Type_equality
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Closure_elements : (Closure_elements_intf.S
+    with module Index := Var_within_closure.Set
+    with module Component := Logical_variable)
+  and Closure_ids : (Closure_ids_intf.S
+    with module Tag := Unit
+    with module Index := Closure_id.Set
+    with module Maps_to := Flambda_type.Ty_value)
+  and Closures_entry_by_closure_id : (Closures_entry_by_closure_id_intf.S
+    with module Tag := Unit
+    with module Index := Closure_id
+    with module Maps_to := Flambda_type.Closures_entry)
+  and Discriminants : (Trivial_row_like_intf.S
+    with module Flambda_type := Flambda_type
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
+    with module Thing_without_names := Discriminant)
+  and Function_type : (Function_type_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Immediates : (Trivial_row_like_intf.S
+    with module Flambda_type := Flambda_type
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
+    with module Thing_without_names := Immediate)
+  and Join_env : (Join_env_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Relational_product : (Relational_product_intf.S
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Row_like : (Row_like_intf.S
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Types_by_closure_id : (Types_by_closure_id_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Typing_env : (Typing_env_intf.S
+    with module Flambda_type := Flambda_type)
+  and Typing_env_extension : (Typing_env_extension_intf.S
+    with module Flambda_type := Flambda_type)
+  and Type_equality : (Type_equality_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Type_free_names : (Type_free_names_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Type_printers : (Type_printers_intf.S
+    with module Flambda_type := Flambda_type
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
 
   include module type of struct include T end
 
