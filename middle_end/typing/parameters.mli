@@ -21,7 +21,7 @@
 
 module Make (T : Typing_world.S) :
   Parameters_intf.S
-    with module Flambda_type := T.Flambda_type
+    with module Flambda_type0_core := T.Flambda_type0_core
     with module Join_env := T.Join_env
     with module Relational_product := T.Relational_product
     with module Typing_env := T.Typing_env

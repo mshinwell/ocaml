@@ -17,13 +17,13 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module T : Flambda_type0_intf.S
+  module Flambda_type0_core : sig type t end
 
-  val print : Format.formatter -> T.t -> unit
+  val print : Format.formatter -> Flambda_type0_core.t -> unit
 
   val print_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
-    -> T.t
+    -> Flambda_type0_core.t
     -> unit
 end

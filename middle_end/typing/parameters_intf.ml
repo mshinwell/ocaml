@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
+  module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
   module Typing_env : sig type t end
 
@@ -30,7 +30,7 @@ module type S = sig
 
   (** Create a representation of the names, order and type of a function's
       parameters. *)
-  val create : (Kinded_parameter.t * Flambda_type.t) list -> t
+  val create : (Kinded_parameter.t * Flambda_type0_core.t) list -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
