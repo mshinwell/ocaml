@@ -317,6 +317,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
   middle_end/language/freshening.cmo \
+  middle_end/language/inline_attribute.cmo \
+  middle_end/language/specialise_attribute.cmo \
   middle_end/typing/flambda_arity.cmo \
   middle_end/language/flambda_primitive.cmo \
   middle_end/typing/string_info.cmo \

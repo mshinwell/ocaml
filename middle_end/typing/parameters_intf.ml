@@ -16,10 +16,28 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) : sig
-  Function_parameters_intf.S
-    with module Flambda_type := T.Flambda_type
-    with module Join_env := T.Join_env
-    with module Relational_product := T.Relational_product
-    with module Typing_env := T.Typing_env
-    with module Typing_env_extension := T.Typing_env_extension
+module type S = sig
+  module Flambda_type : sig type t end
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
+
+  type t
+
+  include Contains_names.S with type t := t
+
+  (** Perform invariant checks upon the given function type. *)
+  val invariant : t -> unit
+
+  (** Create a representation of the names, order and type of a function's
+      parameters. *)
+  val create : (Kinded_parameter.t * Flambda_type.t) list -> t
+
+  (** A conservative approximation to equality. *)
+  val equal : t -> t -> bool
+
+  (** Greatest lower bound of two parameter lists. *)
+  val meet : Typing_env.t -> t -> t -> t Or_bottom.t
+
+  (** Least upper bound of two parameter lists. *)
+  val join : Join_env.t -> t -> t -> t
+end

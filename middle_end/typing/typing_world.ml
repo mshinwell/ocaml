@@ -19,7 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module rec Flambda_type : Flambda_type0_internal_intf.S
+  module rec Flambda_type : Flambda_type0_core_intf.S
     with module Blocks := Blocks
     with module Discriminants := Discriminants
     with module Expr := Expr
@@ -42,13 +42,11 @@ module type S = sig
   and Continuation_parameters : Relational_product_intf.S
     with module Index := Targetint.OCaml
     with module Component := Logical_variable
-  and Block_fields : Relational_product_intf.S
-    with module Index := Targetint.OCaml
-    with module Component := Logical_variable
-  and Blocks : Row_like_intf.S
-    with module Tag := Tag
-    with module Index := Targetint.OCaml
-    with module Maps_to := Block_fields
+  and Blocks : Blocks_intf.S
+    with module Flambda_type := T.Flambda_type
+    with module Join_env := T.Join_env
+    with module Typing_env := T.Typing_env
+    with module Typing_env_extension := T.Typing_env_extension
   and Closure_elements : Relational_product_intf.S
     with module Index := Var_within_closure.Set
     with module Component := Logical_variable
@@ -60,18 +58,16 @@ module type S = sig
     with module Tag := Unit
     with module Index := Closure_id.Set
     with module Maps_to := Flambda_type.ty_value
-  and Immediates_relational_product : Relational_product_intf.S
-    with module Index := Targetint.OCaml.Set
-    with module Component := Logical_variable
-  and Immediates : Row_like_intf.S
-    with module Tag := Unit
-    with module Index := Targetint.OCaml.Set
-    with module Maps_to := Immediates_relational_product
-  and Discriminants_relational_product : Relational_product_intf.S
-    with module Index := Discriminant.Set
-    with module Component := Logical_variable
-  and Discriminants : Row_like_intf.S
-    with module Tag := Unit
-    with module Index := Discriminant.Set
-    with module Maps_to := Discriminants_relational_product
+  and Immediates : Trivial_row_like_intf.S
+    with module Flambda_type := T.Flambda_type
+    with module Join_env := T.Join_env
+    with module Typing_env := T.Typing_env
+    with module Typing_env_extension := T.Typing_env_extension
+    with module Thing_without_names := Immediate
+  and Discriminants : Trivial_row_like_intf.S
+    with module Flambda_type := T.Flambda_type
+    with module Join_env := T.Join_env
+    with module Typing_env := T.Typing_env
+    with module Typing_env_extension := T.Typing_env_extension
+    with module Thing_without_names := Discriminant
 end

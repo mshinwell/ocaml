@@ -96,7 +96,8 @@ module Make (T : Typing_world.S) = struct
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
   (** A function declaration which is inlinable (which in particular implies
-      that the code of the function's body is known). *)
+      that the code of the function's body is known).  Such declarations are
+      completely closed entities in terms of names. *)
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
@@ -107,7 +108,8 @@ module Make (T : Typing_world.S) = struct
     is_classic_mode : bool;
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
-    params : T.Function_parameters.t;
+    params : Kinded_parameter.t list;
+    (** The parameters of the function, in order. *)
     body : Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
@@ -127,14 +129,8 @@ module Make (T : Typing_world.S) = struct
     my_closure : Variable.t;
   }
 
-  (** A function declaration that is not inlinable (typically because the
-      code is unknown, possibly due to being deliberately discarded). *)
-  and non_inlinable_function_declaration = {
-    direct_call_surrogate : Closure_id.t option;
-  }
-
   and function_declaration =
-    | Non_inlinable of non_inlinable_function_declaration
+    | Non_inlinable
     | Inlinable of inlinable_function_declaration
 
   and closures_entry = {

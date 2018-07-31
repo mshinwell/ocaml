@@ -14,33 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The representation of function parameters and equations upon them in the
-    term language. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type : sig type t end
-  module Join_env : sig type t end
-  module Typing_env : sig type t end
+type t =
+  | Always_specialise
+  | Never_specialise
+  | Default_specialise
 
-  type t
-
-  include Contains_names.S with type t := t
-
-  (** Perform invariant checks upon the given function type. *)
-  val invariant : t -> unit
-
-  (** Create a representation of the names, order and type of a function's
-      parameters. *)
-  val create : (Kinded_parameter.t * Flambda_type.t) list -> t
-
-  (** A conservative approximation to equality. *)
-  val equal : t -> t -> bool
-
-  (** Greatest lower bound of two parameter lists. *)
-  val meet : Typing_env.t -> t -> t -> t Or_bottom.t
-
-  (** Least upper bound of two parameter lists. *)
-  val join : Join_env.t -> t -> t -> t
-end
+val print : Format.formatter -> t -> unit

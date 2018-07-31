@@ -28,6 +28,10 @@ module Call_kind : sig
   type function_call =
     | Direct of {
         closure_id : Closure_id.t;
+        (** The [closure_id] isn't actually sufficient to perform a direct
+            call.  The set of closures involved has to be determined first
+            using reachability analysis.  If such determination fails, then
+            we have to fall back to an indirect call. *)
         (* CR mshinwell: Should this arity really permit "bottom"? *)
         return_arity : Flambda_arity.t;
         (** [return_arity] describes what the callee returns.  It matches up
@@ -56,17 +60,6 @@ module Call_kind : sig
   val equal : t -> t -> bool
 end
 
-type inline_attribute =
-  | Always_inline
-  | Never_inline
-  | Unroll of int
-  | Default_inline
-
-type specialise_attribute =
-  | Always_specialise
-  | Never_specialise
-  | Default_specialise
-
 (** The application of a function (or method on a given object) to a list of
     arguments. *)
 module Apply : sig
@@ -92,13 +85,6 @@ module Apply : sig
 
   val print : Format.formatter -> t -> unit
 end
-
-(** The update of a mutable variable.  Mutable variables are distinct from
-    immutable variables in Flambda. *)
-type assign = {
-  being_assigned : Mutable_variable.t;
-  new_value : Simple.t;
-}
 
 (** Actions affecting exception traps on the stack.  These are always
     associated with an [Apply_cont] node; the trap action is executed before
@@ -197,7 +183,6 @@ module rec Expr : sig
   *)
   type t =
     | Let of Let.t
-    | Let_mutable of Let_mutable.t
     | Let_cont of Let_cont.t
     | Apply of Apply.t
     | Apply_cont of Continuation.t * Trap_action.t option * Simple.t list
@@ -297,8 +282,6 @@ end and Named : sig
     | Simple of Simple.t
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
-    | Assign of assign
-    | Read_mutable of Mutable_variable.t
 
   (** Compute the free names of the given term. *)
   val free_names
@@ -468,7 +451,7 @@ end and Continuation_handler : sig
 end and Set_of_closures : sig
   type t = private {
     function_decls : Function_declarations.t;
-    closure_elements : Flambda_type.Closure_elements.t;
+    closure_elements : Simple.t Var_within_closure.Map.t;
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
     (** If [direct_call_surrogates] maps [closure_id1] to [closure_id2] then
         direct calls to [closure_id1] should be redirected to [closure_id2].
@@ -478,11 +461,11 @@ end and Set_of_closures : sig
         N.B. [direct_call_surrogates] might not be transitively closed. *)
   }
 
-  (** Create a set of closures.  Checks are made to ensure that [free_vars]
-      are reasonable. *)
+  (** Create a set of closures given the code for its functions and the
+      closure variables. *)
   val create
      : function_decls:Function_declarations.t
-    -> closure_elements:Flambda_type.Closure_elements.t
+    -> closure_elements:Simple.t Var_within_closure.Map.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
 
@@ -515,10 +498,6 @@ end and Function_declarations : sig
   *)
 
   type t = private {
-    set_of_closures_id : Set_of_closures_id.t;
-    (** An identifier (unique across all Flambda trees currently in memory)
-        of the set of closures associated with this set of function
-        declarations. *)
     set_of_closures_origin : Set_of_closures_origin.t;
     (** An identifier of the original set of closures on which this set of
         function declarations is based.  Used to prevent different
@@ -563,7 +542,7 @@ end and Function_declaration : sig
     exn_continuation_param : Continuation.t;
     (** To where we must jump if application of the function raises an
         exception. *)
-    params : Flambda_type.Function_parameters.t;
+    params : Flambda_type.Parameters.t;
     (** Relational product holding the function's parameters and equations
         thereon. *)
     body : Expr.t;
@@ -584,9 +563,9 @@ end and Function_declaration : sig
         must go through a stub.  Stubs will be unconditionally inlined. *)
     dbg : Debuginfo.t;
     (** Debug info for the function declaration. *)
-    inline : inline_attribute;
+    inline : Inline_attribute.t;
     (** Inlining requirements from the source code. *)
-    specialise : specialise_attribute;
+    specialise : Specialise_attribute.t;
     (** Specialising requirements from the source code. *)
     is_a_functor : bool;
     (** Whether the function is known definitively to be a functor. *)

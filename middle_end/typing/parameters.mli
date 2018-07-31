@@ -16,16 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t =
-  | Always_inline
-  | Never_inline
-  | Unroll of int
-  | Default_inline
+(** The representation of function (and continuation) parameters and
+    equations upon them in the term language. *)
 
-let print ppf t =
-  let fprintf = Format.fprintf in
-  match t with
-  | Always_inline -> fprintf ppf "Always_inline"
-  | Never_inline -> fprintf ppf "Never_inline"
-  | Unroll n -> fprintf ppf "@[(Unroll %d)@]" n
-  | Default_inline -> fprintf ppf "Default_inline"
+module Make (T : Typing_world.S) : sig
+  Parameters_intf.S
+    with module Flambda_type := T.Flambda_type
+    with module Join_env := T.Join_env
+    with module Relational_product := T.Relational_product
+    with module Typing_env := T.Typing_env
+    with module Typing_env_extension := T.Typing_env_extension
