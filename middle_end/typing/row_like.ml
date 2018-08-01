@@ -19,39 +19,41 @@
 (* CR mshinwell: Should be able to enforce kinds *)
 
 module Make
-  (T : Typing_world.S)
+  (W : Typing_world.S)
   (Tag : sig
     type t
+    include Hashtbl.With_map with type t := t
     include Contains_names.S with type t := t
   end)
   (Index : sig
     type t
 
-    val equal : t -> t -> bool
-    val compare : t -> t -> int
-
-    include Map.With_set with type t := t
+    include Hashtbl.With_map with type t := t
     include Contains_names.S with type t := t
   end)
   (Maps_to : sig
     type t
 
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
     val add_or_meet_equations
        : t
-      -> Typing_env.t
-      -> Typing_env_extension.t
+      -> W.Typing_env.t
+      -> W.Typing_env_extension.t
       -> t
 
     include Contains_names.S with type t := t
   end) =
 struct
-  open T
+  open W
 
   module MT = Maps_to
 
   module Tag_and_index = struct
-    type t = Tag.t * Index.t
-
     include Hashtbl.Make_with_map_pair (Tag) (Index)
 
     let create tag index = tag, index
@@ -60,8 +62,6 @@ struct
     let apply_name_permutation (tag, index) perm =
       tag, Index.apply_name_permutation index perm
   end
-
-  module JE = Join_env
 
   type t = {
     known : MT.t Tag_and_index.Map.t;
@@ -73,8 +73,8 @@ struct
       "@[<hov 1>(\
          @[<hov 1>(known@ %a)@]@ \
          @[<hov 1>(at_least@ %a)@])@]"
-      (Tag_and_index.Map.print (MT.print ~cache)) known
-      (Index.Map.print (MT.print ~cache)) at_least
+      (Tag_and_index.Map.print (MT.print_with_cache ~cache)) known
+      (Index.Map.print (MT.print_with_cache ~cache)) at_least
 
   let create () =
     { known = Tag_and_index.Map.empty;
@@ -96,7 +96,10 @@ struct
     Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
 
   module Meet_or_join
-    (E : Either_meet_or_join_intf.S with module T := T) =
+    (E : Either_meet_or_join_intf.S
+      with module Join_env := Join_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension) =
   struct
     let meet_or_join env perm1 perm2
           ({ known = known1; at_least = at_least1; } : t)
@@ -116,7 +119,7 @@ struct
             let params1 =
               MT.add_or_meet_equations
                 (MT.apply_name_permutation params1 perm1)
-                (JE.central_environment env)
+                (Join_env.central_environment env)
                 (get_equations_to_deposit1 env)
             in
             Some params1
@@ -132,11 +135,11 @@ struct
         | Some params1, None ->
           assert (Index.equal index (MT.index params1));
           one_side_only params1 perm1 at_least2
-            ~get_equations_to_deposit1:JE.holds_on_left
+            ~get_equations_to_deposit1:Join_env.holds_on_left
         | None, Some params2 ->
           assert (Index.equal index (MT.index params2));
           one_side_only params2 perm2 at_least1
-            ~get_equations_to_deposit1:JE.holds_on_right
+            ~get_equations_to_deposit1:Join_env.holds_on_right
         | Some params1, Some params2 ->
           assert (Index.equal index (MT.index params1));
           assert (Index.equal index (MT.index params2));
@@ -168,10 +171,12 @@ struct
   end
 
   module For_meet =
-    Either_meet_or_join.Meet (T) (Typing_env) (Typing_env_extension) (Join_env)
+    Either_meet_or_join.Meet (Flambda_type0_core) (Typing_env)
+      (Typing_env_extension) (Join_env)
 
   module For_join =
-    Either_meet_or_join.Join (T) (Typing_env) (Typing_env_extension) (Join_env)
+    Either_meet_or_join.Join (Flambda_type0_core) (Typing_env)
+      (Typing_env_extension) (Join_env)
 
   module Meet = Meet_or_join (For_meet)
   module Join = Meet_or_join (For_join)
