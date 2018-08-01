@@ -22,5 +22,5 @@ module type S = sig
   val free_names : t -> Name_occurrences.t
   val bound_names : t -> Name_occurrences.t
   val apply_name_permutation : t -> Name_permutation.t -> t
-  val freshen : t -> t
+  val freshen : t -> Freshening.t -> t
 end

@@ -17,24 +17,22 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
   module RP : Relational_product_intf.S
-    with module Index := Int_index
-    with module Component := Logical_variable
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
+    with module Index := Int_index
+    with module Component := Logical_variable_component
 
   include Row_like_intf.S
-    with module Tag := Tag
-    with module Index := Int_index
-    with module Maps_to := RP
-    with module Flambda_type := Flambda_type
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
+    with module Tag := Tag
+    with module Index := Targetint.OCaml
+    with module Maps_to := RP
 end

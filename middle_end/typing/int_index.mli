@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,18 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Target integers equipped with various operations relating to names.
+    The intended use is indexes into algebraic structures such as
+    [Relational_product]. *)
 
-module Id : Id_types.Id = Id_types.Id (struct end)
-module Unit_id = Id_types.UnitId (Id) (Compilation_unit)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Unit_id.t
-
-include Hashtbl.Make_with_map (Unit_id)
-
-let create = Unit_id.create
-let get_compilation_unit = Unit_id.unit
-let name = Unit_id.name
-
-let in_compilation_unit t cu =
-  Compilation_unit.equal (get_compilation_unit t) cu
+include module type of struct include Targetint.OCaml end
+include Contains_names.S with type t := t

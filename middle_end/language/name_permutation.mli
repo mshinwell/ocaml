@@ -56,17 +56,6 @@ val apply_logical_variable
   -> Logical_variable.t
   -> Logical_variable.t
 
-val add_mutable_variable
-   : t
-  -> Mutable_variable.t
-  -> Mutable_variable.t
-  -> t
-
-val apply_mutable_variable
-   : t
-  -> Mutable_variable.t
-  -> Mutable_variable.t
-
 val add_name
    : t
   -> Name.t

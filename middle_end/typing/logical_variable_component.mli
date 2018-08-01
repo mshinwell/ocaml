@@ -14,17 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Target integers equipped with various operations relating to names.
-    The intended use is indexes into algebraic structures such as
-    [Relational_product]. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include module type of struct include Targetint.OCaml end
-
-val free_names : t -> Name_occurrences.t
-val bound_names : t -> Name_occurrences.t
-val apply_name_permutation : t -> Name_permutation.t -> t
-val freshen : t -> t
-val kind : t -> Flambda_kind.t
-val name : t -> Name.t
+include module type of struct include Logical_variable end
+include Contains_names.S with type t := t

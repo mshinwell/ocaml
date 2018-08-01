@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,22 +14,18 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Hashtbl.With_map
+include Logical_variable
 
-val create : ?current_compilation_unit:Compilation_unit.t -> string -> t
-val of_ident : Ident.t -> t
+let free_names t =
+  Name_occurrences.create_from_set_in_types (
+    Name.Set.singleton (Name.logical_var t))
 
-(** For [Flambda_to_clambda] only. *)
-val unique_ident : t -> Ident.t
+let bound_names t = Name_occurrences.create ()
 
-val freshen : t -> t
+let apply_name_permutation t perm =
+  Name_permutation.apply_logical_variable perm t
 
-val rename
-   : ?current_compilation_unit:Compilation_unit.t
-  -> ?append:string
-  -> t
-  -> t
-
-val in_compilation_unit : t -> Compilation_unit.t -> bool
+let freshen t freshening =
+  apply_name_permutation t (Freshening.name_permutation freshening)

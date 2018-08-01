@@ -259,6 +259,10 @@ module Make
 
     let freshen t freshening =
       apply_name_permutation t (Freshening.name_permutation freshening)
+
+    let add_or_meet_equations t env new_equations =
+      let env_extension = TEE.meet env t.env_extension new_equations in
+      { t with env_extension; }
   end
 
   module IP = Indexed_product
@@ -352,4 +356,7 @@ module Make
 
   let freshen t freshening =
     List.map (fun ip -> IP.freshen ip freshening) t
+
+  let add_or_meet_equations t env new_equations =
+    List.map (fun ip -> IP.add_or_meet_equations ip env new_equations) t
 end

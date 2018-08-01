@@ -21,15 +21,13 @@ module type Name_like = sig
 
   include Map.With_set with type t := t
   include Contains_names.S with type t := t
-
-  val kind : t -> Flambda_kind.t
-  val name : t -> Name.t
 end
 
 module type S = sig
+  module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
-  module Join_env : sig type t end
+
   module Index : Name_like
   module Component : Name_like
 
@@ -92,4 +90,12 @@ module type S = sig
   (** Add or meet the definitions and equations from the given relational
       product value into the given typing environment. *)
   val introduce : t -> Typing_env.t -> Typing_env.t
+
+  (** Add or meet the given equations into the environment extension held
+      within the relational product. *)
+  val add_or_meet_equations
+     : t
+    -> Typing_env.t
+    -> Typing_env_extension.t
+    -> t
 end

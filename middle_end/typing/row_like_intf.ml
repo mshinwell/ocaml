@@ -17,23 +17,19 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
   module Tag : sig
     type t
-    include Contains_names.S with type t := t
   end
 
   module Index : sig
     type t
 
     val equal : t -> t -> bool
-
     include Map.With_set with type t := t
-    include Contains_names.S with type t := t
   end
 
   module Tag_and_index : sig

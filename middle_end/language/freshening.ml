@@ -47,12 +47,6 @@ let apply_kinded_parameter t p = NP.apply_kinded_parameter t p
 let apply_kinded_parameters t ps =
   List.map (fun p -> apply_kinded_parameter t p) ps
 
-let freshen_mutable_variable t v =
-  let v' = Mutable_variable.rename v in
-  v', NP.add_mutable_variable t v v'
-
-let apply_mutable_variable t v = NP.apply_mutable_variable t v
-
 let freshen_name t n =
   let n' = Name.rename n in
   n', NP.add_name t n n'

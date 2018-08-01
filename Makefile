@@ -59,7 +59,6 @@ include stdlib/StdlibModules
 
 MIDDLE_END_DIRS=\
   middle_end/analysis \
-  middle_end/base_types \
   middle_end/cmx \
   middle_end/code_motion \
   middle_end/from_lambda \
@@ -73,7 +72,6 @@ MIDDLE_END_DIRS=\
 
 MIDDLE_END_INCLUDES=\
   -I middle_end/analysis \
-  -I middle_end/base_types \
   -I middle_end/cmx \
   -I middle_end/code_motion \
   -I middle_end/from_lambda \
@@ -145,14 +143,14 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/typecore.cmo typing/typeclass.cmo typing/typemod.cmo
 
 COMP=\
-  middle_end/base_types/debuginfo.cmo \
-  middle_end/base_types/tag.cmo \
-  middle_end/base_types/discriminant.cmo \
-  middle_end/base_types/linkage_name.cmo \
-  middle_end/base_types/compilation_unit.cmo \
-  middle_end/base_types/variable.cmo \
-  middle_end/base_types/continuation.cmo \
-  middle_end/base_types/trap_id.cmo \
+  middle_end/language/debuginfo.cmo \
+  middle_end/language/tag.cmo \
+  middle_end/language/discriminant.cmo \
+  middle_end/language/linkage_name.cmo \
+  middle_end/language/compilation_unit.cmo \
+  middle_end/language/variable.cmo \
+  middle_end/language/continuation.cmo \
+  middle_end/language/trap_id.cmo \
 	bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/semantics_of_primitives.cmo \
   bytecomp/switch.cmo bytecomp/matching.cmo \
@@ -254,32 +252,6 @@ MIDDLE_END_ANALYSIS=\
   # middle_end/analysis/place_continuations.cmo \
   # middle_end/analysis/reachability.cmo
 
-MIDDLE_END_BASE_TYPES=\
-  middle_end/base_types/id_types.cmo \
-  middle_end/base_types/closure_element.cmo \
-  middle_end/base_types/closure_id.cmo \
-  middle_end/base_types/closure_origin.cmo \
-  middle_end/base_types/code_id.cmo \
-  middle_end/base_types/export_id.cmo \
-  middle_end/base_types/immediate.cmo \
-  middle_end/base_types/mutable_variable.cmo \
-  middle_end/base_types/num_continuation_uses.cmo \
-  middle_end/base_types/symbol.cmo \
-  middle_end/base_types/logical_variable.cmo \
-  middle_end/base_types/name.cmo \
-  middle_end/base_types/parameter.cmo \
-  middle_end/base_types/scope_level.cmo \
-  middle_end/base_types/set_of_closures_id.cmo \
-  middle_end/base_types/set_of_closures_origin.cmo \
-  middle_end/base_types/var_within_closure.cmo \
-  middle_end/base_types/or_bottom.cmo \
-  middle_end/base_types/or_unknown.cmo \
-  middle_end/base_types/or_absorbing.cmo \
-  middle_end/base_types/name_occurrences.cmo \
-  middle_end/base_types/tag_and_size.cmo \
-  middle_end/base_types/contains_names.cmo \
-  middle_end/base_types/changes.cmo
-
 MIDDLE_END_CODE_MOTION=\
   middle_end/code_motion/lift_let_cont.cmo \
   middle_end/code_motion/lift_to_toplevel.cmo \
@@ -313,10 +285,34 @@ MIDDLE_END_INLINING=\
   # middle_end/inlining/continuation_with_specialised_args.cmo \
 
 MIDDLE_END_LANGUAGE_AND_TYPING=\
+  middle_end/language/id_types.cmo \
+  middle_end/language/closure_element.cmo \
+  middle_end/language/closure_id.cmo \
+  middle_end/language/closure_origin.cmo \
+  middle_end/language/code_id.cmo \
+  middle_end/language/export_id.cmo \
+  middle_end/language/immediate.cmo \
+  middle_end/language/num_continuation_uses.cmo \
+  middle_end/language/symbol.cmo \
+  middle_end/typing/logical_variable.cmo \
+  middle_end/typing/int_index.cmo \
+  middle_end/language/name.cmo \
+  middle_end/language/parameter.cmo \
+  middle_end/language/scope_level.cmo \
+  middle_end/language/set_of_closures_origin.cmo \
+  middle_end/language/var_within_closure.cmo \
+  middle_end/language/name_occurrences.cmo \
+  middle_end/typing/or_bottom.cmo \
+  middle_end/typing/or_unknown.cmo \
+  middle_end/typing/or_absorbing.cmo \
+  middle_end/typing/tag_and_size.cmo \
+  middle_end/typing/changes.cmo \
   middle_end/typing/flambda_kind.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
   middle_end/language/freshening.cmo \
+  middle_end/typing/contains_names.cmo \
+  middle_end/typing/logical_variable_component.cmo \
   middle_end/language/inline_attribute.cmo \
   middle_end/language/specialise_attribute.cmo \
   middle_end/typing/flambda_arity.cmo \
@@ -418,7 +414,6 @@ MIDDLE_END_TOPLEVEL=\
   middle_end/middle_end.cmo
 
 MIDDLE_END=\
-  $(MIDDLE_END_BASE_TYPES) \
   $(MIDDLE_END_LANGUAGE_AND_TYPING) \
   $(MIDDLE_END_ANALYSIS) \
   $(MIDDLE_END_CODE_MOTION) \
@@ -1441,7 +1436,7 @@ beforedepend:: bytecomp/opcodes.ml
 
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp $(MIDDLE_END_DIRS) \
-	         middle_end/base_types middle_end/analysis middle_end/base_types \
+	         middle_end/analysis \
            middle_end/cmx middle_end/code_motion middle_end/from_lambda \
            middle_end/inlining middle_end/language middle_end/typing \
            middle_end/removal middle_end/simplify middle_end/to_clambda \
@@ -1454,7 +1449,7 @@ partialclean::
 .PHONY: depend
 depend: beforedepend
 	(for d in utils parsing typing bytecomp asmcomp $(MIDDLE_END_DIRS) \
-	   middle_end/base_types middle_end/analysis middle_end/base_types \
+	   middle_end/analysis \
      middle_end/cmx middle_end/code_motion middle_end/from_lambda \
      middle_end/inlining middle_end/language middle_end/typing \
      middle_end/removal middle_end/simplify middle_end/to_clambda \

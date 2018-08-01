@@ -53,7 +53,6 @@ end
 module Continuations = Make (Continuation)
 module Kinded_parameters = Make (Kinded_parameter)
 module Logical_variables = Make (Logical_variable)
-module Mutable_variables = Make (Mutable_variable)
 module Names = Make (Name)
 module Symbols = Make (Symbol)
 module Trap_ids = Make (Trap_id)
@@ -63,7 +62,6 @@ type t = {
   continuations : Continuations.t;
   kinded_parameters : Kinded_parameters.t;
   logical_variables : Logical_variables.t;
-  mutable_variables : Mutable_variables.t;
   names : Names.t;
   symbols : Symbols.t;
   trap_ids : Trap_ids.t;
@@ -74,14 +72,13 @@ let create () =
   { continuations = Continuations.create ();
     kinded_parameters = Kinded_parameters.create ();
     logical_variables = Logical_variables.create ();
-    mutable_variables = Mutable_variables.create ();
     names = Names.create ();
     symbols = Symbols.create ();
     trap_ids = Trap_ids.create ();
     variables = Variables.create ();
   }
 
-let print ppf { continuations; kinded_parameters; mutable_variables;
+let print ppf { continuations; kinded_parameters;
       names; symbols; trap_ids; variables; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
@@ -95,7 +92,6 @@ let print ppf { continuations; kinded_parameters; mutable_variables;
     Continuations.print continuations
     Kinded_parameters.print kinded_parameters
     Logical_variables.print logical_variables
-    Mutable_variables.print mutable_variables
     Names.print names
     Symbols.print symbols
     Trap_ids.print trap_ids
@@ -106,7 +102,6 @@ let is_empty { continuations; kinded_parameters; logical_variables;
   Continuations.is_empty continuations
     && Kinded_parameters.is_empty kinded_parameters
     && Logical_variables.is_empty logical_variables
-    && Mutable_variables.is_empty mutable_variables
     && Names.is_empty names
     && Symbols.is_empty symbols
     && Trap_ids.is_empty trap_ids
@@ -136,8 +131,6 @@ let compose
       Kinded_parameters.compose kinded_parameters1 kinded_parameters2;
     logical_variables =
       logical_variables.compose logical_variables1 logical_variables2;
-    mutable_variables =
-      Mutable_variables.compose mutable_variables1 mutable_variables2;
     names = Names.compose names1 names2;
     symbols = Symbols.compose symbols1 symbols2;
     trap_ids = Trap_ids.compose trap_ids1 trap_ids2;
@@ -167,14 +160,6 @@ let add_logical_variable t p1 p2 =
 
 let apply_logical_variable t p =
   Logical_variables.apply t.logical_variables p
-
-let add_mutable_variable t v1 v2 =
-  { t with
-    mutable_variables = Mutable_variables.add t.mutable_variables v1 v2;
-  }
-
-let apply_mutable_variable t v =
-  Mutable_variables.apply t.mutable_variables v
 
 let add_name t n1 n2 =
   { t with

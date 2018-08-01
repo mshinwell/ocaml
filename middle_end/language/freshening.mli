@@ -44,16 +44,6 @@ val apply_kinded_parameters
   -> Kinded_parameter.t list
   -> Kinded_parameter.t list
 
-val freshen_mutable_variable
-   : t
-  -> Mutable_variable.t
-  -> Mutable_variable.t * t
-
-val apply_mutable_variable
-   : t
-  -> Mutable_variable.t
-  -> Mutable_variable.t
-
 val freshen_name
    : t
   -> Name.t
