@@ -17,7 +17,10 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
+  module Flambda_type0_core : sig
+    type t
+    module Closures_entry : sig type t end
+  end
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
@@ -37,14 +40,15 @@ module type S = sig
   (** Describe one or more closures by giving for each one the closure ID
       and the set of variables in the closure. *)
   val create_exactly_multiple
-     : Flambda_type.Closures_entry.t Closure_id_and_vars_within_closure.Map.t
+     : Flambda_type0_core.Closures_entry.t
+         Closure_id_and_vars_within_closure.Map.t
     -> t
 
   (** Describe one closure that contains at least the given closure
       variables. *)
   val create_open
      : Var_within_closure.Set.t
-    -> Flambda_type.Closures_entry.t 
+    -> Flambda_type0_core.Closures_entry.t 
     -> t
 
   (** Greatest lower bound of two values of type [t]. *)

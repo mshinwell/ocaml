@@ -4942,12 +4942,12 @@ middle_end/typing/typing_world.cmo : \
     middle_end/typing/trivial_row_like_intf.cmo \
     middle_end/typing/row_like_intf.cmo \
     middle_end/typing/relational_product_intf.cmo \
-    middle_end/typing/parameters.cmi \
+    middle_end/typing/parameters_intf.cmo \
     middle_end/base_types/logical_variable.cmi \
     middle_end/typing/join_env_intf.cmo middle_end/base_types/immediate.cmi \
     middle_end/typing/function_type_intf.cmo \
     middle_end/typing/flambda_type0_core_intf.cmo \
-    middle_end/typing/flambda_type.cmi middle_end/base_types/discriminant.cmi \
+    middle_end/base_types/discriminant.cmi \
     middle_end/typing/closures_entry_by_closure_id_intf.cmo \
     middle_end/typing/closure_ids_intf.cmo \
     middle_end/base_types/closure_id.cmi \
@@ -4965,12 +4965,12 @@ middle_end/typing/typing_world.cmx : \
     middle_end/typing/trivial_row_like_intf.cmx \
     middle_end/typing/row_like_intf.cmx \
     middle_end/typing/relational_product_intf.cmx \
-    middle_end/typing/parameters.cmx \
+    middle_end/typing/parameters_intf.cmx \
     middle_end/base_types/logical_variable.cmx \
     middle_end/typing/join_env_intf.cmx middle_end/base_types/immediate.cmx \
     middle_end/typing/function_type_intf.cmx \
     middle_end/typing/flambda_type0_core_intf.cmx \
-    middle_end/typing/flambda_type.cmx middle_end/base_types/discriminant.cmx \
+    middle_end/base_types/discriminant.cmx \
     middle_end/typing/closures_entry_by_closure_id_intf.cmx \
     middle_end/typing/closure_ids_intf.cmx \
     middle_end/base_types/closure_id.cmx \
