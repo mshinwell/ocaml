@@ -163,17 +163,41 @@ module type S = sig
   end
 
   val switch
-     : (Typing_env.t -> 'a -> 'a -> 'a * Typing_env_extension.t)
-    -> (Join_env.t -> 'a -> 'a -> 'a)
+     : (Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'a
+      -> 'a
+      -> 'a * Typing_env_extension.t)
+    -> (Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'a
+      -> 'a
+      -> 'a)
     -> Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
     -> 'a
     -> 'a
     -> 'a * Typing_env_extension.t
 
   val switch'
-     : (Typing_env.t -> 'a -> 'a -> 'a)
-    -> (Join_env.t -> 'a -> 'a -> 'a)
+     : (Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'a
+      -> 'a
+      -> 'a * Typing_env_extension.t)
+    -> (Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'a
+      -> 'a
+      -> 'a)
     -> Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
     -> 'a
     -> 'a
     -> 'a

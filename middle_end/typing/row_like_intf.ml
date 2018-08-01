@@ -48,6 +48,22 @@ module type S = sig
       -> Typing_env_extension.t
       -> t
 
+    val meet
+       : Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> t
+      -> t
+      -> t * Typing_env_extension.t
+
+    val join
+       : Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> t
+      -> t
+      -> t
+
     include Contains_names.S with type t := t
   end
 

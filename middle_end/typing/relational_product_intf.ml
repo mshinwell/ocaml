@@ -75,17 +75,21 @@ module type S = sig
   (** Greatest lower bound of two parameter bindings. *)
   val meet
      : Typing_env.t
-    -> t
-    -> t
+    -> Name_permutation.t
+    -> Name_permutation.t
     -> fresh_component_semantics:fresh_component_semantics
+    -> t
+    -> t
     -> t Or_bottom.t
 
   (** Least upper bound of two parameter bindings. *)
   val join
      : Join_env.t
-    -> t
-    -> t
+    -> Name_permutation.t
+    -> Name_permutation.t
     -> fresh_component_semantics:fresh_component_semantics
+    -> t
+    -> t
     -> t
 
   (** The environment extension associated with the given relational product,

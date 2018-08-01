@@ -46,6 +46,26 @@ module Make
       -> W.Typing_env_extension.t
       -> t
 
+    val meet
+       : W.Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> fresh_component_semantics:
+           Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> t * W.Typing_env_extension.t
+
+    val join
+       : W.Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> fresh_component_semantics:
+           Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> t
+
     include Contains_names.S with type t := t
   end) =
 struct
@@ -104,8 +124,8 @@ struct
     let meet_or_join env perm1 perm2
           ({ known = known1; at_least = at_least1; } : t)
           ({ known = known2; at_least = at_least2; } : t) : t Or_bottom.t =
-      let one_side_only params1 perm1 at_least2 ~get_equations_to_deposit1 =
-        let index1 = MT.index params1 in
+      let one_side_only index1 maps_to1 perm1 at_least2
+            ~get_equations_to_deposit1 =
         let from_at_least2 =
           Index.Map.find_last_opt
             (fun index -> Index.compare index index1 <= 0)
@@ -116,48 +136,48 @@ struct
           begin match E.op with
           | Meet -> None
           | Join ->
-            let params1 =
+            let maps_to1 =
               MT.add_or_meet_equations
-                (MT.apply_name_permutation params1 perm1)
+                (MT.apply_name_permutation maps_to1 perm1)
                 (Join_env.central_environment env)
                 (get_equations_to_deposit1 env)
             in
-            Some params1
+            Some maps_to1
           end
         | Some (index2, from_at_least2) ->
           assert (Index.compare index2 index1 <= 0);
-          let params1 = MT.apply_name_permutation params1 perm1 in
-          Some (E.switch' MT.meet MT.join env params1 from_at_least2)
+          let maps_to1 = MT.apply_name_permutation maps_to1 perm1 in
+          (* CR mshinwell: What happens to any generated equations in the
+             [meet] case (same below)? *)
+          Some (E.switch' MT.meet MT.join env perm1 perm2
+            maps_to1 from_at_least2)
         end
       in
-      let merge index params1 params2 =
-        match params1, params2 with
-        | Some params1, None ->
-          assert (Index.equal index (MT.index params1));
-          one_side_only params1 perm1 at_least2
+      let merge index maps_to1 maps_to2 =
+        match maps_to1, maps_to2 with
+        | Some maps_to1, None ->
+          one_side_only index maps_to1 perm1 at_least2
             ~get_equations_to_deposit1:Join_env.holds_on_left
-        | None, Some params2 ->
-          assert (Index.equal index (MT.index params2));
-          one_side_only params2 perm2 at_least1
+        | None, Some maps_to2 ->
+          one_side_only index maps_to2 perm2 at_least1
             ~get_equations_to_deposit1:Join_env.holds_on_right
-        | Some params1, Some params2 ->
-          assert (Index.equal index (MT.index params1));
-          assert (Index.equal index (MT.index params2));
-          let params1 = MT.apply_name_permutation params1 perm1 in
-          let params2 = MT.apply_name_permutation params2 perm2 in
-          Some (E.switch' MT.meet MT.join env params1 params2)
+        | Some maps_to1, Some maps_to2 ->
+          let maps_to1 = MT.apply_name_permutation maps_to1 perm1 in
+          let maps_to2 = MT.apply_name_permutation maps_to2 perm2 in
+          Some (E.switch' MT.meet MT.join env perm1 perm2
+            maps_to1 maps_to2)
         | None, None -> None
       in
       let known =
-        Tag_and_index.Map.merge (fun tag_and_index params1 params2 ->
+        Tag_and_index.Map.merge (fun tag_and_index maps_to1 maps_to2 ->
             let index = Tag_and_index.index tag_and_index in
-            merge index params1 params2)
+            merge index maps_to1 maps_to2)
           known1
           known2
       in
       let at_least =
-        Index.Map.merge (fun index params1 params2 ->
-            merge index params1 params2)
+        Index.Map.merge (fun index maps_to1 maps_to2 ->
+            merge index maps_to1 maps_to2)
           at_least1
           at_least2
       in
@@ -170,13 +190,8 @@ struct
         }
   end
 
-  module For_meet =
-    Either_meet_or_join.Meet (Flambda_type0_core) (Typing_env)
-      (Typing_env_extension) (Join_env)
-
-  module For_join =
-    Either_meet_or_join.Join (Flambda_type0_core) (Typing_env)
-      (Typing_env_extension) (Join_env)
+  module For_meet = Either_meet_or_join.For_meet (W)
+  module For_join = Either_meet_or_join.For_join (W)
 
   module Meet = Meet_or_join (For_meet)
   module Join = Meet_or_join (For_join)
@@ -186,20 +201,20 @@ struct
 
   let apply_name_permutation { known; at_least; } perm =
     let known =
-      Tag_and_index.Map.fold (fun tag_and_index params known ->
+      Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
           let tag_and_index =
             Tag_and_index.apply_name_permutation tag_and_index perm
           in
-          let params = MT.apply_name_permutation params perm in
-          Tag_and_index.Map.add tag_and_index params known)
+          let maps_to = MT.apply_name_permutation maps_to perm in
+          Tag_and_index.Map.add tag_and_index maps_to known)
         known
         Tag_and_index.Map.empty
     in
     let at_least =
-      Index.Map.fold (fun index params at_least ->
+      Index.Map.fold (fun index maps_to at_least ->
           let index = Index.apply_name_permutation index perm in
-          let params = MT.apply_name_permutation params perm in
-          Index.Map.add index params at_least)
+          let maps_to = MT.apply_name_permutation maps_to perm in
+          Index.Map.add index maps_to at_least)
         at_least
         Index.Map.empty
     in
