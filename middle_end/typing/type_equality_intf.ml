@@ -16,14 +16,12 @@
 
 (** Interface to type equality functions. *)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module T : sig
-    type flambda_type
-  end
+  module Flambda_type0_core : sig type t end
 
-  val fast_equal : T.flambda_type -> T.flambda_type -> bool
+  val fast_equal : Flambda_type0_core.t -> Flambda_type0_core.t -> bool
 
-  val equal : T.flambda_type -> T.flambda_type -> bool
+  val equal : Flambda_type0_core.t -> Flambda_type0_core.t -> bool
 end

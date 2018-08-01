@@ -21,27 +21,28 @@
 
 module type S = sig
   module rec Blocks : (Blocks_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Both_meet_and_join : (Both_meet_and_join_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
-    with module Type_equality := Type_equality
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Closure_elements : (Closure_elements_intf.S
-    with module Index := Var_within_closure.Set
-    with module Component := Logical_variable)
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Closure_ids : (Closure_ids_intf.S
-    with module Tag := Unit
-    with module Index := Closure_id.Set
-    with module Maps_to := Flambda_type0_core.Ty_value)
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env)
   and Closures_entry_by_closure_id : (Closures_entry_by_closure_id_intf.S
-    with module Tag := Unit
-    with module Index := Closure_id
-    with module Maps_to := Flambda_type0_core.Closures_entry)
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Discriminants : (Trivial_row_like_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -54,18 +55,16 @@ module type S = sig
     with module Closure_ids := Closure_ids
     with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
     with module Discriminants := Discriminants
-    with module Expr := Expr
     with module Function_type := Function_type
     with module Immediates := Immediates
-    with module Join_env := Join_env
-    with module Parameters := Parameters
     with module Types_by_closure_id := Types_by_closure_id
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Function_type : (Function_type_intf.S
     with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Join_env := Join_env
+    with module Relational_product := Relational_product
+    with module Typing_env := Typing_env)
   and Immediates : (Trivial_row_like_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -73,13 +72,12 @@ module type S = sig
     with module Typing_env_extension := Typing_env_extension
     with module Thing_without_names := Immediate)
   and Join_env : (Join_env_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Parameters : (Parameters_intf.S
     with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env)
   and Relational_product : (Relational_product_intf.S
     with module Join_env := Join_env
     with module Typing_env := Typing_env
@@ -90,22 +88,16 @@ module type S = sig
     with module Typing_env_extension := Typing_env_extension)
   and Types_by_closure_id : (Types_by_closure_id_intf.S
     with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Join_env := Join_env
+    with module Typing_env := Typing_env)
   and Typing_env : (Typing_env_intf.S
     with module Flambda_type0_core := Flambda_type0_core)
   and Typing_env_extension : (Typing_env_extension_intf.S
     with module Flambda_type0_core := Flambda_type0_core)
   and Type_equality : (Type_equality_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Flambda_type0_core := Flambda_type0_core)
   and Type_free_names : (Type_free_names_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Flambda_type0_core := Flambda_type0_core)
   and Type_printers : (Type_printers_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Flambda_type0_core := Flambda_type0_core)
 end

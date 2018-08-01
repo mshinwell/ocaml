@@ -23,7 +23,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
+  module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
   module Relational_product : sig
     type fresh_component_semantics
@@ -39,8 +39,8 @@ module type S = sig
 
   (** Create a function type from parameter and result types. *)
   val create
-     : parameters:Flambda_type.t list
-    -> results:Flambda_type.t list
+     : parameters:Flambda_type0_core.t list
+    -> results:Flambda_type0_core.t list
     -> t
 
   (** A conservative approximation to equality. *)

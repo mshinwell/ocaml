@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig
+  module Flambda_type0_core : sig
     type t
     module Set_of_closures_entry : sig type t end
   end
@@ -31,7 +31,7 @@ module type S = sig
   type open_or_closed = Open | Closed
 
   val create
-     : Flambda_type.Set_of_closures_entry.t Closure_id.Map.t
+     : Flambda_type0_core.Set_of_closures_entry.t Closure_id.Map.t
     -> open_or_closed
     -> t
 

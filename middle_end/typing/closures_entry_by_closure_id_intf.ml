@@ -24,7 +24,6 @@ module type S = sig
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
-  module Thing_without_names : Map.With_set
 
   module Closure_id_and_vars_within_closure : sig
     type t = Closure_id.t * Var_within_closure.Set.t

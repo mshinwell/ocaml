@@ -19,7 +19,6 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
-  module Type_equality : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 

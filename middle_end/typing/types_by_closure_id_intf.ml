@@ -17,17 +17,15 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
+  module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
   module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-  module Thing_without_names : Map.With_set
 
   type t
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val create : Flambda_type.t Closure_id.Map.t -> t
+  val create : Flambda_type0_core.t Closure_id.Map.t -> t
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet

@@ -19,7 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type : sig type t end
+  module Flambda_type0_core : sig type t end
   module Typing_env : sig type t end
   module Join_env : sig type t end
 
@@ -49,12 +49,12 @@ module type S = sig
 
   (** Add a definition of an existentially-bound name prior to all
       other entries in the given extension. *)
-  val add_definition_at_beginning : t -> Name.t -> Flambda_type.t -> t
+  val add_definition_at_beginning : t -> Name.t -> Flambda_type0_core.t -> t
 
   (** Add an equation (on a name that is either existentially bound in the
       given extension, or free in the extension) after all other entries in
       the given extension. *)
-  val add_equation : t -> Name.t -> Flambda_type.t -> t
+  val add_equation : t -> Name.t -> Flambda_type0_core.t -> t
 
   val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
@@ -70,7 +70,7 @@ module type S = sig
      : t
     -> Typing_env.t
     -> Typing_env.t
-    -> Flambda_type.t list
+    -> Flambda_type0_core.t list
     -> t
 
   (** [diff t env] computes the environment extension whose bindings are

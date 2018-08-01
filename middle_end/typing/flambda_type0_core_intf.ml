@@ -56,8 +56,8 @@ module type S = sig
     include Contains_names.S with type t := t
   end
 
-  module Ty_value : sig
-    type t = ty_value
+  module Set_of_closures_entry : sig
+    type t = set_of_closures_entry
 
     val add_or_meet_equations
        : t
