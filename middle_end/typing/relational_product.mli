@@ -42,11 +42,15 @@ module Make
     (Index : Relational_product_intf.Name_like)
     (Component : sig
       include Relational_product_intf.Name_like
-
-      val create : unit -> t
+      val create : Flambda_kind.t -> t
+      val equal : t -> t -> bool
+      val name : t -> Name.t
+      val kind : t -> Flambda_kind.t
     end)
     (T : Typing_world.S) :
   Relational_product_intf.S
     with module Typing_env := T.Typing_env
     with module Typing_env_extension := T.Typing_env_extension
     with module Join_env := T.Join_env
+    with module Index := Index
+    with module Component := Component

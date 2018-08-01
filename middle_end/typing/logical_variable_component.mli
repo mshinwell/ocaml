@@ -18,3 +18,5 @@
 
 include module type of struct include Logical_variable end
 include Contains_names.S with type t := t
+
+val name : t -> Name.t

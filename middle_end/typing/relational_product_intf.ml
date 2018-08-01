@@ -33,6 +33,8 @@ module type S = sig
     include Name_like
     val create : Flambda_kind.t -> t
     val equal : t -> t -> bool
+    val name : t -> Name.t
+    val kind : t -> Flambda_kind.t
   end
 
   type t

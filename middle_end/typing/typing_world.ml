@@ -92,9 +92,14 @@ module type S = sig
     with module Join_env := Join_env
     with module Typing_env := Typing_env)
   and Typing_env : (Typing_env_intf.S
-    with module Flambda_type0_core := Flambda_type0_core)
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Typing_env := Typing_env
+    with module Join_env := Join_env
+    with module Typing_env_extension := Typing_env_extension)
   and Typing_env_extension : (Typing_env_extension_intf.S
-    with module Flambda_type0_core := Flambda_type0_core)
+    with module Flambda_type0_core := Flambda_type0_core
+    with module Typing_env := Typing_env
+    with module Join_env := Join_env)
   and Type_equality : (Type_equality_intf.S
     with module Flambda_type0_core := Flambda_type0_core)
   and Type_free_names : (Type_free_names_intf.S

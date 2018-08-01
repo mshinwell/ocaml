@@ -29,3 +29,5 @@ let apply_name_permutation t perm =
 
 let freshen t freshening =
   apply_name_permutation t (Freshening.name_permutation freshening)
+
+let name t = Name.logical_var t
