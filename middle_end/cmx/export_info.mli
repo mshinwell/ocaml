@@ -18,6 +18,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Set_of_closures_id : Hashtbl.With_map (* XXX *)
+
 (** A structure that describes what a single compilation unit exports. *)
 type t = private {
   sets_of_closures : Flambda.Function_declarations.t Set_of_closures_id.Map.t;

@@ -20,6 +20,6 @@
 
 module Make (T : Typing_world.S) :
   Typing_env_extension_intf.S
-    with module Flambda_type := T.Flambda_type
+    with module Flambda_type0_core := T.Flambda_type0_core
     with module Typing_env := T.Typing_env
     with module Join_env := T.Join_env

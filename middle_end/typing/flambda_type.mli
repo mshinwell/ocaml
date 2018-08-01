@@ -73,7 +73,10 @@ val values_physically_equal : t -> t -> bool
 
 (** Whether values of the given two types will always have a different
     structure from each other. *)
-val values_structurally_distinct : t_in_context -> t_in_context -> bool
+val values_structurally_distinct
+   : (Typing_env.t * t)
+  -> (Typing_env.t * t)
+  -> bool
 
 type reification_result = private
   | Term of Simple.t * t
@@ -231,7 +234,9 @@ val prove_closures : (t -> closures proof) type_accessor
 val prove_sets_of_closures
    : (t -> (Name.t option * set_of_closures) proof) type_accessor
 
+(*
 val prove_closure : (t -> closure proof) type_accessor
+*)
 
 (** Evidence that a variant or block (with all components of kind [Value])
     may be unboxed. *)
@@ -256,8 +261,8 @@ val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
 
 (** Given the type of a [Switch] scrutinee and the arms of the [Switch], return
     which cases may be taken together with, for each such case, the destination
-    continuation and any env_extension known to hold at the jump from the [Switch]
-    to that continuation. *)
+    continuation and any env_extension known to hold at the jump from the
+    [Switch] to that continuation. *)
 val switch_arms
    : (t
     -> arms:Continuation.t Discriminant.Map.t

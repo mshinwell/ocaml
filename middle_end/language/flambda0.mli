@@ -73,10 +73,10 @@ module Apply : sig
     args : Simple.t list;
     call_kind : Call_kind.t;
     dbg : Debuginfo.t;
-    inline : inline_attribute;
+    inline : Inline_attribute.t;
     (** Instructions from the source code as to whether the callee should
         be inlined. *)
-    specialise : specialise_attribute;
+    specialise : Specialise_attribute.t;
     (** Instructions from the source code as to whether the callee should
         be specialised. *)
   }
@@ -336,13 +336,6 @@ end and Let : sig
   (** Apply the specified function [f] to the given defining expression of
       a [Let]. *)
   val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
-end and Let_mutable : sig
-  type t = {
-    var : Mutable_variable.t;
-    initial_value : Simple.t;
-    contents_type : Flambda_type.t;
-    body : Expr.t;
-  }
 end and Let_cont : sig
   (** Values of type [t] represent the definitions of continuations:
         let_cont [name] [args] = [handler] in [body]
@@ -521,7 +514,6 @@ end and Function_declarations : sig
 
   val import_for_pack
      : t
-    -> (Set_of_closures_id.t -> Set_of_closures_id.t)
     -> (Set_of_closures_origin.t -> Set_of_closures_origin.t)
     -> t
 
@@ -597,8 +589,8 @@ end and Function_declaration : sig
     -> results:Flambda_type.Parameters.t
     -> stub:bool
     -> dbg:Debuginfo.t
-    -> inline:inline_attribute
-    -> specialise:specialise_attribute
+    -> inline:Inline_attribute.t
+    -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
     -> my_closure:Variable.t
     -> t

@@ -21,16 +21,6 @@
 
 module F0 = Flambda0
 
-type assign = F0.assign
-type inline_attribute = F0.inline_attribute =
-  | Always_inline
-  | Never_inline
-  | Unroll of int
-  | Default_inline
-type specialise_attribute = F0.specialise_attribute =
-  | Always_specialise
-  | Never_specialise
-  | Default_specialise
 type mutable_or_immutable = F0.mutable_or_immutable
 type recursive = F0.recursive
 
@@ -43,33 +33,16 @@ module Call_kind :
   module type of struct include F0.Call_kind end
 module Continuation_handlers :
   module type of struct include F0.Continuation_handlers end
-module Free_var :
-  module type of struct include F0.Free_var end
 module Let :
   module type of struct include F0.Let end
 module Let_cont :
   module type of struct include F0.Let_cont end
-module Let_mutable :
-  module type of struct include F0.Let_mutable end
 module Switch :
   module type of struct include F0.Switch end
 module Trap_action :
   module type of struct include F0.Trap_action end
 module With_free_names :
   module type of struct include F0.With_free_names end
-
-module Free_vars : sig
-  include module type of struct include F0.Free_vars end
-
-  (* This is probably not needed anymore: closure elements are part of
-     the set of closures not of the closure themselves anymore. This
-     means that there are no elements that are projections from
-     others elements of the same set. So no need to clean them (I think) *)
-
-  (* Ensure that projection information is suitably erased if we have deleted
-     the variable being projected from. *)
-  (* val clean_projections : t -> t *)
-end
 
 module Reachable : sig
   type t = private

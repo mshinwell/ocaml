@@ -52,12 +52,6 @@ val add_variables : t -> (Variable.t * Flambda_kind.t) list -> t
 
 val add_kinded_parameters : t -> Kinded_parameter.t list -> t
 
-val add_mutable_variable
-   : t
-  -> Mutable_variable.t
-  -> Flambda_kind.t
-  -> t
-
 val add_symbol : t -> Symbol.t -> Flambda_kind.t -> t
 
 val add_continuation
@@ -76,9 +70,6 @@ val add_use_of_var_within_closure : t -> Var_within_closure.t -> unit
 val add_closure_id : t -> Closure_id.t -> unit
 
 val add_use_of_closure_id : t -> Closure_id.t -> unit
-
-(* XXX this one needs to error upon rebinding *)
-val add_set_of_closures_id : t -> Set_of_closures_id.t -> unit
 
 val variable_is_bound : t -> Variable.t -> bool
 
@@ -124,8 +115,6 @@ val check_variables_are_bound_and_of_kind
   -> Flambda_kind.t
   -> unit
 
-val check_mutable_variable_is_bound : t -> Mutable_variable.t -> unit
-
 val check_symbol_is_bound : t -> Symbol.t -> unit
 
 val find_continuation_opt
@@ -140,8 +129,6 @@ val kind_of_simple : t -> Simple.t -> Flambda_kind.t
 val kind_of_name : t -> Name.t -> Flambda_kind.t
 
 val kind_of_variable : t -> Variable.t -> Flambda_kind.t
-
-val kind_of_mutable_variable : t -> Mutable_variable.t -> Flambda_kind.t
 
 val current_continuation_stack : t -> Continuation_stack.t
 

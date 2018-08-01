@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,9 +14,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Set_of_closures_id
+module Id : Id_types.Id = Id_types.Id (struct end)
+module Unit_id = Id_types.UnitId (Id) (Compilation_unit)
 
-let create t = t
-let rename f t = f t
+type t = Unit_id.t
+
+include Hashtbl.Make_with_map (Unit_id)
+
+let create = Unit_id.create
+let get_compilation_unit = Unit_id.unit
+let name = Unit_id.name
