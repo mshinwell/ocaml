@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S = sig
+  module Flambda_type0_core : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -27,7 +28,11 @@ module type S = sig
 
   val create : Typing_env.t -> t
 
-  val add_definition_central_environment : t -> Name.t -> t -> t
+  val add_definition_central_environment
+     : t
+    -> Name.t
+    -> Flambda_type0_core.t
+    -> t
 
   val add_extensions
      : t

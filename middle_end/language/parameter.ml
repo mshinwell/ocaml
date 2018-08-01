@@ -23,8 +23,8 @@ type parameter = {
 let create (name : Name.t) =
   match name with
   | Var var -> { var; }
-  | Symbol _ ->
-    Misc.fatal_errorf "Cannot create [Parameter]s from [Symbol]s: %a"
+  | Symbol _ | Logical_var _ ->
+    Misc.fatal_errorf "Can only create [Parameter]s from [Variable]s: %a"
       Name.print name
 
 let wrap var = { var; }

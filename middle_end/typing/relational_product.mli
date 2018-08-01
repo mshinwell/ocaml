@@ -39,9 +39,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make
-    (Index : Name_like)
+    (Index : Relational_product_intf.Name_like)
     (Component : sig
-      include Name_like
+      include Relational_product_intf.Name_like
 
       val create : unit -> t
     end)

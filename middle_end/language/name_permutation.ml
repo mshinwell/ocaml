@@ -78,13 +78,12 @@ let create () =
     variables = Variables.create ();
   }
 
-let print ppf { continuations; kinded_parameters;
+let print ppf { continuations; kinded_parameters; logical_variables;
       names; symbols; trap_ids; variables; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
       @[<hov 1>(kinded_parameters@ %a)@]@ \
       @[<hov 1>(logical_variables@ %a)@]@ \
-      @[<hov 1>(mutable_variables@ %a)@]@ \
       @[<hov 1>(names@ %a)@]@ \
       @[<hov 1>(symbols@ %a)@]@ \
       @[<hov 1>(trap_ids@ %a)@]@ \
@@ -98,7 +97,7 @@ let print ppf { continuations; kinded_parameters;
     Variables.print variables
 
 let is_empty { continuations; kinded_parameters; logical_variables;
-      mutable_variables; names; symbols; trap_ids; variables; } =
+      names; symbols; trap_ids; variables; } =
   Continuations.is_empty continuations
     && Kinded_parameters.is_empty kinded_parameters
     && Logical_variables.is_empty logical_variables
@@ -111,7 +110,6 @@ let compose
       { continuations = continuations1;
         kinded_parameters = kinded_parameters1;
         logical_variables = logical_variables1;
-        mutable_variables = mutable_variables1;
         names = names1;
         symbols = symbols1;
         trap_ids = trap_ids1;
@@ -120,7 +118,6 @@ let compose
       { continuations = continuations2;
         kinded_parameters = kinded_parameters2;
         logical_variables = logical_variables2;
-        mutable_variables = mutable_variables2;
         names = names2;
         symbols = symbols2;
         trap_ids = trap_ids2;
@@ -130,7 +127,7 @@ let compose
     kinded_parameters =
       Kinded_parameters.compose kinded_parameters1 kinded_parameters2;
     logical_variables =
-      logical_variables.compose logical_variables1 logical_variables2;
+      Logical_variables.compose logical_variables1 logical_variables2;
     names = Names.compose names1 names2;
     symbols = Symbols.compose symbols1 symbols2;
     trap_ids = Trap_ids.compose trap_ids1 trap_ids2;

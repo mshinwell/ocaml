@@ -29,7 +29,11 @@ module type S = sig
   module Typing_env_extension : sig type t end
 
   module Index : Name_like
-  module Component : Name_like
+  module Component : sig
+    include Name_like
+    val create : Flambda_kind.t -> t
+    val equal : t -> t -> bool
+  end
 
   type t
 

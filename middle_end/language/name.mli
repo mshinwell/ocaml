@@ -16,9 +16,6 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** A "name" in Flambda identifies either a variable or a symbol.  Much of
-    the same logic applies to both of these concepts. *)
-
 type t = private
   | Var of Variable.t
   | Symbol of Symbol.t

@@ -19,9 +19,11 @@
 type t =
   | Var of Variable.t
   | Symbol of Symbol.t
+  | Logical_var of Logical_variable.t
 
 let var v = Var v
 let symbol s = Symbol s
+let logical_var lv = Logical_var lv
 
 let map_var t ~f =
   match t with
@@ -29,11 +31,11 @@ let map_var t ~f =
     let var' = f var in
     if var == var' then t
     else Var var'
-  | Symbol _ -> t
+  | Symbol _ | Logical_var _ -> t
 
 let map_symbol t ~f =
   match t with
-  | Var _ -> t
+  | Var _ | Logical_var _ -> t
   | Symbol symbol ->
     let symbol' = f symbol in
     if symbol == symbol' then t
@@ -42,11 +44,11 @@ let map_symbol t ~f =
 let to_var t =
   match t with
   | Var var -> Some var
-  | Symbol _ -> None
+  | Symbol _ | Logical_var _ -> None
 
 let to_symbol t =
   match t with
-  | Var _ -> None
+  | Var _ | Logical_var _ -> None
   | Symbol sym -> Some sym
 
 module With_map =
@@ -57,18 +59,25 @@ module With_map =
       match t with
       | Var var -> Variable.print ppf var
       | Symbol sym -> Symbol.print ppf sym
+      | Logical_var lv -> Logical_variable.print ppf lv
 
     let hash t =
       match t with
       | Var var -> Hashtbl.hash (0, Variable.hash var)
       | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
+      | Logical_var lv -> Hashtbl.hash (2, Logical_variable.hash lv)
 
     let compare t1 t2 =
       match t1, t2 with
       | Var var1, Var var2 -> Variable.compare var1 var2
       | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
+      | Logical_var lv1, Logical_var lv2 -> Logical_variable.compare lv1 lv2
       | Var _, Symbol _ -> -1
+      | Var _, Logical_var _ -> -1
       | Symbol _, Var _ -> 1
+      | Symbol _, Logical_var _ -> -1
+      | Logical_var _, Var _ -> 1
+      | Logical_var _, Symbol _ -> 1
   end)
 
 (* CR mshinwell: We need a better way of adding the colours to maps. *)
@@ -99,13 +108,13 @@ let variables_only t =
   Set.filter (fun name ->
       match name with
       | Var _ -> true
-      | Symbol _ -> false)
+      | Symbol _ | Logical_var _ -> false)
     t
 
 let symbols_only_map t =
   Map.filter (fun name _ ->
       match name with
-      | Var _ -> false
+      | Var _ | Logical_var _ -> false
       | Symbol _ -> true)
     t
 
@@ -129,18 +138,23 @@ let print_sexp ppf t =
   match t with
   | Var var -> Format.fprintf ppf "@[(Var %a)@]" Variable.print var
   | Symbol sym -> Format.fprintf ppf "@[(Symbol %a)@]" Symbol.print sym
+  | Logical_var lv ->
+    Format.fprintf ppf "@[(Logical_var %a)@]" Logical_variable.print lv
 
 let is_predefined_exception t =
   match t with
   | Var _ -> false
   | Symbol sym -> Symbol.is_predefined_exception sym
+  | Logical_var _ -> false
 
 let rename t =
   match t with
   | Var var -> Var (Variable.rename var)
   | Symbol sym -> Symbol (Symbol.rename sym)
+  | Logical_var lv -> Logical_var (Logical_variable.rename lv)
 
 let in_compilation_unit t =
   match t with
   | Var var -> Variable.in_compilation_unit var
   | Symbol sym -> Symbol.in_compilation_unit sym
+  | Logical_var lv -> Logical_variable.in_compilation_unit lv

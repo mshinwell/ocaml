@@ -22,6 +22,9 @@ type string_contents =
 
 type t
 
-val create : string_contents -> size:Targetint.OCaml.t -> t
+val create : contents:string_contents -> size:Targetint.OCaml.t -> t
+
+val contents : t -> string_contents
+val size : t -> Targetint.OCaml.t
 
 include Hashtbl.With_map with type t := t

@@ -46,3 +46,11 @@ let create kind =
   }
 
 let kind t = t.kind
+
+let rename t =
+  { t with
+    var = Variable.rename t.var;
+  }
+
+let in_compilation_unit t comp_unit =
+  Variable.in_compilation_unit t.var comp_unit

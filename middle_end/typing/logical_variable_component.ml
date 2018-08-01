@@ -22,7 +22,7 @@ let free_names t =
   Name_occurrences.create_from_set_in_types (
     Name.Set.singleton (Name.logical_var t))
 
-let bound_names t = Name_occurrences.create ()
+let bound_names _t = Name_occurrences.create ()
 
 let apply_name_permutation t perm =
   Name_permutation.apply_logical_variable perm t

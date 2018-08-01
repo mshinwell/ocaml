@@ -20,5 +20,7 @@ type t
 
 val create : Flambda_kind.t -> t
 val kind : t -> Flambda_kind.t
+val rename : t -> t
+val in_compilation_unit : t -> Compilation_unit.t -> bool
 
 include Hashtbl.With_map with type t := t

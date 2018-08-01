@@ -1,4 +1,3 @@
-
 (**************************************************************************)
 (*                                                                        *)
 (*                                 OCaml                                  *)
@@ -31,16 +30,15 @@ module Make
   (Index : Name_like)
   (Component : sig
     include Name_like
-
-    val create : unit -> t
+    val create : Flambda_kind.t -> t
+    val equal : t -> t -> bool
   end)
-  (T : Typing_world.S)
+  (W : Typing_world.S)
 = struct
-  open T
-
-  module JE = Join_env
-  module TE = Typing_env
-  module TEE = Typing_env_extension
+  module JE = W.Join_env
+  module T = W.Flambda_type0_core
+  module TE = W.Typing_env
+  module TEE = W.Typing_env_extension
 
   module Indexed_product = struct
     type t = {
@@ -53,18 +51,7 @@ module Make
          [Definition]s for [Name]s occurring in the indexes. *)
       ()
 
-    let create_with_env_extension indexes env_extension : t =
-      let components_by_index =
-        Index.Set.fold (fun index components_by_index ->
-            let kind = Index.kind index in
-            let component = Component.create kind in
-            let components_by_index =
-              Index.Map.add index component components_by_index_in_result
-            in
-            components_by_index)
-          indexes
-          Index.Map.empty
-      in
+    let create components_by_index env_extension : t =
       let t =
         { components_by_index;
           env_extension;
@@ -72,9 +59,6 @@ module Make
       in
       invariant t;
       t
-
-    let create indexes =
-      create_with_env_extension indexes TEE.empty
 
     let print ppf { components_by_index; env_extension; } =
       Format.fprintf ppf
@@ -105,11 +89,15 @@ module Make
       | Meet
       | Join
 
+    (* CR mshinwell: The [kind] may not be needed in [Component] but it isn't
+       clear yet.  We can sort this out later.  At present all relational
+       products map to components of kind [Value]. *)
+    let kind = Flambda_kind.value ()
+
     let environment_for_meet_or_join env (t1 : t) (t2 : t)
           ~fresh_component_semantics ~indexes =
       let components_by_index_in_result, env =
         Index.Set.fold (fun index (components_by_index_in_result, env) ->
-            let kind = Index.kind index in
             let component =
               match fresh_component_semantics with
               | Fresh -> Component.create kind
@@ -277,13 +265,10 @@ module Make
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         IP.print) t
 
-  let create indexes_list =
-    List.map (fun indexes -> IP.create indexes) indexes_list
-
-  let create_with_env_extensions indexes_and_extensions_list =
-    List.map (fun (indexes, extension) ->
-        IP.create_with_env_extension indexes extension)
-      indexes_and_extensions_list
+  let create components_by_index_list =
+    List.map (fun (components_by_index, env_extension) ->
+        IP.create components_by_index env_extension)
+      indexes_list
 
   let equal t1 t2 =
     Misc.Stdlib.List.equal IP.equal t1 t2
