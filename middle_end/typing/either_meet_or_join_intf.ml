@@ -168,7 +168,7 @@ module type S = sig
       -> Name_permutation.t
       -> 'a
       -> 'a
-      -> 'a * Typing_env_extension.t)
+      -> 'a Or_bottom.t * Typing_env_extension.t)
     -> (Join_env.t
       -> Name_permutation.t
       -> Name_permutation.t
@@ -188,7 +188,7 @@ module type S = sig
       -> Name_permutation.t
       -> 'a
       -> 'a
-      -> 'a * Typing_env_extension.t)
+      -> 'a Or_bottom.t * Typing_env_extension.t)
     -> (Join_env.t
       -> Name_permutation.t
       -> Name_permutation.t
@@ -198,6 +198,29 @@ module type S = sig
     -> Join_env.t
     -> Name_permutation.t
     -> Name_permutation.t
+    -> 'a
+    -> 'a
+    -> 'a
+
+  val switch'_with_param
+     : (Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'b
+      -> 'a
+      -> 'a
+      -> 'a Or_bottom.t * Typing_env_extension.t)
+    -> (Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> 'b
+      -> 'a
+      -> 'a
+      -> 'a)
+    -> Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> 'b
     -> 'a
     -> 'a
     -> 'a

@@ -23,6 +23,17 @@ module type Name_like = sig
   include Contains_names.S with type t := t
 end
 
+type fresh_component_semantics =
+  | Fresh
+    (** For [meet] and [join] always assign fresh components. *)
+  | Left
+    (** For [meet] and [join] use component names from the left-hand
+        value of type [t] passed in.  (During [join], if a component does
+        not occur on the left-hand side, a fresh component will be
+        created. *)
+  | Right
+    (** Analogous to [Left]. *)
+
 module type S = sig
   module Join_env : sig type t end
   module Typing_env : sig type t end
@@ -61,33 +72,22 @@ module type S = sig
       is ordered according to [Index.compare]. *)
   val components : t -> Component.t list list
 
-  type fresh_component_semantics =
-    | Fresh
-      (** For [meet] and [join] always assign fresh components. *)
-    | Left
-      (** For [meet] and [join] use component names from the left-hand
-          value of type [t] passed in.  (During [join], if a component does
-          not occur on the left-hand side, a fresh component will be
-          created. *)
-    | Right
-      (** Analogous to [Left]. *)
-
   (** Greatest lower bound of two parameter bindings. *)
   val meet
      : Typing_env.t
     -> Name_permutation.t
     -> Name_permutation.t
-    -> fresh_component_semantics:fresh_component_semantics
+    -> fresh_component_semantics
     -> t
     -> t
-    -> t Or_bottom.t
+    -> t Or_bottom.t * Typing_env_extension.t
 
   (** Least upper bound of two parameter bindings. *)
   val join
      : Join_env.t
     -> Name_permutation.t
     -> Name_permutation.t
-    -> fresh_component_semantics:fresh_component_semantics
+    -> fresh_component_semantics
     -> t
     -> t
     -> t

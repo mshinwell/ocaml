@@ -63,8 +63,8 @@ module type S = sig
   and Function_type : (Function_type_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
-    with module Relational_product := Relational_product
-    with module Typing_env := Typing_env)
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Immediates : (Trivial_row_like_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env

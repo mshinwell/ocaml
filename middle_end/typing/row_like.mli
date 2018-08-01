@@ -44,6 +44,24 @@ module Make
         -> W.Typing_env_extension.t
         -> t
 
+      val meet
+         : W.Typing_env.t
+        -> Name_permutation.t
+        -> Name_permutation.t
+        -> Relational_product_intf.fresh_component_semantics
+        -> t
+        -> t
+        -> t Or_bottom.t * W.Typing_env_extension.t
+
+      val join
+         : W.Join_env.t
+        -> Name_permutation.t
+        -> Name_permutation.t
+        -> Relational_product_intf.fresh_component_semantics
+        -> t
+        -> t
+        -> t
+
       include Contains_names.S with type t := t
     end) :
   Row_like_intf.S

@@ -59,10 +59,22 @@ module type S = sig
   val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
   (** Least upper bound of two environment extensions. *)
-  val meet : Typing_env.t -> t -> t -> t
+  val meet
+     : Typing_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> t
+    -> t
+    -> t
 
   (** Greatest lower bound of two environment extensions. *)
-  val join : Join_env.t -> t -> t -> t
+  val join
+     : Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> t
+    -> t
+    -> t
 
   val restrict_to_definitions : t -> t
 

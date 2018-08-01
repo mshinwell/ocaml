@@ -25,10 +25,8 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
-  module Relational_product : sig
-    type fresh_component_semantics
-  end
   module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
 
   type t
 
@@ -50,17 +48,21 @@ module type S = sig
       [fresh_component_semantics] is as for [Relational_product.meet]. *)
   val meet
      : Typing_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> fresh_component_semantics:Relational_product.fresh_component_semantics
-    -> t Or_bottom.t
+    -> t Or_bottom.t * Typing_env_extension.t
 
   (** Least upper bound of two function types. *)
   val join
      : Join_env.t
+    -> Name_permutation.t
+    -> Name_permutation.t
+    -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> fresh_component_semantics:Relational_product.fresh_component_semantics
     -> t
 
   (** Add or meet the definitions and equations from the given function type

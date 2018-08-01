@@ -52,14 +52,16 @@ module type S = sig
        : Typing_env.t
       -> Name_permutation.t
       -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
-      -> t * Typing_env_extension.t
+      -> t Or_bottom.t * Typing_env_extension.t
 
     val join
        : Join_env.t
       -> Name_permutation.t
       -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
       -> t
@@ -81,8 +83,6 @@ module type S = sig
 
   val create_at_least_multiple : Maps_to.t Index.Map.t -> t
 
-  val create_unknown : unit -> t
-
   val is_bottom : t -> bool
 
   val get_singleton : t -> Maps_to.t option
@@ -91,14 +91,16 @@ module type S = sig
      : Typing_env.t
     -> Name_permutation.t
     -> Name_permutation.t
+    -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> t Or_bottom.t
+    -> t Or_bottom.t * Typing_env_extension.t
 
   val join
      : Join_env.t
     -> Name_permutation.t
     -> Name_permutation.t
+    -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
     -> t

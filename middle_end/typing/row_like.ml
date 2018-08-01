@@ -50,18 +50,16 @@ module Make
        : W.Typing_env.t
       -> Name_permutation.t
       -> Name_permutation.t
-      -> fresh_component_semantics:
-           Relational_product_intf.fresh_component_semantics
+      -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
-      -> t * W.Typing_env_extension.t
+      -> t Or_bottom.t * W.Typing_env_extension.t
 
     val join
        : W.Join_env.t
       -> Name_permutation.t
       -> Name_permutation.t
-      -> fresh_component_semantics:
-           Relational_product_intf.fresh_component_semantics
+      -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
       -> t
@@ -72,6 +70,9 @@ struct
   open W
 
   module MT = Maps_to
+
+  module Tag = Tag
+  module Index = Index
 
   module Tag_and_index = struct
     include Hashtbl.Make_with_map_pair (Tag) (Index)
@@ -107,9 +108,19 @@ struct
       at_least = Index.Map.empty;
     }
 
+  let create_exactly_multiple known =
+    { known;
+      at_least = Index.Map.empty;
+    }
+
   let create_at_least index maps_to =
     { known = Tag_and_index.Map.empty;
       at_least = Index.Map.singleton index maps_to;
+    }
+
+  let create_at_least_multiple at_least =
+    { known = Tag_and_index.Map.empty;
+      at_least;
     }
 
   let is_empty { known; at_least; } =
@@ -121,7 +132,7 @@ struct
       with module Typing_env := Typing_env
       with module Typing_env_extension := Typing_env_extension) =
   struct
-    let meet_or_join env perm1 perm2
+    let meet_or_join env perm1 perm2 fresh_component_semantics
           ({ known = known1; at_least = at_least1; } : t)
           ({ known = known2; at_least = at_least2; } : t) : t Or_bottom.t =
       let one_side_only index1 maps_to1 perm1 at_least2
@@ -149,8 +160,8 @@ struct
           let maps_to1 = MT.apply_name_permutation maps_to1 perm1 in
           (* CR mshinwell: What happens to any generated equations in the
              [meet] case (same below)? *)
-          Some (E.switch' MT.meet MT.join env perm1 perm2
-            maps_to1 from_at_least2)
+          Some (E.switch'_with_param MT.meet MT.join env perm1 perm2
+            fresh_component_semantics maps_to1 from_at_least2)
         end
       in
       let merge index maps_to1 maps_to2 =
@@ -164,8 +175,8 @@ struct
         | Some maps_to1, Some maps_to2 ->
           let maps_to1 = MT.apply_name_permutation maps_to1 perm1 in
           let maps_to2 = MT.apply_name_permutation maps_to2 perm2 in
-          Some (E.switch' MT.meet MT.join env perm1 perm2
-            maps_to1 maps_to2)
+          Some (E.switch'_with_param MT.meet MT.join env perm1 perm2
+            fresh_component_semantics maps_to1 maps_to2)
         | None, None -> None
       in
       let known =
@@ -199,6 +210,23 @@ struct
   let meet = Meet.meet_or_join
   let join = Join.meet_or_join
 
+  let get_singleton { known; at_least; } =
+    match
+      Tag_and_index.Map.get_singleton known,
+        Index.Map.get_singleton at_least
+    with
+    | Some maps_to, None | None, Some maps_to -> Some maps_to
+    | Some _, Some _ | None, None -> None
+
+  let is_bottom { known; at_least; } =
+    Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
+
+  let free_names { known; at_least; } =
+
+
+  let bound_names { known; at_least; } =
+
+
   let apply_name_permutation { known; at_least; } perm =
     let known =
       Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
@@ -222,6 +250,6 @@ struct
       at_least;
     }
 
-  let apply_freshening t freshening =
+  let freshen t freshening =
     apply_name_permutation t (Freshening.name_permutation freshening)
 end

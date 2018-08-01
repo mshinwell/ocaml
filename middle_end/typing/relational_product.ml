@@ -59,11 +59,6 @@ module Make
   module TEE = W.Typing_env_extension
 *)
 
-  type fresh_component_semantics =
-    | Fresh
-    | Left
-    | Right
-
   module Indexed_product = struct
     type t = {
       components_by_index : Component.t Index.Map.t;
@@ -110,7 +105,9 @@ module Make
     let kind = Flambda_kind.value ()
 
     let environment_for_meet_or_join env (t1 : t) (t2 : t)
-          ~fresh_component_semantics ~indexes =
+          (fresh_component_semantics
+            : Relational_product_intf.fresh_component_semantics)
+          ~indexes =
       let components_by_index_in_result, env =
         Index.Set.fold (fun index (components_by_index_in_result, env) ->
             let component =
@@ -176,7 +173,7 @@ module Make
       let env_extension2 = add_equalities_to_extension t2 env_extension2 in
       env, env_extension1, env_extension2, components_by_index_in_result
 
-    let meet env t1 t2 ~fresh_component_semantics : _ Or_bottom.t =
+    let meet env perm1 perm2 fresh_component_semantics t1 t2 : _ Or_bottom.t =
       if t1 == t2 then Ok (t1, env, t1.env_extension, t1.env_extension)
       else
         let indexes = Index.Set.inter (indexes t1) (indexes t2) in
@@ -184,12 +181,13 @@ module Make
         else
           let env = Join_env.create env in
           let env, env_extension1, env_extension2, components_by_index =
-            environment_for_meet_or_join env t1 t2 ~fresh_component_semantics
+            environment_for_meet_or_join env t1 t2 fresh_component_semantics
               ~indexes
           in
           let env = Join_env.central_environment env in
           let env_extension =
-            Typing_env_extension.meet env env_extension1 env_extension2
+            Typing_env_extension.meet env perm1 perm2
+              env_extension1 env_extension2
           in
           let t =
             { components_by_index;
@@ -198,17 +196,18 @@ module Make
           in
           Ok (t, env, env_extension1, env_extension2)
 
-    let join env t1 t2 ~fresh_component_semantics =
+    let join env perm1 perm2 fresh_component_semantics t1 t2 =
       if t1 == t2 then
         t1, env, t1.env_extension, t1.env_extension
       else
         let indexes = Index.Set.union (indexes t1) (indexes t2) in
         let env, env_extension1, env_extension2, components_by_index =
-          environment_for_meet_or_join env t1 t2 ~fresh_component_semantics
+          environment_for_meet_or_join env t1 t2 fresh_component_semantics
             ~indexes
         in
         let env_extension =
-          Typing_env_extension.join env env_extension1 env_extension2
+          Typing_env_extension.join env perm1 perm2
+            env_extension1 env_extension2
         in
         let t =
           { components_by_index;
@@ -251,7 +250,11 @@ module Make
 
     let append_extension t env extension =
       { t with
-        env_extension = Typing_env_extension.meet env t.env_extension extension;
+        env_extension =
+          Typing_env_extension.meet env
+            (Name_permutation.create ())
+            (Name_permutation.create ())
+            t.env_extension extension;
       }
 
     let apply_name_permutation { components_by_index; env_extension; } perm =
@@ -275,7 +278,10 @@ module Make
 
     let add_or_meet_equations t env new_equations =
       let env_extension =
-        Typing_env_extension.meet env t.env_extension new_equations
+        Typing_env_extension.meet env
+          (Name_permutation.create ())
+          (Name_permutation.create ())
+          t.env_extension new_equations
       in
       { t with env_extension; }
 
@@ -305,9 +311,10 @@ module Make
   let components t =
     List.map (fun ip -> IP.components ip) t
 
-  let meet env t1 t2 ~fresh_component_semantics : _ Or_bottom.t =
+  let meet env perm1 perm2 fresh_component_semantics t1 t2
+        : _ Or_bottom.t * Typing_env_extension.t =
     if t1 == t2 then begin
-      Ok t1
+      Ok t1, Typing_env_extension.empty
     end else begin
       if List.compare_lengths t1 t2 <> 0 then begin
         Misc.fatal_errorf "Cannot meet relational products of different lengths"
@@ -321,7 +328,9 @@ module Make
             | Ok t_rev ->
               let ip1 = IP.append_extension ip1 env env_extension1 in
               let ip2 = IP.append_extension ip2 env env_extension2 in
-              match IP.meet env ip1 ip2 ~fresh_component_semantics with
+              match
+                IP.meet env perm1 perm2 fresh_component_semantics ip1 ip2
+              with
               | Bottom -> Or_bottom.Bottom, env, env_extension1, env_extension2
               | Ok (ip, env, env_extension1, env_extension2) ->
                 Or_bottom.Ok (ip :: t_rev), env, env_extension1, env_extension2)
@@ -330,11 +339,11 @@ module Make
           t1 t2
       in
       match t_rev with
-      | Bottom -> Bottom
-      | Ok t_rev -> Ok (List.rev t_rev)
+      | Bottom -> Bottom, Typing_env_extension.empty
+      | Ok t_rev -> Ok (List.rev t_rev), Typing_env_extension.empty
     end
 
-  let join env t1 t2 ~fresh_component_semantics =
+  let join env perm1 perm2 fresh_component_semantics t1 t2 =
     if t1 == t2 then begin
       t1
     end else begin
@@ -353,7 +362,7 @@ module Make
                 env_extension2
             in
             let ip, env, env_extension1, env_extension2 =
-              IP.join env ip1 ip2 ~fresh_component_semantics
+              IP.join env perm1 perm2 fresh_component_semantics ip1 ip2
             in
             ip :: t_rev, env, env_extension1, env_extension2)
           ([], env, Typing_env_extension.empty, Typing_env_extension.empty)
@@ -364,7 +373,10 @@ module Make
 
   let standalone_extension t env =
     List.fold_left (fun extension ip ->
-        Typing_env_extension.meet env extension (IP.standalone_extension ip))
+        Typing_env_extension.meet env
+          (Name_permutation.create ())
+          (Name_permutation.create ())
+          extension (IP.standalone_extension ip))
       Typing_env_extension.empty
       t
 
