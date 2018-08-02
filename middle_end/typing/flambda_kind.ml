@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017 OCamlPro SAS                                          *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Naked_number_kind = struct
   type t =
@@ -33,40 +33,10 @@ module Naked_number_kind = struct
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end
 
-module Phantom_kind = struct
-  type t =
-    | Value
-    | Naked_number of Naked_number_kind.t
-    | Fabricated
-
-  let print ppf t =
-    match t with
-    | Value ->
-      Format.fprintf ppf "Value"
-    | Naked_number naked_number_kind ->
-      Format.fprintf ppf "(Naked_number %a)"
-        Naked_number_kind.print naked_number_kind
-    | Fabricated ->
-      Format.fprintf ppf "Fabricated"
-
-  type occurrences =
-    | In_types
-    | Debug_only
-
-  let print_occurrences ppf occs =
-    match occs with
-    | In_types -> Format.pp_print_string ppf "In_types"
-    | Debug_only -> Format.pp_print_string ppf "Debug_only"
-
-  let equal_occurrences occs1 occs2 =
-    Pervasives.compare occs1 occs2 = 0
-end
-
 type t =
   | Value
   | Naked_number of Naked_number_kind.t
   | Fabricated
-  | Phantom of Phantom_kind.occurrences * Phantom_kind.t
 
 type kind = t
 
@@ -87,8 +57,6 @@ let naked_nativeint () = Naked_number Naked_nativeint
 
 let fabricated () = Fabricated
 
-let phantom occs phantom_kind = Phantom (occs, phantom_kind)
-
 include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
@@ -105,72 +73,23 @@ include Hashtbl.Make_with_map (struct
         Naked_number_kind.print naked_number_kind
     | Fabricated ->
       Format.fprintf ppf "Fabricated"
-    | Phantom (occs, phantom_kind) ->
-      Format.fprintf ppf "(Phantom %a %a)"
-        Phantom_kind.print_occurrences occs
-        Phantom_kind.print phantom_kind
 end)
 
 let compatible t ~if_used_at =
   equal t if_used_at
 
-let compatible_allowing_phantom t ~if_used_at =
-  let without_phantom : t =
-    match if_used_at with
-    | Value
-    | Naked_number _
-    | Fabricated -> t
-    | Phantom (_, Value) -> Value
-    | Phantom (_, Naked_number kind) -> Naked_number kind
-    | Phantom (_, Fabricated) -> Fabricated
-  in
-  compatible t ~if_used_at:without_phantom
-
 let is_value t =
   match t with
   | Value -> true
   | Naked_number _
-  | Fabricated
-  | Phantom _ -> false
+  | Fabricated -> false
 
 let is_naked_float t =
   match t with
   | Naked_number Naked_float -> true
   | Value
   | Naked_number _
-  | Fabricated
-  | Phantom _ -> false
-
-let is_phantom t =
-  match t with
-  | Value
-  | Naked_number _
   | Fabricated -> false
-  | Phantom _ -> true
-
-let phantomize_in_types t : t =
-  match t with
-  | Value ->
-    Phantom (In_types, Value)
-  | Naked_number number_kind ->
-    Phantom (In_types, Phantom_kind.Naked_number number_kind)
-  | Fabricated ->
-    Phantom (In_types, Fabricated)
-  | Phantom (In_types, _) -> t
-  | Phantom (Debug_only, _) ->
-    Misc.fatal_errorf "Cannot phantomize kind %a to [In_types]"
-      print t
-
-let phantomize_debug_only t =
-  match t with
-  | Value ->
-    Phantom (Debug_only, Value)
-  | Naked_number number_kind ->
-    Phantom (Debug_only, Phantom_kind.Naked_number number_kind)
-  | Fabricated ->
-    Phantom (Debug_only, Fabricated)
-  | Phantom (Debug_only, _) -> t
-  | Phantom (In_types, kind) -> Phantom (Debug_only, kind)
 
 module Standard_int = struct
   type t =

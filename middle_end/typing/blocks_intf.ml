@@ -43,6 +43,9 @@ module type S = sig
 
   type open_or_closed = Open | Closed of Tag.t
 
+  (** Create a value which describes that there are exactly no blocks. *)
+  val create_bottom : unit -> t
+
   val create : field_tys:Flambda_type0_core.t list -> open_or_closed -> t
 
   val invariant : t -> unit

@@ -27,6 +27,13 @@ module type S_applied = sig
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+  (** Create a value which describes the presence of exactly no things. *)
+  val create_bottom : unit -> t
+
+  (** Create a value which describes the presence of an unknown set of
+      things. *)
+  val create_unknown : unit -> t
+
   val create : Thing_without_names.Set.t -> t
 
   val create_with_equations

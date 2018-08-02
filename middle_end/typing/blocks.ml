@@ -71,7 +71,10 @@ module Make (W : Typing_world.S) = struct
     | Open -> RL.create_at_least size product
     | Closed tag -> RL.create_exactly tag size product
 
-  let invariant _t = () (* CR mshinwelL: RL.invariant *)
+  let create_bottom () =
+    create ~field_tys:[] (Closed Tag.zero)  (* The tag is arbitrary. *)
+
+  let invariant _t = () (* CR mshinwell: RL.invariant *)
   let print_with_cache = RL.print
 
   let meet env perm1 perm2 t1 t2 =

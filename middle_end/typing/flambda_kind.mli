@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017 OCamlPro SAS                                          *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (** Kinds of Flambda types. *)
 
@@ -29,24 +29,6 @@ module Naked_number_kind : sig
   val print : Format.formatter -> t -> unit
 end
 
-module Phantom_kind : sig
-  type t =
-    | Value
-    | Naked_number of Naked_number_kind.t
-    | Fabricated
-
-  val print : Format.formatter -> t -> unit
-
-  type occurrences =
-    | In_types
-    (** The associated variable only occurs in types and not terms. *)
-    | Debug_only
-    (** The associated variable is being kept only for the purposes of
-        generating debugging information. *)
-
-  val equal_occurrences : occurrences -> occurrences -> bool
-end
-
 (* CR mshinwell: Once disambiguation works on GADTs, consider turning [t]
    into a GADT. *)
 type t = private
@@ -55,9 +37,6 @@ type t = private
   | Fabricated
     (** Values which have been introduced by Flambda and are never accessible
         at the source language level (for example sets of closures). *)
-  | Phantom of Phantom_kind.occurrences * Phantom_kind.t
-    (** The kind of entities that do not exist at runtime but which are left in
-        Flambda terms for the purpose of generating debugging information. *)
 
 type kind = t
 
@@ -68,11 +47,9 @@ val naked_int32 : unit -> t
 val naked_int64 : unit -> t
 val naked_nativeint : unit -> t
 val fabricated : unit -> t
-val phantom : Phantom_kind.occurrences -> Phantom_kind.t -> t
 
 val is_value : t -> bool
 val is_naked_float : t -> bool
-val is_phantom : t -> bool
 
 (** The kind of the unit value. *)
 val unit : unit -> t
@@ -81,14 +58,6 @@ val unit : unit -> t
     be used in any context with a hole expecting a value of kind [if_used_at].
 *)
 val compatible : t -> if_used_at:t -> bool
-
-(** Like [compatible], but allows [if_used_at] to be a phantom version of
-    the kind being checked against. *)
-val compatible_allowing_phantom : t -> if_used_at:t -> bool
-
-val phantomize_in_types : t -> t
-
-val phantomize_debug_only : t -> t
 
 include Hashtbl.With_map with type t := t
 

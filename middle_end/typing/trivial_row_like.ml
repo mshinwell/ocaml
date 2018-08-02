@@ -73,6 +73,12 @@ module Make (W : Typing_world.S) = struct
       in
       create_with_equations things_with_env_extensions
 
+    let create_bottom () =
+      create Thing_without_names.Set.empty
+
+    let create_unknown () =
+      RL.create_at_least_multiple Unit.Map.empty
+
     let print = RL.print
 
     let meet env perm1 perm2 t1 t2 =

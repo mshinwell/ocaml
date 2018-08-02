@@ -28,7 +28,7 @@ module Function_type = struct end
 module Immediates = struct end
 module Types_by_closure_id = struct end
 
-module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
+module Make (W : Typing_world.S) = struct
   open! W
 
   module Flambda_types =
@@ -44,6 +44,8 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
       (Types_by_closure_id)
 
   include Flambda_types
+
+  module K = Flambda_kind
 
   let print = Type_printers.print
   let print_with_cache = Type_printers.print_with_cache
@@ -71,7 +73,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
         print t
 
   let force_to_kind_naked_float (t : t)
-        : Float_by_bit_pattern.Set.t ty_naked_number =
+        : Float.Set.t ty_naked_number =
     match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
       ty_naked_number
@@ -118,7 +120,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
 
   let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
         : n ty_naked_number =
-    match t.descr, kind with
+    match t, kind with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate),
         K.Naked_number.Naked_immediate ->
       ty_naked_number
@@ -137,8 +139,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     | Naked_number _, _
     | Fabricated _, _
     | Value _, _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected \
-          [Naked_number %a]):@ %a"
+      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]):@ %a"
         K.Naked_number.print kind
         print t
 
@@ -162,101 +163,36 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     | Fabricated ty -> ty_is_obviously_bottom ty
 
   let of_ty_value ty_value : t =
-    { descr = Value ty_value;
-      phantom = None;
-    }
+    Value ty_value
 
   let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number)
         (kind : n K.Naked_number.t) : t =
-    { descr = Naked_number (ty_naked_number, kind);
-      phantom = None;
-    }
+    Naked_number (ty_naked_number, kind)
 
   let of_ty_fabricated ty_fabricated : t =
-    { descr = Fabricated ty_fabricated;
-      phantom = None;
-    }
+    Fabricated ty_fabricated
 
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
-    simplified if [K.t] were a GADT. *)
+     simplified if [K.t] were a GADT. *)
 
-  let phantomize t (occs : K.Phantom_kind.occurrences) : t =
-    let ok () = { t with phantom = Some occs; } in
-    match t.phantom with
-    | None -> ok ()
-    | Some In_types ->
-      begin match occs with
-      | In_types -> t
-      | Debug_only -> ok ()
-      end
-    | Some Debug_only ->
-      begin match occs with
-      | Debug_only -> t
-      | In_types ->
-        Misc.fatal_errorf "Cannot change [Debug_only] phantom type back \
-            into an [In_types]"
-          print t
-      end
-
-  (* CR mshinwell: Share with typing_env_extension.ml *)
-  let empty_env_extension : env_extension =
-    { first_definitions = [];
-      at_or_after_cut_point = Scope_level.Map.empty;
-      last_equations_rev = [];
-      cse = Flambda_primitive.With_fixed_value.Map.empty;
-    }
-
-  type 'a type_accessor = typing_environment -> 'a
+  type 'a type_accessor = Typing_env.t -> 'a
 
   let alias_type_of (kind : K.t) name : t =
     match kind with
     | Value ->
-      { descr = Value (Equals name);
-        phantom = None;
-      }
+      Value (Equals name)
     | Naked_number Naked_immediate ->
-      { descr = Naked_number (Equals name, K.Naked_number.Naked_immediate);
-        phantom = None;
-      }
+      Naked_number (Equals name, K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
-      { descr = Naked_number (Equals name, K.Naked_number.Naked_float);
-        phantom = None;
-      }
+      Naked_number (Equals name, K.Naked_number.Naked_float)
     | Naked_number Naked_int32 ->
-      { descr = Naked_number (Equals name, K.Naked_number.Naked_int32);
-        phantom = None;
-      }
+      Naked_number (Equals name, K.Naked_number.Naked_int32)
     | Naked_number Naked_int64 ->
-      { descr = Naked_number (Equals name, K.Naked_number.Naked_int64);
-        phantom = None;
-      }
+      Naked_number (Equals name, K.Naked_number.Naked_int64)
     | Naked_number Naked_nativeint ->
-      { descr = Naked_number (Equals name, K.Naked_number.Naked_nativeint);
-        phantom = None;
-      }
+      Naked_number (Equals name, K.Naked_number.Naked_nativeint)
     | Fabricated ->
-      { descr = Fabricated (Equals name);
-        phantom = None;
-      }
-    | Phantom (occs, phantom_kind) ->
-      let descr : descr =
-        match phantom_kind with
-        | Value -> Value (Equals name)
-        | Naked_number Naked_immediate ->
-          Naked_number (Equals name, K.Naked_number.Naked_immediate)
-        | Naked_number Naked_float ->
-          Naked_number (Equals name, K.Naked_number.Naked_float)
-        | Naked_number Naked_int32 ->
-          Naked_number (Equals name, K.Naked_number.Naked_int32)
-        | Naked_number Naked_int64 ->
-          Naked_number (Equals name, K.Naked_number.Naked_int64)
-        | Naked_number Naked_nativeint ->
-          Naked_number (Equals name, K.Naked_number.Naked_nativeint)
-        | Fabricated -> Fabricated (Equals name)
-      in
-      { descr;
-        phantom = Some occs;
-      }
+      Fabricated (Equals name)
 
   let alias_type_of_as_ty_value name : ty_value = Equals name
 
@@ -265,52 +201,19 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
   let alias_type (kind : K.t) export_id : t =
     match kind with
     | Value ->
-      { descr = Value (Type export_id);
-        phantom = None;
-      }
+      Value (Type export_id)
     | Naked_number Naked_immediate ->
-      { descr = Naked_number (Type export_id, K.Naked_number.Naked_immediate);
-        phantom = None;
-      }
+      Naked_number (Type export_id, K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
-      { descr = Naked_number (Type export_id, K.Naked_number.Naked_float);
-        phantom = None;
-      }
+      Naked_number (Type export_id, K.Naked_number.Naked_float)
     | Naked_number Naked_int32 ->
-      { descr = Naked_number (Type export_id, K.Naked_number.Naked_int32);
-        phantom = None;
-      }
+      Naked_number (Type export_id, K.Naked_number.Naked_int32)
     | Naked_number Naked_int64 ->
-      { descr = Naked_number (Type export_id, K.Naked_number.Naked_int64);
-        phantom = None;
-      }
+      Naked_number (Type export_id, K.Naked_number.Naked_int64)
     | Naked_number Naked_nativeint ->
-      { descr = Naked_number (Type export_id, K.Naked_number.Naked_nativeint);
-        phantom = None;
-      }
+      Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
     | Fabricated ->
-      { descr = Fabricated (Type export_id);
-        phantom = None;
-      }
-    | Phantom (occs, phantom_kind) ->
-      let descr : descr =
-        match phantom_kind with
-        | Value -> Value (Type export_id)
-        | Naked_number Naked_immediate ->
-          Naked_number (Type export_id, K.Naked_number.Naked_immediate)
-        | Naked_number Naked_float ->
-          Naked_number (Type export_id, K.Naked_number.Naked_float)
-        | Naked_number Naked_int32 ->
-          Naked_number (Type export_id, K.Naked_number.Naked_int32)
-        | Naked_number Naked_int64 ->
-          Naked_number (Type export_id, K.Naked_number.Naked_int64)
-        | Naked_number Naked_nativeint ->
-          Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
-        | Fabricated -> Fabricated (Type export_id)
-      in
-      { descr;
-        phantom = Some occs;
-      }
+      Fabricated (Type export_id)
 
   let bottom_as_ty_value () : ty_value =
     No_alias (Join [])
@@ -321,54 +224,19 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
   let bottom (kind : K.t) : t =
     match kind with
     | Value ->
-      { descr = Value (No_alias (Join []));
-        phantom = None;
-      }
+      Value (No_alias (Join []))
     | Naked_number Naked_immediate ->
-      { descr =
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate);
-        phantom = None;
-      }
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
-      { descr = Naked_number (No_alias (Join []), K.Naked_number.Naked_float);
-        phantom = None;
-      }
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_float)
     | Naked_number Naked_int32 ->
-      { descr = Naked_number (No_alias (Join []), K.Naked_number.Naked_int32);
-        phantom = None;
-      }
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_int32)
     | Naked_number Naked_int64 ->
-      { descr = Naked_number (No_alias (Join []), K.Naked_number.Naked_int64);
-        phantom = None;
-      }
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_int64)
     | Naked_number Naked_nativeint ->
-      { descr =
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint);
-        phantom = None;
-      }
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint)
     | Fabricated ->
-      { descr = Fabricated (No_alias (Join []));
-        phantom = None;
-      }
-    | Phantom (occs, phantom_kind) ->
-      let descr : descr =
-        match phantom_kind with
-        | Value -> Value (No_alias (Join []))
-        | Naked_number Naked_immediate ->
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate)
-        | Naked_number Naked_float ->
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_float)
-        | Naked_number Naked_int32 ->
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_int32)
-        | Naked_number Naked_int64 ->
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_int64)
-        | Naked_number Naked_nativeint ->
-          Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint)
-        | Fabricated -> Fabricated (No_alias (Join []))
-      in
-      { descr;
-        phantom = Some occs;
-      }
+      Fabricated (No_alias (Join []))
 
   let any_value_as_ty_value () : ty_value =
     No_alias Unknown
@@ -380,156 +248,82 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     No_alias Unknown
 
   let any_value () : t =
-    { descr = Value (any_value_as_ty_value ());
-      phantom = None;
-    }
-
-  let no_blocks : blocks =
-    { known_tags_and_sizes = Tag_and_size.Map.empty;
-      size_at_least_n = Targetint.OCaml.Map.empty;
-    }
+    Value (any_value_as_ty_value ())
 
   let any_tagged_immediate () : t =
-    { descr =
-        Value (No_alias (Join [Blocks_and_tagged_immediates {
-          immediates = Unknown;
-          blocks = Known no_blocks;
-        }]));
-      phantom = None;
-    }
+    Value (No_alias (Join [Blocks_and_tagged_immediates {
+      immediates = Immediates.create_unknown ();
+      blocks = Blocks.create_bottom ();
+    }, Name_permutation.create ()]))
 
   let any_naked_immediate () : t =
-    { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate);
-      phantom = None;
-    }
+    Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
 
   let any_naked_float () : t =
-    { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_float);
-      phantom = None;
-    }
+    Naked_number (No_alias Unknown, K.Naked_number.Naked_float)
 
   let any_naked_int32 () : t =
-    { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_int32);
-      phantom = None;
-    }
+    Naked_number (No_alias Unknown, K.Naked_number.Naked_int32)
 
   let any_naked_int64 () : t =
-    { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_int64);
-      phantom = None;
-    }
+    Naked_number (No_alias Unknown, K.Naked_number.Naked_int64)
 
   let any_naked_nativeint () : t =
-    { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint);
-      phantom = None;
-    }
+    Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint)
 
   let any_fabricated () : t =
-    { descr = Fabricated (No_alias Unknown);
-      phantom = None;
-    }
+    Fabricated (No_alias Unknown)
 
   let unknown (kind : K.t) =
     match kind with
     | Value ->
-      { descr = Value (No_alias Unknown);
-        phantom = None;
-      }
+      Value (No_alias Unknown)
     | Naked_number Naked_immediate ->
-      { descr =
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate);
-        phantom = None;
-      }
+      Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
-      { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_float);
-        phantom = None;
-      }
+      Naked_number (No_alias Unknown, K.Naked_number.Naked_float)
     | Naked_number Naked_int32 ->
-      { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_int32);
-        phantom = None;
-      }
+      Naked_number (No_alias Unknown, K.Naked_number.Naked_int32)
     | Naked_number Naked_int64 ->
-      { descr = Naked_number (No_alias Unknown, K.Naked_number.Naked_int64);
-        phantom = None;
-      }
+      Naked_number (No_alias Unknown, K.Naked_number.Naked_int64)
     | Naked_number Naked_nativeint ->
-      { descr =
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint);
-        phantom = None;
-      }
+      Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint)
     | Fabricated ->
-      { descr = Fabricated (No_alias Unknown);
-        phantom = None;
-      }
-    | Phantom (occs, phantom_kind) ->
-      let descr : descr =
-        match phantom_kind with
-        | Value -> Value (No_alias Unknown)
-        | Naked_number Naked_immediate ->
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
-        | Naked_number Naked_float ->
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_float)
-        | Naked_number Naked_int32 ->
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_int32)
-        | Naked_number Naked_int64 ->
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_int64)
-        | Naked_number Naked_nativeint ->
-          Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint)
-        | Fabricated -> Fabricated (No_alias Unknown)
-      in
-      { descr;
-        phantom = Some occs;
-      }
+      Fabricated (No_alias Unknown)
 
   let these_naked_immediates (is : Immediate.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Immediate is in
-    { descr =
-        Naked_number (No_alias (Join [of_kind]),
-          K.Naked_number.Naked_immediate);
-      phantom = None;
-    }
+    Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
+      K.Naked_number.Naked_immediate)
 
-  let these_naked_floats (is : Float_by_bit_pattern.Set.t) : t =
+  let these_naked_floats (is : Float.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Float is in
-    { descr =
-        Naked_number (No_alias (Join [of_kind]),
-          K.Naked_number.Naked_float);
-      phantom = None;
-    }
+    Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
+      K.Naked_number.Naked_float)
 
   let these_naked_int32s (is : Int32.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Int32 is in
-    { descr =
-        Naked_number (No_alias (Join [of_kind]),
-          K.Naked_number.Naked_int32);
-      phantom = None;
-    }
+    Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
+      K.Naked_number.Naked_int32)
 
   let these_naked_int64s (is : Int64.Set.t) : t =
-    let of_kind : _ of_kind_naked_number = Int64 is in
-    { descr =
-        Naked_number (No_alias (Join [of_kind]),
-          K.Naked_number.Naked_int64);
-      phantom = None;
-    }
+    Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
+      K.Naked_number.Naked_int64)
 
   let these_naked_nativeints (is : Targetint.Set.t) : t =
-    let of_kind : _ of_kind_naked_number = Nativeint is in
-    { descr =
-        Naked_number (No_alias (Join [of_kind]),
-          K.Naked_number.Naked_nativeint);
-      phantom = None;
-    }
+    Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
+      K.Naked_number.Naked_nativeint)
 
   let this_naked_immediate i =
     these_naked_immediates (Immediate.Set.singleton i)
 
   let this_naked_float f =
-    these_naked_floats (Float_by_bit_pattern.Set.singleton f)
+    these_naked_floats (Float.Set.singleton f)
 
   let this_naked_float_as_ty_naked_float f =
-    let fs = Float_by_bit_pattern.Set.singleton f in
+    let fs = Float.Set.singleton f in
     let of_kind : _ of_kind_naked_number = Float fs in
-    No_alias (Join [of_kind])
+    No_alias (Join [of_kind, Name_permutation.create ()])
 
   let this_naked_int32 i =
     these_naked_int32s (Int32.Set.singleton i)
@@ -700,10 +494,8 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     No_alias (Join [Discriminant discriminant_map])
 
   let these_discriminants discriminants_to_env_extension : t =
-    { descr = Fabricated (
-        these_discriminants_as_ty_fabricated discriminants_to_env_extension);
-      phantom = None;
-    }
+    Fabricated (
+      these_discriminants_as_ty_fabricated discriminants_to_env_extension)
 
   let this_discriminant_as_ty_fabricated discriminant =
     let discriminant_map =
@@ -713,10 +505,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     No_alias (Join [Discriminant discriminant_map])
 
   let this_discriminant discriminant : t =
-    { descr = Fabricated (
-        this_discriminant_as_ty_fabricated discriminant);
-      phantom = None;
-    }
+    Fabricated (this_discriminant_as_ty_fabricated discriminant)
 
   let any_discriminant_as_ty_fabricated () : ty_fabricated =
     No_alias Unknown
@@ -732,9 +521,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     No_alias (Join [String str])
 
   let this_immutable_string str : t =
-    { descr = Value (this_immutable_string_as_ty_value str);
-      phantom = None;
-    }
+    Value (this_immutable_string_as_ty_value str)
 
   let immutable_string_as_ty_value ~size : ty_value =
     let str : String_info.t =
@@ -746,9 +533,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     No_alias (Join [String str])
 
   let immutable_string ~size : t =
-    { descr = Value (immutable_string_as_ty_value ~size);
-      phantom = None;
-    }
+    Value (immutable_string_as_ty_value ~size)
 
   let mutable_string ~size : t =
     let str : String_info.t =
@@ -757,9 +542,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
       }
     in
     let str = String_info.Set.singleton str in
-    { descr = Value (No_alias (Join [String str]));
-      phantom = None;
-    }
+    Value (No_alias (Join [String str]))
 
   let kind (t : t) =
     match t with
@@ -808,9 +591,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
           blocks = Known blocks;
         }
       in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-      }
+      Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
 
   let immutable_float_array fields : t =
     match Targetint.OCaml.of_int_option (Array.length fields) with
@@ -819,10 +600,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     | Some size ->
       let field_tys =
         Array.map (fun ty_naked_number : t ->
-            { descr =
-                Naked_number (ty_naked_number, K.Naked_number.Naked_float);
-              phantom = None;
-            })
+            Naked_number (ty_naked_number, K.Naked_number.Naked_float))
           fields
       in
       let blocks =
@@ -840,7 +618,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
 
   let this_immutable_float_array fields : t =
     let make_field f : _ ty_naked_number =
-      No_alias (Join [Float (Float_by_bit_pattern.Set.singleton f)])
+      No_alias (Join [Float (Float.Set.singleton f)])
     in
     let fields = Array.map make_field fields in
     immutable_float_array fields
@@ -951,8 +729,7 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
     { set_of_closures; }
 
   let closures ty by_closure_id : t =
-    { descr = Value (No_alias (Join [Closures { ty; by_closure_id; }]));
-    }
+    Value (No_alias (Join [Closures { ty; by_closure_id; }]))
 
   let set_of_closures ~closures ~closure_elements =
     let set_of_closures : set_of_closures =
@@ -965,14 +742,10 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
       | Open _ -> false
       | Exactly map -> Closure_id.Map.is_empty map
     in
-    let descr : descr =
-      if no_closures then
-        Fabricated (No_alias (Join []))
-      else
-        Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
-    in
-    { descr;
-    }
+    if no_closures then
+      Fabricated (No_alias (Join []))
+    else
+      Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
 
   let apply_name_permutation_unknown_or_join unknown_or_join perm =
     match unknown_or_join with
@@ -1005,25 +778,20 @@ module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
       if simple == simple' then ty
       else Equals simple'
 
-  let apply_name_permutation_descr descr perm =
-    match descr with
+  let apply_name_permutation_t t perm =
+    match t with
     | Value ty_value ->
       let ty_value' = apply_name_permutation_ty ty_value perm in
-      if ty_value == ty_value' then descr
+      if ty_value == ty_value' then t
       else Value ty_value'
     | Naked_number (ty_naked_number, kind) ->
       let ty_naked_number' = apply_name_permutation_ty ty_naked_number perm in
-      if ty_naked_number == ty_naked_number' then descr
+      if ty_naked_number == ty_naked_number' then t
       else Naked_number (ty_naked_number', kind)
     | Fabricated ty_fabricated ->
       let ty_fabricated' = apply_name_permutation_ty ty_fabricated perm in
-      if ty_fabricated == ty_fabricated' then descr
+      if ty_fabricated == ty_fabricated' then t
       else Fabricated ty_fabricated'
-
-  let apply_name_permutation ({ descr; } as t) perm =
-    let descr' = apply_name_permutation_descr descr perm in
-    if descr == descr' then t
-    else { descr = descr'; }
 
   let get_alias t =
     match t with

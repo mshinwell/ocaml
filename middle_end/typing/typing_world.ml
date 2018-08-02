@@ -48,6 +48,7 @@ module type S = sig
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
     with module Thing_without_names := Discriminant)
+  and Expr : Expr_intf.S
   and Flambda_type0_core : (Flambda_type0_core_intf.S
     with module Blocks := Blocks
     with module Closure_elements := Closure_elements
@@ -55,6 +56,7 @@ module type S = sig
     with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
     with module Discriminants := Discriminants
     with module Function_type := Function_type
+    with module Expr := Expr
     with module Join_env := Join_env
     with module Immediates := Immediates
     with module Types_by_closure_id := Types_by_closure_id
