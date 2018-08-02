@@ -438,6 +438,15 @@ module type S = sig
        : unit
       -> function_declaration
 
+    (** Create a closure type given full information about the closure. *)
+    val closure
+       : Closure_id.t
+      -> function_declaration
+      -> Function_type.t
+      -> Closure_elements.t
+      -> set_of_closures:ty_fabricated
+      -> t
+
     (** The type of a closure (of kind [Value]) containing at least the
         given closure variable with the given type. *)
     val closure_containing_at_least

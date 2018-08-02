@@ -625,9 +625,9 @@ module Make (W : Typing_world.S) = struct
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param ~params ~body ~code_id
-        ~results ~stub ~dbg ~inline ~specialise ~is_a_functor
-        ~invariant_params ~size
-        ~direct_call_surrogate ~my_closure : function_declarations =
+        ~result_arity ~stub ~dbg ~inline ~specialise ~is_a_functor
+        ~invariant_params ~size ~direct_call_surrogate ~my_closure
+        : function_declaration =
     Inlinable [({
       closure_origin;
       continuation_param;
@@ -637,7 +637,7 @@ module Make (W : Typing_world.S) = struct
       body;
       code_id;
       free_names_in_body = Expr.free_names body;
-      results;
+      result_arity;
       stub;
       dbg;
       inline;
@@ -650,12 +650,52 @@ module Make (W : Typing_world.S) = struct
     } : inlinable_function_declaration)]
 
   let create_non_inlinable_function_declaration ~direct_call_surrogate
-        : function_declarations =
-    let decl : non_inlinable_function_declarations =
-      { direct_call_surrogate;
+        : function_declaration =
+    Non_inlinable
+
+  let closure closure_id function_decl ty closure_elements ~set_of_closures =
+    let closure_elements' =
+      let closure_elements =
+        Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
+          closure_elements
+      in
+      Closure_elements.create closure_elements
+    in
+    let closures_entry : closures_entry =
+      { function_decl;
+        ty;
+        closure_elements = closure_elements';
+        set_of_closures;
       }
     in
-    Non_inlinable decl
+    let by_closure_id =
+      Closures_entry_by_closure_id.create_exactly_multiple
+        (Closure_id_and_var_within_closure_set.Map.singleton
+          (closure_id, Var_within_closure.Map.keys closure_elements)
+          closures_entry)
+    in
+    let closures : closures =
+      { by_closure_id;
+      }
+    in
+    Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
+
+  let closure_containing_at_least var_within_closure ty_value =
+    (* XXX what to do with [ty_value]? *)
+    let by_closure_id =
+      Closures_entry_by_closure_id.create_exactly_multiple
+        (Closure_id_and_var_within_closure_set.Map.singleton
+          (closure_id, Var_within_closure.Set.singleton var_within_closure)
+          closures_entry)
+    in
+    let closures : closures =
+      { by_closure_id;
+      }
+    in
+    Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
+
+  let set_of_closures ~closures ~closure_elements =
+
 
   let closure function_decls : ty_fabricated =
     No_alias (Join [Closure { function_decls; }])
