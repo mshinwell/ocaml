@@ -87,11 +87,16 @@ module Make (W : Typing_world.S) = struct
       let create tag index = tag, index
       let index (_tag, index) = index
 
+      let bound_names _ = Misc.fatal_error "try not to need this"
+
       let free_names (tag, index) =
         Name_occurrences.union (Tag.free_names tag) (Index.free_names index)
 
       let apply_name_permutation (tag, index) perm =
         tag, Index.apply_name_permutation index perm
+
+      let freshen t freshening =
+        apply_name_permutation t (Freshening.name_permutation freshening)
     end
 
     (* CR mshinwell: Think about what means bottom and what needs unknown for

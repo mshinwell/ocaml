@@ -3567,11 +3567,11 @@ middle_end/typing/closure_id_set.cmx : \
 middle_end/typing/closure_id_set.cmi : middle_end/typing/contains_names.cmi \
     middle_end/language/closure_id.cmi
 middle_end/typing/closure_ids.cmo : middle_end/typing/unit.cmi \
-    middle_end/typing/typing_world.cmo middle_end/typing/row_like.cmi \
-    middle_end/typing/closure_id_set.cmi middle_end/typing/closure_ids.cmi
+    middle_end/typing/typing_world.cmo middle_end/typing/closure_id_set.cmi \
+    middle_end/typing/closure_ids.cmi
 middle_end/typing/closure_ids.cmx : middle_end/typing/unit.cmx \
-    middle_end/typing/typing_world.cmx middle_end/typing/row_like.cmx \
-    middle_end/typing/closure_id_set.cmx middle_end/typing/closure_ids.cmi
+    middle_end/typing/typing_world.cmx middle_end/typing/closure_id_set.cmx \
+    middle_end/typing/closure_ids.cmi
 middle_end/typing/closure_ids.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/closure_ids_intf.cmo
 middle_end/typing/closure_ids_intf.cmo : utils/printing_cache.cmi \
@@ -3582,12 +3582,14 @@ middle_end/typing/closure_ids_intf.cmx : utils/printing_cache.cmx \
     middle_end/typing/contains_names.cmx middle_end/typing/closure_id_set.cmx
 middle_end/typing/closures_entry_by_closure_id.cmo : \
     middle_end/language/var_within_closure.cmi \
-    middle_end/typing/typing_world.cmo middle_end/typing/row_like.cmi \
+    middle_end/typing/typing_world.cmo \
+    middle_end/language/name_occurrences.cmi \
     middle_end/language/closure_id.cmi \
     middle_end/typing/closures_entry_by_closure_id.cmi
 middle_end/typing/closures_entry_by_closure_id.cmx : \
     middle_end/language/var_within_closure.cmx \
-    middle_end/typing/typing_world.cmx middle_end/typing/row_like.cmx \
+    middle_end/typing/typing_world.cmx \
+    middle_end/language/name_occurrences.cmx \
     middle_end/language/closure_id.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmi
 middle_end/typing/closures_entry_by_closure_id.cmi : \

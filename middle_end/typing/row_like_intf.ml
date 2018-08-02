@@ -28,6 +28,7 @@ module type S_applied = sig
     type t = Tag.t * Index.t
 
     include Map.With_set with type t := t
+    include Contains_names.S with type t := t
   end
 
   module Maps_to : sig type t end

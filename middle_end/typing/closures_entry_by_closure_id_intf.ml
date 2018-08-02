@@ -25,8 +25,17 @@ module type S = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  module Closure_id_and_vars_within_closure : sig
-    type t = Closure_id.t * Var_within_closure.Set.t
+  (* CR mshinwell: This module is unpleasant.  We should arrange things so that
+     [Var_within_closure.Set.Map] exists.  (This should be easier now that
+     things brought in using "include" can be shadowed.) *)
+  module Var_within_closure_set : sig
+    type t = Var_within_closure.Set.t
+
+    include Map.With_set with type t := t
+  end
+
+  module Closure_id_and_var_within_closure_set : sig
+    type t = Closure_id.t * Var_within_closure_set.t
 
     include Map.With_set with type t := t
     include Contains_names.S with type t := t
@@ -40,14 +49,13 @@ module type S = sig
       and the set of variables in the closure. *)
   val create_exactly_multiple
      : Flambda_type0_core.Closures_entry.t
-         Closure_id_and_vars_within_closure.Map.t
+         Closure_id_and_var_within_closure_set.Map.t
     -> t
 
-  (** Describe one closure that contains at least the given closure
+  (** Describe one or more closures that contain at least the given closure
       variables. *)
-  val create_open
-     : Var_within_closure.Set.t
-    -> Flambda_type0_core.Closures_entry.t 
+  val create_at_least_multiple
+     : Flambda_type0_core.Closures_entry.t Var_within_closure_set.Map.t
     -> t
 
   (** Greatest lower bound of two values of type [t]. *)

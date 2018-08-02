@@ -20,6 +20,7 @@
 [@@@ocaml.warning "-60"]
 module Flambda_type0_core = struct end
 module Join_env = struct end
+module Row_like = struct end
 module Typing_env = struct end
 
 module Make (W : Typing_world.S) = struct

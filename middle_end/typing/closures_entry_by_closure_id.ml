@@ -16,32 +16,76 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  module Flambda_type = T.Flambda_type
-  module Join_env = T.Join_env
-  module Relational_product = T.Relational_product
-  module Typing_env = T.Typing_env
-  module Typing_env_extension = T.Typing_env_extension
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
+module Join_env = struct end
+module Row_like = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
+
+module Make (W : Typing_world.S) = struct
+  open! W
+
+  module Flambda_type0_core = W.Flambda_type0_core
+  module Join_env = W.Join_env
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
+
+  module Closure_id = struct
+    include Closure_id
+
+    let free_names _t = Name_occurrences.create ()
+    let bound_names _t = Name_occurrences.create ()
+
+    let apply_name_permutation t _perm = t
+    let freshen t _freshening = t
+  end
+
+  (* CR mshinwell: Share with closure_elements.ml *)
+  module Var_within_closure_set = struct
+    type t = Var_within_closure.Set.t
+
+    include Hashtbl.Make_with_map (struct
+      include Var_within_closure.Set
+      let hash = Hashtbl.hash
+    end)
+
+    let free_names _t = Name_occurrences.create ()
+    let bound_names _t = Name_occurrences.create ()
+
+    let apply_name_permutation t _perm = t
+    let freshen t _freshening = t
+  end
 
   module RL =
-    Row_like.Make (Closure_id) (Var_within_closure.Set)
-      (Flambda_type.Closures_entry) (T)
+    Row_like.Make (Closure_id) (Var_within_closure_set)
+      (W.Flambda_type0_core.Closures_entry)
 
-  module Closure_id_and_var_within_closure = RL.Tag_and_index
+  module Closure_id_and_var_within_closure_set = RL.Tag_and_index
 
   type t = RL.t
 
-  type open_or_closed = Open | Closed
-
-  let create_closed closure_id_and_vars_within_closure_map =
+  let create_exactly_multiple closure_id_and_vars_within_closure_map =
     RL.create_exactly_multiple closure_id_and_vars_within_closure_map
 
-  let create_open vars_within_closure_map =
+  let create_at_least_multiple vars_within_closure_map =
     RL.create_at_least_multiple vars_within_closure_map
 
-  let invariant = RL.invariant
-  let meet = RL.meet
-  let join = RL.join
-  let apply_name_permutation t = RL.apply_name_permutation
-  let freshen t = RL.freshen
+  let print ~cache ppf t = RL.print ~cache ppf t
+
+  let meet env perm1 perm2 t1 t2 =
+    (* CR mshinwell: think about env_extension *)
+    let t, _env_extension =
+      RL.meet env perm1 perm2 Fresh t1 t2
+    in
+    t
+
+  let join env perm1 perm2 t1 t2 =
+    RL.join env perm1 perm2 Fresh t1 t2
+
+  let free_names = RL.free_names
+  let bound_names = RL.bound_names
+  let apply_name_permutation = RL.apply_name_permutation
+  let freshen = RL.freshen
 end
