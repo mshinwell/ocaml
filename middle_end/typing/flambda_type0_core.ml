@@ -307,10 +307,12 @@ module Make (W : Typing_world.S) = struct
       K.Naked_number.Naked_int32)
 
   let these_naked_int64s (is : Int64.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Int64 is in
     Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
       K.Naked_number.Naked_int64)
 
   let these_naked_nativeints (is : Targetint.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Nativeint is in
     Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
       K.Naked_number.Naked_nativeint)
 
@@ -350,23 +352,12 @@ module Make (W : Typing_world.S) = struct
         print t
 *)
 
-  let check_not_phantom t reason =
-    match t.phantom with
-    | None -> ()
-    | Some _ ->
-      Misc.fatal_errorf "Type given to [%s] cannot be phantom: %a"
-        reason
-        print t
-
   let box_float (t : t) : t =
-    check_not_phantom t "box_float";
     match t with
     | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
-      { descr =
-          Value (No_alias (Join [
-            Boxed_number (Boxed_float ty_naked_float)]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Boxed_number (Boxed_float ty_naked_float),
+          Name_permutation.create ()]))
     | Value _
     | Naked_number _
     | Fabricated _ ->
@@ -374,14 +365,11 @@ module Make (W : Typing_world.S) = struct
         print t
 
   let box_int32 (t : t) : t =
-    check_not_phantom t "box_int32";
     match t with
     | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
-      { descr =
-          Value (No_alias (Join [
-            Boxed_number (Boxed_int32 ty_naked_int32)]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Boxed_number (Boxed_int32 ty_naked_int32),
+          Name_permutation.create ()]))
     | Value _
     | Naked_number _
     | Fabricated _ ->
@@ -389,14 +377,11 @@ module Make (W : Typing_world.S) = struct
         print t
 
   let box_int64 (t : t) : t =
-    check_not_phantom t "box_int64";
     match t with
     | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
-      { descr =
-          Value (No_alias (Join [
-            Boxed_number (Boxed_int64 ty_naked_int64)]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Boxed_number (Boxed_int64 ty_naked_int64),
+          Name_permutation.create ()]))
     | Value _
     | Naked_number _
     | Fabricated _ ->
@@ -404,14 +389,11 @@ module Make (W : Typing_world.S) = struct
         print t
 
   let box_nativeint (t : t) : t =
-    check_not_phantom t "box_nativeint";
     match t with
     | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
-      { descr =
-          Value (No_alias (Join [
-            Boxed_number (Boxed_nativeint ty_naked_nativeint)]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Boxed_number (Boxed_nativeint ty_naked_nativeint),
+          Name_permutation.create ()]))
     | Value _
     | Naked_number _
     | Fabricated _ ->
@@ -423,46 +405,31 @@ module Make (W : Typing_world.S) = struct
       bottom (K.value ())
     else
       let immediates =
-        Immediate.Set.fold (fun imm map ->
-            let case : immediate_case =
-              { env_extension = empty_env_extension;
-              }
-            in
-            Immediate.Map.add imm case map)
-          imms
-          Immediate.Map.empty
+        Immediates.create_with_equations (
+          Immediate.Map.of_set (fun _imm -> Typing_env_extension.empty)
+            imms)
       in
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-        { immediates = Known immediates;
-          blocks = Known no_blocks;
+        { immediates;
+          blocks = Blocks.create_bottom ();
         }
       in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates
-            blocks_and_tagged_immediates]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Blocks_and_tagged_immediates blocks_and_tagged_immediates,
+          Name_permutation.create ()]))
 
-  (* CR mshinwell: share code with previous function *)
   let these_tagged_immediates_with_envs env_map =
     if Immediate.Map.is_empty env_map then
       bottom (K.value ())
     else
-      let immediates =
-        Immediate.Map.map (fun env_extension : immediate_case ->
-            { env_extension; })
-          env_map
-      in
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-        { immediates = Known immediates;
-          blocks = Known no_blocks;
+        { immediates = Immediates.create_with_equations env_map;
+          blocks = Blocks.create_bottom ();
         }
       in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates
-            blocks_and_tagged_immediates]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Blocks_and_tagged_immediates blocks_and_tagged_immediates,
+          Name_permutation.create ()]))
 
   let this_tagged_immediate imm =
     these_tagged_immediates (Immediate.Set.singleton imm)
@@ -486,23 +453,20 @@ module Make (W : Typing_world.S) = struct
 
   let these_discriminants_as_ty_fabricated discriminants_to_env_extension
         : ty_fabricated =
-    let discriminant_map =
-      Discriminant.Map.map (fun env_extension : discriminant_case ->
-          { env_extension; })
-        discriminants_to_env_extension
+    let discriminants =
+      Discriminants.create_with_equations discriminants_to_env_extension
     in
-    No_alias (Join [Discriminant discriminant_map])
+    No_alias (Join [Discriminants discriminants, Name_permutation.create ()])
 
   let these_discriminants discriminants_to_env_extension : t =
     Fabricated (
       these_discriminants_as_ty_fabricated discriminants_to_env_extension)
 
   let this_discriminant_as_ty_fabricated discriminant =
-    let discriminant_map =
-      Discriminant.Map.singleton discriminant
-        ({ env_extension = empty_env_extension; } : discriminant_case)
+    let discriminants =
+      Discriminants.create (Discriminant.Set.singleton discriminant)
     in
-    No_alias (Join [Discriminant discriminant_map])
+    No_alias (Join [Discriminants discriminants, Name_permutation.create ()])
 
   let this_discriminant discriminant : t =
     Fabricated (this_discriminant_as_ty_fabricated discriminant)
@@ -511,38 +475,28 @@ module Make (W : Typing_world.S) = struct
     No_alias Unknown
 
   let this_immutable_string_as_ty_value str : ty_value =
-    let str : String_info.t =
-      { contents = Contents str;
-        (* CR mshinwell: Possibility for exception? *)
-        size = Targetint.OCaml.of_int (String.length str);
-      }
+    let str =
+      String_info.create ~contents:(Contents str)
+        ~size:(Targetint.OCaml.of_int (String.length str))
     in
     let str = String_info.Set.singleton str in
-    No_alias (Join [String str])
+    No_alias (Join [String str, Name_permutation.create ()])
 
   let this_immutable_string str : t =
     Value (this_immutable_string_as_ty_value str)
 
   let immutable_string_as_ty_value ~size : ty_value =
-    let str : String_info.t =
-      { contents = Unknown_or_mutable;
-        size;
-      }
-    in
+    let str = String_info.create ~contents:Unknown_or_mutable ~size in
     let str = String_info.Set.singleton str in
-    No_alias (Join [String str])
+    No_alias (Join [String str, Name_permutation.create ()])
 
   let immutable_string ~size : t =
     Value (immutable_string_as_ty_value ~size)
 
   let mutable_string ~size : t =
-    let str : String_info.t =
-      { contents = Unknown_or_mutable;
-        size;
-      }
-    in
+    let str = String_info.create ~contents:Unknown_or_mutable ~size in
     let str = String_info.Set.singleton str in
-    Value (No_alias (Join [String str]))
+    Value (No_alias (Join [String str, Name_permutation.create ()]))
 
   let kind (t : t) =
     match t with
@@ -554,44 +508,25 @@ module Make (W : Typing_world.S) = struct
     | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint ()
     | Fabricated _ -> K.fabricated ()
 
-  let create_parameters_from_types ts : parameters =
-    let params =
-      List.mapi (fun index t ->
-          let kind = kind t in
-          let var = Variable.create (Format.sprintf "param%d" index) in
-          let parameter = Parameter.wrap var in
-          Kinded_parameter.create parameter kind)
-        ts
-    in
-    { params;
-      env_extension = empty_env_extension;
-    }
-
-  let create_blocks ~tag ~size ~field_tys : blocks =
-    let fields = create_parameters_from_types field_tys in
-    let known_tags_and_sizes =
-      Tag_and_size.Map.singleton (Tag_and_size.create tag size) fields
-    in
-    { known_tags_and_sizes;
-      size_at_least_n = Targetint.OCaml.Map.empty;
-    }
-
   let mutable_float_array ~size : t =
     match Targetint.OCaml.to_int_option size with
     | None ->
-      (* CR mshinwell: Here and below, this should be a normal compilation
-        error, not a fatal error. *)
+      (* CR mshinwell: Here and elsewhere, this should be a normal compilation
+         error, not a fatal error. *)
       Misc.fatal_error "Mutable float array too long for host"
     | Some size ->
       let field_tys = List.init size (fun _index -> any_naked_float ()) in
-      let size = Targetint.OCaml.of_int size in
-      let blocks = create_blocks ~tag:Tag.double_array_tag ~size ~field_tys in
+      let blocks =
+        Blocks.create ~field_tys (Closed Tag.double_array_tag)
+      in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
+        { immediates = Immediates.create_bottom ();
+          blocks;
         }
       in
-      Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
+      Value (No_alias (Join [
+        Blocks_and_tagged_immediates blocks_imms,
+        Name_permutation.create ()]))
 
   let immutable_float_array fields : t =
     match Targetint.OCaml.of_int_option (Array.length fields) with
