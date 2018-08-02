@@ -304,6 +304,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/name_occurrences.cmo \
   middle_end/typing/unit.cmo \
   middle_end/typing/tag_index.cmo \
+  middle_end/typing/closure_id_set.cmo \
   middle_end/typing/or_bottom.cmo \
   middle_end/typing/or_unknown.cmo \
   middle_end/typing/or_absorbing.cmo \

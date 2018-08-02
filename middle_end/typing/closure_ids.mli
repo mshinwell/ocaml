@@ -16,8 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) :
+module Make (W : Typing_world.S) :
   Closure_ids_intf.S
-    with module Flambda_type0_core := T.Flambda_type0_core
-    with module Join_env := T.Join_env
-    with module Typing_env := T.Typing_env
+    with module Flambda_type0_core := W.Flambda_type0_core
+    with module Join_env := W.Join_env
+    with module Typing_env := W.Typing_env

@@ -16,42 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig
-    type t
-    module Set_of_closures_entry : sig type t end
-  end
-  module Join_env : sig type t end
-  module Typing_env : sig type t end
+type t = Closure_id.Set.t
 
-  type t
-
-  val invariant : t -> unit
-
-  type open_or_closed = Open | Closed
-
-  val create
-     : Flambda_type0_core.Set_of_closures_entry.t Closure_id_set.Map.t
-    -> open_or_closed
-    -> t
-
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-  val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
-    -> t
-    -> t
-    -> t Or_bottom.t
-
-  val join
-     : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
-    -> t
-    -> t
-    -> t
-
-  include Contains_names.S with type t := t
-end
+include Hashtbl.With_map with type t := t
+include Contains_names.S with type t := t

@@ -55,6 +55,7 @@ module type S = sig
     with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
     with module Discriminants := Discriminants
     with module Function_type := Function_type
+    with module Join_env := Join_env
     with module Immediates := Immediates
     with module Types_by_closure_id := Types_by_closure_id
     with module Typing_env := Typing_env

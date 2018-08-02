@@ -25,6 +25,7 @@ module type S = sig
   module Expr : sig type t end
   module Function_type : sig type t end
   module Immediates : sig type t end
+  module Join_env : sig type t end
   module Types_by_closure_id : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
@@ -47,10 +48,34 @@ module type S = sig
   module Closures_entry : sig
     type t = closures_entry
 
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
     val add_or_meet_equations
        : t
       -> Typing_env.t
       -> Typing_env_extension.t
+      -> t
+
+    val meet
+       : Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> t Or_bottom.t * Typing_env_extension.t
+
+    val join
+       : Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
       -> t
 
     include Contains_names.S with type t := t
@@ -59,10 +84,34 @@ module type S = sig
   module Set_of_closures_entry : sig
     type t = set_of_closures_entry
 
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
     val add_or_meet_equations
        : t
       -> Typing_env.t
       -> Typing_env_extension.t
+      -> t
+
+    val meet
+       : Typing_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> t Or_bottom.t * Typing_env_extension.t
+
+    val join
+       : Join_env.t
+      -> Name_permutation.t
+      -> Name_permutation.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
       -> t
 
     include Contains_names.S with type t := t
