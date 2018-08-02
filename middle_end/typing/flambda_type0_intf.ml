@@ -386,6 +386,14 @@ module type S = sig
       -> size:int
       -> t
 
+    (** The type of a block with at least [n] fields and an unknown tag.
+        The type of the [n - 1]th field is taken to be an [Equals] to the
+        given variable. *)
+    val block_with_size_at_least
+       : n:int
+      -> field_n_minus_one:Variable.t
+      -> t
+
     (** The bottom type for the given kind ("no value can flow to this point"). *)
     val bottom : Flambda_kind.t -> t
 
@@ -425,34 +433,28 @@ module type S = sig
       -> function_declaration
 
     (** Create a description of a function declaration whose code is unknown.
-        The lack of knowledge about the code will prevent inlining. *)
+        Such declarations cannot be inlined. *)
     val create_non_inlinable_function_declaration
        : unit
       -> function_declaration
-(*
-    (** Create a type of kind [Fabricated] describing a closure in terms of
-        either a non-inlinable or an inlinable function declaration.  Note that
-        this concept is different from that of closure types of kind [Value]
-        (see [closures], below). *)
-    val closure : function_declaration -> ty_fabricated
 
-    (** Create a type of kind [Fabricated] describing the given set(s) of
-        closures. *)
+    (** The type of a closure (of kind [Value]) containing at least the
+        given closure variable with the given type. *)
+    val closure_containing_at_least
+       : Var_within_closure.t
+      -> ty_value
+      -> t
+
+    (** The type of a set of closures whose closures have exactly the given
+        set of closure IDs and closure variables. *)
     val set_of_closures
-       : closures:ty_fabricated Closure_id.Map.t extensibility
-      -> closure_elements:ty_value Var_within_closure.Map.t extensibility
+       : closures:ty_value Closure_id.Map.t
+      -> closure_elements:ty_value Var_within_closure.Map.t
       -> t
 
-    (** Used to create the data in the map required for the [closures]
-        function. *)
-    val closures_entry : set_of_closures:ty_fabricated -> closures_entry
-
-    (** Create a type of kind [Value] corresponding to one or more closures. *)
-    val closures
-       : dependent_function_type
-      -> closures_entry Closure_id.Map.t
-      -> t
-*)
+    (** The type of a set of closures containing at least one closure with
+        the given closure ID. *)
+    val set_of_closures_containing_at_least : Closure_id.t -> t
 
     (** Construct a type equal to the type of the given name.  (The name
         must be present in the given environment when calling e.g. [join].) *)

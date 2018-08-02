@@ -539,73 +539,73 @@ module Make (W : Typing_world.S) = struct
           fields
       in
       let blocks =
-        create_blocks ~tag:Tag.double_array_tag ~size
-          ~field_tys:(Array.to_list field_tys)
+        Blocks.create ~field_tys:(Array.to_list field_tys)
+          (Closed Tag.double_array_tag)
       in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
+        { immediates = Immediates.create_bottom ();
+          blocks;
         }
       in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-      }
+      Value (No_alias (Join [
+        Blocks_and_tagged_immediates blocks_imms,
+        Name_permutation.create ()]))
 
   let this_immutable_float_array fields : t =
     let make_field f : _ ty_naked_number =
-      No_alias (Join [Float (Float.Set.singleton f)])
+      No_alias (Join [
+        Float (Float.Set.singleton f), Name_permutation.create ()])
     in
     let fields = Array.map make_field fields in
     immutable_float_array fields
 
-  let block tag ~(fields : t mutable_or_immutable array) =
+  let block tag ~(fields : t list) =
     (* CR mshinwell: We should check the field kinds against the tag. *)
-    match Targetint.OCaml.of_int_option (Array.length fields) with
+    match Targetint.OCaml.of_int_option (List.length fields) with
     | None ->
       Misc.fatal_error "Block too long for target"
     | Some size ->
-      let field_tys =
-        Array.map
-          (fun (field : _ mutable_or_immutable) : t ->
-            match field with
-            | Immutable t -> t
-            | Mutable -> any_value ())
-          fields
-      in
-      let blocks =
-        create_blocks ~tag ~size ~field_tys:(Array.to_list field_tys)
-      in
+      let blocks = Blocks.create ~field_tys:fields (Closed tag) in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks = Known blocks;
+        { immediates = Immediates.create_bottom ();
+          blocks;
         }
       in
-      { descr =
-          Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
-        phantom = None;
-      }
+      Value (No_alias (Join [
+        Blocks_and_tagged_immediates blocks_imms,
+          Name_permutation.create ()]))
 
   (* CR mshinwell: bad name *)
-  let block_of_values tag ~(fields : ty_value mutable_or_immutable array) =
-    let fields =
-      Array.map
-        (fun (field : _ mutable_or_immutable) : t mutable_or_immutable ->
-          match field with
-          | Immutable ty_value ->
-            Immutable {
-              descr = Value ty_value;
-            }
-          | Mutable -> Mutable)
-        fields
-    in
-    block tag ~fields
+  let block_of_values tag ~(fields : ty_value list) =
+    block tag ~fields:(List.map (fun field : t -> Value field) fields)
 
-  let block_of_unknown_values tag ~size =
+  let block_of_unknown_values _tag ~size:_ = Misc.fatal_error "TBD"
+(*
     let fields =
       Array.init size (fun _index : _ mutable_or_immutable ->
         Immutable (any_value_as_ty_value ()))
     in
     block_of_values tag ~fields
+*)
+
+  let block_with_size_at_least ~n ~field_n_minus_one =
+    let type_of_field_n_minus_one =
+      alias_type_of (Flambda_kind.value ()) (Simple.var field_n_minus_one)
+    in
+    let field_tys =
+      Array.init n (fun index ->
+        if index = n - 1 then type_of_field_n_minus_one
+        else any_value ())
+    in
+    let blocks = Blocks.create ~field_tys Open in
+    let blocks_imms : blocks_and_tagged_immediates =
+      { immediates = Immediates.create_bottom ();
+        blocks;
+      }
+    in
+    Value (No_alias (Join [
+      Blocks_and_tagged_immediates blocks_imms,
+        Name_permutation.create ()]))
 
   let any_boxed_float () = box_float (any_naked_float ())
   let any_boxed_int32 () = box_int32 (any_naked_int32 ())

@@ -21,6 +21,7 @@
 
 module type S = sig
   module rec Blocks : (Blocks_intf.S
+    with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Typing_env := Typing_env)
   and Both_meet_and_join : (Both_meet_and_join_intf.S
