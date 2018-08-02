@@ -18,13 +18,19 @@
 
 (* CR mshinwell: Delete >= 4.08 *)
 [@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
 module Join_env = struct end
 module Relational_product = struct end
+module Row_like = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
 module Make (W : Typing_world.S) = struct
   open! W
+
+  module Flambda_type0_core = Flambda_type0_core
+  module Join_env = Join_env
+  module Typing_env = Typing_env
 
   module RP = Relational_product.Make (Int_index) (Logical_variable_component)
   module RL = Row_like.Make (Tag_index) (Int_index) (RP)
@@ -33,7 +39,7 @@ module Make (W : Typing_world.S) = struct
 
   type open_or_closed = Open | Closed of Tag.t
 
-  let create field_tys open_or_closed =
+  let create ~field_tys open_or_closed : t =
     (* CR mshinwell: This code is very similar to some in [Function_type]. *)
     let indexes_to_vars =
       Targetint.OCaml.Map.of_list (
@@ -66,10 +72,20 @@ module Make (W : Typing_world.S) = struct
     | Closed tag -> RL.create_exactly tag size product
 
   let invariant _t = () (* CR mshinwelL: RL.invariant *)
-  let meet = RL.meet
-  let join = RL.join
+  let print_with_cache = RL.print
+
+  let meet env perm1 perm2 t1 t2 =
+    (* CR mshinwell: think about env_extension *)
+    let t, _env_extension =
+      RL.meet env perm1 perm2 Fresh t1 t2
+    in
+    t
+
+  let join env perm1 perm2 t1 t2 =
+    RL.join env perm1 perm2 Fresh t1 t2
+
   let free_names = RL.free_names
   let bound_names = RL.bound_names
-  let apply_name_permutation t = RL.apply_name_permutation
-  let freshen t = RL.freshen
+  let apply_name_permutation = RL.apply_name_permutation
+  let freshen = RL.freshen
 end

@@ -540,8 +540,7 @@ module type S = sig
   end
   and Blocks : (Blocks_intf.S
     with module Join_env := Join_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+    with module Typing_env := Typing_env)
   and Both_meet_and_join : (Both_meet_and_join_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -561,7 +560,7 @@ module type S = sig
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
-  and Discriminants : (Trivial_row_like_intf.S
+  and Discriminants : (Trivial_row_like_intf.S_applied
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Typing_env := Typing_env
@@ -572,7 +571,7 @@ module type S = sig
     with module Join_env := Join_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
-  and Immediates : (Trivial_row_like_intf.S
+  and Immediates : (Trivial_row_like_intf.S_applied
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Typing_env := Typing_env

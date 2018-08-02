@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
+module type S_applied = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
   module Typing_env : sig type t end
@@ -50,4 +50,18 @@ module type S = sig
     -> t
 
   include Contains_names.S with type t := t
+end
+
+module type S = sig
+  module Flambda_type0_core : sig type t end
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+
+  module Make (Thing_without_names : Hashtbl.With_map)
+    : S_applied
+        with module Flambda_type0_core := Flambda_type0_core
+        with module Join_env := Join_env
+        with module Typing_env := Typing_env
+        with module Typing_env_extension := Typing_env_extension
 end
