@@ -24,6 +24,8 @@ module Typing_env = struct end
 module Typing_env_extension = struct end
 
 module Make (W : Typing_world.S) = struct
+  open! W
+
   (* CR mshinwell: Share with closures_entry_by_closure_id.ml *)
   module Closure_id = struct
     include Closure_id
@@ -41,7 +43,7 @@ module Make (W : Typing_world.S) = struct
     let closure_ids_to_logical_variables =
       Closure_id.Map.map (fun _ty ->
           Logical_variable.create (Flambda_kind.value ()))
-        closure_ids
+        closure_ids_to_tys
     in
     let env_extension =
       Closure_id.Map.fold (fun closure_id ty env_extension ->
@@ -50,7 +52,7 @@ module Make (W : Typing_world.S) = struct
           in
           Typing_env_extension.add_equation env_extension
             (Name.logical_var logical_var) ty)
-        closure_ids
+        closure_ids_to_tys
         Typing_env_extension.empty
     in
     RP.create [
@@ -67,7 +69,7 @@ module Make (W : Typing_world.S) = struct
   let apply_name_permutation = RP.apply_name_permutation
   let freshen = RP.freshen
 
-  module Flambda_type = W.Flambda_type
+  module Flambda_type0_core = W.Flambda_type0_core
   module Join_env = W.Join_env
   module Relational_product = W.Relational_product
   module Typing_env = W.Typing_env
