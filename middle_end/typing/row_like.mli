@@ -17,53 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make
-    (W : Typing_world.S)
-    (Tag : sig
-      type t
-      include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
-    end)
-    (Index : sig
-      type t
-
-      include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
-    end)
-    (Maps_to : sig
-      type t
-
-      val print_with_cache
-         : cache:Printing_cache.t
-        -> Format.formatter
-        -> t
-        -> unit
-
-      val add_or_meet_equations
-        : t
-        -> W.Typing_env.t
-        -> W.Typing_env_extension.t
-        -> t
-
-      val meet
-         : W.Typing_env.t
-        -> Name_permutation.t
-        -> Name_permutation.t
-        -> Relational_product_intf.fresh_component_semantics
-        -> t
-        -> t
-        -> t Or_bottom.t * W.Typing_env_extension.t
-
-      val join
-         : W.Join_env.t
-        -> Name_permutation.t
-        -> Name_permutation.t
-        -> Relational_product_intf.fresh_component_semantics
-        -> t
-        -> t
-        -> t
-
-      include Contains_names.S with type t := t
-    end) :
+    (W : Typing_world.S) :
   Row_like_intf.S
     with module Join_env := W.Join_env
     with module Typing_env := W.Typing_env

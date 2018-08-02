@@ -34,6 +34,8 @@ module type S = sig
   (** Print the given typing environment to a formatter. *)
   val print : Format.formatter -> t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   (** Equality on two environment extensions.
       Note that this doesn't do anything fancy such as making a canonical
       form of environment from the extensions; it's just a structural

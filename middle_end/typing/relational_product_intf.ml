@@ -34,19 +34,12 @@ type fresh_component_semantics =
   | Right
     (** Analogous to [Left]. *)
 
-module type S = sig
+module type S_applied = sig
+  module Component : Name_like
+  module Index : Name_like
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
-
-  module Index : Name_like
-  module Component : sig
-    include Name_like
-    val create : Flambda_kind.t -> t
-    val equal : t -> t -> bool
-    val name : t -> Name.t
-    val kind : t -> Flambda_kind.t
-  end
 
   type t
 
@@ -58,11 +51,13 @@ module type S = sig
   (** Format the given relational product value as an s-expression. *)
   val print : Format.formatter -> t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   (** Create a relational product value given:
       - the indexes (with associated components) for each of the indexed
         products;
-      - the equations that hold between the components in each of the indexed
-        products. *)
+      - the equations that hold between the components in each of the
+        indexed products. *)
   val create : (Component.t Index.Map.t * Typing_env_extension.t) list -> t
 
   (** A conservative approximation to equality. *)
@@ -92,9 +87,9 @@ module type S = sig
     -> t
     -> t
 
-  (** The environment extension associated with the given relational product,
-      including at the start, definitions of each component to bottom
-      (hence the name "standalone"). *)
+  (** The environment extension associated with the given relational
+      product, including at the start, definitions of each component to
+      bottom (hence the name "standalone"). *)
   val standalone_extension : t -> Typing_env.t -> Typing_env_extension.t
 
   (** Add or meet the definitions and equations from the given relational
@@ -108,4 +103,26 @@ module type S = sig
     -> Typing_env.t
     -> Typing_env_extension.t
     -> t
+end
+
+module type S = sig
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+
+  module Make
+    (Index : Name_like)
+    (Component : sig
+      include Name_like
+      val create : Flambda_kind.t -> t
+      val equal : t -> t -> bool
+      val name : t -> Name.t
+      val kind : t -> Flambda_kind.t
+    end) :
+    S_applied
+      with module Index := Index
+      with module Component := Component
+      with module Join_env := Join_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension
 end

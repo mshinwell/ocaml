@@ -16,7 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet (T : Typing_world.S) = struct
+[@@@ocaml.warning "-60"]
+module Join_env = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
+
+module For_meet (W : Typing_world.S) = struct
+  open! W
+
   let name = "meet"
 
   type meet_or_join = Meet | Join
@@ -41,24 +48,24 @@ module For_meet (T : Typing_world.S) = struct
     end
   end
 
-  module Float_by_bit_pattern = struct
+  module Float = struct
     module Set = struct
-      type t = Float_by_bit_pattern.Set.t
-      let union_or_inter = Float_by_bit_pattern.Set.inter
+      type t = Numbers.Float_by_bit_pattern.Set.t
+      let union_or_inter = Numbers.Float_by_bit_pattern.Set.inter
     end
   end
 
   module Int32 = struct
     module Set = struct
-      type t = Int32.Set.t
-      let union_or_inter = Int32.Set.inter
+      type t = Numbers.Int32.Set.t
+      let union_or_inter = Numbers.Int32.Set.inter
     end
   end
 
   module Int64 = struct
     module Set = struct
-      type t = Int64.Set.t
-      let union_or_inter = Int64.Set.inter
+      type t = Numbers.Int64.Set.t
+      let union_or_inter = Numbers.Int64.Set.inter
     end
   end
 
@@ -120,14 +127,26 @@ module For_meet (T : Typing_world.S) = struct
     end
   end
 
-  let switch meet _join join_env thing1 thing2 =
-    meet (Join_env.central_environment join_env) thing1 thing2
+  let switch meet _join join_env perm1 perm2 thing1 thing2 =
+    meet (Join_env.central_environment join_env) perm1 perm2 thing1 thing2
 
-  let switch' meet _join join_env thing1 thing2 =
-    meet (Join_env.central_environment join_env) thing1 thing2
+  let switch' meet _join join_env perm1 perm2 thing1 thing2 =
+    let thing_or_bottom, _env_extension =
+      meet (Join_env.central_environment join_env) perm1 perm2 thing1 thing2
+    in
+    thing_or_bottom
+
+  let switch'_with_param meet _join join_env perm1 perm2 param thing1 thing2 =
+    let thing_or_bottom, _env_extension =
+      meet (Join_env.central_environment join_env) perm1 perm2 param
+        thing1 thing2
+    in
+    thing_or_bottom
 end
 
-module For_join (T : Typing_world.S) = struct
+module For_join (W : Typing_world.S) = struct
+  open! W
+
   let name = "join"
 
   type meet_or_join = Meet | Join
@@ -151,24 +170,24 @@ module For_join (T : Typing_world.S) = struct
     end
   end
 
-  module Float_by_bit_pattern = struct
+  module Float = struct
     module Set = struct
-      type t = Float_by_bit_pattern.Set.t
-      let union_or_inter = Float_by_bit_pattern.Set.union
+      type t = Numbers.Float_by_bit_pattern.Set.t
+      let union_or_inter = Numbers.Float_by_bit_pattern.Set.union
     end
   end
 
   module Int32 = struct
     module Set = struct
-      type t = Int32.Set.t
-      let union_or_inter = Int32.Set.union
+      type t = Numbers.Int32.Set.t
+      let union_or_inter = Numbers.Int32.Set.union
     end
   end
 
   module Int64 = struct
     module Set = struct
-      type t = Int64.Set.t
-      let union_or_inter = Int64.Set.union
+      type t = Numbers.Int64.Set.t
+      let union_or_inter = Numbers.Int64.Set.union
     end
   end
 
@@ -225,9 +244,13 @@ module For_join (T : Typing_world.S) = struct
     end
   end
 
-  let switch _meet join join_env thing1 thing2 =
-    join join_env thing1 thing2, Typing_env_extension.empty
+  let switch _meet join join_env perm1 perm2 thing1 thing2 : _ Or_bottom.t * _ =
+    Ok (join join_env perm1 perm2 thing1 thing2), Typing_env_extension.empty
 
-  let switch' _meet join join_env thing1 thing2 =
-    join join_env thing1 thing2
+  let switch' _meet join join_env perm1 perm2 thing1 thing2 : _ Or_bottom.t =
+    Ok (join join_env perm1 perm2 thing1 thing2)
+
+  let switch'_with_param _meet join join_env perm1 perm2 param thing1 thing2
+        : _ Or_bottom.t =
+    Ok (join join_env perm1 perm2 param thing1 thing2)
 end

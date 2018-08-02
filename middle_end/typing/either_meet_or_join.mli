@@ -20,12 +20,12 @@
 
 module For_meet (W : Typing_world.S)
   : Either_meet_or_join_intf.S
+      with module Join_env := W.Join_env
       with module Typing_env := W.Typing_env
       with module Typing_env_extension := W.Typing_env_extension
-      with module Join_env := W.Join_env
 
 module For_join (W : Typing_world.S)
   : Either_meet_or_join_intf.S
+      with module Join_env := W.Join_env
       with module Typing_env := W.Typing_env
       with module Typing_env_extension := W.Typing_env_extension
-      with module Join_env := W.Join_env

@@ -17,9 +17,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
+  module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
-  module Join_env : sig type t end
 
   val name : string
 
@@ -180,7 +180,7 @@ module type S = sig
     -> Name_permutation.t
     -> 'a
     -> 'a
-    -> 'a * Typing_env_extension.t
+    -> 'a Or_bottom.t * Typing_env_extension.t
 
   val switch'
      : (Typing_env.t
@@ -200,7 +200,7 @@ module type S = sig
     -> Name_permutation.t
     -> 'a
     -> 'a
-    -> 'a
+    -> 'a Or_bottom.t
 
   val switch'_with_param
      : (Typing_env.t
@@ -223,5 +223,5 @@ module type S = sig
     -> 'b
     -> 'a
     -> 'a
-    -> 'a
+    -> 'a Or_bottom.t
 end

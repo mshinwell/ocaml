@@ -16,17 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  module Flambda_type = T.Flambda_type
-  module Join_env = T.Join_env
-  module Relational_product = T.Relational_product
-  module Typing_env = T.Typing_env
-  module Typing_env_extension = T.Typing_env_extension
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Join_env = struct end
+module Relational_product = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
-  module RP = Relational_product.Make (Targetint.OCaml) (Logical_variable) (T)
-  module RL = Row_like.Make (Tag) (Targetint.OCaml) (RP) (T)
+module Make (W : Typing_world.S) = struct
+  open! W
 
-  module TEE = Typing_env_extension
+  module RP = Relational_product.Make (Int_index) (Logical_variable_component)
+  module RL = Row_like.Make (Tag_index) (Int_index) (RP)
 
   type t = RL.t
 
@@ -38,7 +39,7 @@ module Make (T : Typing_world.S) = struct
       Targetint.OCaml.Map.of_list (
         List.mapi (fun index _field_ty ->
             let index = Targetint.OCaml.of_int index in
-            let logical_var = Logical_variable.create () in
+            let logical_var = Logical_variable.create (Flambda_kind.value ()) in
             index, logical_var)
           field_tys)
     in
@@ -46,11 +47,12 @@ module Make (T : Typing_world.S) = struct
       List.fold_left (fun (env_extension, index) field_ty ->
           let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
           let env_extension =
-            TEE.add_equation env_extension (Name.logical_var logical_var) ty
+            Typing_env_extension.add_equation env_extension
+              (Name.logical_var logical_var) field_ty
           in
           let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
           env_extension, next_index)
-        (TEE.empty, Targetint.OCaml.zero)
+        (Typing_env_extension.empty, Targetint.OCaml.zero)
         field_tys
     in
     let product =
@@ -58,14 +60,16 @@ module Make (T : Typing_world.S) = struct
         indexes_to_vars, env_extension;
       ]
     in
-    let size = List.length field_tys in
+    let size = Targetint.OCaml.of_int (List.length field_tys) in
     match open_or_closed with
     | Open -> RL.create_at_least size product
     | Closed tag -> RL.create_exactly tag size product
 
-  let invariant = RL.invariant
+  let invariant _t = () (* CR mshinwelL: RL.invariant *)
   let meet = RL.meet
   let join = RL.join
+  let free_names = RL.free_names
+  let bound_names = RL.bound_names
   let apply_name_permutation t = RL.apply_name_permutation
   let freshen t = RL.freshen
 end

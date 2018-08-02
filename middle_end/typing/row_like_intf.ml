@@ -16,58 +16,21 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
+module type S_applied = sig
   module Join_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  module Tag : sig
-    type t
-  end
-
-  module Index : sig
-    type t
-
-    val equal : t -> t -> bool
-    include Map.With_set with type t := t
-  end
+  module Tag : Hashtbl.With_map
+  module Index : Hashtbl.With_map
 
   module Tag_and_index : sig
     type t = Tag.t * Index.t
 
     include Map.With_set with type t := t
-    include Contains_names.S with type t := t
   end
 
-  module Maps_to : sig
-    type t
-
-    val add_or_meet_equations
-       : t
-      -> Typing_env.t
-      -> Typing_env_extension.t
-      -> t
-
-    val meet
-       : Typing_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> t Or_bottom.t * Typing_env_extension.t
-
-    val join
-       : Join_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> t
-
-    include Contains_names.S with type t := t
-  end
+  module Maps_to : sig type t end
 
   type t
 
@@ -106,4 +69,64 @@ module type S = sig
     -> t
 
   include Contains_names.S with type t := t
+end
+
+module type S = sig
+  module Join_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+
+  module Make
+    (Tag : sig
+      type t
+      include Hashtbl.With_map with type t := t
+      include Contains_names.S with type t := t
+    end)
+    (Index : sig
+      type t
+      include Hashtbl.With_map with type t := t
+      include Contains_names.S with type t := t
+    end)
+    (Maps_to : sig
+      type t
+
+      val print_with_cache
+         : cache:Printing_cache.t
+        -> Format.formatter
+        -> t
+        -> unit
+
+      val add_or_meet_equations
+         : t
+        -> Typing_env.t
+        -> Typing_env_extension.t
+        -> t
+
+      val meet
+         : Typing_env.t
+        -> Name_permutation.t
+        -> Name_permutation.t
+        -> Relational_product_intf.fresh_component_semantics
+        -> t
+        -> t
+        -> t Or_bottom.t * Typing_env_extension.t
+
+      val join
+         : Join_env.t
+        -> Name_permutation.t
+        -> Name_permutation.t
+        -> Relational_product_intf.fresh_component_semantics
+        -> t
+        -> t
+        -> t
+
+      include Contains_names.S with type t := t
+    end) :
+    S_applied
+      with module Tag := Tag
+      with module Index := Index
+      with module Maps_to := Maps_to
+      with module Join_env := Join_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension
 end
