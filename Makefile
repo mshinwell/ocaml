@@ -352,7 +352,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/closure_ids.cmo \
   middle_end/typing/closures_entry_by_closure_id.cmo \
   middle_end/typing/discriminants.cmo \
-  middle_end/typing/function_parameters.cmo \
   middle_end/typing/function_type.cmo \
   middle_end/typing/immediates.cmo \
   middle_end/typing/types_by_closure_id.cmo \

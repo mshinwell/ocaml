@@ -16,4 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = Trivial_row_like.Make (Discriminant) (T)
+module Make (W : Typing_world.S) = struct
+  module TRL = Trivial_row_like.Make (W)
+  include TRL.Make (Discriminant)
+end

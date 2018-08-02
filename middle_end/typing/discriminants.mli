@@ -16,10 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) :
-  Trivial_row_like_intf.S
-    with module Flambda_type := T.Flambda_type
-    with module Join_env := T.Join_env
-    with module Typing_env := T.Typing_env
-    with module Typing_env_extension := T.Typing_env_extension
+module Make (W : Typing_world.S) :
+  Trivial_row_like_intf.S_applied
+    with module Flambda_type0_core := W.Flambda_type0_core
+    with module Join_env := W.Join_env
+    with module Typing_env := W.Typing_env
+    with module Typing_env_extension := W.Typing_env_extension
     with module Thing_without_names := Discriminant

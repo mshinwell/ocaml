@@ -3909,12 +3909,16 @@ middle_end/typing/flambda_types.cmx : middle_end/language/variable.cmx \
     middle_end/language/code_id.cmx middle_end/language/closure_origin.cmx \
     middle_end/language/closure_id.cmx
 middle_end/typing/function_type.cmo : middle_end/typing/typing_world.cmo \
-    utils/targetint.cmi middle_end/language/name.cmi \
-    middle_end/typing/logical_variable.cmi \
+    utils/targetint.cmi middle_end/typing/relational_product.cmi \
+    middle_end/language/name.cmi \
+    middle_end/typing/logical_variable_component.cmi \
+    middle_end/typing/logical_variable.cmi middle_end/typing/int_index.cmi \
     middle_end/typing/function_type.cmi
 middle_end/typing/function_type.cmx : middle_end/typing/typing_world.cmx \
-    utils/targetint.cmx middle_end/language/name.cmx \
-    middle_end/typing/logical_variable.cmx \
+    utils/targetint.cmx middle_end/typing/relational_product.cmx \
+    middle_end/language/name.cmx \
+    middle_end/typing/logical_variable_component.cmx \
+    middle_end/typing/logical_variable.cmx middle_end/typing/int_index.cmx \
     middle_end/typing/function_type.cmi
 middle_end/typing/function_type.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/function_type_intf.cmo

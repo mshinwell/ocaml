@@ -16,24 +16,27 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  module Flambda_type = T.Flambda_type
-  module Join_env = T.Join_env
-  module Relational_product = T.Relational_product
-  module Typing_env = T.Typing_env
-  module Typing_env_extension = T.Typing_env_extension
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
+module Join_env = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
-  module RP = Relational_product.Make (Targetint.OCaml) (Logical_variable) (T)
-  module TEE = Typing_env_extension
+module Make (W : Typing_world.S) = struct
+  open! W
+
+  module RP = Relational_product.Make (Int_index) (Logical_variable_component)
 
   type t = RP.t
 
   let create ~parameters ~results =
     let assign_logical_variables tys =
       Targetint.OCaml.Map.of_list (
-        List.mapi (fun index _ty ->
+        List.mapi (fun index ty ->
             let index = Targetint.OCaml.of_int index in
-            let logical_var = Logical_variable.create () in
+            let kind = Flambda_type0_core.kind ty in
+            let logical_var = Logical_variable.create kind in
             index, logical_var)
           tys)
     in
@@ -42,11 +45,12 @@ module Make (T : Typing_world.S) = struct
         List.fold_left (fun (env_extension, index) ty ->
             let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
             let env_extension =
-              TEE.add_equation env_extension (Name.logical_var logical_var) ty
+              Typing_env_extension.add_equation env_extension
+                (Name.logical_var logical_var) ty
             in
             let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
             env_extension, next_index)
-          (TEE.empty, Targetint.OCaml.zero)
+          (Typing_env_extension.empty, Targetint.OCaml.zero)
           tys
       in
       env_extension
@@ -67,6 +71,12 @@ module Make (T : Typing_world.S) = struct
   let bound_names = RP.bound_names
   let free_names = RP.free_names
   let introduce = RP.introduce
-  let apply_name_permutation t = RP.apply_name_permutation
-  let freshen t = RP.freshen
+  let apply_name_permutation = RP.apply_name_permutation
+  let freshen = RP.freshen
+
+  module Flambda_type0_core = W.Flambda_type0_core
+  module Join_env = W.Join_env
+  module Relational_product = W.Relational_product
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

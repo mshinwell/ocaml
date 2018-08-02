@@ -62,6 +62,7 @@ module type S = sig
     : S_applied
         with module Flambda_type0_core := Flambda_type0_core
         with module Join_env := Join_env
+        with module Thing_without_names := Thing_without_names
         with module Typing_env := Typing_env
         with module Typing_env_extension := Typing_env_extension
 end
