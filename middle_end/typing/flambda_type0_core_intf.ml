@@ -31,7 +31,7 @@ module type S = sig
   module Typing_env_extension : sig type t end
 
   include module type of struct include
-    Flambda_types.S_impl
+    Flambda_types.Make
       (Blocks)
       (Closure_elements)
       (Closure_ids)

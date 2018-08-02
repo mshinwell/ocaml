@@ -16,5 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Flambda_type0_internal_intf.S) :
-  Type_printers_intf.S with module T := T 
+module Make (W : Typing_world.S) :
+  Type_printers_intf.S
+    with module Flambda_type0_core := W.Flambda_type0_core

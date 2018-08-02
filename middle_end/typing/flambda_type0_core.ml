@@ -16,21 +16,32 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Blocks = struct end
+module Closure_elements = struct end
+module Closure_ids = struct end
+module Closures_entry_by_closure_id = struct end
+module Discriminants = struct end
+module Expr = struct end
+module Function_type = struct end
+module Immediates = struct end
+module Types_by_closure_id = struct end
+
+module Make (W : Typing_world.S) (Expr : Expr_intf.S) = struct
+  open! W
+
   module Flambda_types =
-    Flambda_types.S_impl
-      (T.Blocks)
-      (T.Closure_elements)
-      (T.Closure_ids)
-      (T.Closures_entry_by_closure_id)
-      (T.Discriminants)
-      (T.Expr)
-      (T.Function_type)
-      (T.Immediates)
-      (T.Join_env)
-      (T.Types_by_closure_id)
-      (T.Typing_env)
-      (T.Typing_env_extension)
+    Flambda_types.Make
+      (Blocks)
+      (Closure_elements)
+      (Closure_ids)
+      (Closures_entry_by_closure_id)
+      (Discriminants)
+      (Expr)
+      (Function_type)
+      (Immediates)
+      (Types_by_closure_id)
 
   include Flambda_types
 
@@ -40,7 +51,7 @@ module Make (T : Typing_world.S) = struct
   let free_names = Type_free_names.free_names
 
   let force_to_kind_value t =
-    match t.descr with
+    match t with
     | Value ty_value -> ty_value
     | Naked_number _
     | Fabricated _ ->
@@ -49,7 +60,7 @@ module Make (T : Typing_world.S) = struct
 
   let force_to_kind_naked_immediate (t : t)
         : Immediate.Set.t ty_naked_number =
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
       ty_naked_number
     | Naked_number _
@@ -61,7 +72,7 @@ module Make (T : Typing_world.S) = struct
 
   let force_to_kind_naked_float (t : t)
         : Float_by_bit_pattern.Set.t ty_naked_number =
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
       ty_naked_number
     | Naked_number _
@@ -72,7 +83,7 @@ module Make (T : Typing_world.S) = struct
         print t
 
   let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
       ty_naked_number
     | Naked_number _
@@ -83,7 +94,7 @@ module Make (T : Typing_world.S) = struct
         print t
 
   let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
       ty_naked_number
     | Naked_number _
@@ -95,7 +106,7 @@ module Make (T : Typing_world.S) = struct
 
   let force_to_kind_naked_nativeint (t : t)
         : Targetint.Set.t ty_naked_number =
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
       ty_naked_number
     | Naked_number _
@@ -132,7 +143,7 @@ module Make (T : Typing_world.S) = struct
         print t
 
   let force_to_kind_fabricated t =
-    match t.descr with
+    match t with
     | Fabricated ty_fabricated -> ty_fabricated
     | Value _
     | Naked_number _ ->
@@ -145,7 +156,7 @@ module Make (T : Typing_world.S) = struct
     | _ -> false
 
   let is_obviously_bottom (t : t) =
-    match t.descr with
+    match t with
     | Value ty -> ty_is_obviously_bottom ty
     | Naked_number (ty, _) -> ty_is_obviously_bottom ty
     | Fabricated ty -> ty_is_obviously_bottom ty
@@ -555,7 +566,7 @@ module Make (T : Typing_world.S) = struct
 
   let box_float (t : t) : t =
     check_not_phantom t "box_float";
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
       { descr =
           Value (No_alias (Join [
@@ -570,7 +581,7 @@ module Make (T : Typing_world.S) = struct
 
   let box_int32 (t : t) : t =
     check_not_phantom t "box_int32";
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
       { descr =
           Value (No_alias (Join [
@@ -585,7 +596,7 @@ module Make (T : Typing_world.S) = struct
 
   let box_int64 (t : t) : t =
     check_not_phantom t "box_int64";
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
       { descr =
           Value (No_alias (Join [
@@ -600,7 +611,7 @@ module Make (T : Typing_world.S) = struct
 
   let box_nativeint (t : t) : t =
     check_not_phantom t "box_nativeint";
-    match t.descr with
+    match t with
     | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
       { descr =
           Value (No_alias (Join [
@@ -751,39 +762,14 @@ module Make (T : Typing_world.S) = struct
     }
 
   let kind (t : t) =
-    match t.phantom with
-    | None ->
-      begin match t.descr with
-      | Value _ -> K.value ()
-      | Naked_number (_, K.Naked_number.Naked_immediate) ->
-        K.naked_immediate ()
-      | Naked_number (_, K.Naked_number.Naked_float) -> K.naked_float ()
-      | Naked_number (_, K.Naked_number.Naked_int32) -> K.naked_int32 ()
-      | Naked_number (_, K.Naked_number.Naked_int64) -> K.naked_int64 ()
-      | Naked_number (_, K.Naked_number.Naked_nativeint) ->
-        K.naked_nativeint ()
-      | Fabricated _ -> K.fabricated ()
-      end
-    | Some occurrences ->
-      let phantom_kind =
-        let module PK = K.Phantom_kind in
-        match t.descr with
-        | Value _ -> PK.Value
-        | Naked_number (_, K.Naked_number.Naked_immediate) ->
-          PK.Naked_number Naked_immediate
-        | Naked_number (_, K.Naked_number.Naked_float) ->
-          PK.Naked_number Naked_float
-        | Naked_number (_, K.Naked_number.Naked_int32) ->
-          PK.Naked_number Naked_int32
-        | Naked_number (_, K.Naked_number.Naked_int64) ->
-          PK.Naked_number Naked_int64
-        | Naked_number (_, K.Naked_number.Naked_nativeint) ->
-          PK.Naked_number Naked_nativeint
-        | Fabricated _ -> PK.Fabricated
-      in
-      match occurrences with
-      | In_types -> K.phantom In_types phantom_kind
-      | Debug_only -> K.phantom Debug_only phantom_kind
+    match t with
+    | Value _ -> K.value ()
+    | Naked_number (_, K.Naked_number.Naked_immediate) -> K.naked_immediate ()
+    | Naked_number (_, K.Naked_number.Naked_float) -> K.naked_float ()
+    | Naked_number (_, K.Naked_number.Naked_int32) -> K.naked_int32 ()
+    | Naked_number (_, K.Naked_number.Naked_int64) -> K.naked_int64 ()
+    | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint ()
+    | Fabricated _ -> K.fabricated ()
 
   let create_parameters_from_types ts : parameters =
     let params =
@@ -1040,7 +1026,7 @@ module Make (T : Typing_world.S) = struct
     else { descr = descr'; }
 
   let get_alias t =
-    match t.descr with
+    match t with
     | Value (Equals simple) -> Some simple
     | Value _ -> None
     | Naked_number (Equals simple, _) -> Some simple

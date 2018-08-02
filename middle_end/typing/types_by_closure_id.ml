@@ -39,6 +39,8 @@ module Make (W : Typing_world.S) = struct
 
   module RP = Relational_product.Make (Closure_id) (Logical_variable_component)
 
+  type t = RP.t
+
   let create closure_ids_to_tys =
     let closure_ids_to_logical_variables =
       Closure_id.Map.map (fun _ty ->
@@ -59,13 +61,20 @@ module Make (W : Typing_world.S) = struct
       closure_ids_to_logical_variables, env_extension;
     ]
 
-  let invariant = RP.invariant
-  let equal = RP.equal
-  let meet = RP.meet
-  let join = RP.join
+  let print ~cache ppf t = RP.print_with_cache ~cache ppf t
+
+  let meet env perm1 perm2 t1 t2 =
+    (* CR mshinwell: think about env_extension *)
+    let t, _env_extension =
+      RP.meet env perm1 perm2 Fresh t1 t2
+    in
+    t
+
+  let join env perm1 perm2 t1 t2 =
+    RP.join env perm1 perm2 Fresh t1 t2
+
   let bound_names = RP.bound_names
   let free_names = RP.free_names
-  let introduce = RP.introduce
   let apply_name_permutation = RP.apply_name_permutation
   let freshen = RP.freshen
 

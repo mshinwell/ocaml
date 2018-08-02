@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module S_impl
+module Make
   (Blocks : sig type t end)
   (Closure_elements : sig type t end)
   (Closure_ids : sig type t end)
