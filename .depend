@@ -3537,12 +3537,16 @@ middle_end/typing/changes.cmi :
 middle_end/typing/closure_elements.cmo : \
     middle_end/language/var_within_closure.cmi middle_end/typing/unit.cmi \
     middle_end/typing/typing_world.cmo middle_end/typing/row_like.cmi \
-    middle_end/language/name.cmi middle_end/typing/logical_variable.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    middle_end/typing/logical_variable_component.cmi \
+    middle_end/typing/logical_variable.cmi middle_end/typing/flambda_kind.cmi \
     middle_end/typing/closure_elements.cmi
 middle_end/typing/closure_elements.cmx : \
     middle_end/language/var_within_closure.cmx middle_end/typing/unit.cmx \
     middle_end/typing/typing_world.cmx middle_end/typing/row_like.cmx \
-    middle_end/language/name.cmx middle_end/typing/logical_variable.cmx \
+    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
+    middle_end/typing/logical_variable_component.cmx \
+    middle_end/typing/logical_variable.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/typing/closure_elements.cmi
 middle_end/typing/closure_elements.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/closure_elements_intf.cmo
