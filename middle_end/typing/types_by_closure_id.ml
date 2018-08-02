@@ -16,18 +16,31 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  module Flambda_type = T.Flambda_type
-  module Join_env = T.Join_env
-  module Relational_product = T.Relational_product
-  module Typing_env = T.Typing_env
-  module Typing_env_extension = T.Typing_env_extension
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
+module Join_env = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
-  module RP = Relational_product.Make (Closure_id) (Logical_variable) (T)
+module Make (W : Typing_world.S) = struct
+  (* CR mshinwell: Share with closures_entry_by_closure_id.ml *)
+  module Closure_id = struct
+    include Closure_id
+
+    let free_names _t = Name_occurrences.create ()
+    let bound_names _t = Name_occurrences.create ()
+
+    let apply_name_permutation t _perm = t
+    let freshen t _freshening = t
+  end
+
+  module RP = Relational_product.Make (Closure_id) (Logical_variable_component)
 
   let create closure_ids_to_tys =
     let closure_ids_to_logical_variables =
-      Closure_id.Map.map (fun _ty -> Logical_variable.create ())
+      Closure_id.Map.map (fun _ty ->
+          Logical_variable.create (Flambda_kind.value ()))
         closure_ids
     in
     let env_extension =
@@ -35,17 +48,28 @@ module Make (T : Typing_world.S) = struct
           let logical_var =
             Closure_id.Map.find closure_id closure_ids_to_logical_variables
           in
-          TEE.add_equation env_extension (Name.logical_var logical_var) ty)
+          Typing_env_extension.add_equation env_extension
+            (Name.logical_var logical_var) ty)
         closure_ids
-        TEE.empty
+        Typing_env_extension.empty
     in
     RP.create [
       closure_ids_to_logical_variables, env_extension;
     ]
 
   let invariant = RP.invariant
+  let equal = RP.equal
   let meet = RP.meet
   let join = RP.join
-  let apply_name_permutation t = RP.apply_name_permutation
-  let freshen t = RP.freshen
+  let bound_names = RP.bound_names
+  let free_names = RP.free_names
+  let introduce = RP.introduce
+  let apply_name_permutation = RP.apply_name_permutation
+  let freshen = RP.freshen
+
+  module Flambda_type = W.Flambda_type
+  module Join_env = W.Join_env
+  module Relational_product = W.Relational_product
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

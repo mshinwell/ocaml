@@ -4293,12 +4293,20 @@ middle_end/typing/type_printers.cmi : \
 middle_end/typing/type_printers_intf.cmo : utils/printing_cache.cmi
 middle_end/typing/type_printers_intf.cmx : utils/printing_cache.cmx
 middle_end/typing/types_by_closure_id.cmo : \
-    middle_end/typing/typing_world.cmo middle_end/language/name.cmi \
-    middle_end/typing/logical_variable.cmi middle_end/language/closure_id.cmi \
+    middle_end/typing/typing_world.cmo \
+    middle_end/typing/relational_product.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    middle_end/typing/logical_variable_component.cmi \
+    middle_end/typing/logical_variable.cmi middle_end/typing/flambda_kind.cmi \
+    middle_end/language/closure_id.cmi \
     middle_end/typing/types_by_closure_id.cmi
 middle_end/typing/types_by_closure_id.cmx : \
-    middle_end/typing/typing_world.cmx middle_end/language/name.cmx \
-    middle_end/typing/logical_variable.cmx middle_end/language/closure_id.cmx \
+    middle_end/typing/typing_world.cmx \
+    middle_end/typing/relational_product.cmx \
+    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
+    middle_end/typing/logical_variable_component.cmx \
+    middle_end/typing/logical_variable.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/language/closure_id.cmx \
     middle_end/typing/types_by_closure_id.cmi
 middle_end/typing/types_by_closure_id.cmi : \
     middle_end/typing/typing_world.cmo \
