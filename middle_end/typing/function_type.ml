@@ -20,6 +20,7 @@
 [@@@ocaml.warning "-60"]
 module Flambda_type0_core = struct end
 module Join_env = struct end
+module Meet_env = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
@@ -76,6 +77,7 @@ module Make (W : Typing_world.S) = struct
 
   module Flambda_type0_core = W.Flambda_type0_core
   module Join_env = W.Join_env
+  module Meet_env = W.Meet_env
   module Relational_product = W.Relational_product
   module Typing_env = W.Typing_env
   module Typing_env_extension = W.Typing_env_extension

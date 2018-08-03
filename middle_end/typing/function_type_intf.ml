@@ -52,7 +52,7 @@ module type S = sig
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> t Or_bottom.t * Typing_env_extension.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two function types. *)
   val join

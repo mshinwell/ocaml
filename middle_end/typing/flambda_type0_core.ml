@@ -593,7 +593,7 @@ module Make (W : Typing_world.S) = struct
       alias_type_of (Flambda_kind.value ()) (Simple.var field_n_minus_one)
     in
     let field_tys =
-      Array.init n (fun index ->
+      List.init n (fun index ->
         if index = n - 1 then type_of_field_n_minus_one
         else any_value ())
     in
@@ -628,7 +628,7 @@ module Make (W : Typing_world.S) = struct
         ~result_arity ~stub ~dbg ~inline ~specialise ~is_a_functor
         ~invariant_params ~size ~direct_call_surrogate ~my_closure
         : function_declaration =
-    Inlinable [({
+    Inlinable {
       closure_origin;
       continuation_param;
       exn_continuation_param;
@@ -647,7 +647,7 @@ module Make (W : Typing_world.S) = struct
       size;
       direct_call_surrogate;
       my_closure;
-    } : inlinable_function_declaration)]
+    }
 
   let create_non_inlinable_function_declaration ~direct_call_surrogate
         : function_declaration =
@@ -670,9 +670,10 @@ module Make (W : Typing_world.S) = struct
     in
     let by_closure_id =
       Closures_entry_by_closure_id.create_exactly_multiple
-        (Closure_id_and_var_within_closure_set.Map.singleton
-          (closure_id, Var_within_closure.Map.keys closure_elements)
-          closures_entry)
+        (Closures_entry_by_closure_id.
+          Closure_id_and_var_within_closure_set.Map.singleton
+            (closure_id, Var_within_closure.Map.keys closure_elements)
+            closures_entry)
     in
     let closures : closures =
       { by_closure_id;
@@ -685,8 +686,9 @@ module Make (W : Typing_world.S) = struct
       Var_within_closure.Map.singleton var_within_closure (Value ty_value)
     in
     let closures_entry : closures_entry =
-      { function_decl;
-        ty;
+      { function_decl = Non_inlinable;
+        ty = Function_type.unknown ();
+        (* XXX we need to know the arity, no? *)
         closure_elements = closure_elements';
         set_of_closures = any_fabricated_as_ty_fabricated ()
       }

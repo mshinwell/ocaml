@@ -52,7 +52,11 @@ module Make (W : Typing_world.S) = struct
   let print = RL.print
   let invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
-  let meet env t1 t2 = RL.meet env Fresh t1 t2
+  let meet env t1 t2 : _ Or_bottom.t =
+    match RL.meet env Fresh t1 t2 with
+    | Bottom -> Bottom
+    | Ok (t, _set_of_closures_entry) -> Ok (t, Typing_env_extension.empty)
+
   let join env t1 t2 = RL.join env Fresh t1 t2
 
   let free_names = RL.free_names
