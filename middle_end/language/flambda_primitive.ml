@@ -452,7 +452,7 @@ type unary_primitive =
       move_from : Closure_id.t;
       move_to : Closure_id.t;
     }
-  | Project_var of Closure_id.t * Var_within_closure.t
+  | Project_var of Var_within_closure.t
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =

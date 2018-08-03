@@ -16,26 +16,30 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  open T
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
+module Meet_env = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
-  module TE = Typing_env
-  module TEE = Typing_env_extension
+module Make (W : Typing_world.S) = struct
+  open! W
 
   type t = {
-    env : TE.t;
-    env_plus_extension1 : TE.t;
-    env_plus_extension2 : TE.t;
-    extension1 : TEE.t;
-    extension2 : TEE.t;
+    env : Meet_env.t;
+    env_plus_extension1 : Typing_env.t;
+    env_plus_extension2 : Typing_env.t;
+    extension1 : Typing_env_extension.t;
+    extension2 : Typing_env_extension.t;
   }
 
   let create env =
     { env;
       env_plus_extension1 = env;
       env_plus_extension2 = env;
-      extension1 = TEE.empty;
-      extension2 = TEE.empty;
+      extension1 = Typing_env_extension.empty;
+      extension2 = Typing_env_extension.empty;
     }
 
   let invariant _t =
@@ -43,15 +47,20 @@ module Make (T : Typing_world.S) = struct
 
   let add_extensions t ~holds_on_left ~holds_on_right =
     let env_plus_extension1 =
-      TE.add_or_meet_env_extension t.env_plus_extension1 holds_on_left
-        (TE.max_level t.env)
+      Typing_env.add_or_meet_env_extension t.env_plus_extension1
+        holds_on_left (Typing_env.max_level (Meet_env.env t.env))
     in
-    let extension1 = TEE.meet t.env t.extension1 holds_on_left in
+    let extension1 =
+      Typing_env_extension.meet (Meet_env.env t.env) t.extension1 holds_on_left
+    in
     let env_plus_extension2 =
-      TE.add_or_meet_env_extension t.env_plus_extension2 holds_on_right
-        (TE.max_level t.env)
+      Typing_env.add_or_meet_env_extension t.env_plus_extension2 holds_on_right
+        (Typing_env.max_level (Meet_env.env t.env))
     in
-    let extension2 = TEE.meet t.env t.extension2 holds_on_right in
+    let extension2 =
+      Typing_env_extension.meet (Meet_env.env t.env)
+        t.extension2 holds_on_right
+    in
     let t = {
       env;
       env_plus_extension1;
@@ -66,13 +75,15 @@ module Make (T : Typing_world.S) = struct
   let add_extensions_and_extend_central_environment t
         ~holds_on_left ~holds_on_right ~central_extension =
     let env =
-      TE.add_or_meet_env_extension t.env central_extension (T.max_level t.env)
+      Typing_env.add_or_meet_env_extension (Meet_env.env t.env)
+        central_extension
+        (Typing_env.max_level (Meet_env.env t.env))
     in
     let t = { t with env; } in
     invariant t;
     add_extensions t ~holds_on_left ~holds_on_right
 
-  let environment t = t.env
+  let central_environment t = t.env
 
   let environment_on_left t = t.env_plus_extension1
 
@@ -83,5 +94,14 @@ module Make (T : Typing_world.S) = struct
   let holds_on_right t = t.extension2
 
   let fast_check_extensions_same_both_sides t =
-    TEE.fast_equal t.extension1 t.extension2
+    Typing_env_extension.fast_equal t.extension1 t.extension2
+
+  let shortcut_precondition t =
+    fast_check_extensions_same_both_sides t
+      && Meet_env.shortcut_precondition t.env
+
+  module Flambda_type0_core = W.Flambda_type0_core
+  module Meet_env = W.Meet_env
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

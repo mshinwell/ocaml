@@ -46,26 +46,7 @@ module Make (W : Typing_world.S) = struct
     Relational_product.Make (Var_within_closure)
       (Logical_variable_component)
 
-  module Var_within_closure_set = struct
-    type t = Var_within_closure.Set.t
-
-    (* CR mshinwell: Throughout, try to go back to Map.With_set rather than
-       Hashtbl.With_map *)
-    include Hashtbl.Make_with_map (struct
-      include Var_within_closure.Set
-      let hash = Hashtbl.hash
-    end)
-
-    let free_names _t = Name_occurrences.create ()
-    let bound_names _t = Name_occurrences.create ()
-
-    let apply_name_permutation t _perm = t
-    let freshen t _freshening = t
-  end
-
-  module RL = Row_like.Make (Unit) (Var_within_closure_set) (RP)
-
-  type t = RL.t
+  type t = RP.t
 
   type open_or_closed = Open | Closed
 
@@ -86,32 +67,24 @@ module Make (W : Typing_world.S) = struct
         closure_elements_to_tys
         Typing_env_extension.empty
     in
-    let product =
-      RP.create [
-        closure_elements_to_logical_variables, env_extension;
-      ]
-    in
-    let closure_elements =
-      Var_within_closure.Map.keys closure_elements_to_tys
-    in
-    match open_or_closed with
-    | Open -> RL.create_at_least closure_elements product
-    | Closed -> RL.create_exactly () closure_elements product
+    RP.create [
+      closure_elements_to_logical_variables, env_extension;
+    ]
 
-  let print = RL.print
+  let print = RP.print
 
   let meet env perm1 perm2 t1 t2 =
     (* CR mshinwell: think about env_extension *)
     let t, _env_extension =
-      RL.meet env perm1 perm2 Fresh t1 t2
+      RP.meet env perm1 perm2 Fresh t1 t2
     in
     t
 
   let join env perm1 perm2 t1 t2 =
-    RL.join env perm1 perm2 Fresh t1 t2
+    RP.join env perm1 perm2 Fresh t1 t2
 
-  let free_names = RL.free_names
-  let bound_names = RL.bound_names
-  let apply_name_permutation = RL.apply_name_permutation
-  let freshen = RL.freshen
+  let free_names = RP.free_names
+  let bound_names = RP.bound_names
+  let apply_name_permutation = RP.apply_name_permutation
+  let freshen = RP.freshen
 end

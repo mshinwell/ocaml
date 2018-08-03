@@ -14,14 +14,33 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** "Join environments": structures which keep track of the various
-    typing environments and environment extensions that are required whilst
-    carrying out join operations (on types, etc). *)
+module type S = sig
+  module Typing_env : sig type t end
 
-module Make (T : Typing_world.S)
-  : Join_env_intf.S
-      with module Meet_env := T.Meet_env
-      with module Typing_env := T.Typing_env
-      with module Typing_env_extension := T.Typing_env_extension
+  val create
+     : Typing_env.t
+    -> perm_left:Name_permutation.t
+    -> perm_right:Name_permutation.t
+    -> t
+
+  val print : Format.formatter -> t -> unit
+
+  val env : t -> Typing_env.t
+
+  val perm_left : t -> Name_permutation.t
+
+  val perm_right : t -> Name_permutation.t
+
+  (** Note that we are now in the process of meeting the given two
+      [Simple]s. *)
+  val now_meeting : Simple.t -> Simple.t -> t
+
+  (** Determine whether we are now in the process of meeting the given two
+      [Simple]s.  The arguments do not have to be provided in the same order
+      as when [now_meeting] was called. *)
+  val already_meeting : Simple.t -> Simple.t -> bool
+
+  val shortcut_precondition : t -> bool
+end

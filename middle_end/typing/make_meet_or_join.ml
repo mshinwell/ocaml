@@ -36,6 +36,150 @@ struct
     | Join _ -> false
     | Unknown -> true
 
+  let rec meet_on_unknown_or_join env perm1 perm2
+        (ou1 : S.of_kind_foo unknown_or_join)
+        (ou2 : S.of_kind_foo unknown_or_join)
+        : S.of_kind_foo unknown_or_join * env_extension =
+    if ou1 == ou2 then
+      ou1, Typing_env_extension.empty
+    else
+      match ou1, ou2 with
+      | Unknown, ou2 -> ou2, Typing_env_extension.empty
+      | ou1, Unknown -> ou1, Typing_env_extension.empty
+      | Join of_kind_foos1, Join of_kind_foos2 ->
+        let of_kind_foos, env_extension_from_meet =
+          List.fold_left
+            (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
+              let new_env_extension_from_meet =
+                ref (Typing_env_extension.empty)
+              in
+              let of_kind_foos =
+                Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
+                    let meet =
+                      let env = Join_env.create env in
+                      S.meet_or_join_of_kind_foo env perm1 perm2
+                        of_kind_foo of_kind_foo'
+                    in
+                    match meet with
+                    | Ok (of_kind_foo, new_env_extension_from_meet') ->
+                      new_env_extension_from_meet :=
+                        Typing_env_extension.meet env
+                          new_env_extension_from_meet'
+                            !new_env_extension_from_meet;
+                      Some of_kind_foo
+                    | Absorbing -> None)
+                  of_kind_foos
+              in
+              let env_extension_from_meet =
+                Typing_env_extension.meet env
+                  env_extension_from_meet !new_env_extension_from_meet;
+              in
+              of_kind_foos, env_extension_from_meet)
+            (of_kind_foos2, Typing_env_extension.empty)
+            of_kind_foos1
+        in
+        let same_as input_of_kind_foos =
+          List.compare_lengths input_of_kind_foos of_kind_foos = 0
+            && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
+                   input_of_kind_foo == of_kind_foo)
+                 input_of_kind_foos of_kind_foos
+        in
+        if same_as of_kind_foos1 then ou1, env_extension_from_meet
+        else if same_as of_kind_foos2 then ou2, env_extension_from_meet
+        else Join of_kind_foos, env_extension_from_meet
+
+  and meet_ty env
+        (or_alias1 : S.of_kind_foo ty)
+        (or_alias2 : S.of_kind_foo ty)
+        : S.of_kind_foo ty * env_extension =
+    if Meet_env.check_name_permutations_same_both_sides env
+         && or_alias1 == or_alias2
+    then begin
+      or_alias1, Typing_env_extension.empty
+    end else begin
+      let unknown_or_join1, canonical_simple1 =
+        Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+          (Meet_env.env env)
+          ~force_to_kind:S.force_to_kind
+          ~print_ty:S.print_ty
+          or_alias1
+      in
+      let unknown_or_join2, canonical_simple2 =
+        Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
+          (Meet_env.env env)
+          ~force_to_kind:S.force_to_kind
+          ~print_ty:S.print_ty
+          or_alias2
+      in
+      let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
+        match simple with
+        | Name name ->
+          Typing_env_extension.add_equation env_extension name ty
+        | Const _ | Discriminant _ -> env_extension
+      in
+      match canonical_simple1, canonical_simple2 with
+      | Some simple1, Some simple2
+          when Simple.equal simple1 simple2
+                 || Meet_env.already_meeting env simple1 simple2 ->
+        Equals simple1, Typing_env_extension.empty
+      | Some simple1, _ when unknown_or_join_is_unknown unknown_or_join2 ->
+        Equals simple1, Typing_env_extension.empty
+      | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
+        Equals simple2, Typing_env_extension.empty
+      | Some simple1, Some simple2 ->
+        let meet_unknown_or_join, env_extension_from_meet =
+          let env = Meet_env.now_meeting env simple1 simple2 in
+          meet_on_unknown_or_join env perm1 perm2
+            unknown_or_join1 unknown_or_join2
+        in
+        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+        let env_extension_from_meet =
+          add_equation_if_on_a_name env_extension_from_meet
+            simple1 meet_ty
+        in
+        let env_extension_from_meet =
+          add_equation_if_on_a_name env_extension_from_meet
+            simple2 (S.to_type (Equals simple1))
+        in
+        Equals simple1, env_extension_from_meet
+      | Some simple1, None ->
+        let meet_unknown_or_join, env_extension_from_meet =
+          meet_on_unknown_or_join env perm1 perm2
+            unknown_or_join1 unknown_or_join2
+        in
+        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+        let env_extension_from_meet =
+          add_equation_if_on_a_name env_extension_from_meet
+            simple1 meet_ty
+        in
+        Equals simple1, env_extension_from_meet
+      | None, Some simple2 ->
+        let meet_unknown_or_join, env_extension_from_meet =
+          meet_on_unknown_or_join env perm1 perm2
+            unknown_or_join1 unknown_or_join2
+        in
+        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+        let env_extension_from_meet =
+          add_equation_if_on_a_name env_extension_from_meet
+            simple2 meet_ty
+        in
+        Equals simple2, env_extension_from_meet
+      | None, None ->
+        let unknown_or_join, env_extension_from_meet =
+          meet_on_unknown_or_join env perm1 perm2
+            unknown_or_join1 unknown_or_join2
+        in
+        if unknown_or_join == unknown_or_join1 then begin
+          assert (match or_alias1 with No_alias _ -> true | _ -> false);
+          or_alias1, env_extension_from_meet
+        end else if unknown_or_join == unknown_or_join2 then begin
+          assert (match or_alias2 with No_alias _ -> true | _ -> false);
+          or_alias2, env_extension_from_meet
+        end else begin
+          No_alias unknown_or_join, env_extension_from_meet
+        end
+    end
+
   let rec join_on_unknown_or_join env
         (uj1 : S.of_kind_foo unknown_or_join)
         (uj2 : S.of_kind_foo unknown_or_join)
@@ -59,7 +203,7 @@ struct
                     let join =
                       (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
                          must be a "join" operation. *)
-                      S.meet_or_join_of_kind_foo env perm perm'
+                      S.meet_or_join_of_kind_foo env
                         of_kind_foo of_kind_foo'
                     in
                     match join with
@@ -148,143 +292,6 @@ struct
               unknown_or_join1 unknown_or_join2
           in
           No_alias unknown_or_join
-
-  let rec meet_on_unknown_or_join env perm1 perm2
-        (ou1 : S.of_kind_foo unknown_or_join)
-        (ou2 : S.of_kind_foo unknown_or_join)
-        : S.of_kind_foo unknown_or_join * env_extension =
-    if ou1 == ou2 then
-      ou1, Typing_env_extension.empty
-    else
-      match ou1, ou2 with
-      | Unknown, ou2 -> ou2, Typing_env_extension.empty
-      | ou1, Unknown -> ou1, Typing_env_extension.empty
-      | Join of_kind_foos1, Join of_kind_foos2 ->
-        let of_kind_foos, env_extension_from_meet =
-          List.fold_left
-            (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
-              let new_env_extension_from_meet =
-                ref (Typing_env_extension.empty)
-              in
-              let of_kind_foos =
-                Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
-                    let meet =
-                      let env = Join_env.create env in
-                      S.meet_or_join_of_kind_foo env perm1 perm2
-                        of_kind_foo of_kind_foo'
-                    in
-                    match meet with
-                    | Ok (of_kind_foo, new_env_extension_from_meet') ->
-                      new_env_extension_from_meet :=
-                        Typing_env_extension.meet env
-                          new_env_extension_from_meet'
-                            !new_env_extension_from_meet;
-                      Some of_kind_foo
-                    | Absorbing -> None)
-                  of_kind_foos
-              in
-              let env_extension_from_meet =
-                Typing_env_extension.meet env
-                  env_extension_from_meet !new_env_extension_from_meet;
-              in
-              of_kind_foos, env_extension_from_meet)
-            (of_kind_foos2, Typing_env_extension.empty)
-            of_kind_foos1
-        in
-        let same_as input_of_kind_foos =
-          List.compare_lengths input_of_kind_foos of_kind_foos = 0
-            && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
-                   input_of_kind_foo == of_kind_foo)
-                 input_of_kind_foos of_kind_foos
-        in
-        if same_as of_kind_foos1 then ou1, env_extension_from_meet
-        else if same_as of_kind_foos2 then ou2, env_extension_from_meet
-        else Join of_kind_foos, env_extension_from_meet
-
-  and meet_ty env perm1 perm2
-        (or_alias1 : S.of_kind_foo ty)
-        (or_alias2 : S.of_kind_foo ty)
-        : S.of_kind_foo ty * env_extension =
-    if or_alias1 == or_alias2 then begin
-      or_alias1, Typing_env_extension.empty
-    end else begin
-      let unknown_or_join1, canonical_simple1 =
-        Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
-          ~force_to_kind:S.force_to_kind
-          ~print_ty:S.print_ty
-          or_alias1
-      in
-      let unknown_or_join2, canonical_simple2 =
-        Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty' env
-          ~force_to_kind:S.force_to_kind
-          ~print_ty:S.print_ty
-          or_alias2
-      in
-      let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
-        match simple with
-        | Name name ->
-          Typing_env_extension.add_equation env_extension name ty
-        | Const _ | Discriminant _ -> env_extension
-      in
-      match canonical_simple1, canonical_simple2 with
-      | Some simple1, Some simple2 when Simple.equal simple1 simple2 ->
-        Equals simple1, Typing_env_extension.empty
-      | Some simple1, _ when unknown_or_join_is_unknown unknown_or_join2 ->
-        Equals simple1, Typing_env_extension.empty
-      | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
-        Equals simple2, Typing_env_extension.empty
-      | Some simple1, Some simple2 ->
-        let meet_unknown_or_join, env_extension_from_meet =
-          meet_on_unknown_or_join env perm1 perm2
-            unknown_or_join1 unknown_or_join2
-        in
-        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-        let env_extension_from_meet =
-          add_equation_if_on_a_name env_extension_from_meet
-            simple1 meet_ty
-        in
-        let env_extension_from_meet =
-          add_equation_if_on_a_name env_extension_from_meet
-            simple2 (S.to_type (Equals simple1))
-        in
-        Equals simple1, env_extension_from_meet
-      | Some simple1, None ->
-        let meet_unknown_or_join, env_extension_from_meet =
-          meet_on_unknown_or_join env perm1 perm2
-            unknown_or_join1 unknown_or_join2
-        in
-        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-        let env_extension_from_meet =
-          add_equation_if_on_a_name env_extension_from_meet
-            simple1 meet_ty
-        in
-        Equals simple1, env_extension_from_meet
-      | None, Some simple2 ->
-        let meet_unknown_or_join, env_extension_from_meet =
-          meet_on_unknown_or_join env perm1 perm2
-            unknown_or_join1 unknown_or_join2
-        in
-        let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
-        let env_extension_from_meet =
-          add_equation_if_on_a_name env_extension_from_meet
-            simple2 meet_ty
-        in
-        Equals simple2, env_extension_from_meet
-      | None, None ->
-        let unknown_or_join, env_extension_from_meet =
-          meet_on_unknown_or_join env perm1 perm2
-            unknown_or_join1 unknown_or_join2
-        in
-        if unknown_or_join == unknown_or_join1 then begin
-          assert (match or_alias1 with No_alias _ -> true | _ -> false);
-          or_alias1, env_extension_from_meet
-        end else if unknown_or_join == unknown_or_join2 then begin
-          assert (match or_alias2 with No_alias _ -> true | _ -> false);
-          or_alias2, env_extension_from_meet
-        end else begin
-          No_alias unknown_or_join, env_extension_from_meet
-        end
-    end
 
   let meet_or_join_ty env or_alias1 or_alias2 =
     E.switch meet_ty join_ty env or_alias1 or_alias2

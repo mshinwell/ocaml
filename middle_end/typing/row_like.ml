@@ -222,6 +222,9 @@ module Make (W : Typing_world.S) = struct
         }
     end
 
+    let all_maps_to { known; at_least; } =
+      (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
+
     module For_meet = Either_meet_or_join.For_meet (W)
     module For_join = Either_meet_or_join.For_join (W)
 
@@ -234,10 +237,19 @@ module Make (W : Typing_world.S) = struct
         Meet.meet_or_join (Join_env.create env)
           perm1 perm2 fresh_component_semantics t1 t2
       in
-      if Tag_and_index.Map.is_empty t.known
-           && Index.Map.is_empty t.at_least
-      then Bottom, Typing_env_extension.empty
-      else Ok t, Typing_env_extension.empty
+      let 
+      if Tag_and_index.Map.is_empty t.known && Index.Map.is_empty t.at_least
+      then Bottom
+      else
+        let join_of_all_maps_to =
+          let env = Join_env.create env in
+          List.fold_left (fun result maps_to ->
+              MT.join env perm1 perm2
+                fresh_component_semantics maps_to result)
+            (all_maps_to t)
+            (MT.unknown ())
+        in
+        Ok (t, join_of_all_maps_to)
 
     let join = Join.meet_or_join
 

@@ -447,18 +447,18 @@ module type S = sig
       -> set_of_closures:ty_fabricated
       -> t
 
-    (** The type of a closure (of kind [Value]) containing at least the
-        given closure variable with the given type. *)
+    (** The type of a closure (of kind [Value]) containing at least one
+        closure that holds the given closure variable with the given type. *)
     val closure_containing_at_least
-       : Var_within_closure.t
+       : Closure_id.t
+      -> Var_within_closure.t
       -> ty_value
       -> t
 
-    (** The type of a set of closures whose closures have exactly the given
-        set of closure IDs and closure variables. *)
+    (** The type of a set of closures containing exactly those closure IDs
+        with the given types. *)
     val set_of_closures
        : closures:ty_value Closure_id.Map.t
-      -> closure_elements:ty_value Var_within_closure.Map.t
       -> t
 
     (** The type of a set of closures containing at least one closure with
@@ -590,8 +590,11 @@ module type S = sig
     with module Thing_without_names := Immediate)
   and Join_env : (Join_env_intf.S
     with module Flambda_type0_core := Flambda_type0_core
+    with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
+  and Meet_env : (Meet_env_intf.S
+    with module Typing_env := Typing_env)
   and Parameters : (Parameters_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env

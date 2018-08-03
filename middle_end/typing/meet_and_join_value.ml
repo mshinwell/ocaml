@@ -18,12 +18,11 @@
 
 module K = Flambda_kind
 
-module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
-  Make_meet_and_join (struct
-    module JE = T.Join_env
-    module TEE = T.Typing_env_extension
+module Make (E : Either_meet_or_join_intf.S) (W : Typing_world.S) =
+  open! W
 
-    type of_kind_foo = T.Flambda_type.of_kind_value
+  Make_meet_and_join (struct
+    type of_kind_foo = Flambda_type0_core.of_kind_value
 
     let kind = K.value ()
 
@@ -31,40 +30,25 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
       { descr = Value ty;
       }
 
-    let force_to_kind = T.Flambda_type.force_to_kind_value
-    let print_ty = T.Flambda_type.print_ty_value
+    let force_to_kind = Flambda_type0_core.force_to_kind_value
+    let print_ty = Flambda_type0_core.print_ty_value
 
-    let meet_or_join_blocks_and_tagged_immediates env perm1 perm2
+    let meet_or_join_blocks_and_tagged_immediates env
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
-          : (blocks_and_tagged_immediates * TEE.t) Or_bottom.t =
-      let blocks, env_extension1 =
-        E.switch T.Blocks.meet T.Blocks.join env blocks1 blocks2
+          : (blocks_and_tagged_immediates * Typing_env_extension.t)
+              Or_bottom.t =
+      let blocks =
+        E.switch Blocks.meet Blocks.join env blocks1 blocks2
       in
-      let immediates, env_extension2 =
-        E.switch T.Immediates.meet T.Immediates.join env immediates1 immediates2
+      let immediates =
+        E.switch Immediates.meet Immediates.join env immediates1 immediates2
       in
       match blocks, immediates with
-      | Ok blocks, Ok immediates ->
-        let env_extension_immediates =
-          if not (T.Blocks.is_empty blocks) then TEE.empty
-          else
-            match T.Immediates.get_singleton immediates with
-            | None -> TEE.empty
-            | Some block_fields ->
-              T.Immediates.RP.standalone_extension block_fields
-        in
-        let env_extension_blocks =
-          if not (T.Immediates.is_empty immediates) then TEE.empty
-          else
-            match T.Blocks.get_singleton blocks with
-            | None -> TEE.empty
-            | Some immediates ->
-              T.Blocks.RP.standalone_extension immediates
-        in
+      | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
         let env_extension =
-          TEE.meet env (TEE.meet env env_extension1 env_extension2)
-            (TEE.meet env env_extension_blocks env_extension_immediates)
+          Typing_env_extension.join (Join_env.create env)
+            env_extension1 env_extension2
         in
         Ok ({ blocks; immediates; }, env_extension)
       | Bottom, _ | _, Bottom -> Bottom
@@ -80,7 +64,7 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
              closure_elements = closure_elements2;
              set_of_closures = set_of_closures2;
            } : closures_entry) =
-      let function_decl : T.function_declaration =
+      let function_decl : function_declaration =
         match function_decl1, function_decl2 with
         | Non_inlinable, (Non_inlinable | Inlinable _)
         | (Non_inlinable | Inlinable _), Non_inlinable -> Non_inlinable
@@ -161,15 +145,15 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
             Inlinable function_decl1
       in
       let ty =
-        E.switch T.Function_type.meet T.Function_type.join perm1 perm2 ty1 ty2
+        E.switch Function_type.meet Function_type.join perm1 perm2 ty1 ty2
       in
       let closure_elements =
-        E.switch T.Closure_elements.meet T.Closure_elements.join perm1 perm2
+        E.switch Closure_elements.meet Closure_elements.join perm1 perm2
           closure_elements1 closure_elements2
       in
       let set_of_closures =
-        E.switch T.Meet_or_join_of_kind_fabricated.meet_ty_fabricated
-          T.Meet_or_join_of_kind_fabricated.join_ty_fabricated
+        E.switch Meet_or_join_of_kind_fabricated.meet_ty_fabricated
+          Meet_or_join_of_kind_fabricated.join_ty_fabricated
           perm1 perm2 set_of_closures1 set_of_closures2
       in
       match ty, closure_elements, set_of_closures with
@@ -182,14 +166,14 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
         }
       | _, _, _, _ -> Absorbing
 
-    let meet_or_join_of_kind_foo env perm1 perm2
+    let meet_or_join_of_kind_foo env
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * env_extension) Or_absorbing.t =
-      if JE.fast_check_extensions_same_both_sides env
-        && perm1 == perm2
+      if Join_env.fast_check_extensions_same_both_sides env
+        && Meet_env.fast_check_name_permutations_same_both_sides env
         && of_kind1 == of_kind2
       then
-        Ok (of_kind1, TEE.empty)
+        Ok (of_kind1, Typing_env_extension.empty)
       else
         match of_kind1, of_kind2 with
         | Blocks_and_tagged_immediates blocks_imms1,
@@ -206,32 +190,32 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
         | Boxed_number (Boxed_float n1),
             Boxed_number (Boxed_float n2) ->
           let (n : _ ty_naked_number), equations =
-            T.Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2 n1 n2
+            Meet_and_join_naked_float.meet_or_join_ty env perm1 perm2 n1 n2
           in
           Ok (Boxed_number (Boxed_float n), equations)
         | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
           let (n : _ ty_naked_number), equations =
-            T.Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2 n1 n2
+            Meet_and_join_naked_int32.meet_or_join_ty env perm1 perm2 n1 n2
           in
           Ok (Boxed_number (Boxed_int32 n), equations)
         | Boxed_number (Boxed_int64 n1),
             Boxed_number (Boxed_int64 n2) ->
           let (n : _ ty_naked_number), equations =
-            T.Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2 n1 n2
+            Meet_and_join_naked_int64.meet_or_join_ty env perm1 perm2 n1 n2
           in
           Ok (Boxed_number (Boxed_int64 n), equations)
         | Boxed_number (Boxed_nativeint n1),
             Boxed_number (Boxed_nativeint n2) ->
           let (n : _ ty_naked_number), equations =
-            T.Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2
+            Meet_and_join_naked_nativeint.meet_or_join_ty env perm1 perm2
               n1 n2
           in
           Ok (Boxed_number (Boxed_nativeint n), equations)
         | Closures closures1, Closures closures2 ->
           let closures =
-            E.switch T.Closures_entry_by_closure_id.meet
-              T.Closures_entry_by_closure_id.join
+            E.switch Closures_entry_by_closure_id.meet
+              Closures_entry_by_closure_id.join
               env perm1 perm2 closures1 closures2
           in
           begin match closures with
@@ -241,10 +225,11 @@ module Make (E : Either_meet_or_join_intf.S) (T : Typing_world.S) =
         | String strs1, String strs2 ->
           let strs = String_info.Set.inter strs1 strs2 in
           if String_info.Set.is_empty strs then Absorbing
-          else Ok (String strs, TEE.empty)
+          else Ok (String strs, Typing_env_extension.empty)
         | (Blocks_and_tagged_immediates _
             | Boxed_number _
             | Closures _
             | String _), _ ->
           Absorbing
   end)
+end

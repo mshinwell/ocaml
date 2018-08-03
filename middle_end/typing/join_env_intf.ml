@@ -18,6 +18,7 @@
 
 module type S = sig
   module Flambda_type0_core : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -26,7 +27,7 @@ module type S = sig
   (** Perform various invariant checks upon the given join environment. *)
   val invariant : t -> unit
 
-  val create : Typing_env.t -> t
+  val create : Meet_env.t -> t
 
   val add_definition_central_environment
      : t
@@ -47,7 +48,7 @@ module type S = sig
     -> central_extension:Typing_env_extension.t
     -> t
 
-  val central_environment : t -> Typing_env.t
+  val central_environment : t -> Meet_env.t
 
   val environment_on_left : t -> Typing_env.t
 

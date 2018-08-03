@@ -680,12 +680,21 @@ module Make (W : Typing_world.S) = struct
     in
     Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
 
-  let closure_containing_at_least var_within_closure ty_value =
-    (* XXX what to do with [ty_value]? *)
+  let closure_containing_at_least ~closure_name var_within_closure ty_value =
+    let closure_elements =
+      Var_within_closure.Map.singleton var_within_closure (Value ty_value)
+    in
+    let closures_entry : closures_entry =
+      { function_decl;
+        ty;
+        closure_elements = closure_elements';
+        set_of_closures = any_fabricated_as_ty_fabricated ()
+      }
+    in
     let by_closure_id =
-      Closures_entry_by_closure_id.create_exactly_multiple
-        (Closure_id_and_var_within_closure_set.Map.singleton
-          (closure_id, Var_within_closure.Set.singleton var_within_closure)
+      Closures_entry_by_closure_id.create_at_least_multiple
+        (Closures_entry_by_closure_id.Var_within_closure_set.Map.singleton
+          (Var_within_closure.Set.singleton var_within_closure)
           closures_entry)
     in
     let closures : closures =
@@ -694,33 +703,34 @@ module Make (W : Typing_world.S) = struct
     in
     Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
 
-  let set_of_closures ~closures ~closure_elements =
-
-
-  let closure function_decls : ty_fabricated =
-    No_alias (Join [Closure { function_decls; }])
-
-  let closures_entry ~set_of_closures : closures_entry =
-    { set_of_closures; }
-
-  let closures ty by_closure_id : t =
-    Value (No_alias (Join [Closures { ty; by_closure_id; }]))
-
-  let set_of_closures ~closures ~closure_elements =
-    let set_of_closures : set_of_closures =
-      { closures;
-        closure_elements;
-      }
-    in
-    let no_closures =
-      match set_of_closures.closures with
-      | Open _ -> false
-      | Exactly map -> Closure_id.Map.is_empty map
-    in
-    if no_closures then
-      Fabricated (No_alias (Join []))
+  let set_of_closures ~closures =
+    let all_closures = Closure_id.Map.keys closures in
+    if Closure_id.Map.is_empty all_closures then bottom_as_ty_fabricated ()
     else
-      Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
+      let by_closure_id = Types_by_closure_id.create closures in
+      let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
+      let closures =
+        Closure_ids.create
+          (Closure_id_set.Map.singleton all_closures set_of_closures_entry)
+          Closed
+      in
+      Fabricated (No_alias (Join [Set_of_closures { closures; },
+        Name_permutation.create ()]))
+
+  let set_of_closures_containing_at_least closure_id =
+    let by_closure_id =
+      Types_by_closure_id.create
+        (Closure_id.Map.singleton closure_id (any_value ())
+    in
+    let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
+    let closure_id = Closure_id.Set.singleton closure_id in
+    let closures =
+      Closure_ids.create
+        (Closure_id_set.Map.singleton closure_id set_of_closures_entry)
+        Open
+    in
+    Fabricated (No_alias (Join [Set_of_closures { closures; },
+      Name_permutation.create ()]))
 
   let apply_name_permutation_unknown_or_join unknown_or_join perm =
     match unknown_or_join with

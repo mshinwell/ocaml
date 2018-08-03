@@ -186,7 +186,7 @@ module Make
         env, env_extension1, env_extension2, components_by_index_in_result
 
       let meet env perm1 perm2 fresh_component_semantics t1 t2 : _ Or_bottom.t =
-        if t1 == t2 then Ok (t1, env, t1.env_extension, t1.env_extension)
+        if t1 == t2 then Ok (t1, env)
         else
           let indexes = Index.Set.inter (indexes t1) (indexes t2) in
           if Index.Set.is_empty indexes then Bottom
@@ -206,7 +206,10 @@ module Make
                 env_extension;
               }
             in
-            Ok (t, env, env_extension1, env_extension2)
+            let env =
+              Typing_env.add_or_meet_env_extension env env_extension
+            in
+            Ok (t, env)
 
       let join env perm1 perm2 fresh_component_semantics t1 t2 =
         if t1 == t2 then
@@ -259,15 +262,6 @@ module Make
         Name_occurrences.union (free_names_in_indexes t)
           (Name_occurrences.diff (Typing_env_extension.free_names env_extension)
             (bound_names t))
-
-      let append_extension t env extension =
-        { t with
-          env_extension =
-            Typing_env_extension.meet env
-              (Name_permutation.create ())
-              (Name_permutation.create ())
-              t.env_extension extension;
-        }
 
       let apply_name_permutation { components_by_index; env_extension; } perm =
         let components_by_index =
@@ -337,25 +331,19 @@ module Make
           Misc.fatal_errorf "Cannot meet relational products of different \
             lengths"
         end;
-        let t_rev, _env, _env_extension1, _env_extension2 =
+        let t_rev, _env =
           List.fold_left2
-            (fun ((t_rev : _ Or_bottom.t), env, env_extension1, env_extension2)
-                  ip1 ip2 ->
+            (fun ((t_rev : _ Or_bottom.t), env) ip1 ip2 ->
               match t_rev with
-              | Bottom -> Or_bottom.Bottom, env, env_extension1, env_extension2
+              | Bottom -> Or_bottom.Bottom, env
               | Ok t_rev ->
-                let ip1 = IP.append_extension ip1 env env_extension1 in
-                let ip2 = IP.append_extension ip2 env env_extension2 in
                 match
                   IP.meet env perm1 perm2 fresh_component_semantics ip1 ip2
                 with
-                | Bottom ->
-                  Or_bottom.Bottom, env, env_extension1, env_extension2
-                | Ok (ip, env, env_extension1, env_extension2) ->
-                  Or_bottom.Ok (ip :: t_rev), env,
-                    env_extension1, env_extension2)
-            (Or_bottom.Ok [], env,
-              Typing_env_extension.empty, Typing_env_extension.empty)
+                | Bottom -> Or_bottom.Bottom, env
+                | Ok (ip, env) ->
+                  Or_bottom.Ok (ip :: t_rev), env)
+            (Or_bottom.Ok [], env)
             t1 t2
         in
         match t_rev with

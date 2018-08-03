@@ -14,14 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Environments used during meet operations (and during join operations
+    as the "central environment"; see [Join_env]). *)
 
-(** "Join environments": structures which keep track of the various
-    typing environments and environment extensions that are required whilst
-    carrying out join operations (on types, etc). *)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S)
-  : Join_env_intf.S
-      with module Meet_env := T.Meet_env
-      with module Typing_env := T.Typing_env
-      with module Typing_env_extension := T.Typing_env_extension
+module Make (W : Typing_world.S) :
+  Meet_env_intf.S
+    with module Typing_env := W.Typing_env

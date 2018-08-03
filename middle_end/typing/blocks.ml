@@ -78,11 +78,8 @@ module Make (W : Typing_world.S) = struct
   let print_with_cache = RL.print
 
   let meet env perm1 perm2 t1 t2 =
-    (* CR mshinwell: think about env_extension *)
-    let t, _env_extension =
-      RL.meet env perm1 perm2 Fresh t1 t2
-    in
-    t
+    let t, product = RL.meet env perm1 perm2 Fresh t1 t2 in
+    t, RP.standalone_extension product
 
   let join env perm1 perm2 t1 t2 =
     RL.join env perm1 perm2 Fresh t1 t2

@@ -51,6 +51,9 @@ module type S_applied = sig
 
   val get_singleton : t -> Maps_to.t option
 
+  (** The [Maps_to] value which [meet] returns contains the join of all
+      [Maps_to] values in the range of the row-like structure after the meet
+      operation has been completed. *)
   val meet
      : Typing_env.t
     -> Name_permutation.t
@@ -58,7 +61,7 @@ module type S_applied = sig
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> t Or_bottom.t * Typing_env_extension.t
+    -> (t * Maps_to.t) Or_bottom.t
 
   val join
      : Join_env.t

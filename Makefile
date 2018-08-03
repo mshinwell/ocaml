@@ -357,6 +357,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/types_by_closure_id.cmo \
   middle_end/typing/flambda_types.cmo \
   middle_end/typing/flambda_type0_core.cmo \
+  middle_end/typing/meet_env.cmo \
   middle_end/typing/join_env.cmo \
   middle_end/typing/make_meet_or_join.cmo \
   middle_end/typing/meet_and_join.cmo \
