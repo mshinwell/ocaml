@@ -20,6 +20,7 @@ module Make (W : Typing_world.S) :
   Trivial_row_like_intf.S_applied
     with module Flambda_type0_core := W.Flambda_type0_core
     with module Join_env := W.Join_env
+    with module Meet_env := W.Meet_env
     with module Typing_env := W.Typing_env
     with module Typing_env_extension := W.Typing_env_extension
     with module Thing_without_names := Immediate

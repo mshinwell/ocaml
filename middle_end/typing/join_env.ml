@@ -100,6 +100,14 @@ module Make (W : Typing_world.S) = struct
     fast_check_extensions_same_both_sides t
       && Meet_env.shortcut_precondition t.env
 
+  let perm_left t = Meet_env.perm_left t.env
+  let perm_right t = Meet_env.perm_right t.env
+
+  let clear_name_permutations t =
+    { t with
+      env = Meet_env.clear_name_permutations t.env;
+    }
+
   module Flambda_type0_core = W.Flambda_type0_core
   module Meet_env = W.Meet_env
   module Typing_env = W.Typing_env

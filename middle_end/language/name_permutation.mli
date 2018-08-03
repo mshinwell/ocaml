@@ -64,6 +64,8 @@ val add_name
 
 val apply_name : t -> Name.t -> Name.t
 
+val apply_name_set : t -> Name.Set.t -> Name.Set.t
+
 val apply_simple : t -> Simple.t -> Simple.t
 
 val apply_simples : t -> Simple.t list -> Simple.t list

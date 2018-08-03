@@ -14,20 +14,19 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Functions over which meet and join code is parameterised. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet (W : Typing_world.S)
-  : Either_meet_or_join_intf.S
-      with module Join_env := W.Join_env
-      with module Meet_env := W.Meet_env
-      with module Typing_env := W.Typing_env
-      with module Typing_env_extension := W.Typing_env_extension
+type t
 
-module For_join (W : Typing_world.S)
-  : Either_meet_or_join_intf.S
-      with module Join_env := W.Join_env
-      with module Meet_env := W.Meet_env
-      with module Typing_env := W.Typing_env
-      with module Typing_env_extension := W.Typing_env_extension
+val create
+   : perm_left:Name_permutation.t
+  -> perm_right:Name_permutation.t
+  -> t
+
+val print : Format.formatter -> t -> unit
+
+val perm_left : t -> Name_permutation.t
+
+val perm_right : t -> Name_permutation.t
+
+val clear_name_permutations : t -> unit

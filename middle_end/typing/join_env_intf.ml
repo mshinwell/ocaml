@@ -58,5 +58,11 @@ module type S = sig
 
   val holds_on_right : t -> Typing_env_extension.t
 
-  val fast_check_extensions_same_both_sides : t -> bool
+  val shortcut_precondition : t -> bool
+
+  val perm_left : t -> Name_permutation.t
+
+  val perm_right : t -> Name_permutation.t
+
+  val clear_name_permutations : t -> t
 end

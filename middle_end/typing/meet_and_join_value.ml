@@ -18,10 +18,17 @@
 
 module K = Flambda_kind
 
-module Make (E : Either_meet_or_join_intf.S) (W : Typing_world.S) =
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_type0_core = struct end
+module Join_env = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
+
+module Make (E : Either_meet_or_join_intf.S) (W : Typing_world.S) = struct
   open! W
 
-  Make_meet_and_join (struct
+  include Make_meet_and_join (struct
     type of_kind_foo = Flambda_type0_core.of_kind_value
 
     let kind = K.value ()

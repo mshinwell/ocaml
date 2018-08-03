@@ -36,11 +36,11 @@ struct
     | Join _ -> false
     | Unknown -> true
 
-  let rec meet_on_unknown_or_join env perm1 perm2
+  let rec meet_on_unknown_or_join env
         (ou1 : S.of_kind_foo unknown_or_join)
         (ou2 : S.of_kind_foo unknown_or_join)
         : S.of_kind_foo unknown_or_join * env_extension =
-    if ou1 == ou2 then
+    if Meet_env.shortcut_precondition env && ou1 == ou2 then
       ou1, Typing_env_extension.empty
     else
       match ou1, ou2 with
@@ -92,8 +92,7 @@ struct
         (or_alias1 : S.of_kind_foo ty)
         (or_alias2 : S.of_kind_foo ty)
         : S.of_kind_foo ty * env_extension =
-    if Meet_env.check_name_permutations_same_both_sides env
-         && or_alias1 == or_alias2
+    if Meet_env.shortcut_precondition env && or_alias1 == or_alias2
     then begin
       or_alias1, Typing_env_extension.empty
     end else begin
@@ -184,7 +183,7 @@ struct
         (uj1 : S.of_kind_foo unknown_or_join)
         (uj2 : S.of_kind_foo unknown_or_join)
         : S.of_kind_foo unknown_or_join =
-    if uj1 == uj2 then uj1
+    if Join_env.shortcut_precondition env && uj1 == uj2 then uj1
     else
       match uj1, uj2 with
       | Unknown, _ | _, Unknown -> Unknown
@@ -228,8 +227,7 @@ struct
   and join_ty env
         (or_alias1 : S.of_kind_foo ty) (or_alias2 : S.of_kind_foo ty)
         : S.of_kind_foo ty =
-    if Join_env.fast_check_extensions_same_both_sides env
-      && or_alias1 == or_alias2
+    if Join_env.shortcut_precondition env && or_alias1 == or_alias2
     then or_alias1
     else
       let unknown_or_join1, canonical_simple1 =
@@ -294,5 +292,26 @@ struct
           No_alias unknown_or_join
 
   let meet_or_join_ty env or_alias1 or_alias2 =
+    let meet_env = Join_env.central_environment env in
+    let or_alias1 =
+      match or_alias1 with
+      | No_alias _ | Type _ -> or_alias1
+      | Equals simple ->
+        let simple' =
+          Name_permutation.apply_simple (Meet_env.perm_left meet_env)
+        in
+        if simple == simple' then or_alias1
+        else Equals simple'
+    in
+    let or_alias2 =
+      match or_alias2 with
+      | No_alias _ | Type _ -> or_alias2
+      | Equals simple ->
+        let simple' =
+          Name_permutation.apply_simple (Meet_env.perm_right meet_env)
+        in
+        if simple == simple' then or_alias2
+        else Equals simple'
+    in
     E.switch meet_ty join_ty env or_alias1 or_alias2
 end

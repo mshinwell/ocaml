@@ -19,6 +19,8 @@
 module type S = sig
   module Typing_env : sig type t end
 
+  type t
+
   val create
      : Typing_env.t
     -> perm_left:Name_permutation.t
@@ -43,4 +45,8 @@ module type S = sig
   val already_meeting : Simple.t -> Simple.t -> bool
 
   val shortcut_precondition : t -> bool
+
+  val with_env : t -> (Typing_env.t -> Typing_env.t) -> t
+
+  val clear_name_permutations : t -> t
 end

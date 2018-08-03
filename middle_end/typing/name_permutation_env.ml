@@ -14,20 +14,33 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Functions over which meet and join code is parameterised. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet (W : Typing_world.S)
-  : Either_meet_or_join_intf.S
-      with module Join_env := W.Join_env
-      with module Meet_env := W.Meet_env
-      with module Typing_env := W.Typing_env
-      with module Typing_env_extension := W.Typing_env_extension
+type t = {
+  perm_left : Name_permutation.t;
+  perm_right : Name_permutation.t;
+}
 
-module For_join (W : Typing_world.S)
-  : Either_meet_or_join_intf.S
-      with module Join_env := W.Join_env
-      with module Meet_env := W.Meet_env
-      with module Typing_env := W.Typing_env
-      with module Typing_env_extension := W.Typing_env_extension
+let print ppf { perm_left; perm_right; } =
+  Format.fprintf ppf
+    "@[<hov 1>(\
+      @[<hov 1>(perm_left@ %a)@]@ \
+      @[<hov 1>(perm_right@ %a)@])@]"
+    Name_permutation.print perm_left
+    Name_permutation.print perm_right
+
+let create perm_left perm_right =
+  { perm_left;
+    perm_right;
+  }
+
+let env t = t.env
+
+let perm_left t = t.perm_left
+let perm_right t = t.perm_right
+
+let clear_name_permutations t =
+  { t with
+    perm_left = Name_permutation.create ();
+    perm_right = Name_permutation.create ();
+  }

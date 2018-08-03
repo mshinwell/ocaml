@@ -18,6 +18,7 @@
 
 module type S_applied = sig
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -49,15 +50,11 @@ module type S_applied = sig
 
   val is_bottom : t -> bool
 
-  val get_singleton : t -> Maps_to.t option
-
   (** The [Maps_to] value which [meet] returns contains the join of all
       [Maps_to] values in the range of the row-like structure after the meet
       operation has been completed. *)
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
@@ -65,8 +62,6 @@ module type S_applied = sig
 
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
@@ -77,6 +72,7 @@ end
 
 module type S = sig
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -93,6 +89,8 @@ module type S = sig
     end)
     (Maps_to : sig
       type t
+
+      val unknown : unit -> t
 
       val print_with_cache
          : cache:Printing_cache.t
@@ -131,6 +129,7 @@ module type S = sig
       with module Index := Index
       with module Maps_to := Maps_to
       with module Join_env := Join_env
+      with module Meet_env := Meet_env
       with module Typing_env := Typing_env
       with module Typing_env_extension := Typing_env_extension
 end

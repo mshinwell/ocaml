@@ -26,6 +26,7 @@ module type S = sig
   end
   module Function_parameters : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 

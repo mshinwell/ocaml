@@ -79,4 +79,13 @@ module Make (W : Typing_world.S) = struct
 
   let shortcut_precondition t =
     fast_check_name_permutations_same_both_sides t
+
+  let with_env t f =
+    { t with env = f t.env; }
+
+  let clear_name_permutations t =
+    { t with
+      perm_left = Name_permutation.create ();
+      perm_right = Name_permutation.create ();
+    }
 end

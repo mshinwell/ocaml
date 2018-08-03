@@ -720,7 +720,7 @@ module Make (W : Typing_world.S) = struct
   let set_of_closures_containing_at_least closure_id =
     let by_closure_id =
       Types_by_closure_id.create
-        (Closure_id.Map.singleton closure_id (any_value ())
+        (Closure_id.Map.singleton closure_id (any_value ()))
     in
     let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
     let closure_id = Closure_id.Set.singleton closure_id in

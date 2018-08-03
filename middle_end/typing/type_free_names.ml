@@ -33,8 +33,9 @@ module Make (T : Flambda_type0_internal_intf.S) = struct
     match o with
     | Unknown -> acc
     | Join contents_list ->
-      List.fold_left (fun free_names contents ->
-          free_names_contents contents free_names)
+      List.fold_left (fun free_names (contents, perm) ->
+          let names = free_names_contents contents free_names in
+          Name_permutation.apply_name_set perm names)
         acc
         contents_list
 

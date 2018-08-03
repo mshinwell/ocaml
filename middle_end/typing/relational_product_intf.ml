@@ -38,6 +38,7 @@ module type S_applied = sig
   module Component : Name_like
   module Index : Name_like
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -60,6 +61,8 @@ module type S_applied = sig
         indexed products. *)
   val create : (Component.t Index.Map.t * Typing_env_extension.t) list -> t
 
+  val unknown : unit -> t
+
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
 
@@ -69,9 +72,7 @@ module type S_applied = sig
 
   (** Greatest lower bound of two parameter bindings. *)
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> fresh_component_semantics
     -> t
     -> t
@@ -80,8 +81,6 @@ module type S_applied = sig
   (** Least upper bound of two parameter bindings. *)
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> fresh_component_semantics
     -> t
     -> t
@@ -100,13 +99,14 @@ module type S_applied = sig
       within the relational product. *)
   val add_or_meet_equations
      : t
-    -> Typing_env.t
+    -> Meet_env.t
     -> Typing_env_extension.t
     -> t
 end
 
 module type S = sig
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -123,6 +123,7 @@ module type S = sig
       with module Index := Index
       with module Component := Component
       with module Join_env := Join_env
+      with module Meet_env := Meet_env
       with module Typing_env := Typing_env
       with module Typing_env_extension := Typing_env_extension
 end

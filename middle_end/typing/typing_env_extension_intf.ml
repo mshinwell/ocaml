@@ -20,6 +20,7 @@
 
 module type S = sig
   module Flambda_type0_core : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Join_env : sig type t end
 
@@ -62,9 +63,7 @@ module type S = sig
 
   (** Least upper bound of two environment extensions. *)
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
     -> t
@@ -72,8 +71,6 @@ module type S = sig
   (** Greatest lower bound of two environment extensions. *)
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t

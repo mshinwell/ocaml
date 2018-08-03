@@ -166,6 +166,13 @@ let add_name t n1 n2 =
 let apply_name t n =
   Names.apply t.names n
 
+let apply_name_set t names =
+  Name.Set.fold (fun name result ->
+      let name = apply_name t name in
+      Name.Set.add name result)
+    names
+    Name.Set.empty
+
 let apply_simple t (s : Simple.t) =
   match s with
   | Name name ->

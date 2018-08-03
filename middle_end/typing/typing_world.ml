@@ -87,10 +87,12 @@ module type S = sig
     with module Typing_env := Typing_env)
   and Relational_product : (Relational_product_intf.S
     with module Join_env := Join_env
+    with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Row_like : (Row_like_intf.S
     with module Join_env := Join_env
+    with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
   and Type_equality : (Type_equality_intf.S
@@ -107,9 +109,11 @@ module type S = sig
     with module Flambda_type0_core := Flambda_type0_core
     with module Typing_env := Typing_env
     with module Join_env := Join_env
+    with module Meet_env := Meet_env
     with module Typing_env_extension := Typing_env_extension)
   and Typing_env_extension : (Typing_env_extension_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Typing_env := Typing_env
-    with module Join_env := Join_env)
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env)
 end

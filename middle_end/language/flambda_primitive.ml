@@ -529,11 +529,8 @@ let compare_unary_primitive p1 p2 =
     let c = Closure_id.compare move_from1 move_from2 in
     if c <> 0 then c
     else Closure_id.compare move_to1 move_to2
-  | Project_var (closure_id1, var_within_closure1),
-      Project_var (closure_id2, var_within_closure2) ->
-    let c = Closure_id.compare closure_id1 closure_id2 in
-    if c <> 0 then c
-    else Var_within_closure.compare var_within_closure1 var_within_closure2
+  | Project_var var_within_closure1, Project_var var_within_closure2 ->
+    Var_within_closure.compare var_within_closure1 var_within_closure2
   | (Duplicate_block _
     | Is_int
     | Get_tag _
@@ -591,9 +588,8 @@ let print_unary_primitive ppf p =
         (move_from %a)@ (move_to %a))@]"
       Closure_id.print move_from
       Closure_id.print move_to
-  | Project_var (closure_id, var_within_closure) ->
-    Format.fprintf ppf "@[(Project_var@ %a %a)@]"
-      Closure_id.print closure_id
+  | Project_var var_within_closure ->
+    Format.fprintf ppf "@[(Project_var@ %a)@]"
       Var_within_closure.print var_within_closure
 
 let arg_kind_of_unary_primitive p =
