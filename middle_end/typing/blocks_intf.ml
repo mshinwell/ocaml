@@ -19,7 +19,9 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
 
 (* CR mshinwell: See whether we want Row_like_intf or a custom interface
    in the end.
@@ -53,17 +55,13 @@ module type S = sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
-    -> t Or_bottom.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t

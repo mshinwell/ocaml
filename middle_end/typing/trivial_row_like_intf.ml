@@ -19,6 +19,7 @@
 module type S_applied = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
   module Thing_without_names : Map.With_set
@@ -41,17 +42,13 @@ module type S_applied = sig
     -> t
 
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
-    -> t Or_bottom.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t
@@ -62,6 +59,7 @@ end
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -69,6 +67,7 @@ module type S = sig
     : S_applied
         with module Flambda_type0_core := Flambda_type0_core
         with module Join_env := Join_env
+        with module Meet_env := Meet_env
         with module Thing_without_names := Thing_without_names
         with module Typing_env := Typing_env
         with module Typing_env_extension := Typing_env_extension

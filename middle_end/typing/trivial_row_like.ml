@@ -20,16 +20,12 @@
 [@@@ocaml.warning "-60"]
 module Flambda_type0_core = struct end
 module Join_env = struct end
+module Meet_env = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
 module Make (W : Typing_world.S) = struct
   open! W
-
-  module Flambda_type0_core = W.Flambda_type0_core
-  module Join_env = W.Join_env
-  module Typing_env = W.Typing_env
-  module Typing_env_extension = W.Typing_env_extension
 
   module Make (Thing_without_names0 : Hashtbl.With_map) = struct
     module Thing_without_names = struct
@@ -45,13 +41,16 @@ module Make (W : Typing_world.S) = struct
       include Typing_env_extension
 
       let add_or_meet_equations t env t' =
-        meet env (Name_permutation.create ()) (Name_permutation.create ()) t t'
+        meet env t t'
 
-      let meet env perm1 perm2 _ t1 t2 : _ Or_bottom.t * _ =
-        Ok (meet env perm1 perm2 t1 t2), empty
+      let meet env _ t1 t2 : _ Or_bottom.t =
+        let t = meet env t1 t2 in
+        if is_empty t then Bottom
+        else Ok (t, empty)
 
-      let join env perm1 perm2 _ t1 t2 =
-        join env perm1 perm2 t1 t2
+      let join env _ t1 t2 = join env t1 t2
+
+      let bottom () = empty
     end
 
     module RL = Row_like.Make (Thing_without_names) (Unit) (TEE)
@@ -81,19 +80,24 @@ module Make (W : Typing_world.S) = struct
 
     let print = RL.print
 
-    let meet env perm1 perm2 t1 t2 =
-      (* CR mshinwell: think about env_extension *)
-      let t, _env_extension =
-        RL.meet env perm1 perm2 Fresh t1 t2
-      in
-      t
-
-    let join env perm1 perm2 t1 t2 =
-      RL.join env perm1 perm2 Fresh t1 t2
+    let meet env t1 t2 = RL.meet env Fresh t1 t2
+    let join env t1 t2 = RL.join env Fresh t1 t2
 
     let free_names = RL.free_names
     let bound_names = RL.bound_names
     let apply_name_permutation = RL.apply_name_permutation
     let freshen = RL.freshen
+
+    module Flambda_type0_core = W.Flambda_type0_core
+    module Join_env = W.Join_env
+    module Meet_env = W.Meet_env
+    module Typing_env = W.Typing_env
+    module Typing_env_extension = W.Typing_env_extension
   end
+
+  module Flambda_type0_core = W.Flambda_type0_core
+  module Join_env = W.Join_env
+  module Meet_env = W.Meet_env
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

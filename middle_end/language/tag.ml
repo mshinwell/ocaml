@@ -60,6 +60,8 @@ let double_array_tag = Obj.double_array_tag
 let custom_tag = Obj.custom_tag
 let closure_tag = Obj.closure_tag
 
+let arbitrary = max_int
+
 let all_as_targetints =
   let all = ref Targetint.Set.empty in
   for tag = min_tag to max_tag do

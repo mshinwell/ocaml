@@ -20,20 +20,17 @@
 [@@@ocaml.warning "-60"]
 module Flambda_type0_core = struct end
 module Join_env = struct end
+module Meet_env = struct end
 module Row_like = struct end
 module Typing_env = struct end
+module Typing_env_extension = struct end
 
 module Make (W : Typing_world.S) = struct
   open! W
 
-  module Flambda_type0_core = W.Flambda_type0_core
-  module Join_env = W.Join_env
-  module Typing_env = W.Typing_env
-
   module RL =
     Row_like.Make (Unit) (Closure_id_set)
-      (W.Flambda_type0_core.Set_of_closures_entry)
-  (* CR mshinwell: remove "W." qualification above >= 4.08 *)
+      (Flambda_type0_core.Set_of_closures_entry)
 
   type t = RL.t
 
@@ -55,18 +52,17 @@ module Make (W : Typing_world.S) = struct
   let print = RL.print
   let invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
-  let meet env perm1 perm2 t1 t2 =
-    (* CR mshinwell: think about env_extension *)
-    let t, _env_extension =
-      RL.meet env perm1 perm2 Fresh t1 t2
-    in
-    t
-
-  let join env perm1 perm2 t1 t2 =
-    RL.join env perm1 perm2 Fresh t1 t2
+  let meet env t1 t2 = RL.meet env Fresh t1 t2
+  let join env t1 t2 = RL.join env Fresh t1 t2
 
   let free_names = RL.free_names
   let bound_names = RL.bound_names
   let apply_name_permutation = RL.apply_name_permutation
   let freshen = RL.freshen
+
+  module Flambda_type0_core = W.Flambda_type0_core
+  module Join_env = W.Join_env
+  module Meet_env = W.Meet_env
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

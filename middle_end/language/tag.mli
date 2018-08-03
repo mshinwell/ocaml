@@ -37,6 +37,10 @@ val double_tag : t
 val double_array_tag : t
 val custom_tag : t
 
+(** A tag to be used when a [Tag.t] must be provided, but it will never be
+    used. *)
+val arbitrary : t
+
 val is_structured_block : t -> bool
 
 val all_as_targetints : Targetint.Set.t

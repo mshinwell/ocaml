@@ -43,7 +43,7 @@ module Make (W : Typing_world.S) = struct
     (Maps_to : sig
       type t
 
-      val unknown : unit -> t
+      val bottom : unit -> t
 
       val print_with_cache
          : cache:Printing_cache.t
@@ -62,7 +62,7 @@ module Make (W : Typing_world.S) = struct
         -> Relational_product_intf.fresh_component_semantics
         -> t
         -> t
-        -> t Or_bottom.t * Typing_env_extension.t
+        -> (t * Typing_env_extension.t) Or_bottom.t
 
       val join
          : Join_env.t
@@ -273,7 +273,7 @@ module Make (W : Typing_world.S) = struct
           let env = Join_env.clear_name_permutations (Join_env.create env) in
           List.fold_left (fun result maps_to ->
               MT.join env fresh_component_semantics maps_to result)
-            (MT.unknown ())
+            (MT.bottom ())
             (all_maps_to t)
         in
         Ok (t, join_of_all_maps_to)
@@ -305,5 +305,15 @@ module Make (W : Typing_world.S) = struct
 
     let bound_names _ =
       Misc.fatal_error "let's try to do without this"
+
+    module Join_env = W.Join_env
+    module Meet_env = W.Meet_env
+    module Typing_env = W.Typing_env
+    module Typing_env_extension = W.Typing_env_extension
   end
+
+  module Join_env = W.Join_env
+  module Meet_env = W.Meet_env
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

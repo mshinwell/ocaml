@@ -14,12 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
   type t
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-  val free_names : t -> Name_occurrences.t
 end

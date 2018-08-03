@@ -19,11 +19,12 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
   val meet
-     : Typing_env.t
+     : Meet_env.t
     -> Flambda_type0_core.t
     -> Flambda_type0_core.t
     -> Flambda_type0_core.t * Typing_env_extension.t

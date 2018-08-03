@@ -19,6 +19,7 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -26,27 +27,18 @@ module type S = sig
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  type open_or_closed = Open | Closed
-
-  val create
-     : Flambda_type0_core.t Var_within_closure.Map.t
-    -> open_or_closed
-    -> t
+  val create : Flambda_type0_core.t Var_within_closure.Map.t -> t
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
-    -> t Or_bottom.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two values of type [t]. *)
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t

@@ -90,7 +90,7 @@ module type S = sig
     (Maps_to : sig
       type t
 
-      val unknown : unit -> t
+      val bottom : unit -> t
 
       val print_with_cache
          : cache:Printing_cache.t
@@ -100,23 +100,19 @@ module type S = sig
 
       val add_or_meet_equations
          : t
-        -> Typing_env.t
+        -> Meet_env.t
         -> Typing_env_extension.t
         -> t
 
       val meet
-         : Typing_env.t
-        -> Name_permutation.t
-        -> Name_permutation.t
+         : Meet_env.t
         -> Relational_product_intf.fresh_component_semantics
         -> t
         -> t
-        -> t Or_bottom.t * Typing_env_extension.t
+        -> (t * Typing_env_extension.t) Or_bottom.t
 
       val join
          : Join_env.t
-        -> Name_permutation.t
-        -> Name_permutation.t
         -> Relational_product_intf.fresh_component_semantics
         -> t
         -> t

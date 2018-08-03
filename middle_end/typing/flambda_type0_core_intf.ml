@@ -26,6 +26,7 @@ module type S = sig
   module Function_type : sig type t end
   module Immediates : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Types_by_closure_id : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
@@ -48,6 +49,8 @@ module type S = sig
   module Closures_entry : sig
     type t = closures_entry
 
+    val bottom : unit -> t
+
     val print_with_cache
        : cache:Printing_cache.t
       -> Format.formatter
@@ -56,23 +59,19 @@ module type S = sig
 
     val add_or_meet_equations
        : t
-      -> Typing_env.t
+      -> Meet_env.t
       -> Typing_env_extension.t
       -> t
 
     val meet
-       : Typing_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
+       : Meet_env.t
       -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
-      -> t Or_bottom.t * Typing_env_extension.t
+      -> (t * Typing_env_extension.t) Or_bottom.t
 
     val join
        : Join_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
       -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
@@ -84,6 +83,8 @@ module type S = sig
   module Set_of_closures_entry : sig
     type t = set_of_closures_entry
 
+    val bottom : unit -> t
+
     val print_with_cache
        : cache:Printing_cache.t
       -> Format.formatter
@@ -92,23 +93,19 @@ module type S = sig
 
     val add_or_meet_equations
        : t
-      -> Typing_env.t
+      -> Meet_env.t
       -> Typing_env_extension.t
       -> t
 
     val meet
-       : Typing_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
+       : Meet_env.t
       -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t
-      -> t Or_bottom.t * Typing_env_extension.t
+      -> (t * Typing_env_extension.t) Or_bottom.t
 
     val join
        : Join_env.t
-      -> Name_permutation.t
-      -> Name_permutation.t
       -> Relational_product_intf.fresh_component_semantics
       -> t
       -> t

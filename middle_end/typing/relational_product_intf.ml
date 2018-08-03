@@ -61,7 +61,7 @@ module type S_applied = sig
         indexed products. *)
   val create : (Component.t Index.Map.t * Typing_env_extension.t) list -> t
 
-  val unknown : unit -> t
+  val create_bottom : arity:int -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
@@ -76,7 +76,7 @@ module type S_applied = sig
     -> fresh_component_semantics
     -> t
     -> t
-    -> t Or_bottom.t * Typing_env_extension.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two parameter bindings. *)
   val join

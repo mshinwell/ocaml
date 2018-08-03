@@ -22,6 +22,7 @@ module type S = sig
     module Closures_entry : sig type t end
   end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
@@ -60,9 +61,7 @@ module type S = sig
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
     -> t Or_bottom.t
@@ -70,8 +69,6 @@ module type S = sig
   (** Least upper bound of two values of type [t]. *)
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t

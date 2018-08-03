@@ -274,6 +274,8 @@ module rec Expr : sig
     -> bool
 
   val print : Format.formatter -> t -> unit
+
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end and Named : sig
   (** Values of type [t] will always be [Let]-bound to a [Variable.t].
       (Note that [Simple.t] values do not need to be [Let]-bound; but they are

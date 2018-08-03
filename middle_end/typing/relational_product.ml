@@ -82,6 +82,9 @@ module Make
         invariant t;
         t
 
+      let bottom () =
+        create Index.Map.empty Typing_env_extension.empty
+
       let print ppf { components_by_index; env_extension; } =
         Format.fprintf ppf
           "@[<hov 1>(\
@@ -314,8 +317,12 @@ module Make
           IP.create components_by_index env_extension)
         components_by_index_list
 
-    let unknown () =
-
+    (* CR mshinwell: After we have rebased past the patch that allows
+       the shadowing of identifiers brought in from "include", this can
+       change back to [bottom], and it can be redefined in e.g.
+       [Blocks] as required. *)
+    let create_bottom ~arity =
+      List.init arity (fun _ -> IP.bottom ())
 
     let equal t1 t2 =
       Misc.Stdlib.List.equal IP.equal t1 t2
@@ -329,10 +336,9 @@ module Make
     let freshen t freshening =
       List.map (fun ip -> IP.freshen ip freshening) t
 
-    let meet env fresh_component_semantics t1 t2
-          : _ Or_bottom.t * Typing_env_extension.t =
+    let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
       if Meet_env.shortcut_precondition env && t1 == t2 then begin
-        Ok t1, Typing_env_extension.empty
+        Ok (t1, Typing_env_extension.empty)
       end else begin
         if List.compare_lengths t1 t2 <> 0 then begin
           Misc.fatal_errorf "Cannot meet relational products of different \
@@ -355,8 +361,8 @@ module Make
             t1 t2
         in
         match t_rev with
-        | Bottom -> Bottom, Typing_env_extension.empty
-        | Ok t_rev -> Ok (List.rev t_rev), Typing_env_extension.empty
+        | Bottom -> Bottom
+        | Ok t_rev -> Ok (List.rev t_rev, Typing_env_extension.empty)
       end
 
     let join env fresh_component_semantics t1 t2 =

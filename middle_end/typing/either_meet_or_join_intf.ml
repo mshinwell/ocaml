@@ -167,7 +167,7 @@ module type S = sig
      : (Meet_env.t
       -> 'a
       -> 'a
-      -> 'a Or_bottom.t * Typing_env_extension.t)
+      -> ('a * Typing_env_extension.t) Or_bottom.t)
     -> (Join_env.t
       -> 'a
       -> 'a
@@ -175,13 +175,13 @@ module type S = sig
     -> Join_env.t
     -> 'a
     -> 'a
-    -> 'a Or_bottom.t * Typing_env_extension.t
+    -> ('a * Typing_env_extension.t) Or_bottom.t
 
   val switch'
      : (Meet_env.t
       -> 'a
       -> 'a
-      -> 'a Or_bottom.t * Typing_env_extension.t)
+      -> ('a * Typing_env_extension.t) Or_bottom.t)
     -> (Join_env.t
       -> 'a
       -> 'a
@@ -196,7 +196,7 @@ module type S = sig
       -> 'b
       -> 'a
       -> 'a
-      -> 'a Or_bottom.t * Typing_env_extension.t)
+      -> ('a * Typing_env_extension.t) Or_bottom.t)
     -> (Join_env.t
       -> 'b
       -> 'a

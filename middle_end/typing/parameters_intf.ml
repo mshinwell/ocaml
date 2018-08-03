@@ -19,6 +19,7 @@
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
 
   type t
@@ -36,7 +37,7 @@ module type S = sig
   val equal : t -> t -> bool
 
   (** Greatest lower bound of two parameter lists. *)
-  val meet : Typing_env.t -> t -> t -> t Or_bottom.t
+  val meet : Meet_env.t -> t -> t -> t Or_bottom.t
 
   (** Least upper bound of two parameter lists. *)
   val join : Join_env.t -> t -> t -> t

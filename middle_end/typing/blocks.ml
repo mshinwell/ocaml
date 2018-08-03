@@ -20,6 +20,7 @@
 [@@@ocaml.warning "-60"]
 module Flambda_type0_core = struct end
 module Join_env = struct end
+module Meet_env = struct end
 module Relational_product = struct end
 module Row_like = struct end
 module Typing_env = struct end
@@ -28,11 +29,11 @@ module Typing_env_extension = struct end
 module Make (W : Typing_world.S) = struct
   open! W
 
-  module Flambda_type0_core = Flambda_type0_core
-  module Join_env = Join_env
-  module Typing_env = Typing_env
+  module RP = struct
+    include Relational_product.Make (Int_index) (Logical_variable_component)
+    let bottom () = create_bottom ~arity:1
+  end
 
-  module RP = Relational_product.Make (Int_index) (Logical_variable_component)
   module RL = Row_like.Make (Tag_index) (Int_index) (RP)
 
   type t = RL.t
@@ -72,20 +73,28 @@ module Make (W : Typing_world.S) = struct
     | Closed tag -> RL.create_exactly tag size product
 
   let create_bottom () =
-    create ~field_tys:[] (Closed Tag.zero)  (* The tag is arbitrary. *)
+    create ~field_tys:[] (Closed Tag.arbitrary)
 
   let invariant _t = () (* CR mshinwell: RL.invariant *)
   let print_with_cache = RL.print
 
-  let meet env perm1 perm2 t1 t2 =
-    let t, product = RL.meet env perm1 perm2 Fresh t1 t2 in
-    t, RP.standalone_extension product
+  let meet env t1 t2 : _ Or_bottom.t =
+    match RL.meet env Fresh t1 t2 with
+    | Bottom -> Bottom
+    | Ok (t, product) ->
+      Ok (t, RP.standalone_extension product (Meet_env.env env))
 
-  let join env perm1 perm2 t1 t2 =
-    RL.join env perm1 perm2 Fresh t1 t2
+  let join env t1 t2 =
+    RL.join env Fresh t1 t2
 
   let free_names = RL.free_names
   let bound_names = RL.bound_names
   let apply_name_permutation = RL.apply_name_permutation
   let freshen = RL.freshen
+
+  module Flambda_type0_core = Flambda_type0_core
+  module Join_env = Join_env
+  module Meet_env = Meet_env
+  module Typing_env = Typing_env
+  module Typing_env_extension = Typing_env_extension
 end

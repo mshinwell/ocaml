@@ -127,21 +127,25 @@ module For_meet (W : Typing_world.S) = struct
     end
   end
 
-  let switch meet _join join_env perm1 perm2 thing1 thing2 =
-    meet (Join_env.central_environment join_env) perm1 perm2 thing1 thing2
+  let switch meet _join join_env thing1 thing2 =
+    meet (Join_env.central_environment join_env) thing1 thing2
 
-  let switch' meet _join join_env perm1 perm2 thing1 thing2 =
-    let thing_or_bottom, _env_extension =
-      meet (Join_env.central_environment join_env) perm1 perm2 thing1 thing2
+  let switch' meet _join join_env thing1 thing2 : _ Or_bottom.t =
+    let result : _ Or_bottom.t =
+      meet (Join_env.central_environment join_env) thing1 thing2
     in
-    thing_or_bottom
+    match result with
+    | Bottom -> Bottom
+    | Ok (thing, _) -> Ok thing
 
-  let switch'_with_param meet _join join_env perm1 perm2 param thing1 thing2 =
-    let thing_or_bottom, _env_extension =
-      meet (Join_env.central_environment join_env) perm1 perm2 param
-        thing1 thing2
+  let switch'_with_param meet _join join_env param thing1 thing2
+        : _ Or_bottom.t =
+    let result : _ Or_bottom.t =
+      meet (Join_env.central_environment join_env) param thing1 thing2
     in
-    thing_or_bottom
+    match result with
+    | Bottom -> Bottom
+    | Ok (thing, _) -> Ok thing
 end
 
 module For_join (W : Typing_world.S) = struct
@@ -244,13 +248,13 @@ module For_join (W : Typing_world.S) = struct
     end
   end
 
-  let switch _meet join join_env perm1 perm2 thing1 thing2 : _ Or_bottom.t * _ =
-    Ok (join join_env perm1 perm2 thing1 thing2), Typing_env_extension.empty
+  let switch _meet join join_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join join_env thing1 thing2, Typing_env_extension.empty)
 
-  let switch' _meet join join_env perm1 perm2 thing1 thing2 : _ Or_bottom.t =
-    Ok (join join_env perm1 perm2 thing1 thing2)
+  let switch' _meet join join_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join join_env thing1 thing2)
 
-  let switch'_with_param _meet join join_env perm1 perm2 param thing1 thing2
+  let switch'_with_param _meet join join_env param thing1 thing2
         : _ Or_bottom.t =
-    Ok (join join_env perm1 perm2 param thing1 thing2)
+    Ok (join join_env param thing1 thing2)
 end

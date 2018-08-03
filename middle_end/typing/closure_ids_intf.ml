@@ -22,7 +22,9 @@ module type S = sig
     module Set_of_closures_entry : sig type t end
   end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
   module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
 
   type t
 
@@ -38,17 +40,13 @@ module type S = sig
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val meet
-     : Typing_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
+     : Meet_env.t
     -> t
     -> t
-    -> t Or_bottom.t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
   val join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> t
     -> t
     -> t

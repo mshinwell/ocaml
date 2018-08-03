@@ -50,6 +50,8 @@ module type S = sig
   (** The unique environment extension containing no information. *)
   val empty : t
 
+  val is_empty : t -> bool
+
   (** Add a definition of an existentially-bound name prior to all
       other entries in the given extension. *)
   val add_definition_at_beginning : t -> Name.t -> Flambda_type0_core.t -> t
