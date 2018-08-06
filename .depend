@@ -4011,19 +4011,17 @@ middle_end/typing/make_meet_or_join_intf.cmx : \
     middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join.cmo : middle_end/typing/typing_world.cmo \
-    middle_end/typing/typing_env_extension.cmi \
-    middle_end/typing/type_equality.cmi utils/misc.cmi \
-    middle_end/typing/meet_and_join_value.cmi \
+    middle_end/typing/type_printers.cmi middle_end/typing/type_equality.cmi \
+    utils/misc.cmi middle_end/typing/meet_and_join_value.cmi \
     middle_end/typing/meet_and_join_fabricated.cmi \
-    middle_end/typing/join_env.cmi middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/flambda_kind.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo \
     middle_end/typing/meet_and_join.cmi
 middle_end/typing/meet_and_join.cmx : middle_end/typing/typing_world.cmx \
-    middle_end/typing/typing_env_extension.cmx \
-    middle_end/typing/type_equality.cmx utils/misc.cmx \
-    middle_end/typing/meet_and_join_value.cmx \
+    middle_end/typing/type_printers.cmx middle_end/typing/type_equality.cmx \
+    utils/misc.cmx middle_end/typing/meet_and_join_value.cmx \
     middle_end/typing/meet_and_join_fabricated.cmx \
-    middle_end/typing/join_env.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/flambda_kind.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/meet_and_join.cmi
 middle_end/typing/meet_and_join.cmi : middle_end/typing/typing_world.cmo \
@@ -4039,16 +4037,16 @@ middle_end/typing/meet_and_join_fabricated.cmx : \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/meet_and_join_fabricated.cmi
 middle_end/typing/meet_and_join_fabricated.cmi : \
-    middle_end/typing/typing_env_intf.cmo \
-    middle_end/typing/typing_env_extension_intf.cmo \
-    middle_end/typing/meet_and_join_spec_intf.cmo \
-    middle_end/typing/meet_and_join_intf.cmo \
-    middle_end/typing/join_env_intf.cmo \
+    middle_end/typing/typing_world.cmo \
+    middle_end/typing/meet_and_join_fabricated_intf.cmo
+middle_end/typing/meet_and_join_fabricated_intf.cmo : \
+    middle_end/typing/make_meet_or_join_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
-middle_end/typing/meet_and_join_intf.cmo : \
-    middle_end/language/name_permutation.cmi
-middle_end/typing/meet_and_join_intf.cmx : \
-    middle_end/language/name_permutation.cmx
+middle_end/typing/meet_and_join_fabricated_intf.cmx : \
+    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
+middle_end/typing/meet_and_join_intf.cmo :
+middle_end/typing/meet_and_join_intf.cmx :
 middle_end/typing/meet_and_join_naked_number.cmo : \
     middle_end/typing/typing_world.cmo utils/targetint.cmi \
     middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
@@ -4068,6 +4066,12 @@ middle_end/typing/meet_and_join_naked_number.cmi : \
     middle_end/typing/meet_and_join_intf.cmo \
     middle_end/language/immediate.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_number_intf.cmo : \
+    middle_end/typing/make_meet_or_join_intf.cmo \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_number_intf.cmx : \
+    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_spec_intf.cmo : \
     middle_end/typing/or_absorbing.cmi middle_end/typing/flambda_kind.cmi
 middle_end/typing/meet_and_join_spec_intf.cmx : \
@@ -4106,8 +4110,13 @@ middle_end/typing/meet_and_join_value.cmx : middle_end/language/variable.cmx \
     middle_end/typing/meet_and_join_value.cmi
 middle_end/typing/meet_and_join_value.cmi : \
     middle_end/typing/typing_world.cmo \
-    middle_end/typing/meet_and_join_intf.cmo \
+    middle_end/typing/meet_and_join_value_intf.cmo
+middle_end/typing/meet_and_join_value_intf.cmo : \
+    middle_end/typing/make_meet_or_join_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_value_intf.cmx : \
+    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_env.cmo : middle_end/typing/typing_world.cmo \
     middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
     utils/misc.cmi middle_end/typing/meet_env.cmi

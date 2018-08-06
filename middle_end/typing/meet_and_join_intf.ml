@@ -16,25 +16,6 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module type S = sig
-  module T : sig
-    type env_extension
-    type typing_environment
-    type join_env
-    type 'a ty
-  end
-
-  type of_kind_foo
-
-  val meet_or_join_ty
-     : T.join_env
-    -> Name_permutation.t
-    -> Name_permutation.t
-    -> of_kind_foo T.ty
-    -> of_kind_foo T.ty
-    -> of_kind_foo T.ty * T.env_extension
-end
-
 module type S_for_types = sig
   module T : sig
     type flambda_type

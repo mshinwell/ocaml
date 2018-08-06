@@ -16,6 +16,5 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (W : Typing_world.S) :
-  Type_equality_intf.S
-    with module Flambda_types := W.Flambda_types
+include Meet_and_join_naked_number_intf.S
+  with type naked_number = Numbers.Float_by_bit_pattern.Set.t
