@@ -18,10 +18,12 @@
     (The basic definitions are in [Flambda type0], which does not
     depend on [Flambda].) *)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (** Basic definitions and constructors. *)
 include module type of struct include Flambda0.Flambda_type end
+
+type 'a type_accessor = Typing_env.t -> 'a
 
 (** For each of the kinds in an arity, create a "bottom" type. *)
 val bottom_types_from_arity : Flambda_arity.t -> t list

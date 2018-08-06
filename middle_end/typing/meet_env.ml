@@ -44,7 +44,7 @@ module Make (W : Typing_world.S) = struct
       Name_permutation.print perm_right
       Simple_pair.Set.print already_meeting
 
-  let create env perm_left perm_right =
+  let create env ~perm_left ~perm_right =
     { env;
       perm_left;
       perm_right;
@@ -59,12 +59,12 @@ module Make (W : Typing_world.S) = struct
   let fast_check_name_permutations_same_both_sides t =
     t.perm_left == t.perm_right
 
-  let already_meeting simple1 simple2 =
+  let already_meeting t simple1 simple2 =
     Simple_pair.Set.mem (simple1, simple2) t.already_meeting
       || Simple_pair.Set.mem (simple2, simple1) t.already_meeting
 
   let now_meeting t simple1 simple2 =
-    if already_meeting simple1 simple2 then begin
+    if already_meeting t simple1 simple2 then begin
       Misc.fatal_errorf "Already meeting %a and %a:@ %a"
         Simple.print simple1
         Simple.print simple2
@@ -88,4 +88,6 @@ module Make (W : Typing_world.S) = struct
       perm_left = Name_permutation.create ();
       perm_right = Name_permutation.create ();
     }
+
+  module Typing_env = W.Typing_env
 end

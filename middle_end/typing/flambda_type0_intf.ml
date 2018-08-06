@@ -278,5 +278,38 @@ module type S = sig
     with module Join_env := Join_env
     with module Meet_env := Meet_env)
 
+  include module type of struct include Flambda_types end
+
+  (* CR mshinwell: Once old references to [Flambda_type0_core.t] and so forth
+     have been changed to [Flambda_types.t] etc., then these "with type"s
+     should be removed. *)
   include module type of struct include Flambda_type0_core end
+    with type t := t
+    with type set_of_closures_entry := set_of_closures_entry
+    with type closures_entry := closures_entry
+    with type function_declaration := function_declaration
+    with type ty_fabricated := ty_fabricated
+    with type 'a ty := 'a ty
+    with type 'a unknown_or_join := 'a unknown_or_join
+
+  (** Greatest lower bound of two types.  The process of meeting may generate
+      equations, which are returned as an environment extension. *)
+  val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
+
+  (** Least upper bound of two types.  This never generates any equations. *)
+  val join : Join_env.t  -> t -> t -> t
+
+  (** Like [strictly_more_precise], but also returns [true] when the two
+      input types are equally precise. *)
+  val as_or_more_precise : Typing_env.t -> t -> than:t -> bool
+
+  (** Returns [true] if the first type is known to provide strictly more
+      information about the corresponding value than the type [than]. *)
+  val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
+
+  (** Slow type equality. *)
+  val equal : t -> t -> bool
+
+  (** Fast type equality---sound but far from complete. *)
+  val fast_equal : t -> t -> bool
 end

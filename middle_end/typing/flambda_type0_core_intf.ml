@@ -18,7 +18,7 @@
 
 module type S = sig
   module Both_meet_and_join : sig end
-  module Closure_elements : sig type t end
+  module Closure_elements : sig type t end  (* CR mshinwell: remove this *)
   module Expr : sig type t end
   module Flambda_types : sig
     type 'a or_alias
@@ -133,7 +133,6 @@ module type S = sig
   end
 
 (*
-  val get_alias : Flambda_types.t -> Simple.t option
 
   val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t
 
@@ -144,13 +143,11 @@ module type S = sig
   val bottom_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
   val ty_is_obviously_bottom : 'a Flambda_types.ty -> bool
-  val is_obviously_bottom : Flambda_types.t -> bool
 *)
 
-  val equal : t -> t -> bool
+  val get_alias : Flambda_types.t -> Simple.t option
 
-  (** Fast type equality---sound but far from complete. *)
-  val fast_equal : t -> t -> bool
+  val is_obviously_bottom : Flambda_types.t -> bool
 
   val of_ty_value : Flambda_types.ty_value -> t
 
@@ -290,14 +287,14 @@ module type S = sig
   (** The type of a block with a known tag, size and field types. *)
   val block
      : Tag.t
-    -> fields:t array
+    -> fields:t list
     -> t
 
   (** Like [block], except that the field types are statically known to be
       of kind [Value]). *)
   val block_of_values
      : Tag.t
-    -> fields:Flambda_types.ty_value array
+    -> fields:Flambda_types.ty_value list
     -> t
 
   (** The type of a block with a known tag and size but unknown content,
@@ -364,22 +361,21 @@ module type S = sig
      : Closure_id.t
     -> function_declaration
     -> Function_type.t
-    -> Closure_elements.t
+    -> Flambda_types.ty_value Var_within_closure.Map.t
     -> set_of_closures:ty_fabricated
     -> t
 
   (** The type of a closure (of kind [Value]) containing at least one
       closure that holds the given closure variable with the given type. *)
   val closure_containing_at_least
-     : Closure_id.t
-    -> Var_within_closure.t
+     : Var_within_closure.t
     -> Flambda_types.ty_value
     -> t
 
   (** The type of a set of closures containing exactly those closure IDs
       with the given types. *)
   val set_of_closures
-     : closures:Flambda_types.ty_value Closure_id.Map.t
+     : closures:Flambda_types.t Closure_id.Map.t
     -> t
 
   (** The type of a set of closures containing at least one closure with
@@ -445,19 +441,4 @@ module type S = sig
 
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
-
-  (** Greatest lower bound of two types.  The process of meeting may generate
-      equations, which are returned as an environment extension. *)
-  val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
-
-  (** Least upper bound of two types.  This never generates any equations. *)
-  val join : Join_env.t  -> t -> t -> t
-
-  (** Like [strictly_more_precise], but also returns [true] when the two
-      input types are equally precise. *)
-  val as_or_more_precise : Typing_env.t -> t -> than:t -> bool
-
-  (** Returns [true] if the first type is known to provide strictly more
-      information about the corresponding value than the type [than]. *)
-  val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
 end

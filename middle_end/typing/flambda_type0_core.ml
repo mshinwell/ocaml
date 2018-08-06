@@ -173,8 +173,6 @@ module Make (W : Typing_world.S) = struct
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
      simplified if [K.t] were a GADT. *)
 
-  type 'a type_accessor = Typing_env.t -> 'a
-
   let alias_type_of (kind : K.t) name : t =
     match kind with
     | Value ->
@@ -514,7 +512,7 @@ module Make (W : Typing_world.S) = struct
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Immutable float array too long for target"
-    | Some size ->
+    | Some _size ->
       let field_tys =
         Array.map (fun ty_naked_number : t ->
             Naked_number (ty_naked_number, K.Naked_number.Naked_float))
@@ -546,7 +544,7 @@ module Make (W : Typing_world.S) = struct
     match Targetint.OCaml.of_int_option (List.length fields) with
     | None ->
       Misc.fatal_error "Block too long for target"
-    | Some size ->
+    | Some _size ->
       let blocks = Blocks.create ~field_tys:fields (Closed tag) in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Immediates.create_bottom ();
@@ -631,8 +629,7 @@ module Make (W : Typing_world.S) = struct
       my_closure;
     }
 
-  let create_non_inlinable_function_declaration ~direct_call_surrogate
-        : function_declaration =
+  let create_non_inlinable_function_declaration () : function_declaration =
     Non_inlinable
 
   let closure closure_id function_decl ty closure_elements ~set_of_closures =
@@ -663,7 +660,7 @@ module Make (W : Typing_world.S) = struct
     in
     Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
 
-  let closure_containing_at_least ~closure_name var_within_closure ty_value =
+  let closure_containing_at_least var_within_closure ty_value =
     let closure_elements =
       Var_within_closure.Map.singleton var_within_closure (Value ty_value)
     in

@@ -37,12 +37,12 @@ module type S = sig
 
   (** Note that we are now in the process of meeting the given two
       [Simple]s. *)
-  val now_meeting : Simple.t -> Simple.t -> t
+  val now_meeting : t -> Simple.t -> Simple.t -> t
 
   (** Determine whether we are now in the process of meeting the given two
       [Simple]s.  The arguments do not have to be provided in the same order
       as when [now_meeting] was called. *)
-  val already_meeting : Simple.t -> Simple.t -> bool
+  val already_meeting : t -> Simple.t -> Simple.t -> bool
 
   val shortcut_precondition : t -> bool
 

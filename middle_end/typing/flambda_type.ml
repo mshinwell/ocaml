@@ -30,6 +30,8 @@ include F0.Flambda_type
 
 module JE = Join_env
 
+type 'a type_accessor = Typing_env.t -> 'a
+
 let bottom_types_from_arity t =
   List.map (fun kind -> bottom kind) t
 
