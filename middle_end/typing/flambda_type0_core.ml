@@ -19,37 +19,36 @@
 (* CR mshinwell: Delete >= 4.08 *)
 [@@@ocaml.warning "-60"]
 module Both_meet_and_join = struct end
-module Blocks = struct end
 module Closure_elements = struct end
-module Closure_ids = struct end
-module Closures_entry_by_closure_id = struct end
-module Discriminants = struct end
 module Expr = struct end
+module Flambda_types = struct end
 module Function_type = struct end
-module Immediates = struct end
 module Join_env = struct end
 module Meet_env = struct end
+module Type_free_names = struct end
 module Type_printers = struct end
-module Types_by_closure_id = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
 module Make (W : Typing_world.S) = struct
   open! W
+  open! Flambda_types  (* CR mshinwell: add annotations and remove this open *)
 
-  module Flambda_types =
-    Flambda_types.Make
-      (Blocks)
-      (Closure_elements)
-      (Closure_ids)
-      (Closures_entry_by_closure_id)
-      (Discriminants)
-      (Expr)
-      (Function_type)
-      (Immediates)
-      (Types_by_closure_id)
-
-  include Flambda_types
+  (* CR mshinwell: We should remove these.  However this means updating all of
+     the Flambda_type0_core references across many files. *)
+  type nonrec t = t
+  type set_of_closures_entry = Flambda_types.set_of_closures_entry
+  type closures_entry = Flambda_types.closures_entry
+  type function_declaration = Flambda_types.function_declaration
+  type ty_fabricated = Flambda_types.ty_fabricated
+  type 'a ty = 'a Flambda_types.ty
+  type 'a unknown_or_join = 'a Flambda_types.unknown_or_join
 
   module K = Flambda_kind
+
+  module Float = Numbers.Float_by_bit_pattern
+  module Int32 = Numbers.Int32
+  module Int64 = Numbers.Int64
 
   let force_to_kind_value t =
     match t with
@@ -57,7 +56,7 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _
     | Fabricated _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_immediate (t : t)
         : Immediate.Set.t ty_naked_number =
@@ -69,7 +68,7 @@ module Make (W : Typing_world.S) = struct
     | Value _ ->
       Misc.fatal_errorf
         "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_float (t : t)
         : Float.Set.t ty_naked_number =
@@ -81,7 +80,7 @@ module Make (W : Typing_world.S) = struct
     | Value _ ->
       Misc.fatal_errorf
         "Type has wrong kind (expected [Naked_number Float]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
     match t with
@@ -92,7 +91,7 @@ module Make (W : Typing_world.S) = struct
     | Value _ ->
       Misc.fatal_errorf
         "Type has wrong kind (expected [Naked_number Int32]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
     match t with
@@ -103,7 +102,7 @@ module Make (W : Typing_world.S) = struct
     | Value _ ->
       Misc.fatal_errorf
         "Type has wrong kind (expected [Naked_number Int64]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_nativeint (t : t)
         : Targetint.Set.t ty_naked_number =
@@ -115,7 +114,7 @@ module Make (W : Typing_world.S) = struct
     | Value _ ->
       Misc.fatal_errorf
         "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
-        print t
+        Type_printers.print t
 
   let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
         : n ty_naked_number =
@@ -140,7 +139,7 @@ module Make (W : Typing_world.S) = struct
     | Value _, _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]):@ %a"
         K.Naked_number.print kind
-        print t
+        Type_printers.print t
 
   let force_to_kind_fabricated t =
     match t with
@@ -148,7 +147,7 @@ module Make (W : Typing_world.S) = struct
     | Value _
     | Naked_number _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
-        print t
+        Type_printers.print t
 
   let ty_is_obviously_bottom (ty : _ ty) =
     match ty with
@@ -345,7 +344,7 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _
     | Fabricated _ ->
       Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
-        print t
+        Type_printers.print t
 
   let box_int32 (t : t) : t =
     match t with
@@ -357,7 +356,7 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _
     | Fabricated _ ->
       Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
-        print t
+        Type_printers.print t
 
   let box_int64 (t : t) : t =
     match t with
@@ -369,7 +368,7 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _
     | Fabricated _ ->
       Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
-        print t
+        Type_printers.print t
 
   let box_nativeint (t : t) : t =
     match t with
@@ -381,7 +380,7 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _
     | Fabricated _ ->
       Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
-        print t
+        Type_printers.print t
 
   let these_tagged_immediates imms : t =
     if Immediate.Set.is_empty imms then
@@ -717,6 +716,10 @@ module Make (W : Typing_world.S) = struct
     Fabricated (No_alias (Join [Set_of_closures { closures; },
       Name_permutation.create ()]))
 
+  let free_names = Type_free_names.free_names
+
+  let bound_names _ = Misc.fatal_error "Try to remove this"
+
   let apply_name_permutation_unknown_or_join unknown_or_join perm =
     match unknown_or_join with
     | Unknown -> unknown_or_join
@@ -794,8 +797,16 @@ module Make (W : Typing_world.S) = struct
       in
       { by_closure_id; }
 
-    let meet = Both_meet_and_join.meet_set_of_closures_entry
-    let join = Both_meet_and_join.join_set_of_closures_entry
+    let meet env _fresh t1 t2 =
+      Both_meet_and_join.meet_set_of_closures_entry env t1 t2
+
+    let join env _fresh t1 t2 =
+      Both_meet_and_join.join_set_of_closures_entry env t1 t2
+
+    let free_names { by_closure_id; } =
+      Types_by_closure_id.free_names by_closure_id
+
+    let bound_names _ = Misc.fatal_error "Try to remove this"
 
     let apply_name_permutation { by_closure_id; } perm : t =
       let by_closure_id =
@@ -835,8 +846,19 @@ module Make (W : Typing_world.S) = struct
       (* CR mshinwell: Think about what should happen here. *)
       t
 
-    let meet = Both_meet_and_join.meet_closures_entry
-    let join = Both_meet_and_join.join_closures_entry
+    let meet env _fresh t1 t2 =
+      Both_meet_and_join.meet_closures_entry env t1 t2
+
+    let join env _fresh t1 t2 =
+      Both_meet_and_join.join_closures_entry env t1 t2
+
+    let free_names
+          { function_decl = _; ty; closure_elements; set_of_closures; } =
+      Name_occurrences.union (Function_type.free_names ty)
+        (Name_occurrences.union (Closure_elements.free_names closure_elements)
+          (Type_free_names.free_names_of_ty_fabricated set_of_closures))
+
+    let bound_names _ = Misc.fatal_error "Try to remove this"
 
     let apply_name_permutation
           { function_decl; ty; closure_elements; set_of_closures; } perm : t =
@@ -851,17 +873,15 @@ module Make (W : Typing_world.S) = struct
       apply_name_permutation t (Freshening.name_permutation freshening)
   end
 
-  module Blocks = W.Blocks
   module Both_meet_and_join = W.Both_meet_and_join
   module Closure_elements = W.Closure_elements
-  module Closure_ids = W.Closure_ids
-  module Closures_entry_by_closure_id = W.Closures_entry_by_closure_id
-  module Discriminants = W.Discriminants
   module Expr = W.Expr
+  module Flambda_types = W.Flambda_types
   module Function_type = W.Function_type
-  module Immediates = W.Immediates
   module Join_env = W.Join_env
   module Meet_env = W.Meet_env
+  module Type_free_names = W.Type_free_names
   module Type_printers = W.Type_printers
-  module Types_by_closure_id = W.Types_by_closure_id
+  module Typing_env = W.Typing_env
+  module Typing_env_extension = W.Typing_env_extension
 end

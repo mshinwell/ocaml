@@ -16,20 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-  (Blocks : sig type t end)
-  (Closure_elements : sig type t end)
-  (Closure_ids : sig type t end)
-  (Closures_entry_by_closure_id : sig type t end)
-  (Discriminants : sig type t end)
-  (Expr : sig type t end)
-  (Function_type : sig type t end)
-  (Immediates : sig type t end)
-  (Types_by_closure_id : sig type t end) =
-struct
-  module Float = Numbers.Float_by_bit_pattern
-  module Int32 = Numbers.Int32
-  module Int64 = Numbers.Int64
+module type S = sig
+  module Blocks : sig type t end
+  module Closure_elements : sig type t end
+  module Closure_ids : sig type t end
+  module Closures_entry_by_closure_id : sig type t end
+  module Discriminants : sig type t end
+  module Expr : sig type t end
+  module Function_type : sig type t end
+  module Immediates : sig type t end
+  module Types_by_closure_id : sig type t end
 
   type 'a or_alias =
     | No_alias of 'a
@@ -72,14 +68,15 @@ struct
 
   and 'a of_kind_value_boxed_number =
     | Boxed_float
-        : Float.Set.t ty_naked_number
-        -> Float.Set.t ty_naked_number of_kind_value_boxed_number
+        : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+             of_kind_value_boxed_number
     | Boxed_int32
-        : Int32.Set.t ty_naked_number
-        -> Int32.Set.t ty_naked_number of_kind_value_boxed_number
+        : Numbers.Int32.Set.t ty_naked_number
+        -> Numbers.Int32.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_int64
-        : Int64.Set.t ty_naked_number
-        -> Int64.Set.t ty_naked_number of_kind_value_boxed_number
+        : Numbers.Int64.Set.t ty_naked_number
+        -> Numbers.Int64.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_nativeint
         : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
@@ -127,15 +124,17 @@ struct
 
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
-    | Float : Float.Set.t -> Float.Set.t of_kind_naked_number
-    | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
-    | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
+    | Float : Numbers.Float_by_bit_pattern.Set.t
+        -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+    | Int32 : Numbers.Int32.Set.t -> Numbers.Int32.Set.t of_kind_naked_number
+    | Int64 : Numbers.Int64.Set.t -> Numbers.Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and of_kind_naked_immediate = Immediate.Set.t of_kind_naked_number
-  and of_kind_naked_float = Float.Set.t of_kind_naked_number
-  and of_kind_naked_int32 = Int32.Set.t of_kind_naked_number
-  and of_kind_naked_int64 = Int64.Set.t of_kind_naked_number
+  and of_kind_naked_float =
+    Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+  and of_kind_naked_int32 = Numbers.Int32.Set.t of_kind_naked_number
+  and of_kind_naked_int64 = Numbers.Int64.Set.t of_kind_naked_number
   and of_kind_naked_nativeint = Targetint.Set.t of_kind_naked_number
 
   and of_kind_fabricated =

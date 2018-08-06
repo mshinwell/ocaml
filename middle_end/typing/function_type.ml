@@ -76,6 +76,12 @@ module Make (W : Typing_world.S) = struct
     | Product rp -> RP.invariant rp
     | Unknown | Bottom -> ()
 
+  let print_with_cache ~cache ppf t =
+    match t with
+    | Unknown -> Format.pp_print_string ppf "Unknown"
+    | Product rp -> RP.print_with_cache ~cache ppf rp
+    | Bottom -> Format.pp_print_string ppf "Bottom"
+
   let equal t1 t2 =
     match t1, t2 with
     | Product rp1, Product rp2 -> RP.equal rp1 rp2
@@ -90,11 +96,11 @@ module Make (W : Typing_world.S) = struct
       | Bottom -> Bottom
       | Ok (rp, env_extension) -> Ok (Product rp, env_extension)
       end
-    | Product _, Unknown -> Ok t1
-    | Unknown, Product _ -> Ok t2
+    | Product _, Unknown -> Ok (t1, Typing_env_extension.empty)
+    | Unknown, Product _ -> Ok (t2, Typing_env_extension.empty)
     | Unknown, Unknown -> Ok (Unknown, Typing_env_extension.empty)
     | Bottom, (Product _ | Bottom | Unknown)
-    | (Product _ | Bottom | Unknown), Bottom -> Bottom
+    | (Product _ | Unknown), Bottom -> Bottom
 
   let join env fresh t1 t2 =
     match t1, t2 with
@@ -103,7 +109,7 @@ module Make (W : Typing_world.S) = struct
     | Product _, Bottom -> t1
     | Bottom, Bottom -> Bottom
     | Unknown, (Product _ | Bottom | Unknown)
-    | (Product _ | Bottom | Unknown), Unknown -> Unknown
+    | (Product _ | Bottom), Unknown -> Unknown
 
   let bound_names t =
     match t with

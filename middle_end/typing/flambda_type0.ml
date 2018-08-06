@@ -76,9 +76,19 @@ module Make (Expr : Expr_intf.S) = struct
 
     = Outer_namespace.Either_meet_or_join.Make (W)
   and Flambda_type0_core0
-    : Flambda_type0_core_intf.S
-        with module Blocks := Blocks0
+    : (Flambda_type0_core_intf.S
         with module Both_meet_and_join := Both_meet_and_join0
+        with module Flambda_types := Flambda_types0
+        with module Join_env := Join_env0
+        with module Meet_env := Meet_env0
+        with module Type_free_names := Type_free_names0
+        with module Type_printers := Type_printers0
+        with module Typing_env := Typing_env0
+        with module Typing_env_extension := Typing_env_extension0)
+    = Outer_namespace.Flambda_type0_core.Make (W)
+  and Flambda_types0
+    : (Flambda_types_intf.S
+        with module Blocks := Blocks0
         with module Closure_elements := Closure_elements0
         with module Closure_ids := Closure_ids0
         with module Closures_entry_by_closure_id :=
@@ -87,15 +97,8 @@ module Make (Expr : Expr_intf.S) = struct
         with module Expr := Expr0
         with module Function_type := Function_type0
         with module Immediates := Immediates0
-        with module Join_env := Join_env0
-        with module Meet_env := Meet_env0
-        with module Immediates := Immediates0
-        with module Type_printers := Type_printers0
-        with module Types_by_closure_id := Types_by_closure_id0
-        with module Typing_env := Typing_env0
-        with module Typing_env_extension := Typing_env_extension0
-    = Outer_namespace.Flambda_type0_core.Make (W)
-
+        with module Types_by_closure_id := Types_by_closure_id0)
+    = Flambda_types0
   and Function_type0
     : Function_type_intf.S
 
@@ -227,6 +230,9 @@ module Make (Expr : Expr_intf.S) = struct
     and Flambda_type0_core
       : module type of struct include Flambda_type0_core0 end
       = Flambda_type0_core0
+    and Flambda_types
+      : module type of struct include Flambda_types0 end
+      = Flambda_types0
     and Function_type
       : module type of struct include Function_type0 end
       = Function_type0
@@ -279,6 +285,7 @@ module Make (Expr : Expr_intf.S) = struct
   module Discriminants = Discriminants0
   module Either_meet_or_join = Either_meet_or_join0
   module Flambda_type0_core = Flambda_type0_core0
+  module Flambda_types = Flambda_types0
   module Function_type = Function_type0
   module Immediates = Immediates0
   module Join_env = Join_env0

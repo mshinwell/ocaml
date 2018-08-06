@@ -19,9 +19,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
+  module Flambda_types : sig type t end
 
-  val fast_equal : Flambda_type0_core.t -> Flambda_type0_core.t -> bool
+  val fast_equal : Flambda_types.t -> Flambda_types.t -> bool
 
-  val equal : Flambda_type0_core.t -> Flambda_type0_core.t -> bool
+  val equal : Flambda_types.t -> Flambda_types.t -> bool
 end

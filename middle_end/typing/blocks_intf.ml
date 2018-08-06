@@ -23,24 +23,6 @@ module type S = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-(* CR mshinwell: See whether we want Row_like_intf or a custom interface
-   in the end.
-  module RP : Relational_product_intf.S_applied
-    with module Join_env := Join_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
-    with module Index := Int_index
-    with module Component := Logical_variable_component
-
-  include Row_like_intf.S_applied
-    with module Join_env := Join_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
-    with module Tag := Tag_index
-    with module Index := Int_index
-    with module Maps_to := RP
-*)
-
   type t
 
   type open_or_closed = Open | Closed of Tag.t

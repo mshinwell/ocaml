@@ -17,7 +17,14 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
+  module Flambda_types : sig
+    type t
+    type ty_fabricated
+  end
 
-  val free_names : Flambda_type0_core.t -> Name_occurrences.t
+  val free_names : Flambda_types.t -> Name_occurrences.t
+
+  val free_names_of_ty_fabricated
+     : Flambda_types.ty_fabricated
+    -> Name_occurrences.t
 end

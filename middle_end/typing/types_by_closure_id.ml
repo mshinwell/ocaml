@@ -62,6 +62,8 @@ module Make (W : Typing_world.S) = struct
       closure_ids_to_logical_variables, env_extension;
     ]
 
+  let create_bottom () = RP.create_bottom ~arity:1
+
   let print ~cache ppf t = RP.print_with_cache ~cache ppf t
 
   let meet env t1 t2 = RP.meet env Fresh t1 t2

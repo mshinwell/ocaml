@@ -17,13 +17,29 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
+  module Flambda_types : sig
+    type t
+    type ty_fabricated
+    type function_declaration
+  end
 
-  val print : Format.formatter -> Flambda_type0_core.t -> unit
+  val print : Format.formatter -> Flambda_types.t -> unit
 
   val print_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
-    -> Flambda_type0_core.t
+    -> Flambda_types.t
+    -> unit
+
+  val print_ty_fabricated_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> Flambda_types.ty_fabricated
+    -> unit
+
+  val print_function_declaration_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> Flambda_types.function_declaration
     -> unit
 end
