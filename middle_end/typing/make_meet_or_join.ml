@@ -42,8 +42,6 @@ module Make (W : Typing_world.S) = struct
        Distributivity of meet over join:
          X n (X' u Y') == (X n X') u (X n Y'). *)
 
-    type of_kind_foo = S.of_kind_foo
-
     let unknown_or_join_is_bottom (uj : _ Flambda_types.unknown_or_join) =
       match uj with
       | Join [] -> true
@@ -89,7 +87,7 @@ module Make (W : Typing_world.S) = struct
                           Typing_env_extension.meet env
                             new_env_extension_from_meet'
                               !new_env_extension_from_meet;
-                        Some of_kind_foo
+                        Some (of_kind_foo, Name_permutation.create ())
                       | Absorbing -> None)
                     of_kind_foos
                 in
@@ -115,7 +113,7 @@ module Make (W : Typing_world.S) = struct
     and meet_ty env
           (or_alias1 : S.of_kind_foo Flambda_types.ty)
           (or_alias2 : S.of_kind_foo Flambda_types.ty)
-          : S.of_kind_foo ty * Typing_env_extension.t =
+          : S.of_kind_foo Flambda_types.ty * Typing_env_extension.t =
       if Meet_env.shortcut_precondition env && or_alias1 == or_alias2
       then begin
         or_alias1, Typing_env_extension.empty
@@ -152,7 +150,7 @@ module Make (W : Typing_world.S) = struct
         | Some simple1, Some simple2 ->
           let meet_unknown_or_join, env_extension_from_meet =
             let env = Meet_env.now_meeting env simple1 simple2 in
-            meet_on_unknown_or_join env perm1 perm2
+            meet_on_unknown_or_join env
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -167,7 +165,7 @@ module Make (W : Typing_world.S) = struct
           Equals simple1, env_extension_from_meet
         | Some simple1, None ->
           let meet_unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env perm1 perm2
+            meet_on_unknown_or_join env
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -178,7 +176,7 @@ module Make (W : Typing_world.S) = struct
           Equals simple1, env_extension_from_meet
         | None, Some simple2 ->
           let meet_unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env perm1 perm2
+            meet_on_unknown_or_join env
               unknown_or_join1 unknown_or_join2
           in
           let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
@@ -189,7 +187,7 @@ module Make (W : Typing_world.S) = struct
           Equals simple2, env_extension_from_meet
         | None, None ->
           let unknown_or_join, env_extension_from_meet =
-            meet_on_unknown_or_join env perm1 perm2
+            meet_on_unknown_or_join env
               unknown_or_join1 unknown_or_join2
           in
           if unknown_or_join == unknown_or_join1 then begin
@@ -301,7 +299,7 @@ module Make (W : Typing_world.S) = struct
             Equals (Simple.name name2)
           | None, None ->
             let unknown_or_join =
-              join_on_unknown_or_join env perm1 perm2
+              join_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             if unknown_or_join == unknown_or_join1 then begin
@@ -315,34 +313,35 @@ module Make (W : Typing_world.S) = struct
             end
           | _, _ ->
             let unknown_or_join =
-              join_on_unknown_or_join env perm1 perm2
-                unknown_or_join1 unknown_or_join2
+              join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
             in
             No_alias unknown_or_join
 
-    let meet_or_join_ty env or_alias1 or_alias2 =
+    let meet_or_join_ty env
+          (or_alias1 : S.of_kind_foo Flambda_types.ty)
+          (or_alias2 : S.of_kind_foo Flambda_types.ty) =
       let meet_env = Join_env.central_environment env in
-      let or_alias1 =
+      let or_alias1 : _ Flambda_types.ty =
         match or_alias1 with
         | No_alias _ | Type _ -> or_alias1
         | Equals simple ->
           let simple' =
-            Name_permutation.apply_simple (Meet_env.perm_left meet_env)
+            Name_permutation.apply_simple (Meet_env.perm_left meet_env) simple
           in
           if simple == simple' then or_alias1
           else Equals simple'
       in
-      let or_alias2 =
+      let or_alias2 : _ Flambda_types.ty =
         match or_alias2 with
         | No_alias _ | Type _ -> or_alias2
         | Equals simple ->
           let simple' =
-            Name_permutation.apply_simple (Meet_env.perm_right meet_env)
+            Name_permutation.apply_simple (Meet_env.perm_right meet_env) simple
           in
           if simple == simple' then or_alias2
           else Equals simple'
       in
-      E.switch meet_ty join_ty env or_alias1 or_alias2
+      E.switch_no_bottom meet_ty join_ty env or_alias1 or_alias2
 
     module Flambda_types = W.Flambda_types
     module Join_env = W.Join_env

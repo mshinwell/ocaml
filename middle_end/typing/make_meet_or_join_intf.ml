@@ -26,11 +26,13 @@ module type S_applied = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  val meet_or_join
+  type of_kind_foo
+
+  val meet_or_join_ty
      : Join_env.t
-    -> Flambda_types.t
-    -> Flambda_types.t
-    -> (Flambda_types.t * Typing_env_extension.t) Or_bottom.t
+    -> of_kind_foo Flambda_types.ty
+    -> of_kind_foo Flambda_types.ty
+    -> of_kind_foo Flambda_types.ty * Typing_env_extension.t
 end
 
 module type S = sig
@@ -59,4 +61,5 @@ module type S = sig
     with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
+    with type of_kind_foo := S.of_kind_foo
 end

@@ -163,6 +163,20 @@ module type S = sig
     end
   end
 
+  val switch_no_bottom
+     : (Meet_env.t
+      -> 'a
+      -> 'a
+      -> 'a * Typing_env_extension.t)
+    -> (Join_env.t
+      -> 'a
+      -> 'a
+      -> 'a)
+    -> Join_env.t
+    -> 'a
+    -> 'a
+    -> 'a * Typing_env_extension.t
+
   val switch
      : (Meet_env.t
       -> 'a

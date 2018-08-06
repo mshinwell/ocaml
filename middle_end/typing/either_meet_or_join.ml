@@ -127,6 +127,9 @@ module For_meet (W : Typing_world.S) = struct
     end
   end
 
+  let switch_no_bottom meet _join join_env thing1 thing2 =
+    meet (Join_env.central_environment join_env) thing1 thing2
+
   let switch meet _join join_env thing1 thing2 =
     meet (Join_env.central_environment join_env) thing1 thing2
 
@@ -247,6 +250,9 @@ module For_join (W : Typing_world.S) = struct
       let union_or_inter_both = Discriminant.Map.union_both
     end
   end
+
+  let switch_no_bottom _meet join join_env thing1 thing2 =
+    join join_env thing1 thing2, Typing_env_extension.empty
 
   let switch _meet join join_env thing1 thing2 : _ Or_bottom.t =
     Ok (join join_env thing1 thing2, Typing_env_extension.empty)

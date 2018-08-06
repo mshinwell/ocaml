@@ -4005,11 +4005,9 @@ middle_end/typing/make_meet_or_join.cmx : middle_end/typing/typing_world.cmx \
 middle_end/typing/make_meet_or_join.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/make_meet_or_join_intf.cmo
 middle_end/typing/make_meet_or_join_intf.cmo : \
-    middle_end/typing/or_bottom.cmi \
     middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/make_meet_or_join_intf.cmx : \
-    middle_end/typing/or_bottom.cmx \
     middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join.cmo : middle_end/typing/typing_world.cmo \
