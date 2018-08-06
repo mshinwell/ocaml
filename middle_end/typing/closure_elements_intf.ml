@@ -29,6 +29,8 @@ module type S = sig
 
   val create : Flambda_type0_core.t Var_within_closure.Map.t -> t
 
+  val create_bottom : unit -> t
+
   (** Greatest lower bound of two values of type [t]. *)
   val meet
      : Meet_env.t

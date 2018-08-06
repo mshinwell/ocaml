@@ -16,7 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) :
+module Make (W : Typing_world.S) :
   Flambda_type0_core_intf.S
-    with module Typing_env := T.Typing_env
-    with module Typing_env_extension := T.Typing_env_extension
+    with module Blocks = W.Blocks
+    with module Both_meet_and_join = W.Both_meet_and_join
+    with module Closure_elements = W.Closure_elements
+    with module Closure_ids = W.Closure_ids
+    with module Closures_entry_by_closure_id = W.Closures_entry_by_closure_id
+    with module Discriminants = W.Discriminants
+    with module Expr = W.Expr
+    with module Function_type = W.Function_type
+    with module Immediates = W.Immediates
+    with module Join_env = W.Join_env
+    with module Meet_env = W.Meet_env
+    with module Type_printers = W.Type_printers
+    with module Types_by_closure_id = W.Types_by_closure_id

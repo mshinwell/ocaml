@@ -18,6 +18,7 @@
 
 (* CR mshinwell: Delete >= 4.08 *)
 [@@@ocaml.warning "-60"]
+module Both_meet_and_join = struct end
 module Blocks = struct end
 module Closure_elements = struct end
 module Closure_ids = struct end
@@ -28,6 +29,7 @@ module Function_type = struct end
 module Immediates = struct end
 module Join_env = struct end
 module Meet_env = struct end
+module Type_printers = struct end
 module Types_by_closure_id = struct end
 
 module Make (W : Typing_world.S) = struct
@@ -48,11 +50,6 @@ module Make (W : Typing_world.S) = struct
   include Flambda_types
 
   module K = Flambda_kind
-
-  let print = Type_printers.print
-  let print_with_cache = Type_printers.print_with_cache
-
-  let free_names = Type_free_names.free_names
 
   let force_to_kind_value t =
     match t with
@@ -337,22 +334,6 @@ module Make (W : Typing_world.S) = struct
 
   let this_naked_nativeint i =
     these_naked_nativeints (Targetint.Set.singleton i)
-
-(* This one is tricky
-  let tag_immediate (t : t) : t =
-    match t with
-    | Naked_number (ty_naked_number, Naked_immediate) ->
-
-
-      Value (No_alias (Ok (No_alias (
-        Tagged_immediate ty_naked_immediate))))
-    | Value _
-    | Naked_number _
-    | Fabricated _
-    | Phantom _ ->
-      Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
-        print t
-*)
 
   let box_float (t : t) : t =
     match t with
@@ -813,21 +794,8 @@ module Make (W : Typing_world.S) = struct
       in
       { by_closure_id; }
 
-    let meet env _fresh
-          { by_closure_id = by_closure_id1; }
-          { by_closure_id = by_closure_id2; } : _ Or_bottom.t =
-      match Types_by_closure_id.meet env by_closure_id1 by_closure_id2 with
-      | Bottom -> Bottom
-      | Ok (by_closure_id, env_extension) ->
-        Ok ({ by_closure_id; }, env_extension)
-
-    let join env _fresh
-          { by_closure_id = by_closure_id1; }
-          { by_closure_id = by_closure_id2; } : t =
-      let by_closure_id =
-        Types_by_closure_id.join env by_closure_id1 by_closure_id2
-      in
-      { by_closure_id; }
+    let meet = Both_meet_and_join.meet_set_of_closures_entry
+    let join = Both_meet_and_join.join_set_of_closures_entry
 
     let apply_name_permutation { by_closure_id; } perm : t =
       let by_closure_id =
@@ -842,23 +810,49 @@ module Make (W : Typing_world.S) = struct
   module Closures_entry = struct
     type t = closures_entry
 
-    let bottom () =
+    let bottom () : t =
+      { function_decl = Non_inlinable;
+        ty = Function_type.create_bottom ();
+        closure_elements = Closure_elements.create_bottom ();
+        set_of_closures = bottom_as_ty_fabricated ();
+      }
 
-    let print_with_cache ~cache ppf t =
+    let print_with_cache ~cache ppf
+          { function_decl; ty; closure_elements; set_of_closures; } =
+      Format.fprintf ppf
+        "@[<hov 1>(@\
+          @[<hov 1>(function_decl@ %a)@]@ \
+          @[<hov 1>(ty@ %a)@]@ \
+          @[<hov 1>(closure_elements@ %a)@]@ \
+          @[<hov 1>(set_of_closures@ %a)@])@]"
+        (Type_printers.print_function_declaration_with_cache ~cache)
+          function_decl
+        (Function_type.print_with_cache ~cache) ty
+        (Closure_elements.print ~cache) closure_elements
+        (Type_printers.print_ty_fabricated_with_cache ~cache) set_of_closures
 
-    let add_or_meet_equations t env equations =
+    let add_or_meet_equations t _env _equations =
+      (* CR mshinwell: Think about what should happen here. *)
+      t
 
-    let meet env fresh t1 t2 =
+    let meet = Both_meet_and_join.meet_closures_entry
+    let join = Both_meet_and_join.join_closures_entry
 
-    let join fresh t1 t2 =
-
-    let apply_name_permutation t perm =
+    let apply_name_permutation
+          { function_decl; ty; closure_elements; set_of_closures; } perm : t =
+      { function_decl;
+        ty = Function_type.apply_name_permutation ty perm;
+        closure_elements =
+          Closure_elements.apply_name_permutation closure_elements perm;
+        set_of_closures = apply_name_permutation_ty set_of_closures perm;
+      }
 
     let freshen t freshening =
       apply_name_permutation t (Freshening.name_permutation freshening)
   end
 
   module Blocks = W.Blocks
+  module Both_meet_and_join = W.Both_meet_and_join
   module Closure_elements = W.Closure_elements
   module Closure_ids = W.Closure_ids
   module Closures_entry_by_closure_id = W.Closures_entry_by_closure_id
@@ -868,5 +862,6 @@ module Make (W : Typing_world.S) = struct
   module Immediates = W.Immediates
   module Join_env = W.Join_env
   module Meet_env = W.Meet_env
+  module Type_printers = W.Type_printers
   module Types_by_closure_id = W.Types_by_closure_id
 end

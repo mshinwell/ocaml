@@ -30,8 +30,9 @@ module Make (W : Typing_world.S) = struct
   module RP = Relational_product.Make (Int_index) (Logical_variable_component)
 
   type t =
-    | Product of RP.t
     | Unknown
+    | Product of RP.t
+    | Bottom
 
   let create ~parameters ~results =
     let assign_logical_variables tys =
@@ -68,17 +69,19 @@ module Make (W : Typing_world.S) = struct
     ])
 
   let create_unknown () = Unknown
+  let create_bottom () = Bottom
 
   let invariant t =
     match t with
     | Product rp -> RP.invariant rp
-    | Unknown -> ()
+    | Unknown | Bottom -> ()
 
   let equal t1 t2 =
     match t1, t2 with
     | Product rp1, Product rp2 -> RP.equal rp1 rp2
     | Unknown, Unknown -> true
-    | Product _, Unknown | Unknown, Product _ -> false
+    | Bottom, Bottom -> true
+    | (Product _ | Unknown | Bottom), _ -> false
 
   let meet env fresh t1 t2 : _ Or_bottom.t =
     match t1, t2 with
@@ -87,31 +90,35 @@ module Make (W : Typing_world.S) = struct
       | Bottom -> Bottom
       | Ok (rp, env_extension) -> Ok (Product rp, env_extension)
       end
+    | Product _, Unknown -> Ok t1
+    | Unknown, Product _ -> Ok t2
     | Unknown, Unknown -> Ok (Unknown, Typing_env_extension.empty)
-    | Product _, Unknown -> Ok (t1, Typing_env_extension.empty)
-    | Unknown, Product _ -> Ok (t2, Typing_env_extension.empty)
+    | Bottom, (Product _ | Bottom | Unknown)
+    | (Product _ | Bottom | Unknown), Bottom -> Bottom
 
   let join env fresh t1 t2 =
     match t1, t2 with
     | Product rp1, Product rp2 -> Product (RP.join env fresh rp1 rp2)
-    | Unknown, Unknown -> Unknown
-    | Product _, Unknown -> t2
-    | Unknown, Product _ -> t1
+    | Bottom, Product _ -> t2
+    | Product _, Bottom -> t1
+    | Bottom, Bottom -> Bottom
+    | Unknown, (Product _ | Bottom | Unknown)
+    | (Product _ | Bottom | Unknown), Unknown -> Unknown
 
   let bound_names t =
     match t with
     | Product rp -> RP.bound_names rp
-    | Unknown -> Name_occurrences.create ()
+    | Unknown | Bottom -> Name_occurrences.create ()
 
   let free_names t =
     match t with
     | Product rp -> RP.free_names rp
-    | Unknown -> Name_occurrences.create ()
+    | Unknown | Bottom -> Name_occurrences.create ()
 
   let introduce t env =
     match t with
     | Product rp -> RP.introduce rp env
-    | Unknown -> env
+    | Unknown | Bottom -> env
 
   let apply_name_permutation t perm =
     match t with
@@ -119,7 +126,7 @@ module Make (W : Typing_world.S) = struct
       let rp' = RP.apply_name_permutation rp perm in
       if rp == rp' then t
       else Product rp'
-    | Unknown -> Unknown
+    | Unknown | Bottom -> Unknown
 
   let freshen t freshening =
     apply_name_permutation t (Freshening.name_permutation freshening)

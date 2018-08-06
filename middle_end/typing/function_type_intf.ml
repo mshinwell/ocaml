@@ -36,6 +36,8 @@ module type S = sig
   (** Perform invariant checks upon the given function type. *)
   val invariant : t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   (** Create a function type from parameter and result types. *)
   val create
      : parameters:Flambda_type0_core.t list
@@ -45,6 +47,8 @@ module type S = sig
   (** The function type all of whose parameters and result types and arities
       are unknown. *)
   val create_unknown : unit -> t
+
+  val create_bottom : unit -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool

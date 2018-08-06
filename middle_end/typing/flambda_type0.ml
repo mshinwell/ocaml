@@ -78,6 +78,7 @@ module Make (Expr : Expr_intf.S) = struct
   and Flambda_type0_core0
     : Flambda_type0_core_intf.S
         with module Blocks := Blocks0
+        with module Both_meet_and_join := Both_meet_and_join0
         with module Closure_elements := Closure_elements0
         with module Closure_ids := Closure_ids0
         with module Closures_entry_by_closure_id :=
@@ -87,7 +88,9 @@ module Make (Expr : Expr_intf.S) = struct
         with module Function_type := Function_type0
         with module Immediates := Immediates0
         with module Join_env := Join_env0
-        with module Parameters := Parameters0
+        with module Meet_env := Meet_env0
+        with module Immediates := Immediates0
+        with module Type_printers := Type_printers0
         with module Types_by_closure_id := Types_by_closure_id0
         with module Typing_env := Typing_env0
         with module Typing_env_extension := Typing_env_extension0

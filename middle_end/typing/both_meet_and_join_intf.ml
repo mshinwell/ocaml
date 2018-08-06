@@ -17,7 +17,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
+  module Flambda_type0_core : sig
+    type t
+    type closures_entry
+    type set_of_closures_entry
+  end
   module Join_env : sig type t end
   module Meet_env : sig type t end
   module Typing_env : sig type t end
@@ -34,6 +38,31 @@ module type S = sig
     -> Flambda_type0_core.t
     -> Flambda_type0_core.t
     -> Flambda_type0_core.t
+
+  val meet_closures_entry
+     : Meet_env.t
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+    -> (Flambda_type0_core.closures_entry * Typing_env_extension.t) Or_bottom.t
+
+  val join_closures_entry
+     : Join_env.t
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+
+  val meet_set_of_closures_entry
+     : Meet_env.t
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
+    -> (Flambda_type0_core.set_of_closures_entry * Typing_env_extension.t)
+         Or_bottom.t
+
+  val join_set_of_closures_entry
+     : Join_env.t
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
 
   val as_or_more_precise
      : Typing_env.t

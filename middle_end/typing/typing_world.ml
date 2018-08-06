@@ -59,15 +59,18 @@ module type S = sig
   and Expr : Expr_intf.S
   and Flambda_type0_core : (Flambda_type0_core_intf.S
     with module Blocks := Blocks
+    with module Both_meet_and_join := Both_meet_and_join
     with module Closure_elements := Closure_elements
     with module Closure_ids := Closure_ids
     with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
     with module Discriminants := Discriminants
-    with module Function_type := Function_type
     with module Expr := Expr
+    with module Function_type := Function_type
+    with module Immediates := Immediates
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Immediates := Immediates
+    with module Type_printers := Type_printers
     with module Types_by_closure_id := Types_by_closure_id
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)

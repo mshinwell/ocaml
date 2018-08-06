@@ -18,6 +18,7 @@
 
 module type S = sig
   module Blocks : sig type t end
+  module Both_meet_and_join : sig type t end
   module Closure_elements : sig type t end
   module Closure_ids : sig type t end
   module Closures_entry_by_closure_id : sig type t end
@@ -27,6 +28,7 @@ module type S = sig
   module Immediates : sig type t end
   module Join_env : sig type t end
   module Meet_env : sig type t end
+  module Type_printers : sig type t end
   module Types_by_closure_id : sig type t end
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
@@ -121,9 +123,6 @@ module type S = sig
   val unknown : Flambda_kind.t -> t
 
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
-
-  val free_names : t -> Name_occurrences.t
-  val free_names_set : t -> Name.Set.t
 
   val force_to_kind_value : t -> of_kind_value ty
   val force_to_kind_naked_number
