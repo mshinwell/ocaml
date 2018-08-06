@@ -3784,9 +3784,9 @@ middle_end/typing/flambda_type0_core.cmo : \
     middle_end/language/tag.cmi middle_end/typing/string_info.cmi \
     middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
     utils/misc.cmi middle_end/language/immediate.cmi \
-    middle_end/typing/flambda_types.cmo middle_end/typing/flambda_kind.cmi \
-    middle_end/language/discriminant.cmi middle_end/typing/closure_id_set.cmi \
-    middle_end/language/closure_id.cmi \
+    middle_end/language/freshening.cmi middle_end/typing/flambda_types.cmo \
+    middle_end/typing/flambda_kind.cmi middle_end/language/discriminant.cmi \
+    middle_end/typing/closure_id_set.cmi middle_end/language/closure_id.cmi \
     middle_end/typing/flambda_type0_core.cmi
 middle_end/typing/flambda_type0_core.cmx : \
     middle_end/language/var_within_closure.cmx \
@@ -3797,9 +3797,9 @@ middle_end/typing/flambda_type0_core.cmx : \
     middle_end/language/tag.cmx middle_end/typing/string_info.cmx \
     middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
     utils/misc.cmx middle_end/language/immediate.cmx \
-    middle_end/typing/flambda_types.cmx middle_end/typing/flambda_kind.cmx \
-    middle_end/language/discriminant.cmx middle_end/typing/closure_id_set.cmx \
-    middle_end/language/closure_id.cmx \
+    middle_end/language/freshening.cmx middle_end/typing/flambda_types.cmx \
+    middle_end/typing/flambda_kind.cmx middle_end/language/discriminant.cmx \
+    middle_end/typing/closure_id_set.cmx middle_end/language/closure_id.cmx \
     middle_end/typing/flambda_type0_core.cmi
 middle_end/typing/flambda_type0_core.cmi : \
     middle_end/typing/typing_world.cmo \

@@ -26,6 +26,8 @@ module Discriminants = struct end
 module Expr = struct end
 module Function_type = struct end
 module Immediates = struct end
+module Join_env = struct end
+module Meet_env = struct end
 module Types_by_closure_id = struct end
 
 module Make (W : Typing_world.S) = struct
@@ -765,7 +767,7 @@ module Make (W : Typing_world.S) = struct
       if simple == simple' then ty
       else Equals simple'
 
-  let apply_name_permutation_t t perm =
+  let apply_name_permutation t perm =
     match t with
     | Value ty_value ->
       let ty_value' = apply_name_permutation_ty ty_value perm in
@@ -780,6 +782,9 @@ module Make (W : Typing_world.S) = struct
       if ty_fabricated == ty_fabricated' then t
       else Fabricated ty_fabricated'
 
+  let freshen t freshening =
+    apply_name_permutation t (Freshening.name_permutation freshening)
+
   let get_alias t =
     match t with
     | Value (Equals simple) -> Some simple
@@ -788,4 +793,80 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _ -> None
     | Fabricated (Equals simple) -> Some simple
     | Fabricated _ -> None
+
+  module Set_of_closures_entry = struct
+    type t = set_of_closures_entry
+
+    let bottom () : t =
+      { by_closure_id = Types_by_closure_id.create_bottom ();
+      }
+
+    let print_with_cache ~cache ppf { by_closure_id; } =
+      Format.fprintf ppf
+        "@[<hov 1>(@\
+          @[<hov 1>(by_closure_id@ %a)@])@]"
+        (Types_by_closure_id.print ~cache) by_closure_id
+
+    let add_or_meet_equations { by_closure_id; } env equations =
+      let by_closure_id =
+        Types_by_closure_id.add_or_meet_equations by_closure_id env equations
+      in
+      { by_closure_id; }
+
+    let meet env _fresh
+          { by_closure_id = by_closure_id1; }
+          { by_closure_id = by_closure_id2; } : _ Or_bottom.t =
+      match Types_by_closure_id.meet env by_closure_id1 by_closure_id2 with
+      | Bottom -> Bottom
+      | Ok (by_closure_id, env_extension) ->
+        Ok ({ by_closure_id; }, env_extension)
+
+    let join env _fresh
+          { by_closure_id = by_closure_id1; }
+          { by_closure_id = by_closure_id2; } : t =
+      let by_closure_id =
+        Types_by_closure_id.join env by_closure_id1 by_closure_id2
+      in
+      { by_closure_id; }
+
+    let apply_name_permutation { by_closure_id; } perm : t =
+      let by_closure_id =
+        Types_by_closure_id.apply_name_permutation by_closure_id perm
+      in
+      { by_closure_id; }
+
+    let freshen t freshening =
+      apply_name_permutation t (Freshening.name_permutation freshening)
+  end
+
+  module Closures_entry = struct
+    type t = closures_entry
+
+    let bottom () =
+
+    let print_with_cache ~cache ppf t =
+
+    let add_or_meet_equations t env equations =
+
+    let meet env fresh t1 t2 =
+
+    let join fresh t1 t2 =
+
+    let apply_name_permutation t perm =
+
+    let freshen t freshening =
+      apply_name_permutation t (Freshening.name_permutation freshening)
+  end
+
+  module Blocks = W.Blocks
+  module Closure_elements = W.Closure_elements
+  module Closure_ids = W.Closure_ids
+  module Closures_entry_by_closure_id = W.Closures_entry_by_closure_id
+  module Discriminants = W.Discriminants
+  module Expr = W.Expr
+  module Function_type = W.Function_type
+  module Immediates = W.Immediates
+  module Join_env = W.Join_env
+  module Meet_env = W.Meet_env
+  module Types_by_closure_id = W.Types_by_closure_id
 end

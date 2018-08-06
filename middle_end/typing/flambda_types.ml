@@ -139,9 +139,7 @@ struct
   and of_kind_naked_nativeint = Targetint.Set.t of_kind_naked_number
 
   and of_kind_fabricated =
-    (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
-       troublesome since the obvious Fabricated_kind.t wouldn't have a unique
-       top element) *)
+    (* CR-someday mshinwell: Should tags be represented as naked immediates? *)
     | Discriminants of Discriminants.t
     | Set_of_closures of set_of_closures
 

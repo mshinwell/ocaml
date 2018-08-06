@@ -114,12 +114,6 @@ module type S = sig
     include Contains_names.S with type t := t
   end
 
-  val print : Format.formatter -> t -> unit
-
-  val print_ty_value : Format.formatter -> ty_value -> unit
-  val print_ty_naked_number : Format.formatter -> 'a ty_naked_number -> unit
-  val print_ty_fabricated : Format.formatter -> ty_fabricated -> unit
-
   val kind : t -> Flambda_kind.t
   val get_alias : t -> Simple.t option
 

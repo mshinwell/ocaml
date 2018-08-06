@@ -71,6 +71,7 @@ module Make (W : Typing_world.S) = struct
   let free_names = RP.free_names
   let apply_name_permutation = RP.apply_name_permutation
   let freshen = RP.freshen
+  let add_or_meet_equations = RP.add_or_meet_equations
 
   module Flambda_type0_core = W.Flambda_type0_core
   module Join_env = W.Join_env
