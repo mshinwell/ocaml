@@ -97,6 +97,60 @@ module type S = sig
     with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
+  and Make_meet_or_join : (Make_meet_or_join_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join : (Meet_and_join_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_value : (Meet_and_join_value_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_naked_immediate : (Meet_and_join_naked_immediate_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_naked_int32 : (Meet_and_join_naked_int32_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_naked_int64 : (Meet_and_join_naked_int64_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_naked_nativeint : (Meet_and_join_naked_nativeint_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_naked_float : (Meet_and_join_naked_float_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
+  and Meet_and_join_fabricated : (Meet_and_join_fabricated_intf.S
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Meet_env : (Meet_env_intf.S
     with module Typing_env := Typing_env)
   and Parameters : (Parameters_intf.S

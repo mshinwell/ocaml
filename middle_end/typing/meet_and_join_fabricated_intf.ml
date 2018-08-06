@@ -33,7 +33,7 @@ module type S = sig
      with module Meet_env := Meet_env
      with module Typing_env := Typing_env
      with module Typing_env_extension := Typing_env_extension)
-  include Make_meet_or_join_intf.S_applied
+  : Make_meet_or_join_intf.S_applied
      with module Flambda_types := Flambda_types
      with module Join_env := Join_env
      with module Meet_env := Meet_env

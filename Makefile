@@ -329,6 +329,14 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/function_type_intf.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
+  middle_end/typing/meet_and_join_value_intf.cmo \
+  middle_end/typing/meet_and_join_naked_number_intf.cmo \
+  middle_end/typing/meet_and_join_naked_immediate_intf.cmo \
+  middle_end/typing/meet_and_join_naked_float_intf.cmo \
+  middle_end/typing/meet_and_join_naked_int32_intf.cmo \
+  middle_end/typing/meet_and_join_naked_int64_intf.cmo \
+  middle_end/typing/meet_and_join_naked_nativeint_intf.cmo \
+  middle_end/typing/meet_and_join_fabricated_intf.cmo \
   middle_end/typing/types_by_closure_id_intf.cmo \
   middle_end/typing/closure_elements_intf.cmo \
   middle_end/typing/trivial_row_like_intf.cmo \

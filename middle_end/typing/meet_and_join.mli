@@ -17,10 +17,14 @@
 (** Meet (greatest lower bound) and join (least upper bound) operations on
     types. *)
 
+(* CR mshinwell: This should be called [Meet_or_join]. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (W : Typing_world.S)
-    (E : Either_meet_or_join_intf.S with module W := W) :
-sig
-
-end
+module Make (W : Typing_world.S) :
+  Meet_and_join_intf.S
+    with module Flambda_types = W.Flambda_types
+    with module Join_env = W.Join_env
+    with module Meet_env = W.Meet_env
+    with module Typing_env = W.Typing_env
+    with module Typing_env_extension = W.Typing_env_extension

@@ -40,7 +40,10 @@ module Make (W : Typing_world.S) = struct
   module Make
     (E : Either_meet_or_join_intf.S) =
   struct
-    let meet_or_join env t1 t2 : Flambda_types.t * Typing_env_extension.t =
+    module Meet_and_join_value = Meet_and_join_value.Make (E)
+
+    let meet_or_join env (t1 : Flambda_types.t) (t2 : Flambda_types.t)
+          : Flambda_types.t * Typing_env_extension.t =
       if Join_env.shortcut_precondition env
         && Type_equality.fast_equal t1 t2
       then t1, Typing_env_extension.empty

@@ -14,52 +14,45 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S_for_types = sig
-  module T : sig
-    type flambda_type
-    type typing_environment
-    type env_extension
-    type join_env
+module type S_applied = sig
+  module Flambda_types : sig
+    type t
   end
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+
+  type of_kind_foo
 
   val meet_or_join
-     : T.join_env
-    -> T.flambda_type
-    -> T.flambda_type
-    -> T.flambda_type * T.env_extension
+     : Join_env.t
+    -> Flambda_types.t
+    -> Flambda_types.t
+    -> Flambda_types.t * Typing_env_extension.t
 end
 
-module type S_both = sig
-  module T : sig
-    type env_extension
-    type join_env
-    type typing_environment
-    type flambda_type
+module type S = sig
+  module Flambda_types : sig
+    type t
   end
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
 
-  val meet
-     : T.typing_environment
-    -> T.flambda_type
-    -> T.flambda_type
-    -> T.flambda_type * T.env_extension
-
-  val join
-     : T.join_env
-    -> T.flambda_type
-    -> T.flambda_type
-    -> T.flambda_type
-
-  val as_or_more_precise
-     : T.typing_environment
-    -> T.flambda_type
-    -> than:T.flambda_type
-    -> bool
-
-  val strictly_more_precise
-     : T.typing_environment
-    -> T.flambda_type
-    -> than:T.flambda_type
-    -> bool
+  module Make
+    (E : Either_meet_or_join_intf.S
+      with module Join_env := Join_env
+      with module Meet_env := Meet_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension)
+  : S_applied
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
 end
