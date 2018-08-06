@@ -36,8 +36,8 @@ module Make (W : Typing_world.S) = struct
 
   let create env =
     { env;
-      env_plus_extension1 = env;
-      env_plus_extension2 = env;
+      env_plus_extension1 = Meet_env.env env;
+      env_plus_extension2 = Meet_env.env env;
       extension1 = Typing_env_extension.empty;
       extension2 = Typing_env_extension.empty;
     }
@@ -51,18 +51,17 @@ module Make (W : Typing_world.S) = struct
         holds_on_left (Typing_env.max_level (Meet_env.env t.env))
     in
     let extension1 =
-      Typing_env_extension.meet (Meet_env.env t.env) t.extension1 holds_on_left
+      Typing_env_extension.meet t.env t.extension1 holds_on_left
     in
     let env_plus_extension2 =
       Typing_env.add_or_meet_env_extension t.env_plus_extension2 holds_on_right
         (Typing_env.max_level (Meet_env.env t.env))
     in
     let extension2 =
-      Typing_env_extension.meet (Meet_env.env t.env)
-        t.extension2 holds_on_right
+      Typing_env_extension.meet t.env t.extension2 holds_on_right
     in
     let t = {
-      env;
+      env = t.env;
       env_plus_extension1;
       env_plus_extension2;
       extension1;
@@ -72,12 +71,22 @@ module Make (W : Typing_world.S) = struct
     invariant t;
     t
 
+  let add_definition_central_environment t name ty =
+    let env =
+      Meet_env.with_env t.env (fun env ->
+        Typing_env.add env name (Typing_env.max_level env) (Definition ty))
+    in
+    let t = { t with env; } in
+    invariant t;
+    t
+
   let add_extensions_and_extend_central_environment t
         ~holds_on_left ~holds_on_right ~central_extension =
     let env =
-      Typing_env.add_or_meet_env_extension (Meet_env.env t.env)
-        central_extension
-        (Typing_env.max_level (Meet_env.env t.env))
+      Meet_env.with_env t.env (fun env ->
+        Typing_env.add_or_meet_env_extension env
+          central_extension
+          (Typing_env.max_level (Meet_env.env t.env)))
     in
     let t = { t with env; } in
     invariant t;
