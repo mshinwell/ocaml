@@ -32,7 +32,7 @@ module type S = sig
     type t
   end
 
-  module rec Flambda_type0_core : sig
+  module rec Flambda_types : sig
     type 'a or_alias = private
       | No_alias of 'a
       | Type of Export_id.t
@@ -197,7 +197,8 @@ module type S = sig
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Meet_env := Meet_env
-    with module Typing_env := Typing_env)
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Closure_elements : (Closure_elements_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -224,7 +225,10 @@ module type S = sig
     with module Thing_without_names := Discriminant)
   and Flambda_type0_core : (Flambda_type0_core_intf.S
     with module Both_meet_and_join := Both_meet_and_join
+    with module Closure_elements := Closure_elements
+    with module Expr := Expr
     with module Flambda_types := Flambda_types
+    with module Function_type := Function_type
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Type_free_names := Type_free_names
@@ -260,7 +264,8 @@ module type S = sig
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Meet_env := Meet_env
-    with module Typing_env := Typing_env)
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Typing_env : (Typing_env_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Typing_env := Typing_env

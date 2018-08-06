@@ -18,4 +18,4 @@
 
 module Make (W : Typing_world.S) :
   Type_printers_intf.S
-    with module Flambda_type0_core := W.Flambda_type0_core
+    with module Flambda_types := W.Flambda_types
