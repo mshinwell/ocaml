@@ -38,8 +38,6 @@ module type S = sig
 
   val meet_or_join_of_kind_foo
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
     -> of_kind_foo
     -> of_kind_foo
     -> (of_kind_foo * Typing_env_extension.t) Or_absorbing.t

@@ -44,20 +44,21 @@ module Make (W : Typing_world.S) = struct
 
     type of_kind_foo = S.of_kind_foo
 
-    let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
+    let unknown_or_join_is_bottom (uj : _ Flambda_types.unknown_or_join) =
       match uj with
       | Join [] -> true
       | Unknown | Join _ -> false
 
-    let unknown_or_join_is_unknown (uj : _ unknown_or_join) =
+    let unknown_or_join_is_unknown (uj : _ Flambda_types.unknown_or_join) =
       match uj with
       | Join _ -> false
       | Unknown -> true
 
     let rec meet_on_unknown_or_join env
-          (ou1 : S.of_kind_foo unknown_or_join)
-          (ou2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join * env_extension =
+          (ou1 : S.of_kind_foo Flambda_types.unknown_or_join)
+          (ou2 : S.of_kind_foo Flambda_types.unknown_or_join)
+          : S.of_kind_foo Flambda_types.unknown_or_join
+              * Typing_env_extension.t =
       if Meet_env.shortcut_precondition env && ou1 == ou2 then
         ou1, Typing_env_extension.empty
       else
@@ -67,16 +68,20 @@ module Make (W : Typing_world.S) = struct
         | Join of_kind_foos1, Join of_kind_foos2 ->
           let of_kind_foos, env_extension_from_meet =
             List.fold_left
-              (fun (of_kind_foos, env_extension_from_meet) of_kind_foo ->
+              (fun (of_kind_foos, env_extension_from_meet)
+                   (of_kind_foo, perm1) ->
                 let new_env_extension_from_meet =
-                  ref (Typing_env_extension.empty)
+                  ref Typing_env_extension.empty
                 in
                 let of_kind_foos =
-                  Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
+                  Misc.Stdlib.List.filter_map (fun (of_kind_foo', perm2) ->
                       let meet =
-                        let env = Join_env.create env in
-                        S.meet_or_join_of_kind_foo env perm1 perm2
-                          of_kind_foo of_kind_foo'
+                        let env =
+                          Join_env.compose_name_permutations
+                            (Join_env.create env)
+                            ~perm_left:perm1 ~perm_right:perm2
+                        in
+                        S.meet_or_join_of_kind_foo env of_kind_foo of_kind_foo'
                       in
                       match meet with
                       | Ok (of_kind_foo, new_env_extension_from_meet') ->
@@ -98,7 +103,8 @@ module Make (W : Typing_world.S) = struct
           in
           let same_as input_of_kind_foos =
             List.compare_lengths input_of_kind_foos of_kind_foos = 0
-              && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
+              && List.for_all2
+                   (fun (input_of_kind_foo, _perm1) (of_kind_foo, _perm2) ->
                      input_of_kind_foo == of_kind_foo)
                    input_of_kind_foos of_kind_foos
           in
@@ -107,9 +113,9 @@ module Make (W : Typing_world.S) = struct
           else Join of_kind_foos, env_extension_from_meet
 
     and meet_ty env
-          (or_alias1 : S.of_kind_foo ty)
-          (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty * env_extension =
+          (or_alias1 : S.of_kind_foo Flambda_types.ty)
+          (or_alias2 : S.of_kind_foo Flambda_types.ty)
+          : S.of_kind_foo ty * Typing_env_extension.t =
       if Meet_env.shortcut_precondition env && or_alias1 == or_alias2
       then begin
         or_alias1, Typing_env_extension.empty
@@ -198,9 +204,9 @@ module Make (W : Typing_world.S) = struct
       end
 
     let rec join_on_unknown_or_join env
-          (uj1 : S.of_kind_foo unknown_or_join)
-          (uj2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join =
+          (uj1 : S.of_kind_foo Flambda_types.unknown_or_join)
+          (uj2 : S.of_kind_foo Flambda_types.unknown_or_join)
+          : S.of_kind_foo Flambda_types.unknown_or_join =
       if Join_env.shortcut_precondition env && uj1 == uj2 then uj1
       else
         match uj1, uj2 with
@@ -211,15 +217,19 @@ module Make (W : Typing_world.S) = struct
              Everything in [of_kind_foos1] is mutually incompatible with each
              other; likewise in [of_kind_foos2]. *)
           let of_kind_foos =
-            List.fold_left (fun of_kind_foos (of_kind_foo, perm) ->
+            List.fold_left (fun of_kind_foos (of_kind_foo, perm1) ->
                 (* [of_kind_foo] can be compatible with at most one of the
                    elements of [of_kind_foos]. *)
                 let found_one = ref false in
                 let joined =
-                  List.map (fun (of_kind_foo', perm') ->
+                  List.map (fun (of_kind_foo', perm2) ->
                       let join =
                         (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
                            must be a "join" operation. *)
+                        let env =
+                          Join_env.compose_name_permutations env
+                            ~perm_left:perm1 ~perm_right:perm2
+                        in
                         S.meet_or_join_of_kind_foo env
                           of_kind_foo of_kind_foo'
                       in
@@ -232,10 +242,10 @@ module Make (W : Typing_world.S) = struct
                         end;
                         found_one := true;
                         of_kind_foo, Name_permutation.create ()
-                      | Absorbing -> of_kind_foo', perm')
+                      | Absorbing -> of_kind_foo', perm2)
                     of_kind_foos
                 in
-                if not !found_one then (of_kind_foo, perm) :: of_kind_foos
+                if not !found_one then (of_kind_foo, perm1) :: of_kind_foos
                 else joined)
               of_kind_foos2
               of_kind_foos1
@@ -243,8 +253,9 @@ module Make (W : Typing_world.S) = struct
           Join of_kind_foos
 
     and join_ty env
-          (or_alias1 : S.of_kind_foo ty) (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty =
+          (or_alias1 : S.of_kind_foo Flambda_types.ty)
+          (or_alias2 : S.of_kind_foo Flambda_types.ty)
+          : S.of_kind_foo Flambda_types.ty =
       if Join_env.shortcut_precondition env && or_alias1 == or_alias2
       then or_alias1
       else

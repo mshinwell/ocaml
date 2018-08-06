@@ -4071,13 +4071,9 @@ middle_end/typing/meet_and_join_naked_number.cmi : \
     middle_end/language/immediate.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/meet_and_join_spec_intf.cmo : \
-    middle_end/typing/or_absorbing.cmi \
-    middle_end/language/name_permutation.cmi \
-    middle_end/typing/flambda_kind.cmi
+    middle_end/typing/or_absorbing.cmi middle_end/typing/flambda_kind.cmi
 middle_end/typing/meet_and_join_spec_intf.cmx : \
-    middle_end/typing/or_absorbing.cmx \
-    middle_end/language/name_permutation.cmx \
-    middle_end/typing/flambda_kind.cmx
+    middle_end/typing/or_absorbing.cmx middle_end/typing/flambda_kind.cmx
 middle_end/typing/meet_and_join_value.cmo : middle_end/language/variable.cmi \
     middle_end/typing/typing_world.cmo middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \

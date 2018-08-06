@@ -17,7 +17,10 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S_applied = sig
-  module Flambda_types : sig type t end
+  module Flambda_types : sig
+    type t
+    type 'a ty
+  end
   module Join_env : sig type t end
   module Meet_env : sig type t end
   module Typing_env : sig type t end
@@ -31,7 +34,10 @@ module type S_applied = sig
 end
 
 module type S = sig
-  module Flambda_types : sig type t end
+  module Flambda_types : sig
+    type t
+    type 'a ty
+  end
   module Join_env : sig type t end
   module Meet_env : sig type t end
   module Typing_env : sig type t end

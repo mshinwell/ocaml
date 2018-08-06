@@ -89,5 +89,11 @@ module Make (W : Typing_world.S) = struct
       perm_right = Name_permutation.create ();
     }
 
+  let compose_name_permutations t ~perm_left ~perm_right =
+    { t with
+      perm_left = Name_permutation.compose t.perm_left perm_left;
+      perm_right = Name_permutation.compose t.perm_right perm_right;
+    }
+
   module Typing_env = W.Typing_env
 end

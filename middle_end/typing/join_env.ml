@@ -117,6 +117,11 @@ module Make (W : Typing_world.S) = struct
       env = Meet_env.clear_name_permutations t.env;
     }
 
+  let compose_name_permutations t ~perm_left ~perm_right =
+    { t with
+      env = Meet_env.compose_name_permutations t.env ~perm_left ~perm_right;
+    }
+
   module Flambda_type0_core = W.Flambda_type0_core
   module Meet_env = W.Meet_env
   module Typing_env = W.Typing_env

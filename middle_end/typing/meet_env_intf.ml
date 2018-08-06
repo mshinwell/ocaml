@@ -49,4 +49,10 @@ module type S = sig
   val with_env : t -> (Typing_env.t -> Typing_env.t) -> t
 
   val clear_name_permutations : t -> t
+
+  val compose_name_permutations
+     : t
+    -> perm_left:Name_permutation.t
+    -> perm_right:Name_permutation.t
+    -> t
 end
