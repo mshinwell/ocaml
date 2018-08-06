@@ -29,7 +29,9 @@ module Make (W : Typing_world.S) = struct
 
   module RP = Relational_product.Make (Int_index) (Logical_variable_component)
 
-  type t = RP.t
+  type t =
+    | Product of RP.t
+    | Unknown
 
   let create ~parameters ~results =
     let assign_logical_variables tys =
@@ -60,20 +62,67 @@ module Make (W : Typing_world.S) = struct
     let param_env_extension = create_equations parameters param_vars in
     let result_vars = assign_logical_variables results in
     let result_env_extension = create_equations results result_vars in
-    RP.create [
+    Product (RP.create [
       param_vars, param_env_extension;
       result_vars, result_env_extension;
-    ]
+    ])
 
-  let invariant = RP.invariant
-  let equal = RP.equal
-  let meet = RP.meet
-  let join = RP.join
-  let bound_names = RP.bound_names
-  let free_names = RP.free_names
-  let introduce = RP.introduce
-  let apply_name_permutation = RP.apply_name_permutation
-  let freshen = RP.freshen
+  let create_unknown () = Unknown
+
+  let invariant t =
+    match t with
+    | Product rp -> RP.invariant rp
+    | Unknown -> ()
+
+  let equal t1 t2 =
+    match t1, t2 with
+    | Product rp1, Product rp2 -> RP.equal rp1 rp2
+    | Unknown, Unknown -> true
+    | Product _, Unknown | Unknown, Product _ -> false
+
+  let meet env fresh t1 t2 : _ Or_bottom.t =
+    match t1, t2 with
+    | Product rp1, Product rp2 ->
+      begin match RP.meet env fresh rp1 rp2 with
+      | Bottom -> Bottom
+      | Ok (rp, env_extension) -> Ok (Product rp, env_extension)
+      end
+    | Unknown, Unknown -> Ok (Unknown, Typing_env_extension.empty)
+    | Product _, Unknown -> Ok (t1, Typing_env_extension.empty)
+    | Unknown, Product _ -> Ok (t2, Typing_env_extension.empty)
+
+  let join env fresh t1 t2 =
+    match t1, t2 with
+    | Product rp1, Product rp2 -> Product (RP.join env fresh rp1 rp2)
+    | Unknown, Unknown -> Unknown
+    | Product _, Unknown -> t2
+    | Unknown, Product _ -> t1
+
+  let bound_names t =
+    match t with
+    | Product rp -> RP.bound_names rp
+    | Unknown -> Name_occurrences.create ()
+
+  let free_names t =
+    match t with
+    | Product rp -> RP.free_names rp
+    | Unknown -> Name_occurrences.create ()
+
+  let introduce t env =
+    match t with
+    | Product rp -> RP.introduce rp env
+    | Unknown -> env
+
+  let apply_name_permutation t perm =
+    match t with
+    | Product rp ->
+      let rp' = RP.apply_name_permutation rp perm in
+      if rp == rp' then t
+      else Product rp'
+    | Unknown -> Unknown
+
+  let freshen t freshening =
+    apply_name_permutation t (Freshening.name_permutation freshening)
 
   module Flambda_type0_core = W.Flambda_type0_core
   module Join_env = W.Join_env

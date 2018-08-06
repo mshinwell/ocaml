@@ -42,6 +42,10 @@ module type S = sig
     -> results:Flambda_type0_core.t list
     -> t
 
+  (** The function type all of whose parameters and result types and arities
+      are unknown. *)
+  val create_unknown : unit -> t
+
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
 

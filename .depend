@@ -3780,28 +3780,26 @@ middle_end/typing/flambda_type0_core.cmo : \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/typing_env_extension.cmi \
     middle_end/typing/typing_env.cmi middle_end/typing/type_printers.cmi \
-    middle_end/typing/type_free_names.cmi middle_end/typing/type_equality.cmi \
-    utils/targetint.cmi middle_end/language/tag.cmi \
-    middle_end/typing/string_info.cmi middle_end/language/simple.cmi \
-    middle_end/language/name_permutation.cmi utils/misc.cmi \
-    middle_end/language/immediate.cmi middle_end/typing/flambda_types.cmo \
-    middle_end/typing/flambda_kind.cmi middle_end/language/discriminant.cmi \
-    middle_end/typing/closure_id_set.cmi middle_end/language/closure_id.cmi \
-    middle_end/typing/both_meet_and_join.cmi \
+    middle_end/typing/type_free_names.cmi utils/targetint.cmi \
+    middle_end/language/tag.cmi middle_end/typing/string_info.cmi \
+    middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
+    utils/misc.cmi middle_end/language/immediate.cmi \
+    middle_end/typing/flambda_types.cmo middle_end/typing/flambda_kind.cmi \
+    middle_end/language/discriminant.cmi middle_end/typing/closure_id_set.cmi \
+    middle_end/language/closure_id.cmi \
     middle_end/typing/flambda_type0_core.cmi
 middle_end/typing/flambda_type0_core.cmx : \
     middle_end/language/var_within_closure.cmx \
     middle_end/typing/typing_world.cmx \
     middle_end/typing/typing_env_extension.cmx \
     middle_end/typing/typing_env.cmx middle_end/typing/type_printers.cmx \
-    middle_end/typing/type_free_names.cmx middle_end/typing/type_equality.cmx \
-    utils/targetint.cmx middle_end/language/tag.cmx \
-    middle_end/typing/string_info.cmx middle_end/language/simple.cmx \
-    middle_end/language/name_permutation.cmx utils/misc.cmx \
-    middle_end/language/immediate.cmx middle_end/typing/flambda_types.cmx \
-    middle_end/typing/flambda_kind.cmx middle_end/language/discriminant.cmx \
-    middle_end/typing/closure_id_set.cmx middle_end/language/closure_id.cmx \
-    middle_end/typing/both_meet_and_join.cmx \
+    middle_end/typing/type_free_names.cmx utils/targetint.cmx \
+    middle_end/language/tag.cmx middle_end/typing/string_info.cmx \
+    middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
+    utils/misc.cmx middle_end/language/immediate.cmx \
+    middle_end/typing/flambda_types.cmx middle_end/typing/flambda_kind.cmx \
+    middle_end/language/discriminant.cmx middle_end/typing/closure_id_set.cmx \
+    middle_end/language/closure_id.cmx \
     middle_end/typing/flambda_type0_core.cmi
 middle_end/typing/flambda_type0_core.cmi : \
     middle_end/typing/typing_world.cmo \
@@ -3912,16 +3910,18 @@ middle_end/typing/flambda_types.cmx : middle_end/language/variable.cmx \
     middle_end/language/closure_id.cmx
 middle_end/typing/function_type.cmo : middle_end/typing/typing_world.cmo \
     utils/targetint.cmi middle_end/typing/relational_product.cmi \
+    middle_end/typing/or_bottom.cmi middle_end/language/name_occurrences.cmi \
     middle_end/language/name.cmi \
     middle_end/typing/logical_variable_component.cmi \
     middle_end/typing/logical_variable.cmi middle_end/typing/int_index.cmi \
-    middle_end/typing/function_type.cmi
+    middle_end/language/freshening.cmi middle_end/typing/function_type.cmi
 middle_end/typing/function_type.cmx : middle_end/typing/typing_world.cmx \
     utils/targetint.cmx middle_end/typing/relational_product.cmx \
+    middle_end/typing/or_bottom.cmx middle_end/language/name_occurrences.cmx \
     middle_end/language/name.cmx \
     middle_end/typing/logical_variable_component.cmx \
     middle_end/typing/logical_variable.cmx middle_end/typing/int_index.cmx \
-    middle_end/typing/function_type.cmi
+    middle_end/language/freshening.cmx middle_end/typing/function_type.cmi
 middle_end/typing/function_type.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/function_type_intf.cmo
 middle_end/typing/function_type_intf.cmo : \

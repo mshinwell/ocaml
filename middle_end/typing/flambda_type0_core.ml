@@ -685,11 +685,11 @@ module Make (W : Typing_world.S) = struct
     let closure_elements =
       Var_within_closure.Map.singleton var_within_closure (Value ty_value)
     in
+    let closure_elements = Closure_elements.create closure_elements in
     let closures_entry : closures_entry =
       { function_decl = Non_inlinable;
-        ty = Function_type.unknown ();
-        (* XXX we need to know the arity, no? *)
-        closure_elements = closure_elements';
+        ty = Function_type.create_unknown ();
+        closure_elements;
         set_of_closures = any_fabricated_as_ty_fabricated ()
       }
     in
@@ -706,9 +706,9 @@ module Make (W : Typing_world.S) = struct
     Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
 
   let set_of_closures ~closures =
-    let all_closures = Closure_id.Map.keys closures in
-    if Closure_id.Map.is_empty all_closures then bottom_as_ty_fabricated ()
+    if Closure_id.Map.is_empty closures then bottom (Flambda_kind.value ())
     else
+      let all_closures = Closure_id.Map.keys closures in
       let by_closure_id = Types_by_closure_id.create closures in
       let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
       let closures =
@@ -741,7 +741,7 @@ module Make (W : Typing_world.S) = struct
       let something_changed = ref false in
       let of_kind_foos =
         List.map (fun (of_kind_foo, existing_perm) ->
-            let new_perm = Name_permutation.compose existing_perm new_perm in
+            let new_perm = Name_permutation.compose existing_perm perm in
             if not (new_perm == existing_perm) then begin
               something_changed := true
             end;
@@ -788,26 +788,4 @@ module Make (W : Typing_world.S) = struct
     | Naked_number _ -> None
     | Fabricated (Equals simple) -> Some simple
     | Fabricated _ -> None
-
-(*
-  (* CR mshinwell: Add comment that this forms an equivalence relation *)
-  let function_declarations_compatible
-        (decl1 : function_declaration)
-        (decl2 : function_declaration) =
-    let check (params1 : parameters) (params2 : parameters) =
-      let arity1 = Kinded_parameter.arity params1.params in
-      let arity2 = Kinded_parameter.arity params2.params in
-      Flambda_arity.equal arity1 arity2
-        || (Flambda_arity.all_values arity1 && Flambda_arity.all_values arity2)
-    in
-    check decl1.ty.params decl2.ty.params
-      && check decl1.ty.result decl2.ty.result
-*)
-
-  let meet = Both_meet_and_join.meet
-  let join = Both_meet_and_join.join
-  let as_or_more_precise = Both_meet_and_join.as_or_more_precise
-  let strictly_more_precise = Both_meet_and_join.strictly_more_precise
-  let fast_equal = Type_equality.fast_equal
-  let equal = Type_equality.equal
 end

@@ -290,4 +290,13 @@ module Make (Expr : Expr_intf.S) = struct
   module Type_equality = Type_equality0
   module Type_free_names = Type_free_names0
   module Type_printers = Type_printers0
+
+  include Flambda_type0_core
+
+  let meet = Both_meet_and_join.meet
+  let join = Both_meet_and_join.join
+  let as_or_more_precise = Both_meet_and_join.as_or_more_precise
+  let strictly_more_precise = Both_meet_and_join.strictly_more_precise
+  let fast_equal = Type_equality.fast_equal
+  let equal = Type_equality.equal
 end
