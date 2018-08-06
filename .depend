@@ -3991,26 +3991,27 @@ middle_end/typing/logical_variable_component.cmi : \
     middle_end/language/name.cmi middle_end/typing/logical_variable.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/typing/make_meet_or_join.cmo : middle_end/typing/typing_world.cmo \
-    middle_end/typing/typing_env_extension.cmi \
-    middle_end/typing/typing_env.cmi middle_end/language/simple.cmi \
-    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
-    utils/misc.cmi middle_end/typing/meet_env.cmi \
+    middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
+    middle_end/language/name.cmi utils/misc.cmi \
     middle_end/typing/meet_and_join_spec_intf.cmo \
-    middle_end/typing/join_env.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo \
     middle_end/typing/make_meet_or_join.cmi
 middle_end/typing/make_meet_or_join.cmx : middle_end/typing/typing_world.cmx \
-    middle_end/typing/typing_env_extension.cmx \
-    middle_end/typing/typing_env.cmx middle_end/language/simple.cmx \
-    middle_end/language/name_permutation.cmx middle_end/language/name.cmx \
-    utils/misc.cmx middle_end/typing/meet_env.cmx \
+    middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
+    middle_end/language/name.cmx utils/misc.cmx \
     middle_end/typing/meet_and_join_spec_intf.cmx \
-    middle_end/typing/join_env.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/make_meet_or_join.cmi
 middle_end/typing/make_meet_or_join.cmi : middle_end/typing/typing_world.cmo \
+    middle_end/typing/make_meet_or_join_intf.cmo
+middle_end/typing/make_meet_or_join_intf.cmo : \
+    middle_end/typing/or_bottom.cmi \
     middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/make_meet_or_join_intf.cmx : \
+    middle_end/typing/or_bottom.cmx \
+    middle_end/typing/meet_and_join_spec_intf.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join.cmo : middle_end/typing/typing_world.cmo \
     middle_end/typing/typing_env_extension.cmi \
     middle_end/typing/type_equality.cmi utils/misc.cmi \

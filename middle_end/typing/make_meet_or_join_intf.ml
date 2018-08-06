@@ -16,31 +16,41 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** The signature of a module that specifies meet and join operations for
-    a particular kind of types. *)
-module type S = sig
-  module Flambda_types : sig
-    type t
-    type 'a ty
-  end
+module type S_applied = sig
+  module Flambda_types : sig type t end
   module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  type of_kind_foo
-
-  val kind : Flambda_kind.t
-
-  val to_type : of_kind_foo Flambda_types.ty -> Flambda_types.t
-
-  val force_to_kind : Flambda_types.t -> of_kind_foo Flambda_types.ty
-
-  val print_ty : Format.formatter -> of_kind_foo Flambda_types.ty -> unit
-
-  val meet_or_join_of_kind_foo
+  val meet_or_join
      : Join_env.t
-    -> Name_permutation.t
-    -> Name_permutation.t
-    -> of_kind_foo
-    -> of_kind_foo
-    -> (of_kind_foo * Typing_env_extension.t) Or_absorbing.t
+    -> Flambda_types.t
+    -> Flambda_types.t
+    -> (Flambda_types.t * Typing_env_extension.t) Or_bottom.t
+end
+
+module type S = sig
+  module Flambda_types : sig type t end
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Typing_env : sig type t end
+  module Typing_env_extension : sig type t end
+
+  module Make
+    (E : Either_meet_or_join_intf.S
+      with module Join_env := Join_env
+      with module Meet_env := Meet_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension)
+    (S : Meet_and_join_spec_intf.S
+      with module Flambda_types := Flambda_types
+      with module Join_env := Join_env
+      with module Typing_env_extension := Typing_env_extension)
+  : S_applied
+    with module Flambda_types := Flambda_types
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension
 end
