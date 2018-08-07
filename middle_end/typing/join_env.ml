@@ -23,7 +23,7 @@ module Meet_env = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
-module Make (W : Typing_world.S) = struct
+module Make_types (W : Typing_world.Types) = struct
   open! W
 
   type t = {
@@ -33,6 +33,17 @@ module Make (W : Typing_world.S) = struct
     extension1 : Typing_env_extension.t;
     extension2 : Typing_env_extension.t;
   }
+end
+
+module type World = sig
+  module rec Types : Typing_world.Types
+    with module Join_env = Make_types (Types)
+  include Typing_world.S with module Types := Types
+end
+
+module Make (W : Typing_world.S) = struct
+  include W.Types.Join_env
+  open! W
 
   let create env =
     { env;

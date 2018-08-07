@@ -24,7 +24,7 @@ module Type_equality = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
-module Make (W : Typing_world.S) = struct
+module Make_types (W : Typing_world.Types) = struct
   open! W
 
   type t = {
@@ -33,6 +33,17 @@ module Make (W : Typing_world.S) = struct
     last_equations_rev : (Name.t * Flambda_types.t) list;
     cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
   }
+end
+
+module type World = sig
+  module rec Types : Typing_world.Types
+    with module Typing_env_extension = Make_t (Types)
+  include Typing_world.S with module Types := Types
+end
+
+module Make (W : World) = struct
+  include W.Types.Typing_env_extension
+  open! W
 
   let print_with_cache ~cache ppf
         ({ first_definitions; at_or_after_cut_point; last_equations_rev;

@@ -16,8 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  open T
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Join_env = struct end
+module Meet_env = struct end
+module Type_equality = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
+
+module Make_types (W : Typing_world.Types) = struct
+  open! W
 
   type binding_type = Normal | Was_existential
 
@@ -47,6 +55,17 @@ module Make (T : Typing_world.S) = struct
     next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
     were_existentials : Name.Set.t;
   }
+end
+
+module type World = sig
+  module rec Types : Typing_world.Types
+    with module Typing_env = Make_types (Types)
+  include Typing_world.S with module Types := Types
+end
+
+module Make (W : World) = struct
+  include W.Types.Typing_env
+  open! W
 
   let print_typing_environment_entry0_with_cache ~cache ppf
         (entry : typing_environment_entry0) =
