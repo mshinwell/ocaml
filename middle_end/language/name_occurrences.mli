@@ -71,3 +71,5 @@ val choose_and_remove_amongst_everything : t -> (Name.t * t) option
 val equal : t -> t -> bool
 
 val print : Format.formatter -> t -> unit
+
+val apply_name_permutation : t -> Name_permutation.t -> t

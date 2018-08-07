@@ -16,199 +16,76 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Flambda_type0_internal_intf.S) = struct
-  open T
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Flambda_types = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
 
-  let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
+module Make (W : Typing_world.S) = struct
+  open! W
+
+  let free_names_or_alias free_names_contents
+        (or_alias : _ Flambda_types.or_alias) : Name_occurrences.t =
     match or_alias with
-    | No_alias contents -> free_names_contents contents acc
-    | Type _export_id -> acc
+    | No_alias contents -> free_names_contents contents
+    | Type _export_id -> Name_occurrences.create ()
     | Equals simple ->
-      match simple with
-      | Name name -> Name.Set.add name acc
-      | Const _ | Discriminant _ -> acc
+      Name_occurrences.create_from_set_in_types (Simple.free_names simple)
 
-  let free_names_unknown_or_join free_names_contents (o : _ unknown_or_join)
-        acc =
+  let free_names_unknown_or_join free_names_contents
+        (o : _ Flambda_types.unknown_or_join) : Name_occurrences.t =
     match o with
-    | Unknown -> acc
+    | Unknown -> Name_occurrences.create ()
     | Join contents_list ->
       List.fold_left (fun free_names (contents, perm) ->
-          let names = free_names_contents contents free_names in
-          Name_permutation.apply_name_set perm names)
-        acc
+          let names =
+            Name_occurrences.apply_name_permutation
+              (free_names_contents contents)
+              perm
+          in
+          Name_occurrences.union names free_names)
+        (Name_occurrences.create ())
         contents_list
 
-  let free_names_ty free_names_contents ty acc =
-    free_names_or_alias (free_names_unknown_or_join free_names_contents) ty acc
+  let free_names_ty free_names_contents ty : Name_occurrences.t =
+    free_names_or_alias (free_names_unknown_or_join free_names_contents) ty
 
-  let free_names_of_kind_naked_number (type n) (_ty : n of_kind_naked_number)
-        acc =
-    acc
+  let free_names_of_kind_naked_number (type n)
+        (_ty : n Flambda_types.of_kind_naked_number) =
+    Name_occurrences.create ()
 
-  let rec free_names (t : t) acc =
-    match t.descr with
-    | Value ty -> free_names_ty free_names_of_kind_value ty acc
+  let rec free_names (t : Flambda_types.t) =
+    match t with
+    | Value ty -> free_names_ty free_names_of_kind_value ty
     | Naked_number (ty, _kind) ->
-      free_names_ty free_names_of_kind_naked_number ty acc
-    | Fabricated ty -> free_names_ty free_names_of_kind_fabricated ty acc
+      free_names_ty free_names_of_kind_naked_number ty
+    | Fabricated ty -> free_names_ty free_names_of_kind_fabricated ty
 
-  and free_names_of_kind_value (of_kind : of_kind_value) acc =
+  and free_names_of_kind_value (of_kind : Flambda_types.of_kind_value)
+        : Name_occurrences.t =
     match of_kind with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
-      let acc =
-        match blocks with
-        | Unknown -> acc
-        | Known { known_tags_and_sizes; size_at_least_n; } ->
-          let acc =
-            Tag_and_size.Map.fold (fun _tag_and_size params acc ->
-                free_names_parameters params acc)
-              known_tags_and_sizes
-              acc
-          in
-          Targetint.OCaml.Map.fold (fun _size params acc ->
-              free_names_parameters params acc)
-            size_at_least_n
-            acc
-      in
-      begin match immediates with
-      | Unknown -> acc
-      | Known immediates ->
-        Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
-            free_names_of_env_extension case.env_extension acc)
-          immediates
-          acc
-      end
+      Name_occurrences.union (Blocks.free_names blocks)
+        (Immediates.free_names immediates)
     | Boxed_number (Boxed_float n) ->
-      free_names_ty free_names_of_kind_naked_number n acc
+      free_names_ty free_names_of_kind_naked_number n
     | Boxed_number (Boxed_int32 n) ->
-      free_names_ty free_names_of_kind_naked_number n acc
+      free_names_ty free_names_of_kind_naked_number n
     | Boxed_number (Boxed_int64 n) ->
-      free_names_ty free_names_of_kind_naked_number n acc
+      free_names_ty free_names_of_kind_naked_number n
     | Boxed_number (Boxed_nativeint n) ->
-      free_names_ty free_names_of_kind_naked_number n acc
-    | Closures { ty; by_closure_id; } ->
-      let acc = free_names_dependent_function_type ty acc in
-      Closure_id.Map.fold (fun _closure_id (entry : closures_entry) acc ->
-          free_names_ty free_names_of_kind_fabricated entry.set_of_closures acc)
-        by_closure_id
-        acc
-    | String _ -> acc
+      free_names_ty free_names_of_kind_naked_number n
+    | Closures { by_closure_id; } ->
+      Closures_entry_by_closure_id.free_names by_closure_id
+    | String _ -> Name_occurrences.create ()
 
-  and free_names_parameters ({ params; env_extension; } : parameters) acc =
-    let free_names_params =
-      Name.Set.of_list (
-        List.map (fun param -> Kinded_parameter.name param) params)
-    in
-    Name.Set.union acc
-      (Name.Set.diff (free_names_of_env_extension env_extension Name.Set.empty)
-        free_names_params)
-
-  and free_names_dependent_function_type
-        ({ params; results; } : dependent_function_type) acc =
-    free_names_parameters params
-      (free_names_parameters results acc)
-
-  and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
+  and free_names_of_kind_fabricated
+        (of_kind : Flambda_types.of_kind_fabricated) =
     match of_kind with
-    | Discriminant discriminant_map ->
-      Discriminant.Map.fold
-        (fun _discriminant ({ env_extension; } : discriminant_case) acc ->
-          free_names_of_env_extension env_extension acc)
-        discriminant_map
-        acc
-    | Set_of_closures set ->
-      let acc =
-        Closure_id.Map.fold (fun _closure_id ty_fabricated acc ->
-            free_names_ty free_names_of_kind_fabricated ty_fabricated acc)
-          (extensibility_contents set.closures) acc
-      in
-      Var_within_closure.Map.fold (fun _var ty_value acc ->
-          free_names_ty free_names_of_kind_value ty_value acc)
-        (extensibility_contents set.closure_elements) acc
-    | Closure closure -> free_names_of_closure closure acc
+    | Discriminants discrs -> Discriminants.free_names discrs
+    | Set_of_closures { closures; } -> Closure_ids.free_names closures
 
-  and free_names_of_closure (_closure : closure) acc = acc
-
-  and free_names_of_env_extension
-        { first_definitions; at_or_after_cut_point; last_equations_rev;
-          cse; } acc =
-    (* CR mshinwell: This is copied from typing_env_extension.ml, we need to
-      share this *)
-    let defined_names =
-      let from_first_definitions =
-        Name.Set.of_list (
-          List.map (fun (name, _ty) -> name) first_definitions)
-      in
-      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
-          Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : typing_environment_entry))
-                defined_names ->
-              match entry with
-              | Definition _ -> Name.Set.add name defined_names
-              | Equation _ | CSE _ -> defined_names)
-            by_sublevel
-            defined_names)
-        at_or_after_cut_point
-        from_first_definitions
-    in
-    let free_names_first_definitions =
-      List.fold_left (fun acc (_name, t) -> free_names t acc)
-        acc
-        first_definitions
-    in
-    let free_names_at_or_after_cut_point =
-      Scope_level.Map.fold (fun _level by_sublevel acc ->
-          Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
-              match entry with
-              | Definition t -> free_names t acc
-              | Equation t -> free_names t (Name.Set.add name acc)
-              | CSE prim ->
-                Name.Set.union acc
-                  (Flambda_primitive.With_fixed_value.free_names prim))
-            by_sublevel
-            acc)
-        at_or_after_cut_point
-        acc
-    in
-    let free_names_last_equations_rev =
-      List.fold_left (fun acc (name, t) ->
-          free_names t (Name.Set.add name acc))
-        acc
-        last_equations_rev
-    in
-    let free_names_last_equations_rev_and_cse =
-      Flambda_primitive.With_fixed_value.Map.fold
-        (fun prim (simple : Simple.t) acc ->
-          match simple with
-          | Const _ | Discriminant _ -> acc
-          | Name name ->
-            let acc =
-              Name.Set.union acc
-                (Flambda_primitive.With_fixed_value.free_names prim)
-            in
-            Name.Set.add name acc)
-        cse
-        free_names_last_equations_rev
-    in
-    let free_names =
-      Name.Set.union free_names_first_definitions
-        (Name.Set.union free_names_at_or_after_cut_point
-          free_names_last_equations_rev_and_cse)
-    in
-    Name.Set.diff free_names defined_names
-
-  let free_names_set t =
-    free_names t Name.Set.empty
-
-  let free_names t =
-  let result =
-      Name_occurrences.create_from_set_in_types (free_names_set t)
-  in
-  (*
-  Format.eprintf "Free names %a from: %a\n%!"
-    Name_occurrences.print result print t;
-  *)
-  result
+  let free_names_of_ty_fabricated ty =
+    free_names_ty free_names_of_kind_fabricated ty
 end

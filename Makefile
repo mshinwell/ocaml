@@ -301,7 +301,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/scope_level.cmo \
   middle_end/language/set_of_closures_origin.cmo \
   middle_end/language/var_within_closure.cmo \
-  middle_end/language/name_occurrences.cmo \
   middle_end/typing/unit.cmo \
   middle_end/typing/tag_index.cmo \
   middle_end/typing/closure_id_set.cmo \
@@ -313,6 +312,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/flambda_kind.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
+  middle_end/language/name_occurrences.cmo \
   middle_end/language/freshening.cmo \
   middle_end/typing/contains_names.cmo \
   middle_end/typing/logical_variable_component.cmo \

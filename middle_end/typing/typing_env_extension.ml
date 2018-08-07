@@ -542,4 +542,71 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         last_equations_rev = last_equations_rev';
         cse = cse';
       }
+
+  let free_names
+        { first_definitions; at_or_after_cut_point; last_equations_rev;
+          cse; } =
+    let defined_names =
+      let from_first_definitions =
+        Name.Set.of_list (
+          List.map (fun (name, _ty) -> name) first_definitions)
+      in
+      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
+          Scope_level.Sublevel.Map.fold
+            (fun _sublevel (name, (entry : typing_environment_entry))
+                defined_names ->
+              match entry with
+              | Definition _ -> Name.Set.add name defined_names
+              | Equation _ | CSE _ -> defined_names)
+            by_sublevel
+            defined_names)
+        at_or_after_cut_point
+        from_first_definitions
+    in
+    let free_names_first_definitions =
+      List.fold_left (fun acc (_name, t) -> free_names t acc)
+        acc
+        first_definitions
+    in
+    let free_names_at_or_after_cut_point =
+      Scope_level.Map.fold (fun _level by_sublevel acc ->
+          Scope_level.Sublevel.Map.fold
+            (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
+              match entry with
+              | Definition t -> free_names t acc
+              | Equation t -> free_names t (Name.Set.add name acc)
+              | CSE prim ->
+                Name.Set.union acc
+                  (Flambda_primitive.With_fixed_value.free_names prim))
+            by_sublevel
+            acc)
+        at_or_after_cut_point
+        acc
+    in
+    let free_names_last_equations_rev =
+      List.fold_left (fun acc (name, t) ->
+          free_names t (Name.Set.add name acc))
+        acc
+        last_equations_rev
+    in
+    let free_names_last_equations_rev_and_cse =
+      Flambda_primitive.With_fixed_value.Map.fold
+        (fun prim (simple : Simple.t) acc ->
+          match simple with
+          | Const _ | Discriminant _ -> acc
+          | Name name ->
+            let acc =
+              Name.Set.union acc
+                (Flambda_primitive.With_fixed_value.free_names prim)
+            in
+            Name.Set.add name acc)
+        cse
+        free_names_last_equations_rev
+    in
+    let free_names =
+      Name.Set.union free_names_first_definitions
+        (Name.Set.union free_names_at_or_after_cut_point
+          free_names_last_equations_rev_and_cse)
+    in
+    Name.Set.diff free_names defined_names
 end

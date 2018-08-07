@@ -179,3 +179,9 @@ let choose_and_remove_amongst_everything t =
         in
         Some (name, t)
       | None -> None
+
+let apply_name_permutation { in_terms; in_types; in_debug_only; } perm =
+  { in_terms = Name_permutation.apply_name_set perm in_terms;
+    in_types = Name_permutation.apply_name_set perm in_types;
+    in_debug_only = Name_permutation.apply_name_set perm in_debug_only;
+  }

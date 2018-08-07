@@ -1848,11 +1848,14 @@ middle_end/language/name.cmx : middle_end/language/variable.cmx \
 middle_end/language/name.cmi : middle_end/language/variable.cmi \
     middle_end/language/symbol.cmi middle_end/typing/logical_variable.cmi \
     middle_end/language/compilation_unit.cmi
-middle_end/language/name_occurrences.cmo : middle_end/language/name.cmi \
+middle_end/language/name_occurrences.cmo : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     utils/misc.cmi middle_end/language/name_occurrences.cmi
-middle_end/language/name_occurrences.cmx : middle_end/language/name.cmx \
+middle_end/language/name_occurrences.cmx : \
+    middle_end/language/name_permutation.cmx middle_end/language/name.cmx \
     utils/misc.cmx middle_end/language/name_occurrences.cmi
-middle_end/language/name_occurrences.cmi : middle_end/language/name.cmi
+middle_end/language/name_occurrences.cmi : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi
 middle_end/language/name_permutation.cmo : middle_end/language/variable.cmi \
     middle_end/language/trap_id.cmi middle_end/language/symbol.cmi \
     middle_end/language/simple.cmi middle_end/language/name.cmi \
@@ -3385,11 +3388,14 @@ middle_end/language/name.cmx : middle_end/language/variable.cmx \
 middle_end/language/name.cmi : middle_end/language/variable.cmi \
     middle_end/language/symbol.cmi middle_end/typing/logical_variable.cmi \
     middle_end/language/compilation_unit.cmi
-middle_end/language/name_occurrences.cmo : middle_end/language/name.cmi \
+middle_end/language/name_occurrences.cmo : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     utils/misc.cmi middle_end/language/name_occurrences.cmi
-middle_end/language/name_occurrences.cmx : middle_end/language/name.cmx \
+middle_end/language/name_occurrences.cmx : \
+    middle_end/language/name_permutation.cmx middle_end/language/name.cmx \
     utils/misc.cmx middle_end/language/name_occurrences.cmi
-middle_end/language/name_occurrences.cmi : middle_end/language/name.cmi
+middle_end/language/name_occurrences.cmi : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi
 middle_end/language/name_permutation.cmo : middle_end/language/variable.cmi \
     middle_end/language/trap_id.cmi middle_end/language/symbol.cmi \
     middle_end/language/simple.cmi middle_end/language/name.cmi \
@@ -4382,27 +4388,17 @@ middle_end/typing/type_equality_intf.cmo : \
     middle_end/typing/type_equality_env.cmi
 middle_end/typing/type_equality_intf.cmx : \
     middle_end/typing/type_equality_env.cmx
-middle_end/typing/type_free_names.cmo : \
-    middle_end/language/var_within_closure.cmi utils/targetint.cmi \
-    middle_end/typing/tag_and_size.cmi middle_end/language/simple.cmi \
-    middle_end/language/scope_level.cmi \
-    middle_end/language/name_permutation.cmi \
-    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
-    middle_end/language/kinded_parameter.cmi \
-    middle_end/language/immediate.cmi \
-    middle_end/language/flambda_primitive.cmi \
-    middle_end/language/discriminant.cmi middle_end/language/closure_id.cmi \
+middle_end/typing/type_free_names.cmo : middle_end/typing/typing_world.cmo \
+    middle_end/language/simple.cmi middle_end/language/name_occurrences.cmi \
+    middle_end/typing/immediates.cmi middle_end/typing/discriminants.cmi \
+    middle_end/typing/closures_entry_by_closure_id.cmi \
+    middle_end/typing/closure_ids.cmi middle_end/typing/blocks.cmi \
     middle_end/typing/type_free_names.cmi
-middle_end/typing/type_free_names.cmx : \
-    middle_end/language/var_within_closure.cmx utils/targetint.cmx \
-    middle_end/typing/tag_and_size.cmx middle_end/language/simple.cmx \
-    middle_end/language/scope_level.cmx \
-    middle_end/language/name_permutation.cmx \
-    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
-    middle_end/language/kinded_parameter.cmx \
-    middle_end/language/immediate.cmx \
-    middle_end/language/flambda_primitive.cmx \
-    middle_end/language/discriminant.cmx middle_end/language/closure_id.cmx \
+middle_end/typing/type_free_names.cmx : middle_end/typing/typing_world.cmx \
+    middle_end/language/simple.cmx middle_end/language/name_occurrences.cmx \
+    middle_end/typing/immediates.cmx middle_end/typing/discriminants.cmx \
+    middle_end/typing/closures_entry_by_closure_id.cmx \
+    middle_end/typing/closure_ids.cmx middle_end/typing/blocks.cmx \
     middle_end/typing/type_free_names.cmi
 middle_end/typing/type_free_names.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/type_free_names_intf.cmo
