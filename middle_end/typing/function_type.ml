@@ -102,6 +102,8 @@ module Make (W : Typing_world.S) = struct
     | Bottom, (Product _ | Bottom | Unknown)
     | (Product _ | Unknown), Bottom -> Bottom
 
+  let meet_fresh env t1 t2 = meet env Fresh t1 t2
+
   let join env fresh t1 t2 =
     match t1, t2 with
     | Product rp1, Product rp2 -> Product (RP.join env fresh rp1 rp2)
@@ -110,6 +112,8 @@ module Make (W : Typing_world.S) = struct
     | Bottom, Bottom -> Bottom
     | Unknown, (Product _ | Bottom | Unknown)
     | (Product _ | Bottom), Unknown -> Unknown
+
+  let join_fresh env t1 t2 = join env Fresh t1 t2
 
   let bound_names t =
     match t with

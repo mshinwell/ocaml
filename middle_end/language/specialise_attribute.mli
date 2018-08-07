@@ -22,3 +22,5 @@ type t =
   | Default_specialise
 
 val print : Format.formatter -> t -> unit
+
+val equal : t -> t -> bool

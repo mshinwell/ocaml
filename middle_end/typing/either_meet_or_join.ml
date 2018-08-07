@@ -35,6 +35,13 @@ module For_meet (W : Typing_world.S) = struct
   let unknown_is_absorbing = false
 
   (* CR mshinwell: Write functors to generate these patterns *)
+  module String_info = struct
+    module Set = struct
+      type t = String_info.Set.t
+      let union_or_inter = String_info.Set.inter
+    end
+  end
+
   module Immediate = struct
     module Set = struct
       type t = Immediate.Set.t
@@ -163,6 +170,13 @@ module For_join (W : Typing_world.S) = struct
 
   let unknown_is_identity = false
   let unknown_is_absorbing = true
+
+  module String_info = struct
+    module Set = struct
+      type t = String_info.Set.t
+      let union_or_inter = String_info.Set.union
+    end
+  end
 
   module Immediate = struct
     module Set = struct

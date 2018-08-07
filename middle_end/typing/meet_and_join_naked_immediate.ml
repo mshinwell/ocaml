@@ -37,25 +37,25 @@ module Make (W : Typing_world.S) = struct
       with module Typing_env = Typing_env
       with module Typing_env_extension = Typing_env_extension) =
   struct
-    type of_kind_foo = Targetint.Set.t Flambda_types.of_kind_naked_number
+    type of_kind_foo = Immediate.Set.t Flambda_types.of_kind_naked_number
 
-    let kind = K.naked_nativeint ()
+    let kind = K.naked_immediate ()
 
-    let to_type ty : Flambda_types.t = Naked_number (ty, Naked_nativeint)
+    let to_type ty : Flambda_types.t = Naked_number (ty, Naked_immediate)
 
-    let force_to_kind = Flambda_type0_core.force_to_kind_naked_nativeint
-    let print_ty = Type_printers.print_ty_naked_nativeint_with_cache
+    let force_to_kind = Flambda_type0_core.force_to_kind_naked_immediate
+    let print_ty = Type_printers.print_ty_naked_immediate_with_cache
 
     let meet_or_join_of_kind_foo _meet_or_join_env
-          (of_kind1 : Targetint.Set.t Flambda_types.of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t Flambda_types.of_kind_naked_number)
-          : (Targetint.Set.t Flambda_types.of_kind_naked_number
+          (of_kind1 : Immediate.Set.t Flambda_types.of_kind_naked_number)
+          (of_kind2 : Immediate.Set.t Flambda_types.of_kind_naked_number)
+          : (Immediate.Set.t Flambda_types.of_kind_naked_number
               * Typing_env_extension.t) Or_absorbing.t =
       match of_kind1, of_kind2 with
-      | Nativeint fs1, Nativeint fs2 ->
-        let fs = E.Targetint.Set.union_or_inter fs1 fs2 in
-        if Targetint.Set.is_empty fs then Absorbing
-        else Ok (Nativeint fs, Typing_env_extension.empty)
+      | Immediate fs1, Immediate fs2 ->
+        let fs = E.Immediate.Set.union_or_inter fs1 fs2 in
+        if Immediate.Set.is_empty fs then Absorbing
+        else Ok (Immediate fs, Typing_env_extension.empty)
       | _, _ -> Absorbing
   end
 end

@@ -71,6 +71,8 @@ module type S_applied = sig
   val components : t -> Component.t list list
 
   (** Greatest lower bound of two parameter bindings. *)
+  (* CR mshinwell: I'm not sure [fresh_component_semantics] is needed now
+     since we shouldn't be meeting relational products that occur in terms. *)
   val meet
      : Meet_env.t
     -> fresh_component_semantics

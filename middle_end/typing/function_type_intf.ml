@@ -62,10 +62,22 @@ module type S = sig
     -> t
     -> (t * Typing_env_extension.t) Or_bottom.t
 
+  val meet_fresh
+     : Meet_env.t
+    -> t
+    -> t
+    -> (t * Typing_env_extension.t) Or_bottom.t
+
   (** Least upper bound of two function types. *)
   val join
      : Join_env.t
     -> Relational_product_intf.fresh_component_semantics
+    -> t
+    -> t
+    -> t
+
+  val join_fresh
+     : Join_env.t
     -> t
     -> t
     -> t

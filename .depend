@@ -3629,30 +3629,34 @@ middle_end/typing/discriminants.cmi : middle_end/typing/typing_world.cmo \
 middle_end/typing/either_meet_or_join.cmo : \
     middle_end/language/var_within_closure.cmi \
     middle_end/typing/typing_world.cmo utils/targetint.cmi \
-    middle_end/language/tag.cmi middle_end/typing/or_bottom.cmi \
-    utils/numbers.cmi middle_end/language/immediate.cmi \
-    middle_end/language/discriminant.cmi middle_end/language/closure_id.cmi \
+    middle_end/language/tag.cmi middle_end/typing/string_info.cmi \
+    middle_end/typing/or_bottom.cmi utils/numbers.cmi \
+    middle_end/language/immediate.cmi middle_end/language/discriminant.cmi \
+    middle_end/language/closure_id.cmi \
     middle_end/typing/either_meet_or_join.cmi
 middle_end/typing/either_meet_or_join.cmx : \
     middle_end/language/var_within_closure.cmx \
     middle_end/typing/typing_world.cmx utils/targetint.cmx \
-    middle_end/language/tag.cmx middle_end/typing/or_bottom.cmx \
-    utils/numbers.cmx middle_end/language/immediate.cmx \
-    middle_end/language/discriminant.cmx middle_end/language/closure_id.cmx \
+    middle_end/language/tag.cmx middle_end/typing/string_info.cmx \
+    middle_end/typing/or_bottom.cmx utils/numbers.cmx \
+    middle_end/language/immediate.cmx middle_end/language/discriminant.cmx \
+    middle_end/language/closure_id.cmx \
     middle_end/typing/either_meet_or_join.cmi
 middle_end/typing/either_meet_or_join.cmi : \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/either_meet_or_join_intf.cmo : \
     middle_end/language/var_within_closure.cmi utils/targetint.cmi \
-    middle_end/language/tag.cmi middle_end/typing/or_bottom.cmi \
-    utils/numbers.cmi middle_end/language/immediate.cmi \
-    middle_end/language/discriminant.cmi middle_end/language/closure_id.cmi
+    middle_end/language/tag.cmi middle_end/typing/string_info.cmi \
+    middle_end/typing/or_bottom.cmi utils/numbers.cmi \
+    middle_end/language/immediate.cmi middle_end/language/discriminant.cmi \
+    middle_end/language/closure_id.cmi
 middle_end/typing/either_meet_or_join_intf.cmx : \
     middle_end/language/var_within_closure.cmx utils/targetint.cmx \
-    middle_end/language/tag.cmx middle_end/typing/or_bottom.cmx \
-    utils/numbers.cmx middle_end/language/immediate.cmx \
-    middle_end/language/discriminant.cmx middle_end/language/closure_id.cmx
+    middle_end/language/tag.cmx middle_end/typing/string_info.cmx \
+    middle_end/typing/or_bottom.cmx utils/numbers.cmx \
+    middle_end/language/immediate.cmx middle_end/language/discriminant.cmx \
+    middle_end/language/closure_id.cmx
 middle_end/typing/flambda_arity.cmo : utils/misc.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi
 middle_end/typing/flambda_arity.cmx : utils/misc.cmx \
@@ -4137,15 +4141,18 @@ middle_end/typing/meet_and_join_spec_intf.cmo : utils/printing_cache.cmi \
 middle_end/typing/meet_and_join_spec_intf.cmx : utils/printing_cache.cmx \
     middle_end/typing/or_absorbing.cmx middle_end/typing/flambda_kind.cmx
 middle_end/typing/meet_and_join_value.cmo : middle_end/language/variable.cmi \
-    middle_end/typing/typing_world.cmo middle_end/typing/string_info.cmi \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \
     middle_end/typing/or_bottom.cmi middle_end/typing/or_absorbing.cmi \
     middle_end/language/name_occurrences.cmi utils/misc.cmi \
-    middle_end/typing/meet_env.cmi \
     middle_end/typing/meet_and_join_naked_nativeint.cmo \
     middle_end/typing/meet_and_join_naked_int64.cmo \
     middle_end/typing/meet_and_join_naked_int32.cmo \
+    middle_end/typing/meet_and_join_naked_immediate.cmo \
     middle_end/typing/meet_and_join_naked_float.cmo \
+    middle_end/typing/meet_and_join_fabricated.cmi \
+    middle_end/typing/make_meet_or_join.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/language/inline_attribute.cmi middle_end/typing/immediates.cmi \
     middle_end/typing/function_type.cmi middle_end/typing/flambda_kind.cmi \
@@ -4158,15 +4165,18 @@ middle_end/typing/meet_and_join_value.cmo : middle_end/language/variable.cmi \
     middle_end/typing/closure_elements.cmi middle_end/typing/blocks.cmi \
     middle_end/typing/meet_and_join_value.cmi
 middle_end/typing/meet_and_join_value.cmx : middle_end/language/variable.cmx \
-    middle_end/typing/typing_world.cmx middle_end/typing/string_info.cmx \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/string_info.cmx \
     middle_end/language/specialise_attribute.cmx \
     middle_end/typing/or_bottom.cmx middle_end/typing/or_absorbing.cmx \
     middle_end/language/name_occurrences.cmx utils/misc.cmx \
-    middle_end/typing/meet_env.cmx \
     middle_end/typing/meet_and_join_naked_nativeint.cmx \
     middle_end/typing/meet_and_join_naked_int64.cmx \
     middle_end/typing/meet_and_join_naked_int32.cmx \
+    middle_end/typing/meet_and_join_naked_immediate.cmx \
     middle_end/typing/meet_and_join_naked_float.cmx \
+    middle_end/typing/meet_and_join_fabricated.cmx \
+    middle_end/typing/make_meet_or_join.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/language/inline_attribute.cmx middle_end/typing/immediates.cmx \
     middle_end/typing/function_type.cmx middle_end/typing/flambda_kind.cmx \

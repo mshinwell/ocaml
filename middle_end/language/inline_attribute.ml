@@ -29,3 +29,6 @@ let print ppf t =
   | Never_inline -> fprintf ppf "Never_inline"
   | Unroll n -> fprintf ppf "@[(Unroll %d)@]" n
   | Default_inline -> fprintf ppf "Default_inline"
+
+let equal t1 t2 =
+  t1 == t2

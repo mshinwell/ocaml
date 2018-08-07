@@ -27,3 +27,6 @@ let print ppf t =
   | Always_specialise -> fprintf ppf "Always_specialise"
   | Never_specialise -> fprintf ppf "Never_specialise"
   | Default_specialise -> fprintf ppf "Default_specialise"
+
+let equal t1 t2 =
+  t1 == t2

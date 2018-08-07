@@ -31,6 +31,14 @@ module type S = sig
   val unknown_is_identity : bool
   val unknown_is_absorbing : bool
 
+  module String_info : sig
+    module Set : sig
+      type t = String_info.Set.t
+
+      val union_or_inter : t -> t -> t
+    end
+  end
+
   module Immediate : sig
     module Set : sig
       type t = Immediate.Set.t
