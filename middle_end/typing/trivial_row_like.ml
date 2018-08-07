@@ -27,16 +27,7 @@ module Typing_env_extension = struct end
 module Make (W : Typing_world.S) = struct
   open! W
 
-  module Make (Thing_without_names0 : Hashtbl.With_map) = struct
-    module Thing_without_names = struct
-      include Thing_without_names0
-
-      let bound_names _ = Name_occurrences.create ()
-      let free_names _ = Name_occurrences.create ()
-      let apply_name_permutation t _ = t
-      let freshen t _ = t
-    end
-
+  module Make (Thing_without_names : Hashtbl.With_map) = struct
     module TEE = struct
       include Typing_env_extension
 
@@ -79,6 +70,7 @@ module Make (W : Typing_world.S) = struct
       RL.create_at_least_multiple Unit.Map.empty
 
     let print = RL.print
+    let equal = RL.equal
 
     let meet env t1 t2 = RL.meet env Fresh t1 t2
     let join env t1 t2 = RL.join env Fresh t1 t2

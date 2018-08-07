@@ -82,9 +82,9 @@ module Make (W : Typing_world.S) = struct
     | Product rp -> RP.print_with_cache ~cache ppf rp
     | Bottom -> Format.pp_print_string ppf "Bottom"
 
-  let equal t1 t2 =
+  let equal env t1 t2 =
     match t1, t2 with
-    | Product rp1, Product rp2 -> RP.equal rp1 rp2
+    | Product rp1, Product rp2 -> RP.equal env rp1 rp2
     | Unknown, Unknown -> true
     | Bottom, Bottom -> true
     | (Product _ | Unknown | Bottom), _ -> false

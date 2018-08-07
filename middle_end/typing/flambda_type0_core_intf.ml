@@ -81,6 +81,8 @@ module type S = sig
       -> Typing_env_extension.t
       -> t
 
+    val equal : Type_equality_env.t -> t -> t -> bool
+
     val meet
        : Meet_env.t
       -> Relational_product_intf.fresh_component_semantics
@@ -114,6 +116,8 @@ module type S = sig
       -> Meet_env.t
       -> Typing_env_extension.t
       -> t
+
+    val equal : Type_equality_env.t -> t -> t -> bool
 
     val meet
        : Meet_env.t

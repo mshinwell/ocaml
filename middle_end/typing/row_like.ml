@@ -33,12 +33,10 @@ module Make (W : Typing_world.S) = struct
     (Tag : sig
       type t
       include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
     end)
     (Index : sig
       type t
       include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
     end)
     (Maps_to : sig
       type t
@@ -50,6 +48,8 @@ module Make (W : Typing_world.S) = struct
         -> Format.formatter
         -> t
         -> unit
+
+      val equal : Type_equality_env.t -> t -> t -> bool
 
       val add_or_meet_equations
          : t
@@ -85,17 +85,6 @@ module Make (W : Typing_world.S) = struct
 
       let create tag index = tag, index
       let index (_tag, index) = index
-
-      let bound_names _ = Misc.fatal_error "try not to need this"
-
-      let free_names (tag, index) =
-        Name_occurrences.union (Tag.free_names tag) (Index.free_names index)
-
-      let apply_name_permutation (tag, index) perm =
-        tag, Index.apply_name_permutation index perm
-
-      let freshen t freshening =
-        apply_name_permutation t (Freshening.name_permutation freshening)
     end
 
     (* CR mshinwell: Think about what means bottom and what needs unknown for
@@ -139,12 +128,16 @@ module Make (W : Typing_world.S) = struct
         at_least;
       }
 
+    let equal env
+          { known = known1; at_least = at_least1; }
+          { known = known2; at_least = at_least2; } =
+      Tag_and_index.Map.equal (MT.equal env) known1 known2
+        && Index.Map.equal (MT.equal env) at_least1 at_least2
+
     let apply_name_permutation { known; at_least; } perm =
       let known =
+        (* CR mshinwell: Can just use [Tag_and_index.Map.map] now. *)
         Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
-            let tag_and_index =
-              Tag_and_index.apply_name_permutation tag_and_index perm
-            in
             let maps_to = MT.apply_name_permutation maps_to perm in
             Tag_and_index.Map.add tag_and_index maps_to known)
           known
@@ -152,7 +145,6 @@ module Make (W : Typing_world.S) = struct
       in
       let at_least =
         Index.Map.fold (fun index maps_to at_least ->
-            let index = Index.apply_name_permutation index perm in
             let maps_to = MT.apply_name_permutation maps_to perm in
             Index.Map.add index maps_to at_least)
           at_least
@@ -286,18 +278,16 @@ module Make (W : Typing_world.S) = struct
     let free_names t =
       let { known; at_least; } = t in
       let from_known =
-        Tag_and_index.Map.fold (fun tag_and_index maps_to free_names ->
+        Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
             Name_occurrences.union free_names
-              (Name_occurrences.union (Tag_and_index.free_names tag_and_index)
-                (Maps_to.free_names maps_to)))
+              (Maps_to.free_names maps_to))
           known
           (Name_occurrences.create ())
       in
       let from_at_least =
-        Index.Map.fold (fun index maps_to free_names ->
+        Index.Map.fold (fun _index maps_to free_names ->
             Name_occurrences.union free_names
-              (Name_occurrences.union (Index.free_names index)
-                (Maps_to.free_names maps_to)))
+              (Maps_to.free_names maps_to))
           at_least
           (Name_occurrences.create ())
       in

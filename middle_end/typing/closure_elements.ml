@@ -71,6 +71,7 @@ module Make (W : Typing_world.S) = struct
   let meet env t1 t2 = RP.meet env Fresh t1 t2
   let join env t1 t2 = RP.join env Fresh t1 t2
 
+  let equal = RP.equal
   let free_names = RP.free_names
   let bound_names = RP.bound_names
   let apply_name_permutation = RP.apply_name_permutation

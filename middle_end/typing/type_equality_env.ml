@@ -16,42 +16,35 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+type t = {
+  perm_left : Name_permutation.t;
+  perm_right : Name_permutation.t;
+}
 
-  type t
+let print ppf { perm_left; perm_right; } =
+  Format.fprintf ppf
+    "@[<hov 1>(\
+      @[<hov 1>(perm_left@ %a)@]@ \
+      @[<hov 1>(perm_right@ %a)@])@]"
+    Name_permutation.print perm_left
+    Name_permutation.print perm_right
 
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+let create ~perm_left ~perm_right =
+  { perm_left;
+    perm_right;
+  }
 
-  val create : Flambda_type0_core.t Closure_id.Map.t -> t
+let empty =
+  create ~perm_left:(Name_permutation.create ())
+    ~perm_right:(Name_permutation.create ())
 
-  val create_bottom : unit -> t
+let perm_left t = t.perm_left
+let perm_right t = t.perm_right
 
-  val equal : Type_equality_env.t -> t -> t -> bool
+let shortcut_precondition t =
+  t.perm_left == t.perm_right
 
-  (** Greatest lower bound of two values of type [t]. *)
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
-
-  (** Least upper bound of two values of type [t]. *)
-  val join
-     : Join_env.t
-    -> t
-    -> t
-    -> t
-
-  val add_or_meet_equations
-     : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
-    -> t
-
-  include Contains_names.S with type t := t
-end
+let compose_name_permutations t ~perm_left ~perm_right =
+  { perm_left = Name_permutation.compose t.perm_left perm_left;
+    perm_right = Name_permutation.compose t.perm_right perm_right;
+  }

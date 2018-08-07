@@ -28,16 +28,6 @@ module Typing_env_extension = struct end
 module Make (W : Typing_world.S) = struct
   open! W
 
-  module Closure_id = struct
-    include Closure_id
-
-    let free_names _t = Name_occurrences.create ()
-    let bound_names _t = Name_occurrences.create ()
-
-    let apply_name_permutation t _perm = t
-    let freshen t _freshening = t
-  end
-
   (* CR mshinwell: Share with closure_elements.ml *)
   module Var_within_closure_set = struct
     type t = Var_within_closure.Set.t
@@ -46,12 +36,6 @@ module Make (W : Typing_world.S) = struct
       include Var_within_closure.Set
       let hash = Hashtbl.hash
     end)
-
-    let free_names _t = Name_occurrences.create ()
-    let bound_names _t = Name_occurrences.create ()
-
-    let apply_name_permutation t _perm = t
-    let freshen t _freshening = t
   end
 
   module RL =
@@ -77,6 +61,7 @@ module Make (W : Typing_world.S) = struct
 
   let join env t1 t2 = RL.join env Fresh t1 t2
 
+  let equal = RL.equal
   let free_names = RL.free_names
   let bound_names = RL.bound_names
   let apply_name_permutation = RL.apply_name_permutation

@@ -19,7 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
+  module Flambda_types : sig type t end
   module Meet_env : sig type t end
   module Typing_env : sig type t end
   module Join_env : sig type t end
@@ -41,7 +41,7 @@ module type S = sig
       Note that this doesn't do anything fancy such as making a canonical
       form of environment from the extensions; it's just a structural
       comparison. *)
-  val equal : t -> t -> bool
+  val equal : Type_equality_env.t -> t -> t -> bool
 
   (** A sound but not complete equality function which is much faster than
       [equal]. *)
@@ -54,12 +54,12 @@ module type S = sig
 
   (** Add a definition of an existentially-bound name prior to all
       other entries in the given extension. *)
-  val add_definition_at_beginning : t -> Name.t -> Flambda_type0_core.t -> t
+  val add_definition_at_beginning : t -> Name.t -> Flambda_types.t -> t
 
   (** Add an equation (on a name that is either existentially bound in the
       given extension, or free in the extension) after all other entries in
       the given extension. *)
-  val add_equation : t -> Name.t -> Flambda_type0_core.t -> t
+  val add_equation : t -> Name.t -> Flambda_types.t -> t
 
   val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
@@ -83,7 +83,7 @@ module type S = sig
      : t
     -> Typing_env.t
     -> Typing_env.t
-    -> Flambda_type0_core.t list
+    -> Flambda_types.t list
     -> t
 
   (** [diff t env] computes the environment extension whose bindings are

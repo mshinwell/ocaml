@@ -19,10 +19,8 @@
 (** The representation of function (and continuation) parameters and
     equations upon them in the term language. *)
 
-module Make (T : Typing_world.S) :
+module Make (W : Typing_world.S) :
   Parameters_intf.S
-    with module Flambda_type0_core := T.Flambda_type0_core
-    with module Join_env := T.Join_env
-    with module Relational_product := T.Relational_product
-    with module Typing_env := T.Typing_env
-    with module Typing_env_extension := T.Typing_env_extension
+    with module Flambda_type0_core := W.Flambda_type0_core
+    with module Join_env := W.Join_env
+    with module Typing_env := W.Typing_env

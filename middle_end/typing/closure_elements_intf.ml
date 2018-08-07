@@ -31,6 +31,8 @@ module type S = sig
 
   val create_bottom : unit -> t
 
+  val equal : Type_equality_env.t -> t -> t -> bool
+
   (** Greatest lower bound of two values of type [t]. *)
   val meet
      : Meet_env.t

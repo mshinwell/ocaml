@@ -51,7 +51,7 @@ module type S = sig
   val create_bottom : unit -> t
 
   (** A conservative approximation to equality. *)
-  val equal : t -> t -> bool
+  val equal : Type_equality_env.t -> t -> t -> bool
 
   (** Greatest lower bound of two function types.
       [fresh_component_semantics] is as for [Relational_product.meet]. *)

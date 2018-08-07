@@ -34,7 +34,7 @@ module Make (W : Typing_world.S) = struct
     let bottom () = create_bottom ~arity:1
   end
 
-  module RL = Row_like.Make (Tag_index) (Int_index) (RP)
+  module RL = Row_like.Make (Tag) (Targetint.OCaml) (RP)
 
   type t = RL.t
 
@@ -77,6 +77,8 @@ module Make (W : Typing_world.S) = struct
 
   let invariant _t = () (* CR mshinwell: RL.invariant *)
   let print_with_cache = RL.print
+
+  let equal = RL.equal
 
   let meet env t1 t2 : _ Or_bottom.t =
     match RL.meet env Fresh t1 t2 with

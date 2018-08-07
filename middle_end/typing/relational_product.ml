@@ -57,7 +57,7 @@ module Make
     (Component : sig
       include Name_like
       val create : Flambda_kind.t -> t
-      val equal : t -> t -> bool
+      val equal : Type_equality_env.t -> t -> t -> bool
       val name : t -> Name.t
       val kind : t -> Flambda_kind.t
     end) =
@@ -101,16 +101,16 @@ module Make
           (Index.Map.print Component.print) components_by_index
           (Typing_env_extension.print_with_cache ~cache) env_extension
 
-      let equal
+      let equal env
             { components_by_index = components_by_index1;
               env_extension = env_extension1;
             }
             { components_by_index = components_by_index2;
               env_extension = env_extension2;
             } =
-        Index.Map.equal Component.equal
+        Index.Map.equal (Component.equal env)
           components_by_index1 components_by_index2
-        && Typing_env_extension.equal env_extension1 env_extension2
+        && Typing_env_extension.equal env env_extension1 env_extension2
 
       let indexes t = Index.Map.keys t.components_by_index
 
@@ -174,7 +174,9 @@ module Make
               match Index.Map.find index t.components_by_index with
               | exception Not_found -> env_extension
               | stale_component ->
-                if Component.equal component stale_component then env_extension
+                let env = Type_equality_env.empty in
+                if Component.equal env component stale_component
+                then env_extension
                 else
                   let stale_name = Component.name stale_component in
                   let name_ty =
@@ -324,8 +326,8 @@ module Make
     let create_bottom ~arity =
       List.init arity (fun _ -> IP.bottom ())
 
-    let equal t1 t2 =
-      Misc.Stdlib.List.equal IP.equal t1 t2
+    let equal env t1 t2 =
+      Misc.Stdlib.List.equal (IP.equal env) t1 t2
 
     let components t =
       List.map (fun ip -> IP.components ip) t

@@ -273,7 +273,7 @@ module type S = sig
     with module Meet_env := Meet_env
     with module Typing_env_extension := Typing_env_extension)
   and Typing_env_extension : (Typing_env_extension_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
+    with module Flambda_types := Flambda_types
     with module Typing_env := Typing_env
     with module Join_env := Join_env
     with module Meet_env := Meet_env)

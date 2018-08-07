@@ -788,6 +788,8 @@ module Make (W : Typing_world.S) = struct
           @[<hov 1>(by_closure_id@ %a)@])@]"
         (Types_by_closure_id.print ~cache) by_closure_id
 
+    let equal = Type_equality.equal_set_of_closures_entry
+
     let add_or_meet_equations { by_closure_id; } env equations =
       let by_closure_id =
         Types_by_closure_id.add_or_meet_equations by_closure_id env equations
@@ -842,6 +844,8 @@ module Make (W : Typing_world.S) = struct
     let add_or_meet_equations t _env _equations =
       (* CR mshinwell: Think about what should happen here. *)
       t
+
+    let equal = Type_equality.equal_closures_entry
 
     let meet env _fresh t1 t2 =
       Both_meet_and_join.meet_closures_entry env t1 t2

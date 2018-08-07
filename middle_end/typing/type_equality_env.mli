@@ -14,44 +14,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR mshinwell: We could call this [Type_traversal_env] and then
+   introduce it as a component in [Meet_env], replacing the existing
+   permutation-handling code there. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+type t
 
-  type t
+val create
+   : perm_left:Name_permutation.t
+  -> perm_right:Name_permutation.t
+  -> t
 
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+val empty : t
 
-  val create : Flambda_type0_core.t Closure_id.Map.t -> t
+val print : Format.formatter -> t -> unit
 
-  val create_bottom : unit -> t
+val perm_left : t -> Name_permutation.t
 
-  val equal : Type_equality_env.t -> t -> t -> bool
+val perm_right : t -> Name_permutation.t
 
-  (** Greatest lower bound of two values of type [t]. *)
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+val shortcut_precondition : t -> bool
 
-  (** Least upper bound of two values of type [t]. *)
-  val join
-     : Join_env.t
-    -> t
-    -> t
-    -> t
-
-  val add_or_meet_equations
-     : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
-    -> t
-
-  include Contains_names.S with type t := t
-end
+val compose_name_permutations
+   : t
+  -> perm_left:Name_permutation.t
+  -> perm_right:Name_permutation.t
+  -> t

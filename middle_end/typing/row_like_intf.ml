@@ -26,10 +26,10 @@ module type S_applied = sig
   module Index : Hashtbl.With_map
 
   module Tag_and_index : sig
+    (** These values will not contain any names. *)
     type t = Tag.t * Index.t
 
     include Map.With_set with type t := t
-    include Contains_names.S with type t := t
   end
 
   module Maps_to : sig type t end
@@ -49,6 +49,8 @@ module type S_applied = sig
   val create_at_least_multiple : Maps_to.t Index.Map.t -> t
 
   val is_bottom : t -> bool
+
+  val equal : Type_equality_env.t -> t -> t -> bool
 
   (** The [Maps_to] value which [meet] returns contains the join of all
       [Maps_to] values in the range of the row-like structure after the meet
@@ -78,14 +80,14 @@ module type S = sig
 
   module Make
     (Tag : sig
+      (** These values may not contain names. *)
       type t
       include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
     end)
     (Index : sig
+      (** These values may not contain names. *)
       type t
       include Hashtbl.With_map with type t := t
-      include Contains_names.S with type t := t
     end)
     (Maps_to : sig
       type t
@@ -97,6 +99,8 @@ module type S = sig
         -> Format.formatter
         -> t
         -> unit
+
+      val equal : Type_equality_env.t -> t -> t -> bool
 
       val add_or_meet_equations
          : t

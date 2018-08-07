@@ -39,6 +39,8 @@ module type S = sig
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+  val equal : Type_equality_env.t -> t -> t -> bool
+
   val meet
      : Meet_env.t
     -> t

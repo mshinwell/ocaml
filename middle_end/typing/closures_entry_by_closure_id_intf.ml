@@ -39,7 +39,6 @@ module type S = sig
     type t = Closure_id.t * Var_within_closure_set.t
 
     include Map.With_set with type t := t
-    include Contains_names.S with type t := t
   end
 
   type t
@@ -58,6 +57,8 @@ module type S = sig
   val create_at_least_multiple
      : Flambda_type0_core.Closures_entry.t Var_within_closure_set.Map.t
     -> t
+
+  val equal : Type_equality_env.t -> t -> t -> bool
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet

@@ -69,16 +69,10 @@ module Make (W : Typing_world.S) = struct
   let meet env t1 t2 = RP.meet env Fresh t1 t2
   let join env t1 t2 = RP.join env Fresh t1 t2
 
+  let equal = RP.equal
   let bound_names = RP.bound_names
   let free_names = RP.free_names
   let apply_name_permutation = RP.apply_name_permutation
   let freshen = RP.freshen
   let add_or_meet_equations = RP.add_or_meet_equations
-
-  module Flambda_type0_core = W.Flambda_type0_core
-  module Join_env = W.Join_env
-  module Meet_env = W.Meet_env
-  module Relational_product = W.Relational_product
-  module Typing_env = W.Typing_env
-  module Typing_env_extension = W.Typing_env_extension
 end

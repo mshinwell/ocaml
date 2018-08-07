@@ -41,6 +41,8 @@ module type S_applied = sig
      : Typing_env_extension.t Thing_without_names.Map.t
     -> t
 
+  val equal : Type_equality_env.t -> t -> t -> bool
+
   val meet
      : Meet_env.t
     -> t

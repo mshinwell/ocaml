@@ -31,3 +31,8 @@ let freshen t freshening =
   apply_name_permutation t (Freshening.name_permutation freshening)
 
 let name t = Name.logical_var t
+
+let equal env t1 t2 =
+  let t1 = apply_name_permutation t1 (Type_equality_env.perm_left env) in
+  let t2 = apply_name_permutation t2 (Type_equality_env.perm_right env) in
+  equal t1 t2

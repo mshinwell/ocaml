@@ -64,7 +64,7 @@ module type S_applied = sig
   val create_bottom : arity:int -> t
 
   (** A conservative approximation to equality. *)
-  val equal : t -> t -> bool
+  val equal : Type_equality_env.t -> t -> t -> bool
 
   (** The components of the relational product.  Each list of components
       is ordered according to [Index.compare]. *)
@@ -117,7 +117,7 @@ module type S = sig
     (Component : sig
       include Name_like
       val create : Flambda_kind.t -> t
-      val equal : t -> t -> bool
+      val equal : Type_equality_env.t -> t -> t -> bool
       val name : t -> Name.t
       val kind : t -> Flambda_kind.t
     end) :

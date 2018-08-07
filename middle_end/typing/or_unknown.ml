@@ -24,3 +24,10 @@ let print f ppf t =
   match t with
   | Known contents -> Format.fprintf ppf "@[(Known %a)@]" f contents
   | Unknown -> Format.pp_print_string ppf "Unknown"
+
+let equal equal_contents t1 t2 =
+  match t1, t2 with
+  | Unknown, Unknown -> true
+  | Known contents1, Known contents2 -> equal_contents contents1 contents2
+  | Unknown, Known _
+  | Known _, Unknown -> false
