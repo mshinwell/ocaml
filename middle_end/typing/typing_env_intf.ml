@@ -41,6 +41,10 @@ module type S = sig
       (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
          change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
 
+  type levels_to_entries =
+    (Name.t * typing_environment_entry)
+      Scope_level.Sublevel.Map.t Scope_level.Map.t
+
   type t
 
   (** Perform various invariant checks upon the given environment. *)
@@ -48,6 +52,12 @@ module type S = sig
 
   (** Print the given typing environment to a formatter. *)
   val print : Format.formatter -> t -> unit
+
+  val print_levels_to_entries_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> levels_to_entries
+    -> unit
 
   (** Create an empty environment using the given [resolver] to locate the
       definitions of export identifiers (e.g. by loading .cmx files). *)

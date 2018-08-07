@@ -16,18 +16,23 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) = struct
-  open T
+(* CR mshinwell: Delete >= 4.08 *)
+[@@@ocaml.warning "-60"]
+module Join_env = struct end
+module Meet_env = struct end
+module Type_equality = struct end
+module Typing_env = struct end
+module Typing_env_extension = struct end
+
+module Make (W : Typing_world.S) = struct
+  open! W
 
   type t = {
-    first_definitions : (Name.t * t) list;
-    at_or_after_cut_point : levels_to_entries;
-    last_equations_rev : (Name.t * t) list;
+    first_definitions : (Name.t * Flambda_types.t) list;
+    at_or_after_cut_point : Typing_env.levels_to_entries;
+    last_equations_rev : (Name.t * Flambda_types.t) list;
     cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
   }
-
-  module JE = Join_env
-  module TE = Typing_env
 
   let print_with_cache ~cache ppf
         ({ first_definitions; at_or_after_cut_point; last_equations_rev;
@@ -37,7 +42,7 @@ module Make (T : Typing_world.S) = struct
         (fun ppf (name, ty) ->
           Format.fprintf ppf "@[(%a %a)@]"
             Name.print name
-            (print_with_cache ~cache) ty)
+            (Type_printers.print_with_cache ~cache) ty)
     in
     Format.fprintf ppf
       "@[<hov 1>(\
@@ -46,7 +51,8 @@ module Make (T : Typing_world.S) = struct
           @[<hov 1>(last_equations_rev@ %a)@]@ \
           @[<hov 1>(cse@ %a)@])@]"
       print_binding_list first_definitions
-      (print_levels_to_entries_with_cache ~cache) at_or_after_cut_point
+      (Typing_env.print_levels_to_entries_with_cache ~cache)
+        at_or_after_cut_point
       print_binding_list last_equations_rev
       (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
@@ -55,23 +61,24 @@ module Make (T : Typing_world.S) = struct
 
   let fast_equal t1 t2 = (t1 == t2)
 
-  let equal ~equal_type t1 t2 =
+  let equal env t1 t2 =
     (* CR mshinwell: This should be improved *)
     let equal_names_and_types (name1, ty1) (name2, ty2) =
-      Name.equal name1 name2 && equal_type ty1 ty2
+      Name.equal name1 name2
+        && Type_equality.equal_with_env env ty1 ty2
     in
     Misc.Stdlib.List.equal equal_names_and_types
         t1.first_definitions t2.first_definitions
       && Scope_level.Map.equal
            (Scope_level.Sublevel.Map.equal
-             (fun (name1, (entry1 : typing_environment_entry))
-                  (name2, (entry2 : typing_environment_entry)) ->
+             (fun (name1, (entry1 : Typing_env.typing_environment_entry))
+                  (name2, (entry2 : Typing_env.typing_environment_entry)) ->
                Name.equal name1 name2
                  && match entry1, entry2 with
                     | Definition ty1, Definition ty2 ->
-                      equal_type ty1 ty2
+                      Type_equality.equal_with_env env ty1 ty2
                     | Equation ty1, Equation ty2 ->
-                      equal_type ty1 ty2
+                      Type_equality.equal_with_env env ty1 ty2
                     | CSE prim1, CSE prim2 ->
                       Flambda_primitive.With_fixed_value.equal prim1 prim2
                     | _, _ -> false))
@@ -101,7 +108,7 @@ module Make (T : Typing_world.S) = struct
     in
     Scope_level.Map.fold (fun _level by_sublevel defined_names ->
         Scope_level.Sublevel.Map.fold
-          (fun _sublevel (name, (entry : typing_environment_entry))
+          (fun _sublevel (name, (entry : Typing_env.typing_environment_entry))
                defined_names ->
             match entry with
             | Definition _ -> Name.Set.add name defined_names
@@ -114,11 +121,12 @@ module Make (T : Typing_world.S) = struct
   let equations_on_env t =
     let equations_domain
           { first_definitions = _; at_or_after_cut_point;
-            last_equations_rev; } =
+            last_equations_rev; cse = _; } =
       let from_at_or_after_cut_point =
         Scope_level.Map.fold (fun _level by_sublevel domain ->
             Scope_level.Sublevel.Map.fold
-              (fun _sublevel (name, (entry : typing_environment_entry))
+              (fun _sublevel
+                   (name, (entry : Typing_env.typing_environment_entry))
                    domain ->
                 match entry with
                 | Definition _ -> domain
@@ -136,6 +144,7 @@ module Make (T : Typing_world.S) = struct
     in
     Name.Set.diff (equations_domain t) (defined_names t)
 
+  (* CR mshinwell: Move to [Typing_env]? *)
   let free_names_transitive env ty =
     let all_names = ref (Name_occurrences.create ()) in
     let rec loop to_follow =
@@ -144,24 +153,24 @@ module Make (T : Typing_world.S) = struct
       | None -> ()
       | Some (name, to_follow) ->
         let ty =
-          match TE.find_exn env name with
+          match Typing_env.find_exn env name with
           | exception Not_found ->
             Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
                 transitively, of %a@ in environment@ %a"
               Name.print name
-              T.print ty
-              TE.print env
+              Type_printers.print ty
+              Typing_env.print env
           | ty, _binding_type -> ty
         in
-        let names = T.free_names ty in
+        let names = Type_free_names.free_names ty in
         loop (Name_occurrences.union to_follow names)
     in
-    loop (free_names ty);
+    loop (Type_free_names.free_names ty);
     !all_names
 
-  let free_names_transitive_list t env tys =
-    let scope_level = Scope_level.next (TE.max_level env) in
-    let env = TE.add_or_meet_env_extension env t scope_level in
+  let free_names_transitive_list (t : t) (env : Typing_env.t) tys =
+    let scope_level = Scope_level.next (Typing_env.max_level env) in
+    let env = Typing_env.add_or_meet_env_extension env t scope_level in
     List.fold_left (fun names ty ->
         Name_occurrences.union names (free_names_transitive env ty))
       (Name_occurrences.create ())
@@ -218,7 +227,6 @@ module Make (T : Typing_world.S) = struct
     let free_names = free_names_transitive_list t env tys in
     let env_allowed_names = Typing_env.domain env_allowed_names in
     let allowed_names = Name_occurrences.union free_names env_allowed_names in
-Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     restrict_to_names t allowed_names
 
   type fold_info =
@@ -235,7 +243,9 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
     let acc =
       Scope_level.Map.fold (fun _level by_sublevel acc ->
           Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : typing_environment_entry)) acc ->
+            (fun _sublevel
+                 (name, (entry : Typing_env.typing_environment_entry))
+                 acc ->
               match entry with
               | Definition ty ->
                 f acc name (Definition_in_extension ty)
@@ -325,15 +335,15 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
   (* CR-someday mshinwell: Attempt to produce a single piece of code that can
      be specialised to produce both [meet] and [join], as we do elsewhere. *)
 
-  let meet (env : TE.t) (t1 : t) (t2 : t) : t =
+  let meet (env : Typing_env.t) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
     else if is_empty t1 then t2
     else if is_empty t2 then t1
     else
-      let scope_level = Scope_level.next (TE.max_level env) in
-      let env = TE.add_or_meet_env_extension env t1 scope_level in
-      let env = TE.add_or_meet_env_extension env t2 scope_level in
-      TE.cut env ~existential_if_defined_at_or_later_than:scope_level
+      let scope_level = Scope_level.next (Typing_env.max_level env) in
+      let env = Typing_env.add_or_meet_env_extension env t1 scope_level in
+      let env = Typing_env.add_or_meet_env_extension env t2 scope_level in
+      Typing_env.cut env ~existential_if_defined_at_or_later_than:scope_level
 
   let join (env : JE.t) (t1 : t) (t2 : t) : t =
     if fast_equal t1 t2 then t1
@@ -419,7 +429,7 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
             let unfreshened_name = name in
             let name = Freshening.apply_name freshening name in
             let ty = T.apply_freshening ty freshening in
-            match TE.find_opt env name with
+            match Typing_env.find_opt env name with
             | None ->
               let names_more_precise =
                 Name.Set.add unfreshened_name names_more_precise
@@ -608,5 +618,6 @@ Format.eprintf "Restricting to %a\n%!" Name_occurrences.print allowed_names;
         (Name.Set.union free_names_at_or_after_cut_point
           free_names_last_equations_rev_and_cse)
     in
-    Name.Set.diff free_names defined_names
+    Name_occurrences.create_from_set_in_types
+      (Name.Set.diff free_names defined_names)
 end

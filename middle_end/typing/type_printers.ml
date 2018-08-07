@@ -82,6 +82,21 @@ module Make (W : Typing_world.S) = struct
         (ty : n Flambda_types.ty_naked_number) =
     print_ty_generic print_of_kind_naked_number ppf ty
 
+  let print_ty_naked_immediate_with_cache ~cache:_ ppf ty =
+    print_ty_generic (print_of_kind_naked_number) ppf ty
+
+  let print_ty_naked_int32_with_cache ~cache:_ ppf ty =
+    print_ty_generic (print_of_kind_naked_number) ppf ty
+
+  let print_ty_naked_int64_with_cache ~cache:_ ppf ty =
+    print_ty_generic (print_of_kind_naked_number) ppf ty
+
+  let print_ty_naked_nativeint_with_cache ~cache:_ ppf ty =
+    print_ty_generic (print_of_kind_naked_number) ppf ty
+
+  let print_ty_naked_float_with_cache ~cache:_ ppf ty =
+    print_ty_generic (print_of_kind_naked_number) ppf ty
+
   let print_of_kind_value_boxed_number (type n)
         ppf (n : n Flambda_types.of_kind_value_boxed_number) =
     match n with
@@ -121,16 +136,6 @@ module Make (W : Typing_world.S) = struct
   and print_ty_value_with_cache ~cache ppf (ty : Flambda_types.ty_value) =
     print_ty_generic (print_of_kind_value ~cache) ppf ty
 
-  and print_ty_value ppf (ty : Flambda_types.ty_value) =
-    print_ty_value_with_cache ~cache:(Printing_cache.create ()) ppf ty
-
-  and print_ty_value_array ~cache ppf ty_values =
-    Format.fprintf ppf "@[[| %a |]@]"
-      (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.fprintf ppf ";@ ")
-        (print_ty_value_with_cache ~cache))
-      (Array.to_list ty_values)
-
   and print_inlinable_function_declaration_with_cache ~cache ppf
         (({ closure_origin;
            continuation_param;
@@ -160,9 +165,10 @@ module Make (W : Typing_world.S) = struct
           @[<hov 1>(is_classic_mode@ %b)@]@ \
           @[<hov 1>(params@ %a)@]@ \
           @[<hov 1>(body@ %a)@]@ \
+          @[<hov 1>(code_id@ %a)@]@ \
           @[<hov 1>(free_names_in_body@ %a)@]@ \
           @[<hov 1>(stub@ %b)@]@ \
-          @[<hov 1>(result_arity@ %b)@]@ \
+          @[<hov 1>(result_arity@ %a)@]@ \
           @[<hov 1>(dbg@ %a)@]@ \
           @[<hov 1>(inline@ %a)@]@ \
           @[<hov 1>(specialise@ %a)@]@ \
@@ -177,6 +183,7 @@ module Make (W : Typing_world.S) = struct
         is_classic_mode
         Kinded_parameter.List.print params
         (Expr.print_with_cache ~cache) body
+        Code_id.print code_id
         Name_occurrences.print free_names_in_body
         stub
         Flambda_arity.print result_arity
@@ -189,13 +196,8 @@ module Make (W : Typing_world.S) = struct
         (Misc.Stdlib.Option.print Closure_id.print) direct_call_surrogate
         Variable.print my_closure)
 
-  and print_inlinable_function_declaration ppf decl =
-    print_inlinable_function_declaration_with_cache
-      ~cache:(Printing_cache.create ())
-      ppf decl
-
-  and print_function_declarations ~cache ppf
-        (decl : function_declarations) =
+  and print_function_declaration_with_cache ~cache ppf
+        (decl : Flambda_types.function_declaration) =
     match decl with
     | Inlinable decl ->
       print_inlinable_function_declaration_with_cache ~cache ppf decl
@@ -204,18 +206,15 @@ module Make (W : Typing_world.S) = struct
   and print_of_kind_fabricated ~cache ppf
         ((o : Flambda_types.of_kind_fabricated), _) =
     match o with
-    | Discriminant discriminants ->
+    | Discriminants discriminants ->
       Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
-        Discriminants.print discriminants
+        (Discriminants.print ~cache) discriminants
     | Set_of_closures { closures; } ->
       Closure_ids.print ~cache ppf closures
 
   and print_ty_fabricated_with_cache ~cache ppf
         (ty : Flambda_types.ty_fabricated) =
     print_ty_generic (print_of_kind_fabricated ~cache) ppf ty
-
-  and print_ty_fabricated ppf (ty : Flambda_types.ty_fabricated) =
-    print_ty_fabricated_with_cache ~cache:(Printing_cache.create ()) ppf ty
 
   and print_with_cache ~cache ppf (t : Flambda_types.t) =
     match t with
@@ -228,7 +227,7 @@ module Make (W : Typing_world.S) = struct
       Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
         (print_ty_fabricated_with_cache ~cache) ty
 
-  and print ppf (t : t) =
+  and print ppf t =
     let cache : Printing_cache.t = Printing_cache.create () in
     print_with_cache ~cache ppf t
 end

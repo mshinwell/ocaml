@@ -3727,7 +3727,6 @@ middle_end/typing/flambda_type0.cmo : middle_end/typing/typing_world.cmo \
     middle_end/typing/relational_product_intf.cmo \
     middle_end/typing/relational_product.cmi utils/numbers.cmi \
     middle_end/typing/meet_and_join_value.cmi \
-    middle_end/typing/meet_and_join_naked_number.cmi \
     middle_end/typing/meet_and_join_intf.cmo \
     middle_end/typing/meet_and_join_fabricated.cmi \
     middle_end/typing/join_env_intf.cmo middle_end/typing/join_env.cmi \
@@ -3766,7 +3765,6 @@ middle_end/typing/flambda_type0.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/relational_product_intf.cmx \
     middle_end/typing/relational_product.cmx utils/numbers.cmx \
     middle_end/typing/meet_and_join_value.cmx \
-    middle_end/typing/meet_and_join_naked_number.cmi \
     middle_end/typing/meet_and_join_intf.cmx \
     middle_end/typing/meet_and_join_fabricated.cmx \
     middle_end/typing/join_env_intf.cmx middle_end/typing/join_env.cmx \
@@ -4145,9 +4143,6 @@ middle_end/typing/meet_and_join_naked_nativeint_intf.cmo : \
     utils/targetint.cmi middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_nativeint_intf.cmx : \
     utils/targetint.cmx middle_end/typing/meet_and_join_naked_number_intf.cmx
-middle_end/typing/meet_and_join_naked_number.cmi : \
-    middle_end/typing/typing_world.cmo \
-    middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_number_intf.cmo : \
     middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
@@ -4417,6 +4412,7 @@ middle_end/typing/type_printers.cmo : middle_end/language/variable.cmi \
     middle_end/language/immediate.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/export_id.cmi middle_end/typing/discriminants.cmi \
     middle_end/language/debuginfo.cmi middle_end/language/continuation.cmi \
+    middle_end/language/code_id.cmi \
     middle_end/typing/closures_entry_by_closure_id.cmi \
     middle_end/language/closure_origin.cmi middle_end/typing/closure_ids.cmi \
     middle_end/language/closure_id.cmi middle_end/typing/blocks.cmi \
@@ -4432,6 +4428,7 @@ middle_end/typing/type_printers.cmx : middle_end/language/variable.cmx \
     middle_end/language/immediate.cmx middle_end/typing/flambda_arity.cmx \
     middle_end/language/export_id.cmx middle_end/typing/discriminants.cmx \
     middle_end/language/debuginfo.cmx middle_end/language/continuation.cmx \
+    middle_end/language/code_id.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmx \
     middle_end/language/closure_origin.cmx middle_end/typing/closure_ids.cmx \
     middle_end/language/closure_id.cmx middle_end/typing/blocks.cmx \
@@ -4496,21 +4493,23 @@ middle_end/typing/typing_env.cmx : middle_end/typing/typing_world.cmx \
 middle_end/typing/typing_env.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/typing_env_intf.cmo
 middle_end/typing/typing_env_extension.cmo : \
-    middle_end/typing/typing_world.cmo middle_end/typing/typing_env.cmi \
-    middle_end/language/simple.cmi middle_end/language/scope_level.cmi \
-    utils/printing_cache.cmi middle_end/language/name_permutation.cmi \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/type_free_names.cmi middle_end/language/simple.cmi \
+    middle_end/language/scope_level.cmi utils/printing_cache.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     utils/misc.cmi middle_end/typing/meet_and_join.cmi \
-    middle_end/typing/join_env.cmi middle_end/language/freshening.cmi \
+    middle_end/language/freshening.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/typing_env_extension.cmi
 middle_end/typing/typing_env_extension.cmx : \
-    middle_end/typing/typing_world.cmx middle_end/typing/typing_env.cmx \
-    middle_end/language/simple.cmx middle_end/language/scope_level.cmx \
-    utils/printing_cache.cmx middle_end/language/name_permutation.cmx \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/type_free_names.cmx middle_end/language/simple.cmx \
+    middle_end/language/scope_level.cmx utils/printing_cache.cmx \
+    middle_end/language/name_permutation.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     utils/misc.cmx middle_end/typing/meet_and_join.cmx \
-    middle_end/typing/join_env.cmx middle_end/language/freshening.cmx \
+    middle_end/language/freshening.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/typing_env_extension.cmi
 middle_end/typing/typing_env_extension.cmi : \
@@ -4527,13 +4526,13 @@ middle_end/typing/typing_env_extension_intf.cmx : \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/contains_names.cmx
 middle_end/typing/typing_env_intf.cmo : middle_end/language/simple.cmi \
-    middle_end/language/scope_level.cmi \
+    middle_end/language/scope_level.cmi utils/printing_cache.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     middle_end/language/freshening.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/export_id.cmi
 middle_end/typing/typing_env_intf.cmx : middle_end/language/simple.cmx \
-    middle_end/language/scope_level.cmx \
+    middle_end/language/scope_level.cmx utils/printing_cache.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     middle_end/language/freshening.cmx \
     middle_end/language/flambda_primitive.cmx \

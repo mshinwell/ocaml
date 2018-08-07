@@ -29,6 +29,7 @@ module type S = sig
 
   val equal : Flambda_types.t -> Flambda_types.t -> bool
 
+  (* CR mshinwell: Rename to [equal_in_env]. *)
   val equal_with_env
      : Type_equality_env.t
     -> Flambda_types.t
