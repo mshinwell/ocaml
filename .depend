@@ -4407,28 +4407,34 @@ middle_end/typing/type_free_names_intf.cmo : \
 middle_end/typing/type_free_names_intf.cmx : \
     middle_end/language/name_occurrences.cmx
 middle_end/typing/type_printers.cmo : middle_end/language/variable.cmi \
-    middle_end/language/var_within_closure.cmi utils/targetint.cmi \
-    middle_end/typing/tag_and_size.cmi middle_end/typing/string_info.cmi \
-    middle_end/language/simple.cmi utils/printing_cache.cmi \
-    middle_end/typing/or_unknown.cmi middle_end/language/name_occurrences.cmi \
-    utils/misc_color.cmi utils/misc.cmi \
-    middle_end/language/kinded_parameter.cmi \
-    middle_end/language/immediate.cmi middle_end/language/export_id.cmi \
-    middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
-    middle_end/language/continuation.cmi \
-    middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi \
+    middle_end/typing/typing_world.cmo utils/targetint.cmi \
+    middle_end/typing/string_info.cmi \
+    middle_end/language/specialise_attribute.cmi \
+    middle_end/language/simple.cmi utils/printing_cache.cmi utils/numbers.cmi \
+    middle_end/language/name_occurrences.cmi utils/misc_color.cmi \
+    utils/misc.cmi middle_end/language/kinded_parameter.cmi \
+    middle_end/language/inline_attribute.cmi middle_end/typing/immediates.cmi \
+    middle_end/language/immediate.cmi middle_end/typing/flambda_arity.cmi \
+    middle_end/language/export_id.cmi middle_end/typing/discriminants.cmi \
+    middle_end/language/debuginfo.cmi middle_end/language/continuation.cmi \
+    middle_end/typing/closures_entry_by_closure_id.cmi \
+    middle_end/language/closure_origin.cmi middle_end/typing/closure_ids.cmi \
+    middle_end/language/closure_id.cmi middle_end/typing/blocks.cmi \
     middle_end/typing/type_printers.cmi
 middle_end/typing/type_printers.cmx : middle_end/language/variable.cmx \
-    middle_end/language/var_within_closure.cmx utils/targetint.cmx \
-    middle_end/typing/tag_and_size.cmx middle_end/typing/string_info.cmx \
-    middle_end/language/simple.cmx utils/printing_cache.cmx \
-    middle_end/typing/or_unknown.cmx middle_end/language/name_occurrences.cmx \
-    utils/misc_color.cmx utils/misc.cmx \
-    middle_end/language/kinded_parameter.cmx \
-    middle_end/language/immediate.cmx middle_end/language/export_id.cmx \
-    middle_end/language/discriminant.cmx middle_end/language/debuginfo.cmx \
-    middle_end/language/continuation.cmx \
-    middle_end/language/closure_origin.cmx middle_end/language/closure_id.cmx \
+    middle_end/typing/typing_world.cmx utils/targetint.cmx \
+    middle_end/typing/string_info.cmx \
+    middle_end/language/specialise_attribute.cmx \
+    middle_end/language/simple.cmx utils/printing_cache.cmx utils/numbers.cmx \
+    middle_end/language/name_occurrences.cmx utils/misc_color.cmx \
+    utils/misc.cmx middle_end/language/kinded_parameter.cmx \
+    middle_end/language/inline_attribute.cmx middle_end/typing/immediates.cmx \
+    middle_end/language/immediate.cmx middle_end/typing/flambda_arity.cmx \
+    middle_end/language/export_id.cmx middle_end/typing/discriminants.cmx \
+    middle_end/language/debuginfo.cmx middle_end/language/continuation.cmx \
+    middle_end/typing/closures_entry_by_closure_id.cmx \
+    middle_end/language/closure_origin.cmx middle_end/typing/closure_ids.cmx \
+    middle_end/language/closure_id.cmx middle_end/typing/blocks.cmx \
     middle_end/typing/type_printers.cmi
 middle_end/typing/type_printers.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/type_printers_intf.cmo
