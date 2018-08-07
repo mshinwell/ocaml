@@ -25,8 +25,6 @@ module type S_applied = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  type of_kind_foo
-
   val meet_or_join
      : Join_env.t
     -> Flambda_types.t

@@ -3754,7 +3754,7 @@ middle_end/typing/flambda_type0.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/relational_product_intf.cmx \
     middle_end/typing/relational_product.cmx utils/numbers.cmx \
     middle_end/typing/meet_and_join_value.cmx \
-    middle_end/typing/meet_and_join_naked_number.cmx \
+    middle_end/typing/meet_and_join_naked_number.cmi \
     middle_end/typing/meet_and_join_intf.cmx \
     middle_end/typing/meet_and_join_fabricated.cmx \
     middle_end/typing/join_env_intf.cmx middle_end/typing/join_env.cmx \
@@ -3991,15 +3991,15 @@ middle_end/typing/logical_variable_component.cmi : \
     middle_end/language/name.cmi middle_end/typing/logical_variable.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/typing/make_meet_or_join.cmo : middle_end/typing/typing_world.cmo \
-    middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
-    middle_end/language/name.cmi utils/misc.cmi \
-    middle_end/typing/meet_and_join_spec_intf.cmo \
+    middle_end/language/simple.cmi utils/printing_cache.cmi \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
+    utils/misc.cmi middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo \
     middle_end/typing/make_meet_or_join.cmi
 middle_end/typing/make_meet_or_join.cmx : middle_end/typing/typing_world.cmx \
-    middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
-    middle_end/language/name.cmx utils/misc.cmx \
-    middle_end/typing/meet_and_join_spec_intf.cmx \
+    middle_end/language/simple.cmx utils/printing_cache.cmx \
+    middle_end/language/name_permutation.cmx middle_end/language/name.cmx \
+    utils/misc.cmx middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/make_meet_or_join.cmi
 middle_end/typing/make_meet_or_join.cmi : middle_end/typing/typing_world.cmo \
@@ -4011,22 +4011,28 @@ middle_end/typing/make_meet_or_join_intf.cmx : \
     middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join.cmo : middle_end/typing/typing_world.cmo \
-    utils/misc.cmi middle_end/typing/flambda_kind.cmi \
+    utils/misc.cmi middle_end/typing/meet_and_join_naked_float.cmo \
+    middle_end/typing/make_meet_or_join.cmi \
+    middle_end/typing/flambda_kind.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo \
     middle_end/typing/meet_and_join.cmi
 middle_end/typing/meet_and_join.cmx : middle_end/typing/typing_world.cmx \
-    utils/misc.cmx middle_end/typing/flambda_kind.cmx \
+    utils/misc.cmx middle_end/typing/meet_and_join_naked_float.cmx \
+    middle_end/typing/make_meet_or_join.cmx \
+    middle_end/typing/flambda_kind.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/meet_and_join.cmi
 middle_end/typing/meet_and_join.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/meet_and_join_intf.cmo
 middle_end/typing/meet_and_join_fabricated.cmo : \
-    middle_end/typing/typing_world.cmo middle_end/typing/or_absorbing.cmi \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/or_absorbing.cmi middle_end/typing/join_env.cmi \
     middle_end/typing/flambda_kind.cmi \
     middle_end/typing/either_meet_or_join_intf.cmo \
     middle_end/typing/meet_and_join_fabricated.cmi
 middle_end/typing/meet_and_join_fabricated.cmx : \
-    middle_end/typing/typing_world.cmx middle_end/typing/or_absorbing.cmx \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/or_absorbing.cmx middle_end/typing/join_env.cmx \
     middle_end/typing/flambda_kind.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/meet_and_join_fabricated.cmi
@@ -4034,70 +4040,113 @@ middle_end/typing/meet_and_join_fabricated.cmi : \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/meet_and_join_fabricated_intf.cmo
 middle_end/typing/meet_and_join_fabricated_intf.cmo : \
-    middle_end/typing/make_meet_or_join_intf.cmo \
+    middle_end/typing/or_absorbing.cmi \
+    middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/meet_and_join_fabricated_intf.cmx : \
-    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/or_absorbing.cmx \
+    middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_intf.cmo : \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/meet_and_join_intf.cmx : \
     middle_end/typing/either_meet_or_join_intf.cmx
+middle_end/typing/meet_and_join_naked_float.cmo : \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
+    middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_float.cmx : \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
+    middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_naked_float_intf.cmo : utils/numbers.cmi \
     middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_float_intf.cmx : utils/numbers.cmx \
     middle_end/typing/meet_and_join_naked_number_intf.cmx
+middle_end/typing/meet_and_join_naked_immediate.cmo : \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/or_absorbing.cmi middle_end/language/immediate.cmi \
+    middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_immediate.cmx : \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/or_absorbing.cmx middle_end/language/immediate.cmx \
+    middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_naked_immediate_intf.cmo : \
-    utils/targetint.cmi middle_end/typing/meet_and_join_naked_number_intf.cmo
+    middle_end/typing/meet_and_join_naked_number_intf.cmo \
+    middle_end/language/immediate.cmi
 middle_end/typing/meet_and_join_naked_immediate_intf.cmx : \
-    utils/targetint.cmx middle_end/typing/meet_and_join_naked_number_intf.cmx
+    middle_end/typing/meet_and_join_naked_number_intf.cmx \
+    middle_end/language/immediate.cmx
+middle_end/typing/meet_and_join_naked_int32.cmo : \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
+    middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_int32.cmx : \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
+    middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_naked_int32_intf.cmo : utils/numbers.cmi \
     middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_int32_intf.cmx : utils/numbers.cmx \
     middle_end/typing/meet_and_join_naked_number_intf.cmx
+middle_end/typing/meet_and_join_naked_int64.cmo : \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
+    middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_int64.cmx : \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
+    middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_naked_int64_intf.cmo : utils/numbers.cmi \
     middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_int64_intf.cmx : utils/numbers.cmx \
     middle_end/typing/meet_and_join_naked_number_intf.cmx
+middle_end/typing/meet_and_join_naked_nativeint.cmo : \
+    middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
+    utils/targetint.cmi middle_end/typing/or_absorbing.cmi \
+    middle_end/typing/flambda_kind.cmi \
+    middle_end/typing/either_meet_or_join_intf.cmo
+middle_end/typing/meet_and_join_naked_nativeint.cmx : \
+    middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
+    utils/targetint.cmx middle_end/typing/or_absorbing.cmx \
+    middle_end/typing/flambda_kind.cmx \
+    middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_and_join_naked_nativeint_intf.cmo : \
     utils/targetint.cmi middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_nativeint_intf.cmx : \
     utils/targetint.cmx middle_end/typing/meet_and_join_naked_number_intf.cmx
-middle_end/typing/meet_and_join_naked_number.cmo : \
-    middle_end/typing/typing_world.cmo utils/targetint.cmi \
-    middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
-    middle_end/language/immediate.cmi middle_end/typing/flambda_kind.cmi \
-    middle_end/typing/either_meet_or_join_intf.cmo \
-    middle_end/typing/meet_and_join_naked_number.cmi
-middle_end/typing/meet_and_join_naked_number.cmx : \
-    middle_end/typing/typing_world.cmx utils/targetint.cmx \
-    middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
-    middle_end/language/immediate.cmx middle_end/typing/flambda_kind.cmx \
-    middle_end/typing/either_meet_or_join_intf.cmx \
-    middle_end/typing/meet_and_join_naked_number.cmi
 middle_end/typing/meet_and_join_naked_number.cmi : \
-    middle_end/typing/typing_env_intf.cmo \
-    middle_end/typing/typing_env_extension_intf.cmo utils/targetint.cmi \
-    utils/numbers.cmi middle_end/typing/meet_and_join_spec_intf.cmo \
-    middle_end/typing/meet_and_join_intf.cmo \
-    middle_end/language/immediate.cmi \
-    middle_end/typing/either_meet_or_join_intf.cmo
+    middle_end/typing/typing_world.cmo \
+    middle_end/typing/meet_and_join_naked_number_intf.cmo
 middle_end/typing/meet_and_join_naked_number_intf.cmo : \
-    middle_end/typing/make_meet_or_join_intf.cmo \
+    middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/meet_and_join_naked_number_intf.cmx : \
-    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
-middle_end/typing/meet_and_join_spec_intf.cmo : \
+middle_end/typing/meet_and_join_spec_intf.cmo : utils/printing_cache.cmi \
     middle_end/typing/or_absorbing.cmi middle_end/typing/flambda_kind.cmi
-middle_end/typing/meet_and_join_spec_intf.cmx : \
+middle_end/typing/meet_and_join_spec_intf.cmx : utils/printing_cache.cmx \
     middle_end/typing/or_absorbing.cmx middle_end/typing/flambda_kind.cmx
 middle_end/typing/meet_and_join_value.cmo : middle_end/language/variable.cmi \
     middle_end/typing/typing_world.cmo middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \
     middle_end/typing/or_bottom.cmi middle_end/typing/or_absorbing.cmi \
     middle_end/language/name_occurrences.cmi utils/misc.cmi \
-    middle_end/typing/meet_env.cmi middle_end/language/kinded_parameter.cmi \
+    middle_end/typing/meet_env.cmi \
+    middle_end/typing/meet_and_join_naked_nativeint.cmo \
+    middle_end/typing/meet_and_join_naked_int64.cmo \
+    middle_end/typing/meet_and_join_naked_int32.cmo \
+    middle_end/typing/meet_and_join_naked_float.cmo \
+    middle_end/language/kinded_parameter.cmi \
     middle_end/language/inline_attribute.cmi middle_end/typing/immediates.cmi \
     middle_end/typing/function_type.cmi middle_end/typing/flambda_kind.cmi \
     middle_end/typing/flambda_arity.cmi \
@@ -4113,7 +4162,12 @@ middle_end/typing/meet_and_join_value.cmx : middle_end/language/variable.cmx \
     middle_end/language/specialise_attribute.cmx \
     middle_end/typing/or_bottom.cmx middle_end/typing/or_absorbing.cmx \
     middle_end/language/name_occurrences.cmx utils/misc.cmx \
-    middle_end/typing/meet_env.cmx middle_end/language/kinded_parameter.cmx \
+    middle_end/typing/meet_env.cmx \
+    middle_end/typing/meet_and_join_naked_nativeint.cmx \
+    middle_end/typing/meet_and_join_naked_int64.cmx \
+    middle_end/typing/meet_and_join_naked_int32.cmx \
+    middle_end/typing/meet_and_join_naked_float.cmx \
+    middle_end/language/kinded_parameter.cmx \
     middle_end/language/inline_attribute.cmx middle_end/typing/immediates.cmx \
     middle_end/typing/function_type.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/typing/flambda_arity.cmx \
@@ -4128,10 +4182,12 @@ middle_end/typing/meet_and_join_value.cmi : \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/meet_and_join_value_intf.cmo
 middle_end/typing/meet_and_join_value_intf.cmo : \
-    middle_end/typing/make_meet_or_join_intf.cmo \
+    middle_end/typing/or_absorbing.cmi \
+    middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/meet_and_join_value_intf.cmx : \
-    middle_end/typing/make_meet_or_join_intf.cmx \
+    middle_end/typing/or_absorbing.cmx \
+    middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx
 middle_end/typing/meet_env.cmo : middle_end/typing/typing_world.cmo \
     middle_end/language/simple.cmi middle_end/language/name_permutation.cmi \
@@ -4344,8 +4400,12 @@ middle_end/typing/type_printers.cmx : middle_end/language/variable.cmx \
     middle_end/typing/type_printers.cmi
 middle_end/typing/type_printers.cmi : middle_end/typing/typing_world.cmo \
     middle_end/typing/type_printers_intf.cmo
-middle_end/typing/type_printers_intf.cmo : utils/printing_cache.cmi
-middle_end/typing/type_printers_intf.cmx : utils/printing_cache.cmx
+middle_end/typing/type_printers_intf.cmo : utils/targetint.cmi \
+    utils/printing_cache.cmi utils/numbers.cmi \
+    middle_end/language/immediate.cmi
+middle_end/typing/type_printers_intf.cmx : utils/targetint.cmx \
+    utils/printing_cache.cmx utils/numbers.cmx \
+    middle_end/language/immediate.cmx
 middle_end/typing/types_by_closure_id.cmo : \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/relational_product.cmi \

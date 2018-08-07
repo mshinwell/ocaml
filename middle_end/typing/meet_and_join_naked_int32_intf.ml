@@ -16,6 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Meet_and_join_naked_number_intf.Make (struct
-  type naked_number = Numbers.Int32.Set.t
-end)
+include Meet_and_join_naked_number_intf.Make (Numbers.Int32)

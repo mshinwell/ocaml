@@ -42,7 +42,8 @@ module type S = sig
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
     with module Meet_env := Meet_env
-    with module Typing_env := Typing_env)
+    with module Typing_env := Typing_env
+    with module Typing_env_extension := Typing_env_extension)
   and Closures_entry_by_closure_id : (Closures_entry_by_closure_id_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env

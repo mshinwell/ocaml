@@ -16,9 +16,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (S : sig type naked_number end) = struct
+module Make (Naked_number : sig
+  type t
+  module Set : Set.S with type elt = t
+end) = struct
   module type S = sig
-    (* CR mshinwell: rename [naked_number] -> [naked_number_set] *)
+    module Flambda_type0_core : sig end
     module Flambda_types : sig
       type t
       type 'a ty
@@ -35,13 +38,11 @@ module Make (S : sig type naked_number end) = struct
        with module Meet_env := Meet_env
        with module Typing_env := Typing_env
        with module Typing_env_extension := Typing_env_extension)
-    : Make_meet_or_join_intf.S_applied
+    : Meet_and_join_spec_intf.S
        with module Flambda_types := Flambda_types
        with module Join_env := Join_env
-       with module Meet_env := Meet_env
-       with module Typing_env := Typing_env
        with module Typing_env_extension := Typing_env_extension
-       with type of_kind_foo :=
-         S.naked_number Flambda_types.of_kind_naked_number
+       with type of_kind_foo
+         = Naked_number.Set.t Flambda_types.of_kind_naked_number
   end
 end

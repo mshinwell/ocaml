@@ -21,6 +21,7 @@ module type S = sig
     type t
     type 'a ty
     type of_kind_fabricated
+    type set_of_closures_entry
   end
   module Join_env : sig type t end
   module Meet_env : sig type t end
@@ -32,12 +33,19 @@ module type S = sig
      with module Join_env := Join_env
      with module Meet_env := Meet_env
      with module Typing_env := Typing_env
-     with module Typing_env_extension := Typing_env_extension)
-  : Make_meet_or_join_intf.S_applied
-     with module Flambda_types := Flambda_types
-     with module Join_env := Join_env
-     with module Meet_env := Meet_env
-     with module Typing_env := Typing_env
-     with module Typing_env_extension := Typing_env_extension
-     with type of_kind_foo := Flambda_types.of_kind_fabricated
+     with module Typing_env_extension := Typing_env_extension) :
+  sig
+    include Meet_and_join_spec_intf.S
+      with module Flambda_types := Flambda_types
+      with module Join_env := Join_env
+      with module Typing_env_extension := Typing_env_extension
+      with type of_kind_foo = Flambda_types.of_kind_fabricated
+
+    val meet_or_join_set_of_closures_entry
+       : Join_env.t
+      -> Flambda_types.set_of_closures_entry
+      -> Flambda_types.set_of_closures_entry
+      -> (Flambda_types.set_of_closures_entry * Typing_env_extension.t)
+           Or_absorbing.t
+  end
 end

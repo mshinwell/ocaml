@@ -370,7 +370,11 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/make_meet_or_join.cmo \
   middle_end/typing/meet_and_join.cmo \
   middle_end/typing/meet_and_join_fabricated.cmo \
-  middle_end/typing/meet_and_join_naked_number.cmo \
+  middle_end/typing/meet_and_join_naked_immediate.cmo \
+  middle_end/typing/meet_and_join_naked_float.cmo \
+  middle_end/typing/meet_and_join_naked_int32.cmo \
+  middle_end/typing/meet_and_join_naked_int64.cmo \
+  middle_end/typing/meet_and_join_naked_nativeint.cmo \
   middle_end/typing/meet_and_join_value.cmo \
   middle_end/typing/type_equality.cmo \
   middle_end/typing/type_free_names.cmo \

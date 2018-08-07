@@ -52,6 +52,9 @@ module Make (W : Typing_world.S) = struct
       | Join _ -> false
       | Unknown -> true
 
+    let print_ty ppf ty =
+      S.print_ty ~cache:(Printing_cache.create ()) ppf ty
+
     let rec meet_on_unknown_or_join env
           (ou1 : S.of_kind_foo Flambda_types.unknown_or_join)
           (ou2 : S.of_kind_foo Flambda_types.unknown_or_join)
@@ -122,14 +125,14 @@ module Make (W : Typing_world.S) = struct
           Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
             (Meet_env.env env)
             ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
+            ~print_ty
             or_alias1
         in
         let unknown_or_join2, canonical_simple2 =
           Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
             (Meet_env.env env)
             ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
+            ~print_ty
             or_alias2
         in
         let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
@@ -261,14 +264,14 @@ module Make (W : Typing_world.S) = struct
           Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
             (Join_env.environment_on_left env)
             ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
+            ~print_ty
             or_alias1
         in
         let unknown_or_join2, canonical_simple2 =
           Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
             (Join_env.environment_on_right env)
             ~force_to_kind:S.force_to_kind
-            ~print_ty:S.print_ty
+            ~print_ty
             or_alias2
         in
         let all_aliases1 =

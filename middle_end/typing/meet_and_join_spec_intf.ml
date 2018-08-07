@@ -34,7 +34,12 @@ module type S = sig
 
   val force_to_kind : Flambda_types.t -> of_kind_foo Flambda_types.ty
 
-  val print_ty : Format.formatter -> of_kind_foo Flambda_types.ty -> unit
+  (* CR mshinwell: Rename to [print_ty_with_cache]. *)
+  val print_ty
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> of_kind_foo Flambda_types.ty
+    -> unit
 
   val meet_or_join_of_kind_foo
      : Join_env.t

@@ -44,4 +44,30 @@ module Make (T : Typing_world.S) = struct
       let meet_t, _env_extension = meet env t1 t2 in
       Type_equality.equal meet_t t1
         && not (Type_equality.equal meet_t t2)
+(*
+  val meet_closures_entry
+     : Meet_env.t
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+    -> (Flambda_type0_core.closures_entry * Typing_env_extension.t) Or_bottom.t
+
+  val join_closures_entry
+     : Join_env.t
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+    -> Flambda_type0_core.closures_entry
+
+  val meet_set_of_closures_entry
+     : Meet_env.t
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
+    -> (Flambda_type0_core.set_of_closures_entry * Typing_env_extension.t)
+         Or_bottom.t
+
+  val join_set_of_closures_entry
+     : Join_env.t
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
+    -> Flambda_type0_core.set_of_closures_entry
+*)
 end
