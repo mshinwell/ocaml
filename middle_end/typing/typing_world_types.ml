@@ -25,33 +25,45 @@ module type Types_nonrec = sig
     and module Functor_T := Abstract_functor_types
   module Closure_elements : Closure_elements_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Closure_ids : Closure_ids_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Closures_entry_by_closure_id :
     Closures_entry_by_closure_id_intf.S_types
       with module T := Abstract_types
-  module Discriminants : Trivial_row_like_intf.S_types
+      and module Functor_T := Abstract_functor_types
+  module Discriminants : Discriminants_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Expr : Expr_intf.S
+  module Flambda_types : Flambda_types_intf.S_types
     with module T := Abstract_types
-  module Flambda_types : Flambda_types_intf.S
-    with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Function_type : Function_type_intf.S_types
     with module T := Abstract_types
-  module Immediates : Trivial_row_like_intf.S_types
+    and module Functor_T := Abstract_functor_types
+  module Immediates : Immediates_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Join_env : Join_env_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Meet_env : Meet_env_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Parameters : Parameters_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Types_by_closure_id : Types_by_closure_id_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Typing_env : Typing_env_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
   module Typing_env_extension : Typing_env_extension_intf.S_types
     with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
 end
 
 module type Functor_types_nonrec = sig
@@ -63,14 +75,16 @@ module type Functor_types_nonrec = sig
     with module T := Abstract_types
   module Row_like : Row_like_intf.S_types
     with module T := Abstract_types
+  module Trivial_row_like : Trivial_row_like_intf.S_types
+    with module T := Abstract_types
 end
 
 module type S = sig
   module rec Types : (
     Types_nonrec
-      with module Abstract_types := Nonrec_types
-      and module Abstract_functor_types := Nonrec_functor_types)
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types)
   and Functor_types :
     Functor_types_nonrec
-      with module Abstract_types := Nonrec_types
+      with module Abstract_types := Types
 end

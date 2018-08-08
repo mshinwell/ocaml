@@ -14,28 +14,47 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Typing environment extensions. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make_types (T : Typing_world.S) (Functor_T : Typing_world.Functor_S)
-  : Typing_env_extension_intf.S_types
-      with module T := T
-      and module Functor_T := Functor_T
-
-module type Strengthened_world = sig
-  module Typing_world : sig
-    module rec Types : (Typing_world_types.Types_nonrec
-      with module Abstract_types := Types
-      and module Abstract_functor_types := Functor_types
-      with module Typing_env_extension = Make_types (Types) (Functor_types))
-    and Functor_types : Typing_world_types.Functor_types_nonrec
-      with module Abstract_types := Types
-  end
-  include Typing_world.S with module Typing_world := Typing_world
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  type t
 end
 
-module Make (W : Strengthened_world) (F : Typing_world_types.Functor_S)
-  : Typing_env_extension_intf.S
-      with module T := W.Typing_world.Types
-      and module Functor_T := W.Typing_world.Functor_types
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Discriminants end
+
+  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  (** Create a value which describes the presence of exactly no things. *)
+  val create_bottom : unit -> t
+
+  (** Create a value which describes the presence of an unknown set of
+      things. *)
+  val create_unknown : unit -> t
+
+  val create : Discriminant.Set.t -> t
+
+  val create_with_equations
+     : T.Typing_env_extension.t Discriminant.Map.t
+    -> t
+
+  val equal : Type_equality_env.t -> t -> t -> bool
+
+  val meet
+     : T.Meet_env.t
+    -> t
+    -> t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
+
+  val join
+     : T.Join_env.t
+    -> t
+    -> t
+    -> t
+
+  include Contains_names.S with type t := t
+end

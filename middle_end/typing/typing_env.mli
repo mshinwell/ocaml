@@ -18,25 +18,24 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make_types (W : Typing_world.Types)
+module Make_types (T : Typing_world.S) (Functor_T : Typing_world.Functor_S)
   : Typing_env_intf.S_types
-      with module Flambda_types := W.Flambda_types
+      with module T := T
+      and module Functor_T := Functor_T
 
-module type World = sig
-  module rec Types : Typing_world.Types
-    with module Typing_env = Make_types (Types)
-  include Typing_world.S with module Types := Types
+module type Strengthened_world = sig
+  module Typing_world : sig
+    module rec Types : (Typing_world_types.Types_nonrec
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types
+      with module Typing_env = Make_types (Types) (Functor_types))
+    and Functor_types : Typing_world_types.Functor_types_nonrec
+      with module Abstract_types := Types
+  end
+  include Typing_world.S with module Typing_world := Typing_world
 end
 
-module Make (W : World)
+module Make (W : Strengthened_world) (F : Typing_world_types.Functor_S)
   : Typing_env_intf.S
-      with module Flambda_type0_core := W.Flambda_type0_core
-      with module Join_env := W.Join_env
-      with module Typing_env := W.Typing_env
-      with module Typing_env_extension := W.Typing_env_extension
-      with type binding_type := Make_types (W.Types).binding_type
-      with type typing_environment_entry0 :=
-        Make_types (W.Types).typing_environment_entry0
-      with type typing_environment_entry :=
-        Make_types (W.Types).typing_environment_entry
-      with type levels_to_entries := Make_types (W.Types).levels_to_entries
+      with module T := W.Typing_world.Types
+      and module Functor_T := W.Typing_world.Functor_types

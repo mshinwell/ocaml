@@ -55,19 +55,19 @@ module type S = sig
 
       val add_or_meet_equations
          : t
-        -> Meet_env.t
-        -> Typing_env_extension.t
+        -> T.Meet_env.t
+        -> T.Typing_env_extension.t
         -> t
 
       val meet
-         : Meet_env.t
+         : T.Meet_env.t
         -> Relational_product_intf.fresh_component_semantics
         -> t
         -> t
-        -> (t * Typing_env_extension.t) Or_bottom.t
+        -> (t * T.Typing_env_extension.t) Or_bottom.t
 
       val join
-         : Join_env.t
+         : T.Join_env.t
         -> Relational_product_intf.fresh_component_semantics
         -> t
         -> t

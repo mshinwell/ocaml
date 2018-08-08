@@ -68,7 +68,7 @@ module type S = sig
      : T.Meet_env.t
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two function types. *)
   val join

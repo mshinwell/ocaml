@@ -349,6 +349,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/type_printers_intf.cmo \
   middle_end/typing/flambda_type0_intf.cmo \
   middle_end/typing/flambda_types_intf.cmo \
+  middle_end/typing/discriminants_intf.cmo \
+  middle_end/typing/immediates_intf.cmo \
   middle_end/typing/row_like_intf.cmo \
   middle_end/typing/flambda_type0_core_intf.cmo \
   middle_end/typing/blocks_intf.cmo \

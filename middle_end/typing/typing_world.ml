@@ -19,14 +19,6 @@
 module type Functor_S = sig
   module Typing_world : Typing_world_types.S
 
-  module Discriminants : Trivial_row_like_intf.S
-    with module Thing_without_names := Discriminant
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Immediates : Trivial_row_like_intf.S_applied
-    with module Thing_without_names := Immediate
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
   module Make_meet_or_join : Make_meet_or_join_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
@@ -59,6 +51,9 @@ module type S = sig
   module Closures_entry_by_closure_id : Closures_entry_by_closure_id_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
+  module Discriminants : Discriminants_intf.S
+    with module T := Typing_world.Types
+    and module Functor_T := Typing_world.Functor_types
   module Expr : Expr_intf.S
   module Flambda_type0_core : Flambda_type0_core_intf.S
     with module T := Typing_world.Types
@@ -68,6 +63,9 @@ module type S = sig
       with module T := Typing_world.Types
       and module Functor_T := Typing_world.Functor_types
   module Function_type : Function_type_intf.S
+    with module T := Typing_world.Types
+    and module Functor_T := Typing_world.Functor_types
+  module Immediates : Immediates_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
   module Join_env : Join_env_intf.S
