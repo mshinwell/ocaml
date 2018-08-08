@@ -16,42 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+
+end
+
 module type S = sig
-  module Both_meet_and_join : sig end
-  module Closure_elements : sig type t end  (* CR mshinwell: remove this *)
-  module Expr : sig type t end
-  module Flambda_types : sig
-    type 'a or_alias
-    type t
-    type ty_value
-    type 'a ty_naked_number
-    type ty_fabricated
-    type 'a ty
-    type 'a unknown_or_join
-    type of_kind_value
-    type blocks_and_tagged_immediates
-    type 'a of_kind_value_boxed_number
-    type inlinable_function_declaration
-    type function_declaration
-    type closures_entry
-    type closures
-    type 'a of_kind_naked_number
-    type of_kind_naked_immediate
-    type of_kind_naked_float
-    type of_kind_naked_int32
-    type of_kind_naked_int64
-    type of_kind_naked_nativeint
-    type of_kind_fabricated
-    type set_of_closures_entry
-    type set_of_closures
-  end
-  module Function_type : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Type_free_names : sig end
-  module Type_printers : sig end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Flambda_type0_core_intf end
 
   include Contains_names.S with type t := Flambda_types.t
 
@@ -149,7 +123,7 @@ module type S = sig
   val of_ty_naked_number
     : 'kind Flambda_types.ty_naked_number
     -> 'kind Flambda_kind.Naked_number.t
-    -> t
+    -> Flambda_types.t
 
   val of_ty_fabricated : Flambda_types.ty_fabricated -> Flambda_types.t
 

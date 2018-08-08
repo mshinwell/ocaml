@@ -4590,7 +4590,7 @@ middle_end/typing/typing_world.cmo : \
     middle_end/typing/typing_world_types.cmo \
     middle_end/typing/typing_env_intf.cmo \
     middle_end/typing/typing_env_extension_intf.cmo \
-    middle_end/typing/types_by_closure_id_intf.cmo typing/types.cmi \
+    middle_end/typing/types_by_closure_id_intf.cmo \
     middle_end/typing/type_printers_intf.cmo \
     middle_end/typing/type_free_names_intf.cmo \
     middle_end/typing/type_equality_intf.cmo \
@@ -4620,7 +4620,7 @@ middle_end/typing/typing_world.cmx : \
     middle_end/typing/typing_world_types.cmx \
     middle_end/typing/typing_env_intf.cmx \
     middle_end/typing/typing_env_extension_intf.cmx \
-    middle_end/typing/types_by_closure_id_intf.cmx typing/types.cmx \
+    middle_end/typing/types_by_closure_id_intf.cmx \
     middle_end/typing/type_printers_intf.cmx \
     middle_end/typing/type_free_names_intf.cmx \
     middle_end/typing/type_equality_intf.cmx \

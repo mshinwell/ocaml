@@ -59,7 +59,7 @@ module type S = sig
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
   module Flambda_types :
-    module type of struct include Types.Flambda_types end
+    module type of struct include Typing_world.Flambda_types end
       with module T := Typing_world.Types
       and module Functor_T := Typing_world.Functor_types
   module Function_type : Function_type_intf.S
