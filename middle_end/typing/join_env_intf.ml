@@ -16,6 +16,10 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module type S_types = sig
+  type t
+end
+
 module type S = sig
   module Flambda_type0_core : sig type t end
   module Meet_env : sig type t end

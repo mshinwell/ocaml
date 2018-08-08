@@ -20,9 +20,8 @@
     typing environments and environment extensions that are required whilst
     carrying out join operations (on types, etc). *)
 
-module Make_types (W : Typing_world.Types) = struct
-  type t
-end
+module Make_types (W : Typing_world.Types)
+    : Join_env_intf.S_types
 
 module type World = sig
   module rec Types : Typing_world.Types
@@ -35,3 +34,4 @@ module Make (W : World)
       with module Meet_env := W.Meet_env
       with module Typing_env := W.Typing_env
       with module Typing_env_extension := W.Typing_env_extension
+      with type t := Make_types (W).t

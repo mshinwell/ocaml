@@ -18,6 +18,29 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module type S_types = sig
+  module Flambda_types : sig type t end
+
+  type t
+
+  type binding_type = Normal | Was_existential
+
+  type typing_environment_entry0 =
+    | Definition of Flambda_types.t
+    | Equation of Flambda_types.t
+
+  type typing_environment_entry = private
+    | Definition of Flambda_types.t
+    | Equation of Flambda_types.t
+    | CSE of Flambda_primitive.With_fixed_value.t
+      (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
+         change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
+
+  type levels_to_entries =
+    (Name.t * typing_environment_entry)
+      Scope_level.Sublevel.Map.t Scope_level.Map.t
+end
+
 module type S = sig
   module Flambda_type0_core : sig
     type t
@@ -30,22 +53,11 @@ module type S = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  type typing_environment_entry0 = private
-    | Definition of Flambda_type0_core.t
-    | Equation of Flambda_type0_core.t
-
-  type typing_environment_entry =
-    | Definition of Flambda_type0_core.t
-    | Equation of Flambda_type0_core.t
-    | CSE of Flambda_primitive.With_fixed_value.t
-      (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
-         change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
-
-  type levels_to_entries =
-    (Name.t * typing_environment_entry)
-      Scope_level.Sublevel.Map.t Scope_level.Map.t
-
   type t
+  type binding_type
+  type typing_environment_entry0
+  type typing_environment_entry
+  type levels_to_entries
 
   (** Perform various invariant checks upon the given environment. *)
   val invariant : t -> unit

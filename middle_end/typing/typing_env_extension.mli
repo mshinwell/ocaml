@@ -18,9 +18,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make_types (W : Typing_world.Types) = struct
-  type t
-end
+module Make_types (W : Typing_world.Types) :
+  Typing_env_extension_intf.S_types
 
 module type World = sig
   module rec Types : Typing_world.Types
@@ -33,3 +32,4 @@ module Make (W : World) :
     with module Flambda_types := W.Flambda_types
     with module Typing_env := W.Typing_env
     with module Join_env := W.Join_env
+    with type t := Make_types (W).t

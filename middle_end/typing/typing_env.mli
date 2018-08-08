@@ -18,26 +18,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make_types (W : Typing_world.Types) = struct
-  type binding_type = Normal | Was_existential
-
-  type typing_environment_entry0 =
-    | Definition of Flambda_type.t
-    | Equation of Flambda_type.t
-
-  type typing_environment_entry = private
-    | Definition of Flambda_type.t
-    | Equation of Flambda_type.t
-    | CSE of Flambda_primitive.With_fixed_value.t
-
-  type levels_to_entries =
-    (Name.t * typing_environment_entry)
-      Scope_level.Sublevel.Map.t Scope_level.Map.t
-end
+module Make_types (W : Typing_world.Types)
+  : Typing_env_intf.S_types
+      with module Flambda_types := W.Flambda_types
 
 module type World = sig
   module rec Types : Typing_world.Types
-    with module Typing_env = Make_t (Types)
+    with module Typing_env = Make_types (Types)
   include Typing_world.S with module Types := Types
 end
 
@@ -47,3 +34,9 @@ module Make (W : World)
       with module Join_env := W.Join_env
       with module Typing_env := W.Typing_env
       with module Typing_env_extension := W.Typing_env_extension
+      with type binding_type := Make_types (W.Types).binding_type
+      with type typing_environment_entry0 :=
+        Make_types (W.Types).typing_environment_entry0
+      with type typing_environment_entry :=
+        Make_types (W.Types).typing_environment_entry
+      with type levels_to_entries := Make_types (W.Types).levels_to_entries

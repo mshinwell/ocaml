@@ -15,11 +15,25 @@
 (**************************************************************************)
 
 (** The common dependencies of individual typing/ files together with the
-    recursive links between them. *)
+    recursive links between them.
+
+    To avoid the double vision problem some module interfaces are
+    partitioned into two parts: one for types and one for values.
+*)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module type S_types = sig
+  module rec Flambda_types : Flambda_types_intf.S_types
+  and Join_env : Join_env_intf.S_types
+  and Typing_env : (Typing_env_intf.S_types
+    with module Flambda_types := Flambda_types)
+  and Typing_env_extension : Typing_env_extension_intf.S_types
+end
+
 module type S = sig
+  module Types : S_types
+
   module rec Blocks : (Blocks_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -70,16 +84,21 @@ module type S = sig
     with module Type_printers := Type_printers
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
-  and Flambda_types : (Flambda_types_intf.S
-    with module Blocks := Blocks
-    with module Closure_elements := Closure_elements
-    with module Closure_ids := Closure_ids
-    with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
-    with module Discriminants := Discriminants
-    with module Expr := Expr
-    with module Function_type := Function_type
-    with module Immediates := Immediates
-    with module Types_by_closure_id := Types_by_closure_id)
+  and Flambda_types : (sig
+    include module type of struct include Types.Flambda_types end
+
+    include Flambda_types_intf.S
+        with module Blocks := Blocks
+        with module Closure_elements := Closure_elements
+        with module Closure_ids := Closure_ids
+        with module Closures_entry_by_closure_id := Closures_entry_by_closure_id
+        with module Discriminants := Discriminants
+        with module Expr := Expr
+        with module Function_type := Function_type
+        with module Immediates := Immediates
+        with module Types_by_closure_id := Types_by_closure_id
+        with type t := t
+  end)
   and Function_type : (Function_type_intf.S
     with module Flambda_type0_core := Flambda_type0_core
     with module Join_env := Join_env
@@ -93,11 +112,16 @@ module type S = sig
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension
     with module Thing_without_names := Immediate)
-  and Join_env : (Join_env_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
-    with module Meet_env := Meet_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension)
+  and Join_env : (sig
+    include module type of struct include Types.Join_env end
+
+    include Join_env_intf.S
+      with module Flambda_type0_core := Flambda_type0_core
+      with module Meet_env := Meet_env
+      with module Typing_env := Typing_env
+      with module Typing_env_extension := Typing_env_extension
+      with type t := t
+  end)
   and Make_meet_or_join : (Make_meet_or_join_intf.S
     with module Flambda_types := Flambda_types
     with module Join_env := Join_env
@@ -181,14 +205,28 @@ module type S = sig
     with module Meet_env := Meet_env
     with module Typing_env := Typing_env
     with module Typing_env_extension := Typing_env_extension)
-  and Typing_env : (Typing_env_intf.S
-    with module Flambda_type0_core := Flambda_type0_core
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension)
-  and Typing_env_extension : (Typing_env_extension_intf.S
-    with module Flambda_types := Flambda_types
-    with module Typing_env := Typing_env
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env)
+  and Typing_env : (sig
+    include module type of struct include Types.Typing_env end
+
+    include Typing_env_intf.S
+      with module Flambda_type0_core := Flambda_type0_core
+      with module Join_env := Join_env
+      with module Meet_env := Meet_env
+      with module Typing_env_extension := Typing_env_extension
+      with type t := t
+      with type binding_type := binding_type
+      with type typing_environment_entry0 := typing_environment_entry0
+      with type typing_environment_entry := typing_environment_entry
+      with type levels_to_entries := levels_to_entries
+  end)
+  and Typing_env_extension : (sig
+    include module type of struct include Types.Typing_env_extension end
+
+    include Typing_env_extension_intf.S
+      with module Flambda_types := Flambda_types
+      with module Typing_env := Typing_env
+      with module Join_env := Join_env
+      with module Meet_env := Meet_env
+      with type t := t
+  end)
 end
