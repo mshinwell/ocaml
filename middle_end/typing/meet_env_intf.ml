@@ -16,20 +16,26 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Typing_env : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Meet_env end
 
   val create
-     : Typing_env.t
+     : T.Typing_env.t
     -> perm_left:Name_permutation.t
     -> perm_right:Name_permutation.t
     -> t
 
   val print : Format.formatter -> t -> unit
 
-  val env : t -> Typing_env.t
+  val env : t -> T.Typing_env.t
 
   val perm_left : t -> Name_permutation.t
 
@@ -46,7 +52,7 @@ module type S = sig
 
   val shortcut_precondition : t -> bool
 
-  val with_env : t -> (Typing_env.t -> Typing_env.t) -> t
+  val with_env : t -> (T.Typing_env.t -> T.Typing_env.t) -> t
 
   val clear_name_permutations : t -> t
 

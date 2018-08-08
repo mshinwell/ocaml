@@ -19,19 +19,20 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S_types = sig
-  module Flambda_types : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
   type t
 
   type binding_type = Normal | Was_existential
 
   type typing_environment_entry0 =
-    | Definition of Flambda_types.t
-    | Equation of Flambda_types.t
+    | Definition of T.Flambda_types.t
+    | Equation of T.Flambda_types.t
 
   type typing_environment_entry = private
-    | Definition of Flambda_types.t
-    | Equation of Flambda_types.t
+    | Definition of T.Flambda_types.t
+    | Equation of T.Flambda_types.t
     | CSE of Flambda_primitive.With_fixed_value.t
       (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
          change it to [Introduce_name] -- the "t" would be implicitly bottom) *)
@@ -42,22 +43,9 @@ module type S_types = sig
 end
 
 module type S = sig
-  module Flambda_type0_core : sig
-    type t
-    type 'a ty
-    type 'a unknown_or_join
-  end
-  module Function_parameters : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
-  type t
-  type binding_type
-  type typing_environment_entry0
-  type typing_environment_entry
-  type levels_to_entries
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Typing_env end
 
   (** Perform various invariant checks upon the given environment. *)
   val invariant : t -> unit
@@ -73,14 +61,14 @@ module type S = sig
 
   (** Create an empty environment using the given [resolver] to locate the
       definitions of export identifiers (e.g. by loading .cmx files). *)
-  val create : resolver:(Export_id.t -> Flambda_type0_core.t option) -> t
+  val create : resolver:(Export_id.t -> T.Flambda_types.t option) -> t
 
   (** As for [create] but takes the [resolver] from an existing
       environment. *)
   val create_using_resolver_from : t -> t
 
   (** The export identifier resolver from the given environment. *)
-  val resolver : t -> (Export_id.t -> Flambda_type0_core.t option)
+  val resolver : t -> (Export_id.t -> T.Flambda_types.t option)
 
   (** Returns [true] iff the given environment contains no bindings.
       (An environment containing only existential bindings is not deemed
@@ -115,7 +103,7 @@ module type S = sig
 
   (** The same as [add] on a newly-[create]d environment. *)
   val singleton
-     : resolver:(Export_id.t -> Flambda_type0_core.t option)
+     : resolver:(Export_id.t -> T.Flambda_types.t option)
     -> Name.t
     -> Scope_level.t
     -> typing_environment_entry
@@ -125,15 +113,11 @@ module type S = sig
       environment.  The actual type of the added equation will be the meet of
       the current best type specified by the environment for the given name
       with the supplied type. *)
-  val add_equation : t -> Name.t -> Scope_level.t -> Flambda_type0_core.t -> t
+  val add_equation : t -> Name.t -> Scope_level.t -> T.Flambda_types.t -> t
 
   (** Ensure that a binding is not present in an environment.  This function 
       is idempotent. *)
   val remove : t -> Name.t -> t
-
-  type binding_type = private
-    | Normal
-    | Was_existential
 
   (** Determine the most precise type which the environment knows for the
       given name. *)
@@ -141,17 +125,17 @@ module type S = sig
   val find_exn
      : t
     -> Name.t
-    -> Flambda_type0_core.t * binding_type
+    -> T.Flambda_types.t * binding_type
 
   (** As for [find] but returns the scoping level of the given name as well. *)
   val find_with_scope_level_exn
      : t
     -> Name.t
-    -> Flambda_type0_core.t * Scope_level.With_sublevel.t * binding_type
+    -> T.Flambda_types.t * Scope_level.With_sublevel.t * binding_type
 
   (** Like [find], but returns [None] iff the given name is not in the
       specified environment. *)
-  val find_opt : t -> Name.t -> (Flambda_type0_core.t * binding_type) option
+  val find_opt : t -> Name.t -> (T.Flambda_types.t * binding_type) option
 
   (** Return a name or constant, if such is available, which may be
       substituted for the given primitive in the fashion of CSE.  (This
@@ -205,7 +189,7 @@ module type S = sig
   val cut
      : t
     -> existential_if_defined_at_or_later_than:Scope_level.t
-    -> Typing_env_extension.t
+    -> T.Typing_env_extension.t
 
   (** Adjust the domain of the given typing environment so that it only
       mentions names which are symbols, not variables. *)
@@ -229,7 +213,7 @@ module type S = sig
      a level and instead use the max? *)
   val add_or_meet_env_extension
      : t
-    -> Typing_env_extension.t
+    -> T.Typing_env_extension.t
     -> Scope_level.t
     -> t
 
@@ -237,7 +221,7 @@ module type S = sig
       used to open existentials in the supplied extension. *)
   val add_or_meet_env_extension'
      : t
-    -> Typing_env_extension.t
+    -> T.Typing_env_extension.t
     -> Scope_level.t
     -> t * Freshening.t
 
@@ -256,17 +240,17 @@ module type S = sig
   *)
   val resolve_aliases
      : ?bound_name:Name.t
-    -> Typing_env.t
-    -> Flambda_type0_core.t
-    -> Flambda_type0_core.t * (Simple.t option)
+    -> t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t * (Simple.t option)
 
   val resolve_aliases_and_squash_unresolved_names_on_ty'
      : t
     -> ?bound_name:Name.t
-    -> print_ty:(Format.formatter -> 'a Flambda_type0_core.ty -> unit)
-    -> force_to_kind:(Flambda_type0_core.t -> 'a Flambda_type0_core.ty)
-    -> 'a Flambda_type0_core.ty
-    -> 'a Flambda_type0_core.unknown_or_join * (Simple.t option)
+    -> print_ty:(Format.formatter -> 'a T.Flambda_types.ty -> unit)
+    -> force_to_kind:(T.Flambda_types.t -> 'a T.Flambda_types.ty)
+    -> 'a T.Flambda_types.ty
+    -> 'a T.Flambda_types.unknown_or_join * (Simple.t option)
 
   (** All names (not including the given name) which are known to be aliases
       of the given [Simple.t] in the given environment.  (For [Name]s this

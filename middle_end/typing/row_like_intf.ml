@@ -16,67 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S_applied = sig
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
-  module Tag : Hashtbl.With_map
-  module Index : Hashtbl.With_map
-
-  module Tag_and_index : sig
-    (** These values will not contain any names. *)
-    type t = Tag.t * Index.t
-
-    include Map.With_set with type t := t
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  module Make_types (Tag: sig end) (Index : sig end) (Maps_to : sig end) : sig
+    type t
   end
-
-  module Maps_to : sig type t end
-
-  type t
-
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-  val create : unit -> t
-
-  val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
-
-  val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
-
-  val create_at_least : Index.t -> Maps_to.t -> t
-
-  val create_at_least_multiple : Maps_to.t Index.Map.t -> t
-
-  val is_bottom : t -> bool
-
-  val equal : Type_equality_env.t -> t -> t -> bool
-
-  (** The [Maps_to] value which [meet] returns contains the join of all
-      [Maps_to] values in the range of the row-like structure after the meet
-      operation has been completed. *)
-  val meet
-     : Meet_env.t
-    -> Relational_product_intf.fresh_component_semantics
-    -> t
-    -> t
-    -> (t * Maps_to.t) Or_bottom.t
-
-  val join
-     : Join_env.t
-    -> Relational_product_intf.fresh_component_semantics
-    -> t
-    -> t
-    -> t
-
-  include Contains_names.S with type t := t
 end
 
 module type S = sig
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include Functor_T.Row_like end
 
   module Make
     (Tag : sig
@@ -124,12 +75,49 @@ module type S = sig
 
       include Contains_names.S with type t := t
     end) :
-    S_applied
-      with module Tag := Tag
-      with module Index := Index
-      with module Maps_to := Maps_to
-      with module Join_env := Join_env
-      with module Meet_env := Meet_env
-      with module Typing_env := Typing_env
-      with module Typing_env_extension := Typing_env_extension
+  sig
+    include module type of Make_types (Tag) (Index) (Maps_to)
+
+    module Tag_and_index : sig
+      (** These values will not contain any names. *)
+      type t = Tag.t * Index.t
+
+      include Map.With_set with type t := t
+    end
+
+    val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+    val create : unit -> t
+
+    val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
+
+    val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
+
+    val create_at_least : Index.t -> Maps_to.t -> t
+
+    val create_at_least_multiple : Maps_to.t Index.Map.t -> t
+
+    val is_bottom : t -> bool
+
+    val equal : Type_equality_env.t -> t -> t -> bool
+
+    (** The [Maps_to] value which [meet] returns contains the join of all
+        [Maps_to] values in the range of the row-like structure after the meet
+        operation has been completed. *)
+    val meet
+       : T.Meet_env.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> (t * Maps_to.t) Or_bottom.t
+
+    val join
+       : T.Join_env.t
+      -> Relational_product_intf.fresh_component_semantics
+      -> t
+      -> t
+      -> t
+
+    include Contains_names.S with type t := t
+  end
 end

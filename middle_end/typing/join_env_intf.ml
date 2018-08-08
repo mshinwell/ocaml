@@ -17,50 +17,49 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
 end
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
-  type t
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Join_env end
 
   (** Perform various invariant checks upon the given join environment. *)
   val invariant : t -> unit
 
-  val create : Meet_env.t -> t
+  val create : T.Meet_env.t -> t
 
   val add_definition_central_environment
      : t
     -> Name.t
-    -> Flambda_type0_core.t
+    -> T.Flambda_types.t
     -> t
 
   val add_extensions
      : t
-    -> holds_on_left:Typing_env_extension.t
-    -> holds_on_right:Typing_env_extension.t
+    -> holds_on_left:T.Typing_env_extension.t
+    -> holds_on_right:T.Typing_env_extension.t
     -> t
 
   val add_extensions_and_extend_central_environment
      : t
-    -> holds_on_left:Typing_env_extension.t
-    -> holds_on_right:Typing_env_extension.t
-    -> central_extension:Typing_env_extension.t
+    -> holds_on_left:T.Typing_env_extension.t
+    -> holds_on_right:T.Typing_env_extension.t
+    -> central_extension:T.Typing_env_extension.t
     -> t
 
-  val central_environment : t -> Meet_env.t
+  val central_environment : t -> T.Meet_env.t
 
-  val environment_on_left : t -> Typing_env.t
+  val environment_on_left : t -> T.Typing_env.t
 
-  val environment_on_right : t -> Typing_env.t
+  val environment_on_right : t -> T.Typing_env.t
 
-  val holds_on_left : t -> Typing_env_extension.t
+  val holds_on_left : t -> T.Typing_env_extension.t
 
-  val holds_on_right : t -> Typing_env_extension.t
+  val holds_on_right : t -> T.Typing_env_extension.t
 
   val shortcut_precondition : t -> bool
 

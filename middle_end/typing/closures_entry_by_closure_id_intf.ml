@@ -16,15 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  type t
+end
+
 module type S = sig
-  module Flambda_type0_core : sig
-    type t
-    module Closures_entry : sig type t end
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Closures_entry_by_closure_id end
 
   (* CR mshinwell: This module is unpleasant.  We should arrange things so that
      [Var_within_closure.Set.Map] exists.  (This should be easier now that
@@ -41,35 +42,33 @@ module type S = sig
     include Map.With_set with type t := t
   end
 
-  type t
-
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   (** Describe one or more closures by giving for each one the closure ID
       and the set of variables in the closure. *)
   val create_exactly_multiple
-     : Flambda_type0_core.Closures_entry.t
+     : T.Flambda_types.closures_entry
          Closure_id_and_var_within_closure_set.Map.t
     -> t
 
   (** Describe one or more closures that contain at least the given closure
       variables. *)
   val create_at_least_multiple
-     : Flambda_type0_core.Closures_entry.t Var_within_closure_set.Map.t
+     : T.Flambda_types.closures_entry Var_within_closure_set.Map.t
     -> t
 
   val equal : Type_equality_env.t -> t -> t -> bool
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet
-     : Meet_env.t
+     : T.Meet_env.t
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two values of type [t]. *)
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> t

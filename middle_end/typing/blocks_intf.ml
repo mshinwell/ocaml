@@ -16,21 +16,23 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Blocks end
 
   type open_or_closed = Open | Closed of Tag.t
 
   (** Create a value which describes that there are exactly no blocks. *)
   val create_bottom : unit -> t
 
-  val create : field_tys:Flambda_type0_core.t list -> open_or_closed -> t
+  val create : field_tys:T.Flambda_types.t list -> open_or_closed -> t
 
   val invariant : t -> unit
 
@@ -39,13 +41,13 @@ module type S = sig
   val equal : Type_equality_env.t -> t -> t -> bool
 
   val meet
-     : Meet_env.t
+     : T.Meet_env.t
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> t

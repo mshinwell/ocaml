@@ -16,61 +16,51 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S_applied = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-  module Thing_without_names : Map.With_set
-
-  type t
-
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-  (** Create a value which describes the presence of exactly no things. *)
-  val create_bottom : unit -> t
-
-  (** Create a value which describes the presence of an unknown set of
-      things. *)
-  val create_unknown : unit -> t
-
-  val create : Thing_without_names.Set.t -> t
-
-  val create_with_equations
-     : Typing_env_extension.t Thing_without_names.Map.t
-    -> t
-
-  val equal : Type_equality_env.t -> t -> t -> bool
-
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
-
-  val join
-     : Join_env.t
-    -> t
-    -> t
-    -> t
-
-  include Contains_names.S with type t := t
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  module Make_types (Thing_without_names : sig end) : sig
+    type t
+  end
 end
 
 module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include Functor_T.Trivial_row_like end
 
-  module Make (Thing_without_names : Hashtbl.With_map)
-    : S_applied
-        with module Flambda_type0_core := Flambda_type0_core
-        with module Join_env := Join_env
-        with module Meet_env := Meet_env
-        with module Thing_without_names := Thing_without_names
-        with module Typing_env := Typing_env
-        with module Typing_env_extension := Typing_env_extension
+  module Make (Thing_without_names : Hashtbl.With_map) : sig
+    include module type of Make_types (Thing_without_names)
+
+    val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+    (** Create a value which describes the presence of exactly no things. *)
+    val create_bottom : unit -> t
+
+    (** Create a value which describes the presence of an unknown set of
+        things. *)
+    val create_unknown : unit -> t
+
+    val create : Thing_without_names.Set.t -> t
+
+    val create_with_equations
+       : T.Typing_env_extension.t Thing_without_names.Map.t
+      -> t
+
+    val equal : Type_equality_env.t -> t -> t -> bool
+
+    val meet
+       : T.Meet_env.t
+      -> t
+      -> t
+      -> (t * T.Typing_env_extension.t) Or_bottom.t
+
+    val join
+       : T.Join_env.t
+      -> t
+      -> t
+      -> t
+
+    include Contains_names.S with type t := t
+  end
 end

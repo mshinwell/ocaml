@@ -16,16 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Blocks : sig type t end
-  module Closure_elements : sig type t end
-  module Closure_ids : sig type t end
-  module Closures_entry_by_closure_id : sig type t end
-  module Discriminants : sig type t end
-  module Expr : sig type t end
-  module Function_type : sig type t end
-  module Immediates : sig type t end
-  module Types_by_closure_id : sig type t end
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
   type 'a or_alias =
     | No_alias of 'a
@@ -62,8 +55,8 @@ module type S = sig
   (* CR mshinwell: We should note explicitly that block fields are logical
      fields (I think this only matters for float arrays on 32-bit targets) *)
   and blocks_and_tagged_immediates = {
-    immediates : Immediates.t;
-    blocks : Blocks.t;
+    immediates : T.Immediates.t;
+    blocks : T.Blocks.t;
   }
 
   and 'a of_kind_value_boxed_number =
@@ -90,7 +83,7 @@ module type S = sig
        applied to the originating source file. *)
     is_classic_mode : bool;
     params : Kinded_parameter.t list;
-    body : Expr.t;
+    body : T.Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     stub : bool;
@@ -113,13 +106,13 @@ module type S = sig
 
   and closures_entry = {
     function_decl : function_declaration;
-    ty : Function_type.t;
-    closure_elements : Closure_elements.t;
+    ty : T.Function_type.t;
+    closure_elements : T.Closure_elements.t;
     set_of_closures : ty_fabricated;
   }
 
   and closures = {
-    by_closure_id : Closures_entry_by_closure_id.t;
+    by_closure_id : T.Closures_entry_by_closure_id.t;
   }
 
   and 'a of_kind_naked_number =
@@ -139,14 +132,14 @@ module type S = sig
 
   and of_kind_fabricated =
     (* CR-someday mshinwell: Should tags be represented as naked immediates? *)
-    | Discriminants of Discriminants.t
+    | Discriminants of T.Discriminants.t
     | Set_of_closures of set_of_closures
 
   and set_of_closures_entry = {
-    by_closure_id : Types_by_closure_id.t;
+    by_closure_id : T.Types_by_closure_id.t;
   }
 
   and set_of_closures = {
-    closures : Closure_ids.t;
+    closures : T.Closure_ids.t;
   }
 end

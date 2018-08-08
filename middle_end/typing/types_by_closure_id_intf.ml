@@ -16,18 +16,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Types_by_closure_id end
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val create : Flambda_type0_core.t Closure_id.Map.t -> t
+  val create : T.Flambda_types.t Closure_id.Map.t -> t
 
   val create_bottom : unit -> t
 
@@ -35,22 +37,22 @@ module type S = sig
 
   (** Greatest lower bound of two values of type [t]. *)
   val meet
-     : Meet_env.t
+     : T.Meet_env.t
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two values of type [t]. *)
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> t
 
   val add_or_meet_equations
      : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
+    -> T.Meet_env.t
+    -> T.Typing_env_extension.t
     -> t
 
   include Contains_names.S with type t := t

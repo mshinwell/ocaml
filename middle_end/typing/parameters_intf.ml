@@ -16,13 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Parameters end
 
   include Contains_names.S with type t := t
 
@@ -31,14 +34,14 @@ module type S = sig
 
   (** Create a representation of the names, order and type of a function's
       parameters. *)
-  val create : (Kinded_parameter.t * Flambda_type0_core.t) list -> t
+  val create : (Kinded_parameter.t * T.Flambda_types.t) list -> t
 
   (** A conservative approximation to equality. *)
   val equal : t -> t -> bool
 
   (** Greatest lower bound of two parameter lists. *)
-  val meet : Meet_env.t -> t -> t -> t Or_bottom.t
+  val meet : T.Meet_env.t -> t -> t -> t Or_bottom.t
 
   (** Least upper bound of two parameter lists. *)
-  val join : Join_env.t -> t -> t -> t
+  val join : T.Join_env.t -> t -> t -> t
 end

@@ -16,24 +16,23 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig
-    type t
-    module Set_of_closures_entry : sig type t end
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Closure_ids end
 
   val invariant : t -> unit
 
   type open_or_closed = Open | Closed
 
   val create
-     : Flambda_type0_core.Set_of_closures_entry.t Closure_id_set.Map.t
+     : T.Flambda_types.set_of_closures_entry Closure_id_set.Map.t
     -> open_or_closed
     -> t
 
@@ -42,13 +41,13 @@ module type S = sig
   val equal : Type_equality_env.t -> t -> t -> bool
 
   val meet
-     : Meet_env.t
+     : T.Meet_env.t
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> t

@@ -18,8 +18,24 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (W : Typing_world.S) :
-  Blocks_intf.S
-    with module Flambda_type0_core := W.Flambda_type0_core
-    with module Join_env := W.Join_env
-    with module Typing_env := W.Typing_env
+module Make_types (T : Typing_world.S) (Functor_T : Typing_world.Functor_S)
+  : Blocks_intf.S_types
+      with module T := T
+      and module Functor_T := Functor_T
+
+module type Strengthened_world = sig
+  module Typing_world : sig
+    module rec Types : (Typing_world_types.Types_nonrec
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types
+      with module Blocks = Make_types (Types) (Functor_types))
+    and Functor_types : Typing_world_types.Functor_types_nonrec
+      with module Abstract_types := Types
+  end
+  include Typing_world.S with module Typing_world := Typing_world
+end
+
+module Make (W : Strengthened_world) (F : Typing_world_types.Functor_S)
+  : Blocks_intf.S
+      with module T := W.Typing_world.Types
+      and module Functor_T := W.Typing_world.Functor_types

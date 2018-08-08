@@ -53,15 +53,6 @@ module type S = sig
   module Typing_env : sig type t end
   module Typing_env_extension : sig type t end
 
-  (* CR mshinwell: These aliases are deprecated *)
-  type t = Flambda_types.t
-  type set_of_closures_entry = Flambda_types.set_of_closures_entry
-  type closures_entry = Flambda_types.closures_entry
-  type function_declaration = Flambda_types.function_declaration
-  type ty_fabricated = Flambda_types.ty_fabricated
-  type 'a ty = 'a Flambda_types.ty
-  type 'a unknown_or_join = 'a Flambda_types.unknown_or_join
-
   include Contains_names.S with type t := Flambda_types.t
 
   module Closures_entry : sig
@@ -153,131 +144,137 @@ module type S = sig
 
   val is_obviously_bottom : Flambda_types.t -> bool
 
-  val of_ty_value : Flambda_types.ty_value -> t
+  val of_ty_value : Flambda_types.ty_value -> Flambda_types.t
 
   val of_ty_naked_number
     : 'kind Flambda_types.ty_naked_number
     -> 'kind Flambda_kind.Naked_number.t
     -> t
 
-  val of_ty_fabricated : ty_fabricated -> t
+  val of_ty_fabricated : Flambda_types.ty_fabricated -> Flambda_types.t
 
   (** Construction of top types. *)
-  val unknown : Flambda_kind.t -> t
+  val unknown : Flambda_kind.t -> Flambda_types.t
 
-  val any_value : unit -> t
+  val any_value : unit -> Flambda_types.t
   val any_value_as_ty_value : unit -> Flambda_types.ty_value
 
-  val any_fabricated : unit -> t
-  val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
+  val any_fabricated : unit -> Flambda_types.t
+  val any_fabricated_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
-  val any_tagged_immediate : unit -> t
-  val any_tagged_bool : unit -> t
+  val any_tagged_immediate : unit -> Flambda_types.t
+  val any_tagged_bool : unit -> Flambda_types.t
 
-  val any_boxed_float : unit -> t
-  val any_boxed_int32 : unit -> t
-  val any_boxed_int64 : unit -> t
-  val any_boxed_nativeint : unit -> t
+  val any_boxed_float : unit -> Flambda_types.t
+  val any_boxed_int32 : unit -> Flambda_types.t
+  val any_boxed_int64 : unit -> Flambda_types.t
+  val any_boxed_nativeint : unit -> Flambda_types.t
 
-  val any_naked_immediate : unit -> t
-  val any_naked_float : unit -> t
+  val any_naked_immediate : unit -> Flambda_types.t
+  val any_naked_float : unit -> Flambda_types.t
 
   val any_naked_float_as_ty_naked_float
     : unit
     -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
 
   (** The top type for unboxed 32-bit numbers. *)
-  val any_naked_int32 : unit -> t
+  val any_naked_int32 : unit -> Flambda_types.t
 
   (** The top type for unboxed 64-bit numbers. *)
-  val any_naked_int64 : unit -> t
+  val any_naked_int64 : unit -> Flambda_types.t
 
   (** The top type for unboxed "nativeint" numbers. *)
-  val any_naked_nativeint : unit -> t
+  val any_naked_nativeint : unit -> Flambda_types.t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
-  val this_tagged_immediate : Immediate.t -> t
-  val these_tagged_immediates : Immediate.Set.t -> t
-  val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
-  val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
-  val this_boxed_int32 : Int32.t -> t
-  val these_boxed_int32s : Numbers.Int32.Set.t -> t
-  val this_boxed_int64 : Int64.t -> t
-  val these_boxed_int64s : Numbers.Int64.Set.t -> t
-  val this_boxed_nativeint : Targetint.t -> t
-  val these_boxed_nativeints : Targetint.Set.t -> t
-  val this_immutable_string : string -> t
-  val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
+  val this_tagged_immediate : Immediate.t -> Flambda_types.t
+  val these_tagged_immediates : Immediate.Set.t -> Flambda_types.t
+  val this_boxed_float : Numbers.Float_by_bit_pattern.t -> Flambda_types.t
+  val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> Flambda_types.t
+  val this_boxed_int32 : Int32.t -> Flambda_types.t
+  val these_boxed_int32s : Numbers.Int32.Set.t -> Flambda_types.t
+  val this_boxed_int64 : Int64.t -> Flambda_types.t
+  val these_boxed_int64s : Numbers.Int64.Set.t -> Flambda_types.t
+  val this_boxed_nativeint : Targetint.t -> Flambda_types.t
+  val these_boxed_nativeints : Targetint.Set.t -> Flambda_types.t
+  val this_immutable_string : string -> Flambda_types.t
+  val this_immutable_float_array
+     : Numbers.Float_by_bit_pattern.t array
+    -> Flambda_types.t
 
   (** A type representing a set of tagged immediates combined with typing
       judgements that will be used if the set contains, or is subsequently
       refined to contain, only a unique element. *)
   val these_tagged_immediates_with_envs
      : Typing_env_extension.t Immediate.Map.t
-    -> t
+    -> Flambda_types.t
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
-  val this_naked_immediate : Immediate.t -> t
-  val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
+  val this_naked_immediate : Immediate.t -> Flambda_types.t
+  val this_naked_float : Numbers.Float_by_bit_pattern.t -> Flambda_types.t
   val this_naked_float_as_ty_naked_float
      : Numbers.Float_by_bit_pattern.t
     -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
-  val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
-  val this_naked_int32 : Int32.t -> t
-  val these_naked_int32s : Numbers.Int32.Set.t -> t
-  val this_naked_int64 : Int64.t -> t
-  val these_naked_int64s : Numbers.Int64.Set.t -> t
-  val this_naked_nativeint : Targetint.t -> t
-  val these_naked_nativeints : Targetint.Set.t -> t
+  val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> Flambda_types.t
+  val this_naked_int32 : Int32.t -> Flambda_types.t
+  val these_naked_int32s : Numbers.Int32.Set.t -> Flambda_types.t
+  val this_naked_int64 : Int64.t -> Flambda_types.t
+  val these_naked_int64s : Numbers.Int64.Set.t -> Flambda_types.t
+  val this_naked_nativeint : Targetint.t -> Flambda_types.t
+  val these_naked_nativeints : Targetint.Set.t -> Flambda_types.t
 
   (** Building of types corresponding to immutable values given only the
       size of such values. *)
-  val immutable_string : size:Targetint.OCaml.t -> t
+  val immutable_string : size:Targetint.OCaml.t -> Flambda_types.t
 
   (** The type corresponding to a mutable string of length [size]. *)
-  val mutable_string : size:Targetint.OCaml.t -> t
+  val mutable_string : size:Targetint.OCaml.t -> Flambda_types.t
 
   (** The type corresponding to a mutable float array holding [size]
       naked floats. *)
-  val mutable_float_array : size:Targetint.OCaml.t -> t
+  val mutable_float_array : size:Targetint.OCaml.t -> Flambda_types.t
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
 
   (** The given discriminant. *)
-  val this_discriminant : Discriminant.t -> t
+  val this_discriminant : Discriminant.t -> Flambda_types.t
 
   (** Like [this_discriminant], but returns the [ty_fabricated], rather than
-      a value of type [t]. *)
-  val this_discriminant_as_ty_fabricated : Discriminant.t -> ty_fabricated
+      a type. *)
+  val this_discriminant_as_ty_fabricated
+     : Discriminant.t
+    -> Flambda_type.ty_fabricated
 
-  (** The given block discriminants coupled with the env_extension that hold
+  (** The given block discriminants coupled with the env_extensions that hold
       if the corresponding block can be shown to have one of the
       discriminants. *)
-  val these_discriminants : Typing_env_extension.t Discriminant.Map.t -> t
+  val these_discriminants
+     : Typing_env_extension.t Discriminant.Map.t
+    -> Flambda_type.t
 
   (** Like [these_discriminants], but returns the [ty_fabricated], rather than
       a value of type [t]. *)
   val these_discriminants_as_ty_fabricated
      : Typing_env_extension.t Discriminant.Map.t
-    -> ty_fabricated
+    -> Flambda_types.ty_fabricated
 
   (** Any discriminant. *)
-  val any_discriminant_as_ty_fabricated : unit -> ty_fabricated
+  val any_discriminant_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
   (** Given the type of a naked floating-point number, return the type of the
       corresponding boxed version. *)
-  val box_float : t -> t
+  val box_float : Flambda_types.t -> Flambda_types.t
 
   (** Given the type of a naked int32 number, return the type of the
       corresponding boxed version. *)
-  val box_int32 : t -> t
+  val box_int32 : Flambda_types.t -> Flambda_types.t
 
   (** Given the type of a naked int64 number, return the type of the
       corresponding boxed version. *)
-  val box_int64 : t -> t
+  val box_int64 : Flambda_types.t -> Flambda_types.t
 
   (** Given the type of a naked nativeint number, return the type of the
       corresponding boxed version. *)
@@ -291,22 +288,22 @@ module type S = sig
   (** The type of a block with a known tag, size and field types. *)
   val block
      : Tag.t
-    -> fields:t list
-    -> t
+    -> fields:Flambda_types.t list
+    -> Flambda_types.t
 
   (** Like [block], except that the field types are statically known to be
       of kind [Value]). *)
   val block_of_values
      : Tag.t
     -> fields:Flambda_types.ty_value list
-    -> t
+    -> Flambda_types.t
 
   (** The type of a block with a known tag and size but unknown content,
       save that the contents are all of kind [Value]. *)
   val block_of_unknown_values
      : Tag.t
     -> size:int
-    -> t
+    -> Flambda_types.t
 
   (** The type of a block with at least [n] fields and an unknown tag.
       The type of the [n - 1]th field is taken to be an [Equals] to the
@@ -314,10 +311,10 @@ module type S = sig
   val block_with_size_at_least
      : n:int
     -> field_n_minus_one:Variable.t
-    -> t
+    -> Flambda_types.t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
-  val bottom : Flambda_kind.t -> t
+  val bottom : Flambda_kind.t -> Flambda_types.t
 
   (** The bottom type for kind [Value] expressed as a type whose kind is
       statically known. *)
@@ -325,13 +322,13 @@ module type S = sig
 
   (** The bottom type for kind [Fabricated] expressed as a type whose kind is
       statically known. *)
-  val bottom_as_ty_fabricated : unit -> ty_fabricated
+  val bottom_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
   (** Create an "bottom" type with the same kind as the given type. *)
-  val bottom_like : t -> t
+  val bottom_like : Flambda_types.t -> Flambda_types.t
 
   (** Create an "unknown" type with the same kind as the given type. *)
-  val unknown_like : t -> t
+  val unknown_like : Flambda_types.t -> Flambda_types.t
 
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
@@ -352,21 +349,21 @@ module type S = sig
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
     -> my_closure:Variable.t
-    -> function_declaration
+    -> Flambda_types.function_declaration
 
   (** Create a description of a function declaration whose code is unknown.
       Such declarations cannot be inlined. *)
   val create_non_inlinable_function_declaration
      : unit
-    -> function_declaration
+    -> Flambda_types.function_declaration
 
   (** Create a closure type given full information about the closure. *)
   val closure
      : Closure_id.t
-    -> function_declaration
+    -> Flambda_types.function_declaration
     -> Function_type.t
     -> Flambda_types.ty_value Var_within_closure.Map.t
-    -> set_of_closures:ty_fabricated
+    -> set_of_closures:Flambda_types.ty_fabricated
     -> t
 
   (** The type of a closure (of kind [Value]) containing at least one
@@ -374,51 +371,51 @@ module type S = sig
   val closure_containing_at_least
      : Var_within_closure.t
     -> Flambda_types.ty_value
-    -> t
+    -> Flambda_types.t
 
   (** The type of a set of closures containing exactly those closure IDs
       with the given types. *)
   val set_of_closures
      : closures:Flambda_types.t Closure_id.Map.t
-    -> t
+    -> Flambda_types.t
 
   (** The type of a set of closures containing at least one closure with
       the given closure ID. *)
-  val set_of_closures_containing_at_least : Closure_id.t -> t
+  val set_of_closures_containing_at_least : Closure_id.t -> Flambda_types.t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
-  val alias_type_of : Flambda_kind.t -> Simple.t -> t
+  val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t
 
   (** Like [alias_type_of], but for types of kind [Value], and returns the
       [ty] rather than a [t]. *)
   val alias_type_of_as_ty_value : Simple.t -> Flambda_types.ty_value
 
   (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
-  val alias_type_of_as_ty_fabricated : Simple.t -> ty_fabricated
+  val alias_type_of_as_ty_fabricated : Simple.t -> Flambda_types.ty_fabricated
 
   (** The type that is equal to another type, found in a .cmx file, named
       by export identifier. *)
-  val alias_type : Flambda_kind.t -> Export_id.t -> t
+  val alias_type : Flambda_kind.t -> Export_id.t -> Flambda_types.t
 
   (** Determine the (unique) kind of a type. *)
-  val kind : t -> Flambda_kind.t
+  val kind : Flambda_types.t -> Flambda_kind.t
 
   (** Enforce that a type is of kind [Value], returning the corresponding
       [ty]. *)
-  val force_to_kind_value : t -> Flambda_types.ty_value
+  val force_to_kind_value : Flambda_types.t -> Flambda_types.ty_value
 
   (** Enforce that a type is of a naked number kind, returning the
       corresponding [ty]. *)
   val force_to_kind_naked_number
      : 'kind Flambda_kind.Naked_number.t
-    -> t
+    -> Flambda_types.t
     -> 'kind Flambda_types.ty_naked_number
 
   (** Enforce that a type is of naked float kind, returning the corresponding
       [ty]. *)
   val force_to_kind_naked_float
-     : t
+     : Flambda_types.t
     -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
 
   val force_to_kind_naked_int32
@@ -444,5 +441,5 @@ module type S = sig
     -> Flambda_types.of_kind_fabricated Flambda_types.ty
 
   (** Enforce that a type is of a given kind. *)
-  val check_of_kind : t -> Flambda_kind.t -> unit
+  val check_of_kind : Flambda_types.t -> Flambda_kind.t -> unit
 end

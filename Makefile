@@ -324,6 +324,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/allocated_const.cmo \
   middle_end/language/kinded_parameter.cmo \
   middle_end/typing/type_equality_env.cmo \
+  middle_end/typing/typing_world_abstract.cmo \
   middle_end/language/expr_intf.cmo \
   middle_end/typing/closure_ids_intf.cmo \
   middle_end/typing/closures_entry_by_closure_id_intf.cmo \
@@ -352,6 +353,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/flambda_type0_core_intf.cmo \
   middle_end/typing/blocks_intf.cmo \
   middle_end/typing/join_env_intf.cmo \
+  middle_end/typing/typing_world_types.cmo \
   middle_end/typing/typing_world.cmo \
   middle_end/typing/relational_product.cmo \
   middle_end/typing/row_like.cmo \

@@ -22,14 +22,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Flambda_type0_core : sig type t end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+module type S_types = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
   type t
+end
+
+module type S = sig
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
+  include module type of struct include T.Function_type end
 
   include Contains_names.S with type t := t
 
@@ -40,8 +42,8 @@ module type S = sig
 
   (** Create a function type from parameter and result types. *)
   val create
-     : parameters:Flambda_type0_core.t list
-    -> results:Flambda_type0_core.t list
+     : parameters:T.Flambda_types.t list
+    -> results:T.Flambda_types.t list
     -> t
 
   (** The function type all of whose parameters and result types and arities
@@ -56,33 +58,33 @@ module type S = sig
   (** Greatest lower bound of two function types.
       [fresh_component_semantics] is as for [Relational_product.meet]. *)
   val meet
-     : Meet_env.t
+     : T.Meet_env.t
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
 
   val meet_fresh
-     : Meet_env.t
+     : T.Meet_env.t
     -> t
     -> t
     -> (t * Typing_env_extension.t) Or_bottom.t
 
   (** Least upper bound of two function types. *)
   val join
-     : Join_env.t
+     : T.Join_env.t
     -> Relational_product_intf.fresh_component_semantics
     -> t
     -> t
     -> t
 
   val join_fresh
-     : Join_env.t
+     : T.Join_env.t
     -> t
     -> t
     -> t
 
   (** Add or meet the definitions and equations from the given function type
       into the given typing environment. *)
-  val introduce : t -> Typing_env.t -> Typing_env.t
+  val introduce : t -> T.Typing_env.t -> T.Typing_env.t
 end
