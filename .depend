@@ -3684,8 +3684,6 @@ middle_end/typing/either_meet_or_join.cmx : \
     middle_end/language/closure_id.cmx \
     middle_end/typing/either_meet_or_join.cmi
 middle_end/typing/either_meet_or_join.cmi : \
-    middle_end/typing/typing_world_types.cmo \
-    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/either_meet_or_join_intf.cmo : \
@@ -4047,6 +4045,7 @@ middle_end/typing/join_env_intf.cmx : \
     middle_end/typing/typing_world_abstract.cmx \
     middle_end/language/name_permutation.cmx middle_end/language/name.cmx
 middle_end/typing/knot.cmo : middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/typing_env_extension.cmi \
     middle_end/typing/typing_env.cmi \
     middle_end/typing/types_by_closure_id.cmi \
@@ -4065,12 +4064,14 @@ middle_end/typing/knot.cmo : middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/make_meet_or_join.cmi middle_end/typing/join_env.cmi \
     middle_end/typing/immediates.cmi middle_end/typing/function_type.cmi \
     middle_end/typing/flambda_type0_core.cmi \
+    middle_end/language/expr_intf.cmo \
     middle_end/typing/either_meet_or_join.cmi \
     middle_end/typing/discriminants.cmi \
     middle_end/typing/closures_entry_by_closure_id.cmi \
     middle_end/typing/closure_ids.cmi middle_end/typing/closure_elements.cmi \
     middle_end/typing/blocks.cmi
 middle_end/typing/knot.cmx : middle_end/typing/typing_world_abstract.cmx \
+    middle_end/typing/typing_world.cmx \
     middle_end/typing/typing_env_extension.cmx \
     middle_end/typing/typing_env.cmx \
     middle_end/typing/types_by_closure_id.cmx \
@@ -4089,6 +4090,7 @@ middle_end/typing/knot.cmx : middle_end/typing/typing_world_abstract.cmx \
     middle_end/typing/make_meet_or_join.cmx middle_end/typing/join_env.cmx \
     middle_end/typing/immediates.cmx middle_end/typing/function_type.cmx \
     middle_end/typing/flambda_type0_core.cmx \
+    middle_end/language/expr_intf.cmx \
     middle_end/typing/either_meet_or_join.cmx \
     middle_end/typing/discriminants.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmx \

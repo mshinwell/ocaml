@@ -18,5 +18,5 @@
 
 module Make (W : Typing_world.S) (F : Typing_world.Functor_S)
   : Type_printers_intf.S
-      with module T := W.Typing_world.Types
-      and module Functor_T := W.Typing_world.Functor_types
+      with module T := W.Recursive_world.Types
+      and module Functor_T := W.Recursive_world.Functor_types

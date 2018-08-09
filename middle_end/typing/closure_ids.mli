@@ -32,11 +32,10 @@ module type Strengthened_world = sig
     and Functor_types : Typing_world_types.Functor_types_nonrec
       with module Abstract_types := Types
   end
-  include Typing_world.S with module Types := Recursive_world
+  include Typing_world.S with module Recursive_world := Recursive_world
 end
 
 module Make (W : Strengthened_world) (F : Typing_world.Functor_S)
   : Closure_ids_intf.S
       with module T := W.Recursive_world.Types
       and module Functor_T := W.Recursive_world.Functor_types
-    with module Typing_env := W.Typing_env

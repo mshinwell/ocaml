@@ -25,12 +25,12 @@ module type Strengthened_world = sig
   module Recursive_world : sig
     module rec Types : (Typing_world_types.Types_nonrec
       with module Abstract_types := Types
-      and module Abstract_functor_types := Functor_types
-      with module Row_like = Make_types (Types))
-    and Functor_types : Typing_world_types.Functor_types_nonrec
+      and module Abstract_functor_types := Functor_types)
+    and Functor_types : (Typing_world_types.Functor_types_nonrec
       with module Abstract_types := Types
+      with module Row_like = Make_types (Types))
   end
-  include Typing_world.S with module Types := Recursive_world
+  include Typing_world.S with module Recursive_world := Recursive_world
 end
 
 module Make (W : Strengthened_world)
