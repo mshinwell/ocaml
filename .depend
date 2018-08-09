@@ -3536,6 +3536,8 @@ middle_end/typing/both_meet_and_join.cmx : \
     middle_end/typing/typing_world.cmx \
     middle_end/typing/both_meet_and_join.cmi
 middle_end/typing/both_meet_and_join.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/both_meet_and_join_intf.cmo
 middle_end/typing/both_meet_and_join_intf.cmo : \
@@ -3563,7 +3565,10 @@ middle_end/typing/closure_elements.cmx : \
     middle_end/typing/logical_variable_component.cmx \
     middle_end/typing/logical_variable.cmx middle_end/typing/flambda_kind.cmx \
     middle_end/typing/closure_elements.cmi
-middle_end/typing/closure_elements.cmi : middle_end/typing/typing_world.cmo \
+middle_end/typing/closure_elements.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/closure_elements_intf.cmo
 middle_end/typing/closure_elements_intf.cmo : \
     middle_end/language/var_within_closure.cmi \
@@ -3589,8 +3594,9 @@ middle_end/typing/closure_ids.cmo : middle_end/typing/unit.cmi \
 middle_end/typing/closure_ids.cmx : middle_end/typing/unit.cmx \
     middle_end/typing/typing_world.cmx middle_end/typing/or_bottom.cmx \
     middle_end/typing/closure_id_set.cmx middle_end/typing/closure_ids.cmi
-middle_end/typing/closure_ids.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/closure_ids_intf.cmo
+middle_end/typing/closure_ids.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/closure_ids_intf.cmo
 middle_end/typing/closure_ids_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/type_equality_env.cmi utils/printing_cache.cmi \
@@ -3612,6 +3618,8 @@ middle_end/typing/closures_entry_by_closure_id.cmx : \
     middle_end/language/closure_id.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmi
 middle_end/typing/closures_entry_by_closure_id.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/closures_entry_by_closure_id_intf.cmo
 middle_end/typing/closures_entry_by_closure_id_intf.cmo : \
@@ -3644,9 +3652,11 @@ middle_end/typing/discriminants.cmo : middle_end/typing/typing_world.cmo \
 middle_end/typing/discriminants.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/trivial_row_like.cmx \
     middle_end/language/discriminant.cmx middle_end/typing/discriminants.cmi
-middle_end/typing/discriminants.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/trivial_row_like_intf.cmo \
-    middle_end/language/discriminant.cmi
+middle_end/typing/discriminants.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
+    middle_end/typing/discriminants_intf.cmo
 middle_end/typing/discriminants_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/type_equality_env.cmi utils/printing_cache.cmi \
@@ -3674,6 +3684,8 @@ middle_end/typing/either_meet_or_join.cmx : \
     middle_end/language/closure_id.cmx \
     middle_end/typing/either_meet_or_join.cmi
 middle_end/typing/either_meet_or_join.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/either_meet_or_join_intf.cmo
 middle_end/typing/either_meet_or_join_intf.cmo : \
@@ -3847,6 +3859,8 @@ middle_end/typing/flambda_type0_core.cmx : \
     middle_end/language/closure_id.cmx middle_end/typing/blocks.cmx \
     middle_end/typing/flambda_type0_core.cmi
 middle_end/typing/flambda_type0_core.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/flambda_type0_core_intf.cmo
 middle_end/typing/flambda_type0_core_intf.cmo : \
@@ -3981,7 +3995,10 @@ middle_end/typing/function_type.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/logical_variable_component.cmx \
     middle_end/typing/logical_variable.cmx middle_end/typing/int_index.cmx \
     middle_end/language/freshening.cmx middle_end/typing/function_type.cmi
-middle_end/typing/function_type.cmi : middle_end/typing/typing_world.cmo \
+middle_end/typing/function_type.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/function_type_intf.cmo
 middle_end/typing/function_type_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
@@ -3999,9 +4016,9 @@ middle_end/typing/immediates.cmo : middle_end/typing/typing_world.cmo \
 middle_end/typing/immediates.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/trivial_row_like.cmx middle_end/language/immediate.cmx \
     middle_end/typing/immediates.cmi
-middle_end/typing/immediates.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/trivial_row_like_intf.cmo \
-    middle_end/language/immediate.cmi
+middle_end/typing/immediates.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/immediates_intf.cmo
 middle_end/typing/immediates_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/type_equality_env.cmi utils/printing_cache.cmi \
@@ -4022,8 +4039,9 @@ middle_end/typing/join_env.cmo : middle_end/typing/typing_world.cmo \
     middle_end/typing/join_env.cmi
 middle_end/typing/join_env.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/join_env.cmi
-middle_end/typing/join_env.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/join_env_intf.cmo
+middle_end/typing/join_env.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/join_env_intf.cmo
 middle_end/typing/join_env_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/language/name_permutation.cmi middle_end/language/name.cmi
@@ -4138,12 +4156,17 @@ middle_end/typing/meet_and_join_naked_immediate.cmo : \
     middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
     middle_end/typing/or_absorbing.cmi middle_end/language/immediate.cmi \
     middle_end/typing/flambda_kind.cmi \
-    middle_end/typing/either_meet_or_join_intf.cmo
+    middle_end/typing/either_meet_or_join_intf.cmo \
+    middle_end/typing/meet_and_join_naked_immediate.cmi
 middle_end/typing/meet_and_join_naked_immediate.cmx : \
     middle_end/typing/typing_world.cmx middle_end/typing/type_printers.cmx \
     middle_end/typing/or_absorbing.cmx middle_end/language/immediate.cmx \
     middle_end/typing/flambda_kind.cmx \
-    middle_end/typing/either_meet_or_join_intf.cmx
+    middle_end/typing/either_meet_or_join_intf.cmx \
+    middle_end/typing/meet_and_join_naked_immediate.cmi
+middle_end/typing/meet_and_join_naked_immediate.cmi : \
+    middle_end/typing/typing_world.cmo \
+    middle_end/typing/meet_and_join_naked_immediate_intf.cmo
 middle_end/typing/meet_and_join_naked_immediate_intf.cmo : \
     middle_end/typing/meet_and_join_naked_number_intf.cmo \
     middle_end/language/immediate.cmi
@@ -4215,7 +4238,7 @@ middle_end/typing/meet_and_join_value.cmo : middle_end/language/variable.cmi \
     middle_end/typing/meet_and_join_naked_nativeint.cmo \
     middle_end/typing/meet_and_join_naked_int64.cmo \
     middle_end/typing/meet_and_join_naked_int32.cmo \
-    middle_end/typing/meet_and_join_naked_immediate.cmo \
+    middle_end/typing/meet_and_join_naked_immediate.cmi \
     middle_end/typing/meet_and_join_naked_float.cmo \
     middle_end/typing/meet_and_join_fabricated.cmi \
     middle_end/typing/make_meet_or_join.cmi \
@@ -4273,8 +4296,9 @@ middle_end/typing/meet_env.cmo : middle_end/typing/typing_world.cmo \
 middle_end/typing/meet_env.cmx : middle_end/typing/typing_world.cmx \
     middle_end/language/simple.cmx middle_end/language/name_permutation.cmx \
     utils/misc.cmx middle_end/typing/meet_env.cmi
-middle_end/typing/meet_env.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/meet_env_intf.cmo
+middle_end/typing/meet_env.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/meet_env_intf.cmo
 middle_end/typing/meet_env_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/language/simple.cmi middle_end/language/name_permutation.cmi
@@ -4310,8 +4334,9 @@ middle_end/typing/parameters.cmo : middle_end/typing/typing_world.cmo \
 middle_end/typing/parameters.cmx : middle_end/typing/typing_world.cmx \
     utils/targetint.cmx utils/misc.cmx \
     middle_end/language/kinded_parameter.cmx middle_end/typing/parameters.cmi
-middle_end/typing/parameters.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/parameters_intf.cmo
+middle_end/typing/parameters.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/parameters_intf.cmo
 middle_end/typing/parameters_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/or_bottom.cmi middle_end/language/kinded_parameter.cmi \
@@ -4339,6 +4364,8 @@ middle_end/typing/relational_product.cmx : \
     middle_end/typing/flambda_kind.cmx middle_end/typing/contains_names.cmx \
     middle_end/typing/relational_product.cmi
 middle_end/typing/relational_product.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/relational_product_intf.cmo
 middle_end/typing/relational_product_intf.cmo : \
@@ -4365,8 +4392,9 @@ middle_end/typing/row_like.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/either_meet_or_join_intf.cmx \
     middle_end/typing/either_meet_or_join.cmx \
     middle_end/typing/contains_names.cmx middle_end/typing/row_like.cmi
-middle_end/typing/row_like.cmi : middle_end/typing/typing_world.cmo \
-    middle_end/typing/row_like_intf.cmo
+middle_end/typing/row_like.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo middle_end/typing/row_like_intf.cmo
 middle_end/typing/row_like_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/type_equality_env.cmi \
@@ -4432,7 +4460,10 @@ middle_end/typing/type_equality.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmx \
     middle_end/typing/closure_ids.cmx middle_end/typing/closure_elements.cmx \
     middle_end/typing/blocks.cmx middle_end/typing/type_equality.cmi
-middle_end/typing/type_equality.cmi : middle_end/typing/typing_world.cmo \
+middle_end/typing/type_equality.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/type_equality_intf.cmo
 middle_end/typing/type_equality_env.cmo : \
     middle_end/language/name_permutation.cmi \
@@ -4460,7 +4491,10 @@ middle_end/typing/type_free_names.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/closures_entry_by_closure_id.cmx \
     middle_end/typing/closure_ids.cmx middle_end/typing/blocks.cmx \
     middle_end/typing/type_free_names.cmi
-middle_end/typing/type_free_names.cmi : middle_end/typing/typing_world.cmo \
+middle_end/typing/type_free_names.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/type_free_names_intf.cmo
 middle_end/typing/type_free_names_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
@@ -4500,7 +4534,10 @@ middle_end/typing/type_printers.cmx : middle_end/language/variable.cmx \
     middle_end/language/closure_origin.cmx middle_end/typing/closure_ids.cmx \
     middle_end/language/closure_id.cmx middle_end/typing/blocks.cmx \
     middle_end/typing/type_printers.cmi
-middle_end/typing/type_printers.cmi : middle_end/typing/typing_world.cmo \
+middle_end/typing/type_printers.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world.cmo \
     middle_end/typing/type_printers_intf.cmo
 middle_end/typing/type_printers_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo utils/targetint.cmi \
@@ -4527,6 +4564,8 @@ middle_end/typing/types_by_closure_id.cmx : \
     middle_end/language/closure_id.cmx \
     middle_end/typing/types_by_closure_id.cmi
 middle_end/typing/types_by_closure_id.cmi : \
+    middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/types_by_closure_id_intf.cmo
 middle_end/typing/types_by_closure_id_intf.cmo : \
@@ -4560,6 +4599,7 @@ middle_end/typing/typing_env.cmx : middle_end/typing/typing_world.cmx \
     middle_end/language/export_id.cmx utils/clflags.cmx \
     middle_end/typing/typing_env.cmi
 middle_end/typing/typing_env.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo middle_end/typing/typing_env_intf.cmo
 middle_end/typing/typing_env_extension.cmo : \
     middle_end/typing/typing_world.cmo middle_end/typing/type_printers.cmi \
@@ -4583,6 +4623,7 @@ middle_end/typing/typing_env_extension.cmx : \
     middle_end/typing/typing_env_extension.cmi
 middle_end/typing/typing_env_extension.cmi : \
     middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo \
     middle_end/typing/typing_env_extension_intf.cmo
 middle_end/typing/typing_env_extension_intf.cmo : \

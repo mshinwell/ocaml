@@ -16,23 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make_types
-  (T : Typing_world_abstract.S)
-  : Row_like_intf.S_types
+module Make (T : Typing_world.S)
+  : Meet_and_join_naked_immediate_intf.S
       with module T := T
-
-module type Strengthened_world = sig
-  module Recursive_world : sig
-    module rec Types : (Typing_world_types.Types_nonrec
-      with module Abstract_types := Types
-      and module Abstract_functor_types := Functor_types
-      with module Row_like = Make_types (Types))
-    and Functor_types : Typing_world_types.Functor_types_nonrec
-      with module Abstract_types := Types
-  end
-  include Typing_world.S with module Typing_world := Recursive_world
-end
-
-module Make (W : Strengthened_world)
-  : Row_like_intf.S
-      with module T := W.Recursive_world.Types
