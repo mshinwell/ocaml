@@ -54,7 +54,7 @@ module type S = sig
   val fast_equal : t -> t -> bool
 
   (** The unique environment extension containing no information. *)
-  val empty : t
+  val empty : unit -> t
 
   val is_empty : t -> bool
 

@@ -23,7 +23,7 @@ module type S = sig
 
   type of_kind_foo
 
-  val kind : Flambda_kind.t
+  val kind : unit -> Flambda_kind.t
 
   val to_type : of_kind_foo T.Flambda_types.ty -> T.Flambda_types.t
 

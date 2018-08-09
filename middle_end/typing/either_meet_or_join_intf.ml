@@ -20,14 +20,14 @@ module type S = sig
   module T : Typing_world_abstract.S
   module Functor_T : Typing_world_abstract.Functor_S
 
-  val name : string
+  val name : unit -> string
 
   type meet_or_join = private Meet | Join
 
-  val op : meet_or_join
+  val op : unit -> meet_or_join
 
-  val unknown_is_identity : bool
-  val unknown_is_absorbing : bool
+  val unknown_is_identity : unit -> bool
+  val unknown_is_absorbing : unit -> bool
 
   module String_info : sig
     module Set : sig

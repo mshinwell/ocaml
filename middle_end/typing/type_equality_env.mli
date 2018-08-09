@@ -27,7 +27,7 @@ val create
   -> perm_right:Name_permutation.t
   -> t
 
-val empty : t
+val empty : unit -> t
 
 val print : Format.formatter -> t -> unit
 
