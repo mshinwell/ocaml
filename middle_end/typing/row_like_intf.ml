@@ -41,6 +41,13 @@ module type S = sig
       include Hashtbl.With_map with type t := t
     end)
     (Maps_to : sig
+(* XXX
+   1. Put submodule here and include it
+   2. Alter argument type of Make_types in S_types, above, to include the
+      types necessary to define Make_types in the .ml
+   3. Add compare, equal, hash to the "types" parts
+*)
+
       type t
 
       val bottom : unit -> t

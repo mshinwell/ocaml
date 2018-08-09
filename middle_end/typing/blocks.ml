@@ -26,11 +26,46 @@ module Row_like = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
-module Make (W : Typing_world.S) = struct
+module Make_types
+  (T : Typing_world_abstract.S)
+  (Functor_T : Typing_world_abstract.Functor_S) =
+struct
+  open! T
+  open! Functor_T
+
+  module RP = struct
+    include Relational_product.Make_types
+      (Int_index) (Logical_variable_component)
+  end
+
+  module RL = Row_like.Make_types (Tag) (Targetint.OCaml) (RP)
+
+  type t = RL.t
+end
+
+module type Strengthened_world = sig
+  module Recursive_world : sig
+    module rec Types : (Typing_world_types.Types_nonrec
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types
+      with module Blocks = Make_types (Types) (Functor_types))
+    and Functor_types : Typing_world_types.Functor_types_nonrec
+      with module Abstract_types := Types
+  end
+  include Typing_world.S with module Recursive_world := Recursive_world
+end
+
+module Make (W : Strengthened_world)
+  (F : (Typing_world.Functor_S
+    with Recursive_world = Recursive_world))
+struct
   open! W
+
+  include Recursive_world.Types.Blocks
 
   module RP = struct
     include Relational_product.Make (Int_index) (Logical_variable_component)
+
     let bottom () = create_bottom ~arity:1
   end
 
@@ -93,10 +128,4 @@ module Make (W : Typing_world.S) = struct
   let bound_names = RL.bound_names
   let apply_name_permutation = RL.apply_name_permutation
   let freshen = RL.freshen
-
-  module Flambda_type0_core = Flambda_type0_core
-  module Join_env = Join_env
-  module Meet_env = Meet_env
-  module Typing_env = Typing_env
-  module Typing_env_extension = Typing_env_extension
 end
