@@ -3879,7 +3879,7 @@ middle_end/typing/flambda_type0_core_intf.cmx : \
     middle_end/language/code_id.cmx middle_end/language/closure_origin.cmx \
     middle_end/language/closure_id.cmx
 middle_end/typing/flambda_type0_intf.cmo : middle_end/language/variable.cmi \
-    middle_end/typing/typing_world_abstract.cmo \
+    middle_end/typing/typing_world_types.cmo \
     middle_end/typing/typing_env_intf.cmo \
     middle_end/typing/typing_env_extension_intf.cmo \
     middle_end/typing/types_by_closure_id_intf.cmo utils/targetint.cmi \
@@ -3907,7 +3907,7 @@ middle_end/typing/flambda_type0_intf.cmo : middle_end/language/variable.cmi \
     middle_end/typing/closure_elements_intf.cmo \
     middle_end/typing/blocks_intf.cmo
 middle_end/typing/flambda_type0_intf.cmx : middle_end/language/variable.cmx \
-    middle_end/typing/typing_world_abstract.cmx \
+    middle_end/typing/typing_world_types.cmx \
     middle_end/typing/typing_env_intf.cmx \
     middle_end/typing/typing_env_extension_intf.cmx \
     middle_end/typing/types_by_closure_id_intf.cmx utils/targetint.cmx \

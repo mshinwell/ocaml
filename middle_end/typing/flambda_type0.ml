@@ -152,6 +152,7 @@ module Make (Expr : Expr_intf.S) = struct
   module Closure_ids = World.Closure_ids
   module Closures_entry_by_closure_id = World.Closures_entry_by_closure_id
   module Discriminants = World.Discriminants
+  module Flambda_types = World.Flambda_types
   module Function_type = World.Function_type
   module Immediates = World.Immediates
   module Join_env = World.Join_env

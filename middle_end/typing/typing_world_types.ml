@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type Types_nonrec = sig
+module type Types_nonrec_with_abstract_flambda_types = sig
   module Abstract_types : Typing_world_abstract.S
   module Abstract_functor_types : Typing_world_abstract.Functor_S
 
@@ -37,9 +37,7 @@ module type Types_nonrec = sig
     with module T := Abstract_types
     and module Functor_T := Abstract_functor_types
   module Expr : Expr_intf.S
-  module Flambda_types : Flambda_types_intf.S_types
-    with module T := Abstract_types
-    and module Functor_T := Abstract_functor_types
+  module Flambda_types : Typing_world_abstract.Flambda_types
   module Function_type : Function_type_intf.S_types
     with module T := Abstract_types
     and module Functor_T := Abstract_functor_types
@@ -64,6 +62,20 @@ module type Types_nonrec = sig
   module Typing_env_extension : Typing_env_extension_intf.S_types
     with module T := Abstract_types
     and module Functor_T := Abstract_functor_types
+end
+
+module type Types_nonrec = sig
+  module Abstract_types : Typing_world_abstract.S
+  module Abstract_functor_types : Typing_world_abstract.Functor_S
+
+  module Flambda_types : Flambda_types_intf.S_types
+    with module T := Abstract_types
+    and module Functor_T := Abstract_functor_types
+
+  include Types_nonrec_with_abstract_flambda_types
+    with module Abstract_types := Abstract_types
+    with module Abstract_functor_types := Abstract_functor_types
+    with module Flambda_types := Flambda_types
 end
 
 module type Functor_types_nonrec = sig
