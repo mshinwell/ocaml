@@ -3517,6 +3517,7 @@ middle_end/typing/blocks.cmx : middle_end/typing/typing_world.cmx \
     middle_end/typing/logical_variable.cmx middle_end/typing/int_index.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/blocks.cmi
 middle_end/typing/blocks.cmi : middle_end/typing/typing_world_types.cmo \
+    middle_end/typing/typing_world_abstract.cmo \
     middle_end/typing/typing_world.cmo middle_end/typing/blocks_intf.cmo
 middle_end/typing/blocks_intf.cmo : \
     middle_end/typing/typing_world_abstract.cmo \
@@ -4618,6 +4619,7 @@ middle_end/typing/typing_world.cmo : \
     middle_end/typing/type_printers_intf.cmo \
     middle_end/typing/type_free_names_intf.cmo \
     middle_end/typing/type_equality_intf.cmo \
+    middle_end/typing/trivial_row_like_intf.cmo \
     middle_end/typing/row_like_intf.cmo \
     middle_end/typing/relational_product_intf.cmo \
     middle_end/typing/parameters_intf.cmo middle_end/typing/meet_env_intf.cmo \
@@ -4649,6 +4651,7 @@ middle_end/typing/typing_world.cmx : \
     middle_end/typing/type_printers_intf.cmx \
     middle_end/typing/type_free_names_intf.cmx \
     middle_end/typing/type_equality_intf.cmx \
+    middle_end/typing/trivial_row_like_intf.cmx \
     middle_end/typing/row_like_intf.cmx \
     middle_end/typing/relational_product_intf.cmx \
     middle_end/typing/parameters_intf.cmx middle_end/typing/meet_env_intf.cmx \

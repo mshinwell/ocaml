@@ -41,6 +41,8 @@ module type Functor_S = sig
     with module T := Typing_world.Types
   module Row_like : Row_like_intf.S
     with module T := Typing_world.Types
+  module Trivial_row_like : Trivial_row_like_intf.S
+    with module T := Typing_world.Types
 end
 
 module type S = sig

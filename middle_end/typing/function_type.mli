@@ -22,10 +22,26 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (T : Typing_world.S) :
-  Function_type_intf.S
-    with module Flambda_type0_core := T.Flambda_type0_core
-    with module Join_env := T.Join_env
-    with module Meet_env := T.Meet_env
-    with module Typing_env := T.Typing_env
-    with module Typing_env_extension := T.Typing_env_extension
+module Make_types
+  (T : Typing_world_abstract.S)
+  (Functor_T : Typing_world_abstract.Functor_S)
+  : Function_type_intf.S_types
+      with module T := T
+      and module Functor_T := Functor_T
+
+module type Strengthened_world = sig
+  module Recursive_world : sig
+    module rec Types : (Typing_world_types.Types_nonrec
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types
+      with module Function_type = Make_types (Types) (Functor_types))
+    and Functor_types : Typing_world_types.Functor_types_nonrec
+      with module Abstract_types := Types
+  end
+  include Typing_world.S with module Typing_world := Recursive_world
+end
+
+module Make (W : Strengthened_world) (F : Typing_world.Functor_S)
+  : Function_type_intf.S
+      with module T := W.Recursive_world.Types
+      and module Functor_T := W.Recursive_world.Functor_types
