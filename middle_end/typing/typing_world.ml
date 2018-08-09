@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type Functor_S = sig
-  module Typing_world : Typing_world_types.S
+  module Types : Typing_world_types.S
 
   module Make_meet_or_join : Make_meet_or_join_intf.S
     with module T := Typing_world.Types
@@ -46,7 +46,7 @@ module type Functor_S = sig
 end
 
 module type S = sig
-  module Typing_world : Typing_world_types.S
+  module Types : Typing_world_types.S
 
   module Blocks : Blocks_intf.S
     with module T := Typing_world.Types
