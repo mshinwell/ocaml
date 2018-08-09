@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module F (Expr : Expr_intf.S) = struct
+module Make (Expr : Expr_intf.S) = struct
   module rec Types : sig
     module Flambda_types :
       Flambda_types_intf.S_types
@@ -76,6 +76,8 @@ module F (Expr : Expr_intf.S) = struct
     module Trivial_row_like = Trivial_row_like.Make_types (Types)
   end
 
+  (* CR mshinwell: Remove this warning once "unused module" check fixed *)
+  [@@@ocaml.warning "-60"]
   module rec Functor_world : sig
     module Recursive_world : sig
       module Types = Types
@@ -142,6 +144,9 @@ module F (Expr : Expr_intf.S) = struct
       = Typing_env_extension.Make (World) (Functor_world)
   end
 
+  module T = Types
+  module Functor_T = Functor_types
+
   module Blocks = World.Blocks
   module Closure_elements = World.Closure_elements
   module Closure_ids = World.Closure_ids
@@ -170,6 +175,4 @@ module F (Expr : Expr_intf.S) = struct
 
   let print = World.Type_printers.print
   let print_with_cache = World.Type_printers.print_with_cache
-
-  let free_names = World.Type_free_names.free_names
 end
