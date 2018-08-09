@@ -17,14 +17,12 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_types : sig
-    type t
-    type ty_fabricated
-  end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
-  val free_names : Flambda_types.t -> Name_occurrences.t
+  val free_names : T.Flambda_types.t -> Name_occurrences.t
 
   val free_names_of_ty_fabricated
-     : Flambda_types.ty_fabricated
+     : T.Flambda_types.ty_fabricated
     -> Name_occurrences.t
 end

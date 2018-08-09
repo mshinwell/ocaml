@@ -17,10 +17,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
   val name : string
 
@@ -172,59 +170,59 @@ module type S = sig
   end
 
   val switch_no_bottom
-     : (Meet_env.t
+     : (T.Meet_env.t
       -> 'a
       -> 'a
-      -> 'a * Typing_env_extension.t)
-    -> (Join_env.t
+      -> 'a * T.Typing_env_extension.t)
+    -> (T.Join_env.t
       -> 'a
       -> 'a
       -> 'a)
-    -> Join_env.t
+    -> T.Join_env.t
     -> 'a
     -> 'a
-    -> 'a * Typing_env_extension.t
+    -> 'a * T.Typing_env_extension.t
 
   val switch
-     : (Meet_env.t
+     : (T.Meet_env.t
       -> 'a
       -> 'a
-      -> ('a * Typing_env_extension.t) Or_bottom.t)
-    -> (Join_env.t
+      -> ('a * T.Typing_env_extension.t) Or_bottom.t)
+    -> (T.Join_env.t
       -> 'a
       -> 'a
       -> 'a)
-    -> Join_env.t
+    -> T.Join_env.t
     -> 'a
     -> 'a
-    -> ('a * Typing_env_extension.t) Or_bottom.t
+    -> ('a * T.Typing_env_extension.t) Or_bottom.t
 
   val switch'
-     : (Meet_env.t
+     : (T.Meet_env.t
       -> 'a
       -> 'a
-      -> ('a * Typing_env_extension.t) Or_bottom.t)
-    -> (Join_env.t
+      -> ('a * T.Typing_env_extension.t) Or_bottom.t)
+    -> (T.Join_env.t
       -> 'a
       -> 'a
       -> 'a)
-    -> Join_env.t
+    -> T.Join_env.t
     -> 'a
     -> 'a
     -> 'a Or_bottom.t
 
   val switch'_with_param
-     : (Meet_env.t
+     : (T.Meet_env.t
       -> 'b
       -> 'a
       -> 'a
-      -> ('a * Typing_env_extension.t) Or_bottom.t)
-    -> (Join_env.t
+      -> ('a * T.Typing_env_extension.t) Or_bottom.t)
+    -> (T.Join_env.t
       -> 'b
       -> 'a
       -> 'a
       -> 'a)
-    -> Join_env.t
+    -> T.Join_env.t
     -> 'b
     -> 'a
     -> 'a

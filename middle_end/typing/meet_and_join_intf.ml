@@ -16,41 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S_applied = sig
-  module Flambda_types : sig
-    type t
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
-
-  val meet_or_join
-     : Join_env.t
-    -> Flambda_types.t
-    -> Flambda_types.t
-    -> Flambda_types.t * Typing_env_extension.t
-end
-
 module type S = sig
-  module Flambda_types : sig
-    type t
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
 
-  module Make
-    (E : Either_meet_or_join_intf.S
-      with module Join_env := Join_env
-      with module Meet_env := Meet_env
-      with module Typing_env := Typing_env
-      with module Typing_env_extension := Typing_env_extension)
-  : S_applied
-    with module Flambda_types := Flambda_types
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env := Typing_env
-    with module Typing_env_extension := Typing_env_extension
+  module Make (E : Either_meet_or_join_intf.S) : sig
+    val meet_or_join
+       : T.Join_env.t
+      -> T.Flambda_types.t
+      -> T.Flambda_types.t
+      -> T.Flambda_types.t * T.Typing_env_extension.t
+  end
 end

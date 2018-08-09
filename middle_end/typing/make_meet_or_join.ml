@@ -345,17 +345,5 @@ module Make (W : Typing_world.S) = struct
           else Equals simple'
       in
       E.switch_no_bottom meet_ty join_ty env or_alias1 or_alias2
-
-    module Flambda_types = W.Flambda_types
-    module Join_env = W.Join_env
-    module Meet_env = W.Meet_env
-    module Typing_env = W.Typing_env
-    module Typing_env_extension = W.Typing_env_extension
   end
-
-  module Flambda_types = W.Flambda_types
-  module Join_env = W.Join_env
-  module Meet_env = W.Meet_env
-  module Typing_env = W.Typing_env
-  module Typing_env_extension = W.Typing_env_extension
 end

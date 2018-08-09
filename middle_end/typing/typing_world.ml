@@ -21,16 +21,26 @@ module type Functor_S = sig
 
   module Make_meet_or_join : Make_meet_or_join_intf.S
     with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
   module Meet_and_join : Meet_and_join_intf.S
     with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
+  module Meet_and_join_value : Meet_and_join_value_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_naked_immediate : Meet_and_join_naked_immediate_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_naked_int32 : Meet_and_join_naked_int32_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_naked_int64 : Meet_and_join_naked_int64_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_naked_nativeint : Meet_and_join_naked_nativeint_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_naked_float : Meet_and_join_naked_float_intf.S
+    with module T := Typing_world.Types
+  module Meet_and_join_fabricated : Meet_and_join_fabricated_intf.S
+    with module T := Typing_world.Types
   module Relational_product : Relational_product_intf.S
     with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
   module Row_like : Row_like_intf.S
     with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
 end
 
 module type S = sig
@@ -54,14 +64,15 @@ module type S = sig
   module Discriminants : Discriminants_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
+  module Either_meet_or_join : Either_meet_or_join_intf.S
+    with module T := Typing_world.Types
+    and module Functor_T := Typing_world.Functor_types
   module Expr : Expr_intf.S
   module Flambda_type0_core : Flambda_type0_core_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
   module Flambda_types :
-    module type of struct include Typing_world.Flambda_types end
-      with module T := Typing_world.Types
-      and module Functor_T := Typing_world.Functor_types
+    module type of struct include Typing_world.Types.Flambda_types end
   module Function_type : Function_type_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
@@ -69,27 +80,6 @@ module type S = sig
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
   module Join_env : Join_env_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_value : Meet_and_join_value_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_naked_immediate : Meet_and_join_naked_immediate_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_naked_int32 : Meet_and_join_naked_int32_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_naked_int64 : Meet_and_join_naked_int64_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_naked_nativeint : Meet_and_join_naked_nativeint_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_naked_float : Meet_and_join_naked_float_intf.S
-    with module T := Typing_world.Types
-    and module Functor_T := Typing_world.Functor_types
-  module Meet_and_join_fabricated : Meet_and_join_fabricated_intf.S
     with module T := Typing_world.Types
     and module Functor_T := Typing_world.Functor_types
   module Meet_env : Meet_env_intf.S

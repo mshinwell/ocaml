@@ -17,34 +17,18 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_types : sig
-    type t
-    type 'a ty
-    type of_kind_value
-    type closures_entry
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
 
-  module Make
-    (E : Either_meet_or_join_intf.S
-     with module Join_env := Join_env
-     with module Meet_env := Meet_env
-     with module Typing_env := Typing_env
-     with module Typing_env_extension := Typing_env_extension) :
-  sig
+  module Make (E : Either_meet_or_join_intf.S) : sig
     include Meet_and_join_spec_intf.S
-      with module Flambda_types := Flambda_types
-      with module Join_env := Join_env
-      with module Typing_env_extension := Typing_env_extension
-      with type of_kind_foo = Flambda_types.of_kind_value
+      with module T := T
+      with type of_kind_foo = T.Flambda_types.of_kind_value
 
     val meet_or_join_closures_entry
-       : Join_env.t
-      -> Flambda_types.closures_entry
-      -> Flambda_types.closures_entry
-      -> (Flambda_types.closures_entry * Typing_env_extension.t) Or_absorbing.t
+       : T.Join_env.t
+      -> T.Flambda_types.closures_entry
+      -> T.Flambda_types.closures_entry
+      -> (T.Flambda_types.closures_entry * T.Typing_env_extension.t)
+           Or_absorbing.t
   end
 end

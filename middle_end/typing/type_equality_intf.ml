@@ -19,32 +19,29 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_types : sig
-    type t
-    type closures_entry
-    type set_of_closures_entry
-  end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
-  val fast_equal : Flambda_types.t -> Flambda_types.t -> bool
+  val fast_equal : T.Flambda_types.t -> T.Flambda_types.t -> bool
 
-  val equal : Flambda_types.t -> Flambda_types.t -> bool
+  val equal : T.Flambda_types.t -> T.Flambda_types.t -> bool
 
   (* CR mshinwell: Rename to [equal_in_env]. *)
   val equal_with_env
      : Type_equality_env.t
-    -> Flambda_types.t
-    -> Flambda_types.t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t
     -> bool
 
   val equal_closures_entry
      : Type_equality_env.t
-    -> Flambda_types.closures_entry
-    -> Flambda_types.closures_entry
+    -> T.Flambda_types.closures_entry
+    -> T.Flambda_types.closures_entry
     -> bool
 
   val equal_set_of_closures_entry
      : Type_equality_env.t
-    -> Flambda_types.set_of_closures_entry
-    -> Flambda_types.set_of_closures_entry
+    -> T.Flambda_types.set_of_closures_entry
+    -> T.Flambda_types.set_of_closures_entry
     -> bool
 end

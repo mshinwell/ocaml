@@ -17,62 +17,55 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_type0_core : sig
-    type t
-    type closures_entry
-    type set_of_closures_entry
-  end
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Typing_env : sig type t end
-  module Typing_env_extension : sig type t end
+  module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
   val meet
-     : Meet_env.t
-    -> Flambda_type0_core.t
-    -> Flambda_type0_core.t
-    -> Flambda_type0_core.t * Typing_env_extension.t
+     : T.Meet_env.t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t * T.Typing_env_extension.t
 
   val join
-     : Join_env.t
-    -> Flambda_type0_core.t
-    -> Flambda_type0_core.t
-    -> Flambda_type0_core.t
+     : T.Join_env.t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t
+    -> T.Flambda_types.t
 
   val meet_closures_entry
-     : Meet_env.t
-    -> Flambda_type0_core.closures_entry
-    -> Flambda_type0_core.closures_entry
-    -> (Flambda_type0_core.closures_entry * Typing_env_extension.t) Or_bottom.t
+     : T.Meet_env.t
+    -> T.Flambda_types.closures_entry
+    -> T.Flambda_types.closures_entry
+    -> (T.Flambda_types.closures_entry * T.Typing_env_extension.t) Or_bottom.t
 
   val join_closures_entry
-     : Join_env.t
-    -> Flambda_type0_core.closures_entry
-    -> Flambda_type0_core.closures_entry
-    -> Flambda_type0_core.closures_entry
+     : T.Join_env.t
+    -> T.Flambda_types.closures_entry
+    -> T.Flambda_types.closures_entry
+    -> T.Flambda_types.closures_entry
 
   val meet_set_of_closures_entry
-     : Meet_env.t
-    -> Flambda_type0_core.set_of_closures_entry
-    -> Flambda_type0_core.set_of_closures_entry
-    -> (Flambda_type0_core.set_of_closures_entry * Typing_env_extension.t)
+     : T.Meet_env.t
+    -> T.Flambda_types.set_of_closures_entry
+    -> T.Flambda_types.set_of_closures_entry
+    -> (T.Flambda_types.set_of_closures_entry * T.Typing_env_extension.t)
          Or_bottom.t
 
   val join_set_of_closures_entry
-     : Join_env.t
-    -> Flambda_type0_core.set_of_closures_entry
-    -> Flambda_type0_core.set_of_closures_entry
-    -> Flambda_type0_core.set_of_closures_entry
+     : T.Join_env.t
+    -> T.Flambda_types.set_of_closures_entry
+    -> T.Flambda_types.set_of_closures_entry
+    -> T.Flambda_types.set_of_closures_entry
 
   val as_or_more_precise
-     : Typing_env.t
-    -> Flambda_type0_core.t
-    -> than:Flambda_type0_core.t
+     : T.Typing_env.t
+    -> T.Flambda_types.t
+    -> than:T.Flambda_types.t
     -> bool
 
   val strictly_more_precise
-     : Typing_env.t
-    -> Flambda_type0_core.t
-    -> than:Flambda_type0_core.t
+     : T.Typing_env.t
+    -> T.Flambda_types.t
+    -> than:T.Flambda_types.t
     -> bool
 end
