@@ -674,7 +674,7 @@ module Make (W : Typing_world.S) = struct
     in
     let by_closure_id =
       Closures_entry_by_closure_id.create_at_least_multiple
-        (Closures_entry_by_closure_id.Var_within_closure_set.Map.singleton
+        (Var_within_closure_set.Map.singleton
           (Var_within_closure.Set.singleton var_within_closure)
           closures_entry)
     in

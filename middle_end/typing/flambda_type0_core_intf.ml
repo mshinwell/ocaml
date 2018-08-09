@@ -94,19 +94,6 @@ module type S = sig
     include Contains_names.S with type t := t
   end
 
-(*
-
-  val alias_type_of : Flambda_kind.t -> Simple.t -> T.Flambda_types.t
-
-  val any_value_as_ty_value : unit -> T.Flambda_types.ty_value
-  val any_fabricated_as_ty_fabricated : unit -> T.Flambda_types.ty_fabricated
-
-  val bottom_as_ty_value : unit -> T.Flambda_types.ty_value
-  val bottom_as_ty_fabricated : unit -> T.Flambda_types.ty_fabricated
-
-  val ty_is_obviously_bottom : 'a T.Flambda_types.ty -> bool
-*)
-
   val get_alias : T.Flambda_types.t -> Simple.t option
 
   val is_obviously_bottom : T.Flambda_types.t -> bool
@@ -114,7 +101,7 @@ module type S = sig
   val of_ty_value : T.Flambda_types.ty_value -> T.Flambda_types.t
 
   val of_ty_naked_number
-    : 'kind T.Flambda_types.ty_naked_number
+     : 'kind T.Flambda_types.ty_naked_number
     -> 'kind Flambda_kind.Naked_number.t
     -> T.Flambda_types.t
 
@@ -142,7 +129,7 @@ module type S = sig
 
   val any_naked_float_as_ty_naked_float
     : unit
-    -> Numbers.Float_by_bit_pattern.Set.t T.Flambda_types.ty_naked_number
+   -> Numbers.Float_by_bit_pattern.Set.t T.Flambda_types.ty_naked_number
 
   (** The top type for unboxed 32-bit numbers. *)
   val any_naked_int32 : unit -> T.Flambda_types.t

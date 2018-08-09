@@ -27,21 +27,6 @@ module type S = sig
   module Functor_T : Typing_world_abstract.Functor_S
   include module type of struct include T.Closures_entry_by_closure_id end
 
-  (* CR mshinwell: This module is unpleasant.  We should arrange things so that
-     [Var_within_closure.Set.Map] exists.  (This should be easier now that
-     things brought in using "include" can be shadowed.) *)
-  module Var_within_closure_set : sig
-    type t = Var_within_closure.Set.t
-
-    include Map.With_set with type t := t
-  end
-
-  module Closure_id_and_var_within_closure_set : sig
-    type t = Closure_id.t * Var_within_closure_set.t
-
-    include Map.With_set with type t := t
-  end
-
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   (** Describe one or more closures by giving for each one the closure ID
