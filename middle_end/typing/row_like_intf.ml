@@ -16,30 +16,66 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module type Maps_to_type = sig
+  type t
+end
+
+module type Maps_to = sig
+  module T : Typing_world_abstract.S
+
+  module Type : Maps_to_type
+  open Type
+
+  type nonrec t = t
+
+  val bottom : unit -> t
+
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
+
+  val equal : Type_equality_env.t -> t -> t -> bool
+
+  val add_or_meet_equations
+     : t
+    -> T.Meet_env.t
+    -> T.Typing_env_extension.t
+    -> t
+
+  val meet
+     : T.Meet_env.t
+    -> Relational_product_intf.fresh_component_semantics
+    -> t
+    -> t
+    -> (t * T.Typing_env_extension.t) Or_bottom.t
+
+  val join
+     : T.Join_env.t
+    -> Relational_product_intf.fresh_component_semantics
+    -> t
+    -> t
+    -> t
+
+  include Contains_names.S with type t := t
+end
+
 module type S_types = sig
   module T : Typing_world_abstract.S
   module Make_types
-    (Tag : sig
-      include OrderedType
-      include HashedType with type t := t
-    end)
-    (Index : sig
-      include OrderedType
-      include HashedType with type t := t
-    end)
-    (Maps_to : sig
-      include OrderedType
-      include HashedType with type t := t
-    end) :
-  sig
+    (Tag : Map.With_set)
+    (Index : Map.With_set)
+    (Maps_to : Maps_to_type)
+  : sig
     type t
 
     module Tag_and_index : sig
       (** These values will not contain any names. *)
       type t = Tag.t * Index.t
 
-      include OrderedType with type t := t
-      include HashedType with type t := t
+      include Set.OrderedType with type t := t
+      include Hashtbl.HashedType with type t := t
     end
   end
 end
@@ -49,55 +85,18 @@ module type S = sig
   module Functor_T : Typing_world_abstract.Functor_S
   include module type of struct include Functor_T.Row_like end
 
+  (** [Tag]s and [Index]es may not contain names. *)
+  (* CR mshinwell: Remove [Maps_to_type] once aliases to functor arguments
+     are supported. *)
   module Make
-    (Tag : sig
-      (** These values may not contain names. *)
-      type t
-      include Hashtbl.With_map with type t := t
-    end)
-    (Index : sig
-      (** These values may not contain names. *)
-      type t
-      include Hashtbl.With_map with type t := t
-    end)
-    (Maps_to : sig
-      module Types : sig type t end
-      include Types
-
-      val bottom : unit -> t
-
-      val print_with_cache
-         : cache:Printing_cache.t
-        -> Format.formatter
-        -> t
-        -> unit
-
-      val equal : Type_equality_env.t -> t -> t -> bool
-
-      val add_or_meet_equations
-         : t
-        -> T.Meet_env.t
-        -> T.Typing_env_extension.t
-        -> t
-
-      val meet
-         : T.Meet_env.t
-        -> Relational_product_intf.fresh_component_semantics
-        -> t
-        -> t
-        -> (t * T.Typing_env_extension.t) Or_bottom.t
-
-      val join
-         : T.Join_env.t
-        -> Relational_product_intf.fresh_component_semantics
-        -> t
-        -> t
-        -> t
-
-      include Contains_names.S with type t := t
-    end) :
+    (Tag : Map.With_set)
+    (Index : Map.With_set)
+    (Maps_to_type : Maps_to_type)
+    (Maps_to : Maps_to
+      with module T := T
+      with module Type := Maps_to_type) :
   sig
-    include module type of Make_types (Tag) (Index) (Maps_to)
+    type t = Make_types (Tag) (Index) (Maps_to_type).t
 
     module Tag_and_index : sig
       (** These values will not contain any names. *)

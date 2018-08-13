@@ -21,28 +21,40 @@ module type Functor_S = sig
 
   module Make_meet_or_join : Make_meet_or_join_intf.S
     with module T := Recursive_world.Types
+    and module Functor_T := Recursive_world.Functor_types
   module Meet_and_join : Meet_and_join_intf.S
     with module T := Recursive_world.Types
+    and module Functor_T := Recursive_world.Functor_types
   module Meet_and_join_value : Meet_and_join_value_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_naked_immediate : Meet_and_join_naked_immediate_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_naked_int32 : Meet_and_join_naked_int32_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_naked_int64 : Meet_and_join_naked_int64_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_naked_nativeint : Meet_and_join_naked_nativeint_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_naked_float : Meet_and_join_naked_float_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Meet_and_join_fabricated : Meet_and_join_fabricated_intf.S
     with module T := Recursive_world.Types
+(*     and module Functor_T := Recursive_world.Functor_types *)
   module Relational_product : Relational_product_intf.S
     with module T := Recursive_world.Types
+    and module Functor_T := Recursive_world.Functor_types
   module Row_like : Row_like_intf.S
     with module T := Recursive_world.Types
+    and module Functor_T := Recursive_world.Functor_types
   module Trivial_row_like : Trivial_row_like_intf.S
     with module T := Recursive_world.Types
+    and module Functor_T := Recursive_world.Functor_types
 end
 
 module type S = sig

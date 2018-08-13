@@ -16,13 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type Name_like = sig
-  type t
-
-  include Map.With_set with type t := t
-  include Contains_names.S with type t := t
-end
-
 type fresh_component_semantics =
   | Fresh
     (** For [meet] and [join] always assign fresh components. *)
@@ -36,10 +29,8 @@ type fresh_component_semantics =
 
 module type S_types = sig
   module T : Typing_world_abstract.S
-  module Functor_T : Typing_world_abstract.Functor_S
-  module Make_types (Index : sig end) (Component : sig end) : sig
-    type t
-  end
+  module Make_types (Index : Map.With_set) (Component : Map.With_set) :
+    Map.With_set
 end
 
 module type S = sig
@@ -47,8 +38,8 @@ module type S = sig
   module Functor_T : Typing_world_abstract.Functor_S
   include module type of struct include Functor_T.Relational_product end
 
-  module Make (Index : Name_like) (Component : Name_like) : sig
-    include module type of Make_types (Index) (Component)
+  module Make (Index : Map.With_set) (Component : Map.With_set) : sig
+    type t = Make_types (Index) (Component).t
 
     include Contains_names.S with type t := t
 

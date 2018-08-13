@@ -18,6 +18,7 @@
 
 module type S = sig
   module T : Typing_world_abstract.S
+  module Functor_T : Typing_world_abstract.Functor_S
 
   module Make (E : Either_meet_or_join_intf.S) : sig
     val meet_or_join

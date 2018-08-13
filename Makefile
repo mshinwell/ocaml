@@ -327,6 +327,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/kinded_parameter.cmo \
   middle_end/typing/type_equality_env.cmo \
   middle_end/typing/typing_world_abstract.cmo \
+  middle_end/typing/name_like_intf.cmo \
   middle_end/language/expr_intf.cmo \
   middle_end/typing/closure_ids_intf.cmo \
   middle_end/typing/closures_entry_by_closure_id_intf.cmo \

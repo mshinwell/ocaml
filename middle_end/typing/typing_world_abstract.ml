@@ -70,13 +70,18 @@ end
 
 module type Functor_S = sig
   module Relational_product : sig
-    module Make_types (Index : sig end) (Component : sig end)
-      : sig type t end
+    module Make_types
+      (Index : Map.With_set)
+      (Component : Map.With_set)
+    : Map.With_set
   end
 
   module Row_like : sig
-    module Make_types (Tag : sig end) (Index : sig end) (Maps_to : sig end)
-      : sig type t end
+    module Make_types
+      (Tag : Map.With_set)
+      (Index : Map.With_set)
+      (Maps_to : sig type t end)
+    : sig type t end
   end
 
   module Trivial_row_like : sig

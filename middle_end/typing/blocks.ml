@@ -18,9 +18,11 @@
 
 (* CR mshinwell: Delete >= 4.08 *)
 [@@@ocaml.warning "-60"]
+module Blocks = struct end
 module Flambda_type0_core = struct end
 module Join_env = struct end
 module Meet_env = struct end
+module Recursive_world = struct end
 module Relational_product = struct end
 module Row_like = struct end
 module Typing_env = struct end
@@ -33,14 +35,11 @@ struct
   open! T
   open! Functor_T
 
-  module RP = struct
-    include Relational_product.Make_types
+  module RP =
+    Relational_product.Make_types
       (Int_index) (Logical_variable_component)
-  end
 
-  module RL = Row_like.Make_types (Tag) (Targetint.OCaml) (RP)
-
-  type t = RL.t
+  type t = Row_like.Make_types (Tag) (Targetint.OCaml) (RP).t
 end
 
 module type Strengthened_world = sig
@@ -48,7 +47,8 @@ module type Strengthened_world = sig
     module rec Types : (Typing_world_types.Types_nonrec
       with module Abstract_types := Types
       and module Abstract_functor_types := Functor_types
-      with module Blocks = Make_types (Types) (Functor_types))
+      with module Blocks = Make_types (Types) (Functor_types)
+      with type Blocks.t = Make_types (Types) (Functor_types).t)
     and Functor_types : Typing_world_types.Functor_types_nonrec
       with module Abstract_types := Types
   end
@@ -57,21 +57,23 @@ end
 
 module Make (W : Strengthened_world)
   (F : (Typing_world.Functor_S
-    with Recursive_world = Recursive_world))
+    with module Recursive_world = W.Recursive_world)) =
 struct
   open! W
-
-  include Recursive_world.Types.Blocks
+  open! F
 
   module RP = struct
-    include Relational_product.Make (Int_index) (Logical_variable_component)
+    include Relational_product.Make
+      (Int_index) (Logical_variable_component)
 
     let bottom () = create_bottom ~arity:1
   end
 
-  module RL = Row_like.Make (Tag) (Targetint.OCaml) (RP)
+  module RL =
+    Row_like.Make (Tag) (Targetint.OCaml)
+      (W.Recursive_world.Types.Blocks.RP) (RP)
 
-  type t = RL.t
+  type t = W.Recursive_world.Types.Blocks.t
 
   type open_or_closed = Open | Closed of Tag.t
 
@@ -94,7 +96,7 @@ struct
           in
           let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
           env_extension, next_index)
-        (Typing_env_extension.empty, Targetint.OCaml.zero)
+        (Typing_env_extension.empty (), Targetint.OCaml.zero)
         field_tys
     in
     let product =

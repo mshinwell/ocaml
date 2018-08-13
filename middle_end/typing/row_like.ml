@@ -32,19 +32,10 @@ struct
   open! T
 
   module Make_types
-    (Tag : sig
-      include OrderedType
-      include HashedType with type t := t
-    end)
-    (Index : sig
-      include OrderedType
-      include HashedType with type t := t
-    end)
-    (Maps_to : sig
-      include OrderedType
-      include HashedType with type t := t
-    end) =
-  struct
+    (Tag : Map.With_set)
+    (Index : Map.With_set)
+    (Maps_to : Map.With_set)
+  = struct
     module Tag_and_index = struct
       type t = Hashtbl.Make_with_map_pair (Tag) (Index).t
     end
@@ -74,14 +65,8 @@ module Make (W : Strengthened_world) = struct
   open! W
 
   module Make
-    (Tag : sig
-      type t
-      include Hashtbl.With_map with type t := t
-    end)
-    (Index : sig
-      type t
-      include Hashtbl.With_map with type t := t
-    end)
+    (Tag : Map.With_set)
+    (Index : Map.With_set)
     (Maps_to : sig
       type t
 
