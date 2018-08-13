@@ -18,9 +18,29 @@
 
 module type S_types = sig
   module T : Typing_world_abstract.S
-  module Functor_T : Typing_world_abstract.Functor_S
-  module Make_types (Tag: sig end) (Index : sig end) (Maps_to : sig end) : sig
+  module Make_types
+    (Tag : sig
+      include OrderedType
+      include HashedType with type t := t
+    end)
+    (Index : sig
+      include OrderedType
+      include HashedType with type t := t
+    end)
+    (Maps_to : sig
+      include OrderedType
+      include HashedType with type t := t
+    end) :
+  sig
     type t
+
+    module Tag_and_index : sig
+      (** These values will not contain any names. *)
+      type t = Tag.t * Index.t
+
+      include OrderedType with type t := t
+      include HashedType with type t := t
+    end
   end
 end
 
@@ -41,14 +61,8 @@ module type S = sig
       include Hashtbl.With_map with type t := t
     end)
     (Maps_to : sig
-(* XXX
-   1. Put submodule here and include it
-   2. Alter argument type of Make_types in S_types, above, to include the
-      types necessary to define Make_types in the .ml
-   3. Add compare, equal, hash to the "types" parts
-*)
-
-      type t
+      module Types : sig type t end
+      include Types
 
       val bottom : unit -> t
 

@@ -26,7 +26,51 @@ module Meet_env = struct end
 module Typing_env = struct end
 module Typing_env_extension = struct end
 
-module Make (W : Typing_world.S) = struct
+module Make_types
+  (T : Typing_world_abstract.S) =
+struct
+  open! T
+
+  module Make_types
+    (Tag : sig
+      include OrderedType
+      include HashedType with type t := t
+    end)
+    (Index : sig
+      include OrderedType
+      include HashedType with type t := t
+    end)
+    (Maps_to : sig
+      include OrderedType
+      include HashedType with type t := t
+    end) =
+  struct
+    module Tag_and_index = struct
+      type t = Hashtbl.Make_with_map_pair (Tag) (Index).t
+    end
+
+    (* CR mshinwell: Think about what means bottom and what means unknown for
+       this structure *)
+    type t = {
+      known : Maps_to.t Tag_and_index.Map.t;
+      at_least : Maps_to.t Index.Map.t;
+    }
+  end
+end
+
+module type Strengthened_world = sig
+  module Recursive_world : sig
+    module rec Types : (Typing_world_types.Types_nonrec
+      with module Abstract_types := Types
+      and module Abstract_functor_types := Functor_types)
+    and Functor_types : (Typing_world_types.Functor_types_nonrec
+      with module Abstract_types := Types
+      with module Row_like = Make_types (Types))
+  end
+  include Typing_world.S with module Recursive_world := Recursive_world
+end
+
+module Make (W : Strengthened_world) = struct
   open! W
 
   module Make
