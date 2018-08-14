@@ -220,7 +220,6 @@ module Expr (Expr : Expr_intf.S) = struct
       -> t
 
       include Contains_names.S with type t := t
-    end
   end = struct
     module Var_within_closure = struct
       include Var_within_closure
@@ -1945,7 +1944,7 @@ module Expr (Expr : Expr_intf.S) = struct
         let all_closures = Closure_id.Map.keys closures in
         let by_closure_id = Types_by_closure_id.create closures in
         let set_of_closures_entry : set_of_closures_entry =
-           by_closure_id; }
+           { by_closure_id; }
         in
         let closures =
           Closure_ids.create
@@ -2467,7 +2466,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
     let freshen t freshening =
       apply_name_permutation t (Freshening.name_permutation freshening)
-  end Function_type : sig
+  end and Function_type : sig
     (** Dependent function types.
 
         Logical variables introduced by the parameter types may be used in the
