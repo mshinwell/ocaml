@@ -21,4 +21,4 @@
    things brought in using "include" can be shadowed.) *)
 type t = Var_within_closure.Set.t
 
-include Map.With_set with type t := t
+include Hashtbl.With_map with type t := t

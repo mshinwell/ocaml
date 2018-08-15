@@ -16,6 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Closure_id.t * Var_within_closure_set.t
-
-include Hashtbl.With_map with type t := t
+include Hashtbl.Make_with_map_pair (Closure_id) (Var_within_closure_set)

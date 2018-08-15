@@ -341,7 +341,11 @@ module Expr (Expr : Expr_intf.S) = struct
       let bottom () = create_bottom ~arity:1
     end
 
-    module RL = Row_like.Make (Tag) (Targetint.OCaml) (RP)
+    module Tag_and_targetint_ocaml =
+      Hashtbl.Make_with_map_pair (Tag) (Targetint.OCaml)
+
+    module RL =
+      Row_like.Make (Tag) (Targetint.OCaml) (Tag_and_targetint_ocaml) (RP)
 
     type t = RL.t
 
@@ -628,8 +632,11 @@ module Expr (Expr : Expr_intf.S) = struct
 
     include Contains_names.S with type t := t
   end = struct
+    module Unit_and_closure_id_set =
+      Hashtbl.Make_with_map_pair (Unit) (Closure_id_set)
+
     module RL =
-      Row_like.Make (Unit) (Closure_id_set)
+      Row_like.Make (Unit) (Closure_id_set) (Unit_and_closure_id_set)
         (Flambda_type0_core.Set_of_closures_entry)
 
     type t = RL.t
@@ -643,10 +650,10 @@ module Expr (Expr : Expr_intf.S) = struct
         let closure_ids_map =
           Closure_id_set.Map.fold
             (fun closure_ids set_of_closures_entry result ->
-              RL.Tag_and_index.Map.add ((), closure_ids) set_of_closures_entry
-                result)
+              Unit_and_closure_id_set.Map.add ((), closure_ids)
+                set_of_closures_entry result)
             closure_ids_map
-            RL.Tag_and_index.Map.empty
+            Unit_and_closure_id_set.Map.empty
         in
         RL.create_exactly_multiple closure_ids_map
 
@@ -701,21 +708,10 @@ module Expr (Expr : Expr_intf.S) = struct
 
     include Contains_names.S with type t := t
   end = struct
-    (* CR mshinwell: Share with closure_elements.ml *)
-    module Var_within_closure_set = struct
-      type t = Var_within_closure.Set.t
-
-      include Hashtbl.Make_with_map (struct
-        include Var_within_closure.Set
-        let hash = Hashtbl.hash
-      end)
-    end
-
     module RL =
       Row_like.Make (Closure_id) (Var_within_closure_set)
+        (Closure_id_and_var_within_closure_set)
         (Flambda_type0_core.Closures_entry)
-
-    module Closure_id_and_var_within_closure_set = RL.Tag_and_index
 
     type t = RL.t
 
@@ -730,7 +726,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let meet env t1 t2 : _ Or_bottom.t =
       match RL.meet env Fresh t1 t2 with
       | Bottom -> Bottom
-      | Ok (t, _closures_entry) -> Ok (t, Typing_env_extension.empty)
+      | Ok (t, _closures_entry) -> Ok (t, Typing_env_extension.empty ())
 
     let join env t1 t2 = RL.join env Fresh t1 t2
 
@@ -785,15 +781,15 @@ module Expr (Expr : Expr_intf.S) = struct
       with module Typing_env_extension := Typing_env_extension
   end = struct
     module For_meet = struct
-      let name = "meet"
+      let name () = "meet"
 
       type meet_or_join = Meet | Join
 
-      let op : meet_or_join = Meet
+      let op () : meet_or_join = Meet
       let (_ : meet_or_join) = Join
 
-      let unknown_is_identity = true
-      let unknown_is_absorbing = false
+      let unknown_is_identity () = true
+      let unknown_is_absorbing () = false
 
       (* CR mshinwell: Write functors to generate these patterns *)
       module String_info = struct
@@ -920,15 +916,15 @@ module Expr (Expr : Expr_intf.S) = struct
     end
 
     module For_join = struct
-      let name = "join"
+      let name () = "join"
 
       type meet_or_join = Meet | Join
 
-      let op : meet_or_join = Join
+      let op () : meet_or_join = Join
       let (_ : meet_or_join) = Meet
 
-      let unknown_is_identity = false
-      let unknown_is_absorbing = true
+      let unknown_is_identity () = false
+      let unknown_is_absorbing () = true
 
       module String_info = struct
         module Set = struct
@@ -1025,10 +1021,10 @@ module Expr (Expr : Expr_intf.S) = struct
       end
 
       let switch_no_bottom _meet join join_env thing1 thing2 =
-        join join_env thing1 thing2, Typing_env_extension.empty
+        join join_env thing1 thing2, Typing_env_extension.empty ()
 
       let switch _meet join join_env thing1 thing2 : _ Or_bottom.t =
-        Ok (join join_env thing1 thing2, Typing_env_extension.empty)
+        Ok (join join_env thing1 thing2, Typing_env_extension.empty ())
 
       let switch' _meet join join_env thing1 thing2 : _ Or_bottom.t =
         Ok (join join_env thing1 thing2)
@@ -3287,7 +3283,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Flambda_types.of_kind_fabricated
 
-      let kind = K.fabricated ()
+      let kind () = K.fabricated ()
 
       let to_type ty : Flambda_types.t = Fabricated ty
 
@@ -3367,7 +3363,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Float.Set.t Flambda_types.of_kind_naked_number
 
-      let kind = K.naked_float ()
+      let kind () = K.naked_float ()
 
       let to_type ty : Flambda_types.t = Naked_number (ty, Naked_float)
 
@@ -3402,7 +3398,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Immediate.Set.t Flambda_types.of_kind_naked_number
 
-      let kind = K.naked_immediate ()
+      let kind () = K.naked_immediate ()
 
       let to_type ty : Flambda_types.t = Naked_number (ty, Naked_immediate)
 
@@ -3437,7 +3433,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Int32.Set.t Flambda_types.of_kind_naked_number
 
-      let kind = K.naked_int32 ()
+      let kind () = K.naked_int32 ()
 
       let to_type ty : Flambda_types.t = Naked_number (ty, Naked_int32)
 
@@ -3472,7 +3468,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Int64.Set.t Flambda_types.of_kind_naked_number
 
-      let kind = K.naked_int64 ()
+      let kind () = K.naked_int64 ()
 
       let to_type ty : Flambda_types.t = Naked_number (ty, Naked_int64)
 
@@ -3507,7 +3503,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Targetint.Set.t Flambda_types.of_kind_naked_number
 
-      let kind = K.naked_nativeint ()
+      let kind () = K.naked_nativeint ()
 
       let to_type ty : Flambda_types.t = Naked_number (ty, Naked_nativeint)
 
@@ -3555,7 +3551,7 @@ module Expr (Expr : Expr_intf.S) = struct
     struct
       type of_kind_foo = Flambda_types.of_kind_value
 
-      let kind = K.value ()
+      let kind () = K.value ()
 
       let to_type ty : Flambda_types.t = Value ty
 
@@ -3931,10 +3927,10 @@ module Expr (Expr : Expr_intf.S) = struct
     val create : (Kinded_parameter.t * Flambda_types.t) list -> t
 
     (** A conservative approximation to equality. *)
-    val equal : t -> t -> bool
+    val equal : Type_equality_env.t -> t -> t -> bool
 
     (** Greatest lower bound of two parameter lists. *)
-    val meet : Meet_env.t -> t -> t -> t Or_bottom.t
+    val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
 
     (** Least upper bound of two parameter lists. *)
     val join : Join_env.t -> t -> t -> t
@@ -3975,8 +3971,10 @@ module Expr (Expr : Expr_intf.S) = struct
     let invariant = RP.invariant
     let print = RP.print
     let equal = RP.equal
-    let meet = RP.meet
-    let join = RP.join
+
+    let meet env t1 t2 = RP.meet env Fresh t1 t2
+    let join env t1 t2 = RP.join env Fresh t1 t2
+
     let introduce = RP.introduce
 
     let free_names = RP.free_names
@@ -4108,6 +4106,11 @@ module Expr (Expr : Expr_intf.S) = struct
         -> t
     end
   end = struct
+    type fresh_component_semantics =
+      | Fresh
+      | Left
+      | Right
+
     module Make
       (Index : Name_like_intf.S)
       (Component : sig
@@ -4403,7 +4406,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
       let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
         if Meet_env.shortcut_precondition env && t1 == t2 then begin
-          Ok (t1, Typing_env_extension.empty)
+          Ok (t1, Typing_env_extension.empty ())
         end else begin
           if List.compare_lengths t1 t2 <> 0 then begin
             Misc.fatal_errorf "Cannot meet relational products of different \
@@ -4427,7 +4430,7 @@ module Expr (Expr : Expr_intf.S) = struct
           in
           match t_rev with
           | Bottom -> Bottom
-          | Ok t_rev -> Ok (List.rev t_rev, Typing_env_extension.empty)
+          | Ok t_rev -> Ok (List.rev t_rev, Typing_env_extension.empty ())
         end
 
       let join env fresh_component_semantics t1 t2 =
@@ -4510,8 +4513,13 @@ module Expr (Expr : Expr_intf.S) = struct
     end
   end and Row_like : sig
     module Make
-      (Tag : Map.With_set)
-      (Index : Map.With_set)
+      (Tag : Hashtbl.With_map)
+      (Index : Hashtbl.With_map)
+      (Tag_and_index : sig
+        (** These values will not contain any names. *)
+        type t = Tag.t * Index.t
+        include Hashtbl.With_map with type t := t
+      end)
       (Maps_to : sig
         type t
 
@@ -4549,12 +4557,6 @@ module Expr (Expr : Expr_intf.S) = struct
       end) :
     sig
       type t
-
-      module Tag_and_index : sig
-        (** These values will not contain any names. *)
-        type t = Tag.t * Index.t
-        include Hashtbl.With_map with type t := t
-      end
 
       val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
@@ -4595,6 +4597,10 @@ module Expr (Expr : Expr_intf.S) = struct
     module Make
       (Tag : Hashtbl.With_map)
       (Index : Hashtbl.With_map)
+      (Tag_and_index : sig
+        type t = Tag.t * Index.t
+        include Hashtbl.With_map with type t := t
+      end)
       (Maps_to : sig
         type t
 
@@ -4632,7 +4638,7 @@ module Expr (Expr : Expr_intf.S) = struct
       end) =
     struct
       module Tag_and_index = struct
-        include Hashtbl.Make_with_map_pair (Tag) (Index)
+        include Tag_and_index
 
         let create tag index = tag, index
         let index (_tag, index) = index
@@ -4896,16 +4902,21 @@ module Expr (Expr : Expr_intf.S) = struct
         let bottom () = empty ()
       end
 
-      module RL = Row_like.Make (Thing_without_names) (Unit) (TEE)
+      module Thing_without_names_and_unit =
+        Hashtbl.Make_with_map_pair (Thing_without_names) (Unit)
+
+      module RL =
+        Row_like.Make (Thing_without_names) (Unit)
+          (Thing_without_names_and_unit) (TEE)
 
       type t = RL.t
 
       let create_with_equations things_with_env_extensions =
         let things_with_env_extensions =
           Thing_without_names.Map.fold (fun thing extension result ->
-              RL.Tag_and_index.Map.add (thing, ()) extension result)
+              Thing_without_names_and_unit.Map.add (thing, ()) extension result)
             things_with_env_extensions
-            RL.Tag_and_index.Map.empty
+            Thing_without_names_and_unit.Map.empty
         in
         RL.create_exactly_multiple things_with_env_extensions
 
@@ -5944,7 +5955,7 @@ module Expr (Expr : Expr_intf.S) = struct
        check on the end of this function) that if a canonical name is returned
        then the original type was an [Equals] or a [Type].  This fact
        should also be documented in the interface. *)
-    let resolve_aliases ?bound_name (t, (ty : Flambda_types.t))
+    let resolve_aliases ?bound_name t (ty : Flambda_types.t)
           : Flambda_types.t * (Simple.t option) =
       match ty with
       | Value ty_value ->
@@ -6045,7 +6056,7 @@ module Expr (Expr : Expr_intf.S) = struct
               match (entry : typing_environment_entry0) with
               | Definition ty | Equation ty -> ty
             in
-            ignore (Sys.opaque_identity (resolve_aliases ~bound_name (t, ty))))
+            ignore (Sys.opaque_identity (resolve_aliases ~bound_name t ty)))
           t.names_to_types;
       end
 
@@ -6715,7 +6726,7 @@ module Expr (Expr : Expr_intf.S) = struct
          the ordering is reasonable. *)
       ()
 
-    let empty =
+    let empty () =
       { first_definitions = [];
         at_or_after_cut_point = Scope_level.Map.empty;
         last_equations_rev = [];
@@ -6959,24 +6970,122 @@ module Expr (Expr : Expr_intf.S) = struct
           Name.print name
           print t
 
-    (* CR-someday mshinwell: Attempt to produce a single piece of code that can
-       be specialised to produce both [meet] and [join], as we do elsewhere. *)
+    let apply_permutation_typing_environment_entry
+          (entry : Typing_env.typing_environment_entry) perm
+          : Typing_env.typing_environment_entry =
+      match entry with
+      | Definition ty ->
+        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+        if ty == ty' then entry
+        else Definition ty'
+      | Equation ty ->
+        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+        if ty == ty' then entry
+        else Equation ty'
+      | CSE prim ->
+        let prim' =
+          Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
+        in
+        if prim == prim' then entry
+        else CSE prim'
 
-    let meet (env : Typing_env.t) (t1 : t) (t2 : t) : t =
-      if fast_equal t1 t2 then t1
+    let apply_name_permutation
+          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+             cse; } as t)
+          perm : t =
+      let first_definitions_changed = ref false in
+      let first_definitions' =
+        List.map (fun (name, t) ->
+            let name' = Name_permutation.apply_name perm name in
+            let t' = Flambda_type0_core.apply_name_permutation t perm in
+            if (not (name == name')) && (not (t == t')) then begin
+              first_definitions_changed := true
+            end;
+            name', t')
+          first_definitions
+      in
+      let at_or_after_cut_point' =
+        Scope_level.Map.map_sharing (fun by_sublevel ->
+            Scope_level.Sublevel.Map.map_sharing
+              (fun ((name, (entry : Typing_env.typing_environment_entry))
+                    as datum) ->
+                let name' = Name_permutation.apply_name perm name in
+                let entry' =
+                  apply_permutation_typing_environment_entry entry perm
+                in
+                if name == name' && entry == entry' then datum
+                else name', entry')
+              by_sublevel)
+          at_or_after_cut_point
+      in
+      let last_equations_rev_changed = ref false in
+      let last_equations_rev' =
+        List.map (fun (name, ty) ->
+            let name' = Name_permutation.apply_name perm name in
+            let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+            if (not (name == name')) || (not (ty == ty')) then begin
+              last_equations_rev_changed := true
+            end;
+            name', ty')
+          last_equations_rev
+      in
+      let cse_changed = ref false in
+      let cse' =
+        Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
+            let simple' = Name_permutation.apply_simple perm simple in
+            let prim' =
+              Flambda_primitive.With_fixed_value.apply_name_permutation prim
+                perm
+            in
+            if (not (simple == simple')) || (not (prim == prim')) then begin
+              cse_changed := true
+            end;
+            Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
+          cse
+          Flambda_primitive.With_fixed_value.Map.empty
+      in
+      if (not !first_definitions_changed)
+        && at_or_after_cut_point == at_or_after_cut_point'
+        && (not !last_equations_rev_changed)
+        && (not !cse_changed)
+      then t
+      else 
+        { first_definitions = first_definitions';
+          at_or_after_cut_point = at_or_after_cut_point';
+          last_equations_rev = last_equations_rev';
+          cse = cse';
+        }
+
+    let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
+      if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
       else if is_empty t1 then t2
       else if is_empty t2 then t1
       else
-        let scope_level = Scope_level.next (Typing_env.max_level env) in
-        let env = Typing_env.add_or_meet_env_extension env t1 scope_level in
-        let env = Typing_env.add_or_meet_env_extension env t2 scope_level in
-        Typing_env.cut env ~existential_if_defined_at_or_later_than:scope_level
+        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+        let env = Meet_env.clear_name_permutations env in
+        let scope_level =
+          Scope_level.next (Typing_env.max_level (Meet_env.env env))
+        in
+        let env =
+          Meet_env.with_env env (fun env ->
+            Typing_env.add_or_meet_env_extension env t1 scope_level)
+        in
+        let env =
+          Meet_env.with_env env (fun env ->
+            Typing_env.add_or_meet_env_extension env t2 scope_level)
+        in
+        Typing_env.cut (Meet_env.env env)
+          ~existential_if_defined_at_or_later_than:scope_level
 
     let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
-      if fast_equal t1 t2 then t1
-      else if is_empty t1 then empty
-      else if is_empty t2 then empty
+      if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
+      else if is_empty t1 then empty ()
+      else if is_empty t2 then empty ()
       else
+        let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
+        let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
+        let env = Join_env.clear_name_permutations env in
         let env =
           Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
         in
@@ -6992,7 +7101,7 @@ module Expr (Expr : Expr_intf.S) = struct
               let join_ty = Both_meet_and_join.join env ty1 ty2 in
               add_equation t name join_ty)
             names_in_join
-            empty
+            (empty ())
         in
         let preserved_cse_equations t =
           (* CR-someday mshinwell: This could be improved to preserve some of
@@ -7103,92 +7212,6 @@ module Expr (Expr : Expr_intf.S) = struct
       restrict_to_names t
         (Name_occurrences.create_from_set_in_types names_more_precise)
 
-    let apply_permutation_typing_environment_entry
-          (entry : Typing_env.typing_environment_entry) perm
-          : Typing_env.typing_environment_entry =
-      match entry with
-      | Definition ty ->
-        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-        if ty == ty' then entry
-        else Definition ty'
-      | Equation ty ->
-        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-        if ty == ty' then entry
-        else Equation ty'
-      | CSE prim ->
-        let prim' =
-          Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
-        in
-        if prim == prim' then entry
-        else CSE prim'
-
-    let apply_name_permutation
-          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
-             cse; } as t)
-          perm : t =
-      let first_definitions_changed = ref false in
-      let first_definitions' =
-        List.map (fun (name, t) ->
-            let name' = Name_permutation.apply_name perm name in
-            let t' = Flambda_type0_core.apply_name_permutation t perm in
-            if (not (name == name')) && (not (t == t')) then begin
-              first_definitions_changed := true
-            end;
-            name', t')
-          first_definitions
-      in
-      let at_or_after_cut_point' =
-        Scope_level.Map.map_sharing (fun by_sublevel ->
-            Scope_level.Sublevel.Map.map_sharing
-              (fun ((name, (entry : Typing_env.typing_environment_entry))
-                    as datum) ->
-                let name' = Name_permutation.apply_name perm name in
-                let entry' =
-                  apply_permutation_typing_environment_entry entry perm
-                in
-                if name == name' && entry == entry' then datum
-                else name', entry')
-              by_sublevel)
-          at_or_after_cut_point
-      in
-      let last_equations_rev_changed = ref false in
-      let last_equations_rev' =
-        List.map (fun (name, ty) ->
-            let name' = Name_permutation.apply_name perm name in
-            let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-            if (not (name == name')) || (not (ty == ty')) then begin
-              last_equations_rev_changed := true
-            end;
-            name', ty')
-          last_equations_rev
-      in
-      let cse_changed = ref false in
-      let cse' =
-        Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
-            let simple' = Name_permutation.apply_simple perm simple in
-            let prim' =
-              Flambda_primitive.With_fixed_value.apply_name_permutation prim
-                perm
-            in
-            if (not (simple == simple')) || (not (prim == prim')) then begin
-              cse_changed := true
-            end;
-            Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
-          cse
-          Flambda_primitive.With_fixed_value.Map.empty
-      in
-      if (not !first_definitions_changed)
-        && at_or_after_cut_point == at_or_after_cut_point'
-        && (not !last_equations_rev_changed)
-        && (not !cse_changed)
-      then t
-      else 
-        { first_definitions = first_definitions';
-          at_or_after_cut_point = at_or_after_cut_point';
-          last_equations_rev = last_equations_rev';
-          cse = cse';
-        }
-
     let free_names
           { first_definitions; at_or_after_cut_point; last_equations_rev;
             cse; } =
@@ -7262,6 +7285,11 @@ module Expr (Expr : Expr_intf.S) = struct
       in
       Name_occurrences.create_from_set_in_types
         (Name.Set.diff free_names defined_names)
+
+    let freshen t freshening =
+      apply_name_permutation t (Freshening.name_permutation freshening)
+
+    let bound_names _ = Misc.fatal_error "Try to do without this"
   end
 
   include Flambda_type0_core
