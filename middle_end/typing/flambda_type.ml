@@ -2966,8 +2966,6 @@ module Expr (Expr : Expr_intf.S) = struct
         -> Flambda_types.t * Typing_env_extension.t
     end
   end = struct
-    module K = Flambda_kind
-
     module Make (E : Either_meet_or_join.S) = struct
       let meet_or_join env (t1 : Flambda_types.t) (t2 : Flambda_types.t)
             : Flambda_types.t * Typing_env_extension.t =
@@ -3217,8 +3215,6 @@ module Expr (Expr : Expr_intf.S) = struct
     include Meet_and_join_naked_number_intf.S 
       with module Naked_number := Immediate
   end = struct
-    module K = Flambda_kind
-
     module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Immediate.Set.t Flambda_types.of_kind_naked_number
 
@@ -3245,10 +3241,6 @@ module Expr (Expr : Expr_intf.S) = struct
     include Meet_and_join_naked_number_intf.S 
       with module Naked_number := Int32
   end = struct
-    module K = Flambda_kind
-
-    module Int32 = Numbers.Int32
-
     module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Int32.Set.t Flambda_types.of_kind_naked_number
 
@@ -3275,10 +3267,6 @@ module Expr (Expr : Expr_intf.S) = struct
     include Meet_and_join_naked_number_intf.S 
       with module Naked_number := Int64
   end = struct
-    module K = Flambda_kind
-
-    module Int64 = Numbers.Int64
-
     module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Int64.Set.t Flambda_types.of_kind_naked_number
 
@@ -3380,8 +3368,6 @@ module Expr (Expr : Expr_intf.S) = struct
              Or_absorbing.t
     end
   end = struct
-    module K = Flambda_kind
-
     module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Flambda_types.of_kind_value
 
