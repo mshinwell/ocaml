@@ -34,6 +34,32 @@ module type S = sig
 
   type t
 
+  type ty_value
+  type 'a ty_naked_number
+  type ty_fabricated
+
+  type function_declaration
+
+  module Typing_env : sig
+    type t
+  end
+
+  module Typing_env_extension : sig
+    type t
+  end
+
+  module Function_type : sig
+    type t
+  end
+
+  module Join_env : sig
+    type t
+  end
+
+  module Meet_env : sig
+    type t
+  end
+
   val print : Format.formatter -> t -> unit
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
@@ -126,7 +152,7 @@ module type S = sig
       judgements that will be used if the set contains, or is subsequently
       refined to contain, only a unique element. *)
   val these_tagged_immediates_with_envs
-     : T.Typing_env_extension.t Immediate.Map.t
+     : Typing_env_extension.t Immediate.Map.t
     -> t
 
   (** Building of types representing untagged / unboxed values from
@@ -171,13 +197,13 @@ module type S = sig
       if the corresponding block can be shown to have one of the
       discriminants. *)
   val these_discriminants
-     : T.Typing_env_extension.t Discriminant.Map.t
+     : Typing_env_extension.t Discriminant.Map.t
     -> t
 
   (** Like [these_discriminants], but returns the [ty_fabricated], rather than
       a value of type [t]. *)
   val these_discriminants_as_ty_fabricated
-     : T.Typing_env_extension.t Discriminant.Map.t
+     : Typing_env_extension.t Discriminant.Map.t
     -> ty_fabricated
 
   (** Any discriminant. *)
@@ -268,19 +294,19 @@ module type S = sig
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
     -> my_closure:Variable.t
-    -> T.Flambda_types.function_declaration
+    -> function_declaration
 
   (** Create a description of a function declaration whose code is unknown.
       Such declarations cannot be inlined. *)
   val create_non_inlinable_function_declaration
      : unit
-    -> T.Flambda_types.function_declaration
+    -> function_declaration
 
   (** Create a closure type given full information about the closure. *)
   val closure
      : Closure_id.t
-    -> T.Flambda_types.function_declaration
-    -> T.Function_type.t
+    -> function_declaration
+    -> Function_type.t
     -> ty_value Var_within_closure.Map.t
     -> set_of_closures:ty_fabricated
     -> t
@@ -353,11 +379,10 @@ module type S = sig
      : t
     -> Immediate.Set.t ty_naked_number
 
-  (** Enforce that a type is of fabricated kind, returning the corresponding
-      [ty]. *)
+  (** Enforce that a type is of fabricated kind. *)
   val force_to_kind_fabricated
      : t
-    -> T.Flambda_types.of_kind_fabricated ty
+    -> ty_fabricated
 
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
@@ -372,21 +397,6 @@ module type S = sig
 
   (** Like [unknown_like] but for a array of types. *)
   val unknown_like_array : t array -> t array
-
-  (** Building of types and terms representing tagged / boxed values from
-      specified constants. *)
-  val this_tagged_bool_named : bool -> Flambda0.Named.t * t
-  val this_tagged_immediate_named : Immediate.t -> Flambda0.Named.t * t
-
-  (** Building of types and terms representing untagged / unboxed values from
-      specified constants. *)
-  val this_untagged_immediate_named : Immediate.t -> Flambda0.Named.t * t
-  val this_naked_float_named
-     : Numbers.Float_by_bit_pattern.t
-    -> Flambda0.Named.t * t
-  val this_naked_int32_named : Int32.t -> Flambda0.Named.t * t
-  val this_naked_int64_named : Int64.t -> Flambda0.Named.t * t
-  val this_naked_nativeint_named : Targetint.t -> Flambda0.Named.t * t
 
   (* CR mshinwell: rename to [unknown_unit]? *)
   val unit : unit -> t
@@ -419,9 +429,15 @@ module type S = sig
     -> (Typing_env.t * t)
     -> bool
 
+  type to_lift = private
+    | Boxed_float of Float.t
+    | Boxed_int32 of Int32.t
+    | Boxed_int64 of Int64.t
+    | Boxed_nativeint of Targetint.t
+
   type reification_result = private
     | Term of Simple.t * t
-    | Lift of Flambda_static0.Static_part.t
+    | Lift of to_lift
     | Cannot_reify
     | Invalid
 
@@ -570,10 +586,12 @@ module type S = sig
      : t
     -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
 
+(*
   val prove_closures : (t -> closures proof) type_accessor
 
   val prove_sets_of_closures
      : (t -> (Name.t option * set_of_closures) proof) type_accessor
+*)
 
   (*
   val prove_closure : (t -> closure proof) type_accessor

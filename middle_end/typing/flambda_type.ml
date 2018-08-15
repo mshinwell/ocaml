@@ -2466,183 +2466,6 @@ module Expr (Expr : Expr_intf.S) = struct
 
     let freshen t freshening =
       apply_name_permutation t (Freshening.name_permutation freshening)
-  end and Function_type : sig
-    (** Dependent function types.
-
-        Logical variables introduced by the parameter types may be used in the
-        result types.
-    *)
-
-    type t
-
-    include Contains_names.S with type t := t
-
-    (** Perform invariant checks upon the given function type. *)
-    val invariant : t -> unit
-
-    val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-    (** Create a function type from parameter and result types. *)
-    val create
-       : parameters:T.Flambda_types.t list
-      -> results:T.Flambda_types.t list
-      -> t
-
-    (** The function type all of whose parameters and result types and arities
-        are unknown. *)
-    val create_unknown : unit -> t
-
-    val create_bottom : unit -> t
-
-    (** A conservative approximation to equality. *)
-    val equal : Type_equality_env.t -> t -> t -> bool
-
-    (** Greatest lower bound of two function types.
-        [fresh_component_semantics] is as for [Relational_product.meet]. *)
-    val meet
-       : T.Meet_env.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> (t * T.Typing_env_extension.t) Or_bottom.t
-
-    val meet_fresh
-       : T.Meet_env.t
-      -> t
-      -> t
-      -> (t * T.Typing_env_extension.t) Or_bottom.t
-
-    (** Least upper bound of two function types. *)
-    val join
-       : T.Join_env.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> t
-
-    val join_fresh
-       : T.Join_env.t
-      -> t
-      -> t
-      -> t
-
-    (** Add or meet the definitions and equations from the given function type
-        into the given typing environment. *)
-    val introduce : t -> T.Typing_env.t -> T.Typing_env.t
-  end = struct
-    module RP = Relational_product.Make (Int_index) (Logical_variable_component)
-
-    type t =
-      | Unknown
-      | Product of RP.t
-      | Bottom
-
-    let create ~parameters ~results =
-      let assign_logical_variables tys =
-        Targetint.OCaml.Map.of_list (
-          List.mapi (fun index ty ->
-              let index = Targetint.OCaml.of_int index in
-              let kind = Flambda_type0_core.kind ty in
-              let logical_var = Logical_variable.create kind in
-              index, logical_var)
-            tys)
-      in
-      let create_equations tys indexes_to_vars =
-        let env_extension, _index =
-          List.fold_left (fun (env_extension, index) ty ->
-              let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
-              let env_extension =
-                Typing_env_extension.add_equation env_extension
-                  (Name.logical_var logical_var) ty
-              in
-              let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
-              env_extension, next_index)
-            (Typing_env_extension.empty, Targetint.OCaml.zero)
-            tys
-        in
-        env_extension
-      in
-      let param_vars = assign_logical_variables parameters in
-      let param_env_extension = create_equations parameters param_vars in
-      let result_vars = assign_logical_variables results in
-      let result_env_extension = create_equations results result_vars in
-      Product (RP.create [
-        param_vars, param_env_extension;
-        result_vars, result_env_extension;
-      ])
-
-    let create_unknown () = Unknown
-    let create_bottom () = Bottom
-
-    let invariant t =
-      match t with
-      | Product rp -> RP.invariant rp
-      | Unknown | Bottom -> ()
-
-    let print_with_cache ~cache ppf t =
-      match t with
-      | Unknown -> Format.pp_print_string ppf "Unknown"
-      | Product rp -> RP.print_with_cache ~cache ppf rp
-      | Bottom -> Format.pp_print_string ppf "Bottom"
-
-    let equal env t1 t2 =
-      match t1, t2 with
-      | Product rp1, Product rp2 -> RP.equal env rp1 rp2
-      | Unknown, Unknown -> true
-      | Bottom, Bottom -> true
-      | (Product _ | Unknown | Bottom), _ -> false
-
-    let meet env fresh t1 t2 : _ Or_bottom.t =
-      match t1, t2 with
-      | Product rp1, Product rp2 ->
-        begin match RP.meet env fresh rp1 rp2 with
-        | Bottom -> Bottom
-        | Ok (rp, env_extension) -> Ok (Product rp, env_extension)
-        end
-      | Product _, Unknown -> Ok (t1, Typing_env_extension.empty)
-      | Unknown, Product _ -> Ok (t2, Typing_env_extension.empty)
-      | Unknown, Unknown -> Ok (Unknown, Typing_env_extension.empty)
-      | Bottom, (Product _ | Bottom | Unknown)
-      | (Product _ | Unknown), Bottom -> Bottom
-
-    let meet_fresh env t1 t2 = meet env Fresh t1 t2
-
-    let join env fresh t1 t2 =
-      match t1, t2 with
-      | Product rp1, Product rp2 -> Product (RP.join env fresh rp1 rp2)
-      | Bottom, Product _ -> t2
-      | Product _, Bottom -> t1
-      | Bottom, Bottom -> Bottom
-      | Unknown, (Product _ | Bottom | Unknown)
-      | (Product _ | Bottom), Unknown -> Unknown
-
-    let join_fresh env t1 t2 = join env Fresh t1 t2
-
-    let bound_names t =
-      match t with
-      | Product rp -> RP.bound_names rp
-      | Unknown | Bottom -> Name_occurrences.create ()
-
-    let free_names t =
-      match t with
-      | Product rp -> RP.free_names rp
-      | Unknown | Bottom -> Name_occurrences.create ()
-
-    let introduce t env =
-      match t with
-      | Product rp -> RP.introduce rp env
-      | Unknown | Bottom -> env
-
-    let apply_name_permutation t perm =
-      match t with
-      | Product rp ->
-        let rp' = RP.apply_name_permutation rp perm in
-        if rp == rp' then t
-        else Product rp'
-      | Unknown | Bottom -> Unknown
-
-    let freshen t freshening =
-      apply_name_permutation t (Freshening.name_permutation freshening)
   end and Immediates : sig
     type t
 
@@ -2826,7 +2649,7 @@ module Expr (Expr : Expr_intf.S) = struct
       }
   end and Make_meet_or_join : sig
     module Make
-      (E : Either_meet_or_join_intf.S)
+      (E : Either_meet_or_join.S)
       (S : Meet_and_join_spec_intf.S) :
     sig
       val meet_or_join_ty
@@ -2837,7 +2660,7 @@ module Expr (Expr : Expr_intf.S) = struct
     end
   end = struct
     module Make
-      (E : Either_meet_or_join_intf.S
+      (E : Either_meet_or_join.S
         with module Join_env := Join_env
         with module Meet_env := Meet_env
         with module Typing_env := Typing_env
@@ -3156,7 +2979,7 @@ module Expr (Expr : Expr_intf.S) = struct
         E.switch_no_bottom meet_ty join_ty env or_alias1 or_alias2
     end
   end and Meet_and_join : sig
-    module Make (E : Either_meet_or_join_intf.S) : sig
+    module Make (E : Either_meet_or_join.S) : sig
       val meet_or_join
          : Join_env.t
         -> Flambda_types.t
@@ -3166,7 +2989,7 @@ module Expr (Expr : Expr_intf.S) = struct
   end = struct
     module K = Flambda_kind
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       let meet_or_join env (t1 : Flambda_types.t) (t2 : Flambda_types.t)
             : Flambda_types.t * Typing_env_extension.t =
         let module Meet_and_join_of_kind_value =
@@ -3306,7 +3129,7 @@ module Expr (Expr : Expr_intf.S) = struct
         end
     end
   end and Meet_and_join_fabricated : sig
-    module Make (E : Either_meet_or_join_intf.S) : sig
+    module Make (E : Either_meet_or_join.S) : sig
       include Meet_and_join_spec_intf.S
         with type of_kind_foo = Flambda_types.of_kind_fabricated
 
@@ -3318,7 +3141,7 @@ module Expr (Expr : Expr_intf.S) = struct
              Or_absorbing.t
     end
   end = struct
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Flambda_types.of_kind_fabricated
 
       let kind = K.fabricated ()
@@ -3386,13 +3209,10 @@ module Expr (Expr : Expr_intf.S) = struct
           | (Discriminants _ | Set_of_closures _), _ -> Absorbing
     end
   end and Meet_and_join_naked_float : sig
-    include Meet_and_join_naked_number_intf.Make (Numbers.Float_by_bit_pattern)
+    include Meet_and_join_naked_number_intf.S 
+      with module Naked_number := Float
   end = struct
-    module K = Flambda_kind
-
-    module Float = Numbers.Float_by_bit_pattern
-
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Float.Set.t Flambda_types.of_kind_naked_number
 
       let kind = K.naked_float ()
@@ -3415,11 +3235,12 @@ module Expr (Expr : Expr_intf.S) = struct
         | _, _ -> Absorbing
     end
   end and Meet_and_join_naked_immediate : sig
-    include Meet_and_join_naked_number_intf.Make (Immediate)
+    include Meet_and_join_naked_number_intf.S 
+      with module Naked_number := Immediate
   end = struct
     module K = Flambda_kind
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Immediate.Set.t Flambda_types.of_kind_naked_number
 
       let kind = K.naked_immediate ()
@@ -3442,13 +3263,14 @@ module Expr (Expr : Expr_intf.S) = struct
         | _, _ -> Absorbing
     end
   end and Meet_and_join_naked_int32 : sig
-    include Meet_and_join_naked_number_intf.Make (Numbers.Int32)
+    include Meet_and_join_naked_number_intf.S 
+      with module Naked_number := Int32
   end = struct
     module K = Flambda_kind
 
     module Int32 = Numbers.Int32
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Int32.Set.t Flambda_types.of_kind_naked_number
 
       let kind = K.naked_int32 ()
@@ -3471,13 +3293,14 @@ module Expr (Expr : Expr_intf.S) = struct
         | _, _ -> Absorbing
     end
   end and Meet_and_join_naked_int64 : sig
-    include Meet_and_join_naked_number_intf.Make (Numbers.Int64)
+    include Meet_and_join_naked_number_intf.S 
+      with module Naked_number := Int64
   end = struct
     module K = Flambda_kind
 
     module Int64 = Numbers.Int64
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Int64.Set.t Flambda_types.of_kind_naked_number
 
       let kind = K.naked_int64 ()
@@ -3500,11 +3323,12 @@ module Expr (Expr : Expr_intf.S) = struct
         | _, _ -> Absorbing
     end
   end and Meet_and_join_naked_nativeint : sig
-    include Meet_and_join_naked_number_intf.Make (Targetint)
+    include Meet_and_join_naked_number_intf.S 
+      with module Naked_number := Targetint
   end = struct
     module K = Flambda_kind
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Targetint.Set.t Flambda_types.of_kind_naked_number
 
       let kind = K.naked_nativeint ()
@@ -3526,22 +3350,60 @@ module Expr (Expr : Expr_intf.S) = struct
           else Ok (Nativeint fs, Typing_env_extension.empty)
         | _, _ -> Absorbing
     end
-  end and Meet_and_join_value : sig
-    module Make (E : Either_meet_or_join_intf.S) : sig
+  end and Meet_and_join_naked_number_intf : sig
+    module type S = sig
+      module Naked_number : sig
+        type t
+        module Set : Set.S with type elt = t
+      end
+
       include Meet_and_join_spec_intf.S
-        with type of_kind_foo = T.Flambda_types.of_kind_value
+        with type of_kind_foo =
+          Naked_number.Set.t Flambda_types.of_kind_naked_number
+    end
+  end = struct
+    include Meet_and_join_naked_number_intf
+  end and Meet_and_join_spec_intf : sig
+    module type S = sig
+      type of_kind_foo
+
+      val kind : unit -> Flambda_kind.t
+
+      val to_type : of_kind_foo Flambda_types.ty -> Flambda_types.t
+
+      val force_to_kind : Flambda_types.t -> of_kind_foo Flambda_types.ty
+
+      (* CR mshinwell: Rename to [print_ty_with_cache]. *)
+      val print_ty
+         : cache:Printing_cache.t
+        -> Format.formatter
+        -> of_kind_foo Flambda_types.ty
+        -> unit
+
+      val meet_or_join_of_kind_foo
+         : Join_env.t
+        -> of_kind_foo
+        -> of_kind_foo
+        -> (of_kind_foo * Typing_env_extension.t) Or_absorbing.t
+    end
+  end = struct
+    include Meet_and_join_spec_intf
+  end and Meet_and_join_value : sig
+    module Make (E : Either_meet_or_join.S) : sig
+      include Meet_and_join_spec_intf.S
+        with type of_kind_foo = Flambda_types.of_kind_value
 
       val meet_or_join_closures_entry
-         : T.Join_env.t
-        -> T.Flambda_types.closures_entry
-        -> T.Flambda_types.closures_entry
-        -> (T.Flambda_types.closures_entry * T.Typing_env_extension.t)
+         : Join_env.t
+        -> Flambda_types.closures_entry
+        -> Flambda_types.closures_entry
+        -> (Flambda_types.closures_entry * Typing_env_extension.t)
              Or_absorbing.t
     end
   end = struct
     module K = Flambda_kind
 
-    module Make (E : Either_meet_or_join_intf.S) = struct
+    module Make (E : Either_meet_or_join.S) = struct
       type of_kind_foo = Flambda_types.of_kind_value
 
       let kind = K.value ()
@@ -4446,40 +4308,6 @@ module Expr (Expr : Expr_intf.S) = struct
   end and Row_like : sig
     type t
 
-    val bottom : unit -> t
-
-    val print_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
-
-    val equal : Type_equality_env.t -> t -> t -> bool
-
-    val add_or_meet_equations
-       : t
-      -> Meet_env.t
-      -> Typing_env_extension.t
-      -> t
-
-    val meet
-       : Meet_env.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> (t * Typing_env_extension.t) Or_bottom.t
-
-    val join
-       : Join_env.t
-      -> Relational_product_intf.fresh_component_semantics
-      -> t
-      -> t
-      -> t
-
-    include Contains_names.S with type t := t
-  end
-    type t
-
     module Tag_and_index : sig
       (** These values will not contain any names. *)
       type t = Tag.t * Index.t
@@ -4650,7 +4478,7 @@ module Expr (Expr : Expr_intf.S) = struct
       let freshen t freshening =
         apply_name_permutation t (Freshening.name_permutation freshening)
 
-      module Meet_or_join (E : Either_meet_or_join_intf.S) = struct
+      module Meet_or_join (E : Either_meet_or_join.S) = struct
         let meet_or_join env fresh_component_semantics t1 t2 =
           let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
           let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
