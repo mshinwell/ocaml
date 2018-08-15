@@ -68,8 +68,13 @@ let refine_set_of_closures_type_to_identify_closure_element
     set_of_closures_name (E.continuation_scope_level env)
     set_of_closures_ty
 
-let simplify_project_closure env r prim ~closure ~set_of_closures dbg
-      ~result_var:_ =
+let simplify_project_closure env ~closure ~set_of_closures dbg ~result =
+  let skeleton = T.set_of_closures_containing_at_least closure in
+  let set_of_closures_ty = TE.find_exn (E.get_typing_environment env) result in
+  T.meet_skeleton env set_of_closures_ty ~skeleton ~result
+    ~result_kind:(K.value ())
+
+(*
   let set_of_closures, ty = S.simplify_simple env set_of_closures in
   let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
   let unknown r =
@@ -107,6 +112,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
     end
   | Unknown -> unknown r
   | Invalid -> invalid r
+*)
 
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       ~closures dbg ~result_var:_ =
