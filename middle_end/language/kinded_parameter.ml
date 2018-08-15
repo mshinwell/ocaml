@@ -62,6 +62,9 @@ let map_kind t ~f = { t with kind = f t.kind; }
 let equal_kinds t1 t2 =
   Flambda_kind.equal t1.kind t2.kind
 
+let free_names t =
+  Name.Set.singleton (name t)
+
 module List = struct
   type nonrec t = t list
 

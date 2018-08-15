@@ -52,6 +52,8 @@ val equal_kinds : t -> t -> bool
 
 val rename : t -> t
 
+val free_names : t -> Name.Set.t
+
 module List : sig
   type nonrec t = t list
 
