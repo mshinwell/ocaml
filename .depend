@@ -3558,7 +3558,8 @@ middle_end/typing/flambda_type.cmo : middle_end/language/variable.cmi \
     middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
     middle_end/language/name_permutation.cmi \
     middle_end/typing/name_or_export_id.cmi \
-    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    middle_end/language/name_occurrences.cmi \
+    middle_end/typing/name_like_intf.cmo middle_end/language/name.cmi \
     utils/misc_color.cmi utils/misc.cmi \
     middle_end/typing/logical_variable_component.cmi \
     middle_end/typing/logical_variable.cmi \
@@ -3588,7 +3589,8 @@ middle_end/typing/flambda_type.cmx : middle_end/language/variable.cmx \
     middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
     middle_end/language/name_permutation.cmx \
     middle_end/typing/name_or_export_id.cmx \
-    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
+    middle_end/language/name_occurrences.cmx \
+    middle_end/typing/name_like_intf.cmx middle_end/language/name.cmx \
     utils/misc_color.cmx utils/misc.cmx \
     middle_end/typing/logical_variable_component.cmx \
     middle_end/typing/logical_variable.cmx \
