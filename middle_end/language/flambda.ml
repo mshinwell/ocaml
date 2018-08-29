@@ -612,22 +612,24 @@ end = struct
       in
       let rec loop (t : t) ~acc ~rev_lets =
         match t with
-        | Let { var; kind; defining_expr; body; _ } ->
-          let acc, bindings, var, kind, (defining_expr : Reachable.t) =
-            for_defining_expr acc var kind defining_expr
-          in
-          begin match defining_expr with
-          | Reachable defining_expr ->
-            let rev_lets =
-              (var, kind, defining_expr) :: (List.rev bindings) @ rev_lets
-            in
-            loop body ~acc ~rev_lets
-          | Invalid invalid_term_semantics ->
-            let rev_lets = (List.rev bindings) @ rev_lets in
-            let body : Expr.t = Invalid invalid_term_semantics in
-            let last_body, acc = for_last_body acc body in
-            finish ~last_body ~acc ~rev_lets
-          end
+        | Let let_binding ->
+          Let.pattern_match let_binding
+            ~f:(fun var { kind; defining_expr; body; } ->
+              let acc, bindings, var, kind, (defining_expr : Reachable.t) =
+                for_defining_expr acc var kind defining_expr
+              in
+              begin match defining_expr with
+              | Reachable defining_expr ->
+                let rev_lets =
+                  (var, kind, defining_expr) :: (List.rev bindings) @ rev_lets
+                in
+                loop body ~acc ~rev_lets
+              | Invalid invalid_term_semantics ->
+                let rev_lets = (List.rev bindings) @ rev_lets in
+                let body : Expr.t = Invalid invalid_term_semantics in
+                let last_body, acc = for_last_body acc body in
+                finish ~last_body ~acc ~rev_lets
+              end)
         | t ->
           let last_body, acc = for_last_body acc t in
           finish ~last_body ~acc ~rev_lets
@@ -1045,19 +1047,6 @@ end = struct
         Simple.discriminant Discriminant.zero
     in
     Simple simple
-
-  (* CR mshinwell: Implement this properly. *)
-  let toplevel_substitution sb (t : t) =
-    let var = Variable.create "subst" in
-    let cont = Continuation.create () in
-    let expr : Expr.t =
-      Expr.create_let var
-        (K.value () (* arbitrary *)) t
-        (Apply_cont (cont, None, []))
-    in
-    match Expr.toplevel_substitution sb expr with
-    | Let let_expr -> let_expr.defining_expr
-    | _ -> assert false
 
   module Iterators = struct
     let iter f f_named t =

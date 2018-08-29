@@ -314,6 +314,10 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/flambda_kind.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
+  middle_end/language/name_abstraction.cmo \
+  middle_end/language/bound_variable.cmo \
+  middle_end/language/bound_continuation.cmo \
+  middle_end/language/bound_continuations.cmo \
   middle_end/language/name_occurrences.cmo \
   middle_end/language/freshening.cmo \
   middle_end/typing/contains_names.cmo \

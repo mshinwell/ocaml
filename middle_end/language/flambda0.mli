@@ -273,17 +273,7 @@ end and Named : sig
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
 
-  (** Compute the free names of the given term. *)
-  val free_names
-     : ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
-
-  (** Compute _all_ names occurring inside the given term. *)
-  val used_names
-     : ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
+  include Contains_names.S with type t := t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -302,30 +292,39 @@ end and Named : sig
      -> Named.t * Flambda_kind.t
 
   val print : Format.formatter -> t -> unit
+end and Let0 : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val kind : t -> Flambda_kind.t
+
+  val defining_expr : t -> Named.t
+
+  val body : t -> Expr.t
+
+(* XXX Two sets of names?!!  Support and free names... *)
+
+  (** The free names in the body of the [Let].  After the first query the
+      result will be returned in O(1) time. *)
+  val free_names_of_body : t -> Name_occurrences.t
 end and Let : sig
-  (* CR-someday mshinwell: Since we lack expression identifiers on every term,
-     we should probably introduce [Mutable_var] into [named] if we introduce
-     more complicated analyses on these in the future.  Alternatively, maybe
-     consider removing mutable variables altogether. *)
+  include module type of struct
+    include Name_abstraction.Make (Bound_variable) (Let0).t
+  end
 
-  type t = private {
-    var : Variable.t;
-    kind : Flambda_kind.t;
-    defining_expr : Named.t;
-    body : Expr.t;
-    (* CR-someday mshinwell: we could consider having these be keys into some
-       kind of global cache, to reduce memory usage. *)
-    free_names_of_defining_expr : Name_occurrences.t;
-    (** A cache of the free names in the defining expression of the
-        [Let]. *)
-    free_names_of_body : Name_occurrences.t;
-    (** A cache of the free variables of the body of the [let].  This is an
-        important optimization. *)
-  }
+  (** Create a let-expression. *)
+  val create
+     : bound_var:(Variable.t * Flambda_kind.t)
+    -> defining_expr:Named.t
+    -> body:Expr.t
+    -> t
 
-  (** Apply the specified function [f] to the given defining expression of
-      a [Let]. *)
-  val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
+(*
+  (** Apply the specified function [f] to the defining expression of the
+      given let-expression. *)
+  val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
+*)
 end and Let_cont : sig
   (** Values of type [t] represent the definitions of continuations:
         let_cont [name] [args] = [handler] in [body]
@@ -340,11 +339,6 @@ end and Let_cont : sig
       It is an error to mark a continuation that might be recursive as
       non-recursive.  The converse is safe.
   *)
-  type t = {
-    body : Expr.t;
-    handlers : Let_cont_handlers.t;
-  }
-end and Let_cont_handlers : sig
   (* CR mshinwell: We need to add the following invariant checks:
      1. Usual checks on [let_cont.specialised_args].
      2. Also on that specialised_args map, that only [Field] projections are
@@ -366,13 +360,30 @@ end and Let_cont_handlers : sig
       such continuations, so long as [Simplify] is run afterwards
       to inline them out and turn the resulting single [Recursive] handler into
       a [Non_recursive] one. *)
-  type t =
-    (* CR mshinwell: Change Non_recursive -> Non_recursive to be consistent *)
-    | Non_recursive of {
-        name : Continuation.t;
-        handler : Continuation_handler.t;
-      }
-    | Recursive of Continuation_handlers.t
+  type t = private
+    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Recursive of Recursive_let_cont_handlers.t
+
+  (** Create a definition of a non-recursive continuation. *)
+  val create_non_recursive
+     : Continuation.t
+    -> handler:Continuation_handler.t
+    -> body:Expr.t
+    -> t
+
+  (** Create a definition of a continuation that will serve as an exception
+      handler. *)
+  val create_exception_handler
+     : Continuation.t
+    -> handler:Continuation_handler.t
+    -> body:Expr.t
+    -> t
+
+  (** Create a definition of a set of possibly-recursive continuations. *)
+  val create_recursive
+     : handlers:Continuation_handlers.t
+    -> body:Expr.t
+    -> t
 
   val free_names : t -> Name_occurrences.t
 
@@ -384,7 +395,7 @@ end and Let_cont_handlers : sig
   (** Return all continuations free in the given handlers. *)
   val free_continuations : t -> Continuation.Set.t
 
-  type free_and_bound = {
+  type free_and_bound = private {
     free : Continuation.Set.t;
     bound : Continuation.Set.t;
   }
@@ -404,45 +415,68 @@ end and Let_cont_handlers : sig
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
 
   val print : Format.formatter -> t -> unit
+end and Non_recursive_let_cont_handler0 : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val handler : t -> Continuation_handler.t
+
+  val body : t -> Expr.t
+end and Non_recursive_let_cont_handler : sig
+  include module type of struct
+    include Name_abstraction.Make (Bound_continuation)
+      (Non_recursive_let_cont_handler0)
+  end
+end and Recursive_let_cont_handlers0 : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val handlers : t -> Continuation_handler.t Continuation.Map.t
+
+  val body : t -> Expr.t
+end and Recursive_let_cont_handlers : sig
+  include module type of struct
+    include Name_abstraction.Make (Bound_continuations)
+      (Recursive_let_cont_handlers0)
+  end
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
-end and Continuation_handler : sig
-  type t = {
-    params : Flambda_type.Parameters.t;
-    (** The parameters of the continuation. *)
-    stub : bool;
-    (** Whether the continuation is a compiler-generated wrapper that should
-        always be inlined. *)
-    is_exn_handler : bool;
-    (** Whether the continuation is an exception handler.
-
-        Continuations used as exception handlers must always be [Non_recursive]
-        and must have exactly one argument.  To enable identification of them
-        in passes not invoked from [Simplify] (where they could be
-        identified by looking at the [Apply_cont]s that reference them) they
-        are marked explicitly.
-
-        (Relevant piece of background info: the backend cannot compile
-        simultaneously-defined continuations when one or more of them is an
-        exception handler.)
-    *)
-    handler : Expr.t;
-    (** The code of the continuation itself. *)
-  }
+end and Continuation_handler0 : sig
+  type t
 
   val print : Format.formatter -> t -> unit
-end and Set_of_closures : sig
-  type t = private {
-    function_decls : Function_declarations.t;
-    closure_elements : Simple.t Var_within_closure.Map.t;
-    direct_call_surrogates : Closure_id.t Closure_id.Map.t;
-    (** If [direct_call_surrogates] maps [closure_id1] to [closure_id2] then
-        direct calls to [closure_id1] should be redirected to [closure_id2].
-        This is used to reduce the overhead of transformations that introduce
-        wrapper functions (which will be inlined at direct call sites, but will
-        penalise indirect call sites).
-        N.B. [direct_call_surrogates] might not be transitively closed. *)
-  }
+
+  (** The parameters of the continuation. *)
+  val params : t -> Flambda_type.Parameters.t;
+
+  (** Whether the continuation is a compiler-generated wrapper that should
+      always be inlined. *)
+  val stub : t -> bool
+
+  (** Whether the continuation is an exception handler.
+
+      Continuations used as exception handlers are always [Non_recursive]
+      and have exactly one argument.  To enable identification of them
+      in passes not invoked from [Simplify] (where they could be
+      identified by looking at the [Apply_cont]s that reference them) they
+      are marked explicitly.
+
+      (Relevant piece of background info: the backend cannot compile
+      simultaneously-defined continuations when one or more of them is an
+      exception handler.) *)
+  val is_exn_handler : t -> bool
+
+  (** The code of the continuation itself. *)
+  val handler : t -> Expr.t
+end and Continuation_handler :
+  module type of struct
+    include Name_abstraction.Make (Bound_continuations)
+      (Recursive_let_cont_handlers0)
+  end
+and Set_of_closures : sig
+  type t
 
   (** Create a set of closures given the code for its functions and the
       closure variables. *)
@@ -451,6 +485,18 @@ end and Set_of_closures : sig
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
+
+  val function_decls : t -> Function_declarations.t
+
+  val closure_elements : t -> Simple.t Var_within_closure.Map.t
+
+  (** If [direct_call_surrogates t] maps [closure_id1] to [closure_id2] then
+      direct calls to [closure_id1] should be redirected to [closure_id2].
+      This is used to reduce the overhead of transformations that introduce
+      wrapper functions (which will be inlined at direct call sites, but will
+      penalise indirect call sites).
+      N.B. [direct_call_surrogates t] might not be transitively closed. *)
+  val direct_call_surrogates : Closure_id.t Closure_id.Map.t
 
   (** Returns true iff the given set of closures has an empty environment. *)
   val has_empty_environment : t -> bool
@@ -479,24 +525,24 @@ end and Function_declarations : sig
       of closures alive when compiling, for example, mutually-recursive
       functions.
   *)
-
-  type t = private {
-    set_of_closures_origin : Set_of_closures_origin.t;
-    (** An identifier of the original set of closures on which this set of
-        function declarations is based.  Used to prevent different
-        specialisations of the same functions from being inlined/specialised
-        within each other. *)
-    funs : Function_declaration.t Closure_id.Map.t;
-    (** The function(s) defined by the set of function declarations.  The
-        keys of this map are often referred to in the code as "fun_var"s. *)
-  }
+  type t
 
   (** Create a set of function declarations given the individual
       declarations. *)
-  val create : funs:Function_declaration.t Closure_id.Map.t -> t
+  val create : Function_declaration.t Closure_id.Map.t -> t
+
+  (** An identifier of the original set of closures on which this set of
+      function declarations is based.  Used to prevent different
+      specialisations of the same functions from being inlined/specialised
+      within each other. *)
+  val set_of_closures_origin : Set_of_closures_origin.t
+
+  (** The function(s) defined by the set of function declarations, indexed
+      by closure ID. *)
+  val funs : t -> Function_declaration.t Closure_id.Map.t
 
   (** [find f t] raises [Not_found] if [f] is not in [t]. *)
-  val find : Closure_id.t -> t -> Function_declaration.t
+  val find : t -> Closure_id.t -> t -> Function_declaration.t
 
   (** Create a set of function declarations based on another set of function
       declarations. *)
@@ -512,52 +558,9 @@ end and Function_declarations : sig
   (** All names free in the given function declarations. *)
   val free_names : t -> Name_occurrences.t
 end and Function_declaration : sig
-  type t = private {
-    closure_origin : Closure_origin.t;
-    (** The closure from which this function declaration originally came.
-        Used as a backstop against unbounded recursion during inlining. *)
-    continuation_param : Continuation.t;
-    (** The continuation parameter of the function, i.e. to where we must jump
-        once the result of the function has been computed.  If the continuation
-        takes more than one argument then the backend will compile the function
-        so that it returns multiple values. *)
-    exn_continuation_param : Continuation.t;
-    (** To where we must jump if application of the function raises an
-        exception. *)
-    params : Flambda_type.Parameters.t;
-    (** Relational product holding the function's parameters and equations
-        thereon. *)
-    body : Expr.t;
-    (** The code of the function's body. *)
-    code_id : Code_id.t;
-    (** An identifier to provide fast (conservative) equality checking for
-        function bodies. *)
-    free_names_in_body : Name_occurrences.t;
-    (** All free names in the function's body (that is to say, treating
-        parameters etc. bound by the function as free).  (See [free_names],
-        below.) *)
-    result_arity : Flambda_arity.t;
-    (** The arity of the return continuation of the function. *)
-    stub : bool;
-    (** A stub function is a generated function used to prepare arguments or
-        return values to allow indirect calls to functions with a special
-        calling convention.  For instance indirect calls to tuplified functions
-        must go through a stub.  Stubs will be unconditionally inlined. *)
-    dbg : Debuginfo.t;
-    (** Debug info for the function declaration. *)
-    inline : Inline_attribute.t;
-    (** Inlining requirements from the source code. *)
-    specialise : Specialise_attribute.t;
-    (** Specialising requirements from the source code. *)
-    is_a_functor : bool;
-    (** Whether the function is known definitively to be a functor. *)
-    my_closure : Variable.t;
-    (** Binding name of the closure inside the function body.  The only free
-        variables allowed in such a body are this variable and the parameters
-        of the function.  Accesses to variables within the closure need to go
-        via a [Project_var]; accesses to any other simultaneously-defined
-        functions need to go via a [Move_within_set_of_closures]. *)
-  }
+  type t
+
+  include Contains_names.S with type t := t
 
   (** Create a function declaration.  This calculates the free variables and
       symbols occurring in the specified [body].
@@ -568,8 +571,7 @@ end and Function_declaration : sig
 
       When adding a stub to a function the stub should receive a new
       [closure_origin] and the renamed original function should retain its
-      existing [closure_origin].
-  *)
+      existing [closure_origin]. *)
   val create
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
@@ -585,6 +587,67 @@ end and Function_declaration : sig
     -> my_closure:Variable.t
     -> t
 
+  val print : Closure_id.t -> Format.formatter -> t -> unit
+
+  (** The closure from which this function declaration originally came.
+      Used as a backstop against unbounded recursion during inlining. *)
+  val closure_origin : t -> Closure_origin.t
+
+  (** The continuation parameter of the function, i.e. to where we must jump
+      once the result of the function has been computed.  If the continuation
+      takes more than one argument then the backend will compile the function
+      so that it returns multiple values. *)
+  val continuation_param : t -> Continuation.t
+
+  (** To where we must jump if application of the function raises an
+      exception. *)
+  val exn_continuation_param : t -> Continuation.t
+
+  (** Relational product holding the function's parameters and equations
+      thereon. *)
+  val params : t -> Flambda_type.Parameters.t
+
+  (** The code of the function's body. *)
+  val body : t -> Expr.t
+
+  (** An identifier to provide fast (conservative) equality checking for
+      function bodies. *)
+  val code_id : t -> Code_id.t
+
+  (** All free names in the function's body (that is to say, treating
+      parameters etc. bound by the function as free).  (See [free_names],
+      below.) *)
+  val free_names_in_body : t -> Name_occurrences.t
+
+  (** The arity of the return continuation of the function.  This provides the
+      number of results that the function produces and their kinds. *)
+  val result_arity : t -> Flambda_arity.t
+
+  (** A stub function is a generated function used to prepare arguments or
+      return values to allow indirect calls to functions with a special
+      calling convention.  For instance indirect calls to tuplified functions
+      must go through a stub.  Stubs will be unconditionally inlined. *)
+  val stub : t -> bool
+
+  (** Debug info for the function declaration. *)
+  val dbg : t -> Debuginfo.t
+
+  (** Inlining requirements from the source code. *)
+  val inline : t -> Inline_attribute.t
+
+  (** Specialising requirements from the source code. *)
+  val specialise : t -> Specialise_attribute.t
+
+  (** Whether the function is known definitively to be a functor. *)
+  val is_a_functor : t -> bool
+
+  (** Binding name of the closure inside the function body.  The only free
+      variables allowed in such a body are this variable and the parameters
+      of the function.  Accesses to variables within the closure need to go
+      via a [Project_var]; accesses to any other simultaneously-defined
+      functions need to go via a [Move_within_set_of_closures]. *)
+  val my_closure : t -> Variable.t
+
   (** Change only the code of a function declaration. *)
   val update_body : t -> body:Expr.t -> t
 
@@ -597,13 +660,6 @@ end and Function_declaration : sig
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
     -> t
-
-  (** All names free in the function declaration.  (Note that this may be
-      different from the names free in the function _body_, as per [free_names]
-      in the type [t], above.) *)
-  val free_names : t -> Name_occurrences.t
-
-  val print : Closure_id.t -> Format.formatter -> t -> unit
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
 
 (** A module for the manipulation of terms where the recomputation of free

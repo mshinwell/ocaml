@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,10 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  type t
+module Make (Name : sig
+  include Contains_names.S
+  val rename : unit -> t
+  val permutation_to_swap : t -> t -> Name_permutation.t
+end) (Term : Contains_names.S) = struct
+  type t = Name.t * Term.t
 
-  val free_names : t -> Name_occurrences.t
-  val support : t -> Name_occurrences.t
-  val apply_name_permutation : t -> Name_permutation.t -> t
+  let create name term = name, term
+
+  let pattern_match (name, term) ~f =
+    let fresh_name = Name.rename name in
+    let perm = Name.permutation_to_swap name fresh_name in
+    let fresh_term = Term.apply_name_permutation term perm in
+    f fresh_name fresh_term
 end

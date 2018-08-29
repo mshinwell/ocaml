@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,10 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  type t
+type t = Continuation.t list
 
-  val free_names : t -> Name_occurrences.t
-  val support : t -> Name_occurrences.t
-  val apply_name_permutation : t -> Name_permutation.t -> t
-end
+let rename t =
+  List.map (fun _k -> Continuation.create ()) t
+
+let permutation_to_swap t1 t2 =
+  if List.compare_lengths t1 t2 <> 0 then begin
+    Misc.fatal_error "Bound_continuations.create with differing lengths"
+  end;
+  List.fold_left2 (fun perm k1 k2 ->
+      Name_permutation.add_continuation perm k1 k2)
+    (Name_permutation.create ())
+    t1 t2

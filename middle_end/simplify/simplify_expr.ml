@@ -1408,37 +1408,6 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
       ~for_defining_expr:for_defining_expr_of_let
       ~for_last_body
       ~filter_defining_expr:filter_defining_expr_of_let
-  | Let_mutable { var; initial_value; body; contents_type; } ->
-    (* We don't currently do dead [Let_mutable] elimination.  Work in this
-       area should concentrate on removing mutable variables entirely. *)
-    let initial_value, initial_value_ty = S.simplify_simple env initial_value in
-    let var, freshening =
-      Freshening.add_mutable_variable (E.freshening env) var
-    in
-    let env = E.set_freshening env freshening in
-    let contents_kind = (fun ty -> T.kind ty) contents_type in
-    let ty = T.unknown contents_kind in
-    let body, r = simplify_expr (E.add_mutable env var ty) r body in
-    let initial_value_kind = (fun ty -> T.kind ty) initial_value_ty in
-    if not (K.compatible initial_value_kind
-        ~if_used_at:contents_kind)
-    then begin
-      Misc.fatal_errorf "Cannot put initial value %a of kind %a into \
-          mutable variable %a of kind %a"
-        Simple.print initial_value
-        K.print initial_value_kind
-        Mutable_variable.print var
-        K.print contents_kind
-    end;
-    let expr : Expr.t =
-      Let_mutable {
-        var;
-        initial_value;
-        body;
-        contents_type;
-      }
-    in
-    expr, r
   | Let_cont { body; handlers; } -> simplify_let_cont env r ~body ~handlers
   | Apply apply ->
     begin match apply.call_kind with

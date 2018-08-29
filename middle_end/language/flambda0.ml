@@ -826,36 +826,86 @@ end = struct
         K.naked_nativeint ()
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
-end and Let : sig
+end and Let0 : sig
+  type t
+
+  val create
+     : Flambda_kind.t
+    -> Named.t
+    -> Expr.t
+    -> Name_permutation.t
+    -> t
+  val kind : t -> Flambda_kind.t
+  val defining_expr : t -> Named.t
+  val body : t -> Expr.t
+  val free_names_of_body : t -> Name_occurrences.t
+(*
+  val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
+*)
+end = struct
   type t = {
-    var : Variable.t;
     kind : Flambda_kind.t;
     defining_expr : Named.t;
-    body : Expr.t;
-    free_names_of_defining_expr : Name_occurrences.t;
-    free_names_of_body : Name_occurrences.t;
+    body_with_free_names : (Expr.t * Name_occurrences.t) Lazy.t;
   }
 
-  val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
-end = struct
-  include Let
+  let create kind defining_expr body perm =
+    let defining_expr = Named.apply_name_permutation defining_expr perm in
+    let body_with_free_names =
+      lazy (
+        let body = Expr.apply_name_permutation body perm in
+        let free_names = Expr.free_names body in
+        body, free_names)
+    in
+    { kind;
+      defining_expr;
+      body_with_free_names;
+    }
 
-  let map_defining_expr (let_expr : Let.t) ~f : Expr.t =
-    let defining_expr = f let_expr.defining_expr in
-    if defining_expr == let_expr.defining_expr then
-      Let let_expr
+  let kind t = t.kind
+  let defining_expr t = t.defining_expr
+
+  let body t = fst (Lazy.force t.body_with_free_names)
+  let free_names_of_body t = snd (Lazy.force t.body_with_free_names)
+
+(*
+  let map_defining_expr { kind; defining_expr; body_with_free_names; } ~f =
+    let defining_expr' = f defining_expr in
+    if defining_expr == defining_expr' then
+      t
     else
-      let free_names_of_defining_expr =
-        Named.free_names defining_expr
-      in
       Let {
-        var = let_expr.var;
-        kind = let_expr.kind;
-        defining_expr;
-        body = let_expr.body;
-        free_names_of_defining_expr;
-        free_names_of_body = let_expr.free_names_of_body;
+        kind;
+        defining_expr = defining_expr';
+        body_with_free_names;
       }
+*)
+end and Let : sig
+  include module type of struct
+    include Name_abstraction.Make (Bound_variable) (Let0).t
+  end
+
+  val create
+     : bound_var:(Variable.t * Flambda_kind.t)
+    -> defining_expr:Named.t
+    -> body:Expr.t
+    -> t
+
+  val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
+end = struct
+  include Name_abstraction.Make (Bound_variable) (Let0)
+
+  let create ~bound_var:(var, kind) ~defining_expr ~body =
+    let let0 : Let0.t =
+      { kind;
+        defining_expr;
+        body;
+        free_names_of_body = Expr.free_names body;
+      }
+    in
+    create var let0
+
+  let apply_name_permutation 
 end and Let_cont : sig
   type t = {
     body : Expr.t;
