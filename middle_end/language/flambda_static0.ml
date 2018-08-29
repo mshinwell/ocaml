@@ -84,7 +84,7 @@ module Static_part = struct
       end
     | Fabricated_block _ -> true
     | Set_of_closures set ->
-      not (Var_within_closure.Map.is_empty set.free_vars)
+      not (Flambda0.Set_of_closures.has_empty_environment set)
     | Closure _
     | Boxed_float _
     | Boxed_int32 _

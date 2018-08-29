@@ -1643,6 +1643,8 @@ middle_end/language/flambda0.cmo : middle_end/language/variable.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     utils/misc_color.cmi utils/misc.cmi \
     middle_end/language/inline_attribute.cmi \
+    middle_end/typing/flambda_type0_intf.cmo \
+    middle_end/typing/flambda_type0.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
@@ -1659,6 +1661,8 @@ middle_end/language/flambda0.cmx : middle_end/language/variable.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     utils/misc_color.cmx utils/misc.cmx \
     middle_end/language/inline_attribute.cmx \
+    middle_end/typing/flambda_type0_intf.cmx \
+    middle_end/typing/flambda_type0.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
     middle_end/language/discriminant.cmx middle_end/language/debuginfo.cmx \
@@ -1674,7 +1678,7 @@ middle_end/language/flambda0.cmi : middle_end/language/variable.cmi \
     middle_end/language/set_of_closures_origin.cmi utils/printing_cache.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     middle_end/language/inline_attribute.cmi \
-    middle_end/typing/flambda_type_intf.cmo \
+    middle_end/typing/flambda_type0_intf.cmo \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
@@ -1725,9 +1729,8 @@ middle_end/language/flambda_static.cmi : middle_end/language/symbol.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/flambda.cmi middle_end/language/continuation.cmi
 middle_end/language/flambda_static0.cmo : middle_end/language/variable.cmi \
-    middle_end/language/var_within_closure.cmi utils/targetint.cmi \
-    middle_end/language/tag.cmi middle_end/language/symbol.cmi \
-    utils/printing_cache.cmi utils/numbers.cmi \
+    utils/targetint.cmi middle_end/language/tag.cmi \
+    middle_end/language/symbol.cmi utils/printing_cache.cmi utils/numbers.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     utils/misc_color.cmi utils/misc.cmi middle_end/language/immediate.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/language/flambda0.cmi \
@@ -1736,9 +1739,8 @@ middle_end/language/flambda_static0.cmo : middle_end/language/variable.cmi \
     middle_end/language/closure_id.cmi utils/clflags.cmi \
     middle_end/language/flambda_static0.cmi
 middle_end/language/flambda_static0.cmx : middle_end/language/variable.cmx \
-    middle_end/language/var_within_closure.cmx utils/targetint.cmx \
-    middle_end/language/tag.cmx middle_end/language/symbol.cmx \
-    utils/printing_cache.cmx utils/numbers.cmx \
+    utils/targetint.cmx middle_end/language/tag.cmx \
+    middle_end/language/symbol.cmx utils/printing_cache.cmx utils/numbers.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     utils/misc_color.cmx utils/misc.cmx middle_end/language/immediate.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/language/flambda0.cmx \
@@ -3178,6 +3180,8 @@ middle_end/language/flambda0.cmo : middle_end/language/variable.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     utils/misc_color.cmi utils/misc.cmi \
     middle_end/language/inline_attribute.cmi \
+    middle_end/typing/flambda_type0_intf.cmo \
+    middle_end/typing/flambda_type0.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
@@ -3194,6 +3198,8 @@ middle_end/language/flambda0.cmx : middle_end/language/variable.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     utils/misc_color.cmx utils/misc.cmx \
     middle_end/language/inline_attribute.cmx \
+    middle_end/typing/flambda_type0_intf.cmx \
+    middle_end/typing/flambda_type0.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
     middle_end/language/discriminant.cmx middle_end/language/debuginfo.cmx \
@@ -3209,7 +3215,7 @@ middle_end/language/flambda0.cmi : middle_end/language/variable.cmi \
     middle_end/language/set_of_closures_origin.cmi utils/printing_cache.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     middle_end/language/inline_attribute.cmi \
-    middle_end/typing/flambda_type_intf.cmo \
+    middle_end/typing/flambda_type0_intf.cmo \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
@@ -3260,9 +3266,8 @@ middle_end/language/flambda_static.cmi : middle_end/language/symbol.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
     middle_end/language/flambda.cmi middle_end/language/continuation.cmi
 middle_end/language/flambda_static0.cmo : middle_end/language/variable.cmi \
-    middle_end/language/var_within_closure.cmi utils/targetint.cmi \
-    middle_end/language/tag.cmi middle_end/language/symbol.cmi \
-    utils/printing_cache.cmi utils/numbers.cmi \
+    utils/targetint.cmi middle_end/language/tag.cmi \
+    middle_end/language/symbol.cmi utils/printing_cache.cmi utils/numbers.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     utils/misc_color.cmi utils/misc.cmi middle_end/language/immediate.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/language/flambda0.cmi \
@@ -3271,9 +3276,8 @@ middle_end/language/flambda_static0.cmo : middle_end/language/variable.cmi \
     middle_end/language/closure_id.cmi utils/clflags.cmi \
     middle_end/language/flambda_static0.cmi
 middle_end/language/flambda_static0.cmx : middle_end/language/variable.cmx \
-    middle_end/language/var_within_closure.cmx utils/targetint.cmx \
-    middle_end/language/tag.cmx middle_end/language/symbol.cmx \
-    utils/printing_cache.cmx utils/numbers.cmx \
+    utils/targetint.cmx middle_end/language/tag.cmx \
+    middle_end/language/symbol.cmx utils/printing_cache.cmx utils/numbers.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     utils/misc_color.cmx utils/misc.cmx middle_end/language/immediate.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/language/flambda0.cmx \
@@ -3554,7 +3558,13 @@ middle_end/typing/flambda_kind.cmx : utils/targetint.cmx utils/numbers.cmx \
     middle_end/language/immediate.cmx middle_end/typing/flambda_kind.cmi
 middle_end/typing/flambda_kind.cmi : utils/targetint.cmi utils/numbers.cmi \
     middle_end/language/immediate.cmi
-middle_end/typing/flambda_type.cmo : middle_end/language/variable.cmi \
+middle_end/typing/flambda_type.cmo : middle_end/language/flambda0.cmi \
+    middle_end/typing/flambda_type.cmi
+middle_end/typing/flambda_type.cmx : middle_end/language/flambda0.cmx \
+    middle_end/typing/flambda_type.cmi
+middle_end/typing/flambda_type.cmi : \
+    middle_end/typing/flambda_type0_intf.cmo middle_end/language/flambda0.cmi
+middle_end/typing/flambda_type0.cmo : middle_end/language/variable.cmi \
     middle_end/typing/var_within_closure_set.cmi \
     middle_end/language/var_within_closure.cmi middle_end/typing/unit.cmi \
     middle_end/typing/type_equality_env.cmi utils/targetint.cmi \
@@ -3563,8 +3573,9 @@ middle_end/typing/flambda_type.cmo : middle_end/language/variable.cmi \
     middle_end/language/specialise_attribute.cmi \
     middle_end/language/simple.cmi middle_end/language/scope_level.cmi \
     utils/printing_cache.cmi middle_end/language/parameter.cmi \
-    middle_end/typing/or_bottom.cmi middle_end/typing/or_absorbing.cmi \
-    utils/numbers.cmi middle_end/language/name_permutation.cmi \
+    middle_end/typing/or_unknown.cmi middle_end/typing/or_bottom.cmi \
+    middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/typing/name_or_export_id.cmi \
     middle_end/language/name_occurrences.cmi \
     middle_end/typing/name_like_intf.cmo middle_end/language/name.cmi \
@@ -3583,8 +3594,8 @@ middle_end/typing/flambda_type.cmo : middle_end/language/variable.cmi \
     middle_end/typing/closure_id_set.cmi \
     middle_end/typing/closure_id_and_var_within_closure_set.cmi \
     middle_end/language/closure_id.cmi utils/clflags.cmi \
-    middle_end/typing/flambda_type.cmi
-middle_end/typing/flambda_type.cmx : middle_end/language/variable.cmx \
+    middle_end/typing/flambda_type0.cmi
+middle_end/typing/flambda_type0.cmx : middle_end/language/variable.cmx \
     middle_end/typing/var_within_closure_set.cmx \
     middle_end/language/var_within_closure.cmx middle_end/typing/unit.cmx \
     middle_end/typing/type_equality_env.cmx utils/targetint.cmx \
@@ -3593,8 +3604,9 @@ middle_end/typing/flambda_type.cmx : middle_end/language/variable.cmx \
     middle_end/language/specialise_attribute.cmx \
     middle_end/language/simple.cmx middle_end/language/scope_level.cmx \
     utils/printing_cache.cmx middle_end/language/parameter.cmx \
-    middle_end/typing/or_bottom.cmx middle_end/typing/or_absorbing.cmx \
-    utils/numbers.cmx middle_end/language/name_permutation.cmx \
+    middle_end/typing/or_unknown.cmx middle_end/typing/or_bottom.cmx \
+    middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
+    middle_end/language/name_permutation.cmx \
     middle_end/typing/name_or_export_id.cmx \
     middle_end/language/name_occurrences.cmx \
     middle_end/typing/name_like_intf.cmx middle_end/language/name.cmx \
@@ -3613,10 +3625,11 @@ middle_end/typing/flambda_type.cmx : middle_end/language/variable.cmx \
     middle_end/typing/closure_id_set.cmx \
     middle_end/typing/closure_id_and_var_within_closure_set.cmx \
     middle_end/language/closure_id.cmx utils/clflags.cmx \
-    middle_end/typing/flambda_type.cmi
-middle_end/typing/flambda_type.cmi : middle_end/typing/flambda_type_intf.cmo \
+    middle_end/typing/flambda_type0.cmi
+middle_end/typing/flambda_type0.cmi : \
+    middle_end/typing/flambda_type0_intf.cmo \
     middle_end/language/expr_intf.cmo
-middle_end/typing/flambda_type_intf.cmo : middle_end/language/variable.cmi \
+middle_end/typing/flambda_type0_intf.cmo : middle_end/language/variable.cmi \
     middle_end/language/var_within_closure.cmi \
     middle_end/typing/type_equality_env.cmi utils/targetint.cmi \
     middle_end/language/tag.cmi middle_end/language/specialise_attribute.cmi \
@@ -3633,7 +3646,7 @@ middle_end/typing/flambda_type_intf.cmo : middle_end/language/variable.cmi \
     middle_end/language/debuginfo.cmi middle_end/language/continuation.cmi \
     middle_end/typing/contains_names.cmi middle_end/language/code_id.cmi \
     middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi
-middle_end/typing/flambda_type_intf.cmx : middle_end/language/variable.cmx \
+middle_end/typing/flambda_type0_intf.cmx : middle_end/language/variable.cmx \
     middle_end/language/var_within_closure.cmx \
     middle_end/typing/type_equality_env.cmx utils/targetint.cmx \
     middle_end/language/tag.cmx middle_end/language/specialise_attribute.cmx \

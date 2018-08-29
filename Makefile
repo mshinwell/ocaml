@@ -328,7 +328,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/type_equality_env.cmo \
   middle_end/typing/name_like_intf.cmo \
   middle_end/language/expr_intf.cmo \
-  middle_end/typing/flambda_type_intf.cmo \
+  middle_end/typing/flambda_type0_intf.cmo \
+  middle_end/typing/flambda_type0.cmo \
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \
   middle_end/typing/flambda_type.cmo \

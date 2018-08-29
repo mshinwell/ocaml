@@ -327,33 +327,19 @@ end = struct
       let new_free = Name_occurrences.add_set !free names In_terms in
       free := new_free
     in
+    (* CR mshinwell: this can be renamed now *)
     let free_names_promoted_to_kind names (kind : K.t) =
       match kind with
       | Value | Naked_number _ | Fabricated -> free_names names
-      | Phantom (In_types, _) ->
-        let names = Name_occurrences.promote_to_in_types names in
-        free_names names
-      | Phantom (Debug_only, _) ->
-        let names = Name_occurrences.promote_to_debug_only names in
-        free_names names
     in
     let bound_name_in_term name =
       let new_bound = Name_occurrences.add !bound name In_terms in
       bound := new_bound
     in
-    let bound_name_in_types name =
-      let new_bound = Name_occurrences.add !bound name In_types in
-      bound := new_bound
-    in
-    let bound_name_debug_only name =
-      let new_bound = Name_occurrences.add !bound name Debug_only in
-      bound := new_bound
-    in
+    (* CR mshinwell: likewise *)
     let bound_name_of_kind name (kind : K.t) =
       match kind with
       | Value | Naked_number _ | Fabricated -> bound_name_in_term name
-      | Phantom (In_types, _) -> bound_name_in_types name
-      | Phantom (Debug_only, _) -> bound_name_debug_only name
     in
     (* N.B. This function assumes that all bound identifiers are distinct. *)
     let rec aux (flam : t) : unit =
@@ -591,7 +577,7 @@ end = struct
     and aux_named (named : Named.t) =
       f_named named;
       match named with
-      | Simple _ | Read_mutable _ | Prim _ | Assign _ -> ()
+      | Simple _ | Prim _ -> ()
       | Set_of_closures { function_decls = funcs; _; } ->
         if not toplevel then begin
           Closure_id.Map.iter (fun _ (decl : Function_declaration.t) ->
@@ -619,8 +605,8 @@ end = struct
         Name.print func
         Simple.List.print args
         Call_kind.print call_kind
-        print_inline_attribute inline
-        print_specialise_attribute specialise
+        Inline_attribute.print inline
+        Specialise_attribute.print specialise
         Debuginfo.print_or_elide dbg
         Continuation.print continuation
         Continuation.print exn_continuation
@@ -718,8 +704,6 @@ end and Named : sig
     | Simple of Simple.t
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
-    | Assign of assign
-    | Read_mutable of Mutable_variable.t
 
   val free_names
      : ?ignore_uses_in_project_var:unit
@@ -765,9 +749,6 @@ end = struct
       in
       begin match t with
       | Simple simple -> free_names_in_term (Simple.free_names simple)
-      | Read_mutable _ -> ()
-      | Assign { being_assigned = _; new_value; } ->
-        free_names_in_term (Simple.free_names new_value)
       | Set_of_closures set ->
         free_names (Set_of_closures.free_names set)
       | Prim (Unary (Project_var _, x0), _dbg) ->
@@ -808,12 +789,6 @@ end = struct
       fprintf ppf "@[<2>(%a%a)@]"
         Flambda_primitive.print prim
         Debuginfo.print_or_elide dbg
-    | Read_mutable mut_var ->
-      fprintf ppf "Read_mut(%a)" Mutable_variable.print mut_var
-    | Assign { being_assigned; new_value; } ->
-      fprintf ppf "@[<2>(assign@ %a@ %a)@]"
-        Mutable_variable.print being_assigned
-        Simple.print new_value
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -833,9 +808,6 @@ end = struct
       Prim (Unary (Box_number Naked_nativeint, simple), dbg), K.value ()
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
-    | Phantom _ ->
-      (* CR mshinwell: this should probably be supported? *)
-      Misc.fatal_error "Cannot box values of [Phantom] kind"
 
   let unbox_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
@@ -854,9 +826,6 @@ end = struct
         K.naked_nativeint ()
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
-    | Phantom _ ->
-      (* CR mshinwell: this should probably be supported? *)
-      Misc.fatal_error "Cannot box values of [Phantom] kind"
 end and Let : sig
   type t = {
     var : Variable.t;
@@ -1096,9 +1065,11 @@ end = struct
   let has_empty_environment t =
     Var_within_closure.Map.is_empty t.closure_elements
 
-  let print_with_cache ~cache ppf t =
-    match t with
-    | { function_decls; closure_elements; direct_call_surrogates = _; } ->
+  let print_with_cache ~cache ppf
+        { function_decls; 
+          closure_elements;
+          direct_call_surrogates;
+        } =
       fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
           %a@ \
           @[<hov 1>(closure_elements (%a))@]@ \
@@ -1108,21 +1079,26 @@ end = struct
         (Misc_color.bold_green ())
         (Misc_color.reset ())
         (Function_declarations.print_with_cache ~cache) function_decls
-        (Var_within_closure.Map.print Simple.print) t.closure_elements
-        (Closure_id.Map.print Closure_id.print) t.direct_call_surrogates
+        (Var_within_closure.Map.print Simple.print) closure_elements
+        (Closure_id.Map.print Closure_id.print) direct_call_surrogates
         Set_of_closures_origin.print function_decls.set_of_closures_origin
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let free_names t =
+  let free_names
+        { function_decls; 
+          closure_elements;
+          direct_call_surrogates = _;
+        } =
     let in_decls =
-      Function_declarations.free_names t.function_decls
+      Function_declarations.free_names function_decls
     in
-    let in_free_vars =
+    let in_closure_elements =
       Name_occurrences.create_from_set_in_terms
-        (Free_vars.free_names t.free_vars)
+        (Simple.List.free_names
+          (Var_within_closure.Map.data closure_elements))
     in
-    Name_occurrences.union in_decls in_free_vars
+    Name_occurrences.union in_decls in_closure_elements
 end and Function_declarations : sig
   type t = {
     set_of_closures_origin : Set_of_closures_origin.t;
@@ -1145,7 +1121,7 @@ end = struct
   let create ~funs =
     let compilation_unit = Compilation_unit.get_current_exn () in
     let set_of_closures_origin =
-      Set_of_closures_origin.create set_of_closures_id
+      Set_of_closures_origin.create compilation_unit
     in
     { set_of_closures_origin;
       funs;
@@ -1155,14 +1131,12 @@ end = struct
     Closure_id.Map.find cf funs
 
   let update function_decls ~funs =
-    let compilation_unit = Compilation_unit.get_current_exn () in
     let set_of_closures_origin = function_decls.set_of_closures_origin in
     { set_of_closures_origin;
       funs;
     }
 
-  let import_for_pack function_decls
-        import_set_of_closures_id import_set_of_closures_origin =
+  let import_for_pack function_decls import_set_of_closures_origin =
     { set_of_closures_origin =
         import_set_of_closures_origin function_decls.set_of_closures_origin;
       funs = function_decls.funs;
@@ -1194,11 +1168,11 @@ end and Function_declaration : sig
     body : Expr.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
-    results : Flambda_type.Parameters.t;
+    result_arity : Flambda_arity.t;
     stub : bool;
     dbg : Debuginfo.t;
-    inline : inline_attribute;
-    specialise : specialise_attribute;
+    inline : Inline_attribute.t;
+    specialise : Specialise_attribute.t;
     is_a_functor : bool;
     my_closure : Variable.t;
   }
@@ -1209,21 +1183,20 @@ end and Function_declaration : sig
     -> exn_continuation_param:Continuation.t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
-    -> results:Flambda_type.Parameters.t
+    -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
-    -> inline:inline_attribute
-    -> specialise:specialise_attribute
+    -> inline:Inline_attribute.t
+    -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
     -> my_closure:Variable.t
     -> t
   val update_body : t -> body:Expr.t -> t
   val update_params : t -> params:Flambda_type.Parameters.t -> t
-  val update_params_results_and_body
+  val update_params_and_body
      : t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
-    -> results:Flambda_type.Parameters.t
     -> t
   val used_params : t -> Variable.Set.t
   val free_names : t -> Name_occurrences.t
@@ -1238,9 +1211,9 @@ end = struct
   include Function_declaration
 
   let create ~closure_origin ~continuation_param ~exn_continuation_param
-        ~params ~body ~results ~stub ~dbg
-        ~(inline : inline_attribute)
-        ~(specialise : specialise_attribute)
+        ~params ~body ~result_arity ~stub ~dbg
+        ~(inline : Inline_attribute.t)
+        ~(specialise : Specialise_attribute.t)
         ~is_a_functor ~my_closure : t =
     begin match stub, inline with
     | true, (Never_inline | Default_inline)
@@ -1265,7 +1238,7 @@ end = struct
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      results;
+      result_arity;
       stub;
       dbg;
       inline;
@@ -1274,6 +1247,7 @@ end = struct
       my_closure;
     }
 
+  (* CR mshinwell: use record pattern match *)
   let update_body t ~body : t =
     { closure_origin = t.closure_origin;
       params = t.params;
@@ -1282,7 +1256,7 @@ end = struct
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      results = t.results;
+      result_arity = t.result_arity;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
@@ -1291,7 +1265,8 @@ end = struct
       my_closure = t.my_closure
     }
 
-  let update_params_results_and_body t ~params ~body ~results : t =
+  (* CR mshinwell: use record pattern match *)
+  let update_params_and_body t ~params ~body : t =
     { closure_origin = t.closure_origin;
       params;
       continuation_param = t.continuation_param;
@@ -1299,7 +1274,7 @@ end = struct
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      results;
+      result_arity = t.result_arity;
       stub = t.stub;
       dbg = t.dbg;
       inline = t.inline;
@@ -1311,15 +1286,27 @@ end = struct
     }
 
   let update_params t ~params =
-    update_params_results_and_body t ~params ~body:t.body ~results:t.results
+    update_params_and_body t ~params ~body:t.body
 
-  let free_names t =
-    let bound_in_params = Flambda_type.Parameters.bound_names t.params in
-    let free_in_params = Flambda_type.Parameters.free_names t.params in
-    let free_in_results = Flambda_type.Parameters.free_names t.results in
-    Name_occurrences.union free_in_params
-      (Name_occurrences.diff free_in_results bound_in_params)
+  let free_names
+        { closure_origin = _;
+          continuation_param = _;
+          exn_continuation_param = _;
+          params;
+          body = _;
+          code_id = _;
+          free_names_in_body = _;
+          result_arity = _;
+          stub = _;
+          dbg = _;
+          inline = _;
+          specialise = _;
+          is_a_functor = _;
+          my_closure = _;
+        } =
+    Flambda_type.Parameters.free_names params
 
+  (* CR mshinwell: use record pattern match *)
   let print_with_cache ~cache closure_id ppf (f : t) =
     let stub =
       if f.stub then
@@ -1333,6 +1320,7 @@ end = struct
       else
         ""
     in
+    (* CR mshinwell: Use [Inline_attribute.print_...] etc. *)
     let inline =
       match f.inline with
       | Always_inline -> " *inline*"
@@ -1360,7 +1348,7 @@ end = struct
       Continuation.print f.exn_continuation_param
       (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.params
       (Misc_color.bold_white ())
-      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.results
+      Flambda_arity.print f.result_arity
       (Misc_color.reset ())
       (Expr.print_with_cache ~cache) f.body
 

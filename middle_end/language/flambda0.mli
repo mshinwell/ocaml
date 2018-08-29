@@ -56,8 +56,6 @@ module Call_kind : sig
       }
 
   val return_arity : t -> Flambda_arity.t
-
-  val equal : t -> t -> bool
 end
 
 (** The application of a function (or method on a given object) to a list of
@@ -80,8 +78,6 @@ module Apply : sig
     (** Instructions from the source code as to whether the callee should
         be specialised. *)
   }
-
-  val equal : t -> t -> bool
 
   val print : Format.formatter -> t -> unit
 end
@@ -109,8 +105,6 @@ module Trap_action : sig
         exn_handler : Continuation.t;
         take_backtrace : bool;
       }
-
-  val equal : t -> t -> bool
 end
 
 module Switch : sig
@@ -266,12 +260,6 @@ module rec Expr : sig
     -> (Named.t -> unit)
     -> maybe_named
     -> unit
-
-  val equal
-     : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
-    -> t
-    -> t
-    -> bool
 
   val print : Format.formatter -> t -> unit
 
@@ -588,7 +576,7 @@ end and Function_declaration : sig
     -> exn_continuation_param:Continuation.t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
-    -> results:Flambda_type.Parameters.t
+    -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
@@ -603,13 +591,11 @@ end and Function_declaration : sig
   (** Change only the parameters of a function declaration. *)
   val update_params : t -> params:Flambda_type.Parameters.t -> t
 
-  (** Change only the code, parameters and result types of a function
-      declaration. *)
-  val update_params_results_and_body
+  (** Change only the code and parameters of a function declaration. *)
+  val update_params_and_body
      : t
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
-    -> results:Flambda_type.Parameters.t
     -> t
 
   (** All names free in the function declaration.  (Note that this may be
@@ -618,7 +604,7 @@ end and Function_declaration : sig
   val free_names : t -> Name_occurrences.t
 
   val print : Closure_id.t -> Format.formatter -> t -> unit
-end and Flambda_type : Flambda_type_intf.S with module Expr := Expr
+end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
 
 (** A module for the manipulation of terms where the recomputation of free
     name sets is to be kept to a minimum. *)

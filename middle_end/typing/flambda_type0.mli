@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,11 +14,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+(** Basic definitions and constructors for the type system of Flambda. The types
+    give approximations to the values obtained by evaluating Flambda terms at
+    runtime.  Each type has a kind, as per [Flambda_kind].
 
-type t = Var_within_closure.Set.t
+    Normal Flambda passes should use the interface provided in [Flambda_types]
+    rather than this one. *)
 
-include Hashtbl.Make_with_map (struct
-  include Var_within_closure.Set
-  let hash = Hashtbl.hash
-end)
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
+(** The type system is parameterised over the expression language. *)
+module Make (Expr : Expr_intf.S)
+  : Flambda_type0_intf.S with module Expr := Expr

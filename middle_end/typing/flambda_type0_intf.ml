@@ -95,6 +95,16 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val env : t -> Typing_env.t
+  end and Parameters : sig
+    type t
+
+    val print_or_omit_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    include Contains_names.S with type t := t
   end and Typing_env : sig
     type t
 
@@ -805,14 +815,14 @@ module type S = sig
     -> t
     -> reification_result) type_accessor
 
-(*
-
   type 'a proof = private
     | Proved of 'a
     | Unknown
     | Invalid
 
+(*
   val unknown_proof : unit -> _ proof
+*)
 
   (* CR mshinwell: Add unit tests to check that the condition about the result
      sets in [Proved] being non-empty holds. *)
@@ -828,6 +838,8 @@ module type S = sig
   *)
   val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
+
+(*
   type tagged_immediate_as_discriminants_proof = private
     | By_discriminant of Typing_env_extension.t Discriminant.Map.t
 
@@ -839,6 +851,7 @@ module type S = sig
     | Always_a_tagged_immediate
 
   val prove_is_tagged_immediate : (t -> is_tagged_immediate proof) type_accessor
+*)
 
   (** Similar to [prove_tagged_immediate], but for naked float values. *)
   val prove_naked_float
@@ -856,6 +869,7 @@ module type S = sig
   val prove_naked_nativeint
      : (t -> Targetint.Set.t proof) type_accessor
 
+(*
   val prove_unique_naked_float
      : (t -> Numbers.Float_by_bit_pattern.t proof) type_accessor
 
@@ -882,6 +896,8 @@ module type S = sig
   (** As for [prove_tagged_immediate], but for strings. *)
   val prove_string : (t -> String_info.Set.t proof) type_accessor
 
+*)
+
   (** Prove that the given type represents a boxed float value, returning the
       type of the unboxed number therein.  (That type may in itself specify
       a union, etc.)  This function returns [Unknown] and [Invalid] in
@@ -904,6 +920,8 @@ module type S = sig
   val prove_boxed_nativeint
      : (t -> Targetint.Set.t ty_naked_number proof)
          type_accessor
+
+(*
 
   type tags = private
     | Tags of Tag.Set.t
