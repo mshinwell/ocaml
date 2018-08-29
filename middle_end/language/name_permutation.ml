@@ -182,7 +182,18 @@ let apply_simple t (s : Simple.t) =
   | Const _ | Discriminant _ -> s
 
 let apply_simples t ss =
-  List.map (fun s -> apply_simple t s) ss
+  let changed = ref false in
+  let result =
+    List.map (fun s ->
+        let s' = apply_simple t s in
+        if not (s == s') then begin
+          changed := true
+        end;
+        s')
+      ss
+  in
+  if not !changed then ss
+  else result
 
 let add_symbol t s1 s2 =
   { t with

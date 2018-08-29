@@ -699,6 +699,76 @@ end = struct
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+  let apply_name_permutation t perm =
+    match t with
+    | Let let_expr ->
+      let let_expr' = Let.apply_name_permutation let_expr perm in
+      if let_expr == let_expr' then t
+      else Let let_expr'
+    | Let_cont let_cont ->
+      let let_cont = Let_cont.apply_name_permutation let_cont perm in
+      if let_cont == let_cont' then t
+      else Let_cont let_cont'
+    | Apply apply ->
+      let apply' = Apply.apply_name_permutation apply perm in
+      if apply == apply' then t
+      else Apply apply'
+    | Apply_cont (k, trap_action_opt, args) ->
+      let args' = Name_permutation.apply_simples perm args in
+      if args == args' then t
+      else Apply_cont (k, trap_action_opt, args')
+    | Switch (scrutinee, switch) ->
+      let scrutinee' = Name_permutation.apply_name perm scrutinee in
+      if scrutinee == scrutinee' then t
+      else Switch (scrutinee', switch)
+    | Invalid _ -> t
+end Expr_with_permutation : sig
+  include Contains_names.S
+  val create : ?perm:Name_permutation.t -> Expr.t -> t
+  val expr : t -> Expr.t
+end = struct
+  type t = {
+    expr_without_perm : Expr.t;
+    perm : Name_permutation.t;
+    expr_with_perm_and_free_names : (Expr.t * Name_occurrences.t) Lazy.t;
+  }
+
+  let create ?perm expr =
+    let perm =
+      match perm with
+      | None -> Name_permutation.create ()
+      | Some perm -> perm
+    in
+    let expr_with_perm_and_free_names =
+      lazy (
+        let expr = Expr.apply_name_permutation expr perm in
+        let free_names = Expr.free_names expr in
+        expr, free_names)
+    in
+    { expr_without_perm = expr;
+      perm;
+      expr_with_perm_and_free_names;
+    }
+
+  let expr t = fst (Lazy.force t.expr_with_perm_and_free_names)
+
+  let free_names t = snd (Lazy.force t.expr_with_perm_and_free_names)
+
+  let apply_name_permutation
+        { expr_without_perm;
+          perm;
+          expr_with_perm_and_free_names;
+        } perm' =
+    let perm = Name_permutation.compose perm perm' in
+    { expr_without_perm;
+      perm;
+      expr_with_perm_and_free_names =
+        lazy (
+          let expr = Expr.apply_name_permutation expr perm in
+          let free_names = Expr.free_names expr in
+          expr, free_names);
+    }
 end and Named : sig
   type t =
     | Simple of Simple.t
@@ -734,48 +804,6 @@ end and Named : sig
 end = struct
   include Named
 
-  let name_usage ?ignore_uses_in_project_var (t : t) =
-    match t with
-    | Simple simple ->
-      Name_occurrences.create_from_set_in_terms (Simple.free_names simple)
-    | _ ->
-      let free = ref (Name_occurrences.create ()) in
-      let free_names names =
-        free := Name_occurrences.union !free names
-      in
-      let free_names_in_term names =
-        let new_free = Name_occurrences.add_set !free names In_terms in
-        free := new_free
-      in
-      begin match t with
-      | Simple simple -> free_names_in_term (Simple.free_names simple)
-      | Set_of_closures set ->
-        free_names (Set_of_closures.free_names set)
-      | Prim (Unary (Project_var _, x0), _dbg) ->
-        begin match ignore_uses_in_project_var with
-        | None -> free_names_in_term (Simple.free_names x0)
-        | Some () -> ()
-        end
-      | Prim (Unary (_prim, x0), _dbg) ->
-        free_names_in_term (Simple.free_names x0)
-      | Prim (Binary (_prim, x0, x1), _dbg) ->
-        free_names_in_term (Simple.free_names x0);
-        free_names_in_term (Simple.free_names x1)
-      | Prim (Ternary (_prim, x0, x1, x2), _dbg) ->
-        free_names_in_term (Simple.free_names x0);
-        free_names_in_term (Simple.free_names x1);
-        free_names_in_term (Simple.free_names x2)
-      | Prim (Variadic (_prim, xs), _dbg) ->
-        List.iter (fun x -> free_names_in_term (Simple.free_names x)) xs
-      end;
-      !free
-
-  let free_names ?ignore_uses_in_project_var t =
-    name_usage ?ignore_uses_in_project_var t
-
-  let used_names ?ignore_uses_in_project_var named =
-    name_usage ?ignore_uses_in_project_var named
-
   let print_with_cache ~cache ppf (t : t) =
     match t with
     | Simple simple ->
@@ -791,6 +819,55 @@ end = struct
         Debuginfo.print_or_elide dbg
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+  let free_names t =
+    match t with
+    | Simple simple ->
+      Name_occurrences.create_from_set_in_terms (Simple.free_names simple)
+    | _ ->
+      (* CR mshinwell: remove mutable state *)
+      let free = ref (Name_occurrences.create ()) in
+      let free_names names =
+        free := Name_occurrences.union !free names
+      in
+      let free_names_in_term names =
+        let new_free = Name_occurrences.add_set !free names In_terms in
+        free := new_free
+      in
+      begin match t with
+      | Simple simple ->
+        free_names_in_term (Simple.free_names simple)
+      | Set_of_closures set ->
+        free_names (Set_of_closures.free_names set)
+      (* CR mshinwell: Move some of this to flambda_primitive.ml *)
+      | Prim (Unary (_prim, x0), _dbg) ->
+        free_names_in_term (Simple.free_names x0)
+      | Prim (Binary (_prim, x0, x1), _dbg) ->
+        free_names_in_term (Simple.free_names x0);
+        free_names_in_term (Simple.free_names x1)
+      | Prim (Ternary (_prim, x0, x1, x2), _dbg) ->
+        free_names_in_term (Simple.free_names x0);
+        free_names_in_term (Simple.free_names x1);
+        free_names_in_term (Simple.free_names x2)
+      | Prim (Variadic (_prim, xs), _dbg) ->
+        List.iter (fun x -> free_names_in_term (Simple.free_names x)) xs
+      end;
+      !free
+
+  let apply_name_permutation t perm =
+    match t with
+    | Simple simple ->
+      let simple' = Name_permutation.apply_simple perm simple in
+      if simple == simple' then t
+      else Simple simple'
+    | Prim (prim, dbg) ->
+      let prim' = Flambda_primitive.apply_name_permutation prim perm in
+      if prim == prim' then t
+      else Prim (prim', dbg)
+    | Set_of_closures set ->
+      let set' = Set_of_closures.apply_name_permutation set perm in
+      if set == set' then t
+      else Set_of_closures set
 
   let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
@@ -827,14 +904,8 @@ end = struct
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
 end and Let0 : sig
-  type t
-
-  val create
-     : Flambda_kind.t
-    -> Named.t
-    -> Expr.t
-    -> Name_permutation.t
-    -> t
+  include Contains_names.S
+  val create : Flambda_kind.t -> Named.t -> Expr.t -> t
   val kind : t -> Flambda_kind.t
   val defining_expr : t -> Named.t
   val body : t -> Expr.t
@@ -846,53 +917,30 @@ end = struct
   type t = {
     kind : Flambda_kind.t;
     defining_expr : Named.t;
-    body_without_permutation : Expr.t;
-    permutation : Name_permutation.t;
-    body_with_permutation_and_free_names
-       : (Expr.t * Name_occurrences.t) Lazy.t;
+    body : Expr_with_permutation.t;
   }
 
-  let create kind defining_expr body perm =
-    let defining_expr = Named.apply_name_permutation defining_expr perm in
-    let body_with_free_names =
-      lazy (
-        let body = Expr.apply_name_permutation body perm in
-        let free_names = Expr.free_names body in
-        body, free_names)
-    in
+  let create kind defining_expr body =
     { kind;
       defining_expr;
-      body_with_free_names;
+      body = Expr_with_permutation.create body;
     }
 
   let kind t = t.kind
   let defining_expr t = t.defining_expr
 
-  let body t = fst (Lazy.force t.body_with_free_names)
-  let free_names_of_body t = snd (Lazy.force t.body_with_free_names)
+  let body t = Expr_with_permutation.expr t.body
+  let free_names_of_body t = Expr_with_permutation.free_names t.body
 
-  let free_names { kind = _; defining_expr; body_with_free_names; } =
+  let free_names { kind = _; defining_expr; body = _; } =
     let from_defining_expr = Named.free_names defining_expr in
-    let _body, from_body = Lazy.force body_with_free_names in
+    let from_body = free_names_of_body t in
     Name_occurrences.union from_defining_expr from_body
 
-  let apply_name_permutation
-        { kind;
-          defining_expr;
-          body_without_permutation;
-          permutation;
-          body_with_permutation_and_free_names;
-        } perm =
-    let permutation = Name_permutation.compose perm permutation in
+  let apply_name_permutation { kind; defining_expr; body; } perm =
     { kind;
       defining_expr = Named.apply_name_permutation defining_expr perm;
-      body_without_permutation;
-      permutation;
-      body_with_permutation_and_free_names =
-        lazy (
-          let body = Expr.apply_name_permutation body permutation in
-          let free_names = Expr.free_names body in
-          body, free_names);
+      body = Expr_with_permutation.apply_name_permutation body perm;
     }
 
 (*
@@ -913,7 +961,8 @@ end and Let : sig
   end
 
   val create
-     : bound_var:(Variable.t * Flambda_kind.t)
+     : bound_var:Variable.t
+    -> kind:Flambda_kind.t
     -> defining_expr:Named.t
     -> body:Expr.t
     -> t
@@ -922,7 +971,7 @@ end and Let : sig
 end = struct
   include Name_abstraction.Make (Bound_variable) (Let0)
 
-  let create ~bound_var:(var, kind) ~defining_expr ~body =
+  let create ~bound_var ~kind ~defining_expr ~body =
     let let0 : Let0.t =
       { kind;
         defining_expr;
@@ -930,25 +979,26 @@ end = struct
         free_names_of_body = Expr.free_names body;
       }
     in
-    create var let0
-
-  let apply_name_permutation 
+    create bound_var let0
 end and Let_cont : sig
-  type t = {
-    body : Expr.t;
-    handlers : Let_cont_handlers.t;
-  }
-end = struct
-  include Let_cont
-end and Let_cont_handlers : sig
-  type t =
-    | Non_recursive of {
-        name : Continuation.t;
-        handler : Continuation_handler.t;
-      }
-    | Recursive of Continuation_handlers.t
-
-  val free_names : t -> Name_occurrences.t
+  type t = private
+    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Recursive of Recursive_let_cont_handlers.t
+  include Contains_names.S with type t := t
+  val create_non_recursive
+     : Continuation.t
+    -> handler:Continuation_handler.t
+    -> body:Expr.t
+    -> t
+  val create_exception_handler
+     : Continuation.t
+    -> handler:Continuation_handler.t
+    -> body:Expr.t
+    -> t
+  val create_recursive
+     : handlers:Continuation_handlers.t
+    -> body:Expr.t
+    -> t
   val bound_continuations : t -> Continuation.Set.t
   val free_continuations : t -> Continuation.Set.t
   type free_and_bound = {
@@ -966,7 +1016,9 @@ end and Let_cont_handlers : sig
     -> t
     -> unit
 end = struct
-  include Let_cont_handlers
+  type t =
+    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Recursive of Recursive_let_cont_handlers.t
 
   let to_continuation_map t =
     match t with
@@ -1096,7 +1148,7 @@ end and Continuation_handler : sig
     params : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
-    handler : Expr.t;
+    handler : Expr_with_permutation.t;
   }
   val print : Format.formatter -> t -> unit
 (*
@@ -1119,25 +1171,30 @@ end and Set_of_closures : sig
     closure_elements : Simple.t Var_within_closure.Map.t;
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   }
-
+  include Contains_names.S with type t := t
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val create
      : function_decls:Function_declarations.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
-  val free_names : t -> Name_occurrences.t
+  val function_decls : t -> Function_declarations.t
+  val closure_elements : t -> Simple.t Var_within_closure.Map.t
+  val direct_call_surrogates : Closure_id.t Closure_id.Map.t
   val has_empty_environment : t -> bool
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Set_of_closures
 
-  let create ~(function_decls : Function_declarations.t) ~closure_elements
-        ~direct_call_surrogates =
+  let create ~function_decls ~closure_elements ~direct_call_surrogates =
     { function_decls;
       closure_elements;
       direct_call_surrogates;
     }
+
+  let function_decls t = t.function_decls
+  let closure_elements t = t.closure_elements
+  let direct_call_surrogates t = t.direct_call_surrogates
 
   let has_empty_environment t =
     Var_within_closure.Map.is_empty t.closure_elements
@@ -1167,33 +1224,53 @@ end = struct
           closure_elements;
           direct_call_surrogates = _;
         } =
-    let in_decls =
-      Function_declarations.free_names function_decls
-    in
+    let in_decls = Function_declarations.free_names function_decls in
     let in_closure_elements =
       Name_occurrences.create_from_set_in_terms
         (Simple.List.free_names
           (Var_within_closure.Map.data closure_elements))
     in
     Name_occurrences.union in_decls in_closure_elements
-end and Function_declarations : sig
-  type t = {
-    set_of_closures_origin : Set_of_closures_origin.t;
-    funs : Function_declaration.t Closure_id.Map.t;
-  }
 
+  let apply_name_permutation
+        ({ function_decls; 
+           closure_elements;
+           direct_call_surrogates;
+         } as t) perm =
+    let function_decls' =
+      Function_declarations.apply_name_permutation function_decls perm
+    in
+    let closure_elements' =
+      Var_within_closure.Map.map_sharing (fun simple ->
+          Name_permutation.apply_simple perm simple)
+        closure_elements
+    in
+    if function_decls == function_decls'
+      && closure_elements == closure_elements'
+    then t
+    else
+      { function_decls = function_decls';
+        closure_elements = closure_elements';
+        direct_call_surrogates;
+      }
+end and Function_declarations : sig
+  include Contains_names.S
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val create : funs:Function_declaration.t Closure_id.Map.t -> t
+  val set_of_closures_origin : Set_of_closures_origin.t
+  val funs : t -> Function_declaration.t Closure_id.Map.t
   val find : Closure_id.t -> t -> Function_declaration.t
   val update : t -> funs:Function_declaration.t Closure_id.Map.t -> t
   val import_for_pack
      : t
     -> (Set_of_closures_origin.t -> Set_of_closures_origin.t)
     -> t
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val free_names : t -> Name_occurrences.t
 end = struct
-  include Function_declarations
+  type t = {
+    set_of_closures_origin : Set_of_closures_origin.t;
+    funs : Function_declaration.t Closure_id.Map.t;
+  }
 
   let create ~funs =
     let compilation_unit = Compilation_unit.get_current_exn () in
@@ -1203,6 +1280,9 @@ end = struct
     { set_of_closures_origin;
       funs;
     }
+
+  let set_of_closures_origin t = t.set_of_closures_origin
+  let funs t = t.funs
 
   let find cf ({ funs; set_of_closures_origin = _ } : t) =
     Closure_id.Map.find cf funs
@@ -1230,30 +1310,23 @@ end = struct
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let free_names t =
+  let free_names { set_of_closures_origin = _; funs; } =
     Closure_id.Map.fold
       (fun _closure_id (func_decl : Function_declaration.t) syms ->
         Name_occurrences.union syms (Function_declaration.free_names func_decl))
       t.funs
       (Name_occurrences.create ())
-end and Function_declaration : sig
-  type t = {
-    closure_origin : Closure_origin.t;
-    continuation_param : Continuation.t;
-    exn_continuation_param : Continuation.t;
-    params : Flambda_type.Parameters.t;
-    body : Expr.t;
-    code_id : Code_id.t;
-    free_names_in_body : Name_occurrences.t;
-    result_arity : Flambda_arity.t;
-    stub : bool;
-    dbg : Debuginfo.t;
-    inline : Inline_attribute.t;
-    specialise : Specialise_attribute.t;
-    is_a_functor : bool;
-    my_closure : Variable.t;
-  }
 
+  let apply_name_permutation ({ set_of_closures_origin; funs; } as t) perm =
+    let funs' =
+      Closure_id.Map.map_sharing (fun func_decl ->
+          Function_declaration.apply_name_permutation func_decl perm)
+        funs
+    in
+    if funs == funs' then t
+    else { set_of_closures_origin; funs = funs'; }
+end and Function_declaration : sig
+  include Contains_names.S
   val create
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
@@ -1268,6 +1341,27 @@ end and Function_declaration : sig
     -> is_a_functor:bool
     -> my_closure:Variable.t
     -> t
+  val print : Closure_id.t -> Format.formatter -> t -> unit
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Closure_id.t
+    -> Format.formatter
+    -> t
+    -> unit
+  val closure_origin : t -> Closure_origin.t
+  val continuation_param : t -> Continuation.t
+  val exn_continuation_param : t -> Continuation.t
+  val params : t -> Flambda_type.Parameters.t
+  val body : t -> Expr.t
+  val code_id : t -> Code_id.t
+  val free_names_in_body : t -> Name_occurrences.t
+  val result_arity : t -> Flambda_arity.t
+  val stub : t -> bool
+  val dbg : t -> Debuginfo.t
+  val inline : t -> Inline_attribute.t
+  val specialise : t -> Specialise_attribute.t
+  val is_a_functor : t -> bool
+  val my_closure : t -> Variable.t
   val update_body : t -> body:Expr.t -> t
   val update_params : t -> params:Flambda_type.Parameters.t -> t
   val update_params_and_body
@@ -1275,17 +1369,27 @@ end and Function_declaration : sig
     -> params:Flambda_type.Parameters.t
     -> body:Expr.t
     -> t
-  val used_params : t -> Variable.Set.t
-  val free_names : t -> Name_occurrences.t
-  val print_with_cache
-     : cache:Printing_cache.t
-    -> Closure_id.t
-    -> Format.formatter
-    -> t
-    -> unit
-  val print : Closure_id.t -> Format.formatter -> t -> unit
 end = struct
-  include Function_declaration
+  type t = {
+    closure_origin : Closure_origin.t;
+    continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
+    params : Flambda_type.Parameters.t;
+    body : Expr_with_permutation.t;
+    (* Function declarations' bodies are completely closed with respect to
+       names that might be permuted: as such, they have empty support.
+       However we can still use [Expr_with_permutation] to manage the delayed
+       calculation of free names in such bodies. *)
+    code_id : Code_id.t;
+    free_names_in_body : Name_occurrences.t;
+    result_arity : Flambda_arity.t;
+    stub : bool;
+    dbg : Debuginfo.t;
+    inline : Inline_attribute.t;
+    specialise : Specialise_attribute.t;
+    is_a_functor : bool;
+    my_closure : Variable.t;
+  }
 
   let create ~closure_origin ~continuation_param ~exn_continuation_param
         ~params ~body ~result_arity ~stub ~dbg
@@ -1312,7 +1416,7 @@ end = struct
       continuation_param;
       exn_continuation_param;
       params;
-      body;
+      body = Expr_with_permutation.create body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
       result_arity;
@@ -1330,9 +1434,8 @@ end = struct
       params = t.params;
       continuation_param = t.continuation_param;
       exn_continuation_param = t.exn_continuation_param;
-      body;
+      body = Expr_with_permutation.create body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
-      free_names_in_body = Expr.free_names body;
       result_arity = t.result_arity;
       stub = t.stub;
       dbg = t.dbg;
@@ -1348,9 +1451,8 @@ end = struct
       params;
       continuation_param = t.continuation_param;
       exn_continuation_param = t.exn_continuation_param;
-      body;
+      body = Expr_with_permutation.create body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
-      free_names_in_body = Expr.free_names body;
       result_arity = t.result_arity;
       stub = t.stub;
       dbg = t.dbg;
@@ -1372,7 +1474,6 @@ end = struct
           params;
           body = _;
           code_id = _;
-          free_names_in_body = _;
           result_arity = _;
           stub = _;
           dbg = _;
@@ -1382,6 +1483,39 @@ end = struct
           my_closure = _;
         } =
     Flambda_type.Parameters.free_names params
+
+  let apply_name_permutation
+        ({ closure_origin;
+           continuation_param;
+           exn_continuation_param;
+           params;
+           body;
+           code_id;
+           result_arity;
+           stub;
+           dbg;
+           inline;
+           specialise;
+           is_a_functor;
+           my_closure;
+         } as t) perm =
+    let params' = Flambda_type.Parameters.apply_name_permutation params perm in
+    if params == params' then t
+    else
+      { closure_origin;
+        continuation_param;
+        exn_continuation_param;
+        params = params';
+        body;
+        code_id;
+        result_arity;
+        stub;
+        dbg;
+        inline;
+        specialise;
+        is_a_functor;
+        my_closure;
+      }
 
   (* CR mshinwell: use record pattern match *)
   let print_with_cache ~cache closure_id ppf (f : t) =

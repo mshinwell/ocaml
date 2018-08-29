@@ -293,14 +293,15 @@ end and Named : sig
 
   val print : Format.formatter -> t -> unit
 end and Let0 : sig
-  type t
+  include Contains_names.S
 
-  include Contains_names.S with type t := t
-
+  (** The kind of the defining expression of the let-expression. *)
   val kind : t -> Flambda_kind.t
 
+  (** The defining expression of the let-expression. *)
   val defining_expr : t -> Named.t
 
+  (** The body of the let-expression. *)
   val body : t -> Expr.t
 
   (** The free names in the body of the [Let].  After the first query the
@@ -313,7 +314,8 @@ end and Let : sig
 
   (** Create a let-expression. *)
   val create
-     : bound_var:(Variable.t * Flambda_kind.t)
+     : bound_var:Variable.t
+    -> kind:Flambda_kind.t
     -> defining_expr:Named.t
     -> body:Expr.t
     -> t
