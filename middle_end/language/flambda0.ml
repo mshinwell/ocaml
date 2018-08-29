@@ -846,7 +846,10 @@ end = struct
   type t = {
     kind : Flambda_kind.t;
     defining_expr : Named.t;
-    body_with_free_names : (Expr.t * Name_occurrences.t) Lazy.t;
+    body_without_permutation : Expr.t;
+    permutation : Name_permutation.t;
+    body_with_permutation_and_free_names
+       : (Expr.t * Name_occurrences.t) Lazy.t;
   }
 
   let create kind defining_expr body perm =
@@ -867,6 +870,30 @@ end = struct
 
   let body t = fst (Lazy.force t.body_with_free_names)
   let free_names_of_body t = snd (Lazy.force t.body_with_free_names)
+
+  let free_names { kind = _; defining_expr; body_with_free_names; } =
+    let from_defining_expr = Named.free_names defining_expr in
+    let _body, from_body = Lazy.force body_with_free_names in
+    Name_occurrences.union from_defining_expr from_body
+
+  let apply_name_permutation
+        { kind;
+          defining_expr;
+          body_without_permutation;
+          permutation;
+          body_with_permutation_and_free_names;
+        } perm =
+    let permutation = Name_permutation.compose perm permutation in
+    { kind;
+      defining_expr = Named.apply_name_permutation defining_expr perm;
+      body_without_permutation;
+      permutation;
+      body_with_permutation_and_free_names =
+        lazy (
+          let body = Expr.apply_name_permutation body permutation in
+          let free_names = Expr.free_names body in
+          body, free_names);
+    }
 
 (*
   let map_defining_expr { kind; defining_expr; body_with_free_names; } ~f =

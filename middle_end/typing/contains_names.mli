@@ -20,6 +20,5 @@ module type S = sig
   type t
 
   val free_names : t -> Name_occurrences.t
-  val support : t -> Name_occurrences.t
   val apply_name_permutation : t -> Name_permutation.t -> t
 end

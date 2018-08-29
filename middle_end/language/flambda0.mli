@@ -303,8 +303,6 @@ end and Let0 : sig
 
   val body : t -> Expr.t
 
-(* XXX Two sets of names?!!  Support and free names... *)
-
   (** The free names in the body of the [Let].  After the first query the
       result will be returned in O(1) time. *)
   val free_names_of_body : t -> Name_occurrences.t

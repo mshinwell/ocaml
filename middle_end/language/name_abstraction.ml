@@ -30,4 +30,14 @@ end) (Term : Contains_names.S) = struct
     let perm = Name.permutation_to_swap name fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
+
+  let apply_name_permutation (name, term) perm =
+    let name = Name.apply_name_permutation name perm in
+    let term = Term.apply_name_permutation term perm in
+    name, term
+
+  let free_names (name, term) =
+    let bound = Name.free_names name in
+    let free_in_term = Term.free_names term in
+    Name_occurrences.diff free_in_term bound
 end
