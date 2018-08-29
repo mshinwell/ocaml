@@ -760,6 +760,7 @@ module type S = sig
   (** Whether all types in the given list do *not* satisfy [useful]. *)
   val all_not_useful : (t list -> bool) type_accessor
 
+(*
   (** Whether values of the given two types will always be physically equal
       to each other. *)
   val values_physically_equal : t -> t -> bool
@@ -770,6 +771,7 @@ module type S = sig
      : (Typing_env.t * t)
     -> (Typing_env.t * t)
     -> bool
+*)
 
   type to_lift = private
     | Boxed_float of Float.t
@@ -802,6 +804,8 @@ module type S = sig
      : (allow_free_variables:bool
     -> t
     -> reification_result) type_accessor
+
+(*
 
   type 'a proof = private
     | Proved of 'a
@@ -969,4 +973,6 @@ module type S = sig
       -> arms:Continuation.t Discriminant.Map.t
       -> (Typing_env_extension.t * Continuation.t) Discriminant.Map.t)
     type_accessor
+
+*)
 end

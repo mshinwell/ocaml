@@ -3558,8 +3558,8 @@ middle_end/typing/flambda_type.cmo : middle_end/language/variable.cmi \
     middle_end/typing/var_within_closure_set.cmi \
     middle_end/language/var_within_closure.cmi middle_end/typing/unit.cmi \
     middle_end/typing/type_equality_env.cmi utils/targetint.cmi \
-    middle_end/typing/tag_and_size.cmi middle_end/language/tag.cmi \
-    middle_end/language/symbol.cmi middle_end/typing/string_info.cmi \
+    middle_end/language/tag.cmi middle_end/language/symbol.cmi \
+    middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \
     middle_end/language/simple.cmi middle_end/language/scope_level.cmi \
     utils/printing_cache.cmi middle_end/language/parameter.cmi \
@@ -3588,8 +3588,8 @@ middle_end/typing/flambda_type.cmx : middle_end/language/variable.cmx \
     middle_end/typing/var_within_closure_set.cmx \
     middle_end/language/var_within_closure.cmx middle_end/typing/unit.cmx \
     middle_end/typing/type_equality_env.cmx utils/targetint.cmx \
-    middle_end/typing/tag_and_size.cmx middle_end/language/tag.cmx \
-    middle_end/language/symbol.cmx middle_end/typing/string_info.cmx \
+    middle_end/language/tag.cmx middle_end/language/symbol.cmx \
+    middle_end/typing/string_info.cmx \
     middle_end/language/specialise_attribute.cmx \
     middle_end/language/simple.cmx middle_end/language/scope_level.cmx \
     utils/printing_cache.cmx middle_end/language/parameter.cmx \
@@ -3619,8 +3619,7 @@ middle_end/typing/flambda_type.cmi : middle_end/typing/flambda_type_intf.cmo \
 middle_end/typing/flambda_type_intf.cmo : middle_end/language/variable.cmi \
     middle_end/language/var_within_closure.cmi \
     middle_end/typing/type_equality_env.cmi utils/targetint.cmi \
-    middle_end/language/tag.cmi middle_end/typing/string_info.cmi \
-    middle_end/language/specialise_attribute.cmi \
+    middle_end/language/tag.cmi middle_end/language/specialise_attribute.cmi \
     middle_end/language/simple.cmi middle_end/language/scope_level.cmi \
     utils/printing_cache.cmi utils/numbers.cmi \
     middle_end/language/name_permutation.cmi \
@@ -3637,8 +3636,7 @@ middle_end/typing/flambda_type_intf.cmo : middle_end/language/variable.cmi \
 middle_end/typing/flambda_type_intf.cmx : middle_end/language/variable.cmx \
     middle_end/language/var_within_closure.cmx \
     middle_end/typing/type_equality_env.cmx utils/targetint.cmx \
-    middle_end/language/tag.cmx middle_end/typing/string_info.cmx \
-    middle_end/language/specialise_attribute.cmx \
+    middle_end/language/tag.cmx middle_end/language/specialise_attribute.cmx \
     middle_end/language/simple.cmx middle_end/language/scope_level.cmx \
     utils/printing_cache.cmx utils/numbers.cmx \
     middle_end/language/name_permutation.cmx \

@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Remove when warning 60 fixed *)
+[@@@ocaml.warning "-60"]
+
 module Float = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
@@ -299,7 +302,7 @@ module type Meet_and_join_naked_number_intf = sig
   end
 end
 
-module Expr (Expr : Expr_intf.S) = struct
+module Make (Expr : Expr_intf.S) = struct
   module rec Blocks : sig
     type t
 
@@ -310,7 +313,9 @@ module Expr (Expr : Expr_intf.S) = struct
 
     val create : field_tys:Flambda_types.t list -> open_or_closed -> t
 
+(*
     val invariant : t -> unit
+*)
 
     val print_with_cache
        : cache:Printing_cache.t
@@ -331,6 +336,8 @@ module Expr (Expr : Expr_intf.S) = struct
       -> t
       -> t
       -> t
+
+    val is_empty : t -> bool
 
     include Contains_names.S with type t := t
   end = struct
@@ -388,10 +395,11 @@ module Expr (Expr : Expr_intf.S) = struct
     let create_bottom () =
       create ~field_tys:[] (Closed Tag.arbitrary)
 
-    let invariant _t = () (* CR mshinwell: RL.invariant *)
+    let _invariant _t = () (* CR mshinwell: RL.invariant *)
     let print_with_cache = RL.print
 
     let equal = RL.equal
+    let is_empty = RL.is_bottom
 
     let meet env t1 t2 : _ Or_bottom.t =
       match RL.meet env Fresh t1 t2 with
@@ -605,7 +613,9 @@ module Expr (Expr : Expr_intf.S) = struct
   end and Closure_ids : sig
     type t
 
+(*
     val invariant : t -> unit
+*)
 
     type open_or_closed = Open | Closed
 
@@ -658,7 +668,7 @@ module Expr (Expr : Expr_intf.S) = struct
         RL.create_exactly_multiple closure_ids_map
 
     let print = RL.print
-    let invariant _t = ()  (* CR mshinwell: RL.invariant *)
+    let _invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
     let meet env t1 t2 : _ Or_bottom.t =
       match RL.meet env Fresh t1 t2 with
@@ -740,12 +750,14 @@ module Expr (Expr : Expr_intf.S) = struct
 
     val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+(*
     (** Create a value which describes the presence of exactly no things. *)
     val create_bottom : unit -> t
 
     (** Create a value which describes the presence of an unknown set of
         things. *)
     val create_unknown : unit -> t
+*)
 
     val create : Discriminant.Set.t -> t
 
@@ -766,6 +778,8 @@ module Expr (Expr : Expr_intf.S) = struct
       -> t
       -> t
       -> t
+
+    val get_singleton : t -> (Discriminant.t * Typing_env_extension.t) option
 
     include Contains_names.S with type t := t
   end = struct
@@ -2429,12 +2443,14 @@ module Expr (Expr : Expr_intf.S) = struct
 
     val equal : Type_equality_env.t -> t -> t -> bool
 
+(*
     val meet
        : Meet_env.t
       -> Relational_product.fresh_component_semantics
       -> t
       -> t
       -> (t * Typing_env_extension.t) Or_bottom.t
+*)
 
     val meet_fresh
        : Meet_env.t
@@ -2442,12 +2458,14 @@ module Expr (Expr : Expr_intf.S) = struct
       -> t
       -> (t * Typing_env_extension.t) Or_bottom.t
 
+(*
     val join
        : Join_env.t
       -> Relational_product.fresh_component_semantics
       -> t
       -> t
       -> t
+*)
 
     val join_fresh
        : Join_env.t
@@ -2582,7 +2600,9 @@ module Expr (Expr : Expr_intf.S) = struct
         things. *)
     val create_unknown : unit -> t
 
+(*
     val create : Immediate.Set.t -> t
+*)
 
     val create_with_equations
        : Typing_env_extension.t Immediate.Map.t
@@ -2601,6 +2621,8 @@ module Expr (Expr : Expr_intf.S) = struct
       -> t
       -> t
       -> t
+
+    val get_singleton : t -> (Immediate.t * Typing_env_extension.t) option
 
     include Contains_names.S with type t := t
   end = struct
@@ -2625,12 +2647,14 @@ module Expr (Expr : Expr_intf.S) = struct
       -> holds_on_right:Typing_env_extension.t
       -> t
 
+(*
     val add_extensions_and_extend_central_environment
        : t
       -> holds_on_left:Typing_env_extension.t
       -> holds_on_right:Typing_env_extension.t
       -> central_extension:Typing_env_extension.t
       -> t
+*)
 
     val central_environment : t -> Meet_env.t
 
@@ -2711,7 +2735,7 @@ module Expr (Expr : Expr_intf.S) = struct
       invariant t;
       t
 
-    let add_extensions_and_extend_central_environment t
+    let _add_extensions_and_extend_central_environment t
           ~holds_on_left ~holds_on_right ~central_extension =
       let env =
         Meet_env.with_env t.env (fun env ->
@@ -3921,6 +3945,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
     include Contains_names.S with type t := t
 
+(*
     (** Perform invariant checks upon the given function type. *)
     val invariant : t -> unit
 
@@ -3936,6 +3961,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
     (** Least upper bound of two parameter lists. *)
     val join : Join_env.t -> t -> t -> t
+*)
   end = struct
     module KP = struct
       include Kinded_parameter
@@ -3970,21 +3996,21 @@ module Expr (Expr : Expr_intf.S) = struct
 
     type t = RP.t
 
-    let invariant = RP.invariant
+    let _invariant = RP.invariant
     let print = RP.print
-    let equal = RP.equal
+    let _equal = RP.equal
 
-    let meet env t1 t2 = RP.meet env Fresh t1 t2
-    let join env t1 t2 = RP.join env Fresh t1 t2
+    let _meet env t1 t2 = RP.meet env Fresh t1 t2
+    let _join env t1 t2 = RP.join env Fresh t1 t2
 
-    let introduce = RP.introduce
+    let _introduce = RP.introduce
 
     let free_names = RP.free_names
     let bound_names = RP.bound_names
     let apply_name_permutation = RP.apply_name_permutation
     let freshen = RP.freshen
 
-    let create parameters =
+    let _create parameters =
       let indexes_to_parameters =
         Targetint.OCaml.Map.of_list (
           List.mapi (fun index (param, _ty) ->
@@ -4009,7 +4035,7 @@ module Expr (Expr : Expr_intf.S) = struct
         indexes_to_parameters, env_extension
       ]
 
-    let to_list t =
+    let _to_list t =
       match RP.components t with
       | [params] -> params
       | _ -> Misc.fatal_errorf "Wrong form of relational product:@ %a" print t
@@ -4562,7 +4588,9 @@ module Expr (Expr : Expr_intf.S) = struct
 
       val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+(*
       val create : unit -> t
+*)
 
       val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
 
@@ -4592,6 +4620,8 @@ module Expr (Expr : Expr_intf.S) = struct
         -> t
         -> t
         -> t
+
+      val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
 
       include Contains_names.S with type t := t
     end
@@ -4661,7 +4691,7 @@ module Expr (Expr : Expr_intf.S) = struct
           (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
           (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
 
-      let create () =
+      let _create () =
         { known = Tag_and_index.Map.empty;
           at_least = Index.Map.empty;
         }
@@ -4830,6 +4860,10 @@ module Expr (Expr : Expr_intf.S) = struct
       let is_bottom { known; at_least; } =
         Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
 
+      let get_singleton { known; at_least; } =
+        if not (Index.Map.is_empty at_least) then None
+        else Tag_and_index.Map.get_singleton known
+
       let free_names t =
         let { known; at_least; } = t in
         let from_known =
@@ -4883,6 +4917,10 @@ module Expr (Expr : Expr_intf.S) = struct
         -> t
         -> t
         -> t
+
+      val get_singleton
+         : t
+        -> (Thing_without_names.t * Typing_env_extension.t) option
 
       include Contains_names.S with type t := t
     end
@@ -4944,6 +4982,11 @@ module Expr (Expr : Expr_intf.S) = struct
       let bound_names = RL.bound_names
       let apply_name_permutation = RL.apply_name_permutation
       let freshen = RL.freshen
+
+      let get_singleton t =
+        match RL.get_singleton t with
+        | None -> None
+        | Some ((thing, ()), env_extension) -> Some (thing, env_extension)
     end
   end and Type_equality : sig
     val fast_equal : Flambda_types.t -> Flambda_types.t -> bool
@@ -7265,7 +7308,7 @@ module Expr (Expr : Expr_intf.S) = struct
           free_names_first_definitions
       in
       let free_names_last_equations_rev =
-        List.fold_left (fun acc (name, ty) ->
+        List.fold_left (fun acc (_name, ty) ->
             Name.Set.union acc (Name_occurrences.everything (
               Type_free_names.free_names ty)))
           free_names_at_or_after_cut_point
@@ -7300,10 +7343,15 @@ module Expr (Expr : Expr_intf.S) = struct
   let meet = Both_meet_and_join.meet
   let join = Both_meet_and_join.join
 
-  let meet_skeleton env t ~skeleton ~result ~result_kind =
+  let _meet_skeleton env t ~skeleton ~result ~result_kind =
     let level = Typing_env.max_level env in
     let env =
-      Typing_env.add env name level (Definition (bottom result_kind))
+      Typing_env.add env result level (Definition (bottom result_kind))
+    in
+    let env =
+      Meet_env.create env
+        ~perm_left:(Name_permutation.create ())
+        ~perm_right:(Name_permutation.create ())
     in
     let _meet_ty, env_extension = meet env t skeleton in
     env_extension
@@ -7358,7 +7406,7 @@ module Expr (Expr : Expr_intf.S) = struct
     type t = private
       | Value of ty_value
       | Naked_number :
-          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
+          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
       | Fabricated of ty_fabricated
 
     and ty_value = of_kind_value ty
@@ -7367,7 +7415,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
     and 'a ty = private
       | Unknown
-      | Ok of 'a
+      | Ok of 'a * Name_permutation.t
       | Bottom
 
     (* Create a simple type from a type.  If the type has an alias at its
@@ -7393,7 +7441,7 @@ module Expr (Expr : Expr_intf.S) = struct
 
     and 'a ty =
       | Unknown
-      | Ok of 'a
+      | Ok of 'a * Name_permutation.t
       | Bottom
 
     let is_unknown t =
@@ -7417,7 +7465,7 @@ module Expr (Expr : Expr_intf.S) = struct
         match unknown_or_join with
         | Unknown -> Unknown
         | Join [] -> Bottom
-        | Join [of_kind_foo] -> Ok of_kind_foo
+        | Join [of_kind_foo, perm] -> Ok (of_kind_foo, perm)
         | Join _ -> Unknown
 
     let create env (t : flambda_type) : t * (Simple.t option) =
@@ -7463,7 +7511,7 @@ module Expr (Expr : Expr_intf.S) = struct
     | Unknown
     | Invalid
 
-  let unknown_proof () = Unknown
+  let _unknown_proof () = Unknown
 
   let prove_naked_float env t
         : Numbers.Float_by_bit_pattern.Set.t proof =
@@ -7473,13 +7521,12 @@ module Expr (Expr : Expr_intf.S) = struct
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_naked_float";
-    match simplified.descr with
+    match simplified with
     | Simplified_type.Naked_number (ty, K.Naked_number.Naked_float) ->
       begin match ty with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Float fs) -> Proved fs
+      | Ok (Float fs, _perm) -> Proved fs
       | Ok _ ->
         (* CR mshinwell: Find out why this case is still possible *)
         wrong_kind ()
@@ -7495,13 +7542,12 @@ module Expr (Expr : Expr_intf.S) = struct
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_naked_int32";
-    match simplified.descr with
+    match simplified with
     | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int32) ->
       begin match ty with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Int32 is) -> Proved is
+      | Ok (Int32 is, _perm) -> Proved is
       | Ok _ -> wrong_kind ()
       end
     | Simplified_type.Naked_number _ -> wrong_kind ()
@@ -7515,13 +7561,12 @@ module Expr (Expr : Expr_intf.S) = struct
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_naked_int64";
-    match simplified.descr with
+    match simplified with
     | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int64) ->
       begin match ty with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Int64 is) -> Proved is
+      | Ok (Int64 is, _perm) -> Proved is
       | Ok _ -> wrong_kind ()
       end
     | Simplified_type.Naked_number _ -> wrong_kind ()
@@ -7535,13 +7580,12 @@ module Expr (Expr : Expr_intf.S) = struct
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_naked_nativeint";
-    match simplified.descr with
+    match simplified with
     | Simplified_type.Naked_number (ty, K.Naked_number.Naked_nativeint) ->
       begin match ty with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Nativeint is) -> Proved is
+      | Ok (Nativeint is, _perm) -> Proved is
       | Ok _ -> wrong_kind ()
       end
     | Simplified_type.Naked_number _ -> wrong_kind ()
@@ -7551,7 +7595,7 @@ module Expr (Expr : Expr_intf.S) = struct
   let prove_unique_naked_float env t : _ proof =
     match prove_naked_float env t with
     | Proved fs ->
-      begin match Float_by_bit_pattern.Set.get_singleton fs with
+      begin match Float.Set.get_singleton fs with
       | Some f -> Proved f
       | None -> Unknown
       end
@@ -7588,27 +7632,24 @@ module Expr (Expr : Expr_intf.S) = struct
     | Unknown -> Unknown
     | Invalid -> Invalid
 
+(*
   let prove_closure env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_closure";
-    match simplified.descr with
+    match simplified with
     | Fabricated ty_fabricated ->
       begin match ty_fabricated with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Closure closure) -> Proved closure
+      | Ok (Closure closure, perm) -> Proved closure
       | Ok _ -> Invalid
       end
     | Value _ -> wrong_kind ()
     | Simplified_type.Naked_number _ -> wrong_kind ()
-
-  let no_blocks ({ known_tags_and_sizes; size_at_least_n; } : blocks) =
-    Tag_and_size.Map.is_empty known_tags_and_sizes
-      && Targetint.OCaml.Map.is_empty size_at_least_n
+*)
 
   type to_lift =
     | Boxed_float of Float.t
@@ -7623,7 +7664,7 @@ module Expr (Expr : Expr_intf.S) = struct
     | Invalid
 
   let reify env ~allow_free_variables t : reification_result =
-    let t, canonical_simple = Typing_env.resolve_aliases (env, t) in
+    let t, canonical_simple = Typing_env.resolve_aliases env t in
   (*
   Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     canonical_simple;
@@ -7631,7 +7672,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let can_lift =
       Name.Set.for_all (fun (name : Name.t) ->
           match name with
-          | Var _ -> false
+          | Var _ | Logical_var _ -> false
           | Symbol _ -> true)
         (Name_occurrences.everything (free_names t))
     in
@@ -7639,7 +7680,6 @@ module Expr (Expr : Expr_intf.S) = struct
     assert (Misc.Stdlib.Option.equal Simple.equal
       canonical_simple canonical_simple');
     if Simplified_type.is_bottom simplified then Invalid
-    else if Simplified_type.is_phantom simplified then Cannot_reify
     else
       let result, canonical_var =
         match canonical_simple with
@@ -7650,7 +7690,7 @@ module Expr (Expr : Expr_intf.S) = struct
             && (not (Typing_env.was_existential_exn env name))
           then None, Some simple
           else None, None
-        | None -> None, None
+        | Some (Name (Logical_var _)) | None -> None, None
       in
       match result with
       | Some result -> result
@@ -7660,61 +7700,53 @@ module Expr (Expr : Expr_intf.S) = struct
           | Some simple -> Term (simple, alias_type_of (kind t) simple)
           | None -> Cannot_reify
         in
-        match simplified.descr with
+        match simplified with
         | Value ty_value ->
           begin match ty_value with
           | Unknown -> try_canonical_var ()
           | Bottom -> Invalid
-          | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-            begin match blocks_imms.blocks with
-            | Unknown -> try_canonical_var ()
-            | Known blocks ->
-              if not (no_blocks blocks) then try_canonical_var ()
-              else
-                begin match blocks_imms.immediates with
-                | Unknown -> try_canonical_var ()
-                | Known imms ->
-                  begin match Immediate.Map.get_singleton imms with
-                  | Some (imm, _) ->
-                    Term (Simple.const (Tagged_immediate imm), t)
-                  | None -> try_canonical_var ()
-                  end
-                end
-            end
-          | Ok (Boxed_number (Boxed_float ty_naked_number)) ->
+          | Ok (Blocks_and_tagged_immediates { blocks; immediates; }, _perm) ->
+            if not (Blocks.is_empty blocks) then try_canonical_var ()
+            else
+              begin match Immediates.get_singleton immediates with
+              | Some (imm, _env_extension) ->
+                Term (Simple.const (Tagged_immediate imm), t)
+              | None -> try_canonical_var ()
+              end
+          | Ok (Boxed_number (Boxed_float ty_naked_number), _perm) ->
             if not can_lift then try_canonical_var ()
             else
               let contents =
                 of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
               in
               begin match prove_unique_naked_float env contents with
-              | Proved f -> Lift (Boxed_float (Const f))
+              | Proved f -> Lift (Boxed_float f)
               | Unknown -> try_canonical_var ()
               | Invalid -> try_canonical_var ()
               end
-          | Ok (Boxed_number (Boxed_int32 ty_naked_number)) ->
+          | Ok (Boxed_number (Boxed_int32 ty_naked_number), _perm) ->
             if not can_lift then try_canonical_var ()
             else
               let contents =
                 of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
               in
               begin match prove_unique_naked_int32 env contents with
-              | Proved f -> Lift (Boxed_int32 (Const f))
+              | Proved i -> Lift (Boxed_int32 i)
               | Unknown -> try_canonical_var ()
               | Invalid -> try_canonical_var ()
               end
-          | Ok (Boxed_number (Boxed_int64 ty_naked_number)) ->
+          | Ok (Boxed_number (Boxed_int64 ty_naked_number), _perm) ->
             if not can_lift then try_canonical_var ()
             else
               let contents =
                 of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
               in
               begin match prove_unique_naked_int64 env contents with
-              | Proved f -> Lift (Boxed_int64 (Const f))
+              | Proved i -> Lift (Boxed_int64 i)
               | Unknown -> try_canonical_var ()
               | Invalid -> try_canonical_var ()
               end
-          | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
+          | Ok (Boxed_number (Boxed_nativeint ty_naked_number), _perm) ->
             if not can_lift then try_canonical_var ()
             else
               let contents =
@@ -7722,54 +7754,55 @@ module Expr (Expr : Expr_intf.S) = struct
                   K.Naked_number.Naked_nativeint
               in
               begin match prove_unique_naked_nativeint env contents with
-              | Proved f -> Lift (Boxed_nativeint (Const f))
+              | Proved i -> Lift (Boxed_nativeint i)
               | Unknown -> try_canonical_var ()
               | Invalid -> try_canonical_var ()
               end
-          | Ok (Closures _ | String _) -> try_canonical_var ()
+          | Ok ((Closures _ | String _), _perm) -> try_canonical_var ()
           end
         | Simplified_type.Naked_number (ty_naked_number, _) ->
           begin match ty_naked_number with
           | Unknown -> try_canonical_var ()
           | Bottom -> Invalid
-          | Ok (Immediate imms) ->
+          | Ok (Immediate imms, _perm) ->
             begin match Immediate.Set.get_singleton imms with
             | Some imm -> Term (Simple.const (Untagged_immediate imm), t)
             | None -> try_canonical_var ()
             end
-          | Ok (Float fs) ->
-            begin match Float_by_bit_pattern.Set.get_singleton fs with
+          | Ok (Float fs, _perm) ->
+            begin match Float.Set.get_singleton fs with
             | Some f -> Term (Simple.const (Naked_float f), t)
             | None -> try_canonical_var ()
             end
-          | Ok (Int32 is) ->
+          | Ok (Int32 is, _perm) ->
             begin match Int32.Set.get_singleton is with
             | Some i -> Term (Simple.const (Naked_int32 i), t)
             | None -> try_canonical_var ()
             end
-          | Ok (Int64 is) ->
+          | Ok (Int64 is, _perm) ->
             begin match Int64.Set.get_singleton is with
             | Some i -> Term (Simple.const (Naked_int64 i), t)
             | None -> try_canonical_var ()
             end
-          | Ok (Nativeint is) ->
+          | Ok (Nativeint is, _perm) ->
             begin match Targetint.Set.get_singleton is with
             | Some i -> Term (Simple.const (Naked_nativeint i), t)
             | None -> try_canonical_var ()
             end
           end
-        | Fabricated (Ok (Set_of_closures _set_of_closures)) ->
+        | Fabricated (Ok (Set_of_closures _set_of_closures, _perm)) ->
           try_canonical_var ()
-        | Fabricated (Ok (Closure _)) -> try_canonical_var ()
-        | Fabricated (Ok (Discriminant discriminants)) ->
-          begin match Discriminant.Map.get_singleton discriminants with
+        | Fabricated (Ok (Discriminants discriminants, _perm)) ->
+          begin match Discriminants.get_singleton discriminants with
           | None -> try_canonical_var ()
-          | Some (discriminant, { env_extension = _; }) ->
+          | Some (discriminant, _env_extension) ->
+            (* CR mshinwell: Here and above, should the [env_extension] be
+               returned? *)
             Term (Simple.discriminant discriminant, t)
           end
         | Fabricated Unknown -> try_canonical_var ()
         | Fabricated Bottom -> Invalid
-
+(*
   (* CR mshinwell: rename to "prove_must_be_tagged_immediate" *)
   let prove_tagged_immediate env t
         : Immediate.Set.t proof =
@@ -7780,7 +7813,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_tagged_immediate";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -7814,7 +7847,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified
       "prove_tagged_immediate_as_discriminants";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -7865,7 +7898,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_is_tagged_immediate";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -7952,7 +7985,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_get_field_from_block";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8009,7 +8042,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_is_a_block";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8051,7 +8084,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified
       "prove_unboxable_variant_or_block_of_values";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8131,7 +8164,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_float_array";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8190,7 +8223,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_tags";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8233,7 +8266,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_string";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8254,7 +8287,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_boxed_float";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8275,7 +8308,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_boxed_int32";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8296,7 +8329,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_boxed_int64";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8317,7 +8350,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_boxed_nativeint";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8337,7 +8370,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_closures";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8356,7 +8389,7 @@ module Expr (Expr : Expr_intf.S) = struct
     in
     let simplified, canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "prove_sets_of_closures";
-    match simplified.descr with
+    match simplified with
     | Fabricated ty_fabricated ->
       begin match ty_fabricated with
       | Unknown -> Unknown
@@ -8387,7 +8420,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified
       "prove_lengths_of_arrays_or_blocks";
-    match simplified.descr with
+    match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
@@ -8675,7 +8708,7 @@ module Expr (Expr : Expr_intf.S) = struct
     let invalid () = Discriminant.Map.empty in
     let simplified, _canonical_simple = Simplified_type.create env t in
     Simplified_type.check_not_phantom simplified "discriminant_switch_arms";
-    match simplified.descr with
+    match simplified with
     | Fabricated ty_fabricated ->
       begin match ty_fabricated with
       | Unknown -> unknown ()
@@ -8726,4 +8759,5 @@ module Expr (Expr : Expr_intf.S) = struct
                 match prove_boxed_nativeint env unboxee_ty with
                 | Proved _ty_naked_number -> Boxed_nativeint
                 | Invalid | Unknown -> Cannot_unbox
+*)
 end
