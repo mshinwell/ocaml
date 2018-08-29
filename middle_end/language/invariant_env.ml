@@ -98,15 +98,12 @@ end
 
 type t = {
   all_names_seen : Name.Set.t ref;
-  all_mutable_variables_seen : Mutable_variable.Set.t ref;
   all_continuations_seen : Continuation.Set.t ref;
-  all_set_of_closures_ids_seen : Set_of_closures_id.Set.t ref;
   all_closure_ids_seen : Closure_id.Set.t ref;
   uses_of_closure_ids_seen : Closure_id.Set.t ref;
   all_var_within_closures_seen : Var_within_closure.Set.t ref;
   uses_of_var_within_closures_seen : Var_within_closure.Set.t ref;
   names : Flambda_kind.t Name.Map.t;
-  mutable_variables : Flambda_kind.t Mutable_variable.Map.t;
   continuations :
     (Flambda_arity.t * continuation_kind * Continuation_stack.t)
       Continuation.Map.t;
@@ -115,15 +112,12 @@ type t = {
 
 let create () =
   { all_names_seen = ref Name.Set.empty;
-    all_mutable_variables_seen = ref Mutable_variable.Set.empty;
     all_continuations_seen = ref Continuation.Set.empty;
-    all_set_of_closures_ids_seen = ref Set_of_closures_id.Set.empty;
     all_closure_ids_seen = ref Closure_id.Set.empty;
     uses_of_closure_ids_seen = ref Closure_id.Set.empty;
     all_var_within_closures_seen = ref Var_within_closure.Set.empty;
     uses_of_var_within_closures_seen = ref Var_within_closure.Set.empty;
     names = Name.Map.empty;
-    mutable_variables = Mutable_variable.Map.empty;
     continuations = Continuation.Map.empty;
     continuation_stack = Continuation_stack.var ();
   }
@@ -166,30 +160,6 @@ let add_kinded_parameters t kinded_params =
         (Kinded_parameter.kind kinded_param))
     t
     kinded_params
-
-let add_mutable_variable t var kind =
-  if Mutable_variable.Map.mem var t.mutable_variables then begin
-    Misc.fatal_errorf "Duplicate binding of mutable variable %a which is \
-        already bound in the current scope"
-      Mutable_variable.print var
-  end;
-  if Mutable_variable.Set.mem var !(t.all_mutable_variables_seen) then begin
-    Misc.fatal_errorf "Duplicate binding of mutable variable %a which is \
-        bound in some other scope"
-      Mutable_variable.print var
-  end;
-  let compilation_unit = Compilation_unit.get_current_exn () in
-  if not (Mutable_variable.in_compilation_unit var compilation_unit) then begin
-    Misc.fatal_errorf "Binding occurrence of mutable variable %a cannot occur \
-        in this compilation unit since the variable is from another \
-        compilation unit"
-      Mutable_variable.print var
-  end;
-  t.all_mutable_variables_seen :=
-    Mutable_variable.Set.add var !(t.all_mutable_variables_seen);
-  { t with
-    mutable_variables = Mutable_variable.Map.add var kind t.mutable_variables;
-  }
 
 let add_symbol t sym kind =
   let name = Name.symbol sym in
@@ -303,11 +273,6 @@ let check_variables_are_bound_and_of_kind t vars desired_kind =
       check_variable_is_bound_and_of_kind t var desired_kind)
     vars
 
-let check_mutable_variable_is_bound t var =
-  if not (Mutable_variable.Map.mem var t.mutable_variables) then begin
-    Misc.fatal_errorf "Unbound mutable variable %a" Mutable_variable.print var
-  end
-
 let check_symbol_is_bound t sym =
   check_name_is_bound t (Name.symbol sym)
 
@@ -336,32 +301,10 @@ let kind_of_simple t (simple : Simple.t) =
 
 let kind_of_variable t var = kind_of_name t (Name.var var)
 
-let kind_of_mutable_variable t var =
-  match Mutable_variable.Map.find var t.mutable_variables with
-  | exception Not_found ->
-    Misc.fatal_errorf "Unbound mutable variable %a" Mutable_variable.print var
-  | kind -> kind
-
 let current_continuation_stack t = t.continuation_stack
 
 let set_current_continuation_stack t continuation_stack =
   { t with continuation_stack; }
-
-let add_set_of_closures_id t id =
-  if Set_of_closures_id.Set.mem id !(t.all_set_of_closures_ids_seen) then begin
-    Misc.fatal_errorf "Set of closures ID %a occurs more than once in the \
-        program"
-      Set_of_closures_id.print id
-  end;
-  let compilation_unit = Compilation_unit.get_current_exn () in
-  if not (Set_of_closures_id.in_compilation_unit id compilation_unit) then begin
-    Misc.fatal_errorf "Binding occurrence of set-of-closures ID %a cannot \
-        occur in this compilation unit since the set-of-closures ID is from \
-        another compilation unit"
-      Set_of_closures_id.print id
-  end;
-  t.all_set_of_closures_ids_seen :=
-    Set_of_closures_id.Set.add id !(t.all_set_of_closures_ids_seen)
 
 let add_closure_id t id =
   (* The same closure ID may be bound multiple times in the same program, so
@@ -424,7 +367,6 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
   let t =
     { t with
       names;
-      mutable_variables = Mutable_variable.Map.empty;
       continuations;
       continuation_stack;
     }

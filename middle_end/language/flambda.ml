@@ -20,23 +20,11 @@ module F0 = Flambda0
 module K = Flambda_kind
 module T = F0.Flambda_type
 
-type assign = F0.assign
 type mutable_or_immutable = Flambda0.mutable_or_immutable
-type inline_attribute = F0.inline_attribute =
-  | Always_inline
-  | Never_inline
-  | Unroll of int
-  | Default_inline
-type specialise_attribute = F0.specialise_attribute =
-  | Always_specialise
-  | Never_specialise
-  | Default_specialise
 type recursive = F0.recursive
 
-module Free_var = F0.Free_var
 module Let = F0.Let
 module Let_cont = F0.Let_cont
-module Let_mutable = F0.Let_mutable
 module Switch = F0.Switch
 module Trap_action = F0.Trap_action
 module With_free_names = F0.With_free_names
@@ -44,50 +32,46 @@ module With_free_names = F0.With_free_names
 module Call_kind = struct
   include F0.Call_kind
 
-  let rename_names t ~f =
+  let apply_name_permutation t perm =
     match t with
-    | Function (Direct _)
+    | Function (Direct { closure_id = _; return_arity = _; })
     | Function Indirect_unknown_arity
-    | Function (Indirect_known_arity _)
-    | C_call _ -> t
+    | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+    | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
     | Method { kind; obj; } ->
-      let obj' = f obj in
+      let obj' = Name_permutation.apply_name perm obj in
       if obj == obj' then t
       else
         Method {
           kind;
-          obj = f obj;
+          obj = obj';
         }
 end
 
 module Apply = struct
   include F0.Apply
 
-  let rename_names t ~f =
+  let apply_name_permutation
+        { func;
+          continuation;
+          exn_continuation;
+          args;
+          call_kind;
+          dbg;
+          inline;
+          specialise;
+        }
+        perm =
     (* CR mshinwell: add phys-equal checks *)
-    { func = f t.func;
-      continuation = t.continuation;
-      exn_continuation = t.exn_continuation;
-      args = List.map (fun arg -> Simple.map_name arg ~f) t.args;
-      call_kind = Call_kind.rename_names t.call_kind ~f;
-      dbg = t.dbg;
-      inline = t.inline;
-      specialise = t.specialise;
+    { func = Name_permutation.apply_name perm func;
+      continuation = continuation;
+      exn_continuation = exn_continuation;
+      args = Name_permutation.apply_simples perm args;
+      call_kind = Call_kind.apply_name_permutation call_kind perm;
+      dbg = dbg;
+      inline = inline;
+      specialise = specialise;
     }
-end
-
-module Free_vars = struct
-  include F0.Free_vars
-
-  (* let clean_projections (t : Closure_id.t) = *)
-  (*   Closure_id.Map.map (fun (free_var : Free_var.t) -> *)
-  (*       match free_var.projection with *)
-  (*       | None -> free_var *)
-  (*       | Some projection -> *)
-  (*         let from = Projection.projecting_from projection in *)
-  (*         if Closure_id.Map.mem from t then free_var *)
-  (*         else ({ free_var with projection = None; } : Free_var.t)) *)
-  (*     t *)
 end
 
 module Reachable = struct
@@ -260,7 +244,6 @@ end = struct
     | Let { defining_expr; body; _ } ->
       Named.no_effects_or_coeffects defining_expr
         && no_effects_or_coeffects body
-    | Let_mutable { body; _ } -> no_effects_or_coeffects body
     | Let_cont { body; handlers; } ->
       no_effects_or_coeffects body
         && Let_cont_handlers.no_effects_or_coeffects handlers
@@ -272,7 +255,6 @@ end = struct
   let description_of_toplevel_node (expr : Expr.t) =
     match expr with
     | Let { var; _ } -> Format.asprintf "let %a" Variable.print var
-    | Let_mutable _ -> "let_mutable"
     | Let_cont  _ -> "let_cont"
     | Apply _ -> "apply"
     | Apply_cont  _ -> "apply_cont"
@@ -351,7 +333,6 @@ end = struct
       | Let { defining_expr; body; _ } ->
         f_named defining_expr;
         f body
-      | Let_mutable { body; _ } -> f body
       | Let_cont { body; handlers =
           Non_recursive { handler = { handler; _ }; _ } } ->
         f body;
@@ -373,7 +354,7 @@ end = struct
     let iter_sets_of_closures f t =
       iter_named (function
           | Set_of_closures clos -> f clos
-          | Simple _ | Read_mutable _ | Assign _ | Prim _ -> ())
+          | Simple _ | Prim _ -> ())
         t
 
     let iter_function_bodies t ~f =
@@ -413,12 +394,6 @@ end = struct
             match tree with
             | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> tree
             | Let _ -> assert false
-            | Let_mutable mutable_let ->
-              let new_body = aux mutable_let.body in
-              if new_body == mutable_let.body then
-                tree
-              else
-                Let_mutable { mutable_let with body = new_body }
             (* CR-soon mshinwell: There's too much code duplication here with
                [map_subexpressions]. *)
             | Let_cont { body; handlers; } ->
@@ -461,8 +436,8 @@ end = struct
       and aux_named (id : Variable.t) _kind (named : Named.t) =
         let named : Named.t =
           match named with
-          | Simple _ | Read_mutable _ | Assign _ | Prim _ -> named
-          | Set_of_closures ({ function_decls; free_vars;
+          | Simple _ | Prim _ -> named
+          | Set_of_closures ({ function_decls; closure_elements;
               direct_call_surrogates }) ->
             if toplevel then named
             else begin
@@ -486,7 +461,7 @@ end = struct
                   Function_declarations.update function_decls ~funs
                 in
                 let set_of_closures =
-                  Set_of_closures.create ~function_decls ~in_closure:free_vars
+                  Set_of_closures.create ~function_decls ~closure_elements
                     ~direct_call_surrogates
                 in
                 Set_of_closures set_of_closures
@@ -515,12 +490,6 @@ end = struct
           tree
         else
           create_let var kind new_named new_body
-      | Let_mutable mutable_let ->
-        let new_body = f mutable_let.body in
-        if new_body == mutable_let.body then
-          tree
-        else
-          Let_mutable { mutable_let with body = new_body }
       | Let_cont { body; handlers; } ->
         let new_body = f body in
         match handlers with
@@ -565,9 +534,7 @@ end = struct
               named
             else
               Simple new_simple
-          | (Set_of_closures _ | Read_mutable _ | Prim _ | Assign _)
-              as named ->
-            named)
+          | (Set_of_closures _ | Prim _) as named -> named)
         tree
 
     let map_apply tree ~f =
@@ -588,7 +555,7 @@ end = struct
             let new_set_of_closures = f set_of_closures in
             if new_set_of_closures == set_of_closures then named
             else Set_of_closures new_set_of_closures
-          | (Simple _ | Assign _ | Prim _ | Read_mutable _) as named -> named)
+          | (Simple _ | Prim _) as named -> named)
         tree
 
     let map_function_bodies ?ignore_stubs t ~f =
@@ -613,7 +580,7 @@ end = struct
               let new_set_of_closures = f set_of_closures in
               if new_set_of_closures == set_of_closures then named
               else Set_of_closures new_set_of_closures
-            | (Simple _ | Read_mutable _ | Prim _ | Assign _) as named -> named)
+            | (Simple _ | Prim _) as named -> named)
           tree
       end
   end
@@ -674,11 +641,6 @@ end = struct
       (* Note that this does not have to traverse subexpressions; the call to
          [map_toplevel] below will deal with that. *)
       match expr with
-      | Let_mutable mutable_let ->
-        let initial_value =
-          Name_permutation.apply_simple perm mutable_let.initial_value
-        in
-        Let_mutable { mutable_let with initial_value }
       | Apply apply ->
         Apply (Apply.apply_name_permutation apply perm)
       | Switch (cond, sw) ->
@@ -688,11 +650,13 @@ end = struct
         Apply_cont (cont, trap_action, args)
       | Let_cont { body; handlers; } ->
         let f handlers =
+          (* CR mshinwell: use record pattern match *)
           Continuation.Map.map (fun (handler : Continuation_handler.t)
                   : Continuation_handler.t ->
               { handler with
                 params =
-                  Flambda_type.Parameters.rename_variables handler.params sb';
+                  Flambda_type.Parameters.apply_name_permutation
+                    handler.params perm;
               })
             handlers
         in
@@ -708,24 +672,17 @@ end = struct
         let simple' = Name_permutation.apply_simple perm simple in
         if simple == simple' then named
         else Simple simple'
-      | Read_mutable _ -> named
-      | Assign { being_assigned; new_value; } ->
-        let being_assigned =
-          Name_permutation.apply_mutable_variable perm being_assigned
-        in
-        let new_value = Name_permutation.apply_simple perm new_value in
-        Assign { being_assigned; new_value; }
       | Set_of_closures set_of_closures ->
         let function_decls =
           Function_declarations.apply_name_permutation perm
             set_of_closures.function_decls
-            sb'
+            perm
         in
         let set_of_closures =
           Set_of_closures.create ~function_decls
-            ~in_closure:
-              (Var_within_closure.Map.map (fun free_var ->
-                  Free_var.apply_name_permutation free_var perm)
+            ~closure_elements:
+              (Var_within_closure.Map.map (fun simple ->
+                  Name_permutation.apply_simple perm simple)
                 set_of_closures.free_vars)
             ~direct_call_surrogates:set_of_closures.direct_call_surrogates
         in
@@ -767,7 +724,7 @@ end = struct
           use exn_handler
         | Switch (_, switch) ->
           Switch.iter switch ~f:(fun _value cont -> use cont)
-        | Let _ | Let_mutable _ | Let_cont _ | Invalid _ -> ())
+        | Let _ | Let_cont _ | Invalid _ -> ())
       (fun _named -> ())
       expr;
     Continuation.Tbl.to_map counts
@@ -809,30 +766,6 @@ end = struct
         end;
         let env = E.add_variable env var kind in
         loop env body
-      | Let_mutable _ ->
-        Misc.fatal_errorf "Let_mutable not yet supported"
-(* { var; initial_value; body; contents_type; } ->
-        let initial_value_kind = E.kind_of_simple env initial_value in
-        let contents_kind =
-          Flambda_type.kind ~type_of_name:
-            (fun ?local_env (id : Flambda_type.Name_or_export_id.t) ->
-              ignore local_env;
-              match id with
-              | Name name -> E.type_of_name_option env name
-              | Export_id _ -> None)
-            contents_type
-        in
-        if not (K.equal initial_value_kind contents_kind) then begin
-          Misc.fatal_errorf "Initial value of [Let_mutable] term has kind %a \
-              whereas %a was expected: %a"
-            K.print initial_value_kind
-            Flambda_type.print contents_type
-            print t
-        end;
-        let contents_ty = Flambda_type.unknown contents_kind in
-        let env = E.add_mutable_variable env var contents_ty in
-        loop env body
-*)
       | Let_cont { body; handlers; } ->
         let handler_stack = E.Continuation_stack.var () in
         let env =
@@ -1097,21 +1030,16 @@ end = struct
   let dummy_value (kind : K.t) : t =
     let simple = 
       match kind with
-      | Value | Phantom (_, Value) -> Simple.const_zero
-      | Naked_number Naked_immediate
-      | Phantom (_, Naked_number Naked_immediate) ->
+      | Value -> Simple.const_zero
+      | Naked_number Naked_immediate ->
         Simple.const (Untagged_immediate Immediate.zero)
-      | Naked_number Naked_float
-      | Phantom (_, Naked_number Naked_float) ->
+      | Naked_number Naked_float ->
         Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
-      | Naked_number Naked_int32
-      | Phantom (_, Naked_number Naked_int32) ->
+      | Naked_number Naked_int32 ->
         Simple.const (Naked_int32 Int32.zero)
-      | Naked_number Naked_int64
-      | Phantom (_, Naked_number Naked_int64) ->
+      | Naked_number Naked_int64 ->
         Simple.const (Naked_int64 Int64.zero)
-      | Naked_number Naked_nativeint
-      | Phantom (_, Naked_number Naked_nativeint) ->
+      | Naked_number Naked_nativeint ->
         Simple.const (Naked_nativeint Targetint.zero)
       | Fabricated | Phantom (_, Fabricated) ->
         Simple.discriminant Discriminant.zero
@@ -1446,7 +1374,7 @@ end = struct
           (* CR-soon mshinwell: check function_decl.all_symbols *)
           let { Function_declaration. params; body; stub; dbg; my_closure;
                 continuation_param = return_cont;
-                exn_continuation_param; results; _ } =
+                exn_continuation_param; result_arity; _ } =
             function_decl
           in
           let return_arity = T.Parameters.arity results in
@@ -1593,8 +1521,7 @@ end and Function_declarations : sig
     -> Closure_id.Set.t
   val all_functions_parameters : t -> Variable.Set.t
   val contains_stub : t -> bool
-  val freshen : t -> Freshening.t -> t
-  val rename_names : t -> Name.t Name.Map.t -> t
+  include Contains_names.S with type t := t
 end = struct
   include F0.Function_declarations
 
@@ -1714,8 +1641,7 @@ end = struct
          Can't this subst be put into the environment and then applied
          as needed? *)
       let body =
-        Expr.toplevel_substitution subst
-          func_decl.body
+        Expr.toplevel_substitution subst func_decl.body
       in
       let function_decl =
         Function_declaration.update_params_results_and_body func_decl
