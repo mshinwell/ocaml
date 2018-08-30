@@ -68,6 +68,7 @@ with_cplugins=false
 with_fpic=false
 flat_float_array=true
 with_flambda_invariants=false
+ocamlopt_x=""
 
 # we distinguish '' (not set) from 'true' (explicitly set by the user)
 with_instrumented_runtime=''
@@ -144,6 +145,8 @@ while : ; do
         host_type=$2; shift;;
     -target*|--target*)
         target_type=$2; shift;;
+    -ocamlopt-x|--ocamlopt-x)
+        ocamlopt_x=$2; shift;;
     -cc*)
         ccoption="$2"; shift;;
     -as)
@@ -2044,6 +2047,16 @@ if $flat_float_array; then
   echo "#define FLAT_FLOAT_ARRAY" >> m.h
 fi
 
+# Cross-compilation hack for Spacetime etc.
+
+case "$ocamlopt_x" in
+    "") config OCAMLOPT_X "./ocamlopt";;
+    *)
+        config OCAMLOPT_X "$ocamlopt_x"
+        with_ocamldoc=""
+        ;;
+esac
+
 # Finish generated files
 
 cclibs="$cclibs $mathlib"
@@ -2178,6 +2191,9 @@ else
   fi
   if test "$system" = "unknown"; then : ; else
   inf "        OS variant................ $system"
+  fi
+  if test "$ocamlopt_x" == ""; then : ; else
+      inf "        cross ocamlopt binary .... $ocamlopt_x"
   fi
   inf "        C compiler used........... $cc"
   inf "        options for compiling..... $common_cflags"

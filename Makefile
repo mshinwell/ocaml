@@ -59,7 +59,11 @@ CAMLYACC ?= boot/ocamlyacc
 include stdlib/StdlibModules
 
 CAMLC=$(CAMLRUN) boot/ocamlc -g -nostdlib -I boot -use-prims byterun/primitives
-CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
+ifeq "$(OCAMLOPT_X)" "./ocamlopt"
+  CAMLOPT=$(CAMLRUN) $(OCAMLOPT_X) -g -nostdlib -I stdlib -I otherlibs/dynlink
+else
+  CAMLOPT=$(OCAMLOPT_X) -g
+endif
 ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
         -I middle_end/base_types -I asmcomp -I asmcomp/debug \
@@ -82,6 +86,12 @@ CAMLDEP=$(CAMLRUN) boot/ocamlc -depend
 DEPFLAGS=$(INCLUDES)
 
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
+
+ifeq "$(OCAMLOPT_X)" "./ocamlopt"
+	OCAMLTESTOPT_OPT=ocamltest.opt
+else
+	OCAMLTESTOPT_OPT=
+endif
 
 UTILS=utils/config.cmo utils/misc.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
@@ -479,7 +489,7 @@ opt.opt:
 	$(MAKE) ocamlopt.opt
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
-	  ocamltest.opt
+	  $(OCAMLTESTOPT_OPT)
 
 # Core bootstrapping cycle
 .PHONY: coreboot
@@ -901,7 +911,7 @@ partialclean::
 	rm -f ocamlopt.opt
 
 $(COMMON:.cmo=.cmx) $(BYTECOMP:.cmo=.cmx) $(MIDDLE_END:.cmo=.cmx) \
-$(ASMCOMP:.cmo=.cmx): ocamlopt
+$(ASMCOMP:.cmo=.cmx): $(OCAMLOPT_X)
 
 # The predefined exceptions and primitives
 
