@@ -2,6 +2,7 @@
   supports_native_toplevel
   supports_debug_runtime
   supports_instrumented_runtime
+  supports_x_hack
   ))
  (features (
    normal
