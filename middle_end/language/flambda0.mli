@@ -288,10 +288,6 @@ module rec Expr : sig
   (* CR-someday mshinwell: We should make "direct applications should not have
      overapplication" be an invariant throughout.  At the moment I think this is
      only true after [Simplify] has split overapplications. *)
-  (* CR-someday mshinwell: What about checks for shadowed variables and
-     symbols? *)
-
-  val toplevel_substitution : Name.t Name.Map.t -> t -> t
 
   val description_of_toplevel_node : t -> string
 
@@ -528,9 +524,7 @@ end and Let0 : sig
       result will be returned in O(1) time. *)
   val free_names_of_body : t -> Name_occurrences.t
 end and Let : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_variable) (Let0).t
-  end
+  include Contains_names.S
 
   (** Create a let-expression. *)
   val create
@@ -539,6 +533,9 @@ end and Let : sig
     -> defining_expr:Named.t
     -> body:Expr.t
     -> t
+
+  (** Deconstruct a let-expression. *)
+  val pattern_match : t -> f:(Variable.t -> Let0.t -> 'a) -> 'a
 
 (*
   (** Apply the specified function [f] to the defining expression of the
@@ -636,31 +633,33 @@ end and Let_cont : sig
 
   val print : Format.formatter -> t -> unit
 end and Non_recursive_let_cont_handler0 : sig
-  type t
-
-  include Contains_names.S with type t := t
+  include Contains_names.S
 
   val handler : t -> Continuation_handler.t
 
   val body : t -> Expr.t
 end and Non_recursive_let_cont_handler : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_continuation)
-      (Non_recursive_let_cont_handler0)
-  end
-end and Recursive_let_cont_handlers0 : sig
-  type t
+  include Contains_names.S
 
-  include Contains_names.S with type t := t
+  (** Deconstruct a continuation binding. *)
+  val pattern_match
+     : t
+    -> f:(Continuation.t -> Non_recursive_let_cont_handler0.t -> 'a)
+    -> 'a
+end and Recursive_let_cont_handlers0 : sig
+  include Contains_names.S
 
   val handlers : t -> Continuation_handlers.t
 
   val body : t -> Expr.t
 end and Recursive_let_cont_handlers : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_continuations)
-      (Recursive_let_cont_handlers0)
-  end
+  include Contains_names.S
+
+  (** Deconstruct a continuation binding. *)
+  val pattern_match
+     : t
+    -> f:(Continuation.t -> Recursive_let_cont_handler0.t -> 'a)
+    -> 'a
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end and Continuation_handler0 : sig
@@ -692,12 +691,11 @@ end and Continuation_handler0 : sig
 
   (** The code of the continuation itself. *)
   val handler : t -> Expr.t
-end and Continuation_handler :
-  module type of struct
-    include Name_abstraction.Make (Bound_continuations)
-      (Continuation_handler0)
-  end
-and Set_of_closures : sig
+end and Continuation_handler : sig
+  include Contains_names.S
+
+  val pattern_match : t -> f:(Continuation_handler0.t -> 'a) -> 'a
+end and Set_of_closures : sig
   type t
 
   (** Create a set of closures given the code for its functions and the
@@ -845,6 +843,7 @@ end and Function_declarations : sig
       to the "fun_var"s (if any) used in the body of the function associated
       with that "fun_var".
   *)
+(*
   val fun_vars_referenced_in_decls
      : t
     -> backend:(module Backend_intf.S)
@@ -857,6 +856,7 @@ end and Function_declarations : sig
     -> backend:(module Backend_intf.S)
     -> t
     -> Closure_id.Set.t
+*)
 
   val all_functions_parameters : t -> Variable.Set.t
 

@@ -1430,7 +1430,7 @@ end = struct
       (fun _named -> ())
       expr;
     Continuation.Tbl.to_map counts
-end Expr_with_permutation : sig
+end and Expr_with_permutation : sig
   include Contains_names.S
   val create : ?perm:Name_permutation.t -> Expr.t -> t
   val expr : t -> Expr.t
@@ -1809,7 +1809,7 @@ end = struct
 *)
 end and Let : sig
   include module type of struct
-    include Name_abstraction.Make (Bound_variable) (Let0).t
+    include Name_abstraction.Make (Bound_variable) (Let0)
   end
 
   val create
@@ -2197,7 +2197,7 @@ end and Continuation_handler :
     include Name_abstraction.Make (Bound_continuations)
       (Continuation_handler0)
   end
-end = struct
+= struct
   include Name_abstraction.Make (Bound_continuations) (Continuation_handler0)
 end and Set_of_closures : sig
   type t = {

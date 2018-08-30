@@ -19,4 +19,4 @@
 include Continuation
 
 let permutation_to_swap t1 t2 =
-  Name_permutation.add_continuation (Name_permutation.create ()) k1 k2
+  Name_permutation.add_continuation (Name_permutation.create ()) t1 t2

@@ -18,7 +18,7 @@
 
 type t = private
   | Reachable of Flambda.Named.t
-  | Invalid of Flambda.invalid_term_semantics
+  | Invalid of Invalid_term_semantics.t
 
 val reachable : Flambda.Named.t -> t
 val invalid : unit -> t
