@@ -708,7 +708,7 @@ end = struct
       else Let let_expr'
     | Let_cont let_cont ->
       let let_cont = Let_cont.apply_name_permutation let_cont perm in
-      if let_cont == let_cont' then t
+       if let_cont == let_cont' then t
       else Let_cont let_cont'
     | Apply apply ->
       let apply' = Apply.apply_name_permutation apply perm in
@@ -1139,23 +1139,96 @@ end = struct
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
+end and Non_recursive_let_cont_handler0 : sig
+  include Contains_names.S
+  val create
+     : handler:Continuation_handler.t
+    -> body:Expr.t
+    -> t
+  val handler : t -> Continuation_handler.t
+  val body : t -> Expr.t
+end = struct
+  type t = {
+    handler : Continuation_handler.t;
+    body : Expr_with_permutation.t;
+  }
+
+  let free_names t =
+    Name_occurrences.union (Continuation_handler.free_names handler)
+      (Expr_with_permutation.free_names body)
+
+  let apply_name_permutation { handler; body; } perm =
+    let handler' =
+      Continuation_handlers.apply_name_permutation handler perm
+    in
+    let body' =
+      Expr_with_permutation.apply_name_permutation body perm
+    in
+    { handler = handler';
+      body = body';
+    }
+end and Non_recursive_let_cont_handler : sig
+  include module type of struct
+    include Name_abstraction.Make (Bound_continuation)
+      (Non_recursive_let_cont_handler0)
+  end
+end = struct
+  include Name_abstraction.Make (Bound_continuation)
+    (Non_recursive_let_cont_handler0)
+end and Recursive_let_cont_handlers0 : sig
+  include Contains_names.S
+  val create
+     : handlers:Continuation_handlers.t
+    -> body:Expr.t
+    -> t
+  val handlers : t -> Continuation_handler.t Continuation.Map.t
+  val body : t -> Expr.t
+end = struct
+  type t = {
+    handlers : Continuation_handlers.t;
+    body : Expr_with_permutation.t;
+  }
+
+  let free_names { handlers; body; } =
+    Name_occurrences.union (Continuation_handlers.free_names handlers)
+      (Expr_with_permutation.free_names body)
+
+  let apply_name_permutation { handlers; body; } perm =
+    let handlers' =
+      Continuation_handlers.apply_name_permutation handlers perm
+    in
+    let body' =
+      Expr_with_permutation.apply_name_permutation body perm
+    in
+    { handlers = handlers';
+      body = body';
+    }
+end and Recursive_let_cont_handlers : sig
+  include module type of struct
+    include Name_abstraction.Make (Bound_continuations)
+      (Recursive_let_cont_handlers0)
+  end
+end = struct
+  include Name_abstraction.Make (Bound_continuations)
+    (Recursive_let_cont_handlers0)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end = struct
   include Continuation_handlers
-end and Continuation_handler : sig
+end and Continuation_handler0 : sig
+  include Contains_names.S
+  val print : Format.formatter -> t -> unit
+  val params : t -> Flambda_type.Parameters.t
+  val stub : t -> bool
+  val is_exn_handler : t -> bool
+  val handler : t -> Expr.t
+end = struct
   type t = {
     params : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
     handler : Expr_with_permutation.t;
   }
-  val print : Format.formatter -> t -> unit
-(*
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-*)
-end = struct
-  include Continuation_handler
 
   let print_with_cache ~cache ppf { params; stub; handler; is_exn_handler; } =
     fprintf ppf "%s%s%a@ =@ %a"
@@ -1165,6 +1238,37 @@ end = struct
       Expr.print handler
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+  let params t = t.params
+  let stub t = t.stub
+  let is_exn_handler t = t.is_exn_handler
+  let handler t = Expr_with_permutation.expr t.handler
+
+  let free_names { params; stub = _; is_exn_handler = _; handler; } =
+    Name_occurrences.union (Flambda_type.Parameters.free_names params)
+      (Expr_with_permutation.free_names handler)
+
+  let apply_name_permutation
+        ({ params; stub = _; is_exn_handler = _; handler; } as t)
+        perm =
+    let params' =
+      Flambda_type.Parameters.apply_name_permutation params perm
+    in
+    let handler' = Expr_with_permutation.apply_name_permutation handler perm in
+    if params == params' && handler == handler' then t
+    else
+      { params = params';
+        stub;
+        is_exn_handler;
+        handler = handler';
+      }
+end and Continuation_handler :
+  module type of struct
+    include Name_abstraction.Make (Bound_continuations)
+      (Continuation_handler0)
+  end
+end = struct
+  include Name_abstraction.Make (Bound_continuations) (Continuation_handler0)
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -1418,7 +1522,6 @@ end = struct
       params;
       body = Expr_with_permutation.create body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
-      free_names_in_body = Expr.free_names body;
       result_arity;
       stub;
       dbg;
@@ -1427,6 +1530,54 @@ end = struct
       is_a_functor;
       my_closure;
     }
+
+  (* CR mshinwell: use record pattern match *)
+  let print_with_cache ~cache closure_id ppf (f : t) =
+    let stub =
+      if f.stub then
+        " *stub*"
+      else
+        ""
+    in
+    let is_a_functor =
+      if f.is_a_functor then
+        " *functor*"
+      else
+        ""
+    in
+    (* CR mshinwell: Use [Inline_attribute.print_...] etc. *)
+    let inline =
+      match f.inline with
+      | Always_inline -> " *inline*"
+      | Never_inline -> " *never_inline*"
+      | Unroll _ -> " *unroll*"
+      | Default_inline -> ""
+    in
+    let specialise =
+      match f.specialise with
+      | Always_specialise -> " *specialise*"
+      | Never_specialise -> " *never_specialise*"
+      | Default_specialise -> ""
+    in
+    fprintf ppf
+      "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
+        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->@ @[<2>%a@])@]@ "
+      Closure_id.print closure_id
+      stub
+      is_a_functor inline specialise
+      Variable.print f.my_closure
+      Closure_origin.print f.closure_origin
+      (Misc_color.bold_cyan ())
+      (Misc_color.reset ())
+      Continuation.print f.continuation_param
+      Continuation.print f.exn_continuation_param
+      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.params
+      (Misc_color.bold_white ())
+      Flambda_arity.print f.result_arity
+      (Misc_color.reset ())
+      (Expr.print_with_cache ~cache) f.body
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   (* CR mshinwell: use record pattern match *)
   let update_body t ~body : t =
@@ -1516,54 +1667,6 @@ end = struct
         is_a_functor;
         my_closure;
       }
-
-  (* CR mshinwell: use record pattern match *)
-  let print_with_cache ~cache closure_id ppf (f : t) =
-    let stub =
-      if f.stub then
-        " *stub*"
-      else
-        ""
-    in
-    let is_a_functor =
-      if f.is_a_functor then
-        " *functor*"
-      else
-        ""
-    in
-    (* CR mshinwell: Use [Inline_attribute.print_...] etc. *)
-    let inline =
-      match f.inline with
-      | Always_inline -> " *inline*"
-      | Never_inline -> " *never_inline*"
-      | Unroll _ -> " *unroll*"
-      | Default_inline -> ""
-    in
-    let specialise =
-      match f.specialise with
-      | Always_specialise -> " *specialise*"
-      | Never_specialise -> " *never_specialise*"
-      | Default_specialise -> ""
-    in
-    fprintf ppf
-      "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
-        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->@ @[<2>%a@])@]@ "
-      Closure_id.print closure_id
-      stub
-      is_a_functor inline specialise
-      Variable.print f.my_closure
-      Closure_origin.print f.closure_origin
-      (Misc_color.bold_cyan ())
-      (Misc_color.reset ())
-      Continuation.print f.continuation_param
-      Continuation.print f.exn_continuation_param
-      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.params
-      (Misc_color.bold_white ())
-      Flambda_arity.print f.result_arity
-      (Misc_color.reset ())
-      (Expr.print_with_cache ~cache) f.body
-
-  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
   = Flambda_type0.Make (Expr)
 

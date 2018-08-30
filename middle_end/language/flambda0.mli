@@ -433,7 +433,7 @@ end and Recursive_let_cont_handlers0 : sig
 
   include Contains_names.S with type t := t
 
-  val handlers : t -> Continuation_handler.t Continuation.Map.t
+  val handlers : t -> Continuation_handlers.t
 
   val body : t -> Expr.t
 end and Recursive_let_cont_handlers : sig
@@ -444,12 +444,12 @@ end and Recursive_let_cont_handlers : sig
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end and Continuation_handler0 : sig
-  type t
+  include Contains_names.S
 
   val print : Format.formatter -> t -> unit
 
   (** The parameters of the continuation. *)
-  val params : t -> Flambda_type.Parameters.t;
+  val params : t -> Flambda_type.Parameters.t
 
   (** Whether the continuation is a compiler-generated wrapper that should
       always be inlined. *)
@@ -473,7 +473,7 @@ end and Continuation_handler0 : sig
 end and Continuation_handler :
   module type of struct
     include Name_abstraction.Make (Bound_continuations)
-      (Recursive_let_cont_handlers0)
+      (Continuation_handler0)
   end
 and Set_of_closures : sig
   type t
