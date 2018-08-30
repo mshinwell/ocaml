@@ -16,7 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Intermediate language used for tree-based analysis and optimization.
+(** The terms of the intermediate language used for tree-based analysis
+    and optimization.
 
     Flambda expressions augment Ilambda expressions by adding constructs for:
     - the construction and manipulation of closures; and
@@ -35,7 +36,7 @@ module Call_kind : sig
         (* CR mshinwell: Should this arity really permit "bottom"? *)
         return_arity : Flambda_arity.t;
         (** [return_arity] describes what the callee returns.  It matches up
-            with the arity of [continuation] in the enclosing [apply]
+            with the arity of [continuation] in the enclosing [Apply.t]
             record. *)
       }
     | Indirect_unknown_arity
@@ -55,6 +56,8 @@ module Call_kind : sig
         return_arity : Flambda_arity.t;
       }
 
+  include Contains_names.S with type t := t
+
   val return_arity : t -> Flambda_arity.t
 end
 
@@ -62,9 +65,7 @@ end
     arguments. *)
 module Apply : sig
   type t = {
-    (* CR-soon mshinwell: rename func -> callee, and
-       lhs_of_application -> callee *)
-    func : Name.t;
+    callee : Name.t;
     continuation : Continuation.t;
     exn_continuation : Continuation.t;
     (** Where to send the result of the application. *)
@@ -109,37 +110,28 @@ end
 
 module Switch : sig
   (** Conditional control flow (the only such form).  Scrutinees of [Switch]es
-      are [Discriminant]s of kind [Fabricated]---not regular integers, or
-      similar. *)
+      are [Discriminant]s of kind [Fabricated]---not regular integers or
+      similar.  There are no default cases.  Switches always have at least
+      two cases. *)
 
-  (* CR mshinwell: add invariant function *)
   type t
 
+  include Map.With_set with type t := t
+
+  val invariant : t -> bool
+
+  (** Call the given function [f] on each (discriminant, destination) pair
+      in the switch. *)
   val iter : t -> f:(Discriminant.t -> Continuation.t -> unit) -> unit
 
+  (** Where the switch will jump to for each possible value of the
+      discriminant. *)
   val arms : t -> Continuation.t Discriminant.Map.t
 
+  (** How many cases the switch has.  (Note that this is not the number of
+      destinations reached by the switch, which may be a smaller number.) *)
   val num_arms : t -> int
-
-  include Map.With_set with type t := t
 end
-
-(** What the optimizer should do when it reaches a term that is known to be
-    invalid (for example because it is not type correct).  In all cases, code
-    _after_ invalid code will be deleted. *)
-type invalid_term_semantics =
-  | Treat_as_unreachable
-  (** Invalid code should be treated as unreachable and thus deleted.  The
-      unreachability property may be propagated backwards through the term
-      possibly causing other parts to be deleted. *)
-  | Halt_and_catch_fire
-  (** Invalid code should be replaced by an abort trap.  No back-propagation
-      is performed. *)
-
-val print_invalid_term_semantics
-   : Format.formatter
-  -> invalid_term_semantics
-  -> unit
 
 type recursive =
   | Non_recursive
@@ -166,8 +158,8 @@ module rec Expr : sig
         application for an inlined body (unlike in ANF form).  This is important
         for compilation speed.
 
-      See comments on the [let_cont] type below for information about the form
-      of continuations used.
+      See comments on the [Let_cont.t] type below for information about the
+      form of continuations used.
 
       Exception flow is currently handled (for simplicity) using explicit push
       and pop trap operations (see above) rather than double-barrelled CPS.
@@ -177,29 +169,43 @@ module rec Expr : sig
   *)
   type t =
     | Let of Let.t
+    (** Bind a variable.  There can be no effect on control flow (save for
+        asynchronous operations such as the invocation of finalisers or
+        signal handlers as a result of reaching a safe point). *)
     | Let_cont of Let_cont.t
+    (** Define one or more continuations. *)
     | Apply of Apply.t
+    (** Call an OCaml function, external function or method. *)
     | Apply_cont of Continuation.t * Trap_action.t option * Simple.t list
+    (** Call a continuation, optionally adding or removing exception trap
+        frames from the stack, which thus allows for the raising of
+        exceptions. *)
     | Switch of Name.t * Switch.t
-    | Invalid of invalid_term_semantics
+    (** Conditional control flow. *)
+    | Invalid of Invalid_term_semantics.t
+    (** Code proved type-incorrect and therefore unreachable. *)
 
-  (** Creates a [Let] expression.  (This computes the free variables of the
-      defining expression and the body.) *)
+  include Contains_names.S with type t := t
+
+  val print : Format.formatter -> t -> unit
+
+  val invariant : Invariant_env.t -> t -> unit
+
+  (** Creates a [Let] expression. *)
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
 
-  (** Create a [Switch] expression.  The caller is responsible for doing
-      transformations such as generating an [Apply_cont] instead of a
-      single-arm switch.  The only thing that is forbidden here is a zero-arm
-      switch. *)
+  type switch_creation_result = private
+    | Have_not_deleted_branch
+    | Have_deleted_branch
+
+  (** Create a [Switch] expression, save that zero-arm switches are converted
+      to [Invalid], and one-arm switches to [Apply_cont]. *)
   val create_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Discriminant.Map.t
-    -> Expr.t
-  val create_switch'
-     : scrutinee:Name.t
-    -> arms:Continuation.t Discriminant.Map.t
-    -> Expr.t * bool
+    -> Expr.t * switch_creation_result
 
+(*
   (** Compute the free names of a term.  (This is O(1) for [Let]s).
       If [ignore_uses_as_callee], all free names inside [Apply] expressions
       are ignored.  Likewise [ignore_uses_in_project_var] for [Project_var]
@@ -214,8 +220,6 @@ module rec Expr : sig
     -> t
     -> Name_occurrences.t
 
-  val free_names : t -> Name_occurrences.t
-
   (** Compute _all_ names occurring inside an expression. *)
   val used_names
      : ?ignore_uses_as_callee:unit
@@ -224,6 +228,7 @@ module rec Expr : sig
     -> ?ignore_uses_in_project_var:unit
     -> t
     -> Name_occurrences.t
+*)
 
   (* CR mshinwell: Consider if we want to cache these. *)
   val free_continuations : t -> Continuation.Set.t
@@ -264,6 +269,205 @@ module rec Expr : sig
   val print : Format.formatter -> t -> unit
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  (** Build a [Switch] corresponding to a traditional if-then-else. *)
+  val if_then_else
+     : scrutinee:Name.t
+    -> if_true:Continuation.t
+    -> if_false:Continuation.t
+    -> t
+
+  (** Returns [true] if the given expression has neither effects nor
+      coeffects (see [Flambda_primitive] for documentation on such). *)
+  val no_effects_or_coeffects : t -> bool
+
+  (* CR mshinwell: Check that apply_cont is well-formed when there is a
+     trap installation or removal. *)
+  (* CR-someday pchambart: for sum types, we should probably add an exhaustive
+     pattern in ignores functions to be reminded if a type change *)
+  (* CR-someday mshinwell: We should make "direct applications should not have
+     overapplication" be an invariant throughout.  At the moment I think this is
+     only true after [Simplify] has split overapplications. *)
+  (* CR-someday mshinwell: What about checks for shadowed variables and
+     symbols? *)
+
+  val toplevel_substitution : Name.t Name.Map.t -> t -> t
+
+  val description_of_toplevel_node : t -> string
+
+  (** [bind [var1, expr1; ...; varN, exprN] body] binds using
+      [Immutable] [Let] expressions the given [(var, expr)] pairs around the
+      body. *)
+  val bind
+     : bindings:(Variable.t * Flambda_kind.t * Named.t) list
+    -> body:t
+    -> t
+
+  (** All continuations defined at toplevel within the given expression. *)
+  val all_defined_continuations_toplevel : t -> Continuation.Set.t
+
+  val count_continuation_uses_toplevel : t -> int Continuation.Map.t
+
+  type with_wrapper =
+    | Unchanged of { handler : Continuation_handler.t; }
+    | With_wrapper of {
+        new_cont : Continuation.t;
+        new_handler : Continuation_handler.t;
+        wrapper_handler : Continuation_handler.t;
+      }
+
+  val build_let_cont_with_wrappers
+     : body:t
+    -> recursive:F0.recursive
+    -> with_wrappers:with_wrapper Continuation.Map.t
+    -> t
+
+  (* CR-soon mshinwell: we need to document whether these iterators follow any
+     particular order. *)
+  module Iterators : sig
+    val iter : (t -> unit) -> (Named.t -> unit) -> t -> unit
+
+    val iter_lets
+       : t
+      -> for_defining_expr:(Variable.t -> Flambda_kind.t -> Named.t -> unit)
+      -> for_last_body:(t -> unit)
+      -> for_each_let:(t -> unit)
+      -> unit
+
+    (** Apply the given functions to the immediate subexpressions of the given
+        Flambda expression. *)
+    val iter_subexpressions
+       : (t -> unit)
+      -> (Named.t -> unit)
+      -> t
+      -> unit
+        
+    val iter_expr : (t -> unit) -> t -> unit
+
+    val iter_named : (Named.t -> unit) -> t -> unit
+    
+    val iter_all_immutable_let_and_let_rec_bindings
+       : t
+      -> f:(Variable.t -> Named.t -> unit)
+      -> unit
+
+    val iter_sets_of_closures : (Set_of_closures.t -> unit) -> t -> unit
+
+    (** Apply the given [f] to every function body within the given
+        expression. *)
+    val iter_function_bodies
+       : t
+      -> f:(continuation_arity:Flambda_arity.t
+        -> Continuation.t
+        -> Expr.t
+        -> unit)
+      -> unit
+
+    (** Iterators, mappers and folders in [Toplevel_only] modules never
+        recurse into the bodies of functions. *) 
+    module Toplevel_only : sig 
+      val iter
+        : (t -> unit)
+       -> (Named.t -> unit)
+       -> t
+       -> unit
+
+      val iter_all_immutable_let_and_let_rec_bindings
+         : t
+        -> f:(Variable.t -> Named.t -> unit)
+        -> unit
+    end
+  end
+    
+  module Mappers : sig
+    val map : (t -> t) -> (Named.t -> Named.t) -> t -> t
+
+    val map_lets
+       : t
+      -> for_defining_expr:(Variable.t -> Flambda_kind.t -> Named.t -> Named.t)
+      -> for_last_body:(t -> t)
+      -> after_rebuild:(t -> t)
+      -> t
+
+    val map_subexpressions
+       : (t -> t)
+      -> (Variable.t -> Named.t -> Named.t)
+      -> t
+      -> t
+
+    val map_expr : (t -> t) -> t -> t
+
+    val map_named : (Named.t -> Named.t) -> t -> t
+
+    val map_named_with_id : (Variable.t -> Named.t -> Named.t) -> t -> t
+
+    val map_symbols : t -> f:(Symbol.t -> Symbol.t) -> t
+
+    val map_sets_of_closures
+       : t
+      -> f:(Set_of_closures.t -> Set_of_closures.t)
+      -> t
+  
+    val map_apply : t -> f:(Apply.t -> Apply.t) -> t
+
+    val map_all_immutable_let_and_let_rec_bindings
+       : t
+      -> f:(Variable.t -> Named.t -> Named.t)
+      -> t
+
+    val map_function_bodies
+       : ?ignore_stubs:unit
+      -> t
+      -> f:(continuation_arity:Flambda_arity.t
+        -> Continuation.t
+        -> Expr.t
+        -> Expr.t)
+      -> t
+         
+    module Toplevel_only : sig 
+      val map : (t -> t) -> (Named.t -> Named.t) -> t -> t
+
+      val map_expr : (t -> t) -> t -> t
+
+      val map_named : (Named.t -> Named.t) -> t -> t
+  
+      val map_sets_of_closures
+         : t
+        -> f:(Set_of_closures.t -> Set_of_closures.t)
+        -> t
+    end
+  end
+
+  module Folders : sig
+    (** Used to avoid exceeding the stack limit when handling expressions with
+        multiple consecutive nested [Let]-expressions. This saves rewriting
+        large simplification functions in CPS. This function provides for the
+        rewriting or elimination of expressions during the fold. *)
+    val fold_lets_option
+        : t
+      -> init:'a
+      -> for_defining_expr:(
+          'a
+        -> Variable.t
+        -> Flambda_kind.t
+        -> Named.t
+        -> 'a
+          * (Variable.t * Flambda_kind.t * Named.t) list
+          * Variable.t
+          * Flambda_kind.t
+          * Reachable.t)
+      -> for_last_body:('a -> t -> t * 'b)
+      (* CR-someday mshinwell: consider making [filter_defining_expr]
+        optional *)
+      -> filter_defining_expr:(
+          'b
+        -> Variable.t
+        -> Flambda_kind.t
+        -> Named.t
+        -> Name_occurrences.t
+        -> 'b * Variable.t * Flambda_kind.t * (Named.t option))
+      -> t * 'b
+  end
 end and Named : sig
   (** Values of type [t] will always be [Let]-bound to a [Variable.t].
       (Note that [Simple.t] values do not need to be [Let]-bound; but they are
@@ -291,7 +495,23 @@ end and Named : sig
      -> Debuginfo.t
      -> Named.t * Flambda_kind.t
 
-  val print : Format.formatter -> t -> unit
+  val at_most_generative_effects : t -> bool
+
+  (** Return a value which is kind-correct, but not necessarily
+      type-correct, at the given kind. *)
+  val dummy_value : Flambda_kind.t -> t
+
+  val toplevel_substitution : Name.t Name.Map.t -> t -> t
+
+  module Iterators : sig
+    val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
+    
+    val iter_named : (t -> unit) -> t -> unit
+
+    module Toplevel_only : sig
+      val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
+    end
+  end
 end and Let0 : sig
   include Contains_names.S
 
@@ -451,6 +671,8 @@ end and Continuation_handler0 : sig
   (** The parameters of the continuation. *)
   val params : t -> Flambda_type.Parameters.t
 
+  val param_arity : t -> Flambda_arity.t
+
   (** Whether the continuation is a compiler-generated wrapper that should
       always be inlined. *)
   val stub : t -> bool
@@ -486,6 +708,12 @@ and Set_of_closures : sig
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
 
+  val invariant : Invariant_env.t -> t -> unit
+
+  val print : Format.formatter -> t -> unit
+
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   val function_decls : t -> Function_declarations.t
 
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
@@ -501,12 +729,53 @@ and Set_of_closures : sig
   (** Returns true iff the given set of closures has an empty environment. *)
   val has_empty_environment : t -> bool
 
-  val print : Format.formatter -> t -> unit
-
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
   (** All names free in the given set of closures. *)
   val free_names : t -> Name_occurrences.t
+
+  val variables_bound_by_the_closure : t -> Var_within_closure.Set.t
+
+  (** [find_free_variable v clos] raises [Not_found] if [c] is not in [clos]. *)
+  val find_free_variable
+     : Var_within_closure.t
+    -> t
+    -> Variable.t
+
+  module Iterators : sig
+    val iter_function_bodies
+       : t
+      -> f:(continuation_arity:Flambda_arity.t
+        -> Continuation.t
+        -> Expr.t
+        -> unit)
+      -> unit
+  end
+
+  module Mappers : sig
+    val map_symbols
+       : t
+      -> f:(Symbol.t -> Symbol.t)
+      -> t
+
+    val map_function_bodies
+       : ?ignore_stubs:unit
+      -> t
+      -> f:(continuation_arity:Flambda_arity.t
+        -> Continuation.t
+        -> Expr.t
+        -> Expr.t)
+      -> t
+  end
+
+  module Folders : sig
+    val fold_function_decls_ignoring_stubs
+       : t
+      -> init:'a
+      -> f:(closure_id:Closure_id.t
+        -> function_decl:Function_declaration.t
+        -> 'a
+        -> 'a)
+      -> 'a
+  end
 end and Function_declarations : sig
   (** The representation of a set of function declarations (possibly mutually
       recursive).  Such a set encapsulates the declarations themselves,
@@ -557,6 +826,41 @@ end and Function_declarations : sig
 
   (** All names free in the given function declarations. *)
   val free_names : t -> Name_occurrences.t
+
+  val find_declaration_variable : Closure_id.t -> t -> Variable.t
+
+  (* CR pchambart: Update this comment *)
+  (** Within a set of function declarations there is a set of function bodies,
+      each of which may (or may not) reference one of the other functions in
+      the same set.  Initially such intra-set references are by [Var]s (known
+      as "fun_var"s) but if the function is lifted by [Lift_constants] then the
+      references will be translated to [Symbol]s.  This means that optimization
+      passes that need to identify whether a given "fun_var" (i.e. a key in the
+      [funs] map in a value of type [function_declarations]) is used in one of
+      the function bodies need to examine the [free_symbols] as well as the
+      [free_variables] members of [function_declarations].  This function makes
+      that process easier by computing all used "fun_var"s in the bodies of
+      the given set of function declarations, including the cases where the
+      references are [Symbol]s.  The returned value is a map from "fun_var"s
+      to the "fun_var"s (if any) used in the body of the function associated
+      with that "fun_var".
+  *)
+  val fun_vars_referenced_in_decls
+     : t
+    -> backend:(module Backend_intf.S)
+    -> Closure_id.Set.t Closure_id.Map.t
+
+  (** Computes the set of closure_id in the set of closures that are
+      used (transitively) by the [entry_point]. *)
+  val closures_required_by_entry_point
+     : entry_point:Closure_id.t
+    -> backend:(module Backend_intf.S)
+    -> t
+    -> Closure_id.Set.t
+
+  val all_functions_parameters : t -> Variable.Set.t
+
+  val contains_stub : t -> bool
 end and Function_declaration : sig
   type t
 
@@ -606,6 +910,9 @@ end and Function_declaration : sig
   (** Relational product holding the function's parameters and equations
       thereon. *)
   val params : t -> Flambda_type.Parameters.t
+
+  (* CR mshinwell: bad name *)
+  val function_arity : t -> Flambda_arity.t
 
   (** The code of the function's body. *)
   val body : t -> Expr.t

@@ -96,11 +96,36 @@ module Call_kind = struct
     | Function call -> return_arity_function_call call
     | Method _ -> [Flambda_kind.value ()]
     | C_call { return_arity; _ } -> return_arity
+
+  let free_names t =
+    match t with
+    | Function (Direct { closure_id = _; return_arity = _; })
+    | Function Indirect_unknown_arity
+    | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+    | C_call { alloc = _; param_arity = _; return_arity = _; } ->
+      Name_occurrences.create ()
+    | Method { kind = _; obj; } ->
+      Name_occurrences.create_from_set_in_terms (Name.Set.singleton obj)
+
+  let apply_name_permutation t perm =
+    match t with
+    | Function (Direct { closure_id = _; return_arity = _; })
+    | Function Indirect_unknown_arity
+    | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+    | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
+    | Method { kind; obj; } ->
+      let obj' = Name_permutation.apply_name perm obj in
+      if obj == obj' then t
+      else
+        Method {
+          kind;
+          obj = obj';
+        }
 end
 
 module Apply = struct
   type t = {
-    func : Name.t;
+    callee : Name.t;
     continuation : Continuation.t;
     exn_continuation : Continuation.t;
     args : Simple.t list;
@@ -110,10 +135,10 @@ module Apply = struct
     specialise : Specialise_attribute.t;
   }
 
-  let print ppf { func; continuation; exn_continuation; args; call_kind;
+  let print ppf { callee; continuation; exn_continuation; args; call_kind;
         dbg; inline; specialise; } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(func %a)@]@ \
+        @[<hov 1>(callee %a)@]@ \
         @[<hov 1>(continuation %a)@]@ \
         @[<hov 1>(exn_continuation %a)@]@ \
         @[<hov 1>(args %a)@]@ \
@@ -121,7 +146,7 @@ module Apply = struct
         @[<hov 1>(dbg %a)@]@ \
         @[<hov 1>(inline %a)@]@ \
         @[<hov 1>(specialise %a)@])@]"
-      Name.print func
+      Name.print callee
       Continuation.print continuation
       Continuation.print exn_continuation
       Simple.List.print args
@@ -129,6 +154,51 @@ module Apply = struct
       Debuginfo.print_compact dbg
       Inline_attribute.print inline
       Specialise_attribute.print specialise
+
+  let free_names
+        { callee;
+          continuation = _;
+          exn_continuation = _;
+          args;
+          call_kind;
+          dbg = _;
+          inline = _;
+          specialise = _;
+        } =
+    let from_callee =
+      Name_occurrences.create_from_set_in_terms (Name.Set.singleton callee)
+    in
+    let from_args = Simple.List.free_names args in
+    let from_call_kind = Call_kind.free_names call_kind in
+    Name_occurrences.union from_callee
+      (Name_occurrences.union from_args from_call_kind)
+
+  let apply_name_permutation
+        ({ callee;
+          continuation;
+          exn_continuation;
+          args;
+          call_kind;
+          dbg;
+          inline;
+          specialise;
+        } as t)
+        perm =
+    let callee' = Name_permutation.apply_name perm callee in
+    let args' = Name_permutation.apply_simples perm args in
+    let call_kind' = Call_kind.apply_name_permutation call_kind perm in
+    if callee == callee' && args == args' && call_kind == call_kind' then
+      t
+    else
+      { callee = callee';
+        continuation;
+        exn_continuation;
+        args = args';
+        call_kind = call_kind';
+        dbg;
+        inline;
+        specialise;
+      }
 end
 
 module Trap_action = struct
@@ -203,6 +273,34 @@ end
 module Switch = struct
   type t = Continuation.t Discriminant.Map.t
 
+  let invariant t =
+    let module E = Invariant_env in
+    assert (Discriminant.Map.cardinal t >= 2);
+    let check discr cont =
+      ignore (discr : Discriminant.t);
+      match E.find_continuation_opt env cont with
+      | None ->
+        unbound_continuation cont "[Switch] term"
+      | Some (arity, kind, cont_stack) ->
+        let current_stack = E.current_continuation_stack env in
+        E.Continuation_stack.unify cont cont_stack current_stack;
+        begin match kind with
+        | Normal -> ()
+        | Exn_handler ->
+          Misc.fatal_errorf "Continuation %a is an exception handler \
+              but is used in this [Switch] as a normal continuation:@ %a"
+            Continuation.print cont
+            print expr
+        end;
+        if List.length arity <> 0 then begin
+          Misc.fatal_errorf "Continuation %a is used in this [Switch] \
+              and thus must have arity [], but has arity %a"
+            Continuation.print cont
+            Flambda_arity.print arity
+        end
+    in
+    Discriminant.Map.iter check t
+
   let iter t ~f = Discriminant.Map.iter f t
 
   let num_arms t = Discriminant.Map.cardinal t
@@ -229,15 +327,6 @@ module Switch = struct
   end)
 end
 
-type invalid_term_semantics =
-  | Treat_as_unreachable
-  | Halt_and_catch_fire
-
-let print_invalid_term_semantics ppf (sem : invalid_term_semantics) =
-  match sem with
-  | Treat_as_unreachable -> Format.pp_print_string ppf "Treat_as_unreachable"
-  | Halt_and_catch_fire -> Format.pp_print_string ppf "Halt_and_catch_fire"
-
 type recursive =
   | Non_recursive
   | Recursive
@@ -253,17 +342,13 @@ module rec Expr : sig
     | Apply of Apply.t
     | Apply_cont of Continuation.t * Trap_action.t option * Simple.t list
     | Switch of Name.t * Switch.t
-    | Invalid of invalid_term_semantics
+    | Invalid of Invalid_term_semantics.t
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
   val create_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t
-  val create_switch'
-     : scrutinee:Name.t
-    -> arms:Continuation.t Discriminant.Map.t
-    -> Expr.t * bool
   val free_names_advanced
      : ?ignore_uses_as_callee:unit
     -> ?ignore_uses_as_argument:unit
@@ -309,6 +394,287 @@ module rec Expr : sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Expr
+
+  let invariant env expr =
+    let module E = Invariant_env in
+    let unbound_continuation cont reason =
+      Misc.fatal_errorf "Unbound continuation %a in %s: %a"
+        Continuation.print cont
+        reason
+        print expr
+    in
+    let add_parameters env params =
+      (* CR mshinwell: Need to think carefully about exactly what the
+         freshness criterion is for [Parameters] *)
+      E.add_kinded_parameters env (T.Parameters.kinded_params params)
+    in
+    let rec loop env (t : t) : unit =
+      match t with
+      | Let let_expr -> Let.invariant env let_expr
+      | Let_cont let_cont -> Let_cont.invariant env let_cont
+      | Apply_cont (cont, trap_action, args) ->
+        let args_arity = List.map (fun arg -> E.kind_of_simple env arg) args in
+        let arity, kind, cont_stack =
+          match E.find_continuation_opt env cont with
+          | Some result -> result
+          | None -> unbound_continuation cont "[Apply_cont] term"
+        in
+        let stack = E.current_continuation_stack env in
+        E.Continuation_stack.unify cont stack cont_stack;
+        if not (Flambda_arity.equal args_arity arity) then begin
+          Misc.fatal_errorf "Continuation %a called with wrong arity in \
+              this [Apply_cont] term: expected %a but found %a:@ %a"
+            Continuation.print cont
+            Flambda_arity.print arity
+            Flambda_arity.print args_arity
+            print expr
+        end;
+        begin match kind with
+        | Normal -> ()
+        | Exn_handler ->
+          Misc.fatal_errorf "Continuation %a is an exception handler \
+              but is used in this [Apply_cont] term as a normal continuation:@ \
+              %a"
+            Continuation.print cont
+            print expr
+        end;
+        let check_trap_action exn_handler =
+          match E.find_continuation_opt env exn_handler with
+          | None ->
+            unbound_continuation exn_handler "[Apply] trap handler"
+          | Some (arity, kind, cont_stack) ->
+            begin match kind with
+            | Exn_handler -> ()
+            | Normal ->
+              Misc.fatal_errorf "Continuation %a is a normal continuation  \
+                  but is used in the trap action of this [Apply] term as an \
+                  exception handler:@ %a"
+                Continuation.print exn_handler
+                print expr
+            end;
+            assert (not (Continuation.equal cont exn_handler));
+            let expected_arity = [K.value ()] in
+            if not (Flambda_arity.equal arity expected_arity) then begin
+              Misc.fatal_errorf "Exception handler continuation %a has \
+                  the wrong arity for the trap handler action of this \
+                  [Apply] term: expected %a but found %a:@ %a"
+                Continuation.print cont
+                Flambda_arity.print expected_arity
+                Flambda_arity.print arity
+                print expr
+            end;
+            cont_stack
+        in
+        let current_stack = E.current_continuation_stack env in
+        let stack, cont_stack =
+          match trap_action with
+          | None -> current_stack, cont_stack
+          | Some (Push { id; exn_handler }) ->
+            let cont_stack = check_trap_action exn_handler in
+            E.Continuation_stack.push id exn_handler current_stack, cont_stack
+          | Some (Pop { id; exn_handler; take_backtrace = _; }) ->
+            let cont_stack = check_trap_action exn_handler in
+            current_stack, E.Continuation_stack.push id exn_handler cont_stack
+        in
+        E.Continuation_stack.unify cont stack cont_stack
+      | Apply ({ func; continuation; exn_continuation; args; call_kind; dbg;
+                 inline; specialise; } as apply) ->
+        let stack = E.current_continuation_stack env in
+        E.check_name_is_bound_and_of_kind env func (K.value ());
+        begin match call_kind with
+        | Function (Direct { closure_id = _; return_arity = _; }) ->
+          (* Note that [return_arity] is checked for all the cases below. *)
+          E.check_simples_are_bound env args
+        | Function Indirect_unknown_arity ->
+          E.check_simples_are_bound_and_of_kind env args (K.value ())
+        | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
+          ignore (param_arity : Flambda_arity.t);
+          E.check_simples_are_bound env args
+        | Method { kind; obj; } ->
+          ignore (kind : Call_kind.method_kind);
+          E.check_name_is_bound_and_of_kind env obj (K.value ());
+          E.check_simples_are_bound_and_of_kind env args (K.value ())
+        | C_call { alloc = _; param_arity = _; return_arity = _; } ->
+          (* CR mshinwell: Check exactly what Cmmgen can compile and then
+             add further checks on [param_arity] and [return_arity] *)
+          begin match func with
+          | Symbol _ -> ()
+          | Var _ ->
+            (* CR-someday mshinwell: We could expose indirect C calls at the
+               source language level. *)
+            Misc.fatal_errorf "For [C_call] applications the callee must be \
+                directly specified as a [Symbol], not via a [Var]:@ %a"
+              Apply.print apply
+          end
+        end;
+        begin match E.find_continuation_opt env continuation with
+        | None ->
+          unbound_continuation continuation "[Apply] term"
+        | Some (arity, kind, cont_stack) ->
+          begin match kind with
+          | Normal -> ()
+          | Exn_handler ->
+            Misc.fatal_errorf "Continuation %a is an exception handler \
+                but is used in this [Apply] term as a return continuation:@ %a"
+              Continuation.print continuation
+              print expr
+          end;
+          let expected_arity = Call_kind.return_arity call_kind in
+          if not (Flambda_arity.compatible arity ~if_used_at:expected_arity)
+          then begin
+            Misc.fatal_errorf "Continuation %a called with wrong arity in \
+                this [Apply] term: expected %a but used at %a:@ %a"
+              Continuation.print continuation
+              Flambda_arity.print expected_arity
+              Flambda_arity.print arity
+              print expr
+          end;
+          E.Continuation_stack.unify continuation stack cont_stack
+        end;
+        begin match E.find_continuation_opt env exn_continuation with
+        | None ->
+          unbound_continuation continuation
+            "[Apply] term exception continuation"
+        | Some (arity, kind, cont_stack) ->
+          begin match kind with
+          | Normal ->
+            Misc.fatal_errorf "Continuation %a is a normal continuation \
+                but is used in this [Apply] term as an exception handler:@ %a"
+              Continuation.print continuation
+              print expr
+          | Exn_handler -> ()
+          end;
+          let expected_arity = [Flambda_kind.value ()] in
+          if not (Flambda_arity.equal arity expected_arity) then begin
+            Misc.fatal_errorf "Exception continuation %a named in this \
+                [Apply] term has the wrong arity: expected %a but have %a:@ %a"
+              Continuation.print continuation
+              Flambda_arity.print expected_arity
+              Flambda_arity.print arity
+              print expr
+          end;
+          E.Continuation_stack.unify exn_continuation stack cont_stack
+        end;
+        ignore (dbg : Debuginfo.t);
+        ignore (inline : inline_attribute);
+        ignore (specialise : specialise_attribute)
+      | Switch (arg, switch) ->
+        E.check_name_is_bound_and_of_kind env arg (K.fabricated ());
+        Switch.invariant env switch
+      | Invalid _ -> ()
+    in
+    loop env expr
+
+  let rec print_with_cache0 ~cache ppf (t : t) =
+    match t with
+    | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
+               specialise; dbg; }) ->
+      Format.fprintf ppf "@[<2>(apply@ \
+          (func %a)@ \
+          (args %a)@ \
+          (call_kind %a)@ \
+          (inline %a)@ \
+          (specialise %a)@ \
+          (dbg %a)@ \
+          (continuation %a)@ \
+          (exn_continuation %a))@]"
+        Name.print func
+        Simple.List.print args
+        Call_kind.print call_kind
+        Inline_attribute.print inline
+        Specialise_attribute.print specialise
+        Debuginfo.print_or_elide dbg
+        Continuation.print continuation
+        Continuation.print exn_continuation
+    | Let { var = id; kind; defining_expr = arg; body; _ } ->
+      let rec letbody (ul : t) =
+        match ul with
+        | Let { var = id; kind; defining_expr = arg; body; _ } ->
+          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
+            Variable.print id
+            (Misc_color.bold_white ())
+            Flambda_kind.print kind
+            (Misc_color.reset ())
+            (Named.print_with_cache ~cache) arg;
+          letbody body
+        | _ -> ul
+      in
+      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Variable.print id
+        (Misc_color.bold_white ())
+        Flambda_kind.print kind
+        (Misc_color.reset ())
+        (Named.print_with_cache ~cache) arg;
+      let expr = letbody body in
+      fprintf ppf ")@]@ %a)@]" print expr
+    | Switch (scrutinee, sw) ->
+      fprintf ppf
+        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Name.print scrutinee Switch.print sw
+    | Apply_cont (i, trap_action, []) ->
+      fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
+        Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Continuation.print i
+    | Apply_cont (i, trap_action, ls) ->
+      fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
+        Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Continuation.print i
+        Simple.List.print ls
+    | Let_cont { body; handlers; } ->
+      (* Printing the same way as for [Let] is easier when debugging lifting
+         passes. *)
+      if !Clflags.dump_let_cont then begin
+        let rec let_cont_body (ul : t) =
+          match ul with
+          | Let_cont { body; handlers; } ->
+            fprintf ppf "@ @[<2>%a@]"
+              (Let_cont_handlers.print_with_cache ~cache) handlers;
+            let_cont_body body
+          | _ -> ul
+        in
+        fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
+          (Let_cont_handlers.print_with_cache ~cache) handlers;
+        let expr = let_cont_body body in
+        fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
+      end else begin
+        (* CR mshinwell: Share code with ilambda.ml *)
+        let rec gather_let_conts let_conts (t : t) =
+          match t with
+          | Let_cont let_cont ->
+            gather_let_conts (let_cont.handlers :: let_conts) let_cont.body
+          | body -> let_conts, body
+        in
+        let let_conts, body = gather_let_conts [] t in
+        let pp_sep ppf () = fprintf ppf "@ " in
+        fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
+          (print_with_cache0 ~cache) body
+          (Format.pp_print_list ~pp_sep
+            (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
+      end
+    | Invalid _ ->
+      fprintf ppf "%sunreachable%s"
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
+
+  let print_with_cache ~cache ppf (t : t) =
+    print_with_cache0 ~cache ppf t
+(*
+    Printing_cache.with_cache cache ppf "expr" t
+      (fun ppf () -> print_with_cache0 ~cache ppf t)
+*)
+
+  let print ppf (t : t) =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let name_usage ?ignore_uses_as_callee
       ?ignore_uses_as_argument ?ignore_uses_as_continuation_argument
@@ -432,11 +798,20 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  let create_switch ~scrutinee ~arms : t =
-    if Discriminant.Map.cardinal arms < 1 then begin
-      Misc.fatal_error "Cannot create zero-arity [Switch]; use [Invalid]"
-    end;
-    Switch (scrutinee, arms)
+  type switch_creation_result =
+    | Have_not_deleted_branch
+    | Have_deleted_branch
+
+  let create_switch ~scrutinee ~arms =
+    if Discriminant.Map.cardinal arms < 1 then
+      invalid (), Have_deleted_branch
+    else
+      match Discriminant.Map.get_singleton arms with
+      | None ->
+        Switch.invariant arms;
+        Switch arms, Have_not_deleted_branch
+      | Some (_discriminant, k) ->
+        Apply_cont (k, None, []), Have_deleted_branch
 
   let rec free_continuations (t : t) =
     match t with
@@ -589,117 +964,6 @@ end = struct
     | Is_expr expr -> aux expr
     | Is_named named -> aux_named named
 
-  let rec print_with_cache0 ~cache ppf (t : t) =
-    match t with
-    | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
-               specialise; dbg; }) ->
-      Format.fprintf ppf "@[<2>(apply@ \
-          (func %a)@ \
-          (args %a)@ \
-          (call_kind %a)@ \
-          (inline %a)@ \
-          (specialise %a)@ \
-          (dbg %a)@ \
-          (continuation %a)@ \
-          (exn_continuation %a))@]"
-        Name.print func
-        Simple.List.print args
-        Call_kind.print call_kind
-        Inline_attribute.print inline
-        Specialise_attribute.print specialise
-        Debuginfo.print_or_elide dbg
-        Continuation.print continuation
-        Continuation.print exn_continuation
-    | Let { var = id; kind; defining_expr = arg; body; _ } ->
-      let rec letbody (ul : t) =
-        match ul with
-        | Let { var = id; kind; defining_expr = arg; body; _ } ->
-          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Variable.print id
-            (Misc_color.bold_white ())
-            Flambda_kind.print kind
-            (Misc_color.reset ())
-            (Named.print_with_cache ~cache) arg;
-          letbody body
-        | _ -> ul
-      in
-      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Variable.print id
-        (Misc_color.bold_white ())
-        Flambda_kind.print kind
-        (Misc_color.reset ())
-        (Named.print_with_cache ~cache) arg;
-      let expr = letbody body in
-      fprintf ppf ")@]@ %a)@]" print expr
-    | Switch (scrutinee, sw) ->
-      fprintf ppf
-        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Name.print scrutinee Switch.print sw
-    | Apply_cont (i, trap_action, []) ->
-      fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
-        Trap_action.Option.print trap_action
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Continuation.print i
-    | Apply_cont (i, trap_action, ls) ->
-      fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
-        Trap_action.Option.print trap_action
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Continuation.print i
-        Simple.List.print ls
-    | Let_cont { body; handlers; } ->
-      (* Printing the same way as for [Let] is easier when debugging lifting
-         passes. *)
-      if !Clflags.dump_let_cont then begin
-        let rec let_cont_body (ul : t) =
-          match ul with
-          | Let_cont { body; handlers; } ->
-            fprintf ppf "@ @[<2>%a@]"
-              (Let_cont_handlers.print_with_cache ~cache) handlers;
-            let_cont_body body
-          | _ -> ul
-        in
-        fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-          (Let_cont_handlers.print_with_cache ~cache) handlers;
-        let expr = let_cont_body body in
-        fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
-      end else begin
-        (* CR mshinwell: Share code with ilambda.ml *)
-        let rec gather_let_conts let_conts (t : t) =
-          match t with
-          | Let_cont let_cont ->
-            gather_let_conts (let_cont.handlers :: let_conts) let_cont.body
-          | body -> let_conts, body
-        in
-        let let_conts, body = gather_let_conts [] t in
-        let pp_sep ppf () = fprintf ppf "@ " in
-        fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
-          (print_with_cache0 ~cache) body
-          (Format.pp_print_list ~pp_sep
-            (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
-      end
-    | Invalid _ ->
-      fprintf ppf "%sunreachable%s"
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-
-  let print_with_cache ~cache ppf (t : t) =
-    print_with_cache0 ~cache ppf t
-(*
-    Printing_cache.with_cache cache ppf "expr" t
-      (fun ppf () -> print_with_cache0 ~cache ppf t)
-*)
-
-  let print ppf (t : t) =
-    print_with_cache ~cache:(Printing_cache.create ()) ppf t
-
   let apply_name_permutation t perm =
     match t with
     | Let let_expr ->
@@ -723,6 +987,449 @@ end = struct
       if scrutinee == scrutinee' then t
       else Switch (scrutinee', switch)
     | Invalid _ -> t
+
+  let if_then_else ~scrutinee ~if_true ~if_false =
+    let arms =
+      Discriminant.Map.of_list [
+        Discriminant.bool_true, if_true;
+        Discriminant.bool_false, if_false;
+      ]
+    in
+    create_switch ~scrutinee ~arms
+
+  let rec no_effects_or_coeffects (t : t) =
+    match t with
+    | Let { defining_expr; body; _ } ->
+      Named.no_effects_or_coeffects defining_expr
+        && no_effects_or_coeffects body
+    | Let_cont { body; handlers; } ->
+      no_effects_or_coeffects body
+        && Let_cont_handlers.no_effects_or_coeffects handlers
+    | Apply_cont _
+    | Switch _ -> true
+    | Apply _
+    | Invalid _ -> false
+
+  let description_of_toplevel_node (expr : Expr.t) =
+    match expr with
+    | Let { var; _ } -> Format.asprintf "let %a" Variable.print var
+    | Let_cont  _ -> "let_cont"
+    | Apply _ -> "apply"
+    | Apply_cont  _ -> "apply_cont"
+    | Switch _ -> "switch"
+    | Invalid _ -> "invalid"
+
+  let bind ~bindings ~body =
+    List.fold_left (fun expr (var, kind, var_def) ->
+        Expr.create_let var kind var_def expr)
+      body bindings
+
+  type with_wrapper =
+    | Unchanged of { handler : Continuation_handler.t; }
+    | With_wrapper of {
+        new_cont : Continuation.t;
+        new_handler : Continuation_handler.t;
+        wrapper_handler : Continuation_handler.t;
+      }
+
+  let build_let_cont_with_wrappers ~body ~(recursive : F0.recursive)
+        ~with_wrappers : Expr.t =
+    match recursive with
+    | Non_recursive ->
+      begin match Continuation.Map.bindings with_wrappers with
+      | [cont, Unchanged { handler; }] ->
+        Let_cont {
+          body;
+          handlers = Non_recursive { name = cont; handler; };
+        }
+      | [cont, With_wrapper { new_cont; new_handler; wrapper_handler; }] ->
+        Let_cont {
+          body = Let_cont {
+            body;
+            handlers = Non_recursive {
+              name = cont;
+              handler = wrapper_handler;
+            };
+          };
+          handlers = Non_recursive {
+            name = new_cont;
+            handler = new_handler;
+          };
+        }
+      | _ -> assert false
+      end
+    | Recursive ->
+      let handlers =
+        Continuation.Map.fold
+          (fun cont (with_wrapper : with_wrapper) handlers ->
+            match with_wrapper with
+            | Unchanged { handler; } ->
+              Continuation.Map.add cont handler handlers
+            | With_wrapper { new_cont; new_handler; wrapper_handler; } ->
+              Continuation.Map.add new_cont new_handler
+                (Continuation.Map.add cont wrapper_handler handlers))
+          with_wrappers
+          Continuation.Map.empty
+      in
+      Let_cont {
+        body;
+        handlers = Recursive handlers;
+      }
+
+  module Iterators = struct
+    let iter_lets = F0.Expr.iter_lets
+
+    let iter f f_named t = iter_general ~toplevel:false f f_named (Is_expr t)
+
+    let iter_expr f t = iter f (fun _ -> ()) t
+
+    let iter_named f_named t = iter (fun (_ : t) -> ()) f_named t
+
+    let iter_subexpressions f f_named (t : t) =
+      match t with
+      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> ()
+      | Let { defining_expr; body; _ } ->
+        f_named defining_expr;
+        f body
+      | Let_cont { body; handlers =
+          Non_recursive { handler = { handler; _ }; _ } } ->
+        f body;
+        f handler
+      | Let_cont { body; handlers = Recursive handlers; } ->
+        f body;
+        Continuation.Map.iter
+          (fun _cont ({ handler; _ } : Continuation_handler.t) -> f handler)
+          handlers
+
+    (* CR-soon mshinwell: Remove "let_rec" from this name (ditto for the
+       toplevel-only variant) *)
+    let iter_all_immutable_let_and_let_rec_bindings t ~f =
+      iter_expr (function
+          | Let { var; defining_expr; _ } -> f var defining_expr
+          | _ -> ())
+        t
+
+    let iter_sets_of_closures f t =
+      iter_named (function
+          | Set_of_closures clos -> f clos
+          | Simple _ | Prim _ -> ())
+        t
+
+    let iter_function_bodies t ~f =
+      iter_sets_of_closures (fun (set : Set_of_closures.t) ->
+          Set_of_closures.Iterators.iter_function_bodies set ~f)
+        t
+
+    module Toplevel_only = struct
+      (* CR mshinwell: "toplevel" again -- confusing.  We need two separate
+         words:
+         1. Not under a lambda
+         2. Directly bound in the static part (cf. Flambda_static). *)
+      let iter f f_named t =
+        iter_general ~toplevel:true f f_named (Is_expr t)
+
+      let iter_all_immutable_let_and_let_rec_bindings t ~f =
+        iter_general ~toplevel:true
+          (function
+            | Let { var; defining_expr; _ } -> f var defining_expr
+            | _ -> ())
+          (fun _ -> ())
+          (Is_expr t)
+    end
+  end
+
+  module Mappers = struct
+    let map_lets = F0.Expr.map_lets
+
+    let map_general ~toplevel f f_named tree =
+      let rec aux (tree : t) =
+        match tree with
+        | Let _ ->
+          map_lets tree ~for_defining_expr:aux_named ~for_last_body:aux
+            ~after_rebuild:f
+        | _ ->
+          let exp : t =
+            match tree with
+            | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> tree
+            | Let _ -> assert false
+            (* CR-soon mshinwell: There's too much code duplication here with
+               [map_subexpressions]. *)
+            | Let_cont { body; handlers; } ->
+              let new_body = aux body in
+              match handlers with
+              | Non_recursive { name; handler =
+                  ({ handler = handler_expr; _ } as handler); } ->
+                let new_handler_expr = aux handler_expr in
+                if new_body == body && new_handler_expr == handler_expr then
+                  tree
+                else
+                  Let_cont {
+                    body = new_body;
+                    handlers = Non_recursive {
+                      name;
+                      handler = { handler with handler = new_handler_expr; }
+                    };
+                  }
+              | Recursive handlers ->
+                let something_changed = ref false in
+                let candidate_handlers =
+                  Continuation.Map.map
+                    (fun (handler : Continuation_handler.t) ->
+                      let new_handler = aux handler.handler in
+                      if not (new_handler == handler.handler) then begin
+                        something_changed := true
+                      end;
+                      { handler with handler = new_handler; })
+                    handlers
+                in
+                if !something_changed || not (new_body == body) then
+                  Let_cont {
+                    body = new_body;
+                    handlers = Recursive candidate_handlers;
+                  }
+                else
+                  tree
+          in
+          f exp
+      and aux_named (id : Variable.t) _kind (named : Named.t) =
+        let named : Named.t =
+          match named with
+          | Simple _ | Prim _ -> named
+          | Set_of_closures ({ function_decls; closure_elements;
+              direct_call_surrogates }) ->
+            if toplevel then named
+            else begin
+              let done_something = ref false in
+              let funs =
+                Closure_id.Map.map (fun (func_decl : Function_declaration.t) ->
+                    let new_body = aux func_decl.body in
+                    if new_body == func_decl.body then begin
+                      func_decl
+                    end else begin
+                      done_something := true;
+                      Function_declaration.update_body func_decl
+                        ~body:new_body
+                    end)
+                  function_decls.funs
+              in
+              if not !done_something then
+                named
+              else
+                let function_decls =
+                  Function_declarations.update function_decls ~funs
+                in
+                let set_of_closures =
+                  Set_of_closures.create ~function_decls ~closure_elements
+                    ~direct_call_surrogates
+                in
+                Set_of_closures set_of_closures
+            end
+        in
+        f_named id named
+      in
+      aux tree
+
+    let map f f_named t =
+      map_general ~toplevel:false f (fun _ n -> f_named n) t
+
+    let map_expr f t = map f (fun named -> named) t
+    let map_named f_named t = map (fun t -> t) f_named t
+
+    let map_named_with_id f_named t =
+      map_general ~toplevel:false (fun t -> t) f_named t
+
+    let map_subexpressions f f_named (tree : t) : t =
+      match tree with
+      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> tree
+      | Let { var; kind; defining_expr; body; _ } ->
+        let new_named = f_named var defining_expr in
+        let new_body = f body in
+        if new_named == defining_expr && new_body == body then
+          tree
+        else
+          create_let var kind new_named new_body
+      | Let_cont { body; handlers; } ->
+        let new_body = f body in
+        match handlers with
+        | Non_recursive { name; handler =
+            ({ handler = handler_expr; _ } as handler); } ->
+          let new_handler_expr = f handler_expr in
+          if new_body == body && new_handler_expr == handler_expr then
+            tree
+          else
+            Let_cont {
+              body = new_body;
+              handlers = Non_recursive {
+                name;
+                handler = { handler with handler = new_handler_expr; }
+              };
+            }
+        | Recursive handlers ->
+          let something_changed = ref false in
+          let candidate_handlers =
+            Continuation.Map.map
+              (fun (handler : Continuation_handler.t) ->
+                let new_handler = f handler.handler in
+                if not (new_handler == handler.handler) then begin
+                  something_changed := true
+                end;
+                { handler with handler = new_handler; })
+              handlers
+          in
+          if !something_changed || not (new_body == body) then
+            Let_cont {
+              body = new_body;
+              handlers = Recursive candidate_handlers;
+            }
+          else
+            tree
+
+    let map_symbols tree ~f =
+      map_named (function
+          | (Simple simple) as named ->
+            let new_simple = Simple.map_symbol simple ~f in
+            if new_simple == simple then
+              named
+            else
+              Simple new_simple
+          | (Set_of_closures _ | Prim _) as named -> named)
+        tree
+
+    let map_apply tree ~f =
+      map (function
+          | (Apply apply) as expr ->
+            let new_apply = f apply in
+            if new_apply == apply then
+              expr
+            else
+              Apply new_apply
+          | expr -> expr)
+        (fun named -> named)
+        tree
+
+    let map_sets_of_closures tree ~f =
+      map_named (function
+          | (Set_of_closures set_of_closures) as named ->
+            let new_set_of_closures = f set_of_closures in
+            if new_set_of_closures == set_of_closures then named
+            else Set_of_closures new_set_of_closures
+          | (Simple _ | Prim _) as named -> named)
+        tree
+
+    let map_function_bodies ?ignore_stubs t ~f =
+      map_sets_of_closures t ~f:(fun (set : Set_of_closures.t) ->
+        Set_of_closures.Mappers.map_function_bodies ?ignore_stubs set ~f)
+
+    (* CR mshinwell: duplicate function *)
+    let map_all_immutable_let_and_let_rec_bindings (expr : t)
+          ~(f : Variable.t -> Named.t -> Named.t) : t =
+      map_named_with_id f expr
+
+    module Toplevel_only = struct
+      let map f f_named t =
+        map_general ~toplevel:true f (fun _ n -> f_named n) t
+
+      let map_expr f_expr t = map f_expr (fun named -> named) t
+      let map_named f_named t = map (fun t -> t) f_named t
+
+      let map_sets_of_closures tree ~f =
+        map_named (function
+            | (Set_of_closures set_of_closures) as named ->
+              let new_set_of_closures = f set_of_closures in
+              if new_set_of_closures == set_of_closures then named
+              else Set_of_closures new_set_of_closures
+            | (Simple _ | Prim _) as named -> named)
+          tree
+      end
+  end
+
+  module Folders = struct
+    let fold_lets_option (t : t) ~init ~for_defining_expr
+          ~for_last_body ~filter_defining_expr =
+      let finish ~last_body ~acc ~rev_lets =
+        let module W = With_free_names in
+        let acc, t =
+          List.fold_left (fun (acc, t) (var, kind, defining_expr) ->
+              let free_names_of_body = W.free_names t in
+              let acc, var, kind, defining_expr =
+                filter_defining_expr acc var kind defining_expr
+                  free_names_of_body
+              in
+              match defining_expr with
+              | None ->
+                acc, t
+              | Some defining_expr ->
+                let let_expr =
+                  W.create_let_reusing_body var kind defining_expr t
+                in
+                acc, W.of_expr let_expr)
+            (acc, W.of_expr last_body)
+            rev_lets
+        in
+        W.contents t, acc
+      in
+      let rec loop (t : t) ~acc ~rev_lets =
+        match t with
+        | Let let_binding ->
+          Let.pattern_match let_binding
+            ~f:(fun var { kind; defining_expr; body; } ->
+              let acc, bindings, var, kind, (defining_expr : Reachable.t) =
+                for_defining_expr acc var kind defining_expr
+              in
+              begin match defining_expr with
+              | Reachable defining_expr ->
+                let rev_lets =
+                  (var, kind, defining_expr) :: (List.rev bindings) @ rev_lets
+                in
+                loop body ~acc ~rev_lets
+              | Invalid invalid_term_semantics ->
+                let rev_lets = (List.rev bindings) @ rev_lets in
+                let body : Expr.t = Invalid invalid_term_semantics in
+                let last_body, acc = for_last_body acc body in
+                finish ~last_body ~acc ~rev_lets
+              end)
+        | t ->
+          let last_body, acc = for_last_body acc t in
+          finish ~last_body ~acc ~rev_lets
+      in
+      loop t ~acc:init ~rev_lets:[]
+  end
+
+  let all_defined_continuations_toplevel expr =
+    let defined_continuations = ref Continuation.Set.empty in
+    Iterators.Toplevel_only.iter (fun (expr : t) ->
+        match expr with
+        | Let_cont { handlers; _ } ->
+          let conts = Let_cont_handlers.bound_continuations handlers in
+          defined_continuations :=
+            Continuation.Set.union conts
+              !defined_continuations
+        | _ -> ())
+      (fun _named -> ())
+      expr;
+    !defined_continuations
+
+  let count_continuation_uses_toplevel (expr : t) =
+    let counts = Continuation.Tbl.create 42 in
+    let use cont =
+      match Continuation.Tbl.find counts cont with
+      | exception Not_found -> Continuation.Tbl.add counts cont 1
+      | count -> Continuation.Tbl.replace counts cont (count + 1)
+    in
+    Iterators.Toplevel_only.iter (fun (expr : t) ->
+        match expr with
+        | Apply { continuation; _ } -> use continuation
+        | Apply_cont (cont, None, _) -> use cont
+        | Apply_cont (cont, Some (Push { exn_handler; _ }), _)
+        | Apply_cont (cont, Some (Pop { exn_handler; _ }), _) ->
+          use cont;
+          use exn_handler
+        | Switch (_, switch) ->
+          Switch.iter switch ~f:(fun _value cont -> use cont)
+        | Let _ | Let_cont _ | Invalid _ -> ())
+      (fun _named -> ())
+      expr;
+    Continuation.Tbl.to_map counts
 end Expr_with_permutation : sig
   include Contains_names.S
   val create : ?perm:Name_permutation.t -> Expr.t -> t
@@ -903,6 +1610,151 @@ end = struct
         K.naked_nativeint ()
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
+
+  let no_effects_or_coeffects (t : t) =
+    match t with
+    | Simple _ -> true
+    | Prim (prim, _) -> Flambda_primitive.no_effects_or_coeffects prim
+    | Set_of_closures _ -> true
+
+  let at_most_generative_effects (t : t) =
+    match t with
+    | Simple _ -> true
+    | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim
+    | Set_of_closures _ -> true
+
+  let dummy_value (kind : K.t) : t =
+    let simple = 
+      match kind with
+      | Value -> Simple.const_zero
+      | Naked_number Naked_immediate ->
+        Simple.const (Untagged_immediate Immediate.zero)
+      | Naked_number Naked_float ->
+        Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
+      | Naked_number Naked_int32 ->
+        Simple.const (Naked_int32 Int32.zero)
+      | Naked_number Naked_int64 ->
+        Simple.const (Naked_int64 Int64.zero)
+      | Naked_number Naked_nativeint ->
+        Simple.const (Naked_nativeint Targetint.zero)
+      | Fabricated ->
+        Simple.discriminant Discriminant.zero
+    in
+    Simple simple
+
+  module Iterators = struct
+    let iter f f_named t =
+      Expr.iter_general ~toplevel:false f f_named (Is_named t)
+
+    let iter_named f_named t =
+      Expr.iter_general ~toplevel:false (fun (_ : Expr.t) -> ()) f_named
+        (Is_named t)
+
+    module Toplevel_only = struct
+      let iter f f_named t =
+        Expr.iter_general ~toplevel:true f f_named (Is_named t)
+    end
+  end
+
+  let primitive_invariant env (t : Flambda_primitive.t) =
+    (* CR mshinwell: This cannot go in [Flambda_primitive] due to a
+       circularity.  However a refactored version with some callbacks
+       probably could, and that's probably a good change. *)
+    let module E = Invariant_env in
+    let module P = Flambda_primitive in
+    match t with
+    | Unary (prim, x0) ->
+      let kind0 = P.arg_kind_of_unary_primitive prim in
+      E.check_simple_is_bound_and_of_kind env x0 kind0;
+      begin match prim, x0 with
+      | Project_closure closure_id, set_of_closures ->
+        E.check_simple_is_bound_and_of_kind env set_of_closures
+          (K.fabricated ());
+        E.add_use_of_closure_id env closure_id
+      | Move_within_set_of_closures { move_from; move_to; }, closure ->
+        E.check_simple_is_bound_and_of_kind env closure
+          (K.value ());
+        E.add_use_of_closure_id env move_from;
+        E.add_use_of_closure_id env move_to
+      | Project_var (closure_id, var), closure ->
+        E.add_use_of_closure_id env closure_id;
+        E.add_use_of_var_within_closure env var;
+        E.check_simple_is_bound_and_of_kind env closure
+          (K.value ())
+      | Duplicate_block _, _
+      | Is_int, _
+      | Get_tag _, _
+      | Discriminant_of_int, _
+      | Array_length _, _
+      | Bigarray_length _, _
+      | String_length _, _
+      | Int_as_pointer, _
+      | Opaque_identity, _
+      | Int_arith _, _
+      | Float_arith _, _
+      | Num_conv _, _
+      | Boolean_not, _
+      | Unbox_number _, _
+      | Box_number _, _ -> ()  (* None of these contain names. *)
+      end
+    | Binary (prim, x0, x1) ->
+      let kind0, kind1 = P.args_kind_of_binary_primitive prim in
+      E.check_simple_is_bound_and_of_kind env x0 kind0;
+      E.check_simple_is_bound_and_of_kind env x1 kind1;
+      begin match prim with
+      (* None of these currently contain names: this is here so that we
+         are reminded to check upon adding a new primitive. *)
+      | Block_load _
+      | String_or_bigstring_load _
+      | Phys_equal _
+      | Int_arith _
+      | Int_shift _
+      | Int_comp _
+      | Float_arith _
+      | Float_comp _ -> ()
+      end
+    | Ternary (prim, x0, x1, x2) ->
+      let kind0, kind1, kind2 = P.args_kind_of_ternary_primitive prim in
+      E.check_simple_is_bound_and_of_kind env x0 kind0;
+      E.check_simple_is_bound_and_of_kind env x1 kind1;
+      E.check_simple_is_bound_and_of_kind env x2 kind2;
+      begin match prim with
+      | Block_set _
+      | Bytes_or_bigstring_set _ -> ()
+      end
+    | Variadic (prim, xs) ->
+      let kinds =
+        match P.args_kind_of_variadic_primitive prim with
+        | Variadic kinds -> kinds
+        | Variadic_all_of_kind kind ->
+          List.init (List.length xs) (fun _index -> kind)
+      in
+      List.iter2 (fun var kind ->
+          E.check_simple_is_bound_and_of_kind env var kind)
+        xs kinds;
+      begin match prim with
+      | Make_block _
+      | Bigarray_set _
+      | Bigarray_load _ -> ()
+      end
+
+  (* CR mshinwell: It seems that the type [Flambda_primitive.result_kind]
+     should move into [K], now it's used here. *)
+  let invariant env t : Flambda_primitive.result_kind =
+    try
+      let module E = Invariant_env in
+      match t with
+      | Simple simple ->
+        Singleton (E.kind_of_simple env simple)
+      | Set_of_closures set_of_closures ->
+        Set_of_closures.invariant env set_of_closures;
+        Singleton (K.fabricated ())
+      | Prim (prim, dbg) ->
+        primitive_invariant env prim;
+        ignore (dbg : Debuginfo.t);
+        Flambda_primitive.result_kind prim
+    with Misc.Fatal_error ->
+      Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 end and Let0 : sig
   include Contains_names.S
   val create : Flambda_kind.t -> Named.t -> Expr.t -> t
@@ -967,6 +1819,8 @@ end and Let : sig
     -> body:Expr.t
     -> t
 
+  val invariant : Invariant_env.t -> t -> unit
+
   val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
 end = struct
   include Name_abstraction.Make (Bound_variable) (Let0)
@@ -980,6 +1834,31 @@ end = struct
       }
     in
     create bound_var let0
+
+  let invariant env t =
+    let module E = Invariant_env in
+    Name_abstraction.pattern_match t ~f:(fun bound_var let0 ->
+      let kind = Let0.kind let0 in
+      let defining_expr = Let0.defining_expr let0 in
+      let named_kind =
+        match Named.invariant env defining_expr with
+        | Singleton kind -> Some kind
+        | Unit -> Some (K.value ())
+        | Never_returns -> None
+      in
+      begin match named_kind with
+      | None -> ()
+      | Some named_kind ->
+        if not (K.equal named_kind kind) then begin
+          Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
+              equal to the annotated kind (%a);@ [Let] expression is:@ %a"
+            K.print named_kind
+            K.print kind
+            print t
+        end
+      end;
+      let env = E.add_variable env bound_var kind in
+      loop env (Let0.body let0))
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -1019,6 +1898,50 @@ end = struct
   type t =
     | Non_recursive of Non_recursive_let_cont_handler.t
     | Recursive of Recursive_let_cont_handlers.t
+
+  let invariant env t =
+    let module E = Invariant_env in
+    let handler_stack = E.Continuation_stack.var () in
+    let env =
+      match handlers with
+      | Non_recursive { name; handler; } ->
+        let kind : E.continuation_kind =
+          if handler.is_exn_handler then Exn_handler else Normal
+        in
+        let params = handler.params in
+        let arity = Flambda_type.Parameters.arity params in
+        let env = add_parameters env params in
+        let env = E.set_current_continuation_stack env handler_stack in
+        loop env handler.handler;
+        E.add_continuation env name arity kind handler_stack
+      | Recursive handlers ->
+        let recursive_env =
+          Continuation.Map.fold
+            (fun cont (handler : Continuation_handler.t) env ->
+              let arity = Flambda_type.Parameters.arity handler.params in
+              let kind : Invariant_env.continuation_kind =
+                if handler.is_exn_handler then Exn_handler else Normal
+              in
+              E.add_continuation env cont arity kind handler_stack)
+            handlers
+            env
+        in
+        Continuation.Map.iter
+          (fun name ({ params; stub; is_exn_handler; handler; }
+                : Continuation_handler.t) ->
+            if is_exn_handler then begin
+              Misc.fatal_errorf "Continuation %a is declared [Recursive] \
+                  but is an exception handler"
+                Continuation.print name
+            end;
+            let env = add_parameters recursive_env params in
+            let env = E.set_current_continuation_stack env handler_stack in
+            loop env handler;
+            ignore (stub : bool))
+          handlers;
+        recursive_env
+    in
+    loop env body
 
   let to_continuation_map t =
     match t with
@@ -1213,8 +2136,15 @@ end = struct
     (Recursive_let_cont_handlers0)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   include Continuation_handlers
+
+  let no_effects_or_coeffects t =
+    Continuation.Map.for_all (fun _cont handler ->
+        Continuation_handler.no_effects_or_coeffects handler)
+      t
 end and Continuation_handler0 : sig
   include Contains_names.S
   val print : Format.formatter -> t -> unit
@@ -1357,6 +2287,247 @@ end = struct
         closure_elements = closure_elements';
         direct_call_surrogates;
       }
+
+  let variables_bound_by_the_closure t =
+    Var_within_closure.Map.keys t.free_vars
+
+  let find_free_variable cv ({ free_vars; _ } : t) =
+    let free_var : Free_var.t =
+      Var_within_closure.Map.find cv free_vars
+    in
+    free_var.var
+
+  module Iterators = struct
+    let iter_function_bodies t ~f =
+      Closure_id.Map.iter (fun _ (function_decl : Function_declaration.t) ->
+          let continuation_arity = T.Parameters.arity function_decl.results in
+          f ~continuation_arity function_decl.continuation_param
+            function_decl.body)
+        t.function_decls.funs
+  end
+
+  module Mappers = struct
+    let map_symbols ({ function_decls; free_vars; direct_call_surrogates; }
+          as set_of_closures) ~f =
+      let done_something = ref false in
+      let funs =
+        Closure_id.Map.map (fun (func_decl : Function_declaration.t) ->
+            let body = Expr.Mappers.map_symbols func_decl.body ~f in
+            if not (body == func_decl.body) then begin
+              done_something := true;
+            end;
+            Function_declaration.update_body func_decl ~body)
+          function_decls.funs
+      in
+      if not !done_something then
+        set_of_closures
+      else
+        let function_decls =
+          Function_declarations.update function_decls ~funs
+        in
+        create ~function_decls ~in_closure:free_vars ~direct_call_surrogates
+
+    let map_function_bodies ?ignore_stubs (set_of_closures : t) ~f =
+      let done_something = ref false in
+      let funs =
+        Closure_id.Map.map (fun (function_decl : Function_declaration.t) ->
+            let new_body =
+              match ignore_stubs, function_decl.stub with
+              | Some (), true -> function_decl.body
+              | _, _ ->
+                let body =
+                  Expr.Mappers.map_function_bodies ?ignore_stubs
+                    function_decl.body ~f
+                in
+                let continuation_arity =
+                  T.Parameters.arity function_decl.results
+                in
+                f ~continuation_arity function_decl.continuation_param body
+            in
+            if new_body == function_decl.body then
+              function_decl
+            else begin
+              done_something := true;
+              Function_declaration.update_body function_decl
+                ~body:new_body
+            end)
+          set_of_closures.function_decls.funs
+      in
+      if not !done_something then
+        set_of_closures
+      else
+        let function_decls =
+          Function_declarations.update set_of_closures.function_decls ~funs
+        in
+        create ~function_decls ~in_closure:set_of_closures.free_vars
+          ~direct_call_surrogates:set_of_closures.direct_call_surrogates
+  end
+
+  module Folders = struct
+    let fold_function_decls_ignoring_stubs (t : t) ~init ~f =
+      Closure_id.Map.fold (fun closure_id function_decl acc ->
+          f ~closure_id ~function_decl acc)
+        t.function_decls.funs
+        init
+  end
+
+  let invariant env
+        { function_decls; free_vars; direct_call_surrogates = _; } =
+    (* CR mshinwell: Some of this should move into
+       [Function_declarations.invariant] *)
+    let module E = Invariant_env in
+    (* CR-soon mshinwell: check [direct_call_surrogates] *)
+    let { Function_declarations. set_of_closures_id;
+          set_of_closures_origin; funs; } =
+      function_decls
+    in
+    E.add_set_of_closures_id env set_of_closures_id;
+    ignore (set_of_closures_origin : Set_of_closures_origin.t);
+    let functions_in_closure = Closure_id.Map.keys funs in
+    Var_within_closure.Map.iter
+      (fun var (var_in_closure : Free_var.t) ->
+        E.add_var_within_closure env var;
+        E.check_variable_is_bound env var_in_closure.var)
+      free_vars;
+    let _all_params, _all_free_vars =
+      (* CR mshinwell: change to [iter] *)
+      Closure_id.Map.fold (fun fun_var function_decl acc ->
+          let all_params, all_free_vars = acc in
+          (* CR-soon mshinwell: check function_decl.all_symbols *)
+          let { Function_declaration. params; body; stub; dbg; my_closure;
+                continuation_param = return_cont;
+                exn_continuation_param; result_arity; _ } =
+            function_decl
+          in
+          let return_arity = T.Parameters.arity results in
+          (* CR mshinwell: Check arity of [exn_continuation_param] *)
+          if Continuation.equal return_cont exn_continuation_param
+          then begin
+            Misc.fatal_errorf "Function declaration's return and exception \
+                continuations must be distinct: %a"
+              (Function_declaration.print fun_var) function_decl
+          end;
+          assert (Closure_id.Set.mem fun_var functions_in_closure);
+          E.add_closure_id env fun_var;
+          ignore (stub : bool);
+          ignore (dbg : Debuginfo.t);
+          let free_variables =
+            Name.set_to_var_set
+              (Name_occurrences.everything (Expr.free_names body))
+          in
+          let kinded_params = T.Parameters.kinded_params params in
+          (* Check that every variable free in the body of the function is
+             either the distinguished "own closure" variable or one of the
+             function's parameters. *)
+          let allowed_free_variables =
+            Variable.Set.add my_closure (
+              Kinded_parameter.List.var_set kinded_params)
+          in
+          let parameters_with_kinds =
+            List.map (fun param ->
+                let var = Kinded_parameter.var param in
+                let kind = Kinded_parameter.kind param in
+                var, kind)
+              kinded_params
+          in
+          let bad =
+            Variable.Set.diff free_variables allowed_free_variables
+          in
+          if not (Variable.Set.is_empty bad) then begin
+            Misc.fatal_errorf "The function bound to closure ID %a contains \
+                illegal free variables.  The only free variables allowed in \
+                the body of a function are the distinguished [my_closure] \
+                variable and the function's parameters: %a"
+              Closure_id.print fun_var
+              (Function_declaration.print fun_var) function_decl
+          end;
+          (* CR mshinwell: We should allow ordered dependencies left-to-right
+             in the parameter list.  Parameters' types maybe can also depend
+             on [my_closure]? *)
+          (* Check that free names in parameters' types are bound. *)
+(* XXX temporarily disabled
+          List.iter (fun param ->
+              let ty = Typed_parameter.ty param in
+              let fns = Flambda_type.free_names ty in
+              (* CR mshinwell: This should make sure that the (set of) kinds
+                 implied by the modal type in [Name_occurrences] matches up
+                 with the kind in the environment.
+                 We should also check this when we see a use of a name.
+                 For example, a [Debug_only] name may not occur inside the
+                 defining expression of a [Let]-binding of kind [Value]. *)
+              Name.Set.iter (fun fn -> E.check_name_is_bound env fn)
+                (Name_occurrences.everything fns))
+            params;
+          (* Check that projections on parameters only describe projections
+             from other parameters of the same function. *)
+          let params' = Typed_parameter.List.var_set params in
+*)
+(*
+          List.iter (fun param ->
+              match Typed_parameter.equalities param with
+              | [] -> ()
+              | _ ->
+                (* XXX this needs finishing -- in fact probably not
+                   needed now *)
+                ()
+                (* Old code:
+                let projecting_from = Projection.projecting_from projection in
+                if not (Variable.Set.mem projecting_from params') then begin
+                  Misc.fatal_errorf "Projection %a does not describe a \
+                      projection from a parameter of the function %a"
+                    Projection.print projection
+                    print t
+                end *)  )
+            params;
+          (* Check that parameters are unique across all functions in the
+             declaration. *)
+          let old_all_params_size = Variable.Set.cardinal all_params in
+          let params = params' in
+          let params_size = Variable.Set.cardinal params in
+          let all_params = Variable.Set.union all_params params in
+          let all_params_size = Variable.Set.cardinal all_params in
+          if all_params_size <> old_all_params_size + params_size then begin
+            Misc.fatal_errorf "Function declarations have overlapping \
+                parameters: %a"
+              print t
+          end;
+*)
+          (* Check the body of the function. *)
+          let body_env =
+            E.prepare_for_function_body env
+              ~parameters_with_kinds
+              ~my_closure
+              ~return_cont
+              ~return_cont_arity:return_arity
+              ~exception_cont:exn_continuation_param
+          in
+          Expr.invariant body_env body;
+          all_params, Variable.Set.union free_variables all_free_vars)
+        funs (Variable.Set.empty, Variable.Set.empty)
+    in
+    Var_within_closure.Map.iter
+      (fun _in_closure0 (outer_var : Free_var.t) ->
+        E.check_variable_is_bound env outer_var.var;
+        ()
+        (* XXX also needs finishing -- same as above
+        match outer_var.projection with
+        | None -> ()
+        | Some projection ->
+          let projecting_from = Projection.projecting_from projection in
+          let in_closure =
+            Free_vars.find_by_variable free_vars projecting_from
+          in
+          match in_closure with
+          | None ->
+            Misc.fatal_errorf "Closure variable %a equal to outer variable %a \
+                is deemed equal to a projection from %a; but %a does not \
+                correspond to any closure variable"
+              Var_within_closure.print in_closure0
+              Free_var.print outer_var
+              Variable.print projecting_from
+              Variable.print projecting_from
+          | Some _in_closure -> () *) )
+      free_vars
 end and Function_declarations : sig
   include Contains_names.S
   val print : Format.formatter -> t -> unit
@@ -1667,6 +2838,145 @@ end = struct
         is_a_functor;
         my_closure;
       }
+
+  let find_declaration_variable _closure_id _t =
+    (* CR mshinwell for pchambart: What should this do?  Return the
+       [my_closure]? *)
+    assert false  (* XXX *)
+
+  let fun_vars_referenced_in_decls (_function_decls : t) ~backend:_ =
+(*
+    let fun_vars = Variable.Map.keys function_decls.funs in
+    let symbols_to_fun_vars =
+      let module Backend = (val backend : Backend_intf.S) in
+      Variable.Set.fold (fun fun_var symbols_to_fun_vars ->
+          let closure_id = Closure_id.wrap fun_var in
+          let symbol = Backend.closure_symbol closure_id in
+          Symbol.Map.add symbol fun_var symbols_to_fun_vars)
+        fun_vars
+        Symbol.Map.empty
+    in
+    Variable.Map.map (fun (func_decl : Function_declaration.t) ->
+        let from_symbols =
+          Symbol.Set.fold (fun symbol fun_vars' ->
+              match Symbol.Map.find symbol symbols_to_fun_vars with
+              | exception Not_found -> fun_vars'
+              | fun_var ->
+                assert (Variable.Set.mem fun_var fun_vars);
+                Variable.Set.add fun_var fun_vars')
+            func_decl.free_symbols
+            Variable.Set.empty
+        in
+        let from_variables =
+          Variable.Set.inter func_decl.free_variables fun_vars
+        in
+        Variable.Set.union from_symbols from_variables)
+      function_decls.funs
+*)
+    (* CR pchambart: this needs another way to do it *)
+    assert false
+
+  let closures_required_by_entry_point ~(entry_point : Closure_id.t) ~backend
+      (function_decls : t) =
+    let dependencies =
+      fun_vars_referenced_in_decls function_decls ~backend
+    in
+    let set = ref Closure_id.Set.empty in
+    let queue = Queue.create () in
+    let add v =
+      if not (Closure_id.Set.mem v !set) then begin
+        set := Closure_id.Set.add v !set;
+        Queue.push v queue
+      end
+    in
+    add entry_point;
+    while not (Queue.is_empty queue) do
+      let closure_id = Queue.pop queue in
+      match Closure_id.Map.find closure_id dependencies with
+      | exception Not_found -> ()
+      | fun_dependencies ->
+        Closure_id.Set.iter (fun dep ->
+            if Closure_id.Map.mem dep function_decls.funs then
+              add dep)
+          fun_dependencies
+    done;
+    !set
+
+  let all_functions_parameters (function_decls : t) =
+    Closure_id.Map.fold
+      (fun _ ({ params; _ } : Function_declaration.t) set ->
+        let params = T.Parameters.kinded_params params in
+        Variable.Set.union set (Kinded_parameter.List.var_set params))
+      function_decls.funs Variable.Set.empty
+
+  let contains_stub (fun_decls : t) =
+    let number_of_stub_functions =
+      Closure_id.Map.cardinal
+        (Closure_id.Map.filter
+          (fun _ ({ stub; _ } : Function_declaration.t) -> stub)
+          fun_decls.funs)
+    in
+    number_of_stub_functions > 0
+
+(*
+  let map_parameter_types t ~f =
+    let funs =
+      Closure_id.Map.map (fun (decl : Function_declaration.t) ->
+          Function_declaration.map_parameter_types decl ~f)
+        t.funs
+    in
+    update t ~funs
+*)
+
+  (* CR mshinwell: Tidy up, stop computing the [subst] that used to be
+     returned *)
+  let rename_names (func_decls : t) subst =
+    let freshen_func_decl (func_decl : Function_declaration.t) subst =
+(*
+      let params_rev, subst =
+        List.fold_left (fun (params_rev, subst) param ->
+            let var = Typed_parameter.var param in
+            let fresh_var, subst =
+              Freshening.add_variable subst var
+            in
+            let param =
+              Typed_parameter.map_var ~f:(fun _var -> fresh_var) param
+            in
+            param :: params_rev, subst)
+          ([], subst)
+          func_decl.params
+      in
+*)
+      let params = T.Parameters.rename_variables func_decl.params subst in
+      let results = T.Parameters.rename_variables func_decl.results subst in
+      (* Since all parameters are distinct, even between functions, we can
+         just use a single substitution. *)
+      (* CR mshinwell: Why does this [toplevel_substitution] need to happen?
+         Can't this subst be put into the environment and then applied
+         as needed? *)
+      let body =
+        Expr.toplevel_substitution subst func_decl.body
+      in
+      let function_decl =
+        Function_declaration.update_params_results_and_body func_decl
+          ~params ~body ~results
+      in
+      function_decl, subst
+    in
+    let funs, _subst =
+      Closure_id.Map.fold (fun closure_id func_decl (funs, subst) ->
+          let func_decl, subst =
+            freshen_func_decl func_decl subst
+          in
+          Closure_id.Map.add closure_id func_decl funs, subst)
+        func_decls.funs
+        (Closure_id.Map.empty, subst)
+    in
+    update func_decls ~funs
+
+  let freshen t freshening =
+    let subst = Freshening.name_substitution freshening in
+    rename_names t subst
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
   = Flambda_type0.Make (Expr)
 
