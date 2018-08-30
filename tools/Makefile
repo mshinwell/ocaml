@@ -51,7 +51,7 @@ $1: $3 $2
 	$$(CAMLC) $$(LINKFLAGS) -I .. -o $$@ $2
 
 $1.opt: $3 $$(call byte2native,$2)
-	$$(CAMLOPT) $$(LINKFLAGS) -I .. -o $$@ $$(call byte2native,$2)
+	$$(OCAMLOPT_X) $$(LINKFLAGS) -I .. -o $$@ $$(call byte2native,$2)
 
 all: $1
 
@@ -81,7 +81,11 @@ endif
 
 CAMLC=$(CAMLRUN) ../boot/ocamlc -nostdlib -I ../boot \
       -use-prims ../byterun/primitives -I ..
-CAMLOPT=$(CAMLRUN) ../ocamlopt -nostdlib -I ../stdlib
+ifeq "$(OCAMLOPT_X)" "./ocamlopt"
+	CAMLOPT=$(CAMLRUN) ../ocamlopt -nostdlib -I ../stdlib
+else
+  CAMLOPT=$(OCAMLOPT_X)
+endif
 ifeq "$(UNIX_OR_WIN32)" "win32"
   ifneq "$(wildcard ../flexdll/Makefile)" ""
     CAMLOPT := OCAML_FLEXLINK="../boot/ocamlrun ../flexdll/flexlink.exe" \
