@@ -59,7 +59,8 @@ CAMLYACC ?= boot/ocamlyacc
 include stdlib/StdlibModules
 
 CAMLC=$(CAMLRUN) boot/ocamlc -g -nostdlib -I boot -use-prims byterun/primitives
-CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
+OUR_OCAMLOPT=./ocamlopt
+CAMLOPT=$(CAMLRUN) $(OUR_OCAMLOPT) -g -nostdlib -I stdlib -I otherlibs/dynlink
 ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
         -I middle_end/base_types -I asmcomp -I asmcomp/debug \
@@ -82,6 +83,12 @@ CAMLDEP=$(CAMLRUN) boot/ocamlc -depend
 DEPFLAGS=$(INCLUDES)
 
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
+
+ifeq "$(OCAMLOPT_X)" "./ocamlopt"
+	OCAMLTESTOPT_OPT=ocamltest.opt
+else
+	OCAMLTESTOPT_OPT=
+endif
 
 UTILS=utils/config.cmo utils/misc.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
@@ -479,7 +486,7 @@ opt.opt:
 	$(MAKE) ocamlopt.opt
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
-	  ocamltest.opt
+	  $(OCAMLTESTOPT_OPT)
 
 # Core bootstrapping cycle
 .PHONY: coreboot
@@ -868,20 +875,20 @@ beforedepend:: parsing/lexer.ml
 # Shared parts of the system compiled with the native-code compiler
 
 compilerlibs/ocamlcommon.cmxa: $(COMMON:.cmo=.cmx)
-	$(CAMLOPT) -a -linkall -o $@ $^
+	$(OCAMLOPT_X) -a -linkall -o $@ $^
 partialclean::
 	rm -f compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.$(A)
 
 # The bytecode compiler compiled with the native-code compiler
 
 compilerlibs/ocamlbytecomp.cmxa: $(BYTECOMP:.cmo=.cmx)
-	$(CAMLOPT) -a $(OCAML_NATDYNLINKOPTS) -o $@ $^
+	$(OCAMLOPT_X) -a $(OCAML_NATDYNLINKOPTS) -o $@ $^
 partialclean::
 	rm -f compilerlibs/ocamlbytecomp.cmxa compilerlibs/ocamlbytecomp.$(A)
 
 ocamlc.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlbytecomp.cmxa \
             $(BYTESTART:.cmo=.cmx)
-	$(CAMLOPT) $(LINKFLAGS) -o $@ $^ -cclib "$(BYTECCLIBS)"
+	$(OCAMLOPT_X) $(LINKFLAGS) -o $@ $^ -cclib "$(BYTECCLIBS)"
 
 partialclean::
 	rm -f ocamlc.opt
@@ -889,19 +896,19 @@ partialclean::
 # The native-code compiler compiled with itself
 
 compilerlibs/ocamloptcomp.cmxa: $(MIDDLE_END:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx)
-	$(CAMLOPT) -a -o $@ $^
+	$(OCAMLOPT_X) -a -o $@ $^
 partialclean::
 	rm -f compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamloptcomp.$(A)
 
 ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
               $(OPTSTART:.cmo=.cmx)
-	$(CAMLOPT) $(LINKFLAGS) -o $@ $^
+	$(OCAMLOPT_X) $(LINKFLAGS) -o $@ $^
 
 partialclean::
 	rm -f ocamlopt.opt
 
 $(COMMON:.cmo=.cmx) $(BYTECOMP:.cmo=.cmx) $(MIDDLE_END:.cmo=.cmx) \
-$(ASMCOMP:.cmo=.cmx): ocamlopt
+$(ASMCOMP:.cmo=.cmx): $(OCAMLOPT_X)
 
 # The predefined exceptions and primitives
 
@@ -1148,7 +1155,7 @@ clean::
 compilerlibs/ocamlmiddleend.cma: $(MIDDLE_END)
 	$(CAMLC) -a -o $@ $^
 compilerlibs/ocamlmiddleend.cmxa: $(MIDDLE_END:%.cmo=%.cmx)
-	$(CAMLOPT) -a -o $@ $^
+	$(OCAMLOPT_X) -a -o $@ $^
 partialclean::
 	rm -f compilerlibs/ocamlmiddleend.cma \
 	      compilerlibs/ocamlmiddleend.cmxa \
@@ -1228,7 +1235,7 @@ driver/compdynlink.cmo: driver/compdynlink.mlbyte driver/compdynlink.cmi
 	$(CAMLC) $(COMPFLAGS) -c -impl $<
 
 driver/compdynlink.cmx: driver/compdynlink.mlopt driver/compdynlink.cmi
-	$(CAMLOPT) $(COMPFLAGS) -c -impl $<
+	$(OCAMLOPT_X) $(COMPFLAGS) -c -impl $<
 
 beforedepend:: driver/compdynlink.mlbyte driver/compdynlink.mlopt \
                driver/compdynlink.mli
@@ -1240,7 +1247,7 @@ partialclean::
 # The native toplevel
 
 compilerlibs/ocamlopttoplevel.cmxa: $(OPTTOPLEVEL:.cmo=.cmx)
-	$(CAMLOPT) -a -o $@ $^
+	$(OCAMLOPT_X) -a -o $@ $^
 partialclean::
 	rm -f compilerlibs/ocamlopttoplevel.cmxa
 
@@ -1256,7 +1263,7 @@ ocamlnat$(EXE): compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
     compilerlibs/ocamlbytecomp.cmxa \
     compilerlibs/ocamlopttoplevel.cmxa \
     $(OPTTOPLEVELSTART:.cmo=.cmx)
-	$(CAMLOPT) $(LINKFLAGS) -linkall -o $@ $^
+	$(OCAMLOPT_X) $(LINKFLAGS) -linkall -o $@ $^
 
 partialclean::
 	rm -f ocamlnat$(EXE)
@@ -1287,7 +1294,7 @@ beforedepend:: bytecomp/opcodes.ml
 	$(CAMLC) $(COMPFLAGS) -c $<
 
 .ml.cmx:
-	$(CAMLOPT) $(COMPFLAGS) -c $<
+	$(OCAMLOPT_X) $(COMPFLAGS) -c $<
 
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end \
