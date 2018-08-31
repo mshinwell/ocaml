@@ -369,18 +369,6 @@ module rec Expr : sig
     -> Name_occurrences.t
   val free_continuations : t -> Continuation.Set.t
   val invalid : unit -> t
-  val iter_lets
-     : t
-    -> for_defining_expr:(Variable.t -> Flambda_kind.t -> Named.t -> unit)
-    -> for_last_body:(t -> unit)
-    -> for_each_let:(t -> unit)
-    -> unit
-  val map_lets
-     : t
-    -> for_defining_expr:(Variable.t -> Flambda_kind.t -> Named.t -> Named.t)
-    -> for_last_body:(t -> t)
-    -> after_rebuild:(t -> t)
-    -> t
   type maybe_named =
     | Is_expr of t
     | Is_named of Named.t
@@ -709,11 +697,29 @@ end = struct
 
   let free_names t : Name_occurrences.t = free_names t
 
-  let used_names ?ignore_uses_as_callee ?ignore_uses_as_argument
-      ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var t =
-    name_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-      ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var
-      ~all_used_names:true t
+  let apply_name_permutation t perm =
+    match t with
+    | Let let_expr ->
+      let let_expr' = Let.apply_name_permutation let_expr perm in
+      if let_expr == let_expr' then t
+      else Let let_expr'
+    | Let_cont let_cont ->
+      let let_cont = Let_cont.apply_name_permutation let_cont perm in
+       if let_cont == let_cont' then t
+      else Let_cont let_cont'
+    | Apply apply ->
+      let apply' = Apply.apply_name_permutation apply perm in
+      if apply == apply' then t
+      else Apply apply'
+    | Apply_cont (k, trap_action_opt, args) ->
+      let args' = Name_permutation.apply_simples perm args in
+      if args == args' then t
+      else Apply_cont (k, trap_action_opt, args')
+    | Switch (scrutinee, switch) ->
+      let scrutinee' = Name_permutation.apply_name perm scrutinee in
+      if scrutinee == scrutinee' then t
+      else Switch (scrutinee', switch)
+    | Invalid _ -> t
 
   let invalid () =
     if !Clflags.treat_invalid_code_as_unreachable then
@@ -792,124 +798,6 @@ end = struct
       free_names_of_defining_expr;
       free_names_of_body = free_names body;
     }
-
-  let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
-    let rec loop (t : t) =
-      match t with
-      | Let { var; kind; defining_expr; body; _ } ->
-        for_each_let t;
-        for_defining_expr var kind defining_expr;
-        loop body
-      | t ->
-        for_last_body t
-    in
-    loop t
-
-  let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
-    let rec loop (t : t) ~rev_lets =
-      match t with
-      | Let { var; kind; defining_expr; body; _ } ->
-        let new_defining_expr = for_defining_expr var kind defining_expr in
-        let original =
-          if new_defining_expr == defining_expr then
-            Some t
-          else
-            None
-        in
-        let rev_lets = (var, kind, new_defining_expr, original) :: rev_lets in
-        loop body ~rev_lets
-      | t ->
-        let last_body = for_last_body t in
-        (* As soon as we see a change, we have to rebuild that [Let] and every
-          outer one. *)
-        let seen_change = ref (not (last_body == t)) in
-        List.fold_left (fun (t : t) (var, kind, defining_expr, original) : t ->
-            let let_expr =
-              match original with
-              | Some original when not !seen_change -> original
-              | Some _ | None ->
-                seen_change := true;
-                create_let var kind defining_expr t
-            in
-            let new_let = after_rebuild let_expr in
-            if not (new_let == let_expr) then begin
-              seen_change := true
-            end;
-            new_let)
-          last_body
-          rev_lets
-    in
-    loop t ~rev_lets:[]
-
-  let iter_general ~toplevel f f_named maybe_named =
-    let rec aux (t : t) =
-      match t with
-      | Let _ ->
-        iter_lets t
-          ~for_defining_expr:(fun _var _kind named -> aux_named named)
-          ~for_last_body:aux
-          ~for_each_let:f
-      (* CR mshinwell: add tail recursive case for Let_cont *)
-      | _ ->
-        f t;
-        match t with
-        | Apply _ | Apply_cont _ | Switch _ -> ()
-        | Let _ -> assert false
-        | Let_cont { body; handlers; _ } ->
-          aux body;
-          begin match handlers with
-          | Non_recursive { name = _; handler = { handler; _ }; } ->
-            aux handler
-          | Recursive handlers ->
-            Continuation.Map.iter (fun _cont
-                  { Continuation_handler.
-                    params = _;
-                    stub = _;
-                    handler;
-                    is_exn_handler = _;
-                  } ->
-                aux handler)
-              handlers
-          end
-        | Invalid _ -> ()
-    and aux_named (named : Named.t) =
-      f_named named;
-      match named with
-      | Simple _ | Prim _ -> ()
-      | Set_of_closures { function_decls = funcs; _; } ->
-        if not toplevel then begin
-          Closure_id.Map.iter (fun _ (decl : Function_declaration.t) ->
-              aux decl.body)
-            funcs.funs
-        end
-    in
-    match maybe_named with
-    | Is_expr expr -> aux expr
-    | Is_named named -> aux_named named
-
-  let apply_name_permutation t perm =
-    match t with
-    | Let let_expr ->
-      let let_expr' = Let.apply_name_permutation let_expr perm in
-      if let_expr == let_expr' then t
-      else Let let_expr'
-    | Let_cont let_cont ->
-      let let_cont = Let_cont.apply_name_permutation let_cont perm in
-       if let_cont == let_cont' then t
-      else Let_cont let_cont'
-    | Apply apply ->
-      let apply' = Apply.apply_name_permutation apply perm in
-      if apply == apply' then t
-      else Apply apply'
-    | Apply_cont (k, trap_action_opt, args) ->
-      let args' = Name_permutation.apply_simples perm args in
-      if args == args' then t
-      else Apply_cont (k, trap_action_opt, args')
-    | Switch (scrutinee, switch) ->
-      let scrutinee' = Name_permutation.apply_name perm scrutinee in
-      if scrutinee == scrutinee' then t
-      else Switch (scrutinee', switch)
-    | Invalid _ -> t
 
   let if_then_else ~scrutinee ~if_true ~if_false =
     let arms =
@@ -1000,7 +888,67 @@ end = struct
       }
 
   module Iterators = struct
-    let iter_lets = F0.Expr.iter_lets
+    let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
+      let rec loop (t : t) =
+        match t with
+        | Let let_expr ->
+          for_each_let let_expr;
+          let body =
+            Let.pattern_match (fun _bound_var let0 ->
+              for_defining_expr (Let0.kind let0) (Let0.defining_expr let0);
+              Let0.body let0)
+          in
+          loop body
+        | t ->
+          for_last_body t
+      in
+      loop t
+
+    let iter_general ~toplevel f f_named maybe_named =
+      let rec aux (t : t) =
+        match t with
+        | Let _ ->
+          iter_lets t
+            ~for_defining_expr:(fun _kind named -> aux_named named)
+            ~for_last_body:aux
+            ~for_each_let:f
+        (* CR mshinwell: add tail recursive case for Let_cont *)
+        | _ ->
+          f t;
+          match t with
+          | Apply _ | Apply_cont _ | Switch _ -> ()
+          | Let _ -> assert false
+          | Let_cont { body; handlers; _ } ->
+            aux body;
+            begin match handlers with
+            | Non_recursive { name = _; handler = { handler; _ }; } ->
+              aux handler
+            | Recursive handlers ->
+              Continuation.Map.iter (fun _cont
+                    { Continuation_handler.
+                      params = _;
+                      stub = _;
+                      handler;
+                      is_exn_handler = _;
+                    } ->
+                  aux handler)
+                handlers
+            end
+          | Invalid _ -> ()
+      and aux_named (named : Named.t) =
+        f_named named;
+        match named with
+        | Simple _ | Prim _ -> ()
+        | Set_of_closures { function_decls = funcs; _; } ->
+          if not toplevel then begin
+            Closure_id.Map.iter (fun _ (decl : Function_declaration.t) ->
+                aux decl.body)
+              funcs.funs
+          end
+      in
+      match maybe_named with
+      | Is_expr expr -> aux expr
+      | Is_named named -> aux_named named
 
     let iter f f_named t = iter_general ~toplevel:false f f_named (Is_expr t)
 
@@ -1046,7 +994,42 @@ end = struct
   end
 
   module Mappers = struct
-    let map_lets = F0.Expr.map_lets
+    let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
+      let rec loop (t : t) ~rev_lets =
+        match t with
+        | Let { var; kind; defining_expr; body; _ } ->
+          let new_defining_expr = for_defining_expr var kind defining_expr in
+          let original =
+            if new_defining_expr == defining_expr then
+              Some t
+            else
+              None
+          in
+          let rev_lets = (var, kind, new_defining_expr, original) :: rev_lets in
+          loop body ~rev_lets
+        | t ->
+          let last_body = for_last_body t in
+          (* As soon as we see a change, we have to rebuild that [Let] and every
+            outer one. *)
+          let seen_change = ref (not (last_body == t)) in
+          List.fold_left
+            (fun (t : t) (var, kind, defining_expr, original) : t ->
+              let let_expr =
+                match original with
+                | Some original when not !seen_change -> original
+                | Some _ | None ->
+                  seen_change := true;
+                  create_let var kind defining_expr t
+              in
+              let new_let = after_rebuild let_expr in
+              if not (new_let == let_expr) then begin
+                seen_change := true
+              end;
+              new_let)
+            last_body
+            rev_lets
+      in
+      loop t ~rev_lets:[]
 
     let map_general ~toplevel f f_named tree =
       let rec aux (tree : t) =
@@ -1614,62 +1597,8 @@ end = struct
         Flambda_primitive.result_kind prim
     with Misc.Fatal_error ->
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
-end and Let0 : sig
-  include Contains_names.S
-  val create : Flambda_kind.t -> Named.t -> Expr.t -> t
-  val kind : t -> Flambda_kind.t
-  val defining_expr : t -> Named.t
-  val body : t -> Expr.t
-  val free_names_of_body : t -> Name_occurrences.t
-(*
-  val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
-*)
-end = struct
-  type t = {
-    kind : Flambda_kind.t;
-    defining_expr : Named.t;
-    body : Expr_with_permutation.t;
-  }
-
-  let create kind defining_expr body =
-    { kind;
-      defining_expr;
-      body = Expr_with_permutation.create body;
-    }
-
-  let kind t = t.kind
-  let defining_expr t = t.defining_expr
-
-  let body t = Expr_with_permutation.expr t.body
-  let free_names_of_body t = Expr_with_permutation.free_names t.body
-
-  let free_names { kind = _; defining_expr; body = _; } =
-    let from_defining_expr = Named.free_names defining_expr in
-    let from_body = free_names_of_body t in
-    Name_occurrences.union from_defining_expr from_body
-
-  let apply_name_permutation { kind; defining_expr; body; } perm =
-    { kind;
-      defining_expr = Named.apply_name_permutation defining_expr perm;
-      body = Expr_with_permutation.apply_name_permutation body perm;
-    }
-
-(*
-  let map_defining_expr { kind; defining_expr; body_with_free_names; } ~f =
-    let defining_expr' = f defining_expr in
-    if defining_expr == defining_expr' then
-      t
-    else
-      Let {
-        kind;
-        defining_expr = defining_expr';
-        body_with_free_names;
-      }
-*)
 end and Let : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_variable) (Let0)
-  end
+  include Contains_names.S
 
   val create
      : bound_var:Variable.t
@@ -1682,27 +1611,36 @@ end and Let : sig
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
+  val kind : t -> Flambda_kind.t
+  val defining_expr : t -> Named.t
+
+  val pattern_match
+     : t
+    -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
+    -> 'a
 end = struct
-  include Name_abstraction.Make (Bound_variable) (Let0)
+  module Bound_var_and_body = Name_abstraction.Make (Bound_variable) (Expr)
+
+  type t = {
+    bound_var_and_body : Bound_var_and_body.t;
+    kind : Flambda_kind.t;
+    defining_expr : Named.t;
+  }
 
   let create ~bound_var ~kind ~defining_expr ~body =
-    let let0 : Let0.t =
-      { kind;
-        defining_expr;
-        body;
-        free_names_of_body = Expr.free_names body;
-      }
+    let bound_var_and_body =
+      Bound_var_and_body.create bound_var (Expr_with_permutation.create body)
     in
-    create bound_var let0
+    { bound_var_and_body;
+      kind;
+      defining_expr;
+    }
 
   let invariant env t =
     let module E = Invariant_env in
-    Name_abstraction.pattern_match t ~f:(fun bound_var let0 ->
-      let kind = Let0.kind let0 in
-      let defining_expr = Let0.defining_expr let0 in
+    pattern_match t.bound_var_and_body ~f:(fun ~bound_var ~body ->
       let named_kind =
-        match Named.invariant env defining_expr with
+        match Named.invariant env t.defining_expr with
         | Singleton kind -> Some kind
         | Unit -> Some (K.value ())
         | Never_returns -> None
@@ -1710,42 +1648,73 @@ end = struct
       begin match named_kind with
       | None -> ()
       | Some named_kind ->
-        if not (K.equal named_kind kind) then begin
+        if not (K.equal named_kind t.kind) then begin
           Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
               equal to the annotated kind (%a);@ [Let] expression is:@ %a"
             K.print named_kind
-            K.print kind
+            K.print t.kind
             print t
         end
       end;
-      let env = E.add_variable env bound_var kind in
-      loop env (Let0.body let0))
+      let env = E.add_variable env bound_var t.kind in
+      loop env body)
 
-  let print_with_cache ~cache ppf t =
+  let print_with_cache ~cache ppf { bound_var_and_body; kind; defining_expr; } =
     let rec let_body (expr : Expr.t) =
       match expr with
-      | Let let_expr ->
-        pattern_match let_expr ~f:(fun bound_var let0 ->
+      | Let ({ bound_var_and_body; kind; defining_expr; } as t) ->
+        pattern_match t ~f:(fun ~bound_var ~body ->
           fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
             Variable.print bound_var
             (Misc_color.bold_white ())
-            Flambda_kind.print (Let0.kind let0)
+            Flambda_kind.print kind
             (Misc_color.reset ())
-            (Named.print_with_cache ~cache) (Let0.defining_expr let0);
-          let_body (Let0.body body))
+            (Named.print_with_cache ~cache) defining_expr;
+          let_body body)
       | _ -> expr
     in
-    pattern_match let_expr ~f:(fun bound_var let0 ->
+    pattern_match t ~f:(fun ~bound_var ~body ->
       fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
         (Misc_color.bold_cyan ())
         (Misc_color.reset ())
         Variable.print bound_var
         (Misc_color.bold_white ())
-        Flambda_kind.print (Let0.kind let0)
+        Flambda_kind.print kind
         (Misc_color.reset ())
-        (Named.print_with_cache ~cache) (Let0.defining_expr let0);
+        (Named.print_with_cache ~cache) defining_expr
       fprintf ppf ")@]@ %a)@]"
-        (Expr.print_with_cache ~cache) (let_body (Let0.body let0)))
+        (Expr.print_with_cache ~cache) body)
+
+  let kind t = t.kind
+  let defining_expr t = t.defining_expr
+
+  let pattern_match t ~f =
+    Bound_var_and_body.pattern_match t.bound_var_and_body
+      ~f:(fun bound_var body -> f ~bound_var ~body)
+
+  let free_names ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
+    pattern_match t ~f:(fun ~bound_var ~body ->
+      let from_defining_expr = Named.free_names defining_expr in
+      let from_body = Expr.free_names body in
+      Name_occurrences.union from_defining_expr
+        (Name_occurrences.remove from_body bound_var)
+
+  let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
+        perm =
+    let bound_var_and_body' =
+      Bound_var_and_body.apply_name_permutation bound_var_and_body perm
+    in
+    let defining_expr' =
+      Named.apply_name_permutation defining_expr perm
+    in
+    if bound_var_and_body == bound_var_and_body'
+      && defining_expr == defining_expr'
+    then t
+    else
+      { bound_var_and_body = bound_var_and_body';
+        kind;
+        defining_expr = defining_expr';
+      }
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -1983,42 +1952,50 @@ end = struct
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
-end and Non_recursive_let_cont_handler0 : sig
+end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
-  val create
-     : handler:Continuation_handler.t
-    -> body:Expr.t
-    -> t
-  val handler : t -> Continuation_handler.t
-  val body : t -> Expr.t
+
+  val create : Continuation.t -> Non_recursive_let_cont_handler0.t -> t
+
+  val pattern_match
+     : t
+    -> f:(Continuation.t -> Non_recursive_let_cont_handler0.t -> 'a)
+    -> 'a
 end = struct
+  module Continuation_and_body =
+    Name_abstraction.Make (Bound_continuation) (Expr)
+
   type t = {
+    continuation_and_body : Continuation_and_body.t;
     handler : Continuation_handler.t;
-    body : Expr_with_permutation.t;
   }
 
-  let free_names t =
-    Name_occurrences.union (Continuation_handler.free_names handler)
-      (Expr_with_permutation.free_names body)
+  let create ~continuation_and_body ~handler =
+    { continuation_and_body;
+      handler;
+    }
 
-  let apply_name_permutation { handler; body; } perm =
-    let handler' =
-      Continuation_handlers.apply_name_permutation handler perm
+  let pattern_match t ~f =
+    Continuation_and_body.pattern_match t.continuation_and_body
+      ~f:(fun continuation body -> f continuation ~body)
+
+  let handler t = t.handler
+
+  let free_names { continuation_and_body; handler; } =
+    Name_occurrences.union
+      (Continuation_and_body.free_names continuation_and_body)
+      (Continuation_handler.free_names handler)
+
+  let apply_name_permutation { continuation_and_body; handler; } perm =
+    let continuation_and_body' =
+      Continuation_and_body.apply_name_permutation continuation_and_body perm
     in
-    let body' =
-      Expr_with_permutation.apply_name_permutation body perm
+    let handler' =
+      Continuation_handler.apply_name_permutation handler perm
     in
     { handler = handler';
-      body = body';
+      continuation_and_body = continuation_and_body';
     }
-end and Non_recursive_let_cont_handler : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_continuation)
-      (Non_recursive_let_cont_handler0)
-  end
-end = struct
-  include Name_abstraction.Make (Bound_continuation)
-    (Non_recursive_let_cont_handler0)
 end and Recursive_let_cont_handlers0 : sig
   include Contains_names.S
   val create
@@ -2032,6 +2009,14 @@ end = struct
     handlers : Continuation_handlers.t;
     body : Expr_with_permutation.t;
   }
+
+  let create ~handlers ~body =
+    { handlers;
+      body = Expr_with_permutation.create body;
+    }
+
+  let handlers t = t.handlers
+  let body t = t.body
 
   let free_names { handlers; body; } =
     Name_occurrences.union (Continuation_handlers.free_names handlers)
@@ -2048,13 +2033,47 @@ end = struct
       body = body';
     }
 end and Recursive_let_cont_handlers : sig
-  include module type of struct
-    include Name_abstraction.Make (Bound_continuations)
-      (Recursive_let_cont_handlers0)
-  end
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create : Continuation.Set.t -> 
+
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
 end = struct
   include Name_abstraction.Make (Bound_continuations)
     (Recursive_let_cont_handlers0)
+end and Params_and_handler : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create
+     : Flambda_type.Parameters.t
+    -> handler:Expr.t
+    -> t
+
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
+end = struct
+  include Name_abstraction.Make (Bound_kinded_parameter_set)
+    (Expr_with_permutation)
+
+  let create params ~handler =
+    create (Flambda_type.Parameters.to_set params)
+      (Expr_with_permutation.create handler)
+
+  let pattern_match t ~f =
+    pattern_match t ~f:(fun params expr -> f params ~handler:expr)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -2069,57 +2088,56 @@ end = struct
 end and Continuation_handler0 : sig
   include Contains_names.S
   val print : Format.formatter -> t -> unit
-  val params : t -> Flambda_type.Parameters.t
+  val params_and_handler : t -> Params_and_handler.t
   val stub : t -> bool
   val is_exn_handler : t -> bool
-  val handler : t -> Expr.t
 end = struct
   type t = {
-    params : Flambda_type.Parameters.t;
+    params_and_handler : Params_and_handler.t;
     stub : bool;
     is_exn_handler : bool;
-    handler : Expr_with_permutation.t;
   }
 
-  let print_with_cache ~cache ppf { params; stub; handler; is_exn_handler; } =
-    fprintf ppf "%s%s%a@ =@ %a"
-      (if stub then "*stub* " else "")
-      (if is_exn_handler then "*exn* " else "")
-      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
-      Expr.print handler
+  let print_with_cache ~cache ppf { params_and_handler; stub; handler; } =
+    Params_and_handler.pattern_match params_and_handler
+      ~f:(fun params ~handler -
+        fprintf ppf "%s%s%a@ =@ %a"
+          (if stub then "*stub* " else "")
+          (if is_exn_handler then "*exn* " else "")
+          (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
+          Expr.print handler)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let params t = t.params
+  let params_and_handler t = t.params_and_handler
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
-  let handler t = Expr_with_permutation.expr t.handler
 
-  let free_names { params; stub = _; is_exn_handler = _; handler; } =
-    Name_occurrences.union (Flambda_type.Parameters.free_names params)
-      (Expr_with_permutation.free_names handler)
+  let free_names { params_and_handler; stub = _; is_exn_handler = _; } =
+    Params_and_handler.free_names params_and_handler
 
   let apply_name_permutation
-        ({ params; stub = _; is_exn_handler = _; handler; } as t)
-        perm =
-    let params' =
-      Flambda_type.Parameters.apply_name_permutation params perm
+        ({ params_and_handler; stub = _; is_exn_handler = _; } as t) perm =
+    let params_and_handler' =
+      Flambda_type.Parameters.apply_name_permutation params_and_handler perm
     in
-    let handler' = Expr_with_permutation.apply_name_permutation handler perm in
-    if params == params' && handler == handler' then t
+    if params_and_handler == params_and_handler' then t
     else
-      { params = params';
+      { params_and_handler = params_and_handler';
         stub;
         is_exn_handler;
-        handler = handler';
       }
-end and Continuation_handler :
-  module type of struct
-    include Name_abstraction.Make (Bound_continuations)
-      (Continuation_handler0)
-  end
-= struct
-  include Name_abstraction.Make (Bound_continuations) (Continuation_handler0)
+end and Continuation_handler : sig
+  include Contains_names.S
+
+  val create : Continuation.t -> Continuation_handler0.t -> t
+
+  val pattern_match
+     : t
+    -> f:(Continuation.t -> Continuation_handler0.t -> 'a)
+    -> 'a
+end = struct
+  include Name_abstraction.Make (Bound_continuation) (Continuation_handler0)
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -2540,30 +2558,17 @@ end and Params_and_body : sig
       -> 'a)
     -> 'a
 end = struct
-  module My_closure_and_body =
-    Name_abstraction.Make (Bound_variable) (Expr_with_permutation)
+  include
+    Name_abstraction.Make2 (Bound_kinded_parameter_set) (Bound_variable)
+      (Expr_with_permutation)
 
-  type t = {
-    params : Flambda_type.Parameters.t;
-    my_closure_and_body : My_closure_and_body.t;
-  }
-
-  let create params body my_closure =
-    let my_closure_and_body =
-      My_closure_and_body.create my_closure
-        (Expr_with_permutation.create body)
-    in
-    { params;
-      my_closure_and_body;
-    }
+  let create params ~body ~my_closure =
+    create (Flambda_type.Parameters.to_set params) my_closure
+      (Expr_with_permutation.create body)
 
   let pattern_match t ~f =
-    let params, perm = Flambda_type.Parameters.freshen t.params in
-    let my_closure_and_body =
-      My_closure_and_body.apply_name_permutation t.my_closure_and_body perm
-    in
-    My_closure_and_body.pattern_match my_closure_and_body
-      ~f:(fun my_closure body -> f params ~body ~my_closure)
+    pattern_match t ~f:(fun params my_closure expr ->
+      f params ~body ~my_closure)
 end and Function_declaration : sig
   include Contains_names.S
   val create

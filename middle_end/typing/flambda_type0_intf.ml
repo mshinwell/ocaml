@@ -96,7 +96,7 @@ module type S = sig
 
     val env : t -> Typing_env.t
   end and Parameters : sig
-    type t
+    include Contains_names.S
 
     val print_or_omit_with_cache
        : cache:Printing_cache.t
@@ -104,9 +104,7 @@ module type S = sig
       -> t
       -> unit
 
-    include Contains_names.S with type t := t
-
-    val freshen : t -> t * Name_permutation.t
+    val to_set : t -> Kinded_parameter.Set.t
   end and Typing_env : sig
     type t
 

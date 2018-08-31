@@ -16,27 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type Name = sig
-  include Contains_names.S
-  val create : unit -> t
-  val permutation_to_swap : t -> t -> Name_permutation.t
-end
+type t = Kinded_parameter.Set.t
 
-module Make (Name : Name) (Term : Contains_names.S) : sig
-  (** The type [t] is the equivalent of an atom-abstraction construction
-      "<< -- >> --" in nominal sets. *)
-
-  include Contains_names.S
-
-  val create : Name.t -> Term.t -> t
-
-  val pattern_match : t -> f:(Name.t -> Term.t -> 'a) -> 'a
-end
-
-module Make2 (Name0 : Name) (Name1 : Name) (Term : Contains_names.S) : sig
-  include Contains_names.S
-
-  val create : Name0.t -> Name1.t -> Term.t -> t
-
-  val pattern_match : t -> f:(Name0.t -> Name1.t -> Term.t -> 'a) -> 'a
-end
+include Contains_names.S with type t := t

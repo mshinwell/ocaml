@@ -16,27 +16,26 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type Name = sig
-  include Contains_names.S
-  val create : unit -> t
-  val permutation_to_swap : t -> t -> Name_permutation.t
-end
+type t = Kinded_parameter.Set.t
 
-module Make (Name : Name) (Term : Contains_names.S) : sig
-  (** The type [t] is the equivalent of an atom-abstraction construction
-      "<< -- >> --" in nominal sets. *)
+let free_names t =
+  Kinded_parameter.Set.fold (fun param free_names ->
+      Name_occurrences.add free_names In_terms
+        (Kinded_parameter.name param))
+    t
+    (Name_occurrences.create ())
 
-  include Contains_names.S
-
-  val create : Name.t -> Term.t -> t
-
-  val pattern_match : t -> f:(Name.t -> Term.t -> 'a) -> 'a
-end
-
-module Make2 (Name0 : Name) (Name1 : Name) (Term : Contains_names.S) : sig
-  include Contains_names.S
-
-  val create : Name0.t -> Name1.t -> Term.t -> t
-
-  val pattern_match : t -> f:(Name0.t -> Name1.t -> Term.t -> 'a) -> 'a
-end
+let apply_name_permutation t perm =
+  let changed = ref false in
+  let result =
+    Kinded_parameter.Set.fold (fun param result ->
+        let param' = Kinded_parameter.apply_name_permutation param perm in
+        if not (param == param') then begin
+          changed := true;
+        end;
+        Kinded_parameter.Set.add param' result)
+      t
+      Kinded_parameter.Set.empty
+  in
+  if not !changed then t
+  else result

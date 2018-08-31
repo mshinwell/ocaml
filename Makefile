@@ -331,6 +331,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/string_info.cmo \
   middle_end/language/allocated_const.cmo \
   middle_end/language/kinded_parameter.cmo \
+  middle_end/language/bound_kinded_parameter_set.cmo \
   middle_end/typing/type_equality_env.cmo \
   middle_end/typing/name_like_intf.cmo \
   middle_end/language/expr_intf.cmo \

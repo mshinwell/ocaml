@@ -4013,6 +4013,8 @@ module Make (Expr : Expr_intf.S) = struct
       | [params] -> params
       | _ -> Misc.fatal_errorf "Wrong form of relational product:@ %a" print t
 
+    let to_set t = Kinded_parameter.Set.of_list (to_list t)
+
     let print_or_omit_with_cache ~cache:_ ppf t =
       match to_list t with
       | [] -> ()
