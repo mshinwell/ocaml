@@ -329,14 +329,6 @@ module rec Expr : sig
       -> for_last_body:(t -> unit)
       -> for_each_let:(t -> unit)
       -> unit
-
-    (** Apply the given functions to the immediate subexpressions of the given
-        Flambda expression. *)
-    val iter_subexpressions
-       : (t -> unit)
-      -> (Named.t -> unit)
-      -> t
-      -> unit
         
     val iter_expr : (t -> unit) -> t -> unit
 
@@ -383,12 +375,6 @@ module rec Expr : sig
       -> for_defining_expr:(Variable.t -> Flambda_kind.t -> Named.t -> Named.t)
       -> for_last_body:(t -> t)
       -> after_rebuild:(t -> t)
-      -> t
-
-    val map_subexpressions
-       : (t -> t)
-      -> (Variable.t -> Named.t -> Named.t)
-      -> t
       -> t
 
     val map_expr : (t -> t) -> t -> t

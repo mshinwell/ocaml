@@ -1008,22 +1008,6 @@ end = struct
 
     let iter_named f_named t = iter (fun (_ : t) -> ()) f_named t
 
-    let iter_subexpressions f f_named (t : t) =
-      match t with
-      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> ()
-      | Let { defining_expr; body; _ } ->
-        f_named defining_expr;
-        f body
-      | Let_cont { body; handlers =
-          Non_recursive { handler = { handler; _ }; _ } } ->
-        f body;
-        f handler
-      | Let_cont { body; handlers = Recursive handlers; } ->
-        f body;
-        Continuation.Map.iter
-          (fun _cont ({ handler; _ } : Continuation_handler.t) -> f handler)
-          handlers
-
     (* CR-soon mshinwell: Remove "let_rec" from this name (ditto for the
        toplevel-only variant) *)
     let iter_all_immutable_let_and_let_rec_bindings t ~f =
@@ -1075,8 +1059,6 @@ end = struct
             match tree with
             | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> tree
             | Let _ -> assert false
-            (* CR-soon mshinwell: There's too much code duplication here with
-               [map_subexpressions]. *)
             | Let_cont { body; handlers; } ->
               let new_body = aux body in
               match handlers with
@@ -1160,52 +1142,6 @@ end = struct
 
     let map_named_with_id f_named t =
       map_general ~toplevel:false (fun t -> t) f_named t
-
-    let map_subexpressions f f_named (t : t) : t =
-      match t with
-      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> t
-      | Let { var; kind; defining_expr; body; _ } ->
-        let new_named = f_named var defining_expr in
-        let new_body = f body in
-        if new_named == defining_expr && new_body == body then
-          t
-        else
-          create_let var kind new_named new_body
-      | Let_cont { body; handlers; } ->
-        let new_body = f body in
-        match handlers with
-        | Non_recursive { name; handler =
-            ({ handler = handler_expr; _ } as handler); } ->
-          let new_handler_expr = f handler_expr in
-          if new_body == body && new_handler_expr == handler_expr then
-            t
-          else
-            Let_cont {
-              body = new_body;
-              handlers = Non_recursive {
-                name;
-                handler = { handler with handler = new_handler_expr; }
-              };
-            }
-        | Recursive handlers ->
-          let something_changed = ref false in
-          let candidate_handlers =
-            Continuation.Map.map
-              (fun (handler : Continuation_handler.t) ->
-                let new_handler = f handler.handler in
-                if not (new_handler == handler.handler) then begin
-                  something_changed := true
-                end;
-                { handler with handler = new_handler; })
-              handlers
-          in
-          if !something_changed || not (new_body == body) then
-            Let_cont {
-              body = new_body;
-              handlers = Recursive candidate_handlers;
-            }
-          else
-            t
 
     let map_symbols t ~f =
       map_named (function
