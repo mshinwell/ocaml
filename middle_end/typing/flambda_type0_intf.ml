@@ -105,6 +105,8 @@ module type S = sig
       -> unit
 
     include Contains_names.S with type t := t
+
+    val freshen : t -> t * Name_permutation.t
   end and Typing_env : sig
     type t
 

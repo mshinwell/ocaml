@@ -794,6 +794,8 @@ end and Function_declarations : sig
   *)
   type t
 
+  val print : Format.formatter -> t -> unit
+
   (** Create a set of function declarations given the individual
       declarations. *)
   val create : Function_declaration.t Closure_id.Map.t -> t
@@ -819,11 +821,6 @@ end and Function_declarations : sig
      : t
     -> (Set_of_closures_origin.t -> Set_of_closures_origin.t)
     -> t
-
-  val print : Format.formatter -> t -> unit
-
-  (** All names free in the given function declarations. *)
-  val free_names : t -> Name_occurrences.t
 
   val find_declaration_variable : Closure_id.t -> t -> Variable.t
 
@@ -858,9 +855,30 @@ end and Function_declarations : sig
     -> Closure_id.Set.t
 *)
 
-  val all_functions_parameters : t -> Variable.Set.t
-
   val contains_stub : t -> bool
+end and Params_and_body : sig
+  (** A name abstraction that comprises a function's parameters (together with
+      any relations between them, expressed using a relational product), the
+      code of the function, and the [my_closure] variable.
+
+      From the body of the function, accesses to variables within the closure
+      need to go via a [Project_var] (from [my_closure]); accesses to any other
+      simultaneously-defined functions need to go likewise via a
+      [Move_within_set_of_closures]. *)
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create
+     : Flambda_type.Parameters.t
+    -> body:Expr.t
+    -> my_closure:Variable.t
+    -> t
+
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t -> Expr.t -> my_closure:Variable.t -> 'a)
+    -> 'a
 end and Function_declaration : sig
   type t
 
@@ -880,15 +898,13 @@ end and Function_declaration : sig
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
-    -> params:Flambda_type.Parameters.t
-    -> body:Expr.t
+    -> params_and_body:Params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
     -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
-    -> my_closure:Variable.t
     -> t
 
   val print : Closure_id.t -> Format.formatter -> t -> unit
@@ -907,24 +923,15 @@ end and Function_declaration : sig
       exception. *)
   val exn_continuation_param : t -> Continuation.t
 
-  (** Relational product holding the function's parameters and equations
-      thereon. *)
-  val params : t -> Flambda_type.Parameters.t
+  (** Abstraction value containing the parameters and the body. *)
+  val params_and_body : t -> Params_and_body.t
 
   (* CR mshinwell: bad name *)
   val function_arity : t -> Flambda_arity.t
 
-  (** The code of the function's body. *)
-  val body : t -> Expr.t
-
   (** An identifier to provide fast (conservative) equality checking for
       function bodies. *)
   val code_id : t -> Code_id.t
-
-  (** All free names in the function's body (that is to say, treating
-      parameters etc. bound by the function as free).  (See [free_names],
-      below.) *)
-  val free_names_in_body : t -> Name_occurrences.t
 
   (** The arity of the return continuation of the function.  This provides the
       number of results that the function produces and their kinds. *)
@@ -948,25 +955,8 @@ end and Function_declaration : sig
   (** Whether the function is known definitively to be a functor. *)
   val is_a_functor : t -> bool
 
-  (** Binding name of the closure inside the function body.  The only free
-      variables allowed in such a body are this variable and the parameters
-      of the function.  Accesses to variables within the closure need to go
-      via a [Project_var]; accesses to any other simultaneously-defined
-      functions need to go via a [Move_within_set_of_closures]. *)
-  val my_closure : t -> Variable.t
-
-  (** Change only the code of a function declaration. *)
-  val update_body : t -> body:Expr.t -> t
-
-  (** Change only the parameters of a function declaration. *)
-  val update_params : t -> params:Flambda_type.Parameters.t -> t
-
-  (** Change only the code and parameters of a function declaration. *)
-  val update_params_and_body
-     : t
-    -> params:Flambda_type.Parameters.t
-    -> body:Expr.t
-    -> t
+  (** Change the parameters and code of a function declaration. *)
+  val update_params_and_body : t -> Params_and_body.t -> t
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
 
 (** A module for the manipulation of terms where the recomputation of free

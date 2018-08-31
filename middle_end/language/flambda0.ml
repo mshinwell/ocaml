@@ -2600,21 +2600,62 @@ end = struct
     in
     if funs == funs' then t
     else { set_of_closures_origin; funs = funs'; }
+end and Params_and_body : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create
+     : Flambda_type.Parameters.t
+    -> body:Expr.t
+    -> my_closure:Variable.t
+    -> t
+
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> body:Expr.t
+      -> my_closure:Variable.t
+      -> 'a)
+    -> 'a
+end = struct
+  module My_closure_and_body =
+    Name_abstraction.Make (Bound_variable) (Expr_with_permutation)
+
+  type t = {
+    params : Flambda_type.Parameters.t;
+    my_closure_and_body : My_closure_and_body.t;
+  }
+
+  let create params body my_closure =
+    let my_closure_and_body =
+      My_closure_and_body.create my_closure
+        (Expr_with_permutation.create body)
+    in
+    { params;
+      my_closure_and_body;
+    }
+
+  let pattern_match t ~f =
+    let params, perm = Flambda_type.Parameters.freshen t.params in
+    let my_closure_and_body =
+      My_closure_and_body.apply_name_permutation t.my_closure_and_body perm
+    in
+    My_closure_and_body.pattern_match my_closure_and_body
+      ~f:(fun my_closure body -> f params ~body ~my_closure)
 end and Function_declaration : sig
   include Contains_names.S
   val create
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
     -> exn_continuation_param:Continuation.t
-    -> params:Flambda_type.Parameters.t
-    -> body:Expr.t
+    -> params_and_body:Params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
     -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
-    -> my_closure:Variable.t
     -> t
   val print : Closure_id.t -> Format.formatter -> t -> unit
   val print_with_cache
@@ -2626,35 +2667,21 @@ end and Function_declaration : sig
   val closure_origin : t -> Closure_origin.t
   val continuation_param : t -> Continuation.t
   val exn_continuation_param : t -> Continuation.t
-  val params : t -> Flambda_type.Parameters.t
-  val body : t -> Expr.t
+  val params_and_body : t -> Params_and_body.t
   val code_id : t -> Code_id.t
-  val free_names_in_body : t -> Name_occurrences.t
   val result_arity : t -> Flambda_arity.t
   val stub : t -> bool
   val dbg : t -> Debuginfo.t
   val inline : t -> Inline_attribute.t
   val specialise : t -> Specialise_attribute.t
   val is_a_functor : t -> bool
-  val my_closure : t -> Variable.t
-  val update_body : t -> body:Expr.t -> t
-  val update_params : t -> params:Flambda_type.Parameters.t -> t
-  val update_params_and_body
-     : t
-    -> params:Flambda_type.Parameters.t
-    -> body:Expr.t
-    -> t
+  val update_params_and_body : t -> Params_and_body.t -> t
 end = struct
   type t = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
     exn_continuation_param : Continuation.t;
-    params : Flambda_type.Parameters.t;
-    body : Expr_with_permutation.t;
-    (* Function declarations' bodies are completely closed with respect to
-       names that might be permuted: as such, they have empty support.
-       However we can still use [Expr_with_permutation] to manage the delayed
-       calculation of free names in such bodies. *)
+    params_and_body : Params_and_body.t;
     code_id : Code_id.t;
     free_names_in_body : Name_occurrences.t;
     result_arity : Flambda_arity.t;
@@ -2663,14 +2690,13 @@ end = struct
     inline : Inline_attribute.t;
     specialise : Specialise_attribute.t;
     is_a_functor : bool;
-    my_closure : Variable.t;
   }
 
   let create ~closure_origin ~continuation_param ~exn_continuation_param
-        ~params ~body ~result_arity ~stub ~dbg
+        ~params_and_body ~result_arity ~stub ~dbg
         ~(inline : Inline_attribute.t)
         ~(specialise : Specialise_attribute.t)
-        ~is_a_functor ~my_closure : t =
+        ~is_a_functor : t =
     begin match stub, inline with
     | true, (Never_inline | Default_inline)
     | false, (Never_inline | Default_inline | Always_inline | Unroll _) -> ()
@@ -2690,8 +2716,7 @@ end = struct
     { closure_origin;
       continuation_param;
       exn_continuation_param;
-      params;
-      body = Expr_with_permutation.create body;
+      params_and_body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       result_arity;
       stub;
@@ -2699,102 +2724,59 @@ end = struct
       inline;
       specialise;
       is_a_functor;
-      my_closure;
     }
 
-  (* CR mshinwell: use record pattern match *)
-  let print_with_cache ~cache closure_id ppf (f : t) =
-    let stub =
-      if f.stub then
-        " *stub*"
-      else
-        ""
-    in
-    let is_a_functor =
-      if f.is_a_functor then
-        " *functor*"
-      else
-        ""
-    in
-    (* CR mshinwell: Use [Inline_attribute.print_...] etc. *)
-    let inline =
-      match f.inline with
-      | Always_inline -> " *inline*"
-      | Never_inline -> " *never_inline*"
-      | Unroll _ -> " *unroll*"
-      | Default_inline -> ""
-    in
-    let specialise =
-      match f.specialise with
-      | Always_specialise -> " *specialise*"
-      | Never_specialise -> " *never_specialise*"
-      | Default_specialise -> ""
-    in
-    fprintf ppf
-      "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
-        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->@ @[<2>%a@])@]@ "
-      Closure_id.print closure_id
-      stub
-      is_a_functor inline specialise
-      Variable.print f.my_closure
-      Closure_origin.print f.closure_origin
-      (Misc_color.bold_cyan ())
-      (Misc_color.reset ())
-      Continuation.print f.continuation_param
-      Continuation.print f.exn_continuation_param
-      (Flambda_type.Parameters.print_or_omit_with_cache ~cache) f.params
-      (Misc_color.bold_white ())
-      Flambda_arity.print f.result_arity
-      (Misc_color.reset ())
-      (Expr.print_with_cache ~cache) f.body
+  let print_with_cache ~cache closure_id ppf
+        { closure_origin;
+          continuation_param;
+          exn_continuation_param;
+          params_and_body;
+          code_id;
+          result_arity;
+          stub;
+          dbg;
+          inline;
+          specialise;
+          is_a_functor;
+        } =
+    let stub = if f.stub then " *stub*" else "" in
+    let is_a_functor = if f.is_a_functor then " *functor*" else "" in
+    Params_and_body.pattern_match params_and_body
+      ~f:(fun params ~body ~my_closure ->
+        fprintf ppf
+          "@[<2>(%a%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
+            %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->\
+            @ @[<2>%a@])@]@ "
+          Closure_id.print closure_id
+          stub
+          is_a_functor
+          Inline_attribute.print inline
+          Specialise_attribute.print specialise
+          Variable.print my_closure
+          Closure_origin.print closure_origin
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
+          Continuation.print continuation_param
+          Continuation.print exn_continuation_param
+          (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
+          (Misc_color.bold_white ())
+          Flambda_arity.print result_arity
+          (Misc_color.reset ())
+          (Expr.print_with_cache ~cache) body)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  (* CR mshinwell: use record pattern match *)
-  let update_body t ~body : t =
-    { closure_origin = t.closure_origin;
-      params = t.params;
-      continuation_param = t.continuation_param;
-      exn_continuation_param = t.exn_continuation_param;
-      body = Expr_with_permutation.create body;
+  let update_params_and_body t params_and_body =
+    { t with
+      params_and_body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
-      result_arity = t.result_arity;
-      stub = t.stub;
-      dbg = t.dbg;
-      inline = t.inline;
-      specialise = t.specialise;
-      is_a_functor = t.is_a_functor;
-      my_closure = t.my_closure
     }
-
-  (* CR mshinwell: use record pattern match *)
-  let update_params_and_body t ~params ~body : t =
-    { closure_origin = t.closure_origin;
-      params;
-      continuation_param = t.continuation_param;
-      exn_continuation_param = t.exn_continuation_param;
-      body = Expr_with_permutation.create body;
-      code_id = Code_id.create (Compilation_unit.get_current_exn ());
-      result_arity = t.result_arity;
-      stub = t.stub;
-      dbg = t.dbg;
-      inline = t.inline;
-      specialise = t.specialise;
-      is_a_functor = t.is_a_functor;
-      my_closure = t.my_closure;
-      (* CR pchambart: Updating that field ([my_closure]) is probably needed
-         also *)
-    }
-
-  let update_params t ~params =
-    update_params_and_body t ~params ~body:t.body
 
   let free_names
         { closure_origin = _;
           continuation_param = _;
           exn_continuation_param = _;
-          params;
-          body = _;
+          params_and_body;
           code_id = _;
           result_arity = _;
           stub = _;
@@ -2802,16 +2784,14 @@ end = struct
           inline = _;
           specialise = _;
           is_a_functor = _;
-          my_closure = _;
         } =
-    Flambda_type.Parameters.free_names params
+    Params_and_body.free_names params_and_body
 
   let apply_name_permutation
         ({ closure_origin;
            continuation_param;
            exn_continuation_param;
-           params;
-           body;
+           params_and_body;
            code_id;
            result_arity;
            stub;
@@ -2819,16 +2799,16 @@ end = struct
            inline;
            specialise;
            is_a_functor;
-           my_closure;
          } as t) perm =
-    let params' = Flambda_type.Parameters.apply_name_permutation params perm in
-    if params == params' then t
+    let params_and_body' =
+      Params_and_body.apply_name_permutation params_and_body perm
+    in
+    if params_and_body == params_and_body' then t
     else
       { closure_origin;
         continuation_param;
         exn_continuation_param;
-        params = params';
-        body;
+        params_and_body = params_and_body';
         code_id;
         result_arity;
         stub;
@@ -2836,7 +2816,6 @@ end = struct
         inline;
         specialise;
         is_a_functor;
-        my_closure;
       }
 
   let find_declaration_variable _closure_id _t =
@@ -2901,13 +2880,6 @@ end = struct
           fun_dependencies
     done;
     !set
-
-  let all_functions_parameters (function_decls : t) =
-    Closure_id.Map.fold
-      (fun _ ({ params; _ } : Function_declaration.t) set ->
-        let params = T.Parameters.kinded_params params in
-        Variable.Set.union set (Kinded_parameter.List.var_set params))
-      function_decls.funs Variable.Set.empty
 
   let contains_stub (fun_decls : t) =
     let number_of_stub_functions =
