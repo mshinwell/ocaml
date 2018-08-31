@@ -565,113 +565,36 @@ end = struct
     in
     loop env expr
 
-  let rec print_with_cache0 ~cache ppf (t : t) =
+  let rec print_with_cache ~cache ppf (t : t) =
     match t with
-    | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
-               specialise; dbg; }) ->
-      Format.fprintf ppf "@[<2>(apply@ \
-          (func %a)@ \
-          (args %a)@ \
-          (call_kind %a)@ \
-          (inline %a)@ \
-          (specialise %a)@ \
-          (dbg %a)@ \
-          (continuation %a)@ \
-          (exn_continuation %a))@]"
-        Name.print func
-        Simple.List.print args
-        Call_kind.print call_kind
-        Inline_attribute.print inline
-        Specialise_attribute.print specialise
-        Debuginfo.print_or_elide dbg
-        Continuation.print continuation
-        Continuation.print exn_continuation
-    | Let { var = id; kind; defining_expr = arg; body; _ } ->
-      let rec letbody (ul : t) =
-        match ul with
-        | Let { var = id; kind; defining_expr = arg; body; _ } ->
-          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Variable.print id
-            (Misc_color.bold_white ())
-            Flambda_kind.print kind
-            (Misc_color.reset ())
-            (Named.print_with_cache ~cache) arg;
-          letbody body
-        | _ -> ul
-      in
-      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Variable.print id
-        (Misc_color.bold_white ())
-        Flambda_kind.print kind
-        (Misc_color.reset ())
-        (Named.print_with_cache ~cache) arg;
-      let expr = letbody body in
-      fprintf ppf ")@]@ %a)@]" print expr
-    | Switch (scrutinee, sw) ->
-      fprintf ppf
-        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Name.print scrutinee Switch.print sw
-    | Apply_cont (i, trap_action, []) ->
+    | Let let_expr -> Let.print_with_cache ~cache ppf let_expr
+    | Let_cont let_cont -> Let_cont.print_with_cache ~cache ppf let_cont
+    | Apply apply -> Apply.print ppf apply
+    | Apply_cont (k, trap_action, []) ->
       fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
         Trap_action.Option.print trap_action
         (Misc_color.bold_cyan ())
         (Misc_color.reset ())
-        Continuation.print i
-    | Apply_cont (i, trap_action, ls) ->
+        Continuation.print k
+    | Apply_cont (k, trap_action, args) ->
       fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
         Trap_action.Option.print trap_action
         (Misc_color.bold_cyan ())
         (Misc_color.reset ())
-        Continuation.print i
-        Simple.List.print ls
-    | Let_cont { body; handlers; } ->
-      (* Printing the same way as for [Let] is easier when debugging lifting
-         passes. *)
-      if !Clflags.dump_let_cont then begin
-        let rec let_cont_body (ul : t) =
-          match ul with
-          | Let_cont { body; handlers; } ->
-            fprintf ppf "@ @[<2>%a@]"
-              (Let_cont_handlers.print_with_cache ~cache) handlers;
-            let_cont_body body
-          | _ -> ul
-        in
-        fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-          (Let_cont_handlers.print_with_cache ~cache) handlers;
-        let expr = let_cont_body body in
-        fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
-      end else begin
-        (* CR mshinwell: Share code with ilambda.ml *)
-        let rec gather_let_conts let_conts (t : t) =
-          match t with
-          | Let_cont let_cont ->
-            gather_let_conts (let_cont.handlers :: let_conts) let_cont.body
-          | body -> let_conts, body
-        in
-        let let_conts, body = gather_let_conts [] t in
-        let pp_sep ppf () = fprintf ppf "@ " in
-        fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
-          (print_with_cache0 ~cache) body
-          (Format.pp_print_list ~pp_sep
-            (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
-      end
-    | Invalid _ ->
-      fprintf ppf "%sunreachable%s"
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-
-  let print_with_cache ~cache ppf (t : t) =
-    print_with_cache0 ~cache ppf t
-(*
-    Printing_cache.with_cache cache ppf "expr" t
-      (fun ppf () -> print_with_cache0 ~cache ppf t)
-*)
+        Continuation.print k
+        Simple.List.print args
+    | Switch (scrutinee, switch) ->
+      fprintf ppf
+        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Name.print scrutinee
+        Switch.print switch
+    | Invalid semantics ->
+      fprintf ppf "@[%sInvalid %a%s@]"
+        (Misc_color.bold_cyan ())
+        Invalid_term_semantics.print semantics
+        (Misc_color.reset ())
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -1238,14 +1161,14 @@ end = struct
     let map_named_with_id f_named t =
       map_general ~toplevel:false (fun t -> t) f_named t
 
-    let map_subexpressions f f_named (tree : t) : t =
-      match tree with
-      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> tree
+    let map_subexpressions f f_named (t : t) : t =
+      match t with
+      | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> t
       | Let { var; kind; defining_expr; body; _ } ->
         let new_named = f_named var defining_expr in
         let new_body = f body in
         if new_named == defining_expr && new_body == body then
-          tree
+          t
         else
           create_let var kind new_named new_body
       | Let_cont { body; handlers; } ->
@@ -1255,7 +1178,7 @@ end = struct
             ({ handler = handler_expr; _ } as handler); } ->
           let new_handler_expr = f handler_expr in
           if new_body == body && new_handler_expr == handler_expr then
-            tree
+            t
           else
             Let_cont {
               body = new_body;
@@ -1282,9 +1205,9 @@ end = struct
               handlers = Recursive candidate_handlers;
             }
           else
-            tree
+            t
 
-    let map_symbols tree ~f =
+    let map_symbols t ~f =
       map_named (function
           | (Simple simple) as named ->
             let new_simple = Simple.map_symbol simple ~f in
@@ -1293,9 +1216,9 @@ end = struct
             else
               Simple new_simple
           | (Set_of_closures _ | Prim _) as named -> named)
-        tree
+        t
 
-    let map_apply tree ~f =
+    let map_apply t ~f =
       map (function
           | (Apply apply) as expr ->
             let new_apply = f apply in
@@ -1305,16 +1228,16 @@ end = struct
               Apply new_apply
           | expr -> expr)
         (fun named -> named)
-        tree
+        t
 
-    let map_sets_of_closures tree ~f =
+    let map_sets_of_closures t ~f =
       map_named (function
           | (Set_of_closures set_of_closures) as named ->
             let new_set_of_closures = f set_of_closures in
             if new_set_of_closures == set_of_closures then named
             else Set_of_closures new_set_of_closures
           | (Simple _ | Prim _) as named -> named)
-        tree
+        t
 
     let map_function_bodies ?ignore_stubs t ~f =
       map_sets_of_closures t ~f:(fun (set : Set_of_closures.t) ->
@@ -1821,6 +1744,8 @@ end and Let : sig
 
   val invariant : Invariant_env.t -> t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
 end = struct
   include Name_abstraction.Make (Bound_variable) (Let0)
@@ -1859,6 +1784,32 @@ end = struct
       end;
       let env = E.add_variable env bound_var kind in
       loop env (Let0.body let0))
+
+  let print_with_cache ~cache ppf t =
+    let rec let_body (expr : Expr.t) =
+      match expr with
+      | Let let_expr ->
+        pattern_match let_expr ~f:(fun bound_var let0 ->
+          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
+            Variable.print bound_var
+            (Misc_color.bold_white ())
+            Flambda_kind.print (Let0.kind let0)
+            (Misc_color.reset ())
+            (Named.print_with_cache ~cache) (Let0.defining_expr let0);
+          let_body (Let0.body body))
+      | _ -> expr
+    in
+    pattern_match let_expr ~f:(fun bound_var let0 ->
+      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Variable.print bound_var
+        (Misc_color.bold_white ())
+        Flambda_kind.print (Let0.kind let0)
+        (Misc_color.reset ())
+        (Named.print_with_cache ~cache) (Let0.defining_expr let0);
+      fprintf ppf ")@]@ %a)@]"
+        (Expr.print_with_cache ~cache) (let_body (Let0.body let0)))
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -1942,6 +1893,40 @@ end = struct
         recursive_env
     in
     loop env body
+
+  let print_with_cache ~cache ppf t =
+    (* Printing the same way as for [Let] is easier when debugging lifting
+        passes. *)
+    if !Clflags.dump_let_cont then begin
+      let rec let_cont_body (ul : t) =
+        match ul with
+        | Let_cont { body; handlers; } ->
+          fprintf ppf "@ @[<2>%a@]"
+            (Let_cont_handlers.print_with_cache ~cache) handlers;
+          let_cont_body body
+        | _ -> ul
+      in
+      fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        (Let_cont_handlers.print_with_cache ~cache) handlers;
+      let expr = let_cont_body body in
+      fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
+    end else begin
+      (* CR mshinwell: Share code with ilambda.ml *)
+      let rec gather_let_conts let_conts (t : t) =
+        match t with
+        | Let_cont let_cont ->
+          gather_let_conts (let_cont.handlers :: let_conts) let_cont.body
+        | body -> let_conts, body
+      in
+      let let_conts, body = gather_let_conts [] t in
+      let pp_sep ppf () = fprintf ppf "@ " in
+      fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
+        (print_with_cache0 ~cache) body
+        (Format.pp_print_list ~pp_sep
+          (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
+    end
 
   let to_continuation_map t =
     match t with
