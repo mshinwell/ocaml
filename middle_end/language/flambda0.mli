@@ -271,8 +271,6 @@ module rec Expr : sig
      overapplication" be an invariant throughout.  At the moment I think this is
      only true after [Simplify] has split overapplications. *)
 
-  val description_of_toplevel_node : t -> string
-
   (** [bind [var1, expr1; ...; varN, exprN] body] binds using
       [Immutable] [Let] expressions the given [(var, expr)] pairs around the
       body. *)

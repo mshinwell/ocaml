@@ -810,29 +810,20 @@ end = struct
 
   let rec no_effects_or_coeffects (t : t) =
     match t with
-    | Let { defining_expr; body; _ } ->
+    | Let let_expr ->
       Named.no_effects_or_coeffects defining_expr
-        && no_effects_or_coeffects body
+        && Let.pattern_match let_expr ~f:(fun ~bound_var:_ ~body ->
+             no_effects_or_coeffects body)
     | Let_cont { body; handlers; } ->
       no_effects_or_coeffects body
         && Let_cont_handlers.no_effects_or_coeffects handlers
-    | Apply_cont _
-    | Switch _ -> true
-    | Apply _
-    | Invalid _ -> false
+    | Apply_cont _ | Switch _ -> true
+    | Apply _ | Invalid _ -> false
 
-  let description_of_toplevel_node (expr : Expr.t) =
-    match expr with
-    | Let { var; _ } -> Format.asprintf "let %a" Variable.print var
-    | Let_cont  _ -> "let_cont"
-    | Apply _ -> "apply"
-    | Apply_cont  _ -> "apply_cont"
-    | Switch _ -> "switch"
-    | Invalid _ -> "invalid"
-
+  (* CR mshinwell: Maybe this should assign the fresh names? *)
   let bind ~bindings ~body =
-    List.fold_left (fun expr (var, kind, var_def) ->
-        Expr.create_let var kind var_def expr)
+    List.fold_left (fun expr (bound_var, kind, defining_expr) ->
+        Expr.create_let bound_var kind defining_expr expr)
       body bindings
 
   type with_wrapper =
@@ -843,16 +834,13 @@ end = struct
         wrapper_handler : Continuation_handler.t;
       }
 
-  let build_let_cont_with_wrappers ~body ~(recursive : F0.recursive)
+  let build_let_cont_with_wrappers ~body ~(recursive : recursive)
         ~with_wrappers : Expr.t =
     match recursive with
     | Non_recursive ->
       begin match Continuation.Map.bindings with_wrappers with
       | [cont, Unchanged { handler; }] ->
-        Let_cont {
-          body;
-          handlers = Non_recursive { name = cont; handler; };
-        }
+        Let_cont.create_non_recursive cont ~body handler
       | [cont, With_wrapper { new_cont; new_handler; wrapper_handler; }] ->
         Let_cont {
           body = Let_cont {
@@ -893,12 +881,8 @@ end = struct
         match t with
         | Let let_expr ->
           for_each_let let_expr;
-          let body =
-            Let.pattern_match (fun _bound_var let0 ->
-              for_defining_expr (Let0.kind let0) (Let0.defining_expr let0);
-              Let0.body let0)
-          in
-          loop body
+          for_defining_expr (Let.kind let_expr) (Let.defining_expr let_expr);
+          loop (Let.pattern_match let_expr ~f:(fun _bound_var body -> body))
         | t ->
           for_last_body t
       in
@@ -952,9 +936,9 @@ end = struct
 
     let iter f f_named t = iter_general ~toplevel:false f f_named (Is_expr t)
 
-    let iter_expr f t = iter f (fun _ -> ()) t
+    let iter_expr t ~f = iter f (fun _ -> ()) t
 
-    let iter_named f_named t = iter (fun (_ : t) -> ()) f_named t
+    let iter_named t ~f = iter (fun (_ : t) -> ()) f t
 
     (* CR-soon mshinwell: Remove "let_rec" from this name (ditto for the
        toplevel-only variant) *)
@@ -964,16 +948,14 @@ end = struct
           | _ -> ())
         t
 
-    let iter_sets_of_closures f t =
-      iter_named (function
-          | Set_of_closures clos -> f clos
-          | Simple _ | Prim _ -> ())
-        t
+    let iter_sets_of_closures t ~f =
+      iter_named t ~f:(function
+        | Set_of_closures set -> f set
+        | Simple _ | Prim _ -> ())
 
     let iter_function_bodies t ~f =
-      iter_sets_of_closures (fun (set : Set_of_closures.t) ->
-          Set_of_closures.Iterators.iter_function_bodies set ~f)
-        t
+      iter_sets_of_closures t ~f:(fun (set : Set_of_closures.t) ->
+        Set_of_closures.Iterators.iter_function_bodies set ~f)
 
     module Toplevel_only = struct
       (* CR mshinwell: "toplevel" again -- confusing.  We need two separate
@@ -1224,9 +1206,9 @@ end = struct
                   (var, kind, defining_expr) :: (List.rev bindings) @ rev_lets
                 in
                 loop body ~acc ~rev_lets
-              | Invalid invalid_term_semantics ->
+              | Invalid semantics ->
                 let rev_lets = (List.rev bindings) @ rev_lets in
-                let body : Expr.t = Invalid invalid_term_semantics in
+                let body : Expr.t = Invalid semantics in
                 let last_body, acc = for_last_body acc body in
                 finish ~last_body ~acc ~rev_lets
               end)
@@ -1251,14 +1233,14 @@ end = struct
       expr;
     !defined_continuations
 
-  let count_continuation_uses_toplevel (expr : t) =
+  let count_continuation_uses_toplevel expr =
     let counts = Continuation.Tbl.create 42 in
     let use cont =
       match Continuation.Tbl.find counts cont with
       | exception Not_found -> Continuation.Tbl.add counts cont 1
       | count -> Continuation.Tbl.replace counts cont (count + 1)
     in
-    Iterators.Toplevel_only.iter (fun (expr : t) ->
+    Iterators.Toplevel_only.iter_expr expr ~f:(fun expr ->
         match expr with
         | Apply { continuation; _ } -> use continuation
         | Apply_cont (cont, None, _) -> use cont
@@ -1267,10 +1249,8 @@ end = struct
           use cont;
           use exn_handler
         | Switch (_, switch) ->
-          Switch.iter switch ~f:(fun _value cont -> use cont)
-        | Let _ | Let_cont _ | Invalid _ -> ())
-      (fun _named -> ())
-      expr;
+          Switch.iter switch ~f:(fun _discr cont -> use cont)
+        | Let _ | Let_cont _ | Invalid _ -> ());
     Continuation.Tbl.to_map counts
 end and Expr_with_permutation : sig
   include Contains_names.S
@@ -2362,11 +2342,9 @@ end = struct
        [Function_declarations.invariant] *)
     let module E = Invariant_env in
     (* CR-soon mshinwell: check [direct_call_surrogates] *)
-    let { Function_declarations. set_of_closures_id;
-          set_of_closures_origin; funs; } =
+    let { Function_declarations. set_of_closures_origin; funs; } =
       function_decls
     in
-    E.add_set_of_closures_id env set_of_closures_id;
     ignore (set_of_closures_origin : Set_of_closures_origin.t);
     let functions_in_closure = Closure_id.Map.keys funs in
     Var_within_closure.Map.iter
