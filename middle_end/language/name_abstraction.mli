@@ -24,8 +24,7 @@ end
 
 module Make (Name : Name) (Term : Contains_names.S) : sig
   (** The type [t] is the equivalent of an atom-abstraction construction
-      "<< -- >> --" in nominal sets. *)
-
+      "[--]--" in nominal sets. *)
   include Contains_names.S
 
   val create : Name.t -> Term.t -> t

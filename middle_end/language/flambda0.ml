@@ -1722,16 +1722,11 @@ end and Let_cont : sig
   include Contains_names.S with type t := t
   val create_non_recursive
      : Continuation.t
-    -> handler:Continuation_handler.t
-    -> body:Expr.t
-    -> t
-  val create_exception_handler
-     : Continuation.t
-    -> handler:Continuation_handler.t
+    -> Continuation_handler.t
     -> body:Expr.t
     -> t
   val create_recursive
-     : handlers:Continuation_handlers.t
+     : Continuation_handlers.t
     -> body:Expr.t
     -> t
   val bound_continuations : t -> Continuation.Set.t
@@ -1832,6 +1827,15 @@ end = struct
         (Format.pp_print_list ~pp_sep
           (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
     end
+
+  let create_non_recursive k handler ~body =
+    Non_recursive (Non_recursive_let_cont_handler.create k handler ~body)
+
+  let create_recursive handlers ~body =
+    if Continuation_handlers.contains_exn_handler then begin
+      Misc.fatal_error "Exception-handling continuations cannot be recursive"
+    end;
+    Recursive (Recursive_let_cont_handlers.create handlers ~body)
 
   let to_continuation_map t =
     match t with
@@ -1955,12 +1959,18 @@ end = struct
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
-  val create : Continuation.t -> Non_recursive_let_cont_handler0.t -> t
+  val create
+     : Continuation.t
+    -> body:Expr.t
+    -> Continuation_handler.t
+    -> t
 
   val pattern_match
      : t
-    -> f:(Continuation.t -> Non_recursive_let_cont_handler0.t -> 'a)
+    -> f:(Continuation.t -> body:Expr.t -> t)
     -> 'a
+
+  val handler : t -> Continuation_handler.t
 end = struct
   module Continuation_and_body =
     Name_abstraction.Make (Bound_continuation) (Expr)
@@ -1970,7 +1980,10 @@ end = struct
     handler : Continuation_handler.t;
   }
 
-  let create ~continuation_and_body ~handler =
+  let create continuation ~body ~handler =
+    let continuation_and_body =
+      Continuation_and_body.create continuation body
+    in
     { continuation_and_body;
       handler;
     }
@@ -1998,25 +2011,27 @@ end = struct
     }
 end and Recursive_let_cont_handlers0 : sig
   include Contains_names.S
+
   val create
-     : handlers:Continuation_handlers.t
-    -> body:Expr.t
+     : body:Expr.t
+    -> Continuation_handlers.t
     -> t
-  val handlers : t -> Continuation_handler.t Continuation.Map.t
+
   val body : t -> Expr.t
+  val handlers : t -> Continuation_handlers.t
 end = struct
   type t = {
     handlers : Continuation_handlers.t;
     body : Expr_with_permutation.t;
   }
 
-  let create ~handlers ~body =
+  let create ~body handlers =
     { handlers;
       body = Expr_with_permutation.create body;
     }
 
   let handlers t = t.handlers
-  let body t = t.body
+  let body t = Expr_with_permutation.expr t.body
 
   let free_names { handlers; body; } =
     Name_occurrences.union (Continuation_handlers.free_names handlers)
@@ -2033,21 +2048,33 @@ end = struct
       body = body';
     }
 end and Recursive_let_cont_handlers : sig
-  type t
+  include Contains_names.S
 
-  include Contains_names.S with type t := t
-
-  val create : Continuation.Set.t -> 
+  val create
+     : body:Expr.t
+    -> Continuation_handlers.t
+    -> t
 
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t
-      -> handler:Expr.t
-      -> 'a)
+    -> f:(body:Expr.t -> Continuation_handlers.t -> t)
     -> 'a
 end = struct
   include Name_abstraction.Make (Bound_continuations)
     (Recursive_let_cont_handlers0)
+
+  let create ~body handlers =
+    let bound = Continuation_handlers.domain handlers in
+    let handlers0 =
+      Recursive_let_cont_handlers0.create ~body handlers
+    in
+    create bound handlers0
+
+  let pattern_match t ~f =
+    pattern_match t (fun _bound handlers0 ->
+      let body = Recursive_let_cont_handlers0.body handlers0 in
+      let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
+      f ~body handlers)
 end and Params_and_handler : sig
   type t
 
@@ -2077,18 +2104,39 @@ end = struct
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
+  val domain : t -> Continuation.Set.t
+  val contains_exn_handler : t -> bool
   val no_effects_or_coeffects : t -> bool
 end = struct
   include Continuation_handlers
+
+  let domain t = Continuation.Map.keys t
+
+  let contains_exn_handler t =
+    Continuation.Map.exists (fun _cont handler ->
+        Continuation_handler.contains_exn_handler handler)
+      t
 
   let no_effects_or_coeffects t =
     Continuation.Map.for_all (fun _cont handler ->
         Continuation_handler.no_effects_or_coeffects handler)
       t
-end and Continuation_handler0 : sig
+end and Continuation_handler : sig
   include Contains_names.S
+  val create
+     : Flambda_type.Parameters.t
+    -> handler:Expr.t
+    -> stub:bool
+    -> is_exn_handler:bool
+    -> t
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val print : Format.formatter -> t -> unit
-  val params_and_handler : t -> Params_and_handler.t
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
   val stub : t -> bool
   val is_exn_handler : t -> bool
 end = struct
@@ -2097,6 +2145,13 @@ end = struct
     stub : bool;
     is_exn_handler : bool;
   }
+
+  let create params ~handler ~stub ~is_exn_handler =
+    let params_and_handler = Params_and_handler.create params ~handler in
+    { params_and_handler;
+      stub;
+      is_exn_handler;
+    }
 
   let print_with_cache ~cache ppf { params_and_handler; stub; handler; } =
     Params_and_handler.pattern_match params_and_handler
@@ -2109,7 +2164,9 @@ end = struct
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let params_and_handler t = t.params_and_handler
+  let pattern_match t ~f =
+    Params_and_handler.pattern_match t.params_and_handler ~f
+
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
 
@@ -2127,17 +2184,6 @@ end = struct
         stub;
         is_exn_handler;
       }
-end and Continuation_handler : sig
-  include Contains_names.S
-
-  val create : Continuation.t -> Continuation_handler0.t -> t
-
-  val pattern_match
-     : t
-    -> f:(Continuation.t -> Continuation_handler0.t -> 'a)
-    -> 'a
-end = struct
-  include Name_abstraction.Make (Bound_continuation) (Continuation_handler0)
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;

@@ -552,21 +552,13 @@ end and Let_cont : sig
   (** Create a definition of a non-recursive continuation. *)
   val create_non_recursive
      : Continuation.t
-    -> handler:Continuation_handler.t
-    -> body:Expr.t
-    -> t
-
-  (** Create a definition of a continuation that will serve as an exception
-      handler. *)
-  val create_exception_handler
-     : Continuation.t
-    -> handler:Continuation_handler.t
+    -> Continuation_handler.t
     -> body:Expr.t
     -> t
 
   (** Create a definition of a set of possibly-recursive continuations. *)
   val create_recursive
-     : handlers:Continuation_handlers.t
+     : Continuation_handlers.t
     -> body:Expr.t
     -> t
 
@@ -600,45 +592,51 @@ end and Let_cont : sig
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
 
   val print : Format.formatter -> t -> unit
-end and Non_recursive_let_cont_handler0 : sig
-  include Contains_names.S
-
-  val handler : t -> Continuation_handler.t
-
-  val body : t -> Expr.t
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
-  (** Deconstruct a continuation binding. *)
+  val create
+     : Continuation.t
+    -> body:Expr.t
+    -> handler:Expr.t
+
+  (** Deconstruct a continuation binding to get the bound continuation and
+      the expression over which it is scoped. *)
   val pattern_match
      : t
-    -> f:(Continuation.t -> Non_recursive_let_cont_handler0.t -> 'a)
+    -> f:(Continuation.t -> body:Expr.t -> t)
     -> 'a
-end and Recursive_let_cont_handlers0 : sig
-  include Contains_names.S
 
-  val handlers : t -> Continuation_handlers.t
-
-  val body : t -> Expr.t
+  val handler : t -> Expr.t
 end and Recursive_let_cont_handlers : sig
   include Contains_names.S
 
-  (** Deconstruct a continuation binding. *)
+  val create
+     : body:Expr.t
+    -> Continuation_handlers.t
+    -> t
+
+  (** Deconstruct a continuation binding to get the bound continuations,
+      together with the expressions and handlers over which they are scoped. *)
   val pattern_match
      : t
-    -> f:(Continuation.t -> Recursive_let_cont_handler0.t -> 'a)
+    -> f:(body:Expr.t -> Continuation_handlers.t -> t)
     -> 'a
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
-end and Continuation_handler0 : sig
+end and Continuation_handler : sig
   include Contains_names.S
 
   val print : Format.formatter -> t -> unit
 
-  (** The parameters of the continuation. *)
-  val params : t -> Flambda_type.Parameters.t
-
-  val param_arity : t -> Flambda_arity.t
+  (** Go under the parameter binding(s) to obtain a freshened set of
+      parameters and the code of the handler. *)
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
 
   (** Whether the continuation is a compiler-generated wrapper that should
       always be inlined. *)
@@ -656,13 +654,6 @@ end and Continuation_handler0 : sig
       simultaneously-defined continuations when one or more of them is an
       exception handler.) *)
   val is_exn_handler : t -> bool
-
-  (** The code of the continuation itself. *)
-  val handler : t -> Expr.t
-end and Continuation_handler : sig
-  include Contains_names.S
-
-  val pattern_match : t -> f:(Continuation_handler0.t -> 'a) -> 'a
 end and Set_of_closures : sig
   type t
 
