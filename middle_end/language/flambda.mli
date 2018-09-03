@@ -234,6 +234,8 @@ module rec Expr : sig
 
   val print : Format.formatter -> t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   val invariant : Invariant_env.t -> t -> unit
 
   (** Creates a [Let] expression. *)
@@ -292,10 +294,6 @@ module rec Expr : sig
     -> (Named.t -> unit)
     -> maybe_named
     -> unit
-
-  val print : Format.formatter -> t -> unit
-
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   (** Build a [Switch] corresponding to a traditional if-then-else. *)
   val if_then_else
@@ -519,6 +517,15 @@ end and Named : sig
       val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
     end
   end
+end and Reachable : sig
+  type t = private
+    | Reachable of Named.t
+    | Invalid of Invalid_term_semantics.t
+
+  val reachable : Named.t -> t
+  val invalid : unit -> t
+
+  val print : Format.formatter -> t -> unit
 end and Let0 : sig
   include Contains_names.S
 

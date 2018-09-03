@@ -16,10 +16,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-
 type continuation_kind = Normal | Exn_handler
 
+(*
 (* For checking that push- and pop-trap operations match up correctly. *)
+
 module Continuation_stack : sig
   type t
 
@@ -95,6 +96,7 @@ end = struct
             (root stack is not empty) for %a"
           Continuation.print cont
 end
+*)
 
 type t = {
   all_names_seen : Name.Set.t ref;
@@ -105,9 +107,11 @@ type t = {
   uses_of_var_within_closures_seen : Var_within_closure.Set.t ref;
   names : Flambda_kind.t Name.Map.t;
   continuations :
-    (Flambda_arity.t * continuation_kind * Continuation_stack.t)
+    (Flambda_arity.t * continuation_kind (* * Continuation_stack.t *))
       Continuation.Map.t;
+(*
   continuation_stack : Continuation_stack.t;
+*)
 }
 
 let create () =
@@ -119,7 +123,9 @@ let create () =
     uses_of_var_within_closures_seen = ref Var_within_closure.Set.empty;
     names = Name.Map.empty;
     continuations = Continuation.Map.empty;
+(*
     continuation_stack = Continuation_stack.var ();
+*)
   }
 
 let add_name t name kind =
@@ -185,7 +191,7 @@ let add_symbol t sym kind =
     names = Name.Map.add name kind t.names;
   }
 
-let add_continuation t cont arity kind stack =
+let add_continuation t cont arity kind (* stack *) =
   if Continuation.Map.mem cont t.continuations then begin
     Misc.fatal_errorf "Duplicate binding of continuation %a which is already \
         bound in the current scope"
@@ -200,7 +206,7 @@ let add_continuation t cont arity kind stack =
     Continuation.Set.add cont !(t.all_continuations_seen);
   { t with
     continuations =
-      Continuation.Map.add cont (arity, kind, stack) t.continuations;
+      Continuation.Map.add cont (arity, kind (*, stack *)) t.continuations;
   }
 
 let name_is_bound t name = Name.Map.mem name t.names
@@ -301,10 +307,12 @@ let kind_of_simple t (simple : Simple.t) =
 
 let kind_of_variable t var = kind_of_name t (Name.var var)
 
+(*
 let current_continuation_stack t = t.continuation_stack
 
 let set_current_continuation_stack t continuation_stack =
   { t with continuation_stack; }
+*)
 
 let add_closure_id t id =
   (* The same closure ID may be bound multiple times in the same program, so
@@ -353,14 +361,16 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
       ~return_cont ~return_cont_arity ~exception_cont =
   (* CR mshinwell for pchambart: Is one continuation stack correct now that
      we have exception continuations? *)
+(*
   let continuation_stack = Continuation_stack.var () in
+*)
   let continuations =
     Continuation.Map.singleton return_cont
-      (return_cont_arity, Normal, continuation_stack)
+      (return_cont_arity, Normal (*, continuation_stack *))
   in
   let continuations =
     Continuation.Map.add exception_cont
-      ([Flambda_kind.value ()], Exn_handler, continuation_stack)
+      ([Flambda_kind.value ()], Exn_handler (*, continuation_stack *))
       continuations
   in
   let names = Name.symbols_only_map t.names in
@@ -368,7 +378,9 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
     { t with
       names;
       continuations;
+(*
       continuation_stack;
+*)
     }
   in
   add_variables

@@ -312,7 +312,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/changes.cmo \
   middle_end/typing/flambda_kind.cmo \
   middle_end/typing/invalid_term_semantics.cmo \
-  middle_end/typing/reachable.cmo \
   middle_end/language/recursive.cmo \
   middle_end/language/continuation_counts.cmo \
   middle_end/language/simple.cmo \

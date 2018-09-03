@@ -20,15 +20,16 @@
 
 type continuation_kind = Normal | Exn_handler
 
+(*
 module Continuation_stack : sig
   type t
 
   val var : unit -> t
   val root : unit -> t
   val push : Trap_id.t -> Continuation.t -> t -> t
-
   val unify : Continuation.t -> t -> t -> unit
 end
+*)
 
 (** Values of type [t] are mutable.  A fresh value should be created each time
     invariants are checked on a [Program.t]; this will ensure that
@@ -59,7 +60,9 @@ val add_continuation
   -> Continuation.t
   -> Flambda_arity.t
   -> continuation_kind
+(*
   -> Continuation_stack.t
+*)
   -> t
 
 val add_var_within_closure : t -> Var_within_closure.t -> unit
@@ -120,7 +123,7 @@ val check_symbol_is_bound : t -> Symbol.t -> unit
 val find_continuation_opt
    : t
   -> Continuation.t
-  -> (Flambda_arity.t * continuation_kind * Continuation_stack.t) option
+  -> (Flambda_arity.t * continuation_kind (* * Continuation_stack.t *)) option
 
 val continuation_arity : t -> Continuation.t -> Flambda_arity.t
 
@@ -130,9 +133,11 @@ val kind_of_name : t -> Name.t -> Flambda_kind.t
 
 val kind_of_variable : t -> Variable.t -> Flambda_kind.t
 
+(*
 val current_continuation_stack : t -> Continuation_stack.t
 
 val set_current_continuation_stack : t -> Continuation_stack.t -> t
+*)
 
 val closure_ids_not_declared : t -> Closure_id.Set.t
 

@@ -1429,6 +1429,32 @@ end = struct
         Expr.iter_general ~toplevel:true f f_named (Is_named t)
     end
   end
+end and Reachable : sig
+  type t =
+    | Reachable of Named.t
+    | Invalid of Invalid_term_semantics.t
+
+  val reachable : Named.t -> t
+  val invalid : unit -> t
+
+  val print : Format.formatter -> t -> unit
+end = struct
+  type t =
+    | Reachable of Named.t
+    | Invalid of Invalid_term_semantics.t
+
+  let reachable named = Reachable named
+
+  let invalid () =
+    if !Clflags.treat_invalid_code_as_unreachable then
+      Invalid Treat_as_unreachable
+    else
+      Invalid Halt_and_catch_fire
+
+  let print ppf t =
+    match t with
+    | Reachable named -> Flambda.Named.print ppf named
+    | Invalid sem -> Invalid_term_semantics.print ppf sem
 end and Let : sig
   include Contains_names.S
 
