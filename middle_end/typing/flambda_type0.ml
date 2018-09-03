@@ -4142,6 +4142,11 @@ module Make (Expr : Expr_intf.S) = struct
           env_extension : Typing_env_extension.t;
         }
 
+(* XXX There should be a name abstraction
+     [Component.Set.t] Indexed_product0.t
+   here.
+*)
+
         let invariant _t =
           (* CR mshinwell: This should check that the [env_extension] never
              contains [Definition]s for [Name]s occurring in the indexes. *)
