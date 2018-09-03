@@ -317,6 +317,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
   middle_end/language/name_abstraction.cmo \
+  middle_end/language/bound_name_set.cmo \
   middle_end/language/bound_variable.cmo \
   middle_end/language/bound_continuation.cmo \
   middle_end/language/bound_continuations.cmo \
