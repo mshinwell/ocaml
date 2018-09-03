@@ -24,31 +24,31 @@
     - accessing constants that have been lifted to static data.
 *)
 
-(** Whether the callee in a function application is known at compile time. *)
 module Call_kind : sig
-  type function_call =
-    | Direct of {
-        closure_id : Closure_id.t;
-        (** The [closure_id] isn't actually sufficient to perform a direct
-            call.  The set of closures involved has to be determined first
-            using reachability analysis.  If such determination fails, then
-            we have to fall back to an indirect call. *)
-        (* CR mshinwell: Should this arity really permit "bottom"? *)
-        return_arity : Flambda_arity.t;
-        (** [return_arity] describes what the callee returns.  It matches up
-            with the arity of [continuation] in the enclosing [Apply.t]
-            record. *)
-      }
-    | Indirect_unknown_arity
-    | Indirect_known_arity of {
-        param_arity : Flambda_arity.t;
-        return_arity : Flambda_arity.t;
-      }
+  module Function_call : sig
+    type t = private
+      | Direct of {
+          closure_id : Closure_id.t;
+          (** The [closure_id] isn't actually sufficient to perform a direct
+              call.  The set of closures involved has to be determined first
+              using reachability analysis.  If such determination fails, then
+              we have to fall back to an indirect call. *)
+          return_arity : Flambda_arity.t;
+          (** [return_arity] describes what the callee returns.  It matches up
+              with the arity of [continuation] in the enclosing [Apply.t]
+              record. *)
+        }
+      | Indirect_unknown_arity
+      | Indirect_known_arity of {
+          param_arity : Flambda_arity.t;
+          return_arity : Flambda_arity.t;
+        }
+  end
 
   type method_kind = Self | Public | Cached
 
-  type t =
-    | Function of function_call
+  type t = private
+    | Function of Function_call.t
     | Method of { kind : method_kind; obj : Name.t; }
     | C_call of {
         alloc : bool;
@@ -58,40 +58,77 @@ module Call_kind : sig
 
   include Contains_names.S with type t := t
 
+  val direct_function_call : Closure_id.t -> return_arity:Flambda_arity.t -> t
+
+  val indirect_function_call_unknown_arity : unit -> t
+
+  val indirect_function_call_known_arity
+     : param_arity:Flambda_arity.t
+    -> return_arity:Flambda_arity.t
+    -> t
+
+  val method_call : method_kind -> obj:Name.t -> t
+
+  val c_call
+     : alloc:bool
+    -> param_arity:Flambda_arity.t
+    -> return_arity:Flambda_arity.t
+    -> t
+
   val return_arity : t -> Flambda_arity.t
 end
 
-(** The application of a function (or method on a given object) to a list of
-    arguments. *)
 module Apply : sig
-  type t = {
-    callee : Name.t;
-    continuation : Continuation.t;
-    exn_continuation : Continuation.t;
-    (** Where to send the result of the application. *)
-    args : Simple.t list;
-    call_kind : Call_kind.t;
-    dbg : Debuginfo.t;
-    inline : Inline_attribute.t;
-    (** Instructions from the source code as to whether the callee should
-        be inlined. *)
-    specialise : Specialise_attribute.t;
-    (** Instructions from the source code as to whether the callee should
-        be specialised. *)
-  }
+  (** The application of a function (or method on a given object) to a list of
+      arguments. *)
+  type t
 
-  val print : Format.formatter -> t -> unit
+  val create
+     : callee:Name.t
+    -> continuation:Continuation.t
+    -> exn_continuation:Continuation.t
+    -> args:Simple.t list
+    -> call_kind:Call_kind.t
+    -> dbg:Debuginfo.t
+    -> inline:Inline_attribute.t
+    -> specialise:Specialise_attribute.t
+    -> t
+
+  (** The function or method being applied. *)
+  val callee : t -> Name.t
+
+  (** The arguments of the function or method being applied. *)
+  val args : t -> Simple.t list
+
+  (** Information about what kind of call is involved (direct function call,
+      method call, etc). *)
+  val call_kind : t -> Call_kind.t
+
+  (** Where to send the result of the application. *)
+  val continuation : t -> Continuation.t
+
+  (** Where to jump to upon the application raising an exception. *)
+  val exn_continuation : t -> Continuation.t
+
+  (** Debugging information attached to the application. *)
+  val dbg : t -> Debuginfo.t
+
+  (** Instructions from the source code as to whether the callee should
+      be inlined. *)
+  val inline : t -> Inline_attribute.t
+
+  (** Instructions from the source code as to whether the callee should
+      be specialised. *)
+  val specialise : t -> Specialise_attribute.t
 end
 
 (** Actions affecting exception traps on the stack.  These are always
     associated with an [Apply_cont] node; the trap action is executed before
     the application of the continuation.
 
-    The [Trap_id] values tie up corresponding pairs of pushes and pops
-    irrespective of the handler (which might be shared).  [Pop] may not appear
-    to need the [exn_handler] value during Flambda passes---but in fact it
-    does, since it compiles to a reference to such continuation, and must
-    not be moved out of its scope.
+    [Pop] may not appear to need the [exn_handler] value during Flambda
+    passes---but in fact it does, since it compiles to a reference to such
+    continuation, and must not be moved out of its scope.
 
     Beware: continuations cannot be used both as an exception handler and as
     a normal continuation (since continuations used as exception handlers
@@ -99,13 +136,30 @@ end
 *)
 module Trap_action : sig
   type t =
-    | Push of { id : Trap_id.t; exn_handler : Continuation.t; }
-    (* CR mshinwell: Think about whether we really need the trap IDs now *)
+    | Push of { exn_handler : Continuation.t; }
     | Pop of {
-        id : Trap_id.t;
         exn_handler : Continuation.t;
         take_backtrace : bool;
       }
+end
+
+module Apply_cont : sig
+  (** Calling of a continuation. *)
+  type t
+
+  val create
+     : ?trap_action:Trap_action.t
+    -> Continuation.t
+    -> args:Simple.t list
+    -> t
+
+  val goto : Continuation.t -> t
+
+  val continuation : t -> Continuation.t
+
+  val args : t -> Simple.t list
+
+  val trap_action : t -> Trap_action.t option
 end
 
 module Switch : sig
@@ -116,9 +170,8 @@ module Switch : sig
 
   type t
 
-  include Map.With_set with type t := t
-
-  val invariant : t -> bool
+  (** The scrutinee of the switch. *)
+  val scrutinee : t -> Name.t
 
   (** Call the given function [f] on each (discriminant, destination) pair
       in the switch. *)
@@ -132,14 +185,6 @@ module Switch : sig
       destinations reached by the switch, which may be a smaller number.) *)
   val num_arms : t -> int
 end
-
-type recursive =
-  | Non_recursive
-  | Recursive
-
-type mutable_or_immutable =
-  | Mutable
-  | Immutable
 
 module rec Expr : sig
   (** With the exception of applications of primitives ([Prim]), Flambda terms
@@ -176,11 +221,11 @@ module rec Expr : sig
     (** Define one or more continuations. *)
     | Apply of Apply.t
     (** Call an OCaml function, external function or method. *)
-    | Apply_cont of Continuation.t * Trap_action.t option * Simple.t list
+    | Apply_cont of Apply_cont.t
     (** Call a continuation, optionally adding or removing exception trap
         frames from the stack, which thus allows for the raising of
         exceptions. *)
-    | Switch of Name.t * Switch.t
+    | Switch of Switch.t
     (** Conditional control flow. *)
     | Invalid of Invalid_term_semantics.t
     (** Code proved type-incorrect and therefore unreachable. *)
@@ -294,7 +339,7 @@ module rec Expr : sig
 
   val build_let_cont_with_wrappers
      : body:t
-    -> recursive:F0.recursive
+    -> Recursive.t
     -> with_wrappers:with_wrapper Continuation.Map.t
     -> t
 
@@ -593,11 +638,6 @@ end and Let_cont : sig
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
-  val create
-     : Continuation.t
-    -> body:Expr.t
-    -> handler:Expr.t
-
   (** Deconstruct a continuation binding to get the bound continuation and
       the expression over which it is scoped. *)
   val pattern_match
@@ -605,14 +645,9 @@ end and Non_recursive_let_cont_handler : sig
     -> f:(Continuation.t -> body:Expr.t -> t)
     -> 'a
 
-  val handler : t -> Expr.t
+  val handler : t -> Continuation_handler.t
 end and Recursive_let_cont_handlers : sig
   include Contains_names.S
-
-  val create
-     : body:Expr.t
-    -> Continuation_handlers.t
-    -> t
 
   (** Deconstruct a continuation binding to get the bound continuations,
       together with the expressions and handlers over which they are scoped. *)
@@ -623,7 +658,17 @@ end and Recursive_let_cont_handlers : sig
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 end and Continuation_handler : sig
+  (** The binding of a list of parameters around an expression, forming a
+      continuation handler, together with auxiliary information about such
+      handler. *)
   include Contains_names.S
+
+  val create
+     : Flambda_type.Parameters.t
+    -> handler:Expr.t
+    -> stub:bool
+    -> is_exn_handler:bool
+    -> t
 
   val print : Format.formatter -> t -> unit
 
@@ -652,6 +697,22 @@ end and Continuation_handler : sig
       simultaneously-defined continuations when one or more of them is an
       exception handler.) *)
   val is_exn_handler : t -> bool
+end and Params_and_handler : sig
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create
+     : Flambda_type.Parameters.t
+    -> handler:Expr.t
+    -> t
+
+  val pattern_match
+     : t
+    -> f:(Flambda_type.Parameters.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
 end and Set_of_closures : sig
   type t
 

@@ -28,9 +28,7 @@ module Const = struct
   let const_true = Tagged_immediate (Immediate.bool_true)
   let const_false = Tagged_immediate (Immediate.bool_false)
 
-  let const_int i =
-    let imm = Immediate.int (Targetint.OCaml.of_int i) in
-    Tagged_immediate imm
+  let const_int i = Tagged_immediate (Immediate.int i) 
 
   let const_zero = const_false
   let const_unit = const_zero
@@ -116,11 +114,6 @@ let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
 
-let free_names t =
-  match t with
-  | Name name -> Name.Set.singleton name
-  | Const _ | Discriminant _ -> Name.Set.empty
-
 let map_name t ~f =
   match t with
   | Name name ->
@@ -143,6 +136,19 @@ let map_symbol t ~f =
     let name' = Name.map_symbol name ~f in
     if name == name' then t
     else Name name'
+  | Const _ | Discriminant _ -> t
+
+let free_names t =
+  match t with
+  | Name name -> Name_occurrences.singleton_in_terms name
+  | Const _ | Discriminant _ -> Name_occurrences.create ()
+
+let apply_name_permutation t perm =
+  match t with
+  | Name name ->
+    let name' = Name_permutation.apply_name t perm in
+    if name == name' then t
+    else Simple.name name'
   | Const _ | Discriminant _ -> t
 
 include Hashtbl.Make_with_map (struct
@@ -176,12 +182,6 @@ end)
 module List = struct
   type nonrec t = t list
 
-  let free_names t =
-    List.fold_left (fun free t ->
-        Name.Set.union free (free_names t))
-      Name.Set.empty
-      t
-
   include Hashtbl.Make_with_map (struct
     type nonrec t = t
 
@@ -194,6 +194,26 @@ module List = struct
     let print ppf t =
       (Format.pp_print_list print ~pp_sep:Format.pp_print_space) ppf t
   end)
+
+  let free_names t =
+    List.fold_left (fun free t ->
+        Name_occurrences.union free (free_names t))
+      (Name_occurrences.create ())
+      t
+
+  let apply_name_permutation t perm =
+    let changed = ref false in
+    let result =
+      List.map (fun simple ->
+          let simple' = apply_name_permutation simple perm in
+          if not (simple == simple') then begin
+            changed := true
+          end;
+          simple')
+        t
+    in
+    if not !changed then t
+    else result
 end
 
 module With_kind = struct
@@ -215,4 +235,11 @@ module With_kind = struct
         print s
         Flambda_kind.print k
   end)
+
+  let free_names (simple, _kind) = free_names simple
+
+  let apply_name_permutation ((simple, kind) as t) perm =
+    let simple' = apply_name_permutation simple perm in
+    if simple == simple' then t
+    else simple', kind
 end

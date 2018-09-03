@@ -20,56 +20,72 @@ module K = Flambda_kind
 
 let fprintf = Format.fprintf
 
+let unbound_continuation cont reason =
+  Misc.fatal_errorf "Unbound continuation %a in %s: %a"
+    Continuation.print cont
+    reason
+    print expr
+
 module Call_kind = struct
   (* CR-someday xclerc: we could add annotations to external declarations
      (akin to [@@noalloc]) in order to be able to refine the computation of
      effects/coeffects for such functions. *)
 
-  type function_call =
-    | Direct of {
-        closure_id : Closure_id.t;
-        (* CR mshinwell: Should this arity really permit "bottom"? *)
-        return_arity : Flambda_arity.t;
-        (** [return_arity] describes what the callee returns.  It matches up
-            with the arity of [continuation] in the enclosing [apply]
-            record. *)
-      }
-    | Indirect_unknown_arity
-    | Indirect_known_arity of {
-        param_arity : Flambda_arity.t;
-        return_arity : Flambda_arity.t;
-      }
+  let check_arity arity =
+    match arity with
+    | [] -> Misc.fatal_errorf "Invalid empty arity in %a" print t
+    | _::_ -> ()
 
-  let print_function_call ppf call =
-    match call with
-    | Direct { closure_id; return_arity; } ->
-      fprintf ppf "@[(Direct %a %a)@]"
-        Closure_id.print closure_id
-        Flambda_arity.print return_arity
-    | Indirect_unknown_arity ->
-      fprintf ppf "Indirect_unknown_arity"
-    | Indirect_known_arity { param_arity; return_arity; } ->
-      fprintf ppf "@[(Indirect_known_arity %a -> %a)@]"
-        Flambda_arity.print param_arity
-        Flambda_arity.print return_arity
+  module Function_call = struct
+    type t =
+      | Direct of {
+          closure_id : Closure_id.t;
+          return_arity : Flambda_arity.t;
+        }
+      | Indirect_unknown_arity
+      | Indirect_known_arity of {
+          param_arity : Flambda_arity.t;
+          return_arity : Flambda_arity.t;
+        }
 
-  let return_arity_function_call call : Flambda_arity.t =
-    match call with
-    | Direct { return_arity; _ }
-    | Indirect_known_arity { return_arity; _ } -> return_arity
-    | Indirect_unknown_arity -> [Flambda_kind.value ()]
+    let print ppf call =
+      match call with
+      | Direct { closure_id; return_arity; } ->
+        fprintf ppf "@[(Direct %a %a)@]"
+          Closure_id.print closure_id
+          Flambda_arity.print return_arity
+      | Indirect_unknown_arity ->
+        fprintf ppf "Indirect_unknown_arity"
+      | Indirect_known_arity { param_arity; return_arity; } ->
+        fprintf ppf "@[(Indirect_known_arity %a -> %a)@]"
+          Flambda_arity.print param_arity
+          Flambda_arity.print return_arity
+
+    let invariant t =
+      match t with
+      | Direct { closure_id = _; return_arity; } -> check_arity return_arity
+      | Indirect_unknown_arity -> ()
+      | Indirect_known_arity { param_arity; return_arity; } ->
+        check_arity param_arity;
+        check_arity return_arity
+
+    let return_arity call : Flambda_arity.t =
+      match call with
+      | Direct { return_arity; _ }
+      | Indirect_known_arity { return_arity; _ } -> return_arity
+      | Indirect_unknown_arity -> [Flambda_kind.value ()]
+  end
 
   type method_kind = Self | Public | Cached
 
   let print_method_kind ppf kind =
-    let fprintf = Format.fprintf in
     match kind with
     | Self -> fprintf ppf "Self"
     | Public -> fprintf ppf "Public"
     | Cached -> fprintf ppf "Cached"
 
   type t =
-    | Function of function_call
+    | Function of Function_call.t
     | Method of { kind : method_kind; obj : Name.t; }
     | C_call of {
         alloc : bool;
@@ -78,9 +94,8 @@ module Call_kind = struct
       }
 
   let print ppf t =
-    let fprintf = Format.fprintf in
     match t with
-    | Function call -> print_function_call ppf call
+    | Function call -> Function_call.print ppf call
     | Method { kind; obj; } ->
       fprintf ppf "@[(Method %a : %a)@]"
         Name.print obj
@@ -91,6 +106,33 @@ module Call_kind = struct
         Flambda_arity.print param_arity
         Flambda_arity.print return_arity
 
+  let invariant t =
+    match t with
+    | Function call -> Function_call.invariant call
+    | Method { kind = _; obj = _; } -> ()
+    | C_call { alloc = _; param_arity; return_arity; } ->
+      check_arity param_arity;
+      check_arity return_arity
+
+  let direct_function_call closure_id ~return_arity =
+    let t = Function (Direct { closure_id; return_arity; }) in
+    invariant t;
+    t
+
+  let indirect_function_call_unknown_arity () = Function Indirect_unknown_arity
+
+  let indirect_function_call_known_arity ~param_arity ~return_arity =
+    let t = Function (Indirect_known_arity { param_arity; return_arity; }) in
+    invariant t;
+    t
+
+  let method_call method_kind ~obj = Method { kind; obj; }
+
+  let c_call ~alloc ~param_arity ~return_arity =
+    let t = C_call { alloc; param_arity; return_arity; } in
+    invariant t;
+    t
+
   let return_arity t : Flambda_arity.t =
     match t with
     | Function call -> return_arity_function_call call
@@ -99,20 +141,13 @@ module Call_kind = struct
 
   let free_names t =
     match t with
-    | Function (Direct { closure_id = _; return_arity = _; })
-    | Function Indirect_unknown_arity
-    | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
-    | C_call { alloc = _; param_arity = _; return_arity = _; } ->
-      Name_occurrences.create ()
+    | Function _ | C_call _ -> Name_occurrences.create ()
     | Method { kind = _; obj; } ->
-      Name_occurrences.create_from_set_in_terms (Name.Set.singleton obj)
+      Name_occurrences.singleton_in_terms (Name obj)
 
   let apply_name_permutation t perm =
     match t with
-    | Function (Direct { closure_id = _; return_arity = _; })
-    | Function Indirect_unknown_arity
-    | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
-    | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
+    | Function _ | C_call _ -> t
     | Method { kind; obj; } ->
       let obj' = Name_permutation.apply_name perm obj in
       if obj == obj' then t
@@ -137,7 +172,7 @@ module Apply = struct
 
   let print ppf { callee; continuation; exn_continuation; args; call_kind;
         dbg; inline; specialise; } =
-    Format.fprintf ppf "@[<hov 1>(\
+    fprintf ppf "@[<hov 1>(\
         @[<hov 1>(callee %a)@]@ \
         @[<hov 1>(continuation %a)@]@ \
         @[<hov 1>(exn_continuation %a)@]@ \
@@ -155,26 +190,8 @@ module Apply = struct
       Inline_attribute.print inline
       Specialise_attribute.print specialise
 
-  let free_names
+  let invariant
         { callee;
-          continuation = _;
-          exn_continuation = _;
-          args;
-          call_kind;
-          dbg = _;
-          inline = _;
-          specialise = _;
-        } =
-    let from_callee =
-      Name_occurrences.create_from_set_in_terms (Name.Set.singleton callee)
-    in
-    let from_args = Simple.List.free_names args in
-    let from_call_kind = Call_kind.free_names call_kind in
-    Name_occurrences.union from_callee
-      (Name_occurrences.union from_args from_call_kind)
-
-  let apply_name_permutation
-        ({ callee;
           continuation;
           exn_continuation;
           args;
@@ -182,17 +199,179 @@ module Apply = struct
           dbg;
           inline;
           specialise;
+        } =
+      Call_kind.invariant call_kind;
+      let stack = E.current_continuation_stack env in
+      E.check_name_is_bound_and_of_kind env func (K.value ());
+      begin match call_kind with
+      | Function (Direct { closure_id = _; return_arity = _; }) ->
+        (* Note that [return_arity] is checked for all the cases below. *)
+        E.check_simples_are_bound env args
+      | Function Indirect_unknown_arity ->
+        E.check_simples_are_bound_and_of_kind env args (K.value ())
+      | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
+        ignore (param_arity : Flambda_arity.t);
+        E.check_simples_are_bound env args
+      | Method { kind; obj; } ->
+        ignore (kind : Call_kind.method_kind);
+        E.check_name_is_bound_and_of_kind env obj (K.value ());
+        E.check_simples_are_bound_and_of_kind env args (K.value ())
+      | C_call { alloc = _; param_arity = _; return_arity = _; } ->
+        (* CR mshinwell: Check exactly what Cmmgen can compile and then
+           add further checks on [param_arity] and [return_arity] *)
+        begin match func with
+        | Symbol _ -> ()
+        | Var _ ->
+          (* CR-someday mshinwell: We could expose indirect C calls at the
+             source language level. *)
+          Misc.fatal_errorf "For [C_call] applications the callee must be \
+              directly specified as a [Symbol], not via a [Var]:@ %a"
+            Apply.print apply
+        end
+      end;
+      begin match E.find_continuation_opt env continuation with
+      | None ->
+        unbound_continuation continuation "[Apply] term"
+      | Some (arity, kind, cont_stack) ->
+        begin match kind with
+        | Normal -> ()
+        | Exn_handler ->
+          Misc.fatal_errorf "Continuation %a is an exception handler \
+              but is used in this [Apply] term as a return continuation:@ %a"
+            Continuation.print continuation
+            print expr
+        end;
+        let expected_arity = Call_kind.return_arity call_kind in
+        if not (Flambda_arity.compatible arity ~if_used_at:expected_arity)
+        then begin
+          Misc.fatal_errorf "Continuation %a called with wrong arity in \
+              this [Apply] term: expected %a but used at %a:@ %a"
+            Continuation.print continuation
+            Flambda_arity.print expected_arity
+            Flambda_arity.print arity
+            print expr
+        end;
+        E.Continuation_stack.unify continuation stack cont_stack
+      end;
+      begin match E.find_continuation_opt env exn_continuation with
+      | None ->
+        unbound_continuation continuation
+          "[Apply] term exception continuation"
+      | Some (arity, kind, cont_stack) ->
+        begin match kind with
+        | Normal ->
+          Misc.fatal_errorf "Continuation %a is a normal continuation \
+              but is used in this [Apply] term as an exception handler:@ %a"
+            Continuation.print continuation
+            print expr
+        | Exn_handler -> ()
+        end;
+        let expected_arity = [Flambda_kind.value ()] in
+        if not (Flambda_arity.equal arity expected_arity) then begin
+          Misc.fatal_errorf "Exception continuation %a named in this \
+              [Apply] term has the wrong arity: expected %a but have %a:@ %a"
+            Continuation.print continuation
+            Flambda_arity.print expected_arity
+            Flambda_arity.print arity
+            print expr
+        end;
+        E.Continuation_stack.unify exn_continuation stack cont_stack
+      end;
+      ignore (dbg : Debuginfo.t);
+      ignore (inline : Inline_attribute.t);
+      ignore (specialise : Specialise_attribute.t)
+
+  let create ~callee ~continuation ~exn_continuation ~args ~call_kind ~dbg
+        ~inline ~specialise =
+    let t =
+      { callee;
+        continuation;
+        exn_continuation;
+        args;
+        call_kind;
+        dbg;
+        inline;
+        specialise;
+      }
+    in
+    invariant t;
+    t
+
+  let callee t = t.callee
+  let continuation t = t.continuation
+  let exn_continuation t = t.exn_continuation
+  let args t = t.args
+  let call_kind t = t.call_kind
+  let dbg t = t.dbg
+  let inline t = t.inline
+  let specialise t = t.specialise
+
+  let free_names
+        { callee;
+          continuation;
+          exn_continuation;
+          args;
+          call_kind;
+          dbg = _;
+          inline = _;
+          specialise = _;
+        } =
+    Name_occurrences.union_list [
+      Name_occurrences.of_list [
+        Name callee;
+        Continuation continuation;
+        Continuation exn_continuation;
+      ];
+      Simple.List.free_names args;
+      Call_kind.free_names call_kind;
+    ]
+
+  let continuation_counts
+        { callee = _;
+          continuation;
+          exn_continuation;
+          args = _;
+          call_kind = _;
+          dbg = _;
+          inline = _;
+          specialise = _;
+        } =
+    Continuation_counts.create_list [
+      continuation;
+      exn_continuation;
+    ]
+
+  let apply_name_permutation
+        ({ callee;
+           continuation;
+           exn_continuation;
+           args;
+           call_kind;
+           dbg;
+           inline;
+           specialise;
         } as t)
         perm =
+    let continuation' =
+      Name_permutation.apply_continuation perm continuation'
+    in
+    let exn_continuation' =
+      Name_permutation.apply_continuation perm exn_continuation'
+    in
     let callee' = Name_permutation.apply_name perm callee in
     let args' = Name_permutation.apply_simples perm args in
     let call_kind' = Call_kind.apply_name_permutation call_kind perm in
-    if callee == callee' && args == args' && call_kind == call_kind' then
+    if continuation == continuation'
+      && exn_continuation == exn_continuation'
+      && callee == callee'
+      && args == args'
+      && call_kind == call_kind'
+    then
       t
     else
       { callee = callee';
-        continuation;
-        exn_continuation;
+        continuation = continuation';
+        exn_continuation = exn_continuation';
         args = args';
         call_kind = call_kind';
         dbg;
@@ -203,171 +382,303 @@ end
 
 module Trap_action = struct
   type t =
-    | Push of { id : Trap_id.t; exn_handler : Continuation.t; }
+    | Push of { exn_handler : Continuation.t; }
     | Pop of {
-        id : Trap_id.t;
         exn_handler : Continuation.t;
         take_backtrace : bool;
       }
 
-  include Hashtbl.Make_with_map (struct
-    type nonrec t = t
+  let print ppf t =
+    match t with
+    | Push { exn_handler; } ->
+      fprintf ppf "%spush%s %a %sthen%s "
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Continuation.print exn_handler
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+    | Pop { exn_handler; take_backtrace; } ->
+      fprintf ppf "%spop%s%s %a %sthen%s "
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        (if take_backtrace then " with backtrace" else "")
+        Continuation.print exn_handler
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
 
-    let compare t1 t2 =
-      match t1, t2 with
-      | Push { id = id1; exn_handler = exn_handler1; },
-          Push { id = id2; exn_handler = exn_handler2; } ->
-        let c = Trap_id.compare id1 id2 in
-        if c <> 0 then c
-        else Continuation.compare exn_handler1 exn_handler2
-      | Pop { id = id1; exn_handler = exn_handler1;
-              take_backtrace = take_backtrace1; },
-          Pop { id = id2; exn_handler = exn_handler2;
-                take_backtrace = take_backtrace2; } ->
-        let c = Trap_id.compare id1 id2 in
-        if c <> 0 then c
-        else
-          let c = Continuation.compare exn_handler1 exn_handler2 in
-          if c <> 0 then c
-          else
-            Pervasives.compare take_backtrace1 take_backtrace2
-      | Push _, Pop _ -> -1
-      | Pop _, Push _ -> 1
+  let free_names = function
+    | Push { exn_handler; }
+    | Pop { exn_handler; take_backtrace = _; } ->
+      Name_occurrences.singleton_in_terms (Continuation exn_handler)
 
-    let hash t =
-      match t with
-      | Push { id; exn_handler; } ->
-        Hashtbl.hash (Trap_id.hash id, Continuation.hash exn_handler)
-      | Pop { id; exn_handler; take_backtrace; } ->
-        Hashtbl.hash (Trap_id.hash id, Continuation.hash exn_handler,
-          take_backtrace)
+  let apply_name_permutation t perm =
+    match t with
+    | Push { exn_handler; } ->
+      let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
+      if exn_handler == exn_handler' then t
+      else Push { exn_handler = exn_handler'; }
+    | Pop { exn_handler; take_backtrace; } ->
+      let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
+      if exn_handler == exn_handler' then t
+      else Pop { exn_handler = exn_handler'; take_backtrace; }
 
-    let print ppf t =
-      match t with
-      | Push { id; exn_handler; } ->
-        fprintf ppf "%spush%s %a %a %sthen%s "
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-          Trap_id.print id
-          Continuation.print exn_handler
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-      | Pop { id; exn_handler; take_backtrace; } ->
-        fprintf ppf "%spop%s%s %a %a %sthen%s "
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-          (if take_backtrace then " with backtrace" else "")
-          Trap_id.print id
-          Continuation.print exn_handler
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
-  end)
+  let continuation_counts = function
+    | Push { exn_handler; }
+    | Pop { exn_handler; take_backtrace = _; } ->
+      Continuation_counts.create_singleton exn_handler
 
   module Option = struct
+    type nonrec t = t option
+
     let print ppf = function
       | None -> ()
       | Some t -> print ppf t
+
+    let free_names = function
+      | None -> Name_occurrences.create ()
+      | Some trap_action -> free_names trap_action
+
+    let apply_name_permutation t perm =
+      match t with
+      | None -> None
+      | Some trap_action ->
+        let trap_action' = apply_name_permutation trap_action perm in
+        if trap_action == trap_action' then t
+        else Some trap_action'
   end
 end
 
-module Switch = struct
-  type t = Continuation.t Discriminant.Map.t
+module Apply_cont = struct
+  type t = {
+    k : Continuation.t;
+    args : Simple.t list;
+    trap_action : Trap_action.Option.t;
+  }
 
-  let invariant t =
-    let module E = Invariant_env in
-    assert (Discriminant.Map.cardinal t >= 2);
-    let check discr cont =
-      ignore (discr : Discriminant.t);
+  let print ppf { k; args; trap_action; } =
+    match args with
+    | [] ->
+      fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
+        Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Continuation.print k
+    | _ ->
+      fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
+        Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Continuation.print k
+        Simple.List.print args
+
+  let invariant env { k; args; trap_action; } =
+    let args_arity = List.map (fun arg -> E.kind_of_simple env arg) args in
+    let arity, kind, cont_stack =
       match E.find_continuation_opt env cont with
+      | Some result -> result
+      | None -> unbound_continuation cont "[Apply_cont] term"
+    in
+    let stack = E.current_continuation_stack env in
+    E.Continuation_stack.unify cont stack cont_stack;
+    if not (Flambda_arity.equal args_arity arity) then begin
+      Misc.fatal_errorf "Continuation %a called with wrong arity in \
+          this [Apply_cont] term: expected %a but found %a:@ %a"
+        Continuation.print cont
+        Flambda_arity.print arity
+        Flambda_arity.print args_arity
+        print expr
+    end;
+    begin match kind with
+    | Normal -> ()
+    | Exn_handler ->
+      Misc.fatal_errorf "Continuation %a is an exception handler \
+          but is used in this [Apply_cont] term as a normal continuation:@ \
+          %a"
+        Continuation.print cont
+        print expr
+    end;
+    let check_exn_handler exn_handler =
+      match E.find_continuation_opt env exn_handler with
+      | None ->
+        unbound_continuation exn_handler "[Apply] trap handler"
+      | Some (arity, kind, cont_stack) ->
+        begin match kind with
+        | Exn_handler -> ()
+        | Normal ->
+          Misc.fatal_errorf "Continuation %a is a normal continuation  \
+              but is used in the trap action of this [Apply] term as an \
+              exception handler:@ %a"
+            Continuation.print exn_handler
+            print expr
+        end;
+        assert (not (Continuation.equal cont exn_handler));
+        let expected_arity = [K.value ()] in
+        if not (Flambda_arity.equal arity expected_arity) then begin
+          Misc.fatal_errorf "Exception handler continuation %a has \
+              the wrong arity for the trap handler action of this \
+              [Apply] term: expected %a but found %a:@ %a"
+            Continuation.print cont
+            Flambda_arity.print expected_arity
+            Flambda_arity.print arity
+            print expr
+        end;
+        cont_stack
+    in
+    let current_stack = E.current_continuation_stack env in
+    (* CR mshinwell for pchambart: We need to fix this.  I've removed the
+       trap IDs since we don't need them for compilation, and they would be
+       another kind of name that needs freshening (which is weird since they
+       don't have any binding site). *)
+    (*
+    let stack, cont_stack =
+      match trap_action with
+      | None -> current_stack, cont_stack
+      | Some (Push { id; exn_handler }) ->
+        let cont_stack = check_exn_handler exn_handler in
+        E.Continuation_stack.push id exn_handler current_stack, cont_stack
+      | Some (Pop { id; exn_handler; take_backtrace = _; }) ->
+        let cont_stack = check_exn_handler exn_handler in
+        current_stack, E.Continuation_stack.push id exn_handler cont_stack
+    in
+    E.Continuation_stack.unify cont stack cont_stack
+    *)
+    current_stack
+
+  let create ?trap_action k ~args = { k; args; trap_action; }
+
+  let goto k =
+    { k;
+      args;
+      trap_action = None;
+    }
+
+  let free_names { k; args; trap_action; } =
+    Name_occurrences.union_list [
+      Name_occurrences.singleton_in_terms (Continuation k);
+      Simple.List.free_names args;
+      Trap_action.free_names trap_action;
+    ]
+
+  let continuation_counts { k; args = _; trap_action; } =
+    Continuation_counts.union_list [
+      Continuation_counts.create_singleton k;
+      Trap_action.continuation_counts trap_action;
+    ]
+
+  let apply_name_permutation ({ k; args; trap_action; } as t) perm =
+    let k' = Name_permutation.apply_continuation perm k in
+    let args' = Simple.List.apply_name_permutation args perm in
+    let trap_action' = Trap_action.apply_name_permutation trap_action perm in
+    if k == k' && args == args' && trap_action == trap_action' then t
+    else { k = k'; args = args'; trap_action = trap_action'; }
+end
+
+module Switch = struct
+  type t = {
+    scrutinee : Name.t;
+    arms : Continuation.t Discriminant.Map.t;
+  }
+
+  let invariant env { scrutinee = _; arms; } =
+    let module E = Invariant_env in
+    E.check_name_is_bound_and_of_kind env scrutinee (K.fabricated ());
+    assert (Discriminant.Map.cardinal arms >= 2);
+    let check discr k =
+      ignore (discr : Discriminant.t);
+      match E.find_continuation_opt env k with
       | None ->
         unbound_continuation cont "[Switch] term"
       | Some (arity, kind, cont_stack) ->
         let current_stack = E.current_continuation_stack env in
-        E.Continuation_stack.unify cont cont_stack current_stack;
+        E.Continuation_stack.unify k cont_stack current_stack;
         begin match kind with
         | Normal -> ()
         | Exn_handler ->
           Misc.fatal_errorf "Continuation %a is an exception handler \
               but is used in this [Switch] as a normal continuation:@ %a"
-            Continuation.print cont
+            Continuation.print k
             print expr
         end;
         if List.length arity <> 0 then begin
           Misc.fatal_errorf "Continuation %a is used in this [Switch] \
               and thus must have arity [], but has arity %a"
-            Continuation.print cont
+            Continuation.print k
             Flambda_arity.print arity
         end
     in
-    Discriminant.Map.iter check t
+    Discriminant.Map.iter check arms
 
-  let iter t ~f = Discriminant.Map.iter f t
+  let print_arms ppf arms =
+    let spc = ref false in
+    Discriminant.Map.iter (fun discriminant l ->
+        if !spc then fprintf ppf "@ " else spc := true;
+        fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
+          Discriminant.print discriminant
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
+          Continuation.print l)
+      arms
 
-  let num_arms t = Discriminant.Map.cardinal t
+  let print ppf { scrutinee; arms; } =
+    fprintf ppf
+      "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
+      (Misc_color.bold_cyan ())
+      (Misc_color.reset ())
+      Name.print scrutinee
+      print_arms arms
 
-  let arms t = t
+  let iter t ~f = Discriminant.Map.iter f t.arms
 
-  include Map.Make_with_set (struct
-    type nonrec t = t
+  let num_arms t = Discriminant.Map.cardinal t.arms
 
-    let compare t1 t2 =
-      if t1 == t2 then 0
-      else Discriminant.Map.compare Continuation.compare t1 t2
+  let scrutinee t = t.scrutinee
+  let arms t = t.arms
 
-    let print ppf (t : t) =
-      let spc = ref false in
-      Discriminant.Map.iter (fun discriminant l ->
-          if !spc then fprintf ppf "@ " else spc := true;
-          fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
-            Discriminant.print discriminant
-            (Misc_color.bold_cyan ())
-            (Misc_color.reset ())
-            Continuation.print l)
-        t
-  end)
+  let free_names { scrutinee; arms; } =
+    let free_names_in_arms =
+      Discriminant.Map.fold (fun _discr k free_names ->
+          Name_occurrences.add free_names (Continuation k) In_terms)
+        arms
+        (Name_occurrences.create ())
+    in
+    Name_occurrences.union_list [
+      Name_occurrences.singleton_in_terms (Name scrutinee);
+      free_names_in_arms;
+    ]
+
+  let apply_name_permutation ({ scrutinee; arms; } as t) perm =
+    let scrutinee' = Name_permutation.apply_name perm scrutinee in
+    let arms =
+      Discriminant.Map.map_sharing (fun k ->
+          Name_permutation.apply_continuation perm k)
+        arms
+    in
+    if scrutinee == scrutinee' && arms == arms' then t
+    else { scrutinee = scrutinee'; arms = arms'; }
+
+  let continuation_counts { scrutinee = _; arms; } =
+    Continuation_counts.create_list (Discriminant.Set.of_list arms )
 end
-
-type recursive =
-  | Non_recursive
-  | Recursive
-
-type mutable_or_immutable =
-  | Mutable
-  | Immutable
 
 module rec Expr : sig
   type t =
     | Let of Let.t
     | Let_cont of Let_cont.t
     | Apply of Apply.t
-    | Apply_cont of Continuation.t * Trap_action.t option * Simple.t list
-    | Switch of Name.t * Switch.t
+    | Apply_cont of Apply_cont.t
+    | Switch of Switch.t
     | Invalid of Invalid_term_semantics.t
+
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  include Contains_names.S with type t := t
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
   val create_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t
-  val free_names_advanced
-     : ?ignore_uses_as_callee:unit
-    -> ?ignore_uses_as_argument:unit
-    -> ?ignore_uses_as_continuation_argument:unit
-    -> ?ignore_uses_in_project_var:unit
-    -> ?ignore_uses_in_apply_cont:unit
-    -> t
-    -> Name_occurrences.t
-  val free_names : t -> Name_occurrences.t
-  val free_variables : t -> Variable.Set.t
-  val free_symbols : t -> Symbol.Set.t
-  val used_names
-     : ?ignore_uses_as_callee:unit
-    -> ?ignore_uses_as_argument:unit
-    -> ?ignore_uses_as_continuation_argument:unit
-    -> ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
-  val free_continuations : t -> Continuation.Set.t
   val invalid : unit -> t
   type maybe_named =
     | Is_expr of t
@@ -378,177 +689,18 @@ module rec Expr : sig
     -> (Named.t -> unit)
     -> maybe_named
     -> unit
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Expr
 
   let invariant env expr =
     let module E = Invariant_env in
-    let unbound_continuation cont reason =
-      Misc.fatal_errorf "Unbound continuation %a in %s: %a"
-        Continuation.print cont
-        reason
-        print expr
-    in
-    let add_parameters env params =
-      (* CR mshinwell: Need to think carefully about exactly what the
-         freshness criterion is for [Parameters] *)
-      E.add_kinded_parameters env (T.Parameters.kinded_params params)
-    in
     let rec loop env (t : t) : unit =
       match t with
       | Let let_expr -> Let.invariant env let_expr
       | Let_cont let_cont -> Let_cont.invariant env let_cont
-      | Apply_cont (cont, trap_action, args) ->
-        let args_arity = List.map (fun arg -> E.kind_of_simple env arg) args in
-        let arity, kind, cont_stack =
-          match E.find_continuation_opt env cont with
-          | Some result -> result
-          | None -> unbound_continuation cont "[Apply_cont] term"
-        in
-        let stack = E.current_continuation_stack env in
-        E.Continuation_stack.unify cont stack cont_stack;
-        if not (Flambda_arity.equal args_arity arity) then begin
-          Misc.fatal_errorf "Continuation %a called with wrong arity in \
-              this [Apply_cont] term: expected %a but found %a:@ %a"
-            Continuation.print cont
-            Flambda_arity.print arity
-            Flambda_arity.print args_arity
-            print expr
-        end;
-        begin match kind with
-        | Normal -> ()
-        | Exn_handler ->
-          Misc.fatal_errorf "Continuation %a is an exception handler \
-              but is used in this [Apply_cont] term as a normal continuation:@ \
-              %a"
-            Continuation.print cont
-            print expr
-        end;
-        let check_trap_action exn_handler =
-          match E.find_continuation_opt env exn_handler with
-          | None ->
-            unbound_continuation exn_handler "[Apply] trap handler"
-          | Some (arity, kind, cont_stack) ->
-            begin match kind with
-            | Exn_handler -> ()
-            | Normal ->
-              Misc.fatal_errorf "Continuation %a is a normal continuation  \
-                  but is used in the trap action of this [Apply] term as an \
-                  exception handler:@ %a"
-                Continuation.print exn_handler
-                print expr
-            end;
-            assert (not (Continuation.equal cont exn_handler));
-            let expected_arity = [K.value ()] in
-            if not (Flambda_arity.equal arity expected_arity) then begin
-              Misc.fatal_errorf "Exception handler continuation %a has \
-                  the wrong arity for the trap handler action of this \
-                  [Apply] term: expected %a but found %a:@ %a"
-                Continuation.print cont
-                Flambda_arity.print expected_arity
-                Flambda_arity.print arity
-                print expr
-            end;
-            cont_stack
-        in
-        let current_stack = E.current_continuation_stack env in
-        let stack, cont_stack =
-          match trap_action with
-          | None -> current_stack, cont_stack
-          | Some (Push { id; exn_handler }) ->
-            let cont_stack = check_trap_action exn_handler in
-            E.Continuation_stack.push id exn_handler current_stack, cont_stack
-          | Some (Pop { id; exn_handler; take_backtrace = _; }) ->
-            let cont_stack = check_trap_action exn_handler in
-            current_stack, E.Continuation_stack.push id exn_handler cont_stack
-        in
-        E.Continuation_stack.unify cont stack cont_stack
-      | Apply ({ func; continuation; exn_continuation; args; call_kind; dbg;
-                 inline; specialise; } as apply) ->
-        let stack = E.current_continuation_stack env in
-        E.check_name_is_bound_and_of_kind env func (K.value ());
-        begin match call_kind with
-        | Function (Direct { closure_id = _; return_arity = _; }) ->
-          (* Note that [return_arity] is checked for all the cases below. *)
-          E.check_simples_are_bound env args
-        | Function Indirect_unknown_arity ->
-          E.check_simples_are_bound_and_of_kind env args (K.value ())
-        | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
-          ignore (param_arity : Flambda_arity.t);
-          E.check_simples_are_bound env args
-        | Method { kind; obj; } ->
-          ignore (kind : Call_kind.method_kind);
-          E.check_name_is_bound_and_of_kind env obj (K.value ());
-          E.check_simples_are_bound_and_of_kind env args (K.value ())
-        | C_call { alloc = _; param_arity = _; return_arity = _; } ->
-          (* CR mshinwell: Check exactly what Cmmgen can compile and then
-             add further checks on [param_arity] and [return_arity] *)
-          begin match func with
-          | Symbol _ -> ()
-          | Var _ ->
-            (* CR-someday mshinwell: We could expose indirect C calls at the
-               source language level. *)
-            Misc.fatal_errorf "For [C_call] applications the callee must be \
-                directly specified as a [Symbol], not via a [Var]:@ %a"
-              Apply.print apply
-          end
-        end;
-        begin match E.find_continuation_opt env continuation with
-        | None ->
-          unbound_continuation continuation "[Apply] term"
-        | Some (arity, kind, cont_stack) ->
-          begin match kind with
-          | Normal -> ()
-          | Exn_handler ->
-            Misc.fatal_errorf "Continuation %a is an exception handler \
-                but is used in this [Apply] term as a return continuation:@ %a"
-              Continuation.print continuation
-              print expr
-          end;
-          let expected_arity = Call_kind.return_arity call_kind in
-          if not (Flambda_arity.compatible arity ~if_used_at:expected_arity)
-          then begin
-            Misc.fatal_errorf "Continuation %a called with wrong arity in \
-                this [Apply] term: expected %a but used at %a:@ %a"
-              Continuation.print continuation
-              Flambda_arity.print expected_arity
-              Flambda_arity.print arity
-              print expr
-          end;
-          E.Continuation_stack.unify continuation stack cont_stack
-        end;
-        begin match E.find_continuation_opt env exn_continuation with
-        | None ->
-          unbound_continuation continuation
-            "[Apply] term exception continuation"
-        | Some (arity, kind, cont_stack) ->
-          begin match kind with
-          | Normal ->
-            Misc.fatal_errorf "Continuation %a is a normal continuation \
-                but is used in this [Apply] term as an exception handler:@ %a"
-              Continuation.print continuation
-              print expr
-          | Exn_handler -> ()
-          end;
-          let expected_arity = [Flambda_kind.value ()] in
-          if not (Flambda_arity.equal arity expected_arity) then begin
-            Misc.fatal_errorf "Exception continuation %a named in this \
-                [Apply] term has the wrong arity: expected %a but have %a:@ %a"
-              Continuation.print continuation
-              Flambda_arity.print expected_arity
-              Flambda_arity.print arity
-              print expr
-          end;
-          E.Continuation_stack.unify exn_continuation stack cont_stack
-        end;
-        ignore (dbg : Debuginfo.t);
-        ignore (inline : inline_attribute);
-        ignore (specialise : specialise_attribute)
-      | Switch (arg, switch) ->
-        E.check_name_is_bound_and_of_kind env arg (K.fabricated ());
-        Switch.invariant env switch
+      | Apply_cont apply_cont -> Apply_cont.invariant apply_cont
+      | Apply apply -> Apply.invariant apply
+      | Switch switch -> Switch.invariant switch
       | Invalid _ -> ()
     in
     loop env expr
@@ -558,26 +710,8 @@ end = struct
     | Let let_expr -> Let.print_with_cache ~cache ppf let_expr
     | Let_cont let_cont -> Let_cont.print_with_cache ~cache ppf let_cont
     | Apply apply -> Apply.print ppf apply
-    | Apply_cont (k, trap_action, []) ->
-      fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
-        Trap_action.Option.print trap_action
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Continuation.print k
-    | Apply_cont (k, trap_action, args) ->
-      fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
-        Trap_action.Option.print trap_action
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Continuation.print k
-        Simple.List.print args
-    | Switch (scrutinee, switch) ->
-      fprintf ppf
-        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Name.print scrutinee
-        Switch.print switch
+    | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
+    | Switch switch -> Switch.print ppf switch
     | Invalid semantics ->
       fprintf ppf "@[%sInvalid %a%s@]"
         (Misc_color.bold_cyan ())
@@ -587,115 +721,14 @@ end = struct
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let name_usage ?ignore_uses_as_callee
-      ?ignore_uses_as_argument ?ignore_uses_as_continuation_argument
-      ?ignore_uses_in_project_var ?ignore_uses_in_apply_cont
-      ~all_used_names tree =
-    let free = ref (Name_occurrences.create ()) in
-    let bound = ref (Name_occurrences.create ()) in
-    let free_names names =
-      free := Name_occurrences.union !free names
-    in
-    let free_name_in_term name =
-      let new_free = Name_occurrences.add !free name In_terms in
-      free := new_free
-    in
-    let free_names_in_term names =
-      let new_free = Name_occurrences.add_set !free names In_terms in
-      free := new_free
-    in
-    (* CR mshinwell: this can be renamed now *)
-    let free_names_promoted_to_kind names (kind : K.t) =
-      match kind with
-      | Value | Naked_number _ | Fabricated -> free_names names
-    in
-    let bound_name_in_term name =
-      let new_bound = Name_occurrences.add !bound name In_terms in
-      bound := new_bound
-    in
-    (* CR mshinwell: likewise *)
-    let bound_name_of_kind name (kind : K.t) =
-      match kind with
-      | Value | Naked_number _ | Fabricated -> bound_name_in_term name
-    in
-    (* N.B. This function assumes that all bound identifiers are distinct. *)
-    let rec aux (flam : t) : unit =
-      match flam with
-      | Apply { func; args; call_kind; _ } ->
-        begin match ignore_uses_as_callee with
-        | None -> free_name_in_term func
-        | Some () -> ()
-        end;
-        begin match call_kind with
-        | Function (Direct { closure_id = _; return_arity = _; })
-        | Function Indirect_unknown_arity
-        | Function (Indirect_known_arity {
-            param_arity = _; return_arity = _; }) -> ()
-        | Method { kind = _; obj; } -> free_name_in_term obj
-        | C_call { alloc = _; param_arity = _; return_arity = _; } -> ()
-        end;
-        begin match ignore_uses_as_argument with
-        | None -> free_names_in_term (Simple.List.free_names args)
-        | Some () -> ()
-        end
-      | Let { var; kind; free_names_of_defining_expr; free_names_of_body;
-              defining_expr; body; _ } ->
-        bound_name_of_kind (Name.var var) kind;
-        if all_used_names
-            || ignore_uses_as_callee <> None
-            || ignore_uses_as_argument <> None
-            || ignore_uses_as_continuation_argument <> None
-            || ignore_uses_in_project_var <> None
-            || ignore_uses_in_apply_cont <> None
-        then begin
-          (* In these cases we can't benefit from the pre-computed free
-             name sets. *)
-          free_names_promoted_to_kind
-            (Named.name_usage ?ignore_uses_in_project_var defining_expr)
-            kind;
-          aux body
-        end else begin
-          free_names_promoted_to_kind free_names_of_defining_expr kind;
-          free_names free_names_of_body
-        end
-      | Apply_cont (_, _, args) ->
-        (* CR mshinwell: why two names? *)
-        begin match ignore_uses_in_apply_cont with
-        | Some () -> ()
-        | None ->
-          match ignore_uses_as_continuation_argument with
-          | None -> free_names_in_term (Simple.List.free_names args)
-          | Some () -> ()
-        end
-      | Let_cont { handlers; body; } ->
-        aux body;
-        begin match handlers with
-        | Non_recursive { name = _; handler = { Continuation_handler.
-            params; handler; _ }; } ->
-          free_names (Flambda_type.Parameters.free_names params);
-          aux handler
-        | Recursive handlers ->
-          Continuation.Map.iter (fun _name { Continuation_handler.
-            params; handler; _ } ->
-              free_names (Flambda_type.Parameters.free_names params);
-              aux handler)
-            handlers
-        end
-      | Switch (var, _) -> free_name_in_term var
-      | Invalid _ -> ()
-    in
-    aux tree;
-    if all_used_names then !free
-    else Name_occurrences.diff !free !bound
-
-  let free_names ?ignore_uses_as_callee ?ignore_uses_as_argument
-      ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var
-      ?ignore_uses_in_apply_cont t =
-    name_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-      ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var
-      ?ignore_uses_in_apply_cont ~all_used_names:false t
-
-  let free_names t : Name_occurrences.t = free_names t
+  let free_names t =
+    match t with
+    | Let let_expr -> Let.free_names let_expr
+    | Let_cont let_cont -> Let_cont.free_names let_cont
+    | Apply apply -> Apply.free_names apply
+    | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
+    | Switch switch -> Switch.free_names switch
+    | Invalid _ -> Name_occurrences.create ()
 
   let apply_name_permutation t perm =
     match t with
@@ -704,22 +737,48 @@ end = struct
       if let_expr == let_expr' then t
       else Let let_expr'
     | Let_cont let_cont ->
-      let let_cont = Let_cont.apply_name_permutation let_cont perm in
-       if let_cont == let_cont' then t
+      let let_cont' = Let_cont.apply_name_permutation let_cont perm in
+      if let_cont == let_cont' then t
       else Let_cont let_cont'
     | Apply apply ->
       let apply' = Apply.apply_name_permutation apply perm in
       if apply == apply' then t
       else Apply apply'
-    | Apply_cont (k, trap_action_opt, args) ->
-      let args' = Name_permutation.apply_simples perm args in
-      if args == args' then t
-      else Apply_cont (k, trap_action_opt, args')
-    | Switch (scrutinee, switch) ->
-      let scrutinee' = Name_permutation.apply_name perm scrutinee in
-      if scrutinee == scrutinee' then t
-      else Switch (scrutinee', switch)
+    | Apply_cont apply_cont ->
+      let apply_cont' = Apply_cont.apply_name_permutation apply_cont perm in
+      if apply_cont == apply_cont' then t
+      else Apply_cont apply_cont'
+    | Switch switch ->
+      let switch' = Switch.apply_name_permutation switch perm in
+      if switch == switch' then t
+      else Switch switch'
     | Invalid _ -> t
+
+  let continuation_counts_toplevel t =
+    match t with
+    | Let let_expr -> Let.continuation_counts_toplevel let_expr
+    | Let_cont let_cont -> Let_cont.continuation_counts_toplevel let_cont
+    | Apply apply -> Apply.continuation_counts apply
+    | Apply_cont apply_cont -> Apply_cont.continuation_counts apply_cont
+    | Switch switch -> Switch.continuation_counts switch
+    | Invalid _ -> Continuation_counts.create ()
+
+  let defined_continuations_toplevel t =
+    match t with
+    | Let let_expr -> Let.defined_continuations_toplevel let_expr
+    | Let_cont let_cont -> Let_cont.defined_continuations_toplevel let_cont
+    | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> Continuation.Set.empty
+
+  let create_let bound_var kind defining_expr body : t =
+    begin match !Clflags.dump_flambda_let with
+    | None -> ()
+    | Some stamp ->
+      Variable.debug_when_stamp_matches bound_var ~stamp ~f:(fun () ->
+        Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
+          stamp
+          (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
+    end;
+    Let (Let.create ~bound_var ~kind ~defining_expr ~body)
 
   let invalid () =
     if !Clflags.treat_invalid_code_as_unreachable then
@@ -728,76 +787,27 @@ end = struct
       Invalid Halt_and_catch_fire
 
   type switch_creation_result =
-    | Have_not_deleted_branch
-    | Have_deleted_branch
+    | Have_deleted_comparison_but_not_branch
+    | Have_deleted_comparison_and_branch
+    | Nothing_deleted
 
   let create_switch ~scrutinee ~arms =
     if Discriminant.Map.cardinal arms < 1 then
-      invalid (), Have_deleted_branch
+      invalid (), Have_deleted_comparison_and_branch
     else
+      let change_to_goto k =
+        Apply_cont (Apply_cont.goto k), Have_deleted_comparison_but_not_branch
+      in
       match Discriminant.Map.get_singleton arms with
+      | Some (_discriminant, k) -> change_to_goto k
       | None ->
         Switch.invariant arms;
-        Switch arms, Have_not_deleted_branch
-      | Some (_discriminant, k) ->
-        Apply_cont (k, None, []), Have_deleted_branch
-
-  let rec free_continuations (t : t) =
-    match t with
-    | Let { body; _ } ->
-      (* No continuations occur in a [Named.t] except inside closures---and
-         closures do not have free continuations.  As such we don't need
-         to traverse the defining expression of the let. *)
-      free_continuations body
-    | Let_cont { body; handlers; } ->
-      let free_and_bound =
-        Let_cont_handlers.free_and_bound_continuations handlers
-      in
-      Continuation.Set.union free_and_bound.free
-        (Continuation.Set.diff (free_continuations body)
-          free_and_bound.bound)
-    | Apply_cont (cont, trap_action, _args) ->
-      let trap_action =
-        match trap_action with
-        | Some (Push { exn_handler; _ })
-        | Some (Pop { exn_handler; _ }) ->
-          Continuation.Set.singleton exn_handler
-        | None -> Continuation.Set.empty
-      in
-      Continuation.Set.add cont trap_action
-    | Apply {
-        func = _;
-        continuation;
-        exn_continuation;
-        args = _;
-        call_kind = _;
-        dbg = _;
-        inline = _;
-        specialise = _;
-      } ->
-      Continuation.Set.of_list [continuation; exn_continuation]
-    | Switch (_scrutinee, switch) ->
-      Continuation.Set.of_list (Discriminant.Map.data switch)
-    | Invalid _ -> Continuation.Set.empty
-
-  let create_let var kind defining_expr body : t =
-    begin match !Clflags.dump_flambda_let with
-    | None -> ()
-    | Some stamp ->
-      Variable.debug_when_stamp_matches var ~stamp ~f:(fun () ->
-        Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
-          stamp
-          (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
-    end;
-    let free_names_of_defining_expr = Named.free_names defining_expr in
-    Let {
-      var;
-      kind;
-      defining_expr;
-      body;
-      free_names_of_defining_expr;
-      free_names_of_body = free_names body;
-    }
+        let destinations =
+          Discriminant.Set.of_list (Discriminant.Map.data arms)
+        in
+        match Discriminant.Set.get_singleton destinations with
+        | Some k -> change_to_goto k
+        | None -> Switch arms, Nothing_deleted
 
   let if_then_else ~scrutinee ~if_true ~if_false =
     let arms =
@@ -810,13 +820,8 @@ end = struct
 
   let rec no_effects_or_coeffects (t : t) =
     match t with
-    | Let let_expr ->
-      Named.no_effects_or_coeffects defining_expr
-        && Let.pattern_match let_expr ~f:(fun ~bound_var:_ ~body ->
-             no_effects_or_coeffects body)
-    | Let_cont { body; handlers; } ->
-      no_effects_or_coeffects body
-        && Let_cont_handlers.no_effects_or_coeffects handlers
+    | Let let_expr -> Let_expr.no_effects_or_coeffects let_expr
+    | Let_cont let_cont -> Let_cont.no_effects_or_coeffects let_cont
     | Apply_cont _ | Switch _ -> true
     | Apply _ | Invalid _ -> false
 
@@ -829,51 +834,49 @@ end = struct
   type with_wrapper =
     | Unchanged of { handler : Continuation_handler.t; }
     | With_wrapper of {
-        new_cont : Continuation.t;
+        new_k : Continuation.t;
         new_handler : Continuation_handler.t;
         wrapper_handler : Continuation_handler.t;
       }
 
-  let build_let_cont_with_wrappers ~body ~(recursive : recursive)
-        ~with_wrappers : Expr.t =
+  let build_let_cont_with_wrappers ~body ~(recursive : Recursive.t)
+        ~with_wrappers =
     match recursive with
     | Non_recursive ->
       begin match Continuation.Map.bindings with_wrappers with
-      | [cont, Unchanged { handler; }] ->
-        Let_cont.create_non_recursive cont ~body handler
-      | [cont, With_wrapper { new_cont; new_handler; wrapper_handler; }] ->
-        Let_cont {
-          body = Let_cont {
-            body;
-            handlers = Non_recursive {
-              name = cont;
-              handler = wrapper_handler;
-            };
-          };
-          handlers = Non_recursive {
-            name = new_cont;
-            handler = new_handler;
-          };
-        }
-      | _ -> assert false
+      | [k, Unchanged { handler; }] ->
+        Let_cont (Let_cont.create_non_recursive k ~body handler)
+      | [k, With_wrapper { new_k; new_handler; wrapper_handler; }] ->
+        let for_k =
+          Let_cont.create_non_recursive k
+            ~body
+            ~handler:wrapper_handler
+        in
+        let for_new_k =
+          Let_cont.create_non_recursive new_k
+            ~body:(Let_cont for_k)
+            ~handler:new_handler
+        in
+        Let_cont for_new_k
+      | _ -> Misc.fatal_error "build_let_cont_with_wrappers"
       end
     | Recursive ->
       let handlers =
         Continuation.Map.fold
-          (fun cont (with_wrapper : with_wrapper) handlers ->
+          (fun k (with_wrapper : with_wrapper) handlers ->
             match with_wrapper with
             | Unchanged { handler; } ->
-              Continuation.Map.add cont handler handlers
-            | With_wrapper { new_cont; new_handler; wrapper_handler; } ->
-              Continuation.Map.add new_cont new_handler
-                (Continuation.Map.add cont wrapper_handler handlers))
+              Continuation.Map.add k handler handlers
+            | With_wrapper { new_k; new_handler; wrapper_handler; } ->
+              Continuation.Map.add new_k new_handler
+                (Continuation.Map.add k wrapper_handler handlers))
           with_wrappers
           Continuation.Map.empty
       in
-      Let_cont {
-        body;
-        handlers = Recursive handlers;
-      }
+      Let_cont.create_recursive ~body handlers
+
+(* To be re-enabled as we find we need them.
+   Iteration is simple enough not to probably not require these.
 
   module Iterators = struct
     let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
@@ -896,7 +899,7 @@ end = struct
             ~for_defining_expr:(fun _kind named -> aux_named named)
             ~for_last_body:aux
             ~for_each_let:f
-        (* CR mshinwell: add tail recursive case for Let_cont *)
+        (* CR mshinwell: add tail recursive case for Let_cont? *)
         | _ ->
           f t;
           match t with
@@ -923,8 +926,10 @@ end = struct
         f_named named;
         match named with
         | Simple _ | Prim _ -> ()
-        | Set_of_closures { function_decls = funcs; _; } ->
+        | Set_of_closures set ->
           if not toplevel then begin
+            Set_of_closures.iter_function_bodies set 
+
             Closure_id.Map.iter (fun _ (decl : Function_declaration.t) ->
                 aux decl.body)
               funcs.funs
@@ -974,6 +979,7 @@ end = struct
           (Is_expr t)
     end
   end
+*)
 
   module Mappers = struct
     let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
@@ -992,7 +998,7 @@ end = struct
         | t ->
           let last_body = for_last_body t in
           (* As soon as we see a change, we have to rebuild that [Let] and every
-            outer one. *)
+             outer one. *)
           let seen_change = ref (not (last_body == t)) in
           List.fold_left
             (fun (t : t) (var, kind, defining_expr, original) : t ->
@@ -1218,40 +1224,6 @@ end = struct
       in
       loop t ~acc:init ~rev_lets:[]
   end
-
-  let all_defined_continuations_toplevel expr =
-    let defined_continuations = ref Continuation.Set.empty in
-    Iterators.Toplevel_only.iter (fun (expr : t) ->
-        match expr with
-        | Let_cont { handlers; _ } ->
-          let conts = Let_cont_handlers.bound_continuations handlers in
-          defined_continuations :=
-            Continuation.Set.union conts
-              !defined_continuations
-        | _ -> ())
-      (fun _named -> ())
-      expr;
-    !defined_continuations
-
-  let count_continuation_uses_toplevel expr =
-    let counts = Continuation.Tbl.create 42 in
-    let use cont =
-      match Continuation.Tbl.find counts cont with
-      | exception Not_found -> Continuation.Tbl.add counts cont 1
-      | count -> Continuation.Tbl.replace counts cont (count + 1)
-    in
-    Iterators.Toplevel_only.iter_expr expr ~f:(fun expr ->
-        match expr with
-        | Apply { continuation; _ } -> use continuation
-        | Apply_cont (cont, None, _) -> use cont
-        | Apply_cont (cont, Some (Push { exn_handler; _ }), _)
-        | Apply_cont (cont, Some (Pop { exn_handler; _ }), _) ->
-          use cont;
-          use exn_handler
-        | Switch (_, switch) ->
-          Switch.iter switch ~f:(fun _discr cont -> use cont)
-        | Let _ | Let_cont _ | Invalid _ -> ());
-    Continuation.Tbl.to_map counts
 end and Expr_with_permutation : sig
   include Contains_names.S
   val create : ?perm:Name_permutation.t -> Expr.t -> t
@@ -1304,27 +1276,17 @@ end and Named : sig
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
 
-  val free_names
-     : ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
-  val free_symbols : t -> Symbol.Set.t
-  val free_symbols_helper : Symbol.Set.t ref -> t -> unit
-  val used_names
-     : ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
-  val name_usage
-     : ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  include Contains_names.S with type t := t
+
   val box_value
       : Name.t
      -> Flambda_kind.t
      -> Debuginfo.t
      -> Named.t * Flambda_kind.t
+
   val unbox_value
       : Name.t
      -> Flambda_kind.t
@@ -1336,52 +1298,42 @@ end = struct
   let print_with_cache ~cache ppf (t : t) =
     match t with
     | Simple simple ->
-      Format.fprintf ppf "%s%a%s"
+      fprintf ppf "%s%a%s"
         (Misc_color.bold_green ())
         Simple.print simple
         (Misc_color.reset ())
-    | Set_of_closures set_of_closures ->
-      Set_of_closures.print_with_cache ~cache ppf set_of_closures
     | Prim (prim, dbg) ->
       fprintf ppf "@[<2>(%a%a)@]"
         Flambda_primitive.print prim
         Debuginfo.print_or_elide dbg
+    | Set_of_closures set_of_closures ->
+      Set_of_closures.print_with_cache ~cache ppf set_of_closures
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
+  (* CR mshinwell: It seems that the type [Flambda_primitive.result_kind]
+     should move into [K], now it's used here. *)
+  let invariant env t : Flambda_primitive.result_kind =
+    try
+      let module E = Invariant_env in
+      match t with
+      | Simple simple ->
+        Singleton (E.kind_of_simple env simple)
+      | Set_of_closures set_of_closures ->
+        Set_of_closures.invariant env set_of_closures;
+        Singleton (K.fabricated ())
+      | Prim (prim, dbg) ->
+        Flambda_primitive.invariant env prim;
+        ignore (dbg : Debuginfo.t);
+        Flambda_primitive.result_kind prim
+    with Misc.Fatal_error ->
+      Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
+
   let free_names t =
     match t with
-    | Simple simple ->
-      Name_occurrences.create_from_set_in_terms (Simple.free_names simple)
-    | _ ->
-      (* CR mshinwell: remove mutable state *)
-      let free = ref (Name_occurrences.create ()) in
-      let free_names names =
-        free := Name_occurrences.union !free names
-      in
-      let free_names_in_term names =
-        let new_free = Name_occurrences.add_set !free names In_terms in
-        free := new_free
-      in
-      begin match t with
-      | Simple simple ->
-        free_names_in_term (Simple.free_names simple)
-      | Set_of_closures set ->
-        free_names (Set_of_closures.free_names set)
-      (* CR mshinwell: Move some of this to flambda_primitive.ml *)
-      | Prim (Unary (_prim, x0), _dbg) ->
-        free_names_in_term (Simple.free_names x0)
-      | Prim (Binary (_prim, x0, x1), _dbg) ->
-        free_names_in_term (Simple.free_names x0);
-        free_names_in_term (Simple.free_names x1)
-      | Prim (Ternary (_prim, x0, x1, x2), _dbg) ->
-        free_names_in_term (Simple.free_names x0);
-        free_names_in_term (Simple.free_names x1);
-        free_names_in_term (Simple.free_names x2)
-      | Prim (Variadic (_prim, xs), _dbg) ->
-        List.iter (fun x -> free_names_in_term (Simple.free_names x)) xs
-      end;
-      !free
+    | Simple simple -> Simple.free_names simple
+    | Prim (prim, _dbg) -> Flambda_primitive.free_names prim
+    | Set_of_closures set -> Set_of_closures.free_names set
 
   let apply_name_permutation t perm =
     match t with
@@ -1477,106 +1429,6 @@ end = struct
         Expr.iter_general ~toplevel:true f f_named (Is_named t)
     end
   end
-
-  let primitive_invariant env (t : Flambda_primitive.t) =
-    (* CR mshinwell: This cannot go in [Flambda_primitive] due to a
-       circularity.  However a refactored version with some callbacks
-       probably could, and that's probably a good change. *)
-    let module E = Invariant_env in
-    let module P = Flambda_primitive in
-    match t with
-    | Unary (prim, x0) ->
-      let kind0 = P.arg_kind_of_unary_primitive prim in
-      E.check_simple_is_bound_and_of_kind env x0 kind0;
-      begin match prim, x0 with
-      | Project_closure closure_id, set_of_closures ->
-        E.check_simple_is_bound_and_of_kind env set_of_closures
-          (K.fabricated ());
-        E.add_use_of_closure_id env closure_id
-      | Move_within_set_of_closures { move_from; move_to; }, closure ->
-        E.check_simple_is_bound_and_of_kind env closure
-          (K.value ());
-        E.add_use_of_closure_id env move_from;
-        E.add_use_of_closure_id env move_to
-      | Project_var (closure_id, var), closure ->
-        E.add_use_of_closure_id env closure_id;
-        E.add_use_of_var_within_closure env var;
-        E.check_simple_is_bound_and_of_kind env closure
-          (K.value ())
-      | Duplicate_block _, _
-      | Is_int, _
-      | Get_tag _, _
-      | Discriminant_of_int, _
-      | Array_length _, _
-      | Bigarray_length _, _
-      | String_length _, _
-      | Int_as_pointer, _
-      | Opaque_identity, _
-      | Int_arith _, _
-      | Float_arith _, _
-      | Num_conv _, _
-      | Boolean_not, _
-      | Unbox_number _, _
-      | Box_number _, _ -> ()  (* None of these contain names. *)
-      end
-    | Binary (prim, x0, x1) ->
-      let kind0, kind1 = P.args_kind_of_binary_primitive prim in
-      E.check_simple_is_bound_and_of_kind env x0 kind0;
-      E.check_simple_is_bound_and_of_kind env x1 kind1;
-      begin match prim with
-      (* None of these currently contain names: this is here so that we
-         are reminded to check upon adding a new primitive. *)
-      | Block_load _
-      | String_or_bigstring_load _
-      | Phys_equal _
-      | Int_arith _
-      | Int_shift _
-      | Int_comp _
-      | Float_arith _
-      | Float_comp _ -> ()
-      end
-    | Ternary (prim, x0, x1, x2) ->
-      let kind0, kind1, kind2 = P.args_kind_of_ternary_primitive prim in
-      E.check_simple_is_bound_and_of_kind env x0 kind0;
-      E.check_simple_is_bound_and_of_kind env x1 kind1;
-      E.check_simple_is_bound_and_of_kind env x2 kind2;
-      begin match prim with
-      | Block_set _
-      | Bytes_or_bigstring_set _ -> ()
-      end
-    | Variadic (prim, xs) ->
-      let kinds =
-        match P.args_kind_of_variadic_primitive prim with
-        | Variadic kinds -> kinds
-        | Variadic_all_of_kind kind ->
-          List.init (List.length xs) (fun _index -> kind)
-      in
-      List.iter2 (fun var kind ->
-          E.check_simple_is_bound_and_of_kind env var kind)
-        xs kinds;
-      begin match prim with
-      | Make_block _
-      | Bigarray_set _
-      | Bigarray_load _ -> ()
-      end
-
-  (* CR mshinwell: It seems that the type [Flambda_primitive.result_kind]
-     should move into [K], now it's used here. *)
-  let invariant env t : Flambda_primitive.result_kind =
-    try
-      let module E = Invariant_env in
-      match t with
-      | Simple simple ->
-        Singleton (E.kind_of_simple env simple)
-      | Set_of_closures set_of_closures ->
-        Set_of_closures.invariant env set_of_closures;
-        Singleton (K.fabricated ())
-      | Prim (prim, dbg) ->
-        primitive_invariant env prim;
-        ignore (dbg : Debuginfo.t);
-        Flambda_primitive.result_kind prim
-    with Misc.Fatal_error ->
-      Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 end and Let : sig
   include Contains_names.S
 
@@ -1598,6 +1450,8 @@ end and Let : sig
      : t
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   module Bound_var_and_body = Name_abstraction.Make (Bound_variable) (Expr)
 
@@ -1677,7 +1531,7 @@ end = struct
       let from_defining_expr = Named.free_names defining_expr in
       let from_body = Expr.free_names body in
       Name_occurrences.union from_defining_expr
-        (Name_occurrences.remove from_body bound_var)
+        (Name_occurrences.remove from_body bound_var))
 
   let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
         perm =
@@ -1695,6 +1549,12 @@ end = struct
         kind;
         defining_expr = defining_expr';
       }
+
+  let no_effects_or_coeffects
+        ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
+    Named.no_effects_or_coeffects defining_expr
+      && pattern_match t ~f:(fun ~bound_var:_ ~body ->
+           Expr.no_effects_or_coeffects body)
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -1732,6 +1592,9 @@ end = struct
 
   let invariant env t =
     let module E = Invariant_env in
+    let add_parameters env params =
+      E.add_kinded_parameters env (T.Parameters.kinded_params params)
+    in
     let handler_stack = E.Continuation_stack.var () in
     let env =
       match handlers with
@@ -1871,6 +1734,10 @@ end = struct
           returned more than one handler for a [Non_recursive] binding"
       end
     | Recursive handlers -> Recursive (f handlers)
+
+  let no_effects_or_coeffects t =
+    no_effects_or_coeffects body
+      && Let_cont_handlers.no_effects_or_coeffects handlers
 
   let print_using_where_with_cache ~cache ppf (t : t) =
     match t with
@@ -2135,7 +2002,7 @@ end = struct
 
   let print_with_cache ~cache ppf { params_and_handler; stub; handler; } =
     Params_and_handler.pattern_match params_and_handler
-      ~f:(fun params ~handler -
+      ~f:(fun params ~handler ->
         fprintf ppf "%s%s%a@ =@ %a"
           (if stub then "*stub* " else "")
           (if is_exn_handler then "*exn* " else "")

@@ -36,15 +36,13 @@ let freshen_continuation env cont =
     continuation is valid (e.g. a switch arm) and there are no opportunities
     for inlining or specialisation. *)
 let simplify_continuation_use_cannot_inline env r cont ~params =
-  let cont = freshen_continuation env cont in
   let cont_type = E.find_continuation env cont in
   let cont =
     (* CR mshinwell: check: this alias logic should also apply in an
        inlinable context where no inlining happens *)
     match Continuation_approx.is_alias cont_type with
     | None -> Continuation_approx.name cont_type
-    | Some alias_of ->
-      Freshening.apply_continuation (E.freshening env) alias_of
+    | Some alias_of -> alias_of
   in
   let arity = Flambda.Typed_parameter.List.arity params in
   let param_tys = Flambda_type.unknown_types_from_arity arity in
@@ -57,6 +55,21 @@ let simplify_continuation_use_cannot_inline env r cont ~params =
 let simplify_exn_continuation env r cont =
   simplify_continuation_use_cannot_inline env r cont
     ~params:(Simplify_aux.params_for_exception_handler ())
+
+let simplify_trap_action env r (trap_action : Flambda.Trap_action.t) =
+  match trap_action with
+  | Push { exn_handler; } ->
+    let exn_handler, r =
+      simplify_continuation_use_cannot_inline env r exn_handler
+        ~params:(Simplify_aux.params_for_exception_handler ())
+    in
+    Flambda.Trap_action.Push { exn_handler; }, r
+  | Pop { exn_handler; take_backtrace; } ->
+    let exn_handler, r =
+      simplify_continuation_use_cannot_inline env r exn_handler
+        ~params:(Simplify_aux.params_for_exception_handler ())
+    in
+    Flambda.Trap_action.Pop { exn_handler; take_backtrace; }, r
 
 let for_defining_expr_of_let (env, r) var kind defining_expr =
   (* CR mshinwell: This handling of the typing environment in [R] needs to be
@@ -1034,47 +1047,33 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
 
 and simplify_apply_shared env r (apply : Flambda.Apply.t)
       : T.t * (T.t list) * Flambda.Apply.t * R.t =
-  let func, func_ty = simplify_name env apply.func in
+  let callee, callee_ty = simplify_name env apply.callee in
   let args, args_tys = List.split (S.simplify_simples env apply.args) in
-  let apply_continuation_params =
-    List.mapi (fun index kind ->
-        let name = Format.sprintf "apply%d" index in
-        let var = Variable.create name in
-        let param = Parameter.wrap var in
-        Flambda.Typed_parameter.create param (T.unknown kind))
-      (Flambda.Call_kind.return_arity apply.call_kind)
-  in
   let continuation, r =
     simplify_continuation_use_cannot_inline env r apply.continuation
-      ~params:apply_continuation_params
+      ~arity:(Flambda.Call_kind.return_arity apply.call_kind)
   in
   let exn_continuation, r =
     simplify_exn_continuation env r apply.exn_continuation
   in
   let dbg = E.add_inlined_debuginfo env ~dbg:apply.dbg in
-  let apply : Flambda.Apply.t = {
-    func;
-    continuation;
-    exn_continuation;
-    args;
-    call_kind = apply.call_kind;
-    dbg;
-    inline = apply.inline;
-    specialise = apply.specialise;
-  }
+  let apply =
+    Flambda.Apply.create ~callee
+      ~continuation
+      ~exn_continuation
+      ~args
+      ~call_kind:(Apply.call_kind apply)
+      ~dbg
+      ~inline:(Apply.inline apply)
+      ~specialise:(Apply.specialise apply)
   in
-  func_ty, args_tys, apply, r
+  callee_ty, args_tys, apply, r
 
-and simplify_function_application env r (apply : Flambda.Apply.t)
-      (call : Flambda.Call_kind.function_call) : Expr.t * R.t =
+and simplify_function_application env r apply
+      (call : Flambda.Call_kind.Function_call.t) : Expr.t * R.t =
   let callee_ty, arg_tys, apply, r = simplify_apply_shared env r apply in
-  let {
-    Flambda.Apply. func = callee; args; call_kind = _; dbg;
-    inline = inline_requested; specialise = specialise_requested;
-    continuation; exn_continuation;
-  } = apply in
   let unknown_closures () : Expr.t * R.t =
-    let function_call : Flambda.Call_kind.function_call =
+    let function_call : Flambda.Call_kind.Function_call.t =
       match call with
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> call
@@ -1246,8 +1245,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
   | Unknown -> unknown_closures ()
   | Invalid -> Expr.invalid (), r
 
-and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
-      : Expr.t * R.t =
+and simplify_method_call env r apply ~kind ~obj : Expr.t * R.t =
   let callee_ty, _args_tys, apply, r = simplify_apply_shared env r apply in
   let callee_kind = (fun ty -> T.kind ty) callee_ty in
   if not (K.is_value callee_kind) then begin
@@ -1255,12 +1253,7 @@ and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
       K.print callee_kind
       T.print callee_ty
   end;
-  let obj, _obj_ty = simplify_name env obj in
-  let apply : Flambda.Apply.t = {
-    apply with
-    call_kind = Method { kind; obj; };
-  }
-  in
+  let apply = Flambda.Apply.method_call kind ~obj in
   Apply apply, r
 
 and simplify_c_call env r apply ~alloc:_ ~param_arity:_ ~return_arity:_
@@ -1274,103 +1267,62 @@ and simplify_c_call env r apply ~alloc:_ ~param_arity:_ ~return_arity:_
   end;
   Apply apply, r
 
-(** Simplify an application of a continuation. *)
-and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
-      ~(args : Simple.t list) : Expr.t * R.t =
-  let original_cont = cont in
-  let original_args = args in
-  Format.eprintf "simplify_apply_cont %a (%a) in env:@ %a\n%!"
-    Continuation.print cont
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args
-    E.print env;
-  let cont = freshen_continuation env cont in
+and simplify_apply_cont env r apply_cont : Expr.t * R.t =
+  let cont = Flambda.Apply_cont.continuation apply_cont in
+  let args = Flambda.Apply_cont.args apply_cont in
+  let trap_action = Flambda.Apply_cont.trap_action apply_cont in
   let cont_approx = E.find_continuation env cont in
-  let cont = Continuation_approx.name cont_approx in
   let args_with_tys = S.simplify_simples env args in
   let args, _arg_tys = List.split args_with_tys in
-  let freshen_trap_action env r (trap_action : Flambda.Trap_action.t) =
-    match trap_action with
-    | Push { id; exn_handler; } ->
-      let id = Freshening.apply_trap (E.freshening env) id in
-      let exn_handler, r =
-        simplify_continuation_use_cannot_inline env r exn_handler
-          ~params:(Simplify_aux.params_for_exception_handler ())
-      in
-      Flambda.Trap_action.Push { id; exn_handler; }, r
-    | Pop { id; exn_handler; take_backtrace; } ->
-      let id = Freshening.apply_trap (E.freshening env) id in
-      let exn_handler, r =
-        simplify_continuation_use_cannot_inline env r exn_handler
-          ~params:(Simplify_aux.params_for_exception_handler ())
-      in
-      Flambda.Trap_action.Pop { id; exn_handler; take_backtrace; }, r
-  in
+  let module NR = Flambda.Non_recursive_let_cont_handler in
+  let module CH = Flambda.Continuation_handler in
   match Continuation_approx.handlers cont_approx with
-  | Some (Non_recursive handler) when handler.stub && trap_action = None ->
+  | Some (Non_recursive non_rec_handler)
+      when CH.stub (NR.handler non_rec_handler) && trap_action = None ->
     (* Stubs are unconditionally inlined out now for two reasons:
        - [Continuation_inlining] cannot do non-linear inlining;
        - Even if it could, we don't want to have to run that pass when
          doing a "noinline" run of [Simplify].
        Note that we don't call [R.use_continuation] here, because we're going
        to eliminate the use. *)
-    let env = E.activate_freshening env in
     let env = E.disallow_continuation_inlining (E.set_never_inline env) in
     let env = E.disallow_continuation_specialisation env in
-    let stub's_body : Expr.t =
-      match trap_action with
-      | None -> handler.handler
-      | Some trap_action ->
-        let new_cont = Continuation.create () in
-        Let_cont {
-          body = Apply_cont (new_cont, Some trap_action, []);
-          handlers = Non_recursive {
-            name = new_cont;
-            handler = {
-              handler = handler.handler;
-              params = [];
-              stub = false;
-              is_exn_handler = false;
-            };
-          };
-        }
-    in
-    let bindings_of_params_to_args =
-      if List.compare_lengths handler.params args_with_tys <> 0 then
-        Misc.fatal_errorf "Cannot simplify application of %a to %a:@ \
-            mismatch between parameters and arguments"
-          Continuation.print original_cont
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print)
-          original_args
-      else
-        List.map2 (fun param (arg, ty) ->
-            let param = Flambda.Typed_parameter.var param in
-            param, T.kind ty, Named.Simple arg)
-          handler.params args_with_tys
-    in
-    (* CR mshinwell: The check about not regressing in preciseness of type
-       should also go here *)
-    let stub's_body =
-      Flambda.Expr.bind ~bindings:bindings_of_params_to_args
-        ~body:stub's_body
-    in
-Format.eprintf "Body for inlining:@ %a\n@ Freshening: %a\n%!"
-  Flambda.Expr.print stub's_body
-  Freshening.print (E.freshening env);
-    begin
-      try simplify_expr env r stub's_body
-      with Misc.Fatal_error -> begin
-        Format.eprintf "\n%sContext is: inlining application of stub%s \
-            \"%a (%a)\".@ The inlined body was:@ %a@ in environment:@ %a\n"
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          Continuation.print original_cont
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print)
-          original_args
-          Flambda.Expr.print stub's_body
-          E.print env;
-        raise Misc.Fatal_error
-      end
-    end
+    let handler = NR.handler non_rec_handler in
+    Continuation_handler.pattern_match (NR.handler non_rec_handler)
+      ~f:(fun stub's_params ~handler:stub's_body ->
+        let bindings_of_params_to_args =
+          if List.compare_lengths stub's_params args_with_tys <> 0 then
+            Misc.fatal_errorf "Cannot simplify application of %a to %a:@ \
+                mismatch between parameters and arguments"
+              Continuation.print cont
+              Simple.List.print args
+              original_args
+          else
+            List.map2 (fun param (arg, ty) ->
+                let param = Flambda.Typed_parameter.var param in
+                param, T.kind ty, Named.Simple arg)
+              stub's_params args_with_tys
+        in
+        (* CR mshinwell: The check about not regressing in preciseness of type
+           should also go here *)
+        let stub's_body =
+          Flambda.Expr.bind ~bindings:bindings_of_params_to_args
+            ~body:stub's_body
+        in
+        begin
+          try simplify_expr env r stub's_body
+          with Misc.Fatal_error -> begin
+            Format.eprintf "\n%sContext is: inlining application of stub%s \
+                \"%a (%a)\".@ The inlined body was:@ %a@ in environment:@ %a\n"
+              (Misc_color.bold_red ())
+              (Misc_color.reset ())
+              Continuation.print original_cont
+              Simple.List.print args
+              Flambda.Expr.print stub's_body
+              E.print env;
+            raise Misc.Fatal_error
+          end
+        end)
   | Some _ | None ->
     let r =
       let kind =
@@ -1379,25 +1331,10 @@ Format.eprintf "Body for inlining:@ %a\n@ Freshening: %a\n%!"
         | None -> K.inlinable_and_specialisable ~args_with_tys
         | Some _ -> K.only_specialisable ~args_with_tys
       in
-      let params =
-        List.map (fun param ->
-            Flambda.Typed_parameter.map_var param ~f:(fun var ->
-              Freshening.apply_variable (E.freshening env) var))
-          (Continuation_approx.params cont_approx)
-      in
-      R.use_continuation r env cont ~params kind
+      R.use_continuation r env cont kind
     in
-    let trap_action, r =
-      match trap_action with
-      | None -> None, r
-      | Some trap_action ->
-        let trap_action, r = freshen_trap_action env r trap_action in
-        Some trap_action, r
-    in
-  Format.eprintf "END OF simplify_apply_cont %a (%a)\n%!"
-    Continuation.print cont
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args;
-    Apply_cont (cont, trap_action, args), r
+    let apply_cont = Flambda.Apply_cont.create ~trap_action cont args in
+    Apply_cont apply_cont, r
 
 and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
   match tree with
@@ -1410,15 +1347,13 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
       ~filter_defining_expr:filter_defining_expr_of_let
   | Let_cont { body; handlers; } -> simplify_let_cont env r ~body ~handlers
   | Apply apply ->
-    begin match apply.call_kind with
+    begin match Flambda.Apply.call_kind apply with
     | Function call -> simplify_function_application env r apply call
     | Method { kind; obj; } -> simplify_method_call env r apply ~kind ~obj
     | C_call { alloc; param_arity; return_arity; } ->
       simplify_c_call env r apply ~alloc ~param_arity ~return_arity
     end
-  | Apply_cont (cont, trap_action, args) ->
-    simplify_apply_cont env r cont ~trap_action ~args
-  | Switch (scrutinee, switch) ->
-    simplify_switch env r ~scrutinee (Flambda.Switch.arms switch)
-      ~simplify_apply_cont
+  | Apply_cont apply_cont -> simplify_apply_cont env r apply_cont
+  | Switch switch ->
+    simplify_switch env r ~scrutinee switch ~simplify_apply_cont
   | Invalid _ -> tree, r

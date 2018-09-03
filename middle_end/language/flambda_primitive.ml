@@ -1011,6 +1011,84 @@ type t =
 
 type primitive_application = t
 
+let invariant env t =
+  let module E = Invariant_env in
+  match t with
+  | Unary (prim, x0) ->
+    let kind0 = arg_kind_of_unary_primitive prim in
+    E.check_simple_is_bound_and_of_kind env x0 kind0;
+    begin match prim, x0 with
+    | Project_closure closure_id, set_of_closures ->
+      E.check_simple_is_bound_and_of_kind env set_of_closures
+        (K.fabricated ());
+      E.add_use_of_closure_id env closure_id
+    | Move_within_set_of_closures { move_from; move_to; }, closure ->
+      E.check_simple_is_bound_and_of_kind env closure
+        (K.value ());
+      E.add_use_of_closure_id env move_from;
+      E.add_use_of_closure_id env move_to
+    | Project_var (closure_id, var), closure ->
+      E.add_use_of_closure_id env closure_id;
+      E.add_use_of_var_within_closure env var;
+      E.check_simple_is_bound_and_of_kind env closure
+        (K.value ())
+    | Duplicate_block _, _
+    | Is_int, _
+    | Get_tag _, _
+    | Discriminant_of_int, _
+    | Array_length _, _
+    | Bigarray_length _, _
+    | String_length _, _
+    | Int_as_pointer, _
+    | Opaque_identity, _
+    | Int_arith _, _
+    | Float_arith _, _
+    | Num_conv _, _
+    | Boolean_not, _
+    | Unbox_number _, _
+    | Box_number _, _ -> ()  (* None of these contain names. *)
+    end
+  | Binary (prim, x0, x1) ->
+    let kind0, kind1 = args_kind_of_binary_primitive prim in
+    E.check_simple_is_bound_and_of_kind env x0 kind0;
+    E.check_simple_is_bound_and_of_kind env x1 kind1;
+    begin match prim with
+    (* None of these currently contain names: this is here so that we
+       are reminded to check upon adding a new primitive. *)
+    | Block_load _
+    | String_or_bigstring_load _
+    | Phys_equal _
+    | Int_arith _
+    | Int_shift _
+    | Int_comp _
+    | Float_arith _
+    | Float_comp _ -> ()
+    end
+  | Ternary (prim, x0, x1, x2) ->
+    let kind0, kind1, kind2 = args_kind_of_ternary_primitive prim in
+    E.check_simple_is_bound_and_of_kind env x0 kind0;
+    E.check_simple_is_bound_and_of_kind env x1 kind1;
+    E.check_simple_is_bound_and_of_kind env x2 kind2;
+    begin match prim with
+    | Block_set _
+    | Bytes_or_bigstring_set _ -> ()
+    end
+  | Variadic (prim, xs) ->
+    let kinds =
+      match args_kind_of_variadic_primitive prim with
+      | Variadic kinds -> kinds
+      | Variadic_all_of_kind kind ->
+        List.init (List.length xs) (fun _index -> kind)
+    in
+    List.iter2 (fun var kind ->
+        E.check_simple_is_bound_and_of_kind env var kind)
+      xs kinds;
+    begin match prim with
+    | Make_block _
+    | Bigarray_set _
+    | Bigarray_load _ -> ()
+    end
+
 include Map.Make_with_set (struct
   type nonrec t = t
 
@@ -1091,10 +1169,16 @@ let free_names t =
   match t with
   | Unary (_prim, x0) -> Simple.free_names x0
   | Binary (_prim, x0, x1) ->
-    Name.Set.union (Simple.free_names x0) (Simple.free_names x1)
+    Name_occurrences.union_list [
+      Simple.free_names x0;
+      Simple.free_names x1;
+    ]
   | Ternary (_prim, x0, x1, x2) ->
-    Name.Set.union (Simple.free_names x0)
-      (Name.Set.union (Simple.free_names x1) (Simple.free_names x2))
+    Name_occurrences.union_list [
+      Simple.free_names x0;
+      Simple.free_names x1;
+      Simple.free_names x2;
+    ]
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
 let apply_name_permutation t perm =
@@ -1105,9 +1189,6 @@ let apply_name_permutation t perm =
   | Ternary (prim, x0, x1, x2) -> Ternary (prim, apply x0, apply x1, apply x2)
   | Variadic (prim, xs) ->
     Variadic (prim, Name_permutation.apply_simples perm xs)
-
-let apply_freshening t freshening =
-  apply_name_permutation t (Freshening.name_permutation freshening)
 
 let result_kind (t : t) =
   match t with
@@ -1159,7 +1240,6 @@ module With_fixed_value = struct
 
   let free_names = free_names
   let apply_name_permutation = apply_name_permutation
-  let apply_freshening = apply_freshening
 
   include Stdlib.Map.Make_with_set (struct
     type nonrec t = t

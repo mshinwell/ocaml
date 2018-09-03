@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2018 OCamlPro SAS                                    *)
-(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,40 +14,29 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = private
-  | Var of Variable.t
-  | Symbol of Symbol.t
-  | Logical_var of Logical_variable.t
-(* CR mshinwell: Phantom variables should be in here now.
-  | Phantom_var of Variable.t
-*)
+type t = int Continuation.Map.t
 
-val var : Variable.t -> t
-val symbol : Symbol.t -> t
-val logical_var : Logical_variable.t -> t
+let create () = Continuation.Map.empty
 
-val map_var : t -> f:(Variable.t -> Variable.t) -> t
+let use t k =
+  Continuation.Map.update k (function
+      | None -> Some 1
+      | Some n -> Some (n + 1))
+    t
 
-val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
+let use_list t ks =
+  List.fold_left (fun t k -> use t k) t ks
 
-val to_var : t -> Variable.t option
+let create_singleton k = use (create ()) k
 
-include Hashtbl.With_map with type t := t
+let create_list ks = use_list (create ()) ks
 
-val print_sexp : Format.formatter -> t -> unit
+let union_list ts =
+  List.fold_left (fun result t ->
+      Continuation.Map.union_merge (fun n1 n2 -> n1 + n2) t result)
+    (create ())
+    ts
 
-val variables_only : Set.t -> Set.t
-
-val symbols_only_map : 'a Map.t -> 'a Map.t
-
-val set_to_var_set : Set.t -> Variable.Set.t
-
-val set_to_symbol_set : Set.t -> Symbol.Set.t
-
-val is_predefined_exception : t -> bool
-
-val rename : t -> t
-
-val in_compilation_unit : t -> Compilation_unit.t -> bool
+let to_map t = t

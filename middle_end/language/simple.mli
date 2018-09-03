@@ -33,7 +33,8 @@ module Const : sig
   val kind : t -> Flambda_kind.t
 end
 
-(* CR mshinwell: Consider putting [Var] and [Symbol] directly in here. *)
+(* CR-someday mshinwell: Consider putting [Var] and [Symbol] directly
+   in here. *)
 type t = private
   | Name of Name.t
   | Const of Const.t
@@ -47,21 +48,26 @@ val symbol : Symbol.t -> t
 
 val const : Const.t -> t
 
-val const_int : int -> t
+(** The constant representating the given number of type "int". *)
+val const_int : Targetint.OCaml.t -> t
 
+(** The constant representating the given boolean value. *)
 val const_bool : bool -> t
 
+(** The constant representating boolean true. *)
 val const_true : t
 
+(** The constant representating boolean false. *)
 val const_false : t
 
+(** The constant representating the number zero of type "int". *)
 val const_zero : t
 
+(** The constant representing the unit value. *)
 val unit : t
 
+(** The given switch discriminant as a simple. *)
 val discriminant : Discriminant.t -> t
-
-val free_names : t -> Name.Set.t
 
 val map_name : t -> f:(Name.t -> Name.t) -> t
 
@@ -69,18 +75,19 @@ val map_name : t -> f:(Name.t -> Name.t) -> t
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
+include Contains_names.S with type t := t
 include Hashtbl.With_map with type t := t
 
 module List : sig
   type nonrec t = t list
 
-  val free_names : t -> Name.Set.t
-
+  include Contains_names.S with type t := t
   include Hashtbl.With_map with type t := t
 end
 
 module With_kind : sig
   type nonrec t = t * Flambda_kind.t
 
+  include Contains_names.S with type t := t
   include Hashtbl.With_map with type t := t
 end

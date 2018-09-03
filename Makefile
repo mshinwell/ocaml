@@ -150,7 +150,6 @@ COMP=\
   middle_end/language/compilation_unit.cmo \
   middle_end/language/variable.cmo \
   middle_end/language/continuation.cmo \
-  middle_end/language/trap_id.cmo \
 	bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/semantics_of_primitives.cmo \
   bytecomp/switch.cmo bytecomp/matching.cmo \
@@ -314,6 +313,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/flambda_kind.cmo \
   middle_end/typing/invalid_term_semantics.cmo \
   middle_end/typing/reachable.cmo \
+  middle_end/language/recursive.cmo \
+  middle_end/language/continuation_counts.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/name_permutation.cmo \
   middle_end/language/name_abstraction.cmo \
@@ -321,7 +322,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/bound_continuation.cmo \
   middle_end/language/bound_continuations.cmo \
   middle_end/language/name_occurrences.cmo \
-  middle_end/language/freshening.cmo \
   middle_end/typing/contains_names.cmo \
   middle_end/typing/logical_variable_component.cmo \
   middle_end/language/inline_attribute.cmo \

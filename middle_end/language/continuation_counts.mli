@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,14 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Trap handler identifiers.  These are used to identify which poptraps
-    correspond to which pushtraps independently of which continuations the
-    pushtraps have as their exception handlers. *)
-
-include Hashtbl.With_map
+type t
 
 val create : unit -> t
 
-val to_int : t -> int
+val create_singleton : Continuation.t -> t
+
+val create_list : Continuation.t list -> t
+
+val use : t -> Continuation.t -> t
+
+val use_list : t -> Continuation.t list -> t
+
+val union_list : t list -> t
+
+val to_map : t -> int Continuation.Map.t

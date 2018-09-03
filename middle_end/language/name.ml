@@ -20,6 +20,9 @@ type t =
   | Var of Variable.t
   | Symbol of Symbol.t
   | Logical_var of Logical_variable.t
+(*
+  | Phantom_var of Variable.t
+*)
 
 let var v = Var v
 let symbol s = Symbol s

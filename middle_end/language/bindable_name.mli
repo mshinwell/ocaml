@@ -14,15 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** All of the different varieties of names that may be bound. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  type t
+type t =
+  | Continuation of Continuation.t
+  | Name of Name.t
 
-  (** Compute the free names of a term.  Such computation covers all kinds
-      of bindable names (variables, continuations, ...) *)
-  val free_names : t -> Name_occurrences.t
- 
-  (** Permute various names throughout a term. *)
-  val apply_name_permutation : t -> Name_permutation.t -> t
-end
+include Map.With_set with type t := t

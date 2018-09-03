@@ -16,55 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+type t = Non_recursive | Recursive
 
-val create : unit -> t
-
-val freshen_continuation : t -> Continuation.t -> Continuation.t * t
-
-val apply_continuation : t -> Continuation.t -> Continuation.t
-
-val freshen_kinded_parameter
-   : t
-  -> Kinded_parameter.t
-  -> Kinded_parameter.t * t
-
-val freshen_kinded_parameters
-   : t
-  -> Kinded_parameter.t list
-  -> Kinded_parameter.t list * t
-
-val apply_kinded_parameter
-   : t
-  -> Kinded_parameter.t
-  -> Kinded_parameter.t
-
-val apply_kinded_parameters
-   : t
-  -> Kinded_parameter.t list
-  -> Kinded_parameter.t list
-
-val freshen_name
-   : t
-  -> Name.t
-  -> Name.t * t
-
-val apply_name : t -> Name.t -> Name.t
-
-val apply_simple : t -> Simple.t -> Simple.t
-
-val freshen_symbol
-   : t
-  -> Symbol.t
-  -> Symbol.t * t
-
-val apply_symbol : t -> Symbol.t -> Symbol.t
-
-val freshen_variable
-   : t
-  -> Variable.t
-  -> Variable.t * t
-
-val apply_variable : t -> Variable.t -> Variable.t
-
-val name_permutation : t -> Name_permutation.t
+val print : Format.formatter -> t -> unit

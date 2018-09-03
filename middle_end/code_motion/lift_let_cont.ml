@@ -18,7 +18,6 @@
 
 type thing_to_lift =
   | Let of Variable.t * Flambda.Named.t Flambda.With_free_names.t
-  | Let_mutable of Mutable_variable.t * Simple.t * Flambda_type.t
   | Let_cont of Flambda.Let_cont_handlers.t
 
 let bind_things_to_remain ~rev_things ~around =
@@ -27,8 +26,6 @@ let bind_things_to_remain ~rev_things ~around =
       | Let (var, defining_expr) ->
         Flambda.With_free_names.create_let_reusing_defining_expr var
           defining_expr body
-      | Let_mutable (var, initial_value, contents_type) ->
-        Let_mutable { var; initial_value; contents_type; body; }
       | Let_cont handlers ->
         Let_cont { body; handlers; })
     around
@@ -41,11 +38,6 @@ module State = struct
     to_remain : thing_to_lift list;
     continuations_to_remain : Continuation.Set.t;
     variables_to_remain : Variable.Set.t;
-    (* [mutable_variables_used] is here to work around the fact that we don't
-       have functions (or keep track of) mutable variable usage in [Flambda].
-       This seems fine given that the longer-term plan is to remove mutable
-       variables from Flambda entirely. *)
-    mutable_variables_used : Mutable_variable.Set.t;
   }
 
   let create ~variables_to_remain ~continuations_to_remain =
@@ -54,7 +46,6 @@ module State = struct
       to_remain = [];
       continuations_to_remain;
       variables_to_remain = Variable.Set.of_list variables_to_remain;
-      mutable_variables_used = Mutable_variable.Set.empty;
     }
 
   let add_constant t ~var ~kind ~simple =
@@ -75,7 +66,7 @@ module State = struct
   let to_remain t (thing : thing_to_lift) =
     let continuations_to_remain =
       match thing with
-      | Let _ | Let_mutable _ -> t.continuations_to_remain
+      | Let _ -> t.continuations_to_remain
       | Let_cont (Non_recursive { name; _ }) ->
         Continuation.Set.add name t.continuations_to_remain
       | Let_cont (Recursive handlers) ->
@@ -85,7 +76,7 @@ module State = struct
     let variables_to_remain =
       match thing with
       | Let (var, _) -> Variable.Set.add var t.variables_to_remain
-      | Let_mutable _ | Let_cont _ -> t.variables_to_remain
+      | Let_cont _ -> t.variables_to_remain
     in
     { t with
       to_remain = thing :: t.to_remain;
@@ -103,29 +94,6 @@ module State = struct
   let constants t = t.constants
   let rev_to_be_lifted t = t.to_be_lifted
   let rev_to_remain t = t.to_remain
-
-  let use_mutable_variable t mut_var =
-    { t with
-      mutable_variables_used =
-        Mutable_variable.Set.add mut_var t.mutable_variables_used;
-    }
-
-  let use_mutable_variables t mut_vars =
-    { t with
-      mutable_variables_used =
-        Mutable_variable.Set.union mut_vars t.mutable_variables_used;
-    }
-
-  let forget_mutable_variable t var =
-    { t with
-      mutable_variables_used =
-        Mutable_variable.Set.remove var t.mutable_variables_used;
-    }
-
-  let mutable_variables_used t = t.mutable_variables_used
-
-  let uses_no_mutable_variables t =
-    Mutable_variable.Set.is_empty t.mutable_variables_used
 end
 
 let rec lift_let_cont ~body ~handlers ~state
@@ -172,9 +140,6 @@ let rec lift_let_cont ~body ~handlers ~state
                 Name.set_to_var_set (Name_occurrences.everything (
                   Flambda.Let_cont_handlers.free_names handlers))
               in
-              (* Note that we don't have to check any uses of mutable variables
-                 in [handler], since any such uses would prevent [handler] from
-                 being in [to_be_lifted]. *)
               if State.can_lift_if_using_continuations state fcs
                 && State.can_lift_if_using_variables state fvs
               then
@@ -201,13 +166,8 @@ let rec lift_let_cont ~body ~handlers ~state
             handler.specialised_args
         in
 *)
-        let fvs_mut = State.mutable_variables_used handler_state in
-        let state =
-          State.use_mutable_variables state fvs_mut
-        in
         let cannot_lift =
           cannot_lift
-            || not (State.uses_no_mutable_variables handler_state)
 (*
             || not (State.can_lift_if_using_variables state
               fvs_specialised_args)
@@ -248,8 +208,7 @@ and lift_expr (expr : Flambda.Expr.t) ~state =
     | Simple (((Name (Symbol _)) | (Const _) | (Discriminant _)) as simple) ->
       let state = State.add_constant state ~var ~kind ~simple in
       lift_expr body ~state
-    | Simple (Name (Var _)) | Prim _ | Assign _ | Read_mutable _
-    | Set_of_closures _ ->
+    | Simple (Name (Var _)) | Prim _ | Set_of_closures _ ->
       let defining_expr, state =
         match defining_expr with
         | Set_of_closures set_of_closures ->
@@ -261,24 +220,12 @@ and lift_expr (expr : Flambda.Expr.t) ~state =
           in
           Flambda.With_free_names.of_named
             (Flambda_kind.fabricated ()) defining_expr, state
-        | Read_mutable mut_var ->
-          let state = State.use_mutable_variable state mut_var in
-          Flambda.With_free_names.of_defining_expr_of_let let_expr, state
-        | Assign { being_assigned; new_value = _; } ->
-          let state = State.use_mutable_variable state being_assigned in
-          Flambda.With_free_names.of_defining_expr_of_let let_expr, state
         | _ ->
           Flambda.With_free_names.of_defining_expr_of_let let_expr, state
       in
       let state = State.to_remain state (Let (var, defining_expr)) in
       lift_expr body ~state
     end
-  | Let_mutable { var; initial_value; contents_type; body; } ->
-    let state =
-      State.to_remain state (Let_mutable (var, initial_value, contents_type))
-    in
-    let expr, state = lift_expr body ~state in
-    expr, State.forget_mutable_variable state var
   | Let_cont { body; handlers = Non_recursive ({ name; handler; }); }
       when handler.is_exn_handler ->
     (* Don't lift anything out of the scope of an exception handler.

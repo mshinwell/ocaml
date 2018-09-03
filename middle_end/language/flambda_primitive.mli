@@ -83,7 +83,8 @@ module Block_access_kind : sig
   val element_kind : t -> Flambda_kind.t
 end
 
-(* Notes for producing [make_block_kind] / [Duplicate_scannable_block] from
+(* CR mshinwell:
+   Notes for producing [make_block_kind] / [Duplicate_scannable_block] from
    [Pduparray] and [Pduprecord]:  (Now out of date)
 
    - For Pduparray:
@@ -137,7 +138,7 @@ val element_kind_of_bigarray_kind : bigarray_kind -> Flambda_kind.t
 
 type bigarray_layout = Unknown | C | Fortran
 
-(* We can use array_kind instead
+(* CR xclerc: We can use array_kind instead
 type block_set_kind =
   | Immediate
   | Pointer
@@ -279,6 +280,10 @@ type t =
 
 type primitive_application = t
 
+val invariant : Invariant_env.t -> t -> unit
+
+include Contains_names.S with type t := t
+
 (** Simpler version (e.g. for [Inlining_cost]), where only the actual
     primitive matters, not the arguments. *)
 type without_args =
@@ -286,15 +291,6 @@ type without_args =
   | Binary of binary_primitive
   | Ternary of ternary_primitive
   | Variadic of variadic_primitive
-
-(** All free names in a primitive application. *)
-val free_names : t -> Name.Set.t
-
-(** Apply a permutation to all names within a primitive application. *)
-val apply_name_permutation : t -> Name_permutation.t -> t
-
-(** Apply a freshening to all names within a primitive application. *)
-val apply_freshening : t -> Freshening.t -> t
 
 (** A description of the kind of values which a unary primitive expects as
     its arguments. *)
@@ -392,6 +388,8 @@ module With_fixed_value : sig
       bound to a single instance of such application. *)
   type t
 
+  include Contains_names.S with type t := t
+
   val create : primitive_application -> t option
 
   val create_is_int : immediate_or_block:Name.t -> t
@@ -407,17 +405,11 @@ module With_fixed_value : sig
 
   val to_primitive : t -> primitive_application
 
-  val free_names : t -> Name.Set.t
-
-  val apply_name_permutation : t -> Name_permutation.t -> t
-
-  val apply_freshening : t -> Freshening.t -> t
-
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Map.With_set with type t := t
 end
 
-(** Total ordering, equality, printing, sets, maps etc. *)
+(** Total ordering, printing, sets, maps etc. *)
 include Map.With_set with type t := t
 
 val equal : t -> t -> bool
