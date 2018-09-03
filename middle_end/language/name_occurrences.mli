@@ -34,6 +34,8 @@ val create_from_set_in_types : Bindable_name.Set.t -> t
 
 val singleton_in_terms : Bindable_name.t -> t
 
+val singleton_in_types : Bindable_name.t -> t
+
 val of_list_in_terms : Bindable_name.t list -> t
 
 val add : t -> Bindable_name.t -> occurrence_kind -> t
@@ -57,6 +59,9 @@ val in_types : t -> Bindable_name.Set.t
 val in_debug_only : t -> Bindable_name.Set.t
 
 val everything : t -> Bindable_name.Set.t
+
+(* CR mshinwell: rename to [everything_must_be_a_name] *)
+val everything_must_only_be_names : t -> Name.Set.t
 
 val diff : t -> t -> t
 

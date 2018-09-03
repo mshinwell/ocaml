@@ -3590,7 +3590,7 @@ middle_end/typing/flambda_kind.cmi : utils/targetint.cmi utils/numbers.cmi \
     middle_end/language/immediate.cmi
 middle_end/typing/flambda_type.cmo : middle_end/typing/flambda_type.cmi
 middle_end/typing/flambda_type.cmx : middle_end/typing/flambda_type.cmi
-middle_end/typing/flambda_type.cmi :
+middle_end/typing/flambda_type.cmi : middle_end/language/flambda.cmi
 middle_end/typing/flambda_type0.cmo : middle_end/language/variable.cmi \
     middle_end/typing/var_within_closure_set.cmi \
     middle_end/language/var_within_closure.cmi middle_end/typing/unit.cmi \

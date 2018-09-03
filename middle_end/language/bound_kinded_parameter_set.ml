@@ -20,8 +20,9 @@ type t = Kinded_parameter.Set.t
 
 let free_names t =
   Kinded_parameter.Set.fold (fun param free_names ->
-      Name_occurrences.add free_names In_terms
-        (Kinded_parameter.name param))
+      Name_occurrences.add free_names
+        (Name (Kinded_parameter.name param))
+        In_terms)
     t
     (Name_occurrences.create ())
 

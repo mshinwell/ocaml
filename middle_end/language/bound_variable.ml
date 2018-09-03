@@ -19,4 +19,5 @@
 include Variable
 
 let permutation_to_swap t1 t2 =
-  Name_permutation.add_variable (Name_permutation.create ()) t1 t2
+  Name_permutation.add_name (Name_permutation.create ())
+    (Name.var t1) (Name.var t2)

@@ -54,6 +54,9 @@ let create_from_set_in_types in_types =
 let singleton_in_terms name =
   create_from_set_in_terms (Bindable_name.Set.singleton name)
 
+let singleton_in_types name =
+  create_from_set_in_types (Bindable_name.Set.singleton name)
+
 let of_list_in_terms names =
   create_from_set_in_terms (Bindable_name.Set.of_list names)
 
@@ -81,7 +84,22 @@ let mem t name =
   mem_in_terms t name || mem_in_types t name || mem_in_debug_only t name
 
 let everything t =
-  Bindable_name.Set.union t.in_terms (Bindable_name.Set.union t.in_types t.in_debug_only)
+  Bindable_name.Set.union t.in_terms
+    (Bindable_name.Set.union t.in_types t.in_debug_only)
+
+let everything_must_only_be_names t =
+  Bindable_name.Set.fold (fun (bindable : Bindable_name.t) result ->
+      match bindable with
+      | Name name -> Name.Set.add name result
+      | _ -> Misc.fatal_errorf "Only [Name]s allowed: %a " print t)
+    (everything t)
+    Name.Set.empty
+
+let remove t name =
+  { in_terms = Bindable_name.Set.remove name t.in_terms;
+    in_types = Bindable_name.Set.remove name t.in_types;
+    in_debug_only = Bindable_name.Set.remove name t.in_debug_only;
+  }
 
 (* CR mshinwell: Rename to "diff_free_and_bound" or something?
    Also double-check the semantics are correct here *)
@@ -101,8 +119,8 @@ let union t1 t2 =
 
 let rec union_list ts =
   match  ts with
-  | [] -> Name_occurrences.create ()
-  | t::ts -> Name_occurrences.union t (union_list ts)
+  | [] -> create ()
+  | t::ts -> union t (union_list ts)
 
 let subset
       { in_terms = in_terms1; in_types = in_types1;
@@ -132,11 +150,13 @@ let promote_to_debug_only t =
     in_debug_only = everything t;
   }
 
-let variables_only t =
+let variables_only _t = Misc.fatal_error "NYI"
+(*
   { in_terms = Bindable_name.variables_only t.in_terms;
     in_types = Bindable_name.variables_only t.in_types;
     in_debug_only = Bindable_name.variables_only t.in_debug_only;
   }
+*)
 
 let equal
       { in_terms = in_terms1; in_types = in_types1;
@@ -192,7 +212,7 @@ let choose_and_remove_amongst_everything t =
       | None -> None
 
 let apply_name_permutation { in_terms; in_types; in_debug_only; } perm =
-  { in_terms = Name_permutation.apply_name_set perm in_terms;
-    in_types = Name_permutation.apply_name_set perm in_types;
-    in_debug_only = Name_permutation.apply_name_set perm in_debug_only;
+  { in_terms = Name_permutation.apply_bindable_name_set perm in_terms;
+    in_types = Name_permutation.apply_bindable_name_set perm in_types;
+    in_debug_only = Name_permutation.apply_bindable_name_set perm in_debug_only;
   }

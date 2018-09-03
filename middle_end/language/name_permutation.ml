@@ -110,3 +110,15 @@ let apply_name_set t names =
       Name.Set.add name result)
     names
     Name.Set.empty
+
+(* CR mshinwell: add phys-equal checks *)
+let apply_bindable_name_set t names =
+  Bindable_name.Set.fold (fun (name : Bindable_name.t) result ->
+      let name : Bindable_name.t =
+        match name with
+        | Continuation k -> Continuation (apply_continuation t k)
+        | Name name -> Name (apply_name t name)
+      in
+      Bindable_name.Set.add name result)
+    names
+    Bindable_name.Set.empty

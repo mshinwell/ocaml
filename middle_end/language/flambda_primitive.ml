@@ -1027,8 +1027,7 @@ let invariant env t =
         (K.value ());
       E.add_use_of_closure_id env move_from;
       E.add_use_of_closure_id env move_to
-    | Project_var (closure_id, var), closure ->
-      E.add_use_of_closure_id env closure_id;
+    | Project_var var, closure ->
       E.add_use_of_var_within_closure env var;
       E.check_simple_is_bound_and_of_kind env closure
         (K.value ())
@@ -1182,13 +1181,14 @@ let free_names t =
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
 let apply_name_permutation t perm =
-  let apply = Name_permutation.apply_simple perm in
+  (* CR mshinwell: add phys-equal checks *)
+  let apply simple = Simple.apply_name_permutation simple perm in
   match t with
   | Unary (prim, x0) -> Unary (prim, apply x0)
   | Binary (prim, x0, x1) -> Binary (prim, apply x0, apply x1)
   | Ternary (prim, x0, x1, x2) -> Ternary (prim, apply x0, apply x1, apply x2)
   | Variadic (prim, xs) ->
-    Variadic (prim, Name_permutation.apply_simples perm xs)
+    Variadic (prim, Simple.List.apply_name_permutation xs perm)
 
 let result_kind (t : t) =
   match t with

@@ -140,15 +140,15 @@ let map_symbol t ~f =
 
 let free_names t =
   match t with
-  | Name name -> Name_occurrences.singleton_in_terms name
+  | Name name -> Name_occurrences.singleton_in_terms (Name name)
   | Const _ | Discriminant _ -> Name_occurrences.create ()
 
 let apply_name_permutation t perm =
   match t with
   | Name name ->
-    let name' = Name_permutation.apply_name t perm in
+    let name' = Name_permutation.apply_name perm name in
     if name == name' then t
-    else Simple.name name'
+    else Name name'
   | Const _ | Discriminant _ -> t
 
 include Hashtbl.Make_with_map (struct

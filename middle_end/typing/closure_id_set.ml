@@ -24,7 +24,4 @@ include Hashtbl.Make_with_map (struct
 end)
 
 let free_names _t = Name_occurrences.create ()
-let bound_names _t = Name_occurrences.create ()
-
 let apply_name_permutation t _perm = t
-let freshen t _freshening = t

@@ -18,7 +18,7 @@
 
 module type Name = sig
   include Contains_names.S
-  val create : unit -> t
+  val rename : t -> t
   val permutation_to_swap : t -> t -> Name_permutation.t
 end
 
@@ -33,6 +33,9 @@ module Make (Name : Name) (Term : Contains_names.S) : sig
 end
 
 module Make2 (Name0 : Name) (Name1 : Name) (Term : Contains_names.S) : sig
+  (** The type [t] is the equivalent of a product atom-abstraction construction
+      "[-- * --]--" in nominal sets. *)
+
   include Contains_names.S
 
   val create : Name0.t -> Name1.t -> Term.t -> t

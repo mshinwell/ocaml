@@ -18,4 +18,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include module type of struct include Flambda0.Flambda_type end
+include module type of struct include Flambda.Flambda_type end

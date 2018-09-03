@@ -19,16 +19,16 @@
 include Logical_variable
 
 let free_names t =
-  Name_occurrences.create_from_set_in_types (
-    Name.Set.singleton (Name.logical_var t))
+  Name_occurrences.singleton_in_types (Name (Name.logical_var t))
 
-let bound_names _t = Name_occurrences.create ()
-
+(* CR mshinwell: This is strange.  Should logical variables not be in [Name]
+   and instead separately in [Bindable_name]? *)
 let apply_name_permutation t perm =
-  Name_permutation.apply_logical_variable perm t
-
-let freshen t freshening =
-  apply_name_permutation t (Freshening.name_permutation freshening)
+  match Name_permutation.apply_name perm (Name.logical_var t) with
+  | Logical_var var -> var
+  | _ ->
+    Misc.fatal_errorf "Illegal name permutation on logical variables: %a"
+      Name_permutation.print perm
 
 let name t = Name.logical_var t
 

@@ -19,6 +19,4 @@
 include Tag
 
 let free_names _ = Name_occurrences.create ()
-let bound_names _ = Name_occurrences.create ()
 let apply_name_permutation t _ = t
-let freshen t _ = t

@@ -19,6 +19,8 @@
 (** A parameter (to a function, continuation, etc.) together with its kind. *)
 type t
 
+include Contains_names.S with type t := t
+
 (** Create a kinded parameter. *)
 val create : Parameter.t -> Flambda_kind.t -> t
 
@@ -51,8 +53,6 @@ val map_kind : t -> f:(Flambda_kind.t -> Flambda_kind.t) -> t
 val equal_kinds : t -> t -> bool
 
 val rename : t -> t
-
-val free_names : t -> Name.Set.t
 
 module List : sig
   type nonrec t = t list

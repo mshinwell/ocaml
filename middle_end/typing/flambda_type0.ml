@@ -25,6 +25,10 @@ module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
+(* CR mshinwell: Should there be a different [Name_occurrences] used for
+   types?  It would remove most of this "everything_must_only_be_names"
+   stuff. *)
+
 module type Either_meet_or_join_intf = sig
   module Join_env : sig type t end
   module Meet_env : sig type t end
@@ -411,9 +415,7 @@ module Make (Expr : Expr_intf.S) = struct
       RL.join env Fresh t1 t2
 
     let free_names = RL.free_names
-    let bound_names = RL.bound_names
     let apply_name_permutation = RL.apply_name_permutation
-    let freshen = RL.freshen
   end and Both_meet_and_join : sig
     val meet
        : Meet_env.t
@@ -565,10 +567,8 @@ module Make (Expr : Expr_intf.S) = struct
       include Var_within_closure
 
       let free_names _t = Name_occurrences.create ()
-      let bound_names _t = Name_occurrences.create ()
 
       let apply_name_permutation t _perm = t
-      let freshen t _freshening = t
     end
 
     module RP =
@@ -607,9 +607,7 @@ module Make (Expr : Expr_intf.S) = struct
 
     let equal = RP.equal
     let free_names = RP.free_names
-    let bound_names = RP.bound_names
     let apply_name_permutation = RP.apply_name_permutation
-    let freshen = RP.freshen
   end and Closure_ids : sig
     type t
 
@@ -679,9 +677,7 @@ module Make (Expr : Expr_intf.S) = struct
 
     let equal = RL.equal
     let free_names = RL.free_names
-    let bound_names = RL.bound_names
     let apply_name_permutation = RL.apply_name_permutation
-    let freshen = RL.freshen
   end and Closures_entry_by_closure_id : sig
     type t
 
@@ -742,9 +738,7 @@ module Make (Expr : Expr_intf.S) = struct
 
     let equal = RL.equal
     let free_names = RL.free_names
-    let bound_names = RL.bound_names
     let apply_name_permutation = RL.apply_name_permutation
-    let freshen = RL.freshen
   end and Discriminants : sig
     type t
 
@@ -2101,8 +2095,6 @@ module Make (Expr : Expr_intf.S) = struct
 
     let free_names = Type_free_names.free_names
 
-    let bound_names _ = Misc.fatal_error "Try to remove this"
-
     let apply_name_permutation_unknown_or_join unknown_or_join perm =
       match unknown_or_join with
       | Unknown -> unknown_or_join
@@ -2130,7 +2122,7 @@ module Make (Expr : Expr_intf.S) = struct
         else No_alias unknown_or_join'
       | Type _ -> ty
       | Equals simple ->
-        let simple' = Name_permutation.apply_simple perm simple in
+        let simple' = Simple.apply_name_permutation simple perm in
         if simple == simple' then ty
         else Equals simple'
 
@@ -2148,9 +2140,6 @@ module Make (Expr : Expr_intf.S) = struct
         let ty_fabricated' = apply_name_permutation_ty ty_fabricated perm in
         if ty_fabricated == ty_fabricated' then t
         else Fabricated ty_fabricated'
-
-    let freshen t freshening =
-      apply_name_permutation t (Freshening.name_permutation freshening)
 
     let get_alias t =
       match t with
@@ -2191,16 +2180,11 @@ module Make (Expr : Expr_intf.S) = struct
       let free_names { by_closure_id; } =
         Types_by_closure_id.free_names by_closure_id
 
-      let bound_names _ = Misc.fatal_error "Try to remove this"
-
       let apply_name_permutation { by_closure_id; } perm : t =
         let by_closure_id =
           Types_by_closure_id.apply_name_permutation by_closure_id perm
         in
         { by_closure_id; }
-
-      let freshen t freshening =
-        apply_name_permutation t (Freshening.name_permutation freshening)
     end
 
     module Closures_entry = struct
@@ -2245,8 +2229,6 @@ module Make (Expr : Expr_intf.S) = struct
           (Name_occurrences.union (Closure_elements.free_names closure_elements)
             (Type_free_names.free_names_of_ty_fabricated set_of_closures))
 
-      let bound_names _ = Misc.fatal_error "Try to remove this"
-
       let apply_name_permutation
             { function_decl; ty; closure_elements; set_of_closures; } perm : t =
         { function_decl;
@@ -2255,9 +2237,6 @@ module Make (Expr : Expr_intf.S) = struct
             Closure_elements.apply_name_permutation closure_elements perm;
           set_of_closures = apply_name_permutation_ty set_of_closures perm;
         }
-
-      let freshen t freshening =
-        apply_name_permutation t (Freshening.name_permutation freshening)
     end
   end and Flambda_types : sig
     type 'a or_alias =
@@ -2563,11 +2542,6 @@ module Make (Expr : Expr_intf.S) = struct
 
     let join_fresh env t1 t2 = join env Fresh t1 t2
 
-    let bound_names t =
-      match t with
-      | Product rp -> RP.bound_names rp
-      | Unknown | Bottom -> Name_occurrences.create ()
-
     let free_names t =
       match t with
       | Product rp -> RP.free_names rp
@@ -2585,9 +2559,6 @@ module Make (Expr : Expr_intf.S) = struct
         if rp == rp' then t
         else Product rp'
       | Unknown | Bottom -> Unknown
-
-    let freshen t freshening =
-      apply_name_permutation t (Freshening.name_permutation freshening)
   end and Immediates : sig
     type t
 
@@ -3098,8 +3069,7 @@ module Make (Expr : Expr_intf.S) = struct
           | No_alias _ | Type _ -> or_alias1
           | Equals simple ->
             let simple' =
-              Name_permutation.apply_simple (Meet_env.perm_left meet_env)
-                simple
+              Simple.apply_name_permutation simple (Meet_env.perm_left meet_env)
             in
             if simple == simple' then or_alias1
             else Equals simple'
@@ -3109,8 +3079,7 @@ module Make (Expr : Expr_intf.S) = struct
           | No_alias _ | Type _ -> or_alias2
           | Equals simple ->
             let simple' =
-              Name_permutation.apply_simple (Meet_env.perm_right meet_env)
-                simple
+              Simple.apply_name_permutation simple (Meet_env.perm_left meet_env)
             in
             if simple == simple' then or_alias2
             else Equals simple'
@@ -3953,6 +3922,10 @@ module Make (Expr : Expr_intf.S) = struct
       -> t
       -> unit
 
+    val create : unit -> t
+
+    val to_set : t -> Kinded_parameter.Set.t
+
 (*
     (** Perform invariant checks upon the given function type. *)
     val invariant : t -> unit
@@ -3978,17 +3951,9 @@ module Make (Expr : Expr_intf.S) = struct
         create (Parameter.wrap (Variable.create "param")) kind
 
       let apply_name_permutation t perm =
-        Name_permutation.apply_kinded_parameter perm t
+        Kinded_parameter.apply_name_permutation t perm
       
-      let freshen t freshening =
-        apply_name_permutation t (Freshening.name_permutation freshening)
-
-      let bound_names _ =
-        Misc.fatal_error "Try to do without this"
-
-      let free_names t =
-        Name_occurrences.create_from_set_in_types
-          (Kinded_parameter.free_names t)
+      let free_names t = Kinded_parameter.free_names t
 
       let equal env t1 t2 =
         let t1 =
@@ -4032,9 +3997,10 @@ module Make (Expr : Expr_intf.S) = struct
     let _introduce = RP.introduce
 
     let free_names = RP.free_names
-    let bound_names = RP.bound_names
     let apply_name_permutation = RP.apply_name_permutation
-    let freshen = RP.freshen
+
+    let create () =
+      RP.create [Targetint.OCaml.Map.empty, Typing_env_extension.empty ()]
 
     let _create parameters =
       let indexes_to_parameters =
@@ -4400,9 +4366,6 @@ module Make (Expr : Expr_intf.S) = struct
             env_extension;
           }
 
-        let freshen t freshening =
-          apply_name_permutation t (Freshening.name_permutation freshening)
-
         let add_or_meet_equations t env new_equations =
           let env_extension =
             Typing_env_extension.meet env t.env_extension new_equations
@@ -4449,9 +4412,6 @@ module Make (Expr : Expr_intf.S) = struct
 
       let apply_name_permutation t perm =
         List.map (fun ip -> IP.apply_name_permutation ip perm) t
-
-      let freshen t freshening =
-        List.map (fun ip -> IP.freshen ip freshening) t
 
       let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
         if Meet_env.shortcut_precondition env && t1 == t2 then begin
@@ -4553,12 +4513,6 @@ module Make (Expr : Expr_intf.S) = struct
             t
         in
         free_names
-
-      let bound_names t =
-        List.fold_left (fun names ip ->
-            Name_occurrences.union names (IP.bound_names ip))
-          (Name_occurrences.create ())
-          t
     end
   end and Row_like : sig
     module Make
@@ -4768,9 +4722,6 @@ module Make (Expr : Expr_intf.S) = struct
           at_least;
         }
 
-      let freshen t freshening =
-        apply_name_permutation t (Freshening.name_permutation freshening)
-
       module Meet_or_join
         (E : Either_meet_or_join_intf
           with module Join_env := Join_env
@@ -4909,9 +4860,6 @@ module Make (Expr : Expr_intf.S) = struct
             (Name_occurrences.create ())
         in
         Name_occurrences.union from_known from_at_least
-
-      let bound_names _ =
-        Misc.fatal_error "let's try to do without this"
     end
   end and Trivial_row_like : sig
     module Make (Thing_without_names : Hashtbl.With_map) : sig
@@ -5009,9 +4957,7 @@ module Make (Expr : Expr_intf.S) = struct
       let join env t1 t2 = RL.join env Fresh t1 t2
 
       let free_names = RL.free_names
-      let bound_names = RL.bound_names
       let apply_name_permutation = RL.apply_name_permutation
-      let freshen = RL.freshen
 
       let all t : _ Or_unknown.t =
         let indexes = RL.at_least t in
@@ -5071,12 +5017,12 @@ module Make (Expr : Expr_intf.S) = struct
         Export_id.equal export_id1 export_id2
       | Equals simple1, Equals simple2 ->
         let simple1 =
-          Name_permutation.apply_simple (Type_equality_env.perm_left env)
-            simple1
+          Simple.apply_name_permutation simple1
+            (Type_equality_env.perm_left env)
         in
         let simple2 =
-          Name_permutation.apply_simple (Type_equality_env.perm_right env)
-            simple2
+          Simple.apply_name_permutation simple2
+            (Type_equality_env.perm_right env)
         in
         Simple.equal simple1 simple2
       | (No_alias _ | Type _ | Equals _), _ -> false
@@ -5256,8 +5202,7 @@ module Make (Expr : Expr_intf.S) = struct
       match or_alias with
       | No_alias contents -> free_names_contents contents
       | Type _export_id -> Name_occurrences.create ()
-      | Equals simple ->
-        Name_occurrences.create_from_set_in_types (Simple.free_names simple)
+      | Equals simple -> Simple.free_names simple
 
     let free_names_unknown_or_join free_names_contents
           (o : _ Flambda_types.unknown_or_join) : Name_occurrences.t =
@@ -5615,10 +5560,7 @@ module Make (Expr : Expr_intf.S) = struct
       include Closure_id
 
       let free_names _t = Name_occurrences.create ()
-      let bound_names _t = Name_occurrences.create ()
-
       let apply_name_permutation t _perm = t
-      let freshen t _freshening = t
     end
 
     module RP =
@@ -5654,10 +5596,8 @@ module Make (Expr : Expr_intf.S) = struct
     let join env t1 t2 = RP.join env Fresh t1 t2
 
     let equal = RP.equal
-    let bound_names = RP.bound_names
     let free_names = RP.free_names
     let apply_name_permutation = RP.apply_name_permutation
-    let freshen = RP.freshen
     let add_or_meet_equations = RP.add_or_meet_equations
   end and Typing_env : sig 
     type t
@@ -5781,7 +5721,7 @@ module Make (Expr : Expr_intf.S) = struct
        : t
       -> Typing_env_extension.t
       -> Scope_level.t
-      -> t * Freshening.t
+      -> t * Name_permutation.t
 
     val resolve_aliases
        : ?bound_name:Name.t
@@ -5951,8 +5891,13 @@ module Make (Expr : Expr_intf.S) = struct
       t1 == t2
 
     let domain t =
-      Name_occurrences.create_from_set_in_terms
-        (Name.Map.keys t.names_to_types)
+      let names =
+        Name.Set.fold (fun name bindable_names ->
+            Bindable_name.Set.add (Name name) bindable_names)
+          (Name.Map.keys t.names_to_types)
+          Bindable_name.Set.empty
+      in
+      Name_occurrences.create_from_set_in_terms names
 
     let find_exn t name : Flambda_types.t * binding_type =
       (* CR mshinwell: Maybe this should cause a fatal error and we shouldn't
@@ -6117,7 +6062,7 @@ module Make (Expr : Expr_intf.S) = struct
         (* Since [fold] operates in (scope level, sublevel) order, then the
            following check establishes that dependencies between bindings in
            the environment are only in one direction. *)
-        ignore (fold_all t ~init:Name.Set.empty
+        ignore (fold_all t ~init:Bindable_name.Set.empty
           ~f:(fun names_seen (name : Name.t)
                   (_binding_type : binding_type)
                   _scope_level entry ->
@@ -6125,17 +6070,20 @@ module Make (Expr : Expr_intf.S) = struct
               match entry with
               | Definition ty | Equation ty ->
                 Name_occurrences.everything (Type_free_names.free_names ty)
-              | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
+              | CSE prim ->
+                Name_occurrences.everything
+                  (Flambda_primitive.With_fixed_value.free_names prim)
             in
-            if not (Name.Set.subset free_names names_seen) then begin
+            if not (Bindable_name.Set.subset free_names names_seen) then begin
               Misc.fatal_errorf "Typing environment is not closed \
                   (%a free):@ %a"
-                Name.Set.print (Name.Set.diff free_names names_seen)
+                Bindable_name.Set.print
+                (Bindable_name.Set.diff free_names names_seen)
                 print t
             end;
             match entry with
-            | Definition _ -> Name.Set.add name names_seen
-            | Equation _ | CSE _ -> names_seen) : Name.Set.t);
+            | Definition _ -> Bindable_name.Set.add (Name name) names_seen
+            | Equation _ | CSE _ -> names_seen) : Bindable_name.Set.t);
         (* Checking that alias resolution works also ensures there are no
            cycles via aliases. *)
         Name.Map.iter (fun bound_name (_level, entry) ->
@@ -6221,11 +6169,10 @@ module Make (Expr : Expr_intf.S) = struct
           (entry : typing_environment_entry) =
       let free_names =
         match entry with
-        | Definition ty | Equation ty ->
-          Name_occurrences.everything (Type_free_names.free_names ty)
+        | Definition ty | Equation ty -> Type_free_names.free_names ty
         | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
       in
-      if Name.Set.mem name free_names then begin
+      if Name_occurrences.mem free_names (Name name) then begin
         Misc.fatal_errorf "Cannot add binding@ %a = %a@ as it would produce \
             a circular dependency"
           Name.print name
@@ -6479,7 +6426,8 @@ module Make (Expr : Expr_intf.S) = struct
         Flambda_primitive.With_fixed_value.Map.filter
           (fun prim (simple : Simple.t) ->
             let names_in_prim =
-              Flambda_primitive.With_fixed_value.free_names prim
+              Name_occurrences.everything_must_only_be_names
+                (Flambda_primitive.With_fixed_value.free_names prim)
             in
             let names =
               match simple with
@@ -6534,9 +6482,9 @@ module Make (Expr : Expr_intf.S) = struct
     let rec add_or_meet_env_extension' t
           (env_extension : Typing_env_extension.t) scope_level =
       let original_t = t in
-      let add_equation t freshening name ty =
-        let name = Freshening.apply_name freshening name in
-        let ty = Flambda_type0_core.freshen ty freshening in
+      let add_equation t perm name ty =
+        let name = Name_permutation.apply_name perm name in
+        let ty = Flambda_type0_core.apply_name_permutation ty perm in
         match find_opt t name with
         | None -> add t name scope_level (Equation ty)
         | Some (existing_ty, _binding_type) ->
@@ -6560,16 +6508,17 @@ module Make (Expr : Expr_intf.S) = struct
           match meet with
           | None -> t
           | Some (new_ty, new_env_extension)->
-            let t, _freshening =
+            let t, _perm =
               add_or_meet_env_extension' t new_env_extension scope_level
             in
             add t name scope_level (Equation new_ty)
       in
-      let add_definition t freshening (name : Name.t) ty =
-        let ty = Flambda_type0_core.freshen ty freshening in
-        let fresh_name, freshening = Freshening.freshen_name freshening name in
+      let add_definition t perm (name : Name.t) ty =
+        let ty = Flambda_type0_core.apply_name_permutation ty perm in
+        let fresh_name = Name.rename name in
+        let perm = Name_permutation.add_name perm name fresh_name in
         if mem t fresh_name then
-          freshening, add_equation t freshening name ty
+          perm, add_equation t perm name ty
         else
           let t = add t fresh_name scope_level (Definition ty) in
           let t =
@@ -6587,12 +6536,12 @@ module Make (Expr : Expr_intf.S) = struct
               were_existentials = Name.Set.add fresh_name t.were_existentials;
             }
           in
-          freshening, t
+          perm, t
       in
-      let add_cse (t : t) freshening bound_to prim =
-        let bound_to = Freshening.apply_simple freshening bound_to in
+      let add_cse (t : t) perm bound_to prim =
+        let bound_to = Simple.apply_name_permutation bound_to perm in
         let prim =
-          Flambda_primitive.With_fixed_value.apply_freshening prim freshening
+          Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
         in
         match
           Flambda_primitive.With_fixed_value.Map.find prim t.cse
@@ -6611,45 +6560,45 @@ module Make (Expr : Expr_intf.S) = struct
           (* As above, keep the outer binding. *)
           t
       in
-      let freshening, t =
-        List.fold_left (fun (freshening, t) (name, ty) ->
-            add_definition t freshening name ty)
-          (Freshening.create (), t)
+      let perm, t =
+        List.fold_left (fun (perm, t) (name, ty) ->
+            add_definition t perm name ty)
+          (Name_permutation.create (), t)
           (List.rev env_extension.first_definitions)
       in
-      let freshening, t =
+      let perm, t =
         Scope_level.Map.fold
-          (fun _level by_sublevel (freshening, t) ->
+          (fun _level by_sublevel (perm, t) ->
             Scope_level.Sublevel.Map.fold
               (fun _sublevel
                    ((name : Name.t), (entry : typing_environment_entry))
-                   (freshening, t) ->
+                   (perm, t) ->
                 match entry with
-                | Definition ty -> add_definition t freshening name ty
+                | Definition ty -> add_definition t perm name ty
                 | Equation ty ->
-                  let t = add_equation t freshening name ty in
-                  freshening, t
+                  let t = add_equation t perm name ty in
+                  perm, t
                 | CSE prim ->
-                  let t = add_cse t freshening (Simple.name name) prim in
-                  freshening, t)
+                  let t = add_cse t perm (Simple.name name) prim in
+                  perm, t)
               by_sublevel
-              (freshening, t))
+              (perm, t))
           env_extension.at_or_after_cut_point
-          (freshening, t)
+          (perm, t)
       in
       let t =
         List.fold_left (fun t (name, ty) ->
-            add_equation t freshening name ty)
+            add_equation t perm name ty)
           t
           env_extension.last_equations_rev
       in
       let t =
         Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
-            add_cse t freshening bound_to prim)
+            add_cse t perm bound_to prim)
           env_extension.cse
           t
       in
-      t, freshening
+      t, perm
 
     let add_or_meet_env_extension t env_extension scope_level =
       let t, _freshening =
@@ -6692,6 +6641,11 @@ module Make (Expr : Expr_intf.S) = struct
         cse = Flambda_primitive.With_fixed_value.Map.empty;
       }
   end and Typing_env_extension : sig
+    (* XXX This should use the new Name_abstraction stuff if possible.  This
+       should help with getting the freshening correct.  For example in
+       [add_or_meet_env_extension'] above, no freshening will be required,
+       since the bound names in the extension will already have been
+       freshened. *)
     type t = {
       first_definitions : (Name.t * Flambda_types.t) list;
       at_or_after_cut_point : Typing_env.levels_to_entries;
@@ -6867,6 +6821,7 @@ module Make (Expr : Expr_intf.S) = struct
 
     (* CR mshinwell: Move to [Typing_env]? *)
     let free_names_transitive env ty =
+      let original_ty = ty in
       let all_names = ref (Name_occurrences.create ()) in
       let rec loop to_follow =
         all_names := Name_occurrences.union !all_names to_follow;
@@ -6875,18 +6830,24 @@ module Make (Expr : Expr_intf.S) = struct
         with
         | None -> ()
         | Some (name, to_follow) ->
-          let ty =
-            match Typing_env.find_exn env name with
-            | exception Not_found ->
-              Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
-                  transitively, of %a@ in environment@ %a"
-                Name.print name
-                Type_printers.print ty
-                Typing_env.print env
-            | ty, _binding_type -> ty
-          in
-          let names = Type_free_names.free_names ty in
-          loop (Name_occurrences.union to_follow names)
+          begin match name with
+          | Name name ->
+            let ty =
+              match Typing_env.find_exn env name with
+              | exception Not_found ->
+                Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
+                    transitively, of %a@ in environment@ %a"
+                  Name.print name
+                  Type_printers.print ty
+                  Typing_env.print env
+              | ty, _binding_type -> ty
+            in
+            let names = Type_free_names.free_names ty in
+            loop (Name_occurrences.union to_follow names)
+          | Continuation _ ->
+            Misc.fatal_errorf "Illegal name in type: %a"
+              Type_printers.print original_ty
+          end
       in
       loop (Type_free_names.free_names ty);
       !all_names
@@ -6903,7 +6864,7 @@ module Make (Expr : Expr_intf.S) = struct
       let allowed_names = Name_occurrences.everything allowed_names in
       let first_definitions =
         List.filter (fun (name, _ty) ->
-            Name.Set.mem name allowed_names)
+            Bindable_name.Set.mem (Name name) allowed_names)
           t.first_definitions
       in
       let at_or_after_cut_point =
@@ -6911,8 +6872,10 @@ module Make (Expr : Expr_intf.S) = struct
             let by_sublevel =
               Scope_level.Sublevel.Map.filter_map
                 (fun _sublevel ((name, _) as entry) ->
-                  if Name.Set.mem name allowed_names then Some entry
-                  else None)
+                  if Bindable_name.Set.mem (Name name) allowed_names then
+                    Some entry
+                  else
+                    None)
               by_sublevel
             in
             if Scope_level.Sublevel.Map.is_empty by_sublevel then None
@@ -6921,14 +6884,14 @@ module Make (Expr : Expr_intf.S) = struct
       in
       let last_equations_rev =
         List.filter (fun (name, _ty) ->
-            Name.Set.mem name allowed_names)
+            Bindable_name.Set.mem (Name name) allowed_names)
           t.last_equations_rev
       in
       let cse =
         Flambda_primitive.With_fixed_value.Map.filter
           (fun _prim (simple : Simple.t) ->
             match simple with
-            | Name name -> Name.Set.mem name allowed_names
+            | Name name -> Bindable_name.Set.mem (Name name) allowed_names
             | Const _ | Discriminant _ -> true)
           t.cse
       in
@@ -6942,9 +6905,18 @@ module Make (Expr : Expr_intf.S) = struct
       invariant t;
       t
 
+    let defined_names t =
+      (* CR mshinwell: Move to [Bindable_name.Set] *)
+      let defined_names =
+        Name.Set.fold (fun name result ->
+            Bindable_name.Set.add (Name name) result)
+          (defined_names t)
+          Bindable_name.Set.empty
+      in
+      Name_occurrences.create_from_set_in_types defined_names
+
     let restrict_to_definitions t =
-      restrict_to_names t (
-        Name_occurrences.create_from_set_in_types (defined_names t))
+      restrict_to_names t (defined_names t)
 
     let restrict_names_to_those_occurring_in_types t env env_allowed_names tys =
       let free_names = free_names_transitive_list t env tys in
@@ -7119,7 +7091,7 @@ module Make (Expr : Expr_intf.S) = struct
       let cse_changed = ref false in
       let cse' =
         Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
-            let simple' = Name_permutation.apply_simple perm simple in
+            let simple' = Simple.apply_name_permutation simple perm in
             let prim' =
               Flambda_primitive.With_fixed_value.apply_name_permutation prim
                 perm
@@ -7200,7 +7172,8 @@ module Make (Expr : Expr_intf.S) = struct
                 false
               | Name _ | Const _ | Discriminant _ ->
                 let free_names_prim =
-                  Flambda_primitive.With_fixed_value.free_names prim
+                  Name_occurrences.everything_must_only_be_names
+                    (Flambda_primitive.With_fixed_value.free_names prim)
                 in
                 Name.Set.subset free_names_prim names_in_join)
             t.cse
@@ -7233,28 +7206,27 @@ module Make (Expr : Expr_intf.S) = struct
     (* CR mshinwell: Think carefully about whether the freshening is actually
        needed here *)
     let diff t env : t =
-      let names_more_precise, _freshened_names_more_precise, _freshening =
+      let names_more_precise, _freshened_names_more_precise, _perm =
         fold t
-          ~init:(Name.Set.empty, Name.Set.empty, Freshening.create ())
-          ~f:(fun (names_more_precise, freshened_names_more_precise, freshening)
+          ~init:(Name.Set.empty, Name.Set.empty, Name_permutation.create ())
+          ~f:(fun (names_more_precise, freshened_names_more_precise, perm)
                   (name : Name.t)
                   (info : fold_info) ->
             match info with
             | Definition_in_extension _ty ->
-              let fresh_name, freshening =
-                Freshening.freshen_name freshening name
-              in
+              let fresh_name = Name.rename name in
+              let perm = Name_permutation.add_name perm name fresh_name in
               let names_more_precise =
                 Name.Set.add name names_more_precise
               in
               let freshened_names_more_precise =
                 Name.Set.add fresh_name freshened_names_more_precise
               in
-              names_more_precise, freshened_names_more_precise, freshening
+              names_more_precise, freshened_names_more_precise, perm
             | Equation ty ->
               let unfreshened_name = name in
-              let name = Freshening.apply_name freshening name in
-              let ty = Flambda_type0_core.freshen ty freshening in
+              let name = Name_permutation.apply_name perm name in
+              let ty = Flambda_type0_core.apply_name_permutation ty perm in
               match Typing_env.find_opt env name with
               | None ->
                 let names_more_precise =
@@ -7263,7 +7235,7 @@ module Make (Expr : Expr_intf.S) = struct
                 let freshened_names_more_precise =
                   Name.Set.add name names_more_precise
                 in
-                names_more_precise, freshened_names_more_precise, freshening
+                names_more_precise, freshened_names_more_precise, perm
               | Some (old_ty, _) ->
                 let more_precise_using_old_types_for_free_names =
                   (* XXX Not sure [env] is right: shouldn't it contain names
@@ -7274,10 +7246,10 @@ module Make (Expr : Expr_intf.S) = struct
                   let names_more_precise =
                     Name.Set.add name names_more_precise
                   in
-                  names_more_precise, freshened_names_more_precise, freshening
+                  names_more_precise, freshened_names_more_precise, perm
                 else
                   let free_names =
-                    Name_occurrences.everything
+                    Name_occurrences.everything_must_only_be_names
                       (Type_free_names.free_names ty)
                   in
                   let more_precise_using_new_types_for_free_names =
@@ -7291,10 +7263,16 @@ module Make (Expr : Expr_intf.S) = struct
                     let freshened_names_more_precise =
                       Name.Set.add name names_more_precise
                     in
-                    names_more_precise, freshened_names_more_precise, freshening
+                    names_more_precise, freshened_names_more_precise, perm
                   else
                     names_more_precise, freshened_names_more_precise,
-                      freshening)
+                      perm)
+      in
+      let names_more_precise =
+        Name.Set.fold (fun name result ->
+            Bindable_name.Set.add (Name name) result)
+          names_more_precise
+          Bindable_name.Set.empty
       in
       restrict_to_names t
         (Name_occurrences.create_from_set_in_types names_more_precise)
@@ -7322,7 +7300,7 @@ module Make (Expr : Expr_intf.S) = struct
       in
       let free_names_first_definitions =
         List.fold_left (fun acc (_name, ty) ->
-            Name.Set.union acc (Name_occurrences.everything (
+            Name.Set.union acc (Name_occurrences.everything_must_only_be_names (
               Type_free_names.free_names ty)))
           Name.Set.empty
           first_definitions
@@ -7335,15 +7313,18 @@ module Make (Expr : Expr_intf.S) = struct
                    acc ->
                 match entry with
                 | Definition ty ->
-                  Name.Set.union acc (Name_occurrences.everything (
-                    Type_free_names.free_names ty))
+                  Name.Set.union acc (
+                    Name_occurrences.everything_must_only_be_names (
+                      Type_free_names.free_names ty))
                 | Equation ty ->
                   Name.Set.add name (
-                    Name.Set.union acc (Name_occurrences.everything (
-                      Type_free_names.free_names ty)))
+                    Name.Set.union acc (
+                      Name_occurrences.everything_must_only_be_names (
+                        Type_free_names.free_names ty)))
                 | CSE prim ->
-                  Name.Set.union acc
-                    (Flambda_primitive.With_fixed_value.free_names prim))
+                  Name.Set.union acc (
+                    Name_occurrences.everything_must_only_be_names (
+                      (Flambda_primitive.With_fixed_value.free_names prim))))
               by_sublevel
               acc)
           at_or_after_cut_point
@@ -7351,8 +7332,9 @@ module Make (Expr : Expr_intf.S) = struct
       in
       let free_names_last_equations_rev =
         List.fold_left (fun acc (_name, ty) ->
-            Name.Set.union acc (Name_occurrences.everything (
-              Type_free_names.free_names ty)))
+            Name.Set.union acc (
+              Name_occurrences.everything_must_only_be_names (
+                Type_free_names.free_names ty)))
           free_names_at_or_after_cut_point
           last_equations_rev
       in
@@ -7364,19 +7346,20 @@ module Make (Expr : Expr_intf.S) = struct
             | Name name ->
               let acc =
                 Name.Set.union acc
-                  (Flambda_primitive.With_fixed_value.free_names prim)
+                  (Name_occurrences.everything_must_only_be_names (
+                    (Flambda_primitive.With_fixed_value.free_names prim)))
               in
               Name.Set.add name acc)
           cse
           free_names_last_equations_rev
       in
-      Name_occurrences.create_from_set_in_types
-        (Name.Set.diff free_names defined_names)
-
-    let freshen t freshening =
-      apply_name_permutation t (Freshening.name_permutation freshening)
-
-    let bound_names _ = Misc.fatal_error "Try to do without this"
+      let free_names =
+        Name.Set.fold (fun name result ->
+            Bindable_name.Set.add (Name name) result)
+          (Name.Set.diff free_names defined_names)
+          Bindable_name.Set.empty
+      in
+      Name_occurrences.create_from_set_in_types free_names
   end
 
   include Flambda_type0_core
@@ -7716,7 +7699,7 @@ module Make (Expr : Expr_intf.S) = struct
           match name with
           | Var _ | Logical_var _ -> false
           | Symbol _ -> true)
-        (Name_occurrences.everything (free_names t))
+        (Name_occurrences.everything_must_only_be_names (free_names t))
     in
     let simplified, canonical_simple' = Simplified_type.create env t in
     assert (Misc.Stdlib.Option.equal Simple.equal

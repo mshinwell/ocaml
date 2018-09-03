@@ -37,3 +37,5 @@ val add_name : t -> Name.t -> Name.t -> t
 val apply_name : t -> Name.t -> Name.t
 
 val apply_name_set : t -> Name.Set.t -> Name.Set.t
+
+val apply_bindable_name_set : t -> Bindable_name.Set.t -> Bindable_name.Set.t
