@@ -6449,8 +6449,8 @@ module Make (Expr : Expr_intf.S) = struct
       let allowed = Name.Set.remove name (Name.Map.keys t.names_to_types) in
       restrict_to_names0 t allowed
 
-    let rec add_or_meet_env_extension' t
-          (env_extension : Typing_env_extension.t) scope_level =
+    let rec add_or_meet_env_extension' t scope_level ~first_definitions
+          ~at_or_after_cut_point ~last_equations_rev =
       let original_t = t in
       let add_equation t name ty =
         match find_opt t name with
@@ -6523,7 +6523,7 @@ module Make (Expr : Expr_intf.S) = struct
         List.fold_left (fun t (name, ty) ->
             add_definition t name ty)
           t
-          (List.rev env_extension.first_definitions)
+          (List.rev first_definitions)
       in
       let t =
         Scope_level.Map.fold
@@ -6542,24 +6542,26 @@ module Make (Expr : Expr_intf.S) = struct
                   t)
               by_sublevel
               t)
-          env_extension.at_or_after_cut_point
+          at_or_after_cut_point
           t
       in
       let t =
         List.fold_left (fun t (name, ty) ->
             add_equation t name ty)
           t
-          env_extension.last_equations_rev
+          last_equations_rev
       in
       Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
           add_cse t bound_to prim)
-        env_extension.cse
+        cse
         t
 
     let add_or_meet_env_extension t env_extension scope_level =
       Typing_env_extension.pattern_match env_extension
-        ~f:(fun env_extension0 ->
-          add_or_meet_env_extension' t env_extension0 scope_level)
+        ~f:(fun ~first_definitions ~at_or_after_cut_point ~last_equations_rev
+                ~cse ->
+          add_or_meet_env_extension' t ~first_definitions
+            ~at_or_after_cut_point ~last_equations_rev scope_level)
 
     let add_equation t name scope_level ty =
       if not (mem t name) then begin
