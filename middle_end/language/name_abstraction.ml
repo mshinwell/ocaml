@@ -18,12 +18,29 @@
 
 module type Name = sig
   include Contains_names.S
+  val print : Format.formatter -> t -> unit
   val rename : t -> t
   val permutation_to_swap : t -> t -> Name_permutation.t
 end
 
-module Make (Name : Name) (Term : Contains_names.S) = struct
+module type Term = sig
+  include Contains_names.S
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+end
+
+module Make (Name : Name) (Term : Term) = struct
   type t = Name.t * Term.t
+
+  let print ppf (name, term) =
+    Format.fprintf ppf "@[[%a]%a@]"
+      Name.print name
+      Term.print term
+
+  let print_with_cache ~cache ppf (name, term) =
+    Format.fprintf ppf "@[[%a]%a@]"
+      Name.print name
+      (Term.print_with_cache ~cache) term
 
   let create name term = name, term
 
@@ -32,6 +49,14 @@ module Make (Name : Name) (Term : Contains_names.S) = struct
     let perm = Name.permutation_to_swap name fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
+
+  let pattern_match_pair (name0, term0) (name1, term1) ~f =
+    let fresh_name = Name.rename name0 in
+    let perm0 = Name.permutation_to_swap name0 fresh_name in
+    let perm1 = Name.permutation_to_swap name1 fresh_name in
+    let fresh_term0 = Term.apply_name_permutation term0 perm0 in
+    let fresh_term1 = Term.apply_name_permutation term1 perm1 in
+    f fresh_name fresh_term0 fresh_term1
 
   let apply_name_permutation (name, term) perm =
     let name = Name.apply_name_permutation name perm in
@@ -44,8 +69,20 @@ module Make (Name : Name) (Term : Contains_names.S) = struct
     Name_occurrences.diff free_in_term bound
 end
 
-module Make2 (Name0 : Name) (Name1 : Name) (Term : Contains_names.S) = struct
+module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
   type t = Name0.t * Name1.t * Term.t
+
+  let print ppf (name0, name1, term) =
+    Format.fprintf ppf "@[[%a, %a]%a@]"
+      Name0.print name0
+      Name1.print name1
+      Term.print term
+
+  let print_with_cache ~cache ppf (name0, name1, term) =
+    Format.fprintf ppf "@[[%a, %a]%a@]"
+      Name0.print name0
+      Name1.print name1
+      (Term.print_with_cache ~cache) term
 
   let create name0 name1 term = name0, name1, term
 
@@ -57,6 +94,19 @@ module Make2 (Name0 : Name) (Name1 : Name) (Term : Contains_names.S) = struct
     let perm = Name_permutation.compose perm0 perm1 in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name0 fresh_name1 fresh_term
+
+  let pattern_match_pair (name0, name1, term) (name0', name1', term') ~f =
+    let fresh_name0 = Name0.rename name0 in
+    let perm0 = Name0.permutation_to_swap name0 fresh_name0 in
+    let perm0' = Name0.permutation_to_swap name0' fresh_name0 in
+    let fresh_name1 = Name1.rename name1 in
+    let perm1 = Name1.permutation_to_swap name1 fresh_name1 in
+    let perm1' = Name1.permutation_to_swap name1' fresh_name1 in
+    let perm = Name_permutation.compose perm0 perm1 in
+    let perm' = Name_permutation.compose perm0' perm1' in
+    let fresh_term = Term.apply_name_permutation term perm in
+    let fresh_term' = Term.apply_name_permutation term perm' in
+    f fresh_name0 fresh_name1 fresh_term fresh_term'
 
   let apply_name_permutation (name0, name1, term) perm =
     let name0 = Name0.apply_name_permutation name0 perm in

@@ -4027,16 +4027,29 @@ module Make (Expr : Expr_intf.S) = struct
         indexes_to_parameters, env_extension
       ]
   end and Relational_product : sig
-    type fresh_component_semantics =
-      | Fresh
-        (** For [meet] and [join] always assign fresh components. *)
-      | Left
-        (** For [meet] and [join] use component names from the left-hand
-            value of type [t] passed in.  (During [join], if a component does
-            not occur on the left-hand side, a fresh component will be
-            created. *)
-      | Right
-        (** Analogous to [Left]. *)
+    (* CR mshinwell: Update comment to reflect new binding structure *)
+    (** A "relational product" represents a list of indexed products.  Each
+        indexed product binds a set of components, thus:
+
+           ------
+            |  |
+            |  |     (component_i : Component)
+          i : Index
+
+        and additionally holds relational information between the components
+        expressed as a typing environment extension.
+
+        Any indexed product in a relational product may depend on components'
+        names bound by an earlier indexed product.  The overall structure is
+        thus:
+
+           ------    ------
+            |  |      |  |
+            |  |      |  |     (component_i_n : Component)
+           n : int  i_n : Index
+
+        where the outer (dependent) product corresponds to the list structure.
+    *)
 
     module Make
       (Index : Name_like_intf.S)
@@ -4046,6 +4059,7 @@ module Make (Expr : Expr_intf.S) = struct
         val equal : Type_equality_env.t -> t -> t -> bool
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
+        module Set : Contains_names.S
       end) :
     sig
       type t
@@ -4065,40 +4079,31 @@ module Make (Expr : Expr_intf.S) = struct
         -> unit
 
       (** Create a relational product value given:
-          - the indexes (with associated components) for each of the indexed
-            products;
-          - the equations that hold between the components in each of the
-            indexed products. *)
+          - the indexes (with associated components) for the product;
+          - the equations that hold between the components in the product;
+          - any other relational product over which the newly-created one is
+            to be scoped.  The newly-created one will bind references to
+            components in the nested one. *)
       val create
-         : (Component.t Index.Map.t * Typing_env_extension.t) list
+         : ?nested:t option
+        -> Component.t Index.Map.t
+        -> Typing_env_extension.t
         -> t
 
-      val create_bottom : arity:int -> t
+      val create_bottom : unit -> t
 
       (** A conservative approximation to equality. *)
       val equal : Type_equality_env.t -> t -> t -> bool
 
-      (** The components of the relational product.  Each list of components
-          is ordered according to [Index.compare]. *)
-      val components : t -> Component.t list list
-
-      (** Greatest lower bound of two parameter bindings. *)
-      (* CR mshinwell: I'm not sure [fresh_component_semantics] is needed now
-         since we shouldn't be meeting relational products that occur in terms. *)
+      (** Greatest lower bound of two relational products. *)
       val meet
          : Meet_env.t
-        -> fresh_component_semantics
         -> t
         -> t
         -> (t * Typing_env_extension.t) Or_bottom.t
 
-      (** Least upper bound of two parameter bindings. *)
-      val join
-         : Join_env.t
-        -> fresh_component_semantics
-        -> t
-        -> t
-        -> t
+      (** Least upper bound of two relational products. *)
+      val join : Join_env.t -> t -> t -> t
 
       (** The environment extension associated with the given relational
           product, including at the start, definitions of each component to
@@ -4121,11 +4126,6 @@ module Make (Expr : Expr_intf.S) = struct
         -> t
     end
   end = struct
-    type fresh_component_semantics =
-      | Fresh
-      | Left
-      | Right
-
     module Make
       (Index : Name_like_intf.S)
       (Component : sig
@@ -4136,30 +4136,20 @@ module Make (Expr : Expr_intf.S) = struct
         val kind : t -> Flambda_kind.t
       end) =
     struct
-      module Indexed_product = struct
+      module rec T0 : sig
+        include Contains_names.S
+
+      end = struct
         type t = {
           components_by_index : Component.t Index.Map.t;
           env_extension : Typing_env_extension.t;
+          nested : T.t;
         }
-
-(* XXX There should be a name abstraction
-     [Component.Set.t] Indexed_product0.t
-   here.
-*)
 
         let invariant _t =
           (* CR mshinwell: This should check that the [env_extension] never
              contains [Definition]s for [Name]s occurring in the indexes. *)
           ()
-
-        let create components_by_index env_extension : t =
-          let t =
-            { components_by_index;
-              env_extension;
-            }
-          in
-          invariant t;
-          t
 
         let bottom () =
           create Index.Map.empty (Typing_env_extension.empty ())
@@ -4184,41 +4174,81 @@ module Make (Expr : Expr_intf.S) = struct
         let equal env
               { components_by_index = components_by_index1;
                 env_extension = env_extension1;
+                nested = nested1;
               }
               { components_by_index = components_by_index2;
                 env_extension = env_extension2;
+                nested = nested2;
               } =
           Index.Map.equal (Component.equal env)
             components_by_index1 components_by_index2
           && Typing_env_extension.equal env env_extension1 env_extension2
+          && T.equal nested1 nested2
+
+        let free_names
+              ({ components_by_index; env_extension; nested; } as t) =
+          let free_names_in_indexes =
+            Index.Set.fold (fun index free_names ->
+                Name_occurrences.union (Index.free_names index) free_names)
+              (Index.Map.keys components_by_index)
+              (Name_occurrences.create ())
+          in
+          let free_names_in_components =
+            List.fold_left (fun free_names component ->
+                Name_occurrences.union (Component.free_names component)
+                  free_names)
+              (Name_occurrences.create ())
+              (Index.Map.data components_by_index)
+          in
+          let free_names_in_nested =
+            match nested with
+            | None -> Name_occurrences.create ()
+            | Some nested -> T.free_names nested
+          in
+          Name_occurrences.union_list [
+            free_names_in_indexes t;
+            free_names_in_components t;
+            Typing_env_extension.free_names env_extension;
+            free_names_in_nested;
+          ]
+
+        let apply_name_permutation
+              { components_by_index; env_extension; nested; } perm =
+          let components_by_index =
+            Index.Map.fold (fun index component components_by_index ->
+                let index = Index.apply_name_permutation index perm in
+                let component =
+                  Component.apply_name_permutation component perm
+                in
+                Index.Map.add index component components_by_index)
+              components_by_index
+              Index.Map.empty
+          in
+          let env_extension =
+            Typing_env_extension.apply_name_permutation env_extension perm
+          in
+          let nested =
+            match nested with
+            | None -> None
+            | Some nested -> Some (T.apply_name_permutation nested perm)
+          in
+          { components_by_index;
+            env_extension;
+            nested;
+          }
 
         let indexes t = Index.Map.keys t.components_by_index
 
-        (* CR mshinwell: The [kind] may not be needed in [Component] but it isn't
-           clear yet.  We can sort this out later.  At present all relational
-           products map to components of kind [Value]. *)
+        (* CR mshinwell: The [kind] may not be needed in [Component] but it
+           isn't clear yet. We can sort this out later. At present all
+           relational products map to components of kind [Value]. *)
         let kind = Flambda_kind.value ()
 
         let environment_for_meet_or_join env (t1 : t) (t2 : t)
-              (fresh_component_semantics
-                : Relational_product.fresh_component_semantics)
               ~indexes =
           let components_by_index_in_result, env =
             Index.Set.fold (fun index (components_by_index_in_result, env) ->
-                let component =
-                  match fresh_component_semantics with
-                  | Fresh -> Component.create kind
-                  | Left ->
-                    begin match Index.Map.find index t1.components_by_index with
-                    | exception Not_found -> Component.create kind
-                    | component_on_left -> component_on_left
-                    end
-                  | Right ->
-                    begin match Index.Map.find index t2.components_by_index with
-                    | exception Not_found -> Component.create kind
-                    | component_on_right -> component_on_right
-                    end
-                in
+                let component = Component.create kind in
                 let components_by_index_in_result =
                   Index.Map.add index component components_by_index_in_result
                 in
@@ -4270,53 +4300,80 @@ module Make (Expr : Expr_intf.S) = struct
           in
           let env_extension1 = add_equalities_to_extension t1 env_extension1 in
           let env_extension2 = add_equalities_to_extension t2 env_extension2 in
-          env, env_extension1, env_extension2, components_by_index_in_result
+          env, env_extension1, env_extension2, components_by_index_in_result,
+            result_components
 
-        let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
-          if t1 == t2 then Ok (t1, env)
+        let meet env t1 t2 : _ Or_bottom.t =
+          if Meet_env.shortcut_precondition env && t1 == t2 then
+            Ok (t1, env, None)
           else
             let indexes = Index.Set.inter (indexes t1) (indexes t2) in
             if Index.Set.is_empty indexes then Bottom
             else
               let env = Join_env.create env in
-              let env, env_extension1, env_extension2, components_by_index =
-                environment_for_meet_or_join env t1 t2 fresh_component_semantics
-                  ~indexes
+              let env, env_extension1, env_extension2, components_by_index,
+                  result_components =
+                environment_for_meet_or_join env t1 t2 ~indexes
               in
               let env = Join_env.central_environment env in
               let env_extension =
                 Typing_env_extension.meet env env_extension1 env_extension2
               in
-              let t =
-                { components_by_index;
-                  env_extension;
-                }
+              let nested : _ Or_bottom.t =
+                match t1.nested, t2.nested with
+                | None, None -> Ok None
+                | Some nested1, Some nested2 ->
+                  begin match T.meet env nested1 nested2 with
+                  | Ok nested -> Ok (Some nested)
+                  | Bottom -> Bottom
+                  end
+              | None, Some _ | Some _, None ->
+                Misc.fatal_errorf "Cannot meet relational products with \
+                    different nesting structures:@ %a@ and@ %a"
+                  print t1
+                  print t2
               in
-              let env =
-                Meet_env.with_env env (fun env ->
-                  Typing_env.add_or_meet_env_extension env env_extension
-                    (Typing_env.max_level env))
-              in
-              Ok (t, env)
+              match nested with
+              | Bottom -> Bottom
+              | Ok nested ->
+                let t =
+                  { components_by_index;
+                    env_extension;
+                    nested;
+                  }
+                in
+                let env_extension = Typing_env_extension.create () in
+                Ok (t, env_extension, Some result_components)
 
-        let join env fresh_component_semantics t1 t2 =
-          if t1 == t2 then
-            t1, env, t1.env_extension, t1.env_extension
+        let join env t1 t2 =
+          if Join_env.shortcut_precondition env && t1 == t2 then
+            t1, env, t1.env_extension, t1.env_extension, None
           else
             let indexes = Index.Set.union (indexes t1) (indexes t2) in
-            let env, env_extension1, env_extension2, components_by_index =
-              environment_for_meet_or_join env t1 t2 fresh_component_semantics
-                ~indexes
+            let env, env_extension1, env_extension2, components_by_index,
+                result_components =
+              environment_for_meet_or_join env t1 t2 ~indexes
             in
             let env_extension =
               Typing_env_extension.join env env_extension1 env_extension2
             in
+            let nested =
+              match t1.nested, t2.nested with
+              | None, None -> None
+              | Some nested1, Some nested2 -> Some (T.join env nested1 nested2)
+              | None, Some _ | Some _, None ->
+                Misc.fatal_errorf "Cannot join relational products with \
+                    different nesting structures:@ %a@ and@ %a"
+                  print t1
+                  print t2
+            in
             let t =
               { components_by_index;
                 env_extension;
+                nested;
               }
             in
-            t, env, env_extension1, env_extension2
+            t, env, env_extension1, env_extension2, Some result_components
 
         let standalone_extension t =
           Index.Map.fold (fun _index component env_extension ->
@@ -4327,197 +4384,105 @@ module Make (Expr : Expr_intf.S) = struct
             t.components_by_index
             t.env_extension
 
-        let free_names_in_indexes t =
-          Index.Set.fold (fun index free_names ->
-              Name_occurrences.union (Index.free_names index) free_names)
-            (Index.Map.keys t.components_by_index)
-            (Name_occurrences.create ())
-
-        let free_names_in_components t =
-          List.fold_left (fun free_names component ->
-              Name_occurrences.union (Component.free_names component)
-                free_names)
-            (Name_occurrences.create ())
-            (Index.Map.data t.components_by_index)
-
-        (* CR mshinwell: Do we really need [bound_names]?  It seems like this
-           might be problematic with the two notions of freshness (the usual one
-           for terms; and for existentials, which are binding but not freshened
-           until opened). *)
-        let bound_names t = free_names_in_components t
-
-        let free_names ({ components_by_index = _; env_extension; } as t) =
-          Name_occurrences.union (free_names_in_indexes t)
-            (Name_occurrences.diff
-              (Typing_env_extension.free_names env_extension)
-              (bound_names t))
-
-        let apply_name_permutation { components_by_index; env_extension; }
-              perm =
-          let components_by_index =
-            Index.Map.fold (fun index component components_by_index ->
-                let index = Index.apply_name_permutation index perm in
-                let component =
-                  Component.apply_name_permutation component perm
-                in
-                Index.Map.add index component components_by_index)
-              components_by_index
-              Index.Map.empty
-          in
-          let env_extension =
-            Typing_env_extension.apply_name_permutation env_extension perm
-          in
-          { components_by_index;
-            env_extension;
-          }
+        let introduce t env =
+          Typing_env.add_or_meet_env_extension env (standalone_extension t)
+            (Typing_env.max_level env)
 
         let add_or_meet_equations t env new_equations =
           let env_extension =
             Typing_env_extension.meet env t.env_extension new_equations
           in
           { t with env_extension; }
+      end and T : sig
+        include Contains_names.S
+        val invariant : t -> unit
+        val print : Format.formatter -> t -> unit
+        val print_with_cache
+           : cache:Printing_cache.t
+          -> Format.formatter
+          -> t
+          -> unit
+        val create
+           : ?nested:t option
+          -> Component.t Index.Map.t
+          -> Typing_env_extension.t
+          -> t
+        val create_bottom : unit -> t
+        val equal : Type_equality_env.t -> t -> t -> bool
+        val meet
+           : Meet_env.t
+          -> t
+          -> t
+          -> (t * Typing_env_extension.t) Or_bottom.t
+        val join : Join_env.t -> t -> t -> t
+        val standalone_extension
+           : t
+          -> Typing_env.t
+          -> Typing_env_extension.t
+        val introduce : t -> Typing_env.t -> Typing_env.t
+        val add_or_meet_equations
+           : t
+          -> Meet_env.t
+          -> Typing_env_extension.t
+          -> t
+      end = struct
+        include Name_abstraction.Make (Component.Set) (T0)
 
-        let components t = Index.Map.data t.components_by_index
+        let create_abstraction = create
+
+        let create components_by_index env_extension nested : t =
+          let components = Index.Map.data components_by_index in
+          let component_set = Component.Set.of_list components in
+          if List.length components <> Component.Set.cardinal component_set
+          then begin
+            Misc.fatal_error "Can only create a relational product from \
+              distinct components"
+          end;
+          let t0 : T0.t =
+            { components_by_index;
+              env_extension;
+              nested;
+            }
+          in
+          T0.invariant t0;
+          A.create component_set t0
+
+        let create_bottom () =
+          create Index.Map.empty (Typing_env_extension.empty ())
+
+        let invariant t =
+          pattern_match t ~f:(fun _ t0 -> T0.invariant t0)
+
+        let equal t1 t2 =
+          pattern_match_pair t1 t2 ~f:(fun components t0_1 t0_2 ->
+            T0.equal t0_1 t0_2)
+
+        let meet env t1 t2 =
+          pattern_match t1 ~f:(fun components1 t0_1 ->
+            pattern_match t2 ~f:(fun components2 t0_2 ->
+              match T0.meet env t0_1 t0_2 with
+              | Bottom -> Bottom
+              | Ok (t0, env_extension, Some components) ->
+                Ok (create_abstraction components t0, env_extension)))
+
+        let join env t1 t2 =
+          pattern_match t1 ~f:(fun components1 t0_1 ->
+            pattern_match t2 ~f:(fun components2 t0_2 ->
+              let t0 = T0.join env t0_1 t0_2 in
+              create_abstraction components t0))
+
+        let standalone_extension t =
+          pattern_match t ~f:(fun _ t0 -> T0.standalone_extension t0)
+
+        let introduce t env =
+          pattern_match t ~f:(fun _ t0 -> T0.introduce t0 env)
+
+        let add_or_meet_equations t env new_equations =
+          pattern_match t ~f:(fun _ t0 ->
+            T0.add_or_meet_equations t0 env new_equations)
       end
 
-      module IP = Indexed_product
-
-      type t = IP.t list
-
-      let invariant t =
-        List.iter (fun ip -> IP.invariant ip) t
-
-      let print ppf t =
-        Format.fprintf ppf "@[(%a)@]"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            IP.print) t
-
-      let print_with_cache ~cache ppf t =
-        Format.fprintf ppf "@[(%a)@]"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            (IP.print_with_cache ~cache)) t
-
-      let create components_by_index_list =
-        List.map (fun (components_by_index, env_extension) ->
-            IP.create components_by_index env_extension)
-          components_by_index_list
-
-      (* CR mshinwell: After we have rebased past the patch that allows
-         the shadowing of identifiers brought in from "include", this can
-         change back to [bottom], and it can be redefined in e.g.
-         [Blocks] as required. *)
-      let create_bottom ~arity =
-        List.init arity (fun _ -> IP.bottom ())
-
-      let equal env t1 t2 =
-        Misc.Stdlib.List.equal (IP.equal env) t1 t2
-
-      let components t =
-        List.map (fun ip -> IP.components ip) t
-
-      let apply_name_permutation t perm =
-        List.map (fun ip -> IP.apply_name_permutation ip perm) t
-
-      let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
-        if Meet_env.shortcut_precondition env && t1 == t2 then begin
-          Ok (t1, Typing_env_extension.empty ())
-        end else begin
-          if List.compare_lengths t1 t2 <> 0 then begin
-            Misc.fatal_errorf "Cannot meet relational products of different \
-              lengths"
-          end;
-          let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-          let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-          let env = Meet_env.clear_name_permutations env in
-          let t_rev, _env =
-            List.fold_left2
-              (fun ((t_rev : _ Or_bottom.t), env) ip1 ip2 ->
-                match t_rev with
-                | Bottom -> Or_bottom.Bottom, env
-                | Ok t_rev ->
-                  match IP.meet env fresh_component_semantics ip1 ip2 with
-                  | Bottom -> Or_bottom.Bottom, env
-                  | Ok (ip, env) ->
-                    Or_bottom.Ok (ip :: t_rev), env)
-              (Or_bottom.Ok [], env)
-              t1 t2
-          in
-          match t_rev with
-          | Bottom -> Bottom
-          | Ok t_rev -> Ok (List.rev t_rev, Typing_env_extension.empty ())
-        end
-
-      let join env fresh_component_semantics t1 t2 =
-        if Join_env.shortcut_precondition env && t1 == t2 then begin
-          t1
-        end else begin
-          if List.compare_lengths t1 t2 <> 0 then begin
-            Misc.fatal_errorf "Cannot join relational products of different \
-              lengths"
-          end;
-          let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-          let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-          let env = Join_env.clear_name_permutations env in
-          let t_rev, _env, _env_extension1, _env_extension2 =
-            List.fold_left2
-              (fun (t_rev, env, env_extension1, env_extension2) ip1 ip2 ->
-                (* CR mshinwell: Unsure we need env_extension1 / env_extension2
-                   here -- think *)
-                let ip1 =
-                  IP.add_or_meet_equations ip1
-                    (Join_env.central_environment env)
-                    env_extension1
-                in
-                let ip2 =
-                  IP.add_or_meet_equations ip2
-                    (Join_env.central_environment env)
-                    env_extension2
-                in
-                let ip, env, env_extension1, env_extension2 =
-                  IP.join env fresh_component_semantics ip1 ip2
-                in
-                ip :: t_rev, env, env_extension1, env_extension2)
-              ([], env, Typing_env_extension.empty (),
-                Typing_env_extension.empty ())
-              t1 t2
-          in
-          List.rev t_rev
-        end
-
-      let standalone_extension t env =
-        let env =
-          Meet_env.create env
-            ~perm_left:(Name_permutation.create ())
-            ~perm_right:(Name_permutation.create ())
-        in
-        List.fold_left (fun extension ip ->
-            Typing_env_extension.meet env
-              extension (IP.standalone_extension ip))
-          (Typing_env_extension.empty ())
-          t
-
-      let introduce t env =
-        Typing_env.add_or_meet_env_extension env (standalone_extension t env)
-          (Typing_env.max_level env)
-
-      let add_or_meet_equations t env new_equations =
-        List.map (fun ip -> IP.add_or_meet_equations ip env new_equations) t
-
-      let free_names t =
-        let free_names, _bound_names =
-          List.fold_left (fun (free_names, bound_names) ip ->
-              let free_names =
-                Name_occurrences.union free_names
-                  (Name_occurrences.diff (IP.free_names ip) bound_names)
-              in
-              let bound_names =
-                Name_occurrences.union (IP.bound_names ip) bound_names
-              in
-              free_names, bound_names)
-            (Name_occurrences.create (), Name_occurrences.create ())
-            t
-        in
-        free_names
+      include T
     end
   end and Row_like : sig
     module Make
