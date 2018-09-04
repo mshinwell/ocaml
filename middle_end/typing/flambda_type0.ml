@@ -4415,6 +4415,8 @@ module Make (Expr : Expr_intf.S) = struct
           -> t
           -> unit
         val create
+          (* XXX This is problematic as [t], so maybe parameterise this whole
+             thing over the nested part. *)
            : ?nested:t
           -> Component.t Index.Map.t
           -> Typing_env_extension.t
