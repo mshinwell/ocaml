@@ -261,18 +261,6 @@ module type S = sig
         -> unit)
       -> unit
 
-    (** Cut off any portion of the given environment containing definitions
-        and/or equations at or after (deeper) the given scope level.
-
-        Such portion is returned as an environment extension; all names defined
-        in such extension will henceforth be treated as existentially bound.
-
-        If no such portion exists, an empty extension is returned. *)
-    val cut
-       : t
-      -> existential_if_defined_at_or_later_than:Scope_level.t
-      -> Typing_env_extension.t
-
     (** Adjust the domain of the given typing environment so that it only
         mentions names which are symbols, not variables. *)
     val restrict_to_symbols : t -> t
@@ -371,6 +359,18 @@ module type S = sig
     val empty : unit -> t
 
     val is_empty : t -> bool
+
+    (** Cut off any portion of the given environment containing definitions
+        and/or equations at or after (deeper) the given scope level.
+
+        Such portion is returned as an environment extension; all names defined
+        in such extension will henceforth be treated as existentially bound.
+
+        If no such portion exists, an empty extension is returned. *)
+    val create_from_cut
+       : Typing_env.t
+      -> existential_if_defined_at_or_later_than:Scope_level.t
+      -> t
 
     (** Add a definition of an existentially-bound name prior to all
         other entries in the given extension. *)

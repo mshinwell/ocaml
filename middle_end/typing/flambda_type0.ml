@@ -6573,28 +6573,46 @@ module Make (Expr : Expr_intf.S) = struct
       in
       add_or_meet_env_extension t env_extension scope_level
 
-    (* CR mshinwell: Consider moving to [Typing_env_extension]; then we
-       can make [Typing_env_extension.t] private. *)
-    let cut t ~existential_if_defined_at_or_later_than
-          : Typing_env_extension.t =
-      (* CR mshinwell: Add a split which only returns one map, the side we
-         would like. *)
-      let _before_cut_point, at_cut_point, after_cut_point =
-        Scope_level.Map.split existential_if_defined_at_or_later_than
-          t.levels_to_entries
+    (* CR mshinwell: Move to [Typing_env]? *)
+    let free_names_transitive env ty =
+      let original_ty = ty in
+      let all_names = ref (Name_occurrences.create ()) in
+      let rec loop to_follow =
+        all_names := Name_occurrences.union !all_names to_follow;
+        match
+          Name_occurrences.choose_and_remove_amongst_everything to_follow
+        with
+        | None -> ()
+        | Some (name, to_follow) ->
+          begin match name with
+          | Name name ->
+            let ty =
+              match Typing_env.find_exn env name with
+              | exception Not_found ->
+                Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
+                    transitively, of %a@ in environment@ %a"
+                  Name.print name
+                  Type_printers.print ty
+                  Typing_env.print env
+              | ty, _binding_type -> ty
+            in
+            let names = Type_free_names.free_names ty in
+            loop (Name_occurrences.union to_follow names)
+          | Continuation _ ->
+            Misc.fatal_errorf "Illegal name in type: %a"
+              Type_printers.print original_ty
+          end
       in
-      let at_or_after_cut_point =
-        match at_cut_point with
-        | None -> after_cut_point
-        | Some by_sublevel ->
-          Scope_level.Map.add existential_if_defined_at_or_later_than
-            by_sublevel after_cut_point
-      in
-      { first_definitions = [];
-        at_or_after_cut_point;
-        last_equations_rev = [];
-        cse = Flambda_primitive.With_fixed_value.Map.empty;
-      }
+      loop (Type_free_names.free_names ty);
+      !all_names
+
+    let free_names_transitive_list (t : t) (env : Typing_env.t) tys =
+      let scope_level = Scope_level.next (Typing_env.max_level env) in
+      let env = Typing_env.add_or_meet_env_extension env t scope_level in
+      List.fold_left (fun names ty ->
+          Name_occurrences.union names (free_names_transitive env ty))
+        (Name_occurrences.create ())
+        tys
   end and Typing_env_extension0 : sig
     type t = private {
       first_definitions : (Name.t * Flambda_types.t) list;
@@ -6603,7 +6621,29 @@ module Make (Expr : Expr_intf.S) = struct
       cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
     }
 
+    include Contains_names.S with type t := t
 
+    val empty : unit -> t
+
+    val is_empty : t -> bool
+
+    val create_for_cut
+       : at_or_after_cut_point:Typing_env.levels_to_entries
+      -> t
+
+    val meet
+       : Meet_env.t
+      -> t
+      -> t
+      -> t
+
+    val join
+       : Join_env.t
+      -> t
+      -> t
+      -> t
+
+    val diff : t -> Typing_env.t -> t
   end = struct
     type t = {
       first_definitions : (Name.t * Flambda_types.t) list;
@@ -6620,6 +6660,13 @@ module Make (Expr : Expr_intf.S) = struct
       }
 
     let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
+
+    let create_for_cut ~at_or_after_cut_point =
+      { first_definitions = [];
+        at_or_after_cut_point;
+        last_equations_rev = [];
+        cse = Flambda_primitive.With_fixed_value.Map.empty;
+      }
 
     let equal env t1 t2 =
       (* CR mshinwell: This should be improved *)
@@ -6833,144 +6880,6 @@ module Make (Expr : Expr_intf.S) = struct
           List.map (fun (name, _ty) -> name) last_equations_rev)
       in
       Name.Set.union from_at_or_after_cut_point from_last_equations_rev
-  end and Typing_env_extension : sig
-    type t
-
-    include Contains_names.S with type t := t
-
-    val invariant : t -> unit
-
-    val print : Format.formatter -> t -> unit
-
-    val print_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
-
-    val equal : Type_equality_env.t -> t -> t -> bool
-
-    val fast_equal : t -> t -> bool
-
-    val empty : unit -> t
-
-    val is_empty : t -> bool
-
-    val add_definition_at_beginning : t -> Name.t -> Flambda_types.t -> t
-
-    val add_equation : t -> Name.t -> Flambda_types.t -> t
-
-    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
-
-    val meet
-       : Meet_env.t
-      -> t
-      -> t
-      -> t
-
-    val join
-       : Join_env.t
-      -> t
-      -> t
-      -> t
-
-    val restrict_to_definitions : t -> t
-
-    val restrict_names_to_those_occurring_in_types
-       : t
-      -> Typing_env.t
-      -> Typing_env.t
-      -> Flambda_types.t list
-      -> t
-
-    val diff : t -> Typing_env.t -> t
-
-    val pattern_match : t -> f:(Typing_env_extension0.t -> 'a) -> 'a
-  end = struct
-    include Name_abstraction.Make (Bound_name_set) (T0)
-
-    let print_with_cache ~cache ppf
-          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
-             cse; } : t) =
-      let print_binding_list =
-        Format.pp_print_list ~pp_sep:Format.pp_print_space
-          (fun ppf (name, ty) ->
-            Format.fprintf ppf "@[(%a %a)@]"
-              Name.print name
-              (Type_printers.print_with_cache ~cache) ty)
-      in
-      Format.fprintf ppf
-        "@[<hov 1>(\
-            @[<hov 1>(first_definitions@ %a)@]@ \
-            @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
-            @[<hov 1>(last_equations_rev@ %a)@]@ \
-            @[<hov 1>(cse@ %a)@])@]"
-        print_binding_list first_definitions
-        (Typing_env.print_levels_to_entries_with_cache ~cache)
-          at_or_after_cut_point
-        print_binding_list last_equations_rev
-        (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
-
-    let print ppf t =
-      print_with_cache ~cache:(Printing_cache.create ()) ppf t
-
-    let fast_equal t1 t2 = (t1 == t2)
-
-    let equal env t1 t2 =
-      pattern_match_pair t1 t2 ~f:(fun _ t0_1 t0_2 ->
-        Typing_env_extension0.equal env t0_1 t0_2)
-
-    let invariant _t =
-      (* CR mshinwell: Work out what to do here.  Probably just a check that
-         the ordering is reasonable. *)
-      ()
-
-    let empty () =
-      create Name.Set.empty (T0.empty ())
-
-    let is_empty t =
-      pattern_match t ~f:(fun _ t0 -> T0.is_empty t0)
-
-    (* CR mshinwell: Move to [Typing_env]? *)
-    let free_names_transitive env ty =
-      let original_ty = ty in
-      let all_names = ref (Name_occurrences.create ()) in
-      let rec loop to_follow =
-        all_names := Name_occurrences.union !all_names to_follow;
-        match
-          Name_occurrences.choose_and_remove_amongst_everything to_follow
-        with
-        | None -> ()
-        | Some (name, to_follow) ->
-          begin match name with
-          | Name name ->
-            let ty =
-              match Typing_env.find_exn env name with
-              | exception Not_found ->
-                Misc.fatal_errorf "Unbound name %a whilst finding free names,@ \
-                    transitively, of %a@ in environment@ %a"
-                  Name.print name
-                  Type_printers.print ty
-                  Typing_env.print env
-              | ty, _binding_type -> ty
-            in
-            let names = Type_free_names.free_names ty in
-            loop (Name_occurrences.union to_follow names)
-          | Continuation _ ->
-            Misc.fatal_errorf "Illegal name in type: %a"
-              Type_printers.print original_ty
-          end
-      in
-      loop (Type_free_names.free_names ty);
-      !all_names
-
-    let free_names_transitive_list (t : t) (env : Typing_env.t) tys =
-      let scope_level = Scope_level.next (Typing_env.max_level env) in
-      let env = Typing_env.add_or_meet_env_extension env t scope_level in
-      List.fold_left (fun names ty ->
-          Name_occurrences.union names (free_names_transitive env ty))
-        (Name_occurrences.create ())
-        tys
 
     let restrict_to_names t allowed_names =
       let allowed_names = Name_occurrences.everything allowed_names in
@@ -7016,121 +6925,6 @@ module Make (Expr : Expr_intf.S) = struct
       in
       invariant t;
       t
-
-    let restrict_to_definitions t =
-      pattern_match_mapi t ~f:(fun defined_names t0 ->
-        T0.restrict_to_names t0 defined_names)
-
-    let restrict_names_to_those_occurring_in_types t env env_allowed_names tys =
-      let free_names = free_names_transitive_list t env tys in
-      let env_allowed_names = Typing_env.domain env_allowed_names in
-      let allowed_names = Name_occurrences.union free_names env_allowed_names in
-      restrict_to_names t allowed_names
-
-    type fold_info =
-      | Definition_in_extension of Flambda_types.t
-      | Equation of Flambda_types.t
-
-    let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
-      let acc =
-        List.fold_left (fun acc (name, ty) ->
-            f acc name (Definition_in_extension ty))
-          init
-          (List.rev t.first_definitions)
-      in
-      let acc =
-        Scope_level.Map.fold (fun _level by_sublevel acc ->
-            Scope_level.Sublevel.Map.fold
-              (fun _sublevel
-                   (name, (entry : Typing_env.typing_environment_entry))
-                   acc ->
-                match entry with
-                | Definition ty ->
-                  f acc name (Definition_in_extension ty)
-                | Equation ty ->
-                  f acc name (Equation ty)
-                | CSE _ -> acc)
-              by_sublevel
-              acc)
-          t.at_or_after_cut_point
-          acc
-      in
-      List.fold_left (fun acc (name, ty) ->
-          f acc name (Equation ty))
-        acc
-        t.last_equations_rev
-
-    let add_definition_at_beginning t name ty =
-      let first_definitions = (name, ty) :: t.first_definitions in
-      { t with
-        first_definitions;
-      }
-
-    (* CR mshinwell: Invariant check for increased preciseness? *)
-    let add_equation t name ty =
-      let last_equations_rev = (name, ty) :: t.last_equations_rev in
-      { t with
-        last_equations_rev;
-      }
-
-    let add_cse t name prim =
-      let cse =
-        match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
-        | exception Not_found ->
-          Flambda_primitive.With_fixed_value.Map.add prim name t.cse
-        | _name -> t.cse
-      in
-      { t with cse; }
-
-    (* CR mshinwell: These [find] operations need serious optimisation.
-       The tricky thing is keeping a "names_to_types" map for the
-       "at_or_after_cut_point" map without making [cut] expensive. *)
-
-    let find_first_definitions_exn t name =
-      List.assoc name (List.rev t.first_definitions)
-
-    let find_at_or_after_cut_point_exn t name =
-      let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
-      let flattened_sublevels_rev =
-        List.map (fun (_scope_level, by_sublevel) ->
-            List.rev (List.map (fun (_sublevel, binding) -> binding)
-              (Scope_level.Sublevel.Map.bindings by_sublevel)))
-          bindings
-      in
-      let flattened_levels_rev =
-        List.rev (List.concat flattened_sublevels_rev)
-      in
-      let without_cse =
-        Misc.Stdlib.List.filter_map
-          (fun (name, (entry : Typing_env.typing_environment_entry)) ->
-            match entry with
-            | Definition ty | Equation ty -> Some (name, ty)
-            | CSE _ -> None)
-          flattened_levels_rev
-      in
-      List.assoc name without_cse
-
-    let find_last_equations_rev_exn t name =
-      List.assoc name t.last_equations_rev
-
-    let find_opt t name =
-      match find_last_equations_rev_exn t name with
-      | ty -> Some ty
-      | exception Not_found ->
-        match find_at_or_after_cut_point_exn t name with
-        | ty -> Some ty
-        | exception Not_found ->
-          match find_first_definitions_exn t name with
-          | ty -> Some ty
-          | exception Not_found -> None
-
-    let find t name =
-      match find_opt t name with
-      | Some ty -> ty
-      | None ->
-        Misc.fatal_errorf "Unbound name %a in@ %a"
-          Name.print name
-          print t
 
     let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
@@ -7293,6 +7087,251 @@ module Make (Expr : Expr_intf.S) = struct
       in
       restrict_to_names t
         (Name_occurrences.create_from_set_in_types names_more_precise)
+  end and Typing_env_extension : sig
+    type t
+
+    include Contains_names.S with type t := t
+
+    val invariant : t -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val equal : Type_equality_env.t -> t -> t -> bool
+
+    val fast_equal : t -> t -> bool
+
+    val empty : unit -> t
+
+    val is_empty : t -> bool
+
+    val create_from_cut
+       : Typing_env.t
+      -> existential_if_defined_at_or_later_than:Scope_level.t
+      -> t
+
+    val add_definition_at_beginning : t -> Name.t -> Flambda_types.t -> t
+
+    val add_equation : t -> Name.t -> Flambda_types.t -> t
+
+    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
+
+    val meet
+       : Meet_env.t
+      -> t
+      -> t
+      -> t
+
+    val join
+       : Join_env.t
+      -> t
+      -> t
+      -> t
+
+    val restrict_to_definitions : t -> t
+
+    val restrict_names_to_those_occurring_in_types
+       : t
+      -> Typing_env.t
+      -> Typing_env.t
+      -> Flambda_types.t list
+      -> t
+
+    val diff : t -> Typing_env.t -> t
+
+    val pattern_match : t -> f:(Typing_env_extension0.t -> 'a) -> 'a
+  end = struct
+    (* CR mshinwell: Move [Typing_env_extension0] into here? *)
+    module T0 = Typing_env_extension0
+
+    include Name_abstraction.Make (Bound_name_set) (T0)
+
+    let print_with_cache ~cache ppf
+          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+             cse; } : t) =
+      let print_binding_list =
+        Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (fun ppf (name, ty) ->
+            Format.fprintf ppf "@[(%a %a)@]"
+              Name.print name
+              (Type_printers.print_with_cache ~cache) ty)
+      in
+      Format.fprintf ppf
+        "@[<hov 1>(\
+            @[<hov 1>(first_definitions@ %a)@]@ \
+            @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
+            @[<hov 1>(last_equations_rev@ %a)@]@ \
+            @[<hov 1>(cse@ %a)@])@]"
+        print_binding_list first_definitions
+        (Typing_env.print_levels_to_entries_with_cache ~cache)
+          at_or_after_cut_point
+        print_binding_list last_equations_rev
+        (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+
+    let print ppf t =
+      print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+    let fast_equal t1 t2 = (t1 == t2)
+
+    let equal env t1 t2 =
+      pattern_match_pair t1 t2 ~f:(fun _ t0_1 t0_2 ->
+        Typing_env_extension0.equal env t0_1 t0_2)
+
+    let invariant _t =
+      (* CR mshinwell: Work out what to do here.  Probably just a check that
+         the ordering is reasonable. *)
+      ()
+
+    let empty () =
+      create Name.Set.empty (T0.empty ())
+
+    let is_empty t =
+      pattern_match t ~f:(fun _ t0 -> T0.is_empty t0)
+
+    let create_from_cut (env : Typing_env.t)
+          ~existential_if_defined_at_or_later_than : t =
+      (* CR mshinwell: Add a split which only returns one map, the side we
+         would like. *)
+      let _before_cut_point, at_cut_point, after_cut_point =
+        Scope_level.Map.split existential_if_defined_at_or_later_than
+          env.levels_to_entries
+      in
+      let at_or_after_cut_point =
+        match at_cut_point with
+        | None -> after_cut_point
+        | Some by_sublevel ->
+          Scope_level.Map.add existential_if_defined_at_or_later_than
+            by_sublevel after_cut_point
+      in
+      let t0 = T0.create_for_cut ~at_or_after_cut_point in
+      let defined_names = T0.defined_names t0 in
+      create defined_names t0
+
+    let restrict_to_definitions t =
+      pattern_match_mapi t ~f:(fun defined_names t0 ->
+        T0.restrict_to_names t0 defined_names)
+
+    let restrict_names_to_those_occurring_in_types t env env_allowed_names tys =
+      let free_names = free_names_transitive_list t env tys in
+      let env_allowed_names = Typing_env.domain env_allowed_names in
+      let allowed_names = Name_occurrences.union free_names env_allowed_names in
+      restrict_to_names t allowed_names
+
+    type fold_info =
+      | Definition_in_extension of Flambda_types.t
+      | Equation of Flambda_types.t
+
+    let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
+      let acc =
+        List.fold_left (fun acc (name, ty) ->
+            f acc name (Definition_in_extension ty))
+          init
+          (List.rev t.first_definitions)
+      in
+      let acc =
+        Scope_level.Map.fold (fun _level by_sublevel acc ->
+            Scope_level.Sublevel.Map.fold
+              (fun _sublevel
+                   (name, (entry : Typing_env.typing_environment_entry))
+                   acc ->
+                match entry with
+                | Definition ty ->
+                  f acc name (Definition_in_extension ty)
+                | Equation ty ->
+                  f acc name (Equation ty)
+                | CSE _ -> acc)
+              by_sublevel
+              acc)
+          t.at_or_after_cut_point
+          acc
+      in
+      List.fold_left (fun acc (name, ty) ->
+          f acc name (Equation ty))
+        acc
+        t.last_equations_rev
+
+    let add_definition_at_beginning t name ty =
+      let first_definitions = (name, ty) :: t.first_definitions in
+      { t with
+        first_definitions;
+      }
+
+    (* CR mshinwell: Invariant check for increased preciseness? *)
+    let add_equation t name ty =
+      let last_equations_rev = (name, ty) :: t.last_equations_rev in
+      { t with
+        last_equations_rev;
+      }
+
+    let add_cse t name prim =
+      let cse =
+        match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
+        | exception Not_found ->
+          Flambda_primitive.With_fixed_value.Map.add prim name t.cse
+        | _name -> t.cse
+      in
+      { t with cse; }
+
+    (* CR mshinwell: These [find] operations need serious optimisation.
+       The tricky thing is keeping a "names_to_types" map for the
+       "at_or_after_cut_point" map without making [cut] expensive. *)
+
+    let find_first_definitions_exn t name =
+      List.assoc name (List.rev t.first_definitions)
+
+    let find_at_or_after_cut_point_exn t name =
+      let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
+      let flattened_sublevels_rev =
+        List.map (fun (_scope_level, by_sublevel) ->
+            List.rev (List.map (fun (_sublevel, binding) -> binding)
+              (Scope_level.Sublevel.Map.bindings by_sublevel)))
+          bindings
+      in
+      let flattened_levels_rev =
+        List.rev (List.concat flattened_sublevels_rev)
+      in
+      let without_cse =
+        Misc.Stdlib.List.filter_map
+          (fun (name, (entry : Typing_env.typing_environment_entry)) ->
+            match entry with
+            | Definition ty | Equation ty -> Some (name, ty)
+            | CSE _ -> None)
+          flattened_levels_rev
+      in
+      List.assoc name without_cse
+
+    let find_last_equations_rev_exn t name =
+      List.assoc name t.last_equations_rev
+
+    let find_opt t name =
+      match find_last_equations_rev_exn t name with
+      | ty -> Some ty
+      | exception Not_found ->
+        match find_at_or_after_cut_point_exn t name with
+        | ty -> Some ty
+        | exception Not_found ->
+          match find_first_definitions_exn t name with
+          | ty -> Some ty
+          | exception Not_found -> None
+
+    let find t name =
+      match find_opt t name with
+      | Some ty -> ty
+      | None ->
+        Misc.fatal_errorf "Unbound name %a in@ %a"
+          Name.print name
+          print t
+
+    let diff t env =
+      pattern_match t ~f:(fun _ t0 ->
+        let t0 = T0.diff t0 env in
+        let defined_names = T0.defined_names t0 in
+        create defined_names t0)
   end
 
   include Flambda_type0_core
