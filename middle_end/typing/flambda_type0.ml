@@ -568,6 +568,10 @@ module Make (Expr : Expr_intf.S) = struct
       let free_names _t = Name_occurrences.create ()
 
       let apply_name_permutation t _perm = t
+
+      (* CR mshinwell: Add [Var_within_closure.rename] *)
+      let rename t =
+        Var_within_closure.wrap (Variable.rename (Var_within_closure.unwrap t))
     end
 
     module RP =
@@ -4100,7 +4104,13 @@ module Make (Expr : Expr_intf.S) = struct
       end) =
     struct
       module rec T0 : sig
-        include Contains_names.S
+        type t = {
+          components_by_index : Component.t Index.Map.t;
+          env_extension : Typing_env_extension.t;
+          nested : T.t option;
+        }
+
+        include Contains_names.S with type t := t
 
         val invariant : t -> unit
         val print : Format.formatter -> t -> unit
@@ -4109,22 +4119,14 @@ module Make (Expr : Expr_intf.S) = struct
           -> Format.formatter
           -> t
           -> unit
-        val create
-           : ?nested:T.t
-          -> Component.t Index.Map.t
-          -> Typing_env_extension.t
-          -> t
         val equal : Type_equality_env.t -> t -> t -> bool
         val meet
            : Meet_env.t
           -> t
           -> t
-          -> (t * Typing_env_extension.t) Or_bottom.t
-        val join : Join_env.t -> t -> t -> t
-        val standalone_extension
-           : t
-          -> Typing_env.t
-          -> Typing_env_extension.t
+          -> (t * Typing_env_extension.t * Component.Set.t) option Or_bottom.t
+        val join : Join_env.t -> t -> t -> (t * Component.Set.t) option
+        val standalone_extension : t -> Typing_env_extension.t
         val introduce : t -> Typing_env.t -> Typing_env.t
         val add_or_meet_equations
            : t
@@ -4297,8 +4299,10 @@ module Make (Expr : Expr_intf.S) = struct
             result_components
 
         let meet env t1 t2 : _ Or_bottom.t =
+          (* CR mshinwell: Use a proper type instead of "option" for the return
+             value? *)
           if Meet_env.shortcut_precondition env && t1 == t2 then
-            Ok (t1, Typing_env_extension.empty (), None)
+            Ok None
           else
             let indexes = Index.Set.inter (indexes t1) (indexes t2) in
             if Index.Set.is_empty indexes then Bottom
@@ -4337,7 +4341,7 @@ module Make (Expr : Expr_intf.S) = struct
                   }
                 in
                 let env_extension = Typing_env_extension.empty () in
-                Ok (t, env_extension, Some result_components)
+                Ok (Some (t, env_extension, result_components))
               | Ok (Some (nested, _env_extension)) ->
                 (* CR mshinwell: _env_extension should always be empty, but
                    this seems like a wart *)
@@ -4348,11 +4352,14 @@ module Make (Expr : Expr_intf.S) = struct
                   }
                 in
                 let env_extension = Typing_env_extension.empty () in
-                Ok (t, env_extension, Some result_components)
+                Ok (Some (t, env_extension, result_components))
 
         let join env t1 t2 =
+          (* CR mshinwell: Same comment as above re. return value.
+             Or alternatively, maybe pass the components set into this
+             function? *)
           if Join_env.shortcut_precondition env && t1 == t2 then
-            t1, env, t1.env_extension, t1.env_extension, None
+            None
           else
             let indexes = Index.Set.union (indexes t1) (indexes t2) in
             let env, env_extension1, env_extension2, components_by_index,
@@ -4378,7 +4385,7 @@ module Make (Expr : Expr_intf.S) = struct
                 nested;
               }
             in
-            t, env, env_extension1, env_extension2, Some result_components
+            Some (t, result_components)
 
         let standalone_extension t =
           Index.Map.fold (fun _index component env_extension ->
@@ -4408,7 +4415,7 @@ module Make (Expr : Expr_intf.S) = struct
           -> t
           -> unit
         val create
-           : ?nested:t option
+           : ?nested:t
           -> Component.t Index.Map.t
           -> Typing_env_extension.t
           -> t
@@ -4420,10 +4427,7 @@ module Make (Expr : Expr_intf.S) = struct
           -> t
           -> (t * Typing_env_extension.t) Or_bottom.t
         val join : Join_env.t -> t -> t -> t
-        val standalone_extension
-           : t
-          -> Typing_env.t
-          -> Typing_env_extension.t
+        val standalone_extension : t -> Typing_env_extension.t
         val introduce : t -> Typing_env.t -> Typing_env.t
         val add_or_meet_equations
            : t
@@ -4435,6 +4439,14 @@ module Make (Expr : Expr_intf.S) = struct
            equipping sets with permutation actions. *)
         module Component_set = struct
           type t = Component.Set.t
+
+          let print = Component.Set.print
+
+          let rename t =
+            Component.Set.fold (fun component result ->
+                Component.Set.add (Component.rename component) result)
+              t
+              Component.Set.empty
 
           let free_names t =
             Component.Set.fold (fun component result ->
@@ -4451,11 +4463,35 @@ module Make (Expr : Expr_intf.S) = struct
           let permutation_to_swap t1 t2 =
             if Component.Set.cardinal t1 <> Component.Set.cardinal t2
             then begin
-              Misc.fatal_error "Mismatched cardinality in binding position"
+              Misc.fatal_error "Mismatched cardinality in binding position (1)"
             end else begin
               let components1 = Component.Set.elements t1 in
               let components2 = Component.Set.elements t2 in
-              ...
+              let free_names component =
+                Bindable_name.Set.elements (Name_occurrences.everything (
+                  Component.free_names component))
+              in
+              List.fold_left2 (fun perm component1 component2 ->
+                  let free_names1 = free_names component1 in
+                  let free_names2 = free_names component2 in
+                  if List.compare_lengths free_names1 free_names2 <> 0
+                  then begin
+                    Misc.fatal_error "Mismatched cardinality in binding \
+                      position (2)"
+                  end else begin
+                    List.fold_left2
+                      (fun perm (free_name1 : Bindable_name.t)
+                           (free_name2 : Bindable_name.t) ->
+                        match free_name1, free_name2 with
+                        | Name free_name1, Name free_name2 ->
+                          Name_permutation.add_name perm free_name1 free_name2
+                        | _, _ ->
+                          Misc.fatal_error "Only expected [Name]s")
+                      perm
+                      free_names1 free_names2
+                  end)
+                (Name_permutation.create ())
+                components1 components2
             end
         end
 
@@ -4463,7 +4499,7 @@ module Make (Expr : Expr_intf.S) = struct
 
         let create_abstraction = create
 
-        let create components_by_index env_extension nested : t =
+        let create ?nested components_by_index env_extension : t =
           let components = Index.Map.data components_by_index in
           let component_set = Component.Set.of_list components in
           if List.length components <> Component.Set.cardinal component_set
@@ -4478,7 +4514,7 @@ module Make (Expr : Expr_intf.S) = struct
             }
           in
           T0.invariant t0;
-          A.create component_set t0
+          create component_set t0
 
         let create_bottom () =
           create Index.Map.empty (Typing_env_extension.empty ())
@@ -4486,23 +4522,25 @@ module Make (Expr : Expr_intf.S) = struct
         let invariant t =
           pattern_match t ~f:(fun _ t0 -> T0.invariant t0)
 
-        let equal t1 t2 =
+        let equal env t1 t2 =
           pattern_match_pair t1 t2 ~f:(fun components t0_1 t0_2 ->
-            T0.equal t0_1 t0_2)
+            T0.equal env t0_1 t0_2)
 
         let meet env t1 t2 =
           pattern_match t1 ~f:(fun components1 t0_1 ->
-            pattern_match t2 ~f:(fun components2 t0_2 ->
+            pattern_match t2 ~f:(fun components2 t0_2 : _ Or_bottom.t ->
               match T0.meet env t0_1 t0_2 with
               | Bottom -> Bottom
-              | Ok (t0, env_extension, Some components) ->
+              | Ok None -> Ok (t1, Typing_env_extension.empty ())
+              | Ok (Some (t0, env_extension, components)) ->
                 Ok (create_abstraction components t0, env_extension)))
 
         let join env t1 t2 =
           pattern_match t1 ~f:(fun components1 t0_1 ->
             pattern_match t2 ~f:(fun components2 t0_2 ->
-              let t0 = T0.join env t0_1 t0_2 in
-              create_abstraction components t0))
+              match T0.join env t0_1 t0_2 with
+              | None -> create_abstraction components1 t0_1
+              | Some (t0, components) -> create_abstraction components t0))
 
         let standalone_extension t =
           pattern_match t ~f:(fun _ t0 -> T0.standalone_extension t0)

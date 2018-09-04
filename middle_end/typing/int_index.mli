@@ -22,3 +22,4 @@
 
 include module type of struct include Targetint.OCaml end
 include Contains_names.S with type t := t
+val rename : t -> t

@@ -3,4 +3,6 @@ module type S = sig
 
   include Map.With_set with type t := t
   include Contains_names.S with type t := t
+
+  val rename : t -> t
 end

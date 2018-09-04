@@ -21,3 +21,5 @@ include Targetint.OCaml
 let free_names _t = Name_occurrences.create ()
 
 let apply_name_permutation t _perm = t
+
+let rename t = t
