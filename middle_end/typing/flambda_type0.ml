@@ -7277,56 +7277,6 @@ module Make (Expr : Expr_intf.S) = struct
       in
       { t with cse; }
 
-    (* CR mshinwell: These [find] operations need serious optimisation.
-       The tricky thing is keeping a "names_to_types" map for the
-       "at_or_after_cut_point" map without making [cut] expensive. *)
-
-    let find_first_definitions_exn t name =
-      List.assoc name (List.rev t.first_definitions)
-
-    let find_at_or_after_cut_point_exn t name =
-      let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
-      let flattened_sublevels_rev =
-        List.map (fun (_scope_level, by_sublevel) ->
-            List.rev (List.map (fun (_sublevel, binding) -> binding)
-              (Scope_level.Sublevel.Map.bindings by_sublevel)))
-          bindings
-      in
-      let flattened_levels_rev =
-        List.rev (List.concat flattened_sublevels_rev)
-      in
-      let without_cse =
-        Misc.Stdlib.List.filter_map
-          (fun (name, (entry : Typing_env.typing_environment_entry)) ->
-            match entry with
-            | Definition ty | Equation ty -> Some (name, ty)
-            | CSE _ -> None)
-          flattened_levels_rev
-      in
-      List.assoc name without_cse
-
-    let find_last_equations_rev_exn t name =
-      List.assoc name t.last_equations_rev
-
-    let find_opt t name =
-      match find_last_equations_rev_exn t name with
-      | ty -> Some ty
-      | exception Not_found ->
-        match find_at_or_after_cut_point_exn t name with
-        | ty -> Some ty
-        | exception Not_found ->
-          match find_first_definitions_exn t name with
-          | ty -> Some ty
-          | exception Not_found -> None
-
-    let find t name =
-      match find_opt t name with
-      | Some ty -> ty
-      | None ->
-        Misc.fatal_errorf "Unbound name %a in@ %a"
-          Name.print name
-          print t
-
     let diff t env =
       pattern_match t ~f:(fun _ t0 ->
         let t0 = T0.diff t0 env in
