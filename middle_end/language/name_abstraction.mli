@@ -43,6 +43,10 @@ module Make (Name : Name) (Term : Term) : sig
   (** Concretion of an abstraction at a fresh name. *)
   val pattern_match : t -> f:(Name.t -> Term.t -> 'a) -> 'a
 
+  (** Concretion of an abstraction at a fresh name followed by reconstruction
+      of the abstraction. *)
+  val pattern_match_mapi : t -> f:(Name.t -> Term.t -> Term.t) -> Term.t
+
   (** Concretion of a pair of abstractions at the same fresh name(s). *)
   val pattern_match_pair : t -> t -> f:(Name.t -> Term.t -> Term.t -> 'a) -> 'a
 end

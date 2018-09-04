@@ -1479,7 +1479,8 @@ end and Let : sig
 
   val no_effects_or_coeffects : t -> bool
 end = struct
-  module Bound_var_and_body = Name_abstraction.Make (Bound_variable) (Expr)
+  module Bound_var_and_body =
+    Name_abstraction.Make (Bound_variable) (Expr_with_permutation)
 
   type t = {
     bound_var_and_body : Bound_var_and_body.t;
@@ -1495,6 +1496,10 @@ end = struct
       kind;
       defining_expr;
     }
+
+  let pattern_match t ~f =
+    Bound_var_and_body.pattern_match t.bound_var_and_body
+      ~f:(fun bound_var body -> f ~bound_var ~body)
 
   let invariant env t =
     let module E = Invariant_env in
@@ -1547,10 +1552,6 @@ end = struct
 
   let kind t = t.kind
   let defining_expr t = t.defining_expr
-
-  let pattern_match t ~f =
-    Bound_var_and_body.pattern_match t.bound_var_and_body
-      ~f:(fun bound_var body -> f ~bound_var ~body)
 
   let free_names ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
     pattern_match t ~f:(fun ~bound_var ~body ->

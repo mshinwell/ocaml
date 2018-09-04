@@ -50,6 +50,13 @@ module Make (Name : Name) (Term : Term) = struct
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
 
+  let pattern_match_mapi (name, term) ~f =
+    let fresh_name = Name.rename name in
+    let perm = Name.permutation_to_swap name fresh_name in
+    let fresh_term = Term.apply_name_permutation term perm in
+    let new_term = f fresh_name fresh_term in
+    fresh_name, new_term
+
   let pattern_match_pair (name0, term0) (name1, term1) ~f =
     let fresh_name = Name.rename name0 in
     let perm0 = Name.permutation_to_swap name0 fresh_name in
