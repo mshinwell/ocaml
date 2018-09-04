@@ -6613,480 +6613,6 @@ module Make (Expr : Expr_intf.S) = struct
           Name_occurrences.union names (free_names_transitive env ty))
         (Name_occurrences.create ())
         tys
-  end and Typing_env_extension0 : sig
-    type t = private {
-      first_definitions : (Name.t * Flambda_types.t) list;
-      at_or_after_cut_point : Typing_env.levels_to_entries;
-      last_equations_rev : (Name.t * Flambda_types.t) list;
-      cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
-    }
-
-    include Contains_names.S with type t := t
-
-    val empty : unit -> t
-
-    val is_empty : t -> bool
-
-    val create_for_cut
-       : at_or_after_cut_point:Typing_env.levels_to_entries
-      -> t
-
-    val meet
-       : Meet_env.t
-      -> t
-      -> t
-      -> t
-
-    val join
-       : Join_env.t
-      -> t
-      -> t
-      -> t
-
-    val diff : t -> Typing_env.t -> t
-  end = struct
-    type t = {
-      first_definitions : (Name.t * Flambda_types.t) list;
-      at_or_after_cut_point : Typing_env.levels_to_entries;
-      last_equations_rev : (Name.t * Flambda_types.t) list;
-      cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
-    }
-
-    let empty () =
-      { first_definitions = [];
-        at_or_after_cut_point = Scope_level.Map.empty;
-        last_equations_rev = [];
-        cse = Flambda_primitive.With_fixed_value.Map.empty;
-      }
-
-    let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
-
-    let create_for_cut ~at_or_after_cut_point =
-      { first_definitions = [];
-        at_or_after_cut_point;
-        last_equations_rev = [];
-        cse = Flambda_primitive.With_fixed_value.Map.empty;
-      }
-
-    let equal env t1 t2 =
-      (* CR mshinwell: This should be improved *)
-      let equal_names_and_types (name1, ty1) (name2, ty2) =
-        Name.equal name1 name2
-          && Type_equality.equal_with_env env ty1 ty2
-      in
-      Misc.Stdlib.List.equal equal_names_and_types
-          t1.first_definitions t2.first_definitions
-        && Scope_level.Map.equal
-             (Scope_level.Sublevel.Map.equal
-               (fun (name1, (entry1 : Typing_env.typing_environment_entry))
-                    (name2, (entry2 : Typing_env.typing_environment_entry)) ->
-                 Name.equal name1 name2
-                   && match entry1, entry2 with
-                      | Definition ty1, Definition ty2 ->
-                        Type_equality.equal_with_env env ty1 ty2
-                      | Equation ty1, Equation ty2 ->
-                        Type_equality.equal_with_env env ty1 ty2
-                      | CSE prim1, CSE prim2 ->
-                        Flambda_primitive.With_fixed_value.equal prim1 prim2
-                      | _, _ -> false))
-             t1.at_or_after_cut_point
-             t2.at_or_after_cut_point
-        && Misc.Stdlib.List.equal equal_names_and_types
-             t1.last_equations_rev t2.last_equations_rev
-
-    let apply_permutation_typing_environment_entry
-          (entry : Typing_env.typing_environment_entry) perm
-          : Typing_env.typing_environment_entry =
-      match entry with
-      | Definition ty ->
-        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-        if ty == ty' then entry
-        else Definition ty'
-      | Equation ty ->
-        let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-        if ty == ty' then entry
-        else Equation ty'
-      | CSE prim ->
-        let prim' =
-          Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
-        in
-        if prim == prim' then entry
-        else CSE prim'
-
-    let apply_name_permutation
-          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
-             cse; } as t)
-          perm : t =
-      let first_definitions_changed = ref false in
-      let first_definitions' =
-        List.map (fun (name, t) ->
-            let name' = Name_permutation.apply_name perm name in
-            let t' = Flambda_type0_core.apply_name_permutation t perm in
-            if (not (name == name')) && (not (t == t')) then begin
-              first_definitions_changed := true
-            end;
-            name', t')
-          first_definitions
-      in
-      let at_or_after_cut_point' =
-        Scope_level.Map.map_sharing (fun by_sublevel ->
-            Scope_level.Sublevel.Map.map_sharing
-              (fun ((name, (entry : Typing_env.typing_environment_entry))
-                    as datum) ->
-                let name' = Name_permutation.apply_name perm name in
-                let entry' =
-                  apply_permutation_typing_environment_entry entry perm
-                in
-                if name == name' && entry == entry' then datum
-                else name', entry')
-              by_sublevel)
-          at_or_after_cut_point
-      in
-      let last_equations_rev_changed = ref false in
-      let last_equations_rev' =
-        List.map (fun (name, ty) ->
-            let name' = Name_permutation.apply_name perm name in
-            let ty' = Flambda_type0_core.apply_name_permutation ty perm in
-            if (not (name == name')) || (not (ty == ty')) then begin
-              last_equations_rev_changed := true
-            end;
-            name', ty')
-          last_equations_rev
-      in
-      let cse_changed = ref false in
-      let cse' =
-        Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
-            let simple' = Simple.apply_name_permutation simple perm in
-            let prim' =
-              Flambda_primitive.With_fixed_value.apply_name_permutation prim
-                perm
-            in
-            if (not (simple == simple')) || (not (prim == prim')) then begin
-              cse_changed := true
-            end;
-            Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
-          cse
-          Flambda_primitive.With_fixed_value.Map.empty
-      in
-      if (not !first_definitions_changed)
-        && at_or_after_cut_point == at_or_after_cut_point'
-        && (not !last_equations_rev_changed)
-        && (not !cse_changed)
-      then t
-      else 
-        { first_definitions = first_definitions';
-          at_or_after_cut_point = at_or_after_cut_point';
-          last_equations_rev = last_equations_rev';
-          cse = cse';
-        }
-
-    let free_names
-          { first_definitions; at_or_after_cut_point; last_equations_rev;
-            cse; } =
-      let free_names_first_definitions =
-        List.fold_left (fun acc (_name, ty) ->
-            Name.Set.union acc (
-              Name_occurrences.everything_must_only_be_names (
-                Type_free_names.free_names ty)))
-          Name.Set.empty
-          first_definitions
-      in
-      let free_names_at_or_after_cut_point =
-        Scope_level.Map.fold (fun _level by_sublevel acc ->
-            Scope_level.Sublevel.Map.fold
-              (fun _sublevel
-                   (name, (entry : Typing_env.typing_environment_entry))
-                   acc ->
-                match entry with
-                | Definition ty ->
-                  Name.Set.union acc (
-                    Name_occurrences.everything_must_only_be_names (
-                      Type_free_names.free_names ty))
-                | Equation ty ->
-                  Name.Set.add name (
-                    Name.Set.union acc (
-                      Name_occurrences.everything_must_only_be_names (
-                        Type_free_names.free_names ty)))
-                | CSE prim ->
-                  Name.Set.union acc (
-                    Name_occurrences.everything_must_only_be_names (
-                      (Flambda_primitive.With_fixed_value.free_names prim))))
-              by_sublevel
-              acc)
-          at_or_after_cut_point
-          free_names_first_definitions
-      in
-      let free_names_last_equations_rev =
-        List.fold_left (fun acc (_name, ty) ->
-            Name.Set.union acc (
-              Name_occurrences.everything_must_only_be_names (
-                Type_free_names.free_names ty)))
-          free_names_at_or_after_cut_point
-          last_equations_rev
-      in
-      let free_names =
-        Flambda_primitive.With_fixed_value.Map.fold
-          (fun prim (simple : Simple.t) acc ->
-            match simple with
-            | Const _ | Discriminant _ -> acc
-            | Name name ->
-              let acc =
-                Name.Set.union acc
-                  (Name_occurrences.everything_must_only_be_names (
-                    (Flambda_primitive.With_fixed_value.free_names prim)))
-              in
-              Name.Set.add name acc)
-          cse
-          free_names_last_equations_rev
-      in
-      Name_occurrences.create_from_set_in_types free_names
-
-    let defined_names t =
-      let from_first_definitions =
-        Name.Set.of_list (
-          List.map (fun (name, _ty) -> name) t.first_definitions)
-      in
-      Scope_level.Map.fold (fun _level by_sublevel defined_names ->
-          Scope_level.Sublevel.Map.fold
-            (fun _sublevel (name, (entry : Typing_env.typing_environment_entry))
-                 defined_names ->
-              match entry with
-              | Definition _ -> Name.Set.add name defined_names
-              | Equation _ | CSE _ -> defined_names)
-            by_sublevel
-            defined_names)
-        t.at_or_after_cut_point
-        from_first_definitions
-
-    let equations_domain
-          { first_definitions = _; at_or_after_cut_point;
-            last_equations_rev; cse = _; } =
-      let from_at_or_after_cut_point =
-        Scope_level.Map.fold (fun _level by_sublevel domain ->
-            Scope_level.Sublevel.Map.fold
-              (fun _sublevel
-                   (name, (entry : Typing_env.typing_environment_entry))
-                   domain ->
-                match entry with
-                | Definition _ -> domain
-                | Equation _ | CSE _ -> Name.Set.add name domain)
-              by_sublevel
-              domain)
-          at_or_after_cut_point
-          Name.Set.empty
-      in
-      let from_last_equations_rev =
-        Name.Set.of_list (
-          List.map (fun (name, _ty) -> name) last_equations_rev)
-      in
-      Name.Set.union from_at_or_after_cut_point from_last_equations_rev
-
-    let restrict_to_names t allowed_names =
-      let allowed_names = Name_occurrences.everything allowed_names in
-      let first_definitions =
-        List.filter (fun (name, _ty) ->
-            Bindable_name.Set.mem (Name name) allowed_names)
-          t.first_definitions
-      in
-      let at_or_after_cut_point =
-        Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
-            let by_sublevel =
-              Scope_level.Sublevel.Map.filter_map
-                (fun _sublevel ((name, _) as entry) ->
-                  if Bindable_name.Set.mem (Name name) allowed_names then
-                    Some entry
-                  else
-                    None)
-              by_sublevel
-            in
-            if Scope_level.Sublevel.Map.is_empty by_sublevel then None
-            else Some by_sublevel)
-          t.at_or_after_cut_point
-      in
-      let last_equations_rev =
-        List.filter (fun (name, _ty) ->
-            Bindable_name.Set.mem (Name name) allowed_names)
-          t.last_equations_rev
-      in
-      let cse =
-        Flambda_primitive.With_fixed_value.Map.filter
-          (fun _prim (simple : Simple.t) ->
-            match simple with
-            | Name name -> Bindable_name.Set.mem (Name name) allowed_names
-            | Const _ | Discriminant _ -> true)
-          t.cse
-      in
-      let t =
-        { first_definitions;
-          at_or_after_cut_point;
-          last_equations_rev;
-          cse;
-        }
-      in
-      invariant t;
-      t
-
-    let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
-      if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_empty t1 then t2
-      else if is_empty t2 then t1
-      else
-        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-        let env = Meet_env.clear_name_permutations env in
-        let scope_level =
-          Scope_level.next (Typing_env.max_level (Meet_env.env env))
-        in
-        let env =
-          Meet_env.with_env env (fun env ->
-            Typing_env.add_or_meet_env_extension env t1 scope_level)
-        in
-        let env =
-          Meet_env.with_env env (fun env ->
-            Typing_env.add_or_meet_env_extension env t2 scope_level)
-        in
-        Typing_env.cut (Meet_env.env env)
-          ~existential_if_defined_at_or_later_than:scope_level
-
-    let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
-      if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_empty t1 then empty ()
-      else if is_empty t2 then empty ()
-      else
-        let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-        let env = Join_env.clear_name_permutations env in
-        let env =
-          Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
-        in
-        let names_in_join =
-          let equations_in_t1_on_env = free_names t1 in
-          let equations_in_t2_on_env = free_names t2 in
-          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
-        in
-        let t =
-          Name.Set.fold (fun name t ->
-              let ty1 = find t1 name in
-              let ty2 = find t2 name in
-              let join_ty = Both_meet_and_join.join env ty1 ty2 in
-              add_equation t name join_ty)
-            names_in_join
-            (empty ())
-        in
-        let preserved_cse_equations t =
-          (* CR-someday mshinwell: This could be improved to preserve some of
-             those CSE equations that talk about existentially-bound names. *)
-          Flambda_primitive.With_fixed_value.Map.filter
-            (fun prim (bound_to_or_value : Simple.t) ->
-              match bound_to_or_value with
-              | Name name when not (Name.Set.mem name names_in_join) ->
-                false
-              | Name _ | Const _ | Discriminant _ ->
-                let free_names_prim =
-                  Name_occurrences.everything_must_only_be_names
-                    (Flambda_primitive.With_fixed_value.free_names prim)
-                in
-                Name.Set.subset free_names_prim names_in_join)
-            t.cse
-        in
-        let cse =
-          Flambda_primitive.With_fixed_value.Map.merge
-            (fun _prim
-                (simple1 : Simple.t option) (simple2 : Simple.t option) ->
-              match simple1, simple2 with
-              | None, None -> None
-              | Some _, None -> simple1
-              | None, Some _ -> simple2
-              | Some simple1, Some simple2 ->
-                (* For the moment just keep this very straightforward. *)
-                (* CR-soon mshinwell: Make this take account of aliases. *)
-                if Simple.equal simple1 simple2 then Some simple1
-                else None)
-            (preserved_cse_equations t1)
-            (preserved_cse_equations t2)
-        in
-        let t =
-          { t with
-            cse;
-          }
-        in
-        invariant t;
-        t
-
-    (* CR mshinwell: This needs to do something with [t.cse] perhaps *)
-    (* CR mshinwell: Think carefully about whether the freshening is actually
-       needed here *)
-    let diff t env : t =
-      let names_more_precise, _freshened_names_more_precise, _perm =
-        fold t
-          ~init:(Name.Set.empty, Name.Set.empty, Name_permutation.create ())
-          ~f:(fun (names_more_precise, freshened_names_more_precise, perm)
-                  (name : Name.t)
-                  (info : fold_info) ->
-            match info with
-            | Definition_in_extension _ty ->
-              let fresh_name = Name.rename name in
-              let perm = Name_permutation.add_name perm name fresh_name in
-              let names_more_precise =
-                Name.Set.add name names_more_precise
-              in
-              let freshened_names_more_precise =
-                Name.Set.add fresh_name freshened_names_more_precise
-              in
-              names_more_precise, freshened_names_more_precise, perm
-            | Equation ty ->
-              let unfreshened_name = name in
-              let name = Name_permutation.apply_name perm name in
-              let ty = Flambda_type0_core.apply_name_permutation ty perm in
-              match Typing_env.find_opt env name with
-              | None ->
-                let names_more_precise =
-                  Name.Set.add unfreshened_name names_more_precise
-                in
-                let freshened_names_more_precise =
-                  Name.Set.add name names_more_precise
-                in
-                names_more_precise, freshened_names_more_precise, perm
-              | Some (old_ty, _) ->
-                let more_precise_using_old_types_for_free_names =
-                  (* XXX Not sure [env] is right: shouldn't it contain names
-                     from the extension too? *)
-                  Both_meet_and_join.strictly_more_precise env ty ~than:old_ty
-                in
-                if more_precise_using_old_types_for_free_names then
-                  let names_more_precise =
-                    Name.Set.add name names_more_precise
-                  in
-                  names_more_precise, freshened_names_more_precise, perm
-                else
-                  let free_names =
-                    Name_occurrences.everything_must_only_be_names
-                      (Type_free_names.free_names ty)
-                  in
-                  let more_precise_using_new_types_for_free_names =
-                    not (Name.Set.is_empty (
-                      Name.Set.inter free_names names_more_precise))
-                  in
-                  if more_precise_using_new_types_for_free_names then
-                    let names_more_precise =
-                      Name.Set.add unfreshened_name names_more_precise
-                    in
-                    let freshened_names_more_precise =
-                      Name.Set.add name names_more_precise
-                    in
-                    names_more_precise, freshened_names_more_precise, perm
-                  else
-                    names_more_precise, freshened_names_more_precise,
-                      perm)
-      in
-      let names_more_precise =
-        Name.Set.fold (fun name result ->
-            Bindable_name.Set.add (Name name) result)
-          names_more_precise
-          Bindable_name.Set.empty
-      in
-      restrict_to_names t
-        (Name_occurrences.create_from_set_in_types names_more_precise)
   end and Typing_env_extension : sig
     type t
 
@@ -7121,17 +6647,9 @@ module Make (Expr : Expr_intf.S) = struct
 
     val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
-    val meet
-       : Meet_env.t
-      -> t
-      -> t
-      -> t
+    val meet : Meet_env.t -> t -> t -> t
 
-    val join
-       : Join_env.t
-      -> t
-      -> t
-      -> t
+    val join : Join_env.t -> t -> t -> t
 
     val restrict_to_definitions : t -> t
 
@@ -7143,38 +6661,531 @@ module Make (Expr : Expr_intf.S) = struct
       -> t
 
     val diff : t -> Typing_env.t -> t
-
-    val pattern_match : t -> f:(Typing_env_extension0.t -> 'a) -> 'a
   end = struct
-    (* CR mshinwell: Move [Typing_env_extension0] into here? *)
-    module T0 = Typing_env_extension0
+    module T0 = struct
+      type t = {
+        first_definitions : (Name.t * Flambda_types.t) list;
+        at_or_after_cut_point : Typing_env.levels_to_entries;
+        last_equations_rev : (Name.t * Flambda_types.t) list;
+        cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
+      }
+
+      let print_with_cache ~cache ppf
+            ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+               cse; } : t) =
+        let print_binding_list =
+          Format.pp_print_list ~pp_sep:Format.pp_print_space
+            (fun ppf (name, ty) ->
+              Format.fprintf ppf "@[(%a %a)@]"
+                Name.print name
+                (Type_printers.print_with_cache ~cache) ty)
+        in
+        Format.fprintf ppf
+          "@[<hov 1>(\
+              @[<hov 1>(first_definitions@ %a)@]@ \
+              @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
+              @[<hov 1>(last_equations_rev@ %a)@]@ \
+              @[<hov 1>(cse@ %a)@])@]"
+          print_binding_list first_definitions
+          (Typing_env.print_levels_to_entries_with_cache ~cache)
+            at_or_after_cut_point
+          print_binding_list last_equations_rev
+          (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+
+      let print ppf t =
+        print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+      let empty () =
+        { first_definitions = [];
+          at_or_after_cut_point = Scope_level.Map.empty;
+          last_equations_rev = [];
+          cse = Flambda_primitive.With_fixed_value.Map.empty;
+        }
+
+      let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
+
+      let create_for_cut ~at_or_after_cut_point =
+        { first_definitions = [];
+          at_or_after_cut_point;
+          last_equations_rev = [];
+          cse = Flambda_primitive.With_fixed_value.Map.empty;
+        }
+
+      let equal env t1 t2 =
+        (* CR mshinwell: This should be improved *)
+        let equal_names_and_types (name1, ty1) (name2, ty2) =
+          Name.equal name1 name2
+            && Type_equality.equal_with_env env ty1 ty2
+        in
+        Misc.Stdlib.List.equal equal_names_and_types
+            t1.first_definitions t2.first_definitions
+          && Scope_level.Map.equal
+               (Scope_level.Sublevel.Map.equal
+                 (fun (name1, (entry1 : Typing_env.typing_environment_entry))
+                      (name2, (entry2 : Typing_env.typing_environment_entry)) ->
+                   Name.equal name1 name2
+                     && match entry1, entry2 with
+                        | Definition ty1, Definition ty2 ->
+                          Type_equality.equal_with_env env ty1 ty2
+                        | Equation ty1, Equation ty2 ->
+                          Type_equality.equal_with_env env ty1 ty2
+                        | CSE prim1, CSE prim2 ->
+                          Flambda_primitive.With_fixed_value.equal prim1 prim2
+                        | _, _ -> false))
+               t1.at_or_after_cut_point
+               t2.at_or_after_cut_point
+          && Misc.Stdlib.List.equal equal_names_and_types
+               t1.last_equations_rev t2.last_equations_rev
+
+      let apply_permutation_typing_environment_entry
+            (entry : Typing_env.typing_environment_entry) perm
+            : Typing_env.typing_environment_entry =
+        match entry with
+        | Definition ty ->
+          let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+          if ty == ty' then entry
+          else Definition ty'
+        | Equation ty ->
+          let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+          if ty == ty' then entry
+          else Equation ty'
+        | CSE prim ->
+          let prim' =
+            Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
+          in
+          if prim == prim' then entry
+          else CSE prim'
+
+      let apply_name_permutation
+            ({ first_definitions; at_or_after_cut_point; last_equations_rev;
+               cse; } as t)
+            perm : t =
+        let first_definitions_changed = ref false in
+        let first_definitions' =
+          List.map (fun (name, t) ->
+              let name' = Name_permutation.apply_name perm name in
+              let t' = Flambda_type0_core.apply_name_permutation t perm in
+              if (not (name == name')) && (not (t == t')) then begin
+                first_definitions_changed := true
+              end;
+              name', t')
+            first_definitions
+        in
+        let at_or_after_cut_point' =
+          Scope_level.Map.map_sharing (fun by_sublevel ->
+              Scope_level.Sublevel.Map.map_sharing
+                (fun ((name, (entry : Typing_env.typing_environment_entry))
+                      as datum) ->
+                  let name' = Name_permutation.apply_name perm name in
+                  let entry' =
+                    apply_permutation_typing_environment_entry entry perm
+                  in
+                  if name == name' && entry == entry' then datum
+                  else name', entry')
+                by_sublevel)
+            at_or_after_cut_point
+        in
+        let last_equations_rev_changed = ref false in
+        let last_equations_rev' =
+          List.map (fun (name, ty) ->
+              let name' = Name_permutation.apply_name perm name in
+              let ty' = Flambda_type0_core.apply_name_permutation ty perm in
+              if (not (name == name')) || (not (ty == ty')) then begin
+                last_equations_rev_changed := true
+              end;
+              name', ty')
+            last_equations_rev
+        in
+        let cse_changed = ref false in
+        let cse' =
+          Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
+              let simple' = Simple.apply_name_permutation simple perm in
+              let prim' =
+                Flambda_primitive.With_fixed_value.apply_name_permutation prim
+                  perm
+              in
+              if (not (simple == simple')) || (not (prim == prim')) then begin
+                cse_changed := true
+              end;
+              Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
+            cse
+            Flambda_primitive.With_fixed_value.Map.empty
+        in
+        if (not !first_definitions_changed)
+          && at_or_after_cut_point == at_or_after_cut_point'
+          && (not !last_equations_rev_changed)
+          && (not !cse_changed)
+        then t
+        else 
+          { first_definitions = first_definitions';
+            at_or_after_cut_point = at_or_after_cut_point';
+            last_equations_rev = last_equations_rev';
+            cse = cse';
+          }
+
+      let free_names
+            { first_definitions; at_or_after_cut_point; last_equations_rev;
+              cse; } =
+        let free_names_first_definitions =
+          List.fold_left (fun acc (_name, ty) ->
+              Name.Set.union acc (
+                Name_occurrences.everything_must_only_be_names (
+                  Type_free_names.free_names ty)))
+            Name.Set.empty
+            first_definitions
+        in
+        let free_names_at_or_after_cut_point =
+          Scope_level.Map.fold (fun _level by_sublevel acc ->
+              Scope_level.Sublevel.Map.fold
+                (fun _sublevel
+                     (name, (entry : Typing_env.typing_environment_entry))
+                     acc ->
+                  match entry with
+                  | Definition ty ->
+                    Name.Set.union acc (
+                      Name_occurrences.everything_must_only_be_names (
+                        Type_free_names.free_names ty))
+                  | Equation ty ->
+                    Name.Set.add name (
+                      Name.Set.union acc (
+                        Name_occurrences.everything_must_only_be_names (
+                          Type_free_names.free_names ty)))
+                  | CSE prim ->
+                    Name.Set.union acc (
+                      Name_occurrences.everything_must_only_be_names (
+                        (Flambda_primitive.With_fixed_value.free_names prim))))
+                by_sublevel
+                acc)
+            at_or_after_cut_point
+            free_names_first_definitions
+        in
+        let free_names_last_equations_rev =
+          List.fold_left (fun acc (_name, ty) ->
+              Name.Set.union acc (
+                Name_occurrences.everything_must_only_be_names (
+                  Type_free_names.free_names ty)))
+            free_names_at_or_after_cut_point
+            last_equations_rev
+        in
+        let free_names =
+          Flambda_primitive.With_fixed_value.Map.fold
+            (fun prim (simple : Simple.t) acc ->
+              match simple with
+              | Const _ | Discriminant _ -> acc
+              | Name name ->
+                let acc =
+                  Name.Set.union acc
+                    (Name_occurrences.everything_must_only_be_names (
+                      (Flambda_primitive.With_fixed_value.free_names prim)))
+                in
+                Name.Set.add name acc)
+            cse
+            free_names_last_equations_rev
+        in
+        Name_occurrences.create_from_set_in_types free_names
+
+      let defined_names t =
+        let from_first_definitions =
+          Name.Set.of_list (
+            List.map (fun (name, _ty) -> name) t.first_definitions)
+        in
+        Scope_level.Map.fold (fun _level by_sublevel defined_names ->
+            Scope_level.Sublevel.Map.fold
+              (fun _sublevel
+                   (name, (entry : Typing_env.typing_environment_entry))
+                   defined_names ->
+                match entry with
+                | Definition _ -> Name.Set.add name defined_names
+                | Equation _ | CSE _ -> defined_names)
+              by_sublevel
+              defined_names)
+          t.at_or_after_cut_point
+          from_first_definitions
+
+      let equations_domain
+            { first_definitions = _; at_or_after_cut_point;
+              last_equations_rev; cse = _; } =
+        let from_at_or_after_cut_point =
+          Scope_level.Map.fold (fun _level by_sublevel domain ->
+              Scope_level.Sublevel.Map.fold
+                (fun _sublevel
+                     (name, (entry : Typing_env.typing_environment_entry))
+                     domain ->
+                  match entry with
+                  | Definition _ -> domain
+                  | Equation _ | CSE _ -> Name.Set.add name domain)
+                by_sublevel
+                domain)
+            at_or_after_cut_point
+            Name.Set.empty
+        in
+        let from_last_equations_rev =
+          Name.Set.of_list (
+            List.map (fun (name, _ty) -> name) last_equations_rev)
+        in
+        Name.Set.union from_at_or_after_cut_point from_last_equations_rev
+
+      let restrict_to_names t allowed_names =
+        let allowed_names = Name_occurrences.everything allowed_names in
+        let first_definitions =
+          List.filter (fun (name, _ty) ->
+              Bindable_name.Set.mem (Name name) allowed_names)
+            t.first_definitions
+        in
+        let at_or_after_cut_point =
+          Scope_level.Map.filter_map (fun _cont_level by_sublevel ->
+              let by_sublevel =
+                Scope_level.Sublevel.Map.filter_map
+                  (fun _sublevel ((name, _) as entry) ->
+                    if Bindable_name.Set.mem (Name name) allowed_names then
+                      Some entry
+                    else
+                      None)
+                by_sublevel
+              in
+              if Scope_level.Sublevel.Map.is_empty by_sublevel then None
+              else Some by_sublevel)
+            t.at_or_after_cut_point
+        in
+        let last_equations_rev =
+          List.filter (fun (name, _ty) ->
+              Bindable_name.Set.mem (Name name) allowed_names)
+            t.last_equations_rev
+        in
+        let cse =
+          Flambda_primitive.With_fixed_value.Map.filter
+            (fun _prim (simple : Simple.t) ->
+              match simple with
+              | Name name -> Bindable_name.Set.mem (Name name) allowed_names
+              | Const _ | Discriminant _ -> true)
+            t.cse
+        in
+        let t =
+          { first_definitions;
+            at_or_after_cut_point;
+            last_equations_rev;
+            cse;
+          }
+        in
+        invariant t;
+        t
+
+      let add_definition_at_beginning t name ty =
+        let first_definitions = (name, ty) :: t.first_definitions in
+        { t with
+          first_definitions;
+        }
+
+      let add_equation t name ty =
+        let last_equations_rev = (name, ty) :: t.last_equations_rev in
+        { t with
+          last_equations_rev;
+        }
+
+      let add_cse t name prim =
+        let cse =
+          match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
+          | exception Not_found ->
+            Flambda_primitive.With_fixed_value.Map.add prim name t.cse
+          | _name -> t.cse
+        in
+        { t with cse; }
+
+      let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
+        if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
+        else if is_empty t1 then t2
+        else if is_empty t2 then t1
+        else
+          let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+          let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+          let env = Meet_env.clear_name_permutations env in
+          let scope_level =
+            Scope_level.next (Typing_env.max_level (Meet_env.env env))
+          in
+          let env =
+            Meet_env.with_env env (fun env ->
+              Typing_env.add_or_meet_env_extension env t1 scope_level)
+          in
+          let env =
+            Meet_env.with_env env (fun env ->
+              Typing_env.add_or_meet_env_extension env t2 scope_level)
+          in
+          Typing_env.cut (Meet_env.env env)
+            ~existential_if_defined_at_or_later_than:scope_level
+
+      let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
+        if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
+        else if is_empty t1 then empty ()
+        else if is_empty t2 then empty ()
+        else
+          let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
+          let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
+          let env = Join_env.clear_name_permutations env in
+          let env =
+            Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
+          in
+          let names_in_join =
+            let equations_in_t1_on_env = free_names t1 in
+            let equations_in_t2_on_env = free_names t2 in
+            Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
+          in
+          let t =
+            Name.Set.fold (fun name t ->
+                let ty1 = find t1 name in
+                let ty2 = find t2 name in
+                let join_ty = Both_meet_and_join.join env ty1 ty2 in
+                add_equation t name join_ty)
+              names_in_join
+              (empty ())
+          in
+          let preserved_cse_equations t =
+            (* CR-someday mshinwell: This could be improved to preserve some of
+               those CSE equations that talk about existentially-bound names. *)
+            Flambda_primitive.With_fixed_value.Map.filter
+              (fun prim (bound_to_or_value : Simple.t) ->
+                match bound_to_or_value with
+                | Name name when not (Name.Set.mem name names_in_join) ->
+                  false
+                | Name _ | Const _ | Discriminant _ ->
+                  let free_names_prim =
+                    Name_occurrences.everything_must_only_be_names
+                      (Flambda_primitive.With_fixed_value.free_names prim)
+                  in
+                  Name.Set.subset free_names_prim names_in_join)
+              t.cse
+          in
+          let cse =
+            Flambda_primitive.With_fixed_value.Map.merge
+              (fun _prim
+                  (simple1 : Simple.t option) (simple2 : Simple.t option) ->
+                match simple1, simple2 with
+                | None, None -> None
+                | Some _, None -> simple1
+                | None, Some _ -> simple2
+                | Some simple1, Some simple2 ->
+                  (* For the moment just keep this very straightforward. *)
+                  (* CR-soon mshinwell: Make this take account of aliases. *)
+                  if Simple.equal simple1 simple2 then Some simple1
+                  else None)
+              (preserved_cse_equations t1)
+              (preserved_cse_equations t2)
+          in
+          let t =
+            { t with
+              cse;
+            }
+          in
+          invariant t;
+          t
+
+      type fold_info =
+        | Definition_in_extension of Flambda_types.t
+        | Equation of Flambda_types.t
+
+      let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
+        let acc =
+          List.fold_left (fun acc (name, ty) ->
+              f acc name (Definition_in_extension ty))
+            init
+            (List.rev t.first_definitions)
+        in
+        let acc =
+          Scope_level.Map.fold (fun _level by_sublevel acc ->
+              Scope_level.Sublevel.Map.fold
+                (fun _sublevel
+                     (name, (entry : Typing_env.typing_environment_entry))
+                     acc ->
+                  match entry with
+                  | Definition ty -> f acc name (Definition_in_extension ty)
+                  | Equation ty -> f acc name (Equation ty)
+                  | CSE _ -> acc)
+                by_sublevel
+                acc)
+            t.at_or_after_cut_point
+            acc
+        in
+        List.fold_left (fun acc (name, ty) ->
+            f acc name (Equation ty))
+          acc
+          t.last_equations_rev
+
+      (* CR mshinwell: This needs to do something with [t.cse] perhaps *)
+      (* CR mshinwell: Think carefully about whether the freshening is actually
+         needed here *)
+      let diff t env : t =
+        let names_more_precise, _freshened_names_more_precise, _perm =
+          fold t
+            ~init:(Name.Set.empty, Name.Set.empty, Name_permutation.create ())
+            ~f:(fun (names_more_precise, freshened_names_more_precise, perm)
+                    (name : Name.t)
+                    (info : fold_info) ->
+              match info with
+              | Definition_in_extension _ty ->
+                let fresh_name = Name.rename name in
+                let perm = Name_permutation.add_name perm name fresh_name in
+                let names_more_precise =
+                  Name.Set.add name names_more_precise
+                in
+                let freshened_names_more_precise =
+                  Name.Set.add fresh_name freshened_names_more_precise
+                in
+                names_more_precise, freshened_names_more_precise, perm
+              | Equation ty ->
+                let unfreshened_name = name in
+                let name = Name_permutation.apply_name perm name in
+                let ty = Flambda_type0_core.apply_name_permutation ty perm in
+                match Typing_env.find_opt env name with
+                | None ->
+                  let names_more_precise =
+                    Name.Set.add unfreshened_name names_more_precise
+                  in
+                  let freshened_names_more_precise =
+                    Name.Set.add name names_more_precise
+                  in
+                  names_more_precise, freshened_names_more_precise, perm
+                | Some (old_ty, _) ->
+                  let more_precise_using_old_types_for_free_names =
+                    (* XXX Not sure [env] is right: shouldn't it contain names
+                       from the extension too? *)
+                    Both_meet_and_join.strictly_more_precise env ty ~than:old_ty
+                  in
+                  if more_precise_using_old_types_for_free_names then
+                    let names_more_precise =
+                      Name.Set.add name names_more_precise
+                    in
+                    names_more_precise, freshened_names_more_precise, perm
+                  else
+                    let free_names =
+                      Name_occurrences.everything_must_only_be_names
+                        (Type_free_names.free_names ty)
+                    in
+                    let more_precise_using_new_types_for_free_names =
+                      not (Name.Set.is_empty (
+                        Name.Set.inter free_names names_more_precise))
+                    in
+                    if more_precise_using_new_types_for_free_names then
+                      let names_more_precise =
+                        Name.Set.add unfreshened_name names_more_precise
+                      in
+                      let freshened_names_more_precise =
+                        Name.Set.add name names_more_precise
+                      in
+                      names_more_precise, freshened_names_more_precise, perm
+                    else
+                      names_more_precise, freshened_names_more_precise,
+                        perm)
+        in
+        let names_more_precise =
+          Name.Set.fold (fun name result ->
+              Bindable_name.Set.add (Name name) result)
+            names_more_precise
+            Bindable_name.Set.empty
+        in
+        restrict_to_names t
+          (Name_occurrences.create_from_set_in_types names_more_precise)
+    end
 
     include Name_abstraction.Make (Bound_name_set) (T0)
-
-    let print_with_cache ~cache ppf
-          ({ first_definitions; at_or_after_cut_point; last_equations_rev;
-             cse; } : t) =
-      let print_binding_list =
-        Format.pp_print_list ~pp_sep:Format.pp_print_space
-          (fun ppf (name, ty) ->
-            Format.fprintf ppf "@[(%a %a)@]"
-              Name.print name
-              (Type_printers.print_with_cache ~cache) ty)
-      in
-      Format.fprintf ppf
-        "@[<hov 1>(\
-            @[<hov 1>(first_definitions@ %a)@]@ \
-            @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
-            @[<hov 1>(last_equations_rev@ %a)@]@ \
-            @[<hov 1>(cse@ %a)@])@]"
-        print_binding_list first_definitions
-        (Typing_env.print_levels_to_entries_with_cache ~cache)
-          at_or_after_cut_point
-        print_binding_list last_equations_rev
-        (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
-
-    let print ppf t =
-      print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let fast_equal t1 t2 = (t1 == t2)
 
@@ -7220,62 +7231,19 @@ module Make (Expr : Expr_intf.S) = struct
       let free_names = free_names_transitive_list t env tys in
       let env_allowed_names = Typing_env.domain env_allowed_names in
       let allowed_names = Name_occurrences.union free_names env_allowed_names in
-      restrict_to_names t allowed_names
-
-    type fold_info =
-      | Definition_in_extension of Flambda_types.t
-      | Equation of Flambda_types.t
-
-    let fold t ~init ~(f : _ -> Name.t -> fold_info -> _) =
-      let acc =
-        List.fold_left (fun acc (name, ty) ->
-            f acc name (Definition_in_extension ty))
-          init
-          (List.rev t.first_definitions)
-      in
-      let acc =
-        Scope_level.Map.fold (fun _level by_sublevel acc ->
-            Scope_level.Sublevel.Map.fold
-              (fun _sublevel
-                   (name, (entry : Typing_env.typing_environment_entry))
-                   acc ->
-                match entry with
-                | Definition ty ->
-                  f acc name (Definition_in_extension ty)
-                | Equation ty ->
-                  f acc name (Equation ty)
-                | CSE _ -> acc)
-              by_sublevel
-              acc)
-          t.at_or_after_cut_point
-          acc
-      in
-      List.fold_left (fun acc (name, ty) ->
-          f acc name (Equation ty))
-        acc
-        t.last_equations_rev
+      pattern_match_map t ~f:(fun t0 -> T0.restrict_to_names t0 allowed_names)
 
     let add_definition_at_beginning t name ty =
-      let first_definitions = (name, ty) :: t.first_definitions in
-      { t with
-        first_definitions;
-      }
+      pattern_match t ~f:(fun defined_names t0 ->
+        let t0 = T0.add_definition_at_beginning t name ty in
+        create (Name.Set.add name defined_names) t0)
 
     (* CR mshinwell: Invariant check for increased preciseness? *)
     let add_equation t name ty =
-      let last_equations_rev = (name, ty) :: t.last_equations_rev in
-      { t with
-        last_equations_rev;
-      }
+      pattern_match_map t ~f:(fun t0 -> T0.add_equation t0 name ty)
 
     let add_cse t name prim =
-      let cse =
-        match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
-        | exception Not_found ->
-          Flambda_primitive.With_fixed_value.Map.add prim name t.cse
-        | _name -> t.cse
-      in
-      { t with cse; }
+      pattern_match_map t ~f:(fun t0 -> T0.add_cse t0 name prim)
 
     let diff t env =
       pattern_match t ~f:(fun _ t0 ->

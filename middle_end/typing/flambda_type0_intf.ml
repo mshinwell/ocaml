@@ -373,12 +373,11 @@ module type S = sig
       -> t
 
     (** Add a definition of an existentially-bound name prior to all
-        other entries in the given extension. *)
+        other entries in the given extension.  Equations on the name
+        should be added (using [add_equation]) before calling this function. *)
     val add_definition_at_beginning : t -> Name.t -> flambda_type -> t
 
-    (** Add an equation (on a name that is either existentially bound in the
-        given extension, or free in the extension) after all other entries in
-        the given extension. *)
+    (** Add an equation after all other entries in the given extension. *)
     val add_equation : t -> Name.t -> flambda_type -> t
 
     val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
