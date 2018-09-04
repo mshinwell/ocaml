@@ -95,6 +95,7 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val env : t -> Typing_env.t
+(*
   end and Parameters : sig
     include Contains_names.S
 
@@ -107,6 +108,7 @@ module type S = sig
     val create : unit -> t
 
     val to_set : t -> Kinded_parameter.Set.t
+*)
   end and Typing_env : sig
     type t
 

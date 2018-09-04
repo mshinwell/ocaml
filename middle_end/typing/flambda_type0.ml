@@ -3871,6 +3871,7 @@ module Make (Expr : Expr_intf.S) = struct
         perm_left = Name_permutation.compose t.perm_left perm_left;
         perm_right = Name_permutation.compose t.perm_right perm_right;
       }
+(*
   end and Parameters : sig
     type t
 
@@ -3925,6 +3926,9 @@ module Make (Expr : Expr_intf.S) = struct
         equal t1 t2
     end
 
+    (* XXX This seems like the wrong type to use
+       - The binder needs to cover both the environment extension and the
+         expression (handler / etc.) *)
     module RP = Relational_product.Make (Int_index) (KP)
 
     type t = RP.t
@@ -3986,6 +3990,7 @@ module Make (Expr : Expr_intf.S) = struct
       RP.create [
         indexes_to_parameters, env_extension
       ]
+*)
   end and Relational_product : sig
     (* A "relational product" represents a list of indexed products.  Each
        indexed product binds a set of components, thus:
@@ -4097,11 +4102,40 @@ module Make (Expr : Expr_intf.S) = struct
       module rec T0 : sig
         include Contains_names.S
 
+        val invariant : t -> unit
+        val print : Format.formatter -> t -> unit
+        val print_with_cache
+           : cache:Printing_cache.t
+          -> Format.formatter
+          -> t
+          -> unit
+        val create
+           : ?nested:T.t
+          -> Component.t Index.Map.t
+          -> Typing_env_extension.t
+          -> t
+        val equal : Type_equality_env.t -> t -> t -> bool
+        val meet
+           : Meet_env.t
+          -> t
+          -> t
+          -> (t * Typing_env_extension.t) Or_bottom.t
+        val join : Join_env.t -> t -> t -> t
+        val standalone_extension
+           : t
+          -> Typing_env.t
+          -> Typing_env_extension.t
+        val introduce : t -> Typing_env.t -> Typing_env.t
+        val add_or_meet_equations
+           : t
+          -> Meet_env.t
+          -> Typing_env_extension.t
+          -> t
       end = struct
         type t = {
           components_by_index : Component.t Index.Map.t;
           env_extension : Typing_env_extension.t;
-          nested : T.t;
+          nested : T.t option;
         }
 
         let invariant _t =
@@ -4109,25 +4143,26 @@ module Make (Expr : Expr_intf.S) = struct
              contains [Definition]s for [Name]s occurring in the indexes. *)
           ()
 
-        let bottom () =
-          create Index.Map.empty (Typing_env_extension.empty ())
-
-        let print ppf { components_by_index; env_extension; } =
+        let print ppf { components_by_index; env_extension; nested; } =
           Format.fprintf ppf
             "@[<hov 1>(\
               @[<hov 1>(components_by_index@ %a)@]@ \
-              @[<hov 1>(env_extension@ %a)@])@]"
+              @[<hov 1>(env_extension@ %a)@]@ \
+              @[<hov 1>(nested@ %a)@])@]"
             (Index.Map.print Component.print) components_by_index
             Typing_env_extension.print env_extension
+            (Misc.Stdlib.Option.print T.print) nested
 
         let print_with_cache ~cache ppf
-              { components_by_index; env_extension; } =
+              { components_by_index; env_extension; nested; } =
           Format.fprintf ppf
             "@[<hov 1>(\
               @[<hov 1>(components_by_index@ %a)@]@ \
-              @[<hov 1>(env_extension@ %a)@])@]"
+              @[<hov 1>(env_extension@ %a)@]@ \
+              @[<hov 1>(nested@ %a)@])@]"
             (Index.Map.print Component.print) components_by_index
             (Typing_env_extension.print_with_cache ~cache) env_extension
+            (Misc.Stdlib.Option.print (T.print_with_cache ~cache)) nested
 
         let equal env
               { components_by_index = components_by_index1;
@@ -4141,7 +4176,7 @@ module Make (Expr : Expr_intf.S) = struct
           Index.Map.equal (Component.equal env)
             components_by_index1 components_by_index2
           && Typing_env_extension.equal env env_extension1 env_extension2
-          && T.equal nested1 nested2
+          && Misc.Stdlib.Option.equal (T.equal env) nested1 nested2
 
         let free_names
               ({ components_by_index; env_extension; nested; } as t) =
@@ -4164,8 +4199,8 @@ module Make (Expr : Expr_intf.S) = struct
             | Some nested -> T.free_names nested
           in
           Name_occurrences.union_list [
-            free_names_in_indexes t;
-            free_names_in_components t;
+            free_names_in_indexes;
+            free_names_in_components;
             Typing_env_extension.free_names env_extension;
             free_names_in_nested;
           ]
@@ -4263,7 +4298,7 @@ module Make (Expr : Expr_intf.S) = struct
 
         let meet env t1 t2 : _ Or_bottom.t =
           if Meet_env.shortcut_precondition env && t1 == t2 then
-            Ok (t1, env, None)
+            Ok (t1, Typing_env_extension.empty (), None)
           else
             let indexes = Index.Set.inter (indexes t1) (indexes t2) in
             if Index.Set.is_empty indexes then Bottom
@@ -4282,7 +4317,8 @@ module Make (Expr : Expr_intf.S) = struct
                 | None, None -> Ok None
                 | Some nested1, Some nested2 ->
                   begin match T.meet env nested1 nested2 with
-                  | Ok nested -> Ok (Some nested)
+                  | Ok (nested, env_extension) ->
+                    Ok (Some (nested, env_extension))
                   | Bottom -> Bottom
                   end
               | None, Some _ | Some _, None ->
@@ -4293,14 +4329,25 @@ module Make (Expr : Expr_intf.S) = struct
               in
               match nested with
               | Bottom -> Bottom
-              | Ok nested ->
+              | Ok None ->
                 let t =
                   { components_by_index;
                     env_extension;
-                    nested;
+                    nested = None;
                   }
                 in
-                let env_extension = Typing_env_extension.create () in
+                let env_extension = Typing_env_extension.empty () in
+                Ok (t, env_extension, Some result_components)
+              | Ok (Some (nested, _env_extension)) ->
+                (* CR mshinwell: _env_extension should always be empty, but
+                   this seems like a wart *)
+                let t =
+                  { components_by_index;
+                    env_extension;
+                    nested = Some nested;
+                  }
+                in
+                let env_extension = Typing_env_extension.empty () in
                 Ok (t, env_extension, Some result_components)
 
         let join env t1 t2 =
@@ -4384,7 +4431,35 @@ module Make (Expr : Expr_intf.S) = struct
           -> Typing_env_extension.t
           -> t
       end = struct
-        include Name_abstraction.Make (Component.Set) (T0)
+        (* XXX This should go somewhere as a standard module to be used for
+           equipping sets with permutation actions. *)
+        module Component_set = struct
+          type t = Component.Set.t
+
+          let free_names t =
+            Component.Set.fold (fun component result ->
+                Name_occurrences.union (Component.free_names component)
+                  result)
+              t
+              (Name_occurrences.create ())
+
+          let apply_name_permutation t perm =
+            Component.Set.map (fun component ->
+                Component.apply_name_permutation component perm)
+              t
+
+          let permutation_to_swap t1 t2 =
+            if Component.Set.cardinal t1 <> Component.Set.cardinal t2
+            then begin
+              Misc.fatal_error "Mismatched cardinality in binding position"
+            end else begin
+              let components1 = Component.Set.elements t1 in
+              let components2 = Component.Set.elements t2 in
+              ...
+            end
+        end
+
+        include Name_abstraction.Make (Component_set) (T0)
 
         let create_abstraction = create
 
@@ -4728,7 +4803,7 @@ module Make (Expr : Expr_intf.S) = struct
       module Meet = Meet_or_join (Either_meet_or_join.For_meet)
       module Join = Meet_or_join (Either_meet_or_join.For_join)
 
-      let meet env fresh_component_semantics t1 t2 : _ Or_bottom.t =
+      let meet env t1 t2 : _ Or_bottom.t =
         let t =
           Meet.meet_or_join (Join_env.create env)
             fresh_component_semantics t1 t2
@@ -4741,7 +4816,7 @@ module Make (Expr : Expr_intf.S) = struct
                [Meet.meet_or_join], above. *)
             let env = Join_env.clear_name_permutations (Join_env.create env) in
             List.fold_left (fun result maps_to ->
-                Maps_to.join env fresh_component_semantics maps_to result)
+                Maps_to.join env maps_to result)
               (Maps_to.bottom ())
               (all_maps_to t)
           in

@@ -671,7 +671,8 @@ end and Continuation_handler : sig
   include Contains_names.S
 
   val create
-     : Flambda_type.Parameters.t
+     : Kinded_parameter.t list
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> stub:bool
     -> is_exn_handler:bool
@@ -683,7 +684,8 @@ end and Continuation_handler : sig
       parameters and the code of the handler. *)
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t
+    -> f:(Kinded_parameter.t list
+      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
@@ -710,13 +712,15 @@ end and Params_and_handler : sig
   include Contains_names.S with type t := t
 
   val create
-     : Flambda_type.Parameters.t
+     : Kinded_parameter.t list
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> t
 
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t
+    -> f:(Kinded_parameter.t list
+      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
@@ -883,8 +887,8 @@ end and Function_declarations : sig
   val contains_stub : t -> bool
 end and Params_and_body : sig
   (** A name abstraction that comprises a function's parameters (together with
-      any relations between them, expressed using a relational product), the
-      code of the function, and the [my_closure] variable.
+      any relations between them), the code of the function, and the
+      [my_closure] variable.
 
       From the body of the function, accesses to variables within the closure
       need to go via a [Project_var] (from [my_closure]); accesses to any other
@@ -895,14 +899,15 @@ end and Params_and_body : sig
   include Contains_names.S with type t := t
 
   val create
-     : Flambda_type.Parameters.t
+     : Kinded_parameter.t list
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
 
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t -> Expr.t -> my_closure:Variable.t -> 'a)
+    -> f:(t -> Expr.t -> my_closure:Variable.t -> 'a)
     -> 'a
 end and Function_declaration : sig
   type t

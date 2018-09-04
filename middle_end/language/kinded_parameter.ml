@@ -103,4 +103,13 @@ module List = struct
 
   let print ppf t =
     Format.pp_print_list ~pp_sep:Format.pp_print_space print ppf t
+
+  let free_names t =
+    List.fold_left (fun result param ->
+        Name_occurrences.union result (free_names param))
+      (Name_occurrences.create ())
+      t
+
+  let apply_name_permutation t perm =
+    List.map (fun param -> apply_name_permutation param perm) t
 end

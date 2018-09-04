@@ -57,6 +57,8 @@ val rename : t -> t
 module List : sig
   type nonrec t = t list
 
+  include Contains_names.S with type t := t
+
   val create : (Parameter.t * Flambda_kind.t) list -> t
 
   (** As for [Parameter.List.vars]. *)

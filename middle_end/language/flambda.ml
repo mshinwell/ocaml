@@ -1955,26 +1955,39 @@ end and Params_and_handler : sig
   include Contains_names.S with type t := t
 
   val create
-     : Flambda_type.Parameters.t
+     : Kinded_parameter.t list
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> t
 
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t
+    -> f:(Kinded_parameter.t list
+      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
 end = struct
-  include Name_abstraction.Make (Bound_kinded_parameter_set)
-    (Expr_with_permutation)
+  module T0 = struct
+    type t = {
+      param_relations : Flambda_type.Typing_env_extension.t;
+      handler : Expr_with_permutation.t;
+    }
+  end
 
-  let create params ~handler =
-    create (Flambda_type.Parameters.to_set params)
-      (Expr_with_permutation.create handler)
+  include Name_abstraction.Make (Kinded_parameter.List) (T0)
+
+  let create params ~param_relations ~handler =
+    let t0 : T0.t =
+      { param_relations;
+        handler = Expr_with_permutation.create handler;
+      }
+    in
+    create params t0
 
   let pattern_match t ~f =
-    pattern_match t ~f:(fun params expr -> f params ~handler:expr)
+    pattern_match t ~f:(fun params { param_relations; handler; } ->
+      f params ~param_relations ~handler)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -1997,17 +2010,19 @@ end = struct
       t
 end and Continuation_handler : sig
   include Contains_names.S
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val print : Format.formatter -> t -> unit
   val create
-     : Flambda_type.Parameters.t
+     : Kinded_parameter.t list
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> stub:bool
     -> is_exn_handler:bool
     -> t
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val print : Format.formatter -> t -> unit
   val pattern_match
      : t
-    -> f:(Flambda_type.Parameters.t
+    -> f:(Kinded_parameter.t list
+      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
