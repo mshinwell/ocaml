@@ -23,9 +23,7 @@ type t = Name.Set.t
 
 let free_names t =
   Name.Set.fold (fun name free_names ->
-      Name_occurrences.add free_names
-        (Name (Name.name name))
-        In_terms)
+      Name_occurrences.add free_names (Name name) In_terms)
     t
     (Name_occurrences.create ())
 
@@ -33,7 +31,7 @@ let apply_name_permutation t perm =
   let changed = ref false in
   let result =
     Name.Set.fold (fun name result ->
-        let name' = Name.apply_name_permutation name perm in
+        let name' = Name_permutation.apply_name perm name in
         if not (name == name') then begin
           changed := true;
         end;

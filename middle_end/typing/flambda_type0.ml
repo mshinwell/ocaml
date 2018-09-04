@@ -16,6 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Decide on doc or non-doc comments in here.  There are some
+   modules which aren't exposed in the interface but probably require
+   documentation. *)
+
 (* CR mshinwell: Remove when warning 60 fixed *)
 [@@@ocaml.warning "-60"]
 
@@ -349,7 +353,7 @@ module Make (Expr : Expr_intf.S) = struct
       include Relational_product.Make
         (Int_index) (Logical_variable_component)
 
-      let bottom () = create_bottom ~arity:1
+      let bottom () = create_bottom ()
     end
 
     module Tag_and_targetint_ocaml =
@@ -386,11 +390,7 @@ module Make (Expr : Expr_intf.S) = struct
           (Typing_env_extension.empty (), Targetint.OCaml.zero)
           field_tys
       in
-      let product =
-        RP.create [
-          indexes_to_vars, env_extension;
-        ]
-      in
+      let product = RP.create indexes_to_vars env_extension in
       let size = Targetint.OCaml.of_int (List.length field_tys) in
       match open_or_closed with
       | Open -> RL.create_at_least size product
@@ -406,13 +406,12 @@ module Make (Expr : Expr_intf.S) = struct
     let is_empty = RL.is_bottom
 
     let meet env t1 t2 : _ Or_bottom.t =
-      match RL.meet env Fresh t1 t2 with
+      match RL.meet env t1 t2 with
       | Bottom -> Bottom
       | Ok (t, product) ->
         Ok (t, RP.standalone_extension product (Meet_env.env env))
 
-    let join env t1 t2 =
-      RL.join env Fresh t1 t2
+    let join = RL.join
 
     let free_names = RL.free_names
     let apply_name_permutation = RL.apply_name_permutation
@@ -594,16 +593,14 @@ module Make (Expr : Expr_intf.S) = struct
           closure_elements_to_tys
           (Typing_env_extension.empty ())
       in
-      RP.create [
-        closure_elements_to_logical_variables, env_extension;
-      ]
+      RP.create closure_elements_to_logical_variables env_extension
 
-    let create_bottom () = RP.create_bottom ~arity:1
+    let create_bottom = RP.create_bottom
 
     let print ~cache:_ ppf t = RP.print ppf t
 
-    let meet env t1 t2 = RP.meet env Fresh t1 t2
-    let join env t1 t2 = RP.join env Fresh t1 t2
+    let meet = RP.meet
+    let join = RP.join
 
     let equal = RP.equal
     let free_names = RP.free_names
@@ -669,11 +666,11 @@ module Make (Expr : Expr_intf.S) = struct
     let _invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
     let meet env t1 t2 : _ Or_bottom.t =
-      match RL.meet env Fresh t1 t2 with
+      match RL.meet env t1 t2 with
       | Bottom -> Bottom
       | Ok (t, _set_of_closures_entry) -> Ok (t, Typing_env_extension.empty ())
 
-    let join env t1 t2 = RL.join env Fresh t1 t2
+    let join = RL.join
 
     let equal = RL.equal
     let free_names = RL.free_names
@@ -730,11 +727,11 @@ module Make (Expr : Expr_intf.S) = struct
     let print ~cache ppf t = RL.print ~cache ppf t
 
     let meet env t1 t2 : _ Or_bottom.t =
-      match RL.meet env Fresh t1 t2 with
+      match RL.meet env t1 t2 with
       | Bottom -> Bottom
       | Ok (t, _closures_entry) -> Ok (t, Typing_env_extension.empty ())
 
-    let join env t1 t2 = RL.join env Fresh t1 t2
+    let join = RL.join
 
     let equal = RL.equal
     let free_names = RL.free_names
@@ -1065,17 +1062,11 @@ module Make (Expr : Expr_intf.S) = struct
 
       val meet
          : Meet_env.t
-        -> Relational_product.fresh_component_semantics
         -> t
         -> t
         -> (t * Typing_env_extension.t) Or_bottom.t
 
-      val join
-         : Join_env.t
-        -> Relational_product.fresh_component_semantics
-        -> t
-        -> t
-        -> t
+      val join : Join_env.t -> t -> t -> t
 
       include Contains_names.S with type t := t
     end
@@ -1101,17 +1092,11 @@ module Make (Expr : Expr_intf.S) = struct
 
       val meet
          : Meet_env.t
-        -> Relational_product.fresh_component_semantics
         -> t
         -> t
         -> (t * Typing_env_extension.t) Or_bottom.t
 
-      val join
-         : Join_env.t
-        -> Relational_product.fresh_component_semantics
-        -> t
-        -> t
-        -> t
+      val join : Join_env.t -> t -> t -> t
 
       include Contains_names.S with type t := t
     end
@@ -2422,35 +2407,13 @@ module Make (Expr : Expr_intf.S) = struct
 
     val equal : Type_equality_env.t -> t -> t -> bool
 
-(*
     val meet
        : Meet_env.t
-      -> Relational_product.fresh_component_semantics
-      -> t
-      -> t
-      -> (t * Typing_env_extension.t) Or_bottom.t
-*)
-
-    val meet_fresh
-       : Meet_env.t
       -> t
       -> t
       -> (t * Typing_env_extension.t) Or_bottom.t
 
-(*
-    val join
-       : Join_env.t
-      -> Relational_product.fresh_component_semantics
-      -> t
-      -> t
-      -> t
-*)
-
-    val join_fresh
-       : Join_env.t
-      -> t
-      -> t
-      -> t
+    val join : Join_env.t -> t -> t -> t
 
     val introduce : t -> Typing_env.t -> Typing_env.t
   end = struct
@@ -2490,10 +2453,11 @@ module Make (Expr : Expr_intf.S) = struct
       let param_env_extension = create_equations parameters param_vars in
       let result_vars = assign_logical_variables results in
       let result_env_extension = create_equations results result_vars in
-      Product (RP.create [
-        param_vars, param_env_extension;
-        result_vars, result_env_extension;
-      ])
+      let inner_rp = RP.create result_vars result_env_extension in
+      let outer_rp =
+        RP.create ~nested:inner_rp param_vars param_env_extension
+      in
+      Product outer_rp
 
     let create_unknown () = Unknown
     let create_bottom () = Bottom
@@ -2516,10 +2480,10 @@ module Make (Expr : Expr_intf.S) = struct
       | Bottom, Bottom -> true
       | (Product _ | Unknown | Bottom), _ -> false
 
-    let meet env fresh t1 t2 : _ Or_bottom.t =
+    let meet env t1 t2 : _ Or_bottom.t =
       match t1, t2 with
       | Product rp1, Product rp2 ->
-        begin match RP.meet env fresh rp1 rp2 with
+        begin match RP.meet env rp1 rp2 with
         | Bottom -> Bottom
         | Ok (rp, env_extension) -> Ok (Product rp, env_extension)
         end
@@ -2529,18 +2493,14 @@ module Make (Expr : Expr_intf.S) = struct
       | Bottom, (Product _ | Bottom | Unknown)
       | (Product _ | Unknown), Bottom -> Bottom
 
-    let meet_fresh env t1 t2 = meet env Fresh t1 t2
-
-    let join env fresh t1 t2 =
+    let join env t1 t2 =
       match t1, t2 with
-      | Product rp1, Product rp2 -> Product (RP.join env fresh rp1 rp2)
+      | Product rp1, Product rp2 -> Product (RP.join env rp1 rp2)
       | Bottom, Product _ -> t2
       | Product _, Bottom -> t1
       | Bottom, Bottom -> Bottom
       | Unknown, (Product _ | Bottom | Unknown)
       | (Product _ | Bottom), Unknown -> Unknown
-
-    let join_fresh env t1 t2 = join env Fresh t1 t2
 
     let free_names t =
       match t with
@@ -3670,7 +3630,7 @@ module Make (Expr : Expr_intf.S) = struct
               function_decl1
         in
         let ty =
-          E.switch Function_type.meet_fresh Function_type.join_fresh env ty1 ty2
+          E.switch Function_type.meet Function_type.join env ty1 ty2
         in
         let closure_elements =
           E.switch Closure_elements.meet Closure_elements.join env
@@ -4027,28 +3987,27 @@ module Make (Expr : Expr_intf.S) = struct
         indexes_to_parameters, env_extension
       ]
   end and Relational_product : sig
-    (* CR mshinwell: Update comment to reflect new binding structure *)
-    (** A "relational product" represents a list of indexed products.  Each
-        indexed product binds a set of components, thus:
+    (* A "relational product" represents a list of indexed products.  Each
+       indexed product binds a set of components, thus:
 
-           ------
-            |  |
-            |  |     (component_i : Component)
-          i : Index
+          ------
+           |  |
+           |  |     (component_i : Component)
+         i : Index
 
-        and additionally holds relational information between the components
-        expressed as a typing environment extension.
+       and additionally holds relational information between the components
+       expressed as a typing environment extension.
 
-        Any indexed product in a relational product may depend on components'
-        names bound by an earlier indexed product.  The overall structure is
-        thus:
+       Any indexed product in a relational product may depend on components'
+       names bound by an earlier indexed product.  The overall structure is
+       thus:
 
-           ------    ------
-            |  |      |  |
-            |  |      |  |     (component_i_n : Component)
-           n : int  i_n : Index
+          ------    ------
+           |  |      |  |
+           |  |      |  |     (component_i_n : Component)
+          n : int  i_n : Index
 
-        where the outer (dependent) product corresponds to the list structure.
+       where the outer (dependent) product corresponds to the list structure.
     *)
 
     module Make
@@ -4059,7 +4018,6 @@ module Make (Expr : Expr_intf.S) = struct
         val equal : Type_equality_env.t -> t -> t -> bool
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
-        module Set : Contains_names.S
       end) :
     sig
       type t
@@ -4085,7 +4043,7 @@ module Make (Expr : Expr_intf.S) = struct
             to be scoped.  The newly-created one will bind references to
             components in the nested one. *)
       val create
-         : ?nested:t option
+         : ?nested:t
         -> Component.t Index.Map.t
         -> Typing_env_extension.t
         -> t
@@ -4514,17 +4472,11 @@ module Make (Expr : Expr_intf.S) = struct
 
         val meet
            : Meet_env.t
-          -> Relational_product.fresh_component_semantics
           -> t
           -> t
           -> (t * Typing_env_extension.t) Or_bottom.t
 
-        val join
-           : Join_env.t
-          -> Relational_product.fresh_component_semantics
-          -> t
-          -> t
-          -> t
+        val join : Join_env.t -> t -> t -> t
 
         include Contains_names.S with type t := t
       end) :
@@ -4554,17 +4506,11 @@ module Make (Expr : Expr_intf.S) = struct
           operation has been completed. *)
       val meet
          : Meet_env.t
-        -> Relational_product.fresh_component_semantics
         -> t
         -> t
         -> (t * Maps_to.t) Or_bottom.t
 
-      val join
-         : Join_env.t
-        -> Relational_product.fresh_component_semantics
-        -> t
-        -> t
-        -> t
+      val join : Join_env.t -> t -> t -> t
 
       val known : t -> Maps_to.t Tag_and_index.Map.t
 

@@ -115,7 +115,7 @@ module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
     let perm = Name_permutation.compose perm0 perm1 in
     let perm' = Name_permutation.compose perm0' perm1' in
     let fresh_term = Term.apply_name_permutation term perm in
-    let fresh_term' = Term.apply_name_permutation term perm' in
+    let fresh_term' = Term.apply_name_permutation term' perm' in
     f fresh_name0 fresh_name1 fresh_term fresh_term'
 
   let apply_name_permutation (name0, name1, term) perm =
