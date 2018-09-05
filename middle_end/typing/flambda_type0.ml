@@ -228,23 +228,6 @@ module type Either_meet_or_join_intf = sig
     -> 'a
     -> 'a
     -> 'a Or_bottom.t
-
-  val switch'_with_param
-     : (Meet_env.t
-      -> 'b
-      -> 'a
-      -> 'a
-      -> ('a * Typing_env_extension.t) Or_bottom.t)
-    -> (Join_env.t
-      -> 'b
-      -> 'a
-      -> 'a
-      -> 'a)
-    -> Join_env.t
-    -> 'b
-    -> 'a
-    -> 'a
-    -> 'a Or_bottom.t
 end
 
 module type Meet_and_join_spec_intf = sig
@@ -914,7 +897,7 @@ module Make (Expr : Expr_intf.S) = struct
         | Bottom -> Bottom
         | Ok (thing, _) -> Ok thing
 
-      let switch'_with_param meet _join join_env param thing1 thing2
+      let switch' meet _join join_env param thing1 thing2
             : _ Or_bottom.t =
         let result : _ Or_bottom.t =
           meet (Join_env.central_environment join_env) param thing1 thing2
@@ -1038,7 +1021,7 @@ module Make (Expr : Expr_intf.S) = struct
       let switch' _meet join join_env thing1 thing2 : _ Or_bottom.t =
         Ok (join join_env thing1 thing2)
 
-      let switch'_with_param _meet join join_env param thing1 thing2
+      let switch' _meet join join_env param thing1 thing2
             : _ Or_bottom.t =
         Ok (join join_env param thing1 thing2)
     end
@@ -4904,7 +4887,7 @@ module Make (Expr : Expr_intf.S) = struct
           with module Meet_env := Meet_env
           with module Typing_env_extension := Typing_env_extension) =
       struct
-        let meet_or_join env fresh_component_semantics t1 t2 =
+        let meet_or_join env t1 t2 =
           let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
           let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
           let env = Join_env.clear_name_permutations env in
@@ -4935,8 +4918,8 @@ module Make (Expr : Expr_intf.S) = struct
               (* CR mshinwell: What happens to any generated equations in the
                  [meet] case (same below)? *)
               let maps_to =
-                E.switch'_with_param Maps_to.meet Maps_to.join env
-                  fresh_component_semantics maps_to1 from_at_least2
+                E.switch' Maps_to.meet Maps_to.join env
+                  maps_to1 from_at_least2
               in
               match maps_to with
               | Bottom -> None
@@ -4953,8 +4936,8 @@ module Make (Expr : Expr_intf.S) = struct
                 ~get_equations_to_deposit1:Join_env.holds_on_right
             | Some maps_to1, Some maps_to2 ->
               let maps_to =
-                E.switch'_with_param Maps_to.meet Maps_to.join env
-                  fresh_component_semantics maps_to1 maps_to2
+                E.switch' Maps_to.meet Maps_to.join env
+                  maps_to1 maps_to2
               in
               begin match maps_to with
               | Bottom -> None
@@ -4989,10 +4972,7 @@ module Make (Expr : Expr_intf.S) = struct
       module Join = Meet_or_join (Either_meet_or_join.For_join)
 
       let meet env t1 t2 : _ Or_bottom.t =
-        let t =
-          Meet.meet_or_join (Join_env.create env)
-            fresh_component_semantics t1 t2
-        in
+        let t = Meet.meet_or_join (Join_env.create env) t1 t2 in
         if Tag_and_index.Map.is_empty t.known && Index.Map.is_empty t.at_least
         then Bottom
         else
@@ -5086,12 +5066,10 @@ module Make (Expr : Expr_intf.S) = struct
         let add_or_meet_equations t env t' =
           meet env t t'
 
-        let meet env _ t1 t2 : _ Or_bottom.t =
+        let meet env t1 t2 : _ Or_bottom.t =
           let t = meet env t1 t2 in
           if is_empty t then Bottom
           else Ok (t, empty ())
-
-        let join env _ t1 t2 = join env t1 t2
 
         let bottom () = empty ()
       end
@@ -5129,8 +5107,8 @@ module Make (Expr : Expr_intf.S) = struct
       let print = RL.print
       let equal = RL.equal
 
-      let meet env t1 t2 = RL.meet env Fresh t1 t2
-      let join env t1 t2 = RL.join env Fresh t1 t2
+      let meet = RL.meet
+      let join = RL.join
 
       let free_names = RL.free_names
       let apply_name_permutation = RL.apply_name_permutation
@@ -5737,12 +5715,11 @@ module Make (Expr : Expr_intf.S) = struct
 
       let free_names _t = Name_occurrences.create ()
       let apply_name_permutation t _perm = t
+      let rename t = t
     end
 
-    module RP =
-      Relational_product.Make (Closure_id) (Logical_variable_component) (Unit)
-
-    type t = RP.t
+    include
+      Relational_product.Make (Closure_id) (Logical_variable_component)
 
     let create closure_ids_to_tys =
       let closure_ids_to_logical_variables =
@@ -5760,21 +5737,7 @@ module Make (Expr : Expr_intf.S) = struct
           closure_ids_to_tys
           (Typing_env_extension.empty ())
       in
-      RP.create [
-        closure_ids_to_logical_variables, env_extension;
-      ]
-
-    let create_bottom () = RP.create_bottom ~arity:1
-
-    let print ~cache ppf t = RP.print_with_cache ~cache ppf t
-
-    let meet env t1 t2 = RP.meet env Fresh t1 t2
-    let join env t1 t2 = RP.join env Fresh t1 t2
-
-    let equal = RP.equal
-    let free_names = RP.free_names
-    let apply_name_permutation = RP.apply_name_permutation
-    let add_or_meet_equations = RP.add_or_meet_equations
+      create closure_ids_to_logical_variables, env_extension
   end and Typing_env : sig 
     type t
 
