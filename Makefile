@@ -190,8 +190,8 @@ ifeq ($(ARCH),amd64)
 ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
-MIDDLE_END_CMX_EARLY=\
-  middle_end/cmx/export_info.cmo \
+MIDDLE_END_CMX_EARLY=
+  # middle_end/cmx/export_info.cmo \
   # middle_end/cmx/export_info_for_pack.cmo
 
 MIDDLE_END_CMX_LATE=\
@@ -242,7 +242,7 @@ ASMCOMP=\
 #  asmcomp/printbackend_primitives.cmo \
 #  asmcomp/backend_primitives_from_lambda.cmo \
 
-MIDDLE_END_ANALYSIS=\
+MIDDLE_END_ANALYSIS=
   # middle_end/analysis/alias_analysis.cmo \
   # middle_end/analysis/extract_projections.cmo \
   # middle_end/analysis/find_recursive_functions.cmo \
@@ -251,40 +251,41 @@ MIDDLE_END_ANALYSIS=\
   # middle_end/analysis/place_continuations.cmo \
   # middle_end/analysis/reachability.cmo
 
-MIDDLE_END_CODE_MOTION=\
-  middle_end/code_motion/lift_let_cont.cmo \
-  middle_end/code_motion/lift_to_toplevel.cmo \
-  middle_end/code_motion/sink_lets.cmo
+MIDDLE_END_CODE_MOTION=
+#  middle_end/code_motion/lift_let_cont.cmo \
+#  middle_end/code_motion/lift_to_toplevel.cmo \
+#  middle_end/code_motion/sink_lets.cmo
 
 #  middle_end/code_motion/lift_constants.cmo \
   middle_end/code_motion/share_constants.cmo \
 
 MIDDLE_END_FROM_LAMBDA=\
   middle_end/from_lambda/prepare_lambda.cmo \
-  middle_end/from_lambda/ilambda.cmo \
-  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
-  middle_end/from_lambda/closure_conversion_aux.cmo \
-  middle_end/from_lambda/closure_conversion.cmo \
+  middle_end/from_lambda/ilambda.cmo
+#  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
+#  middle_end/from_lambda/closure_conversion_aux.cmo \
+#  middle_end/from_lambda/closure_conversion.cmo \
   middle_end/from_lambda/cps_conversion.cmo
 
 # CR mshinwell: Wart: simplify modules in the inlining stanza below
 
-MIDDLE_END_INLINING=\
-  middle_end/inlining/inlining_cost.cmo \
-  middle_end/inlining/inlining_stats_types.cmo \
-  middle_end/inlining/inlining_stats.cmo \
-  middle_end/inlining/continuation_approx.cmo \
-  middle_end/simplify/simplify_env_and_result.cmo \
-  middle_end/simplify/simplify_aux.cmo \
-  middle_end/inlining/continuation_inlining.cmo \
-  middle_end/inlining/inlining_transforms.cmo \
-  middle_end/inlining/inlining_decision.cmo
+MIDDLE_END_INLINING=
+#  middle_end/inlining/inlining_cost.cmo \
+#  middle_end/inlining/inlining_stats_types.cmo \
+#  middle_end/inlining/inlining_stats.cmo \
+#  middle_end/inlining/continuation_approx.cmo \
+#  middle_end/simplify/simplify_env_and_result.cmo \
+#  middle_end/simplify/simplify_aux.cmo \
+#  middle_end/inlining/continuation_inlining.cmo \
+#  middle_end/inlining/inlining_transforms.cmo \
+#  middle_end/inlining/inlining_decision.cmo
 
   # middle_end/inlining/continuation_specialisation.cmo \
   # middle_end/inlining/continuation_with_specialised_args.cmo \
 
 MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/id_types.cmo \
+  middle_end/typing/flambda_kind.cmo \
   middle_end/language/closure_element.cmo \
   middle_end/language/closure_id.cmo \
   middle_end/language/closure_origin.cmo \
@@ -294,30 +295,33 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/num_continuation_uses.cmo \
   middle_end/language/symbol.cmo \
   middle_end/typing/logical_variable.cmo \
-  middle_end/typing/int_index.cmo \
   middle_end/language/name.cmo \
+  middle_end/typing/name_or_export_id.cmo \
+  middle_end/language/continuation.cmo \
+  middle_end/language/bindable_name.cmo \
+  middle_end/language/name_permutation.cmo \
   middle_end/language/parameter.cmo \
   middle_end/language/scope_level.cmo \
   middle_end/language/set_of_closures_origin.cmo \
   middle_end/language/var_within_closure.cmo \
-  middle_end/typing/unit.cmo \
-  middle_end/typing/tag_index.cmo \
-  middle_end/typing/closure_id_set.cmo \
-  middle_end/typing/var_within_closure_set.cmo \
-  middle_end/typing/closure_id_and_var_within_closure_set.cmo \
   middle_end/typing/or_bottom.cmo \
   middle_end/typing/or_unknown.cmo \
   middle_end/typing/or_absorbing.cmo \
   middle_end/typing/tag_and_size.cmo \
   middle_end/typing/changes.cmo \
-  middle_end/typing/flambda_kind.cmo \
   middle_end/language/invalid_term_semantics.cmo \
   middle_end/language/recursive.cmo \
   middle_end/language/continuation_counts.cmo \
+  middle_end/language/name_occurrences.cmo \
+  middle_end/typing/closure_id_set.cmo \
+  middle_end/typing/int_index.cmo \
+  middle_end/typing/tag_index.cmo \
+  middle_end/typing/unit.cmo \
+  middle_end/typing/var_within_closure_set.cmo \
+  middle_end/typing/closure_id_and_var_within_closure_set.cmo \
   middle_end/typing/contains_names.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/kinded_parameter.cmo \
-  middle_end/language/name_permutation.cmo \
   middle_end/language/name_abstraction.cmo \
   middle_end/language/set_with_permutation_action.cmo \
   middle_end/language/bound_name_set.cmo \
@@ -325,7 +329,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/bound_continuation.cmo \
   middle_end/language/bound_continuations.cmo \
   middle_end/language/bound_kinded_parameter_list.cmo \
-  middle_end/language/name_occurrences.cmo \
+  middle_end/language/invariant_env.cmo \
+  middle_end/typing/type_equality_env.cmo \
   middle_end/typing/logical_variable_component.cmo \
   middle_end/language/inline_attribute.cmo \
   middle_end/language/specialise_attribute.cmo \
@@ -333,20 +338,18 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/flambda_primitive.cmo \
   middle_end/typing/string_info.cmo \
   middle_end/language/allocated_const.cmo \
-  middle_end/typing/type_equality_env.cmo \
   middle_end/typing/name_like_intf.cmo \
   middle_end/language/expr_intf.cmo \
   middle_end/typing/flambda_type0_intf.cmo \
   middle_end/typing/flambda_type0.cmo \
-  middle_end/language/invariant_env.cmo \
   middle_end/language/flambda.cmo \
   middle_end/typing/flambda_type.cmo \
   middle_end/language/number_adjuncts.cmo \
   middle_end/language/flambda_static.cmo \
   middle_end/language/flambda_utils.cmo
 
-MIDDLE_END_REMOVAL=\
-  middle_end/removal/remove_unused_continuation_params.cmo
+MIDDLE_END_REMOVAL=
+#  middle_end/removal/remove_unused_continuation_params.cmo
   # middle_end/removal/initialize_symbol_to_let_symbol.cmo \
   # middle_end/removal/ref_to_variables.cmo \
   # middle_end/removal/remove_free_vars_equal_to_args.cmo \
@@ -355,24 +358,24 @@ MIDDLE_END_REMOVAL=\
   # middle_end/removal/remove_unused_program_constructs.cmo \
   # middle_end/removal/unrecursify.cmo
 
-MIDDLE_END_SIMPLIFY=\
-  middle_end/simplify/continuation_uses.cmo \
-  middle_end/simplify/join_point.cmo \
-  middle_end/simplify/simplify_simple.cmo \
-  middle_end/simplify/simplify_generic_array.cmo \
-  middle_end/simplify/simplify_unary_primitive.cmo \
-  middle_end/simplify/simplify_binary_primitive.cmo \
-  middle_end/simplify/simplify_ternary_primitive.cmo \
-  middle_end/simplify/simplify_variadic_primitive.cmo \
-  middle_end/simplify/simplify_primitive.cmo \
-  middle_end/simplify/simplify_named.cmo \
-  middle_end/simplify/simplify_expr.cmo \
-  middle_end/simplify/simplify_program.cmo \
-  middle_end/simplify/simplify.cmo
+MIDDLE_END_SIMPLIFY=
+#  middle_end/simplify/continuation_uses.cmo \
+#  middle_end/simplify/join_point.cmo \
+#  middle_end/simplify/simplify_simple.cmo \
+#  middle_end/simplify/simplify_generic_array.cmo \
+#  middle_end/simplify/simplify_unary_primitive.cmo \
+#  middle_end/simplify/simplify_binary_primitive.cmo \
+#  middle_end/simplify/simplify_ternary_primitive.cmo \
+#  middle_end/simplify/simplify_variadic_primitive.cmo \
+#  middle_end/simplify/simplify_primitive.cmo \
+#  middle_end/simplify/simplify_named.cmo \
+#  middle_end/simplify/simplify_expr.cmo \
+#  middle_end/simplify/simplify_program.cmo \
+#  middle_end/simplify/simplify.cmo
 
-MIDDLE_END_UNBOXING=\
-  middle_end/unboxing/unbox_one_variable.cmo \
-  middle_end/unboxing/unbox_continuation_params.cmo
+MIDDLE_END_UNBOXING=
+#  middle_end/unboxing/unbox_one_variable.cmo \
+#  middle_end/unboxing/unbox_continuation_params.cmo
 
   # middle_end/unboxing/augment_specialised_args.cmo \
   # middle_end/unboxing/unbox_closures.cmo \
@@ -380,8 +383,8 @@ MIDDLE_END_UNBOXING=\
   # middle_end/unboxing/unbox_returns.cmo \
   # middle_end/unboxing/unbox_specialised_args.cmo
 
-MIDDLE_END_TOPLEVEL=\
-  middle_end/middle_end.cmo
+MIDDLE_END_TOPLEVEL=
+#  middle_end/middle_end.cmo
 
 MIDDLE_END=\
   $(MIDDLE_END_LANGUAGE_AND_TYPING) \
@@ -883,6 +886,10 @@ clean:: partialclean
 
 # Shared parts of the system
 
+# CR mshinwell: Temporary for testing/debugging
+compilerlibs/testflambda.cma: $(COMMON) $(MIDDLE_END_LANGUAGE_AND_TYPING)
+	$(CAMLC) -a -linkall -o $@ $^
+
 compilerlibs/ocamlcommon.cma: $(COMMON)
 	$(CAMLC) -a -linkall -o $@ $^
 partialclean::
@@ -1273,8 +1280,8 @@ partialclean::
 
 .PHONY: ocamltools
 ocamltools: ocamlc ocamlyacc ocamllex asmcomp/cmx_format.cmi \
-            asmcomp/printclambda.cmo compilerlibs/ocamlmiddleend.cma \
-            middle_end/cmx/export_info.cmo
+            asmcomp/printclambda.cmo compilerlibs/ocamlmiddleend.cma
+#            middle_end/cmx/export_info.cmo
 	$(MAKE) -C tools all
 
 .PHONY: ocamltoolsopt

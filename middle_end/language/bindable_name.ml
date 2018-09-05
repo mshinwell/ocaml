@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T = struct
+module T0 = struct
   type t =
     | Continuation of Continuation.t
     | Name of Name.t
@@ -30,8 +30,9 @@ module T = struct
 
   let print ppf t =
     match t with
-    | Continuation k -> Continuation.print k
-    | Name name -> Name.print name
+    | Continuation k -> Continuation.print ppf k
+    | Name name -> Name.print ppf name
 end
 
-include Map.Make_with_set (T)
+include T0
+include Map.Make_with_set (T0)

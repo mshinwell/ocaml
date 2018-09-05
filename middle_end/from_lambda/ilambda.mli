@@ -21,8 +21,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42-49"]
 
 type trap_action =
-  | Push of { id : Trap_id.t; exn_handler : Continuation.t; }
-  | Pop of { id : Trap_id.t; exn_handler : Continuation.t; }
+  | Push of { exn_handler : Continuation.t; }
+  | Pop of { exn_handler : Continuation.t; }
 
 type t =
   | Let of Ident.t * named * t

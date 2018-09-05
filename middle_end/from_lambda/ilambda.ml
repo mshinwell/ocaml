@@ -19,8 +19,8 @@
 module L = Lambda
 
 type trap_action =
-  | Push of { id : Trap_id.t; exn_handler : Continuation.t; }
-  | Pop of { id : Trap_id.t; exn_handler : Continuation.t; }
+  | Push of { exn_handler : Continuation.t; }
+  | Pop of { exn_handler : Continuation.t; }
 
 type t =
   | Let of Ident.t * named * t
@@ -131,6 +131,7 @@ and print_named ppf (named : named) =
     fprintf ppf "@[<2>(assign@ %a@ %a)@]" Ident.print being_assigned
       Ident.print new_value
 
+(* CR mshinwell: Rename [lam] -> [print] *)
 and lam ppf (t : t) =
   let fprintf = Format.fprintf in
   match t with
@@ -224,11 +225,11 @@ and lam ppf (t : t) =
     let print_trap_action ppf trap_action =
       match trap_action with
       | None -> ()
-      | Some (Push { id; exn_handler; }) ->
-        fprintf ppf "push %a %a then " Trap_id.print id
+      | Some (Push { exn_handler; }) ->
+        fprintf ppf "push %a then "
           Continuation.print exn_handler
-      | Some (Pop { id; exn_handler; }) ->
-        fprintf ppf "pop %a %a then " Trap_id.print id
+      | Some (Pop { exn_handler; }) ->
+        fprintf ppf "pop %a then "
           Continuation.print exn_handler
     in
     fprintf ppf "@[<2>(%aapply_cont@ %a@ %a)@]"
