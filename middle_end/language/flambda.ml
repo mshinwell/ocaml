@@ -707,6 +707,11 @@ module Switch = struct
     Continuation_counts.create_list (Discriminant.Map.data arms)
 end
 
+type switch_creation_result =
+  | Have_deleted_comparison_but_not_branch
+  | Have_deleted_comparison_and_branch
+  | Nothing_deleted
+
 module rec Expr : sig
   type t =
     | Let of Let.t
@@ -719,15 +724,17 @@ module rec Expr : sig
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val invariant : Invariant_env.t -> t -> Flambda_primitive.result_kind
+  val invariant : Invariant_env.t -> t -> unit
 
   include Contains_names.S with type t := t
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
+
   val create_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Discriminant.Map.t
-    -> Expr.t
+    -> Expr.t * switch_creation_result
+
   val invalid : unit -> t
   type maybe_named =
     | Is_expr of t
@@ -826,11 +833,6 @@ end = struct
       Invalid Treat_as_unreachable
     else
       Invalid Halt_and_catch_fire
-
-  type switch_creation_result =
-    | Have_deleted_comparison_but_not_branch
-    | Have_deleted_comparison_and_branch
-    | Nothing_deleted
 
   let create_switch ~scrutinee ~arms =
     if Discriminant.Map.cardinal arms < 1 then
@@ -2024,8 +2026,14 @@ end = struct
       handler : Expr_with_permutation.t;
     }
 
-    let print_with_cache ~cache ppf t =
-
+    let print_with_cache ~cache ppf { param_relations; handler; } =
+      fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(param_relations %a)@]@ \
+          @[<hov 1>(handler %a)@]\
+          )@]"
+        (Flambda_type.Typing_env_extension.print_with_cache ~cache)
+        param_relations
+        (Expr_with_permutation.print_with_cache ~cache) handler
 
     let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -2091,7 +2099,7 @@ end = struct
 
   let contains_exn_handler t =
     Continuation.Map.exists (fun _cont handler ->
-        Continuation_handler.contains_exn_handler handler)
+        Continuation_handler.is_exn_handler handler)
       t
 
   let no_effects_or_coeffects t =
@@ -2140,7 +2148,8 @@ end = struct
   let pattern_match t ~f =
     Params_and_handler.pattern_match t.params_and_handler ~f
 
-  let print_using_where_with_cache ~cache ppf k (t : t) ~first =
+  let print_using_where_with_cache ~cache ppf k
+        ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
     if not first then begin
       fprintf ppf "@ "
     end;
@@ -2204,8 +2213,10 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 *)
 
-  let create params ~handler ~stub ~is_exn_handler =
-    let params_and_handler = Params_and_handler.create params ~handler in
+  let create params ~param_relations ~handler ~stub ~is_exn_handler =
+    let params_and_handler =
+      Params_and_handler.create params ~param_relations ~handler
+    in
     { params_and_handler;
       stub;
       is_exn_handler;
@@ -2218,9 +2229,9 @@ end = struct
     Params_and_handler.free_names params_and_handler
 
   let apply_name_permutation
-        ({ params_and_handler; stub = _; is_exn_handler = _; } as t) perm =
+        ({ params_and_handler; stub; is_exn_handler; } as t) perm =
     let params_and_handler' =
-      Flambda_type.Parameters.apply_name_permutation params_and_handler perm
+      Params_and_handler.apply_name_permutation params_and_handler perm
     in
     if params_and_handler == params_and_handler' then t
     else
@@ -2274,18 +2285,16 @@ end = struct
           closure_elements;
           direct_call_surrogates;
         } =
-      fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
-          %a@ \
-          @[<hov 1>(closure_elements (%a))@]@ \
-          @[<hov 1>(direct_call_surrogates %a)@]@ \
-          @[<hov 1>(set_of_closures_origin %a)@]\
-          )@]"
-        (Misc_color.bold_green ())
-        (Misc_color.reset ())
-        (Function_declarations.print_with_cache ~cache) function_decls
-        (Var_within_closure.Map.print Simple.print) closure_elements
-        (Closure_id.Map.print Closure_id.print) direct_call_surrogates
-        Set_of_closures_origin.print function_decls.set_of_closures_origin
+    fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
+        @[<hov 1>(function_decls %a)@]@ \
+        @[<hov 1>(closure_elements %a)@]\
+        @[<hov 1>(direct_call_surrogates %a)@]@ \
+        )@]"
+      (Misc_color.bold_green ())
+      (Misc_color.reset ())
+      (Function_declarations.print_with_cache ~cache) function_decls
+      (Var_within_closure.Map.print Simple.print) closure_elements
+      (Closure_id.Map.print Closure_id.print) direct_call_surrogates
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -2296,9 +2305,8 @@ end = struct
         } =
     let in_decls = Function_declarations.free_names function_decls in
     let in_closure_elements =
-      Name_occurrences.create_from_set_in_terms
-        (Simple.List.free_names
-          (Var_within_closure.Map.data closure_elements))
+      Simple.List.free_names
+        (Var_within_closure.Map.data closure_elements)
     in
     Name_occurrences.union in_decls in_closure_elements
 
@@ -2312,7 +2320,7 @@ end = struct
     in
     let closure_elements' =
       Var_within_closure.Map.map_sharing (fun simple ->
-          Name_permutation.apply_simple perm simple)
+          Simple.apply_name_permutation simple perm)
         closure_elements
     in
     if function_decls == function_decls'
@@ -2324,14 +2332,16 @@ end = struct
         direct_call_surrogates;
       }
 
+(*
   let variables_bound_by_the_closure t =
-    Var_within_closure.Map.keys t.free_vars
+    Var_within_closure.Map.keys t.closure_elements
 
   let find_free_variable cv ({ free_vars; _ } : t) =
     let free_var : Free_var.t =
       Var_within_closure.Map.find cv free_vars
     in
     free_var.var
+*)
 
 (* To be re-enabled as we need it
   module Iterators = struct
@@ -2627,7 +2637,7 @@ end = struct
     Closure_id.Map.fold
       (fun _closure_id (func_decl : Function_declaration.t) syms ->
         Name_occurrences.union syms (Function_declaration.free_names func_decl))
-      t.funs
+      funs
       (Name_occurrences.create ())
 
   let apply_name_permutation ({ set_of_closures_origin; funs; } as t) perm =
@@ -2642,6 +2652,8 @@ end and Params_and_body : sig
   type t
 
   include Contains_names.S with type t := t
+
+  val print : Format.formatter -> t -> unit
 
   val create
      : Kinded_parameter.t list
@@ -2659,17 +2671,53 @@ end and Params_and_body : sig
       -> 'a)
     -> 'a
 end = struct
-  include
-    Name_abstraction.Make2 (Bound_kinded_parameter_set) (Bound_variable)
-      (Expr_with_permutation)
+  module T0 = struct
+    type t = {
+      param_relations : Flambda_type.Typing_env_extension.t;
+      body : Expr_with_permutation.t;
+    }
 
-  let create params ~body ~my_closure =
-    create (Flambda_type.Parameters.to_set params) my_closure
-      (Expr_with_permutation.create body)
+    let print_with_cache ~cache ppf { param_relations; body; } =
+      fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(param_relations %a)@]@ \
+          @[<hov 1>(body %a)@]\
+          )@]"
+        Flambda_type.Typing_env_extension.print param_relations
+        Expr_with_permutation.print body
+
+    let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+    let free_names { param_relations; body; } =
+      Name_occurrences.union
+        (Flambda_type.Typing_env_extension.free_names param_relations)
+        (Expr_with_permutation.free_names body)
+
+    let apply_name_permutation ({ param_relations; body;} as t) perm =
+      let param_relations' =
+        Flambda_type.Typing_env_extension.apply_name_permutation
+          param_relations perm
+      in
+      let body' =
+        Expr_with_permutation.apply_name_permutation body perm
+      in
+      if param_relations == param_relations' && body == body' then t
+      else { param_relations = param_relations'; body = body'; }
+  end
+
+  include
+    Name_abstraction.Make2 (Bound_kinded_parameter_set) (Bound_variable) (T0)
+
+  let create params ~param_relations ~body ~my_closure =
+    let t0 : T0.t =
+      { param_relations;
+        body = Expr_with_permutation.create body;
+      }
+    in
+    create params my_closure t0
 
   let pattern_match t ~f =
-    pattern_match t ~f:(fun params my_closure expr ->
-      f params ~body ~my_closure)
+    pattern_match t ~f:(fun params my_closure t0 ->
+      f params ~param_relations:t0.param_relations ~body:t0.body ~my_closure)
 end and Function_declaration : sig
   include Contains_names.S
   val create
@@ -2710,7 +2758,6 @@ end = struct
     exn_continuation_param : Continuation.t;
     params_and_body : Params_and_body.t;
     code_id : Code_id.t;
-    free_names_in_body : Name_occurrences.t;
     result_arity : Flambda_arity.t;
     stub : bool;
     dbg : Debuginfo.t;
@@ -2730,7 +2777,7 @@ end = struct
     | true, (Always_inline | Unroll _) ->
       Misc.fatal_errorf
         "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
-        Expr.print body
+        Params_and_body.print params_and_body
     end;
     begin match stub, specialise with
     | true, (Never_specialise | Default_specialise)
@@ -2738,7 +2785,7 @@ end = struct
     | true, Always_specialise ->
       Misc.fatal_errorf
         "Stubs may not be annotated as [Always_specialise]: %a"
-        Expr.print body
+        Params_and_body.print params_and_body
     end;
     { closure_origin;
       continuation_param;
@@ -2766,14 +2813,13 @@ end = struct
           specialise;
           is_a_functor;
         } =
-    let stub = if f.stub then " *stub*" else "" in
-    let is_a_functor = if f.is_a_functor then " *functor*" else "" in
+    let stub = if stub then " *stub*" else "" in
+    let is_a_functor = if is_a_functor then " *functor*" else "" in
     Params_and_body.pattern_match params_and_body
-      ~f:(fun params ~body ~my_closure ->
+      ~f:(fun params ~param_relations ~body ~my_closure ->
         fprintf ppf
           "@[<2>(%a%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
-            %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->\
-            @ @[<2>%a@])@]@ "
+            %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s"
           Closure_id.print closure_id
           stub
           is_a_functor
@@ -2785,10 +2831,17 @@ end = struct
           (Misc_color.reset ())
           Continuation.print continuation_param
           Continuation.print exn_continuation_param
-          (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
+          Kinded_parameter.List.print params
           (Misc_color.bold_white ())
           Flambda_arity.print result_arity
-          (Misc_color.reset ())
+          (Misc_color.reset ());
+        if not (Flambda_type.Typing_env_extension.is_empty param_relations)
+        then begin
+          fprintf ppf " [%a]"
+            (Flambda_type.Typing_env_extension.print_with_cache ~cache)
+            param_relations
+        end;
+        fprintf ppf "@]@ ->\ @ @[<2>%a@])@]@ "
           (Expr.print_with_cache ~cache) body)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -2882,6 +2935,7 @@ end = struct
     (* CR pchambart: this needs another way to do it *)
     assert false
 
+(* To be re-enabled
   let closures_required_by_entry_point ~(entry_point : Closure_id.t) ~backend
       (function_decls : t) =
     let dependencies =
@@ -2916,6 +2970,7 @@ end = struct
           fun_decls.funs)
     in
     number_of_stub_functions > 0
+*)
 
 (*
   let map_parameter_types t ~f =
@@ -2926,56 +2981,6 @@ end = struct
     in
     update t ~funs
 *)
-
-  (* CR mshinwell: Tidy up, stop computing the [subst] that used to be
-     returned *)
-  let rename_names (func_decls : t) subst =
-    let freshen_func_decl (func_decl : Function_declaration.t) subst =
-(*
-      let params_rev, subst =
-        List.fold_left (fun (params_rev, subst) param ->
-            let var = Typed_parameter.var param in
-            let fresh_var, subst =
-              Freshening.add_variable subst var
-            in
-            let param =
-              Typed_parameter.map_var ~f:(fun _var -> fresh_var) param
-            in
-            param :: params_rev, subst)
-          ([], subst)
-          func_decl.params
-      in
-*)
-      let params = T.Parameters.rename_variables func_decl.params subst in
-      let results = T.Parameters.rename_variables func_decl.results subst in
-      (* Since all parameters are distinct, even between functions, we can
-         just use a single substitution. *)
-      (* CR mshinwell: Why does this [toplevel_substitution] need to happen?
-         Can't this subst be put into the environment and then applied
-         as needed? *)
-      let body =
-        Expr.toplevel_substitution subst func_decl.body
-      in
-      let function_decl =
-        Function_declaration.update_params_results_and_body func_decl
-          ~params ~body ~results
-      in
-      function_decl, subst
-    in
-    let funs, _subst =
-      Closure_id.Map.fold (fun closure_id func_decl (funs, subst) ->
-          let func_decl, subst =
-            freshen_func_decl func_decl subst
-          in
-          Closure_id.Map.add closure_id func_decl funs, subst)
-        func_decls.funs
-        (Closure_id.Map.empty, subst)
-    in
-    update func_decls ~funs
-
-  let freshen t freshening =
-    let subst = Freshening.name_substitution freshening in
-    rename_names t subst
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
   = Flambda_type0.Make (Expr)
 

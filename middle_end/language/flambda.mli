@@ -186,6 +186,11 @@ module Switch : sig
   val num_arms : t -> int
 end
 
+type switch_creation_result = private
+  | Have_deleted_comparison_but_not_branch
+  | Have_deleted_comparison_and_branch
+  | Nothing_deleted
+
 module rec Expr : sig
   (** With the exception of applications of primitives ([Prim]), Flambda terms
       are in CPS.
@@ -341,6 +346,7 @@ module rec Expr : sig
     -> with_wrappers:with_wrapper Continuation.Map.t
     -> t
 
+(* To be re-enabled
   (* CR-soon mshinwell: we need to document whether these iterators follow any
      particular order. *)
   module Iterators : sig
@@ -473,6 +479,7 @@ module rec Expr : sig
         -> 'b * Variable.t * Flambda_kind.t * (Named.t option))
       -> t * 'b
   end
+*)
 end and Named : sig
   (** Values of type [t] will always be [Let]-bound to a [Variable.t].
       (Note that [Simple.t] values do not need to be [Let]-bound; but they are
@@ -508,6 +515,7 @@ end and Named : sig
 
   val toplevel_substitution : Name.t Name.Map.t -> t -> t
 
+(* To be re-enabled
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
     
@@ -517,6 +525,7 @@ end and Named : sig
       val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
     end
   end
+*)
 end and Reachable : sig
   type t = private
     | Reachable of Named.t
@@ -614,22 +623,8 @@ end and Let_cont : sig
 
   val free_names : t -> Name_occurrences.t
 
-  (** Return all continuations bound in the given handlers (traversing all
-      the way down through the handlers, not just the immediately outermost
-      bindings). *)
-  val bound_continuations : t -> Continuation.Set.t
-
   (** Return all continuations free in the given handlers. *)
   val free_continuations : t -> Continuation.Set.t
-
-  type free_and_bound = private {
-    free : Continuation.Set.t;
-    bound : Continuation.Set.t;
-  }
-
-  (** As for [free_continuations] and [bound_continuations], but returning
-      the results together. *)
-  val free_and_bound_continuations : t -> free_and_bound
 
   (** Form a map from continuations to their definitions.  This is useful
       for analyses that don't care about the (non-)recursiveness of the
@@ -759,6 +754,7 @@ end and Set_of_closures : sig
   (** All names free in the given set of closures. *)
   val free_names : t -> Name_occurrences.t
 
+(* To be re-enabled
   val variables_bound_by_the_closure : t -> Var_within_closure.Set.t
 
   (** [find_free_variable v clos] raises [Not_found] if [c] is not in [clos]. *)
@@ -803,6 +799,7 @@ end and Set_of_closures : sig
         -> 'a)
       -> 'a
   end
+*)
 end and Function_declarations : sig
   (** The representation of a set of function declarations (possibly mutually
       recursive).  Such a set encapsulates the declarations themselves,
