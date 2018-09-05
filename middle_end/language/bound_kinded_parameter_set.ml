@@ -16,27 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Kinded_parameter.Set.t
-
-let free_names t =
-  Kinded_parameter.Set.fold (fun param free_names ->
-      Name_occurrences.add free_names
-        (Name (Kinded_parameter.name param))
-        In_terms)
-    t
-    (Name_occurrences.create ())
-
-let apply_name_permutation t perm =
-  let changed = ref false in
-  let result =
-    Kinded_parameter.Set.fold (fun param result ->
-        let param' = Kinded_parameter.apply_name_permutation param perm in
-        if not (param == param') then begin
-          changed := true;
-        end;
-        Kinded_parameter.Set.add param' result)
-      t
-      Kinded_parameter.Set.empty
-  in
-  if not !changed then t
-  else result
+include Set_with_permutation_action.Make (Kinded_parameter)

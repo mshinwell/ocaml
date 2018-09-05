@@ -16,16 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Continuation.t list
+include Set_with_permutation_action.Make (struct
+  include Continuation
 
-let rename t =
-  List.map (fun _k -> Continuation.create ()) t
+  let rename _k = Continuation.create ()
 
-let permutation_to_swap t1 t2 =
-  if List.compare_lengths t1 t2 <> 0 then begin
-    Misc.fatal_error "Bound_continuations.create with differing lengths"
-  end;
-  List.fold_left2 (fun perm k1 k2 ->
-      Name_permutation.add_continuation perm k1 k2)
-    (Name_permutation.create ())
-    t1 t2
+  let free_names k = Name_occurrences.singleton_in_terms (Continuation k)
+
+  let apply_name_permutation k perm =
+    Name_permutation.apply_continuation perm k
+end)

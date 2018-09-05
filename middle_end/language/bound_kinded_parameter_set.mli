@@ -19,3 +19,11 @@
 type t = Kinded_parameter.Set.t
 
 include Contains_names.S with type t := t
+
+include Set.S_printable
+  with type elt := Kinded_parameter.t
+  with type t := t
+
+val rename : t -> t
+
+val permutation_to_swap : t -> t -> Name_permutation.t

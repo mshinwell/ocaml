@@ -1531,25 +1531,42 @@ middle_end/language/bindable_name.cmi : middle_end/language/name.cmi \
     middle_end/language/continuation.cmi
 middle_end/language/bound_continuation.cmo : \
     middle_end/language/name_permutation.cmi \
-    middle_end/language/continuation.cmi
+    middle_end/language/name_occurrences.cmi \
+    middle_end/language/continuation.cmi \
+    middle_end/language/bound_continuation.cmi
 middle_end/language/bound_continuation.cmx : \
     middle_end/language/name_permutation.cmx \
-    middle_end/language/continuation.cmx
+    middle_end/language/name_occurrences.cmx \
+    middle_end/language/continuation.cmx \
+    middle_end/language/bound_continuation.cmi
+middle_end/language/bound_continuation.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi
 middle_end/language/bound_continuations.cmo : \
-    middle_end/language/name_permutation.cmi utils/misc.cmi \
-    middle_end/language/continuation.cmi
-middle_end/language/bound_continuations.cmx : \
-    middle_end/language/name_permutation.cmx utils/misc.cmx \
-    middle_end/language/continuation.cmx
-middle_end/language/bound_kinded_parameter_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi \
+    middle_end/language/continuation.cmi \
+    middle_end/language/bound_continuations.cmi
+middle_end/language/bound_continuations.cmx : \
+    middle_end/language/set_with_permutation_action.cmx \
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx \
+    middle_end/language/continuation.cmx \
+    middle_end/language/bound_continuations.cmi
+middle_end/language/bound_continuations.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi
+middle_end/language/bound_kinded_parameter_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/language/bound_kinded_parameter_set.cmi
 middle_end/language/bound_kinded_parameter_set.cmx : \
-    middle_end/language/name_occurrences.cmx \
+    middle_end/language/set_with_permutation_action.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/language/bound_kinded_parameter_set.cmi
 middle_end/language/bound_kinded_parameter_set.cmi : \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_name_set.cmo : \
@@ -1566,9 +1583,13 @@ middle_end/language/bound_name_set.cmi : \
     middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_variable.cmo : middle_end/language/variable.cmi \
-    middle_end/language/name_permutation.cmi middle_end/language/name.cmi
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    utils/misc.cmi
 middle_end/language/bound_variable.cmx : middle_end/language/variable.cmx \
-    middle_end/language/name_permutation.cmx middle_end/language/name.cmx
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
+    utils/misc.cmx
 middle_end/language/closure_element.cmo : middle_end/language/variable.cmi \
     middle_end/language/closure_element.cmi
 middle_end/language/closure_element.cmx : middle_end/language/variable.cmx \
@@ -1658,17 +1679,16 @@ middle_end/language/flambda.cmo : middle_end/language/variable.cmi \
     middle_end/typing/flambda_type0.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/language/flambda.cmi middle_end/language/discriminant.cmi \
-    middle_end/language/debuginfo.cmi \
+    middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
     middle_end/language/continuation_counts.cmi \
     middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi \
     middle_end/language/compilation_unit.cmi middle_end/language/code_id.cmi \
     middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi \
     utils/clflags.cmi middle_end/language/bound_variable.cmo \
     middle_end/language/bound_kinded_parameter_set.cmi \
-    middle_end/language/bound_continuations.cmo \
-    middle_end/language/bound_continuation.cmo \
-    middle_end/language/flambda.cmi
+    middle_end/language/bound_continuations.cmi \
+    middle_end/language/bound_continuation.cmi \
+    middle_end/language/bindable_name.cmi middle_end/language/flambda.cmi
 middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/language/var_within_closure.cmx utils/targetint.cmx \
     middle_end/language/specialise_attribute.cmx \
@@ -1688,8 +1708,7 @@ middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/typing/flambda_type0.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
-    middle_end/language/flambda.cmx middle_end/language/discriminant.cmx \
-    middle_end/language/debuginfo.cmx \
+    middle_end/language/discriminant.cmx middle_end/language/debuginfo.cmx \
     middle_end/language/continuation_counts.cmx \
     middle_end/language/continuation.cmx middle_end/typing/contains_names.cmx \
     middle_end/language/compilation_unit.cmx middle_end/language/code_id.cmx \
@@ -1698,7 +1717,7 @@ middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/language/bound_kinded_parameter_set.cmx \
     middle_end/language/bound_continuations.cmx \
     middle_end/language/bound_continuation.cmx \
-    middle_end/language/flambda.cmi
+    middle_end/language/bindable_name.cmx middle_end/language/flambda.cmi
 middle_end/language/flambda.cmi : middle_end/language/variable.cmi \
     middle_end/language/var_within_closure.cmi middle_end/language/symbol.cmi \
     middle_end/language/specialise_attribute.cmi \
@@ -3110,25 +3129,42 @@ middle_end/language/bindable_name.cmi : middle_end/language/name.cmi \
     middle_end/language/continuation.cmi
 middle_end/language/bound_continuation.cmo : \
     middle_end/language/name_permutation.cmi \
-    middle_end/language/continuation.cmi
+    middle_end/language/name_occurrences.cmi \
+    middle_end/language/continuation.cmi \
+    middle_end/language/bound_continuation.cmi
 middle_end/language/bound_continuation.cmx : \
     middle_end/language/name_permutation.cmx \
-    middle_end/language/continuation.cmx
+    middle_end/language/name_occurrences.cmx \
+    middle_end/language/continuation.cmx \
+    middle_end/language/bound_continuation.cmi
+middle_end/language/bound_continuation.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi
 middle_end/language/bound_continuations.cmo : \
-    middle_end/language/name_permutation.cmi utils/misc.cmi \
-    middle_end/language/continuation.cmi
-middle_end/language/bound_continuations.cmx : \
-    middle_end/language/name_permutation.cmx utils/misc.cmx \
-    middle_end/language/continuation.cmx
-middle_end/language/bound_kinded_parameter_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi \
+    middle_end/language/continuation.cmi \
+    middle_end/language/bound_continuations.cmi
+middle_end/language/bound_continuations.cmx : \
+    middle_end/language/set_with_permutation_action.cmx \
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx \
+    middle_end/language/continuation.cmx \
+    middle_end/language/bound_continuations.cmi
+middle_end/language/bound_continuations.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi
+middle_end/language/bound_kinded_parameter_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/language/bound_kinded_parameter_set.cmi
 middle_end/language/bound_kinded_parameter_set.cmx : \
-    middle_end/language/name_occurrences.cmx \
+    middle_end/language/set_with_permutation_action.cmx \
     middle_end/language/kinded_parameter.cmx \
     middle_end/language/bound_kinded_parameter_set.cmi
 middle_end/language/bound_kinded_parameter_set.cmi : \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/kinded_parameter.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_name_set.cmo : \
@@ -3145,9 +3181,13 @@ middle_end/language/bound_name_set.cmi : \
     middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_variable.cmo : middle_end/language/variable.cmi \
-    middle_end/language/name_permutation.cmi middle_end/language/name.cmi
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    utils/misc.cmi
 middle_end/language/bound_variable.cmx : middle_end/language/variable.cmx \
-    middle_end/language/name_permutation.cmx middle_end/language/name.cmx
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
+    utils/misc.cmx
 middle_end/language/closure_element.cmo : middle_end/language/variable.cmi \
     middle_end/language/closure_element.cmi
 middle_end/language/closure_element.cmx : middle_end/language/variable.cmx \
@@ -3237,17 +3277,16 @@ middle_end/language/flambda.cmo : middle_end/language/variable.cmi \
     middle_end/typing/flambda_type0.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/language/flambda.cmi middle_end/language/discriminant.cmi \
-    middle_end/language/debuginfo.cmi \
+    middle_end/language/discriminant.cmi middle_end/language/debuginfo.cmi \
     middle_end/language/continuation_counts.cmi \
     middle_end/language/continuation.cmi middle_end/typing/contains_names.cmi \
     middle_end/language/compilation_unit.cmi middle_end/language/code_id.cmi \
     middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi \
     utils/clflags.cmi middle_end/language/bound_variable.cmo \
     middle_end/language/bound_kinded_parameter_set.cmi \
-    middle_end/language/bound_continuations.cmo \
-    middle_end/language/bound_continuation.cmo \
-    middle_end/language/flambda.cmi
+    middle_end/language/bound_continuations.cmi \
+    middle_end/language/bound_continuation.cmi \
+    middle_end/language/bindable_name.cmi middle_end/language/flambda.cmi
 middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/language/var_within_closure.cmx utils/targetint.cmx \
     middle_end/language/specialise_attribute.cmx \
@@ -3267,8 +3306,7 @@ middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/typing/flambda_type0.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
-    middle_end/language/flambda.cmx middle_end/language/discriminant.cmx \
-    middle_end/language/debuginfo.cmx \
+    middle_end/language/discriminant.cmx middle_end/language/debuginfo.cmx \
     middle_end/language/continuation_counts.cmx \
     middle_end/language/continuation.cmx middle_end/typing/contains_names.cmx \
     middle_end/language/compilation_unit.cmx middle_end/language/code_id.cmx \
@@ -3277,7 +3315,7 @@ middle_end/language/flambda.cmx : middle_end/language/variable.cmx \
     middle_end/language/bound_kinded_parameter_set.cmx \
     middle_end/language/bound_continuations.cmx \
     middle_end/language/bound_continuation.cmx \
-    middle_end/language/flambda.cmi
+    middle_end/language/bindable_name.cmx middle_end/language/flambda.cmi
 middle_end/language/flambda.cmi : middle_end/language/variable.cmi \
     middle_end/language/var_within_closure.cmi middle_end/language/symbol.cmi \
     middle_end/language/specialise_attribute.cmi \

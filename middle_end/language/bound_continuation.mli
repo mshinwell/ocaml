@@ -16,16 +16,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Continuation
+type t = Continuation.t
 
-let free_names t =
-  Name_occurrences.singleton_in_terms (Continuation t)
+include Contains_names.S with type t := t
 
-let apply_name_permutation t perm =
-  Name_permutation.apply_continuation perm t
+val print : Format.formatter -> t -> unit
 
-let rename _t =
-  Continuation.create ()
+val rename : t -> t
 
-let permutation_to_swap t1 t2 =
-  Name_permutation.add_continuation (Name_permutation.create ()) t1 t2
+val permutation_to_swap : t -> t -> Name_permutation.t

@@ -1771,8 +1771,8 @@ end = struct
               let handler = Non_recursive_let_cont_handler.handler handler in
               (k, handler) :: let_conts, body)
         | Recursive handlers ->
-          Recursive_let_cont_handlers.pattern_match handler
-            ~f:(fun handlers ~(body : Expr.t) ->
+          Recursive_let_cont_handlers.pattern_match handlers
+            ~f:(fun ~(body : Expr.t) handlers ->
               let let_conts, body =
                 match body with
                 | Let_cont let_cont -> gather_let_conts let_conts let_cont
@@ -1785,9 +1785,9 @@ end = struct
       fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>"
         (Expr.print_with_cache ~cache) body;
       let first = ref true in
-      List.iter (fun handler ->
+      List.iter (fun (k, handler) ->
           Continuation_handler.print_using_where_with_cache ~cache
-            ppf handler ~first:!first;
+            ppf k handler ~first:!first;
           first := false)
         let_conts;
       fprintf ppf "@]@])@]"
@@ -1805,12 +1805,13 @@ end = struct
     end;
     Recursive (Recursive_let_cont_handlers.create handlers ~body)
 
+(* To be re-enabled
+
   let to_continuation_map t =
     match t with
     | Non_recursive { name; handler } -> Continuation.Map.singleton name handler
     | Recursive handlers -> handlers
 
-(* To be re-enabled
   let map (t : t) ~f =
     match t with
     | Non_recursive { name; handler } ->
@@ -1825,8 +1826,11 @@ end = struct
 *)
 
   let no_effects_or_coeffects t =
-    no_effects_or_coeffects body
-      && Let_cont_handlers.no_effects_or_coeffects handlers
+    match t with
+    | Non_recursive handler ->
+      Non_recursive_let_cont_handler.no_effects_or_coeffects handler
+    | Recursive handlers ->
+      Recursive_let_cont_handlers.no_effects_or_coeffects handlers
 
   let free_names t =
     match t with
@@ -1860,10 +1864,12 @@ end and Non_recursive_let_cont_handler : sig
 
   val pattern_match
      : t
-    -> f:(Continuation.t -> body:Expr.t -> t)
+    -> f:(Continuation.t -> body:Expr.t -> 'a)
     -> 'a
 
   val handler : t -> Continuation_handler.t
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   module Continuation_and_body =
     Name_abstraction.Make (Bound_continuation) (Expr)
@@ -1902,8 +1908,15 @@ end = struct
     { handler = handler';
       continuation_and_body = continuation_and_body';
     }
+
+  let no_effects_or_coeffects ({ continuation_and_body = _; handler; } as t) =
+    Continuation_handler.no_effects_or_coeffects handler
+      && pattern_match t ~f:(fun _k ~body -> Expr.no_effects_or_coeffects body)
 end and Recursive_let_cont_handlers0 : sig
   include Contains_names.S
+
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val create
      : body:Expr.t
@@ -1912,6 +1925,8 @@ end and Recursive_let_cont_handlers0 : sig
 
   val body : t -> Expr.t
   val handlers : t -> Continuation_handlers.t
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   type t = {
     handlers : Continuation_handlers.t;
@@ -1940,8 +1955,15 @@ end = struct
     { handlers = handlers';
       body = body';
     }
+
+  let no_effects_or_coeffects { handlers; body; } =
+    Continuation_handlers.no_effects_or_coeffects handlers
+      && Expr.no_effects_or_coeffects (Expr_with_permutation.expr body)
 end and Recursive_let_cont_handlers : sig
   include Contains_names.S
+
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val create
      : body:Expr.t
@@ -1950,8 +1972,10 @@ end and Recursive_let_cont_handlers : sig
 
   val pattern_match
      : t
-    -> f:(body:Expr.t -> Continuation_handlers.t -> t)
+    -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
     -> 'a
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   include Name_abstraction.Make (Bound_continuations)
     (Recursive_let_cont_handlers0)
@@ -1968,10 +1992,17 @@ end = struct
       let body = Recursive_let_cont_handlers0.body handlers0 in
       let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
       f ~body handlers)
+
+  let no_effects_or_coeffects t =
+    pattern_match t (fun _bound handlers0 ->
+      Recursive_let_cont_handlers0.no_effects_or_coeffects handlers0)
 end and Params_and_handler : sig
   type t
 
   include Contains_names.S with type t := t
+
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val create
      : Kinded_parameter.t list
@@ -1992,9 +2023,30 @@ end = struct
       param_relations : Flambda_type.Typing_env_extension.t;
       handler : Expr_with_permutation.t;
     }
+
+    let print_with_cache ~cache ppf t =
+
+
+    let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+    let free_names { param_relations; handler; } =
+      Name_occurrences.union
+        (Flambda_type.Typing_env_extension.free_names param_relations)
+        (Expr_with_permutation.free_names handler)
+
+    let apply_name_permutation ({ param_relations; handler; } as t) perm =
+      let param_relations' =
+        Flambda_type.Typing_env_extension.apply_name_permutation
+          param_relations perm
+      in
+      let handler' =
+        Expr_with_permutation.apply_name_permutation handler perm
+      in
+      if param_relations == param_relations' && handler == handler' then t
+      else { param_relations = param_relations'; handler = handler'; }
   end
 
-  include Name_abstraction.Make (Kinded_parameter.List) (T0)
+  include Name_abstraction.Make (Bound_kinded_parameter_set) (T0)
 
   let create params ~param_relations ~handler =
     let t0 : T0.t =
@@ -2010,11 +2062,30 @@ end = struct
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
+  include Contains_names.S with type t := t
+
   val domain : t -> Continuation.Set.t
   val contains_exn_handler : t -> bool
   val no_effects_or_coeffects : t -> bool
 end = struct
   include Continuation_handlers
+
+  let free_names t =
+    Continuation.Map.fold (fun _k handler free_names ->
+        Name_occurrences.union free_names
+          (Continuation_handler.free_names handler))
+      t
+      (Name_occurrences.create ())
+
+  let apply_name_permutation t perm =
+    Continuation.Map.fold (fun k handler result ->
+        let k = Name_permutation.apply_continuation perm k in
+        let handler =
+          Continuation_handler.apply_name_permutation handler perm
+        in
+        Continuation.Map.add k handler result)
+      t
+      Continuation.Map.empty
 
   let domain t = Continuation.Map.keys t
 
@@ -2029,9 +2100,11 @@ end = struct
       t
 end and Continuation_handler : sig
   include Contains_names.S
+
   val print_using_where_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
+    -> Continuation.t
     -> t
     -> first:bool
     -> unit
@@ -2055,6 +2128,8 @@ end and Continuation_handler : sig
     -> 'a
   val stub : t -> bool
   val is_exn_handler : t -> bool
+
+  val no_effects_or_coeffects : t -> bool
 end = struct
   type t = {
     params_and_handler : Params_and_handler.t;
@@ -2065,7 +2140,7 @@ end = struct
   let pattern_match t ~f =
     Params_and_handler.pattern_match t.params_and_handler ~f
 
-  let print_using_where_with_cache ~cache ppf (t : t) ~first =
+  let print_using_where_with_cache ~cache ppf k (t : t) ~first =
     if not first then begin
       fprintf ppf "@ "
     end;
@@ -2076,7 +2151,7 @@ end = struct
 (*
         (if first_and_non_recursive then "" else "and ")
 *)
-        Continuation.print name
+        Continuation.print k
         (if stub then " *stub*" else "")
         (if is_exn_handler then "*exn* " else "")
         Kinded_parameter.List.print params;
@@ -2153,6 +2228,10 @@ end = struct
         stub;
         is_exn_handler;
       }
+
+  let no_effects_or_coeffects t =
+    pattern_match t ~f:(fun _params ~param_relations:_ ~handler ->
+      Expr.no_effects_or_coeffects handler)
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
