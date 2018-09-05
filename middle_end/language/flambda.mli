@@ -257,34 +257,6 @@ module rec Expr : sig
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t * switch_creation_result
 
-(*
-  (** Compute the free names of a term.  (This is O(1) for [Let]s).
-      If [ignore_uses_as_callee], all free names inside [Apply] expressions
-      are ignored.  Likewise [ignore_uses_in_project_var] for [Project_var]
-      expressions.
-  *)
-  val free_names_advanced
-     : ?ignore_uses_as_callee:unit
-    -> ?ignore_uses_as_argument:unit
-    -> ?ignore_uses_as_continuation_argument:unit
-    -> ?ignore_uses_in_project_var:unit
-    -> ?ignore_uses_in_apply_cont:unit
-    -> t
-    -> Name_occurrences.t
-
-  (** Compute _all_ names occurring inside an expression. *)
-  val used_names
-     : ?ignore_uses_as_callee:unit
-    -> ?ignore_uses_as_argument:unit
-    -> ?ignore_uses_as_continuation_argument:unit
-    -> ?ignore_uses_in_project_var:unit
-    -> t
-    -> Name_occurrences.t
-*)
-
-  (* CR mshinwell: Consider if we want to cache these. *)
-  val free_continuations : t -> Continuation.Set.t
-
   val invalid : unit -> t
 
   type maybe_named =

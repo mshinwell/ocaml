@@ -1532,7 +1532,7 @@ end and Let : sig
 
   val pattern_match
      : t
-    -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
+    -> f:(bound_var:Variable.t -> body:Expr_with_permutation.t -> 'a)
     -> 'a
 
   val continuation_counts_toplevel : t -> Continuation_counts.t
@@ -1641,7 +1641,7 @@ end = struct
         defining_expr = defining_expr';
       }
 
-  let continuation_counts_toplevel t
+  let continuation_counts_toplevel
         ({ bound_var_and_body = _; kind = _; defining_expr = _; } as t) =
     pattern_match t ~f:(fun ~bound_var:_ ~body ->
       Expr.continuation_counts_toplevel (Expr_with_permutation.expr body))
@@ -1658,11 +1658,6 @@ end and Let_cont : sig
   include Contains_names.S with type t := t
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val print_using_where_with_cache
-     : cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
   val invariant : Invariant_env.t -> t -> unit
   val create_non_recursive
      : Continuation.t
@@ -1673,10 +1668,11 @@ end and Let_cont : sig
      : Continuation_handlers.t
     -> body:Expr.t
     -> t
-  val free_continuations : t -> Continuation.Set.t
   val continuation_counts_toplevel : t -> Continuation_counts.t
+(*
   val to_continuation_map : t -> Continuation_handlers.t
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
+*)
   val no_effects_or_coeffects : t -> bool
 end = struct
   type t =
@@ -1855,6 +1851,13 @@ end = struct
       in
       if handlers == handlers' then t
       else Recursive handlers'
+
+  let continuation_counts_toplevel t =
+    match t with
+    | Non_recursive handler ->
+      Non_recursive_let_cont_handler.continuation_counts_toplevel handler
+    | Recursive handlers ->
+      Recursive_let_cont_handlers.continuation_counts_toplevel handlers
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
@@ -1872,6 +1875,8 @@ end and Non_recursive_let_cont_handler : sig
   val handler : t -> Continuation_handler.t
 
   val no_effects_or_coeffects : t -> bool
+
+  val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
   module Continuation_and_body =
     Name_abstraction.Make (Bound_continuation) (Expr)
@@ -1881,7 +1886,7 @@ end = struct
     handler : Continuation_handler.t;
   }
 
-  let create continuation ~body ~handler =
+  let create continuation ~body handler =
     let continuation_and_body =
       Continuation_and_body.create continuation body
     in
@@ -1914,6 +1919,9 @@ end = struct
   let no_effects_or_coeffects ({ continuation_and_body = _; handler; } as t) =
     Continuation_handler.no_effects_or_coeffects handler
       && pattern_match t ~f:(fun _k ~body -> Expr.no_effects_or_coeffects body)
+
+  let continuation_counts_toplevel _t =
+    Misc.fatal_error "Not yet implemented"
 end and Recursive_let_cont_handlers0 : sig
   include Contains_names.S
 
@@ -1934,6 +1942,11 @@ end = struct
     handlers : Continuation_handlers.t;
     body : Expr_with_permutation.t;
   }
+
+  (* CR mshinwell: Do something about these.  They are needed for the
+     name abstraction building functor below. *)
+  let print _ppf _t = Misc.fatal_error "Not used"
+  let print_with_cache ~cache:_ _ppf _t = Misc.fatal_error "Not used"
 
   let create ~body handlers =
     { handlers;
@@ -1978,6 +1991,8 @@ end and Recursive_let_cont_handlers : sig
     -> 'a
 
   val no_effects_or_coeffects : t -> bool
+
+  val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
   include Name_abstraction.Make (Bound_continuations)
     (Recursive_let_cont_handlers0)
@@ -1990,14 +2005,18 @@ end = struct
     create bound handlers0
 
   let pattern_match t ~f =
-    pattern_match t (fun _bound handlers0 ->
+    pattern_match t ~f:(fun _bound handlers0 ->
       let body = Recursive_let_cont_handlers0.body handlers0 in
       let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
       f ~body handlers)
 
   let no_effects_or_coeffects t =
-    pattern_match t (fun _bound handlers0 ->
-      Recursive_let_cont_handlers0.no_effects_or_coeffects handlers0)
+    pattern_match t ~f:(fun ~body handlers ->
+      Expr.no_effects_or_coeffects body
+        && Continuation_handlers.no_effects_or_coeffects handlers)
+
+  let continuation_counts_toplevel _t =
+    Misc.fatal_error "Not yet implemented"
 end and Params_and_handler : sig
   type t
 
@@ -2054,7 +2073,7 @@ end = struct
       else { param_relations = param_relations'; handler = handler'; }
   end
 
-  include Name_abstraction.Make (Bound_kinded_parameter_set) (T0)
+  include Name_abstraction.Make (Bound_kinded_parameter_list) (T0)
 
   let create params ~param_relations ~handler =
     let t0 : T0.t =
