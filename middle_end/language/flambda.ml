@@ -1327,6 +1327,8 @@ end and Named : sig
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+  val invariant : Invariant_env.t -> t -> Flambda_primitive.result_kind
+
   include Contains_names.S with type t := t
 
   val box_value
@@ -1538,6 +1540,39 @@ end = struct
     defining_expr : Named.t;
   }
 
+  let pattern_match t ~f =
+    Bound_var_and_body.pattern_match t.bound_var_and_body
+      ~f:(fun bound_var body -> f ~bound_var ~body)
+
+  let print_with_cache ~cache ppf
+        ({ bound_var_and_body; kind; defining_expr; } as t) =
+    let rec let_body (expr : Expr.t) =
+      match expr with
+      | Let ({ bound_var_and_body; kind; defining_expr; } as t) ->
+        pattern_match t ~f:(fun ~bound_var ~body ->
+          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
+            Variable.print bound_var
+            (Misc_color.bold_white ())
+            Flambda_kind.print kind
+            (Misc_color.reset ())
+            (Named.print_with_cache ~cache) defining_expr;
+          let_body (Expr_with_permutation.expr body))
+      | _ -> expr
+    in
+    pattern_match t ~f:(fun ~bound_var ~body ->
+      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+        Variable.print bound_var
+        (Misc_color.bold_white ())
+        Flambda_kind.print kind
+        (Misc_color.reset ())
+        (Named.print_with_cache ~cache) defining_expr;
+      fprintf ppf ")@]@ %a)@]"
+        (Expr.print_with_cache ~cache) (Expr_with_permutation.expr body))
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
   let create ~bound_var ~kind ~defining_expr ~body =
     let bound_var_and_body =
       Bound_var_and_body.create bound_var (Expr_with_permutation.create body)
@@ -1547,13 +1582,9 @@ end = struct
       defining_expr;
     }
 
-  let pattern_match t ~f =
-    Bound_var_and_body.pattern_match t.bound_var_and_body
-      ~f:(fun bound_var body -> f ~bound_var ~body)
-
   let invariant env t =
     let module E = Invariant_env in
-    pattern_match t.bound_var_and_body ~f:(fun ~bound_var ~body ->
+    pattern_match t ~f:(fun ~bound_var ~body ->
       let named_kind =
         match Named.invariant env t.defining_expr with
         | Singleton kind -> Some kind
@@ -1573,32 +1604,6 @@ end = struct
       end;
       let env = E.add_variable env bound_var t.kind in
       loop env body)
-
-  let print_with_cache ~cache ppf { bound_var_and_body; kind; defining_expr; } =
-    let rec let_body (expr : Expr.t) =
-      match expr with
-      | Let ({ bound_var_and_body; kind; defining_expr; } as t) ->
-        pattern_match t ~f:(fun ~bound_var ~body ->
-          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Variable.print bound_var
-            (Misc_color.bold_white ())
-            Flambda_kind.print kind
-            (Misc_color.reset ())
-            (Named.print_with_cache ~cache) defining_expr;
-          let_body body)
-      | _ -> expr
-    in
-    pattern_match t ~f:(fun ~bound_var ~body ->
-      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Variable.print bound_var
-        (Misc_color.bold_white ())
-        Flambda_kind.print kind
-        (Misc_color.reset ())
-        (Named.print_with_cache ~cache) defining_expr
-      fprintf ppf ")@]@ %a)@]"
-        (Expr.print_with_cache ~cache) body)
 
   let kind t = t.kind
   let defining_expr t = t.defining_expr
