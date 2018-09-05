@@ -719,6 +719,8 @@ module rec Expr : sig
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
+  val invariant : Invariant_env.t -> t -> Flambda_primitive.result_kind
+
   include Contains_names.S with type t := t
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
@@ -736,6 +738,8 @@ module rec Expr : sig
     -> (Named.t -> unit)
     -> maybe_named
     -> unit
+  val no_effects_or_coeffects : t -> bool
+  val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
   include Expr
 
@@ -1324,12 +1328,14 @@ end and Named : sig
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
 
+  include Contains_names.S with type t := t
+
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val invariant : Invariant_env.t -> t -> Flambda_primitive.result_kind
 
-  include Contains_names.S with type t := t
+  val no_effects_or_coeffects : t -> bool
 
   val box_value
       : Name.t
@@ -1568,8 +1574,9 @@ end = struct
         Flambda_kind.print kind
         (Misc_color.reset ())
         (Named.print_with_cache ~cache) defining_expr;
+      let expr = let_body (Expr_with_permutation.expr body) in
       fprintf ppf ")@]@ %a)@]"
-        (Expr.print_with_cache ~cache) (Expr_with_permutation.expr body))
+        (Expr.print_with_cache ~cache) expr)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -1603,7 +1610,7 @@ end = struct
         end
       end;
       let env = E.add_variable env bound_var t.kind in
-      loop env body)
+      Expr.invariant env (Expr_with_permutation.expr body))
 
   let kind t = t.kind
   let defining_expr t = t.defining_expr
@@ -1611,9 +1618,9 @@ end = struct
   let free_names ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
     pattern_match t ~f:(fun ~bound_var ~body ->
       let from_defining_expr = Named.free_names defining_expr in
-      let from_body = Expr.free_names body in
+      let from_body = Expr_with_permutation.free_names body in
       Name_occurrences.union from_defining_expr
-        (Name_occurrences.remove from_body bound_var))
+        (Name_occurrences.remove from_body (Name (Name.var bound_var))))
 
   let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
         perm =
@@ -1633,18 +1640,15 @@ end = struct
       }
 
   let continuation_counts_toplevel t
-        ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
+        ({ bound_var_and_body = _; kind = _; defining_expr = _; } as t) =
     pattern_match t ~f:(fun ~bound_var:_ ~body ->
-      Continuation_counts.union_list [
-        Named.continuation_counts_toplevel defining_expr;
-        Expr.continuation_counts_toplevel body;
-      ])
+      Expr.continuation_counts_toplevel (Expr_with_permutation.expr body))
 
   let no_effects_or_coeffects
         ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
     Named.no_effects_or_coeffects defining_expr
       && pattern_match t ~f:(fun ~bound_var:_ ~body ->
-           Expr.no_effects_or_coeffects body)
+           Expr.no_effects_or_coeffects (Expr_with_permutation.expr body))
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -1677,12 +1681,15 @@ end = struct
     | Non_recursive of Non_recursive_let_cont_handler.t
     | Recursive of Recursive_let_cont_handlers.t
 
-  let invariant env t =
+  let invariant _env _t = assert false
+(* To be re-enabled
     let module E = Invariant_env in
     let add_parameters env params =
       E.add_kinded_parameters env (T.Parameters.kinded_params params)
     in
+(*
     let handler_stack = E.Continuation_stack.var () in
+*)
     let env =
       match handlers with
       | Non_recursive { name; handler; } ->
@@ -1692,9 +1699,11 @@ end = struct
         let params = handler.params in
         let arity = Flambda_type.Parameters.arity params in
         let env = add_parameters env params in
+(*
         let env = E.set_current_continuation_stack env handler_stack in
+*)
         loop env handler.handler;
-        E.add_continuation env name arity kind handler_stack
+        E.add_continuation env name arity kind (* handler_stack *)
       | Recursive handlers ->
         let recursive_env =
           Continuation.Map.fold
@@ -1716,20 +1725,25 @@ end = struct
                 Continuation.print name
             end;
             let env = add_parameters recursive_env params in
+(*
             let env = E.set_current_continuation_stack env handler_stack in
+*)
             loop env handler;
             ignore (stub : bool))
           handlers;
         recursive_env
     in
     loop env body
+*)
 
   let print_with_cache ~cache ppf t =
-    (* Printing the same way as for [Let] is easier when debugging lifting
-        passes. *)
     if !Clflags.dump_let_cont then begin
-      let rec let_cont_body (ul : t) =
-        match ul with
+      (* Printing the same way as for [Let] is easier when debugging lifting
+         passes. *)
+      Misc.fatal_error "Needs re-enabling"
+(*
+      let rec let_cont_body (expr : Expr.t) =
+        match expr with
         | Let_cont { body; handlers; } ->
           fprintf ppf "@ @[<2>%a@]"
             (Let_cont_handlers.print_with_cache ~cache) handlers;
@@ -1742,27 +1756,51 @@ end = struct
         (Let_cont_handlers.print_with_cache ~cache) handlers;
       let expr = let_cont_body body in
       fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
+*)
     end else begin
-      (* CR mshinwell: Share code with ilambda.ml *)
-      let rec gather_let_conts let_conts (t : t) =
-        match t with
-        | Let_cont let_cont ->
-          gather_let_conts (let_cont.handlers :: let_conts) let_cont.body
-        | body -> let_conts, body
+      let rec gather_let_conts let_conts let_cont =
+        match let_cont with
+        | Non_recursive handler ->
+          Non_recursive_let_cont_handler.pattern_match handler
+            ~f:(fun k ~(body : Expr.t) ->
+              let let_conts, body =
+                match body with
+                | Let_cont let_cont -> gather_let_conts let_conts let_cont
+                | _ -> let_conts, body
+              in
+              let handler = Non_recursive_let_cont_handler.handler handler in
+              (k, handler) :: let_conts, body)
+        | Recursive handlers ->
+          Recursive_let_cont_handlers.pattern_match handler
+            ~f:(fun handlers ~(body : Expr.t) ->
+              let let_conts, body =
+                match body with
+                | Let_cont let_cont -> gather_let_conts let_conts let_cont
+                | _ -> let_conts, body
+              in
+              (Continuation.Map.bindings handlers) @ let_conts, body)
       in
       let let_conts, body = gather_let_conts [] t in
       let pp_sep ppf () = fprintf ppf "@ " in
-      fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
-        (print_with_cache0 ~cache) body
-        (Format.pp_print_list ~pp_sep
-          (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
+      fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>"
+        (Expr.print_with_cache ~cache) body;
+      let first = ref true in
+      List.iter (fun handler ->
+          Continuation_handler.print_using_where_with_cache ~cache
+            ppf handler ~first:!first;
+          first := false)
+        let_conts;
+      fprintf ppf "@]@])@]"
     end
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create_non_recursive k handler ~body =
     Non_recursive (Non_recursive_let_cont_handler.create k handler ~body)
 
   let create_recursive handlers ~body =
-    if Continuation_handlers.contains_exn_handler then begin
+    if Continuation_handlers.contains_exn_handler handlers then begin
       Misc.fatal_error "Exception-handling continuations cannot be recursive"
     end;
     Recursive (Recursive_let_cont_handlers.create handlers ~body)
@@ -1772,44 +1810,7 @@ end = struct
     | Non_recursive { name; handler } -> Continuation.Map.singleton name handler
     | Recursive handlers -> handlers
 
-  let free_and_bound_continuations (t : t) : free_and_bound =
-    match t with
-    | Non_recursive { name; handler = { handler; _ }; } ->
-      let fcs = Expr.free_continuations handler in
-      if Continuation.Set.mem name fcs then begin
-        Misc.fatal_errorf "Non_recursive [Let_cont] handler appears to be \
-            recursive:@ \n%a"
-          print t
-      end;
-      { free = fcs;
-        bound = Continuation.Set.singleton name;
-      }
-    | Recursive handlers ->
-      let bound_conts = Continuation.Map.keys handlers in
-      let fcs =
-        Continuation.Map.fold (fun _name
-              { Continuation_handler. handler; _ } fcs ->
-            Continuation.Set.union fcs
-              (Continuation.Set.diff (Expr.free_continuations handler)
-                bound_conts))
-          handlers
-          Continuation.Set.empty
-      in
-      { free = fcs;
-        bound = bound_conts;
-      }
-
-  let free_continuations t = (free_and_bound_continuations t).free
-  let bound_continuations t = (free_and_bound_continuations t).bound
-
-  (* CR mshinwell: This code should be shared with the calculation of
-     free names in [Expr], above.  For the moment there is a hack here. *)
-  let free_names (t : t) =
-    Expr.free_names (Let_cont {
-      body = Invalid Halt_and_catch_fire;
-      handlers = t;
-    })
-
+(* To be re-enabled
   let map (t : t) ~f =
     match t with
     | Non_recursive { name; handler } ->
@@ -1821,75 +1822,33 @@ end = struct
           returned more than one handler for a [Non_recursive] binding"
       end
     | Recursive handlers -> Recursive (f handlers)
+*)
 
   let no_effects_or_coeffects t =
     no_effects_or_coeffects body
       && Let_cont_handlers.no_effects_or_coeffects handlers
 
-  let print_using_where_with_cache ~cache ppf (t : t) =
+  let free_names t =
     match t with
-    | Non_recursive {
-        name;
-        handler = { params; stub; handler; is_exn_handler; };
-      } ->
-      fprintf ppf "@[<v 2>%swhere%s %a%s%s@ @[%a@] =@ %a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
-        Continuation.print name
-        (if stub then " *stub*" else "")
-        (if is_exn_handler then "*exn* " else "")
-        (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
-        (Expr.print_with_cache ~cache) handler
+    | Non_recursive handler ->
+      Non_recursive_let_cont_handler.free_names handler
     | Recursive handlers ->
-      let first = ref true in
-      fprintf ppf "@[<v 2>%swhere%s rec "
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ());
-      Continuation.Map.iter (fun name
-              { Continuation_handler. params; stub; is_exn_handler;
-                handler; } ->
-          if not !first then fprintf ppf "@ ";
-          fprintf ppf "@[%s%a%s%s@[%a@]@] =@ %a"
-            (if !first then "" else "and ")
-            Continuation.print name
-            (if stub then " *stub*" else "")
-            (if is_exn_handler then "*exn* " else "")
-            (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
-            (Expr.print_with_cache ~cache) handler;
-          first := false)
-        handlers;
-      fprintf ppf "@]"
+      Recursive_let_cont_handlers.free_names handlers
 
-  let print_with_cache ~cache ppf (t : t) =
+  let apply_name_permutation t perm =
     match t with
-    | Non_recursive { name; handler = {
-        params; stub; handler; is_exn_handler; }; } ->
-      fprintf ppf "%a@ %s%s%a=@ %a"
-        Continuation.print name
-        (if stub then "*stub* " else "")
-        (if is_exn_handler then "*exn* " else "")
-        (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
-        (Expr.print_with_cache ~cache) handler
+    | Non_recursive handler ->
+      let handler' =
+        Non_recursive_let_cont_handler.apply_name_permutation handler perm
+      in
+      if handler == handler' then t
+      else Non_recursive handler'
     | Recursive handlers ->
-      let first = ref true in
-      Continuation.Map.iter (fun name
-              { Continuation_handler.params; stub; is_exn_handler; handler; } ->
-          if !first then begin
-            fprintf ppf "@;rec "
-          end else begin
-            fprintf ppf "@;and "
-          end;
-          fprintf ppf "%a@ %s%s%a=@ %a"
-            Continuation.print name
-            (if stub then "*stub* " else "")
-            (if is_exn_handler then "*exn* " else "")
-            (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
-            (Expr.print_with_cache ~cache) handler;
-          first := false)
-        handlers
-
-  let print ppf t =
-    print_with_cache ~cache:(Printing_cache.create ()) ppf t
+      let handlers' =
+        Recursive_let_cont_handlers.apply_name_permutation handlers perm
+      in
+      if handlers == handlers' then t
+      else Recursive handlers'
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
@@ -2070,8 +2029,16 @@ end = struct
       t
 end and Continuation_handler : sig
   include Contains_names.S
+  val print_using_where_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> first:bool
+    -> unit
+(*
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val print : Format.formatter -> t -> unit
+*)
   val create
      : Kinded_parameter.t list
     -> param_relations:Flambda_type.Typing_env_extension.t
@@ -2095,12 +2062,60 @@ end = struct
     is_exn_handler : bool;
   }
 
-  let create params ~handler ~stub ~is_exn_handler =
-    let params_and_handler = Params_and_handler.create params ~handler in
-    { params_and_handler;
-      stub;
-      is_exn_handler;
-    }
+  let pattern_match t ~f =
+    Params_and_handler.pattern_match t.params_and_handler ~f
+
+  let print_using_where_with_cache ~cache ppf (t : t) ~first =
+    if not first then begin
+      fprintf ppf "@ "
+    end;
+    pattern_match t ~f:(fun params ~param_relations ~handler ->
+      fprintf ppf "@[<v 2>%swhere%s @[%a%s%s@[%a"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
+(*
+        (if first_and_non_recursive then "" else "and ")
+*)
+        Continuation.print name
+        (if stub then " *stub*" else "")
+        (if is_exn_handler then "*exn* " else "")
+        Kinded_parameter.List.print params;
+      if not (Flambda_type.Typing_env_extension.is_empty param_relations)
+      then begin
+        fprintf ppf " [%a]"
+          Flambda_type.Typing_env_extension.print param_relations
+      end;
+      fprintf ppf "@]@] =@ %a"
+        (Expr.print_with_cache ~cache) handler)
+
+(*
+  let print_with_cache ~cache ppf (t : t) =
+    match t with
+    | Non_recursive { name; handler = {
+        params; stub; handler; is_exn_handler; }; } ->
+      fprintf ppf "%a@ %s%s%a=@ %a"
+        Continuation.print name
+        (if stub then "*stub* " else "")
+        (if is_exn_handler then "*exn* " else "")
+        (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
+        (Expr.print_with_cache ~cache) handler
+    | Recursive handlers ->
+      let first = ref true in
+      Continuation.Map.iter (fun name
+              { Continuation_handler.params; stub; is_exn_handler; handler; } ->
+          if !first then begin
+            fprintf ppf "@;rec "
+          end else begin
+            fprintf ppf "@;and "
+          end;
+          fprintf ppf "%a@ %s%s%a=@ %a"
+            Continuation.print name
+            (if stub then "*stub* " else "")
+            (if is_exn_handler then "*exn* " else "")
+            (Flambda_type.Parameters.print_or_omit_with_cache ~cache) params
+            (Expr.print_with_cache ~cache) handler;
+          first := false)
+        handlers
 
   let print_with_cache ~cache ppf { params_and_handler; stub; handler; } =
     Params_and_handler.pattern_match params_and_handler
@@ -2112,9 +2127,14 @@ end = struct
           Expr.print handler)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+*)
 
-  let pattern_match t ~f =
-    Params_and_handler.pattern_match t.params_and_handler ~f
+  let create params ~handler ~stub ~is_exn_handler =
+    let params_and_handler = Params_and_handler.create params ~handler in
+    { params_and_handler;
+      stub;
+      is_exn_handler;
+    }
 
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
@@ -2310,7 +2330,8 @@ end = struct
   end
 *)
 
-  let invariant env
+  let invariant _env _ = assert false
+(* To be re-enabled
         { function_decls; free_vars; direct_call_surrogates = _; } =
     (* CR mshinwell: Some of this should move into
        [Function_declarations.invariant] *)
@@ -2465,6 +2486,7 @@ end = struct
               Variable.print projecting_from
           | Some _in_closure -> () *) )
       free_vars
+*)
 end and Function_declarations : sig
   include Contains_names.S
   val print : Format.formatter -> t -> unit
