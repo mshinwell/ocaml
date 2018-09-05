@@ -246,10 +246,6 @@ module rec Expr : sig
   (** Creates a [Let] expression. *)
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
 
-  type switch_creation_result = private
-    | Have_not_deleted_branch
-    | Have_deleted_branch
-
   (** Create a [Switch] expression, save that zero-arm switches are converted
       to [Invalid], and one-arm switches to [Apply_cont]. *)
   val create_switch
@@ -299,15 +295,12 @@ module rec Expr : sig
     -> body:t
     -> t
 
-  (** All continuations defined at toplevel within the given expression. *)
-  val all_defined_continuations_toplevel : t -> Continuation.Set.t
-
-  val count_continuation_uses_toplevel : t -> int Continuation.Map.t
+  val continuation_counts_toplevel : t -> Continuation_counts.t
 
   type with_wrapper =
     | Unchanged of { handler : Continuation_handler.t; }
     | With_wrapper of {
-        new_cont : Continuation.t;
+        new_k : Continuation.t;
         new_handler : Continuation_handler.t;
         wrapper_handler : Continuation_handler.t;
       }
@@ -485,8 +478,6 @@ end and Named : sig
       type-correct, at the given kind. *)
   val dummy_value : Flambda_kind.t -> t
 
-  val toplevel_substitution : Name.t Name.Map.t -> t -> t
-
 (* To be re-enabled
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
@@ -507,25 +498,9 @@ end and Reachable : sig
   val invalid : unit -> t
 
   val print : Format.formatter -> t -> unit
-end and Let0 : sig
-  include Contains_names.S
-
-  (** The kind of the defining expression of the let-expression. *)
-  val kind : t -> Flambda_kind.t
-
-  (** The defining expression of the let-expression. *)
-  val defining_expr : t -> Named.t
-
-  (** The body of the let-expression. *)
-  val body : t -> Expr.t
-
-  (** The free names in the body of the [Let].  After the first query the
-      result will be returned in O(1) time. *)
-  val free_names_of_body : t -> Name_occurrences.t
 end and Let : sig
   include Contains_names.S
 
-  (** Create a let-expression. *)
   val create
      : bound_var:Variable.t
     -> kind:Flambda_kind.t
@@ -533,14 +508,21 @@ end and Let : sig
     -> body:Expr.t
     -> t
 
-  (** Deconstruct a let-expression. *)
-  val pattern_match : t -> f:(Variable.t -> Let0.t -> 'a) -> 'a
+  val invariant : Invariant_env.t -> t -> unit
 
-(*
-  (** Apply the specified function [f] to the defining expression of the
-      given let-expression. *)
-  val map_defining_expr : t -> f:(Named.t -> Named.t) -> Expr.t
-*)
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val kind : t -> Flambda_kind.t
+  val defining_expr : t -> Named.t
+
+  val pattern_match
+     : t
+    -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
+    -> 'a
+
+  val continuation_counts_toplevel : t -> Continuation_counts.t
+
+  val no_effects_or_coeffects : t -> bool
 end and Let_cont : sig
   (** Values of type [t] represent the definitions of continuations:
         let_cont [name] [args] = [handler] in [body]
@@ -580,6 +562,10 @@ end and Let_cont : sig
     | Non_recursive of Non_recursive_let_cont_handler.t
     | Recursive of Recursive_let_cont_handlers.t
 
+  include Contains_names.S with type t := t
+
+  val print : Format.formatter -> t -> unit
+
   (** Create a definition of a non-recursive continuation. *)
   val create_non_recursive
      : Continuation.t
@@ -592,12 +578,7 @@ end and Let_cont : sig
      : Continuation_handlers.t
     -> body:Expr.t
     -> t
-
-  val free_names : t -> Name_occurrences.t
-
-  (** Return all continuations free in the given handlers. *)
-  val free_continuations : t -> Continuation.Set.t
-
+(*
   (** Form a map from continuations to their definitions.  This is useful
       for analyses that don't care about the (non-)recursiveness of the
       definition(s). *)
@@ -607,8 +588,7 @@ end and Let_cont : sig
       then repacking the result in the same constructor ([Recursive] or
       [Non_recursive]) as [t]. *)
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
-
-  val print : Format.formatter -> t -> unit
+*)
 end and Non_recursive_let_cont_handler : sig
   include Contains_names.S
 
@@ -616,7 +596,7 @@ end and Non_recursive_let_cont_handler : sig
       the expression over which it is scoped. *)
   val pattern_match
      : t
-    -> f:(Continuation.t -> body:Expr.t -> t)
+    -> f:(Continuation.t -> body:Expr.t -> 'a)
     -> 'a
 
   val handler : t -> Continuation_handler.t
@@ -627,7 +607,7 @@ end and Recursive_let_cont_handlers : sig
       together with the expressions and handlers over which they are scoped. *)
   val pattern_match
      : t
-    -> f:(body:Expr.t -> Continuation_handlers.t -> t)
+    -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
     -> 'a
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
@@ -644,8 +624,6 @@ end and Continuation_handler : sig
     -> stub:bool
     -> is_exn_handler:bool
     -> t
-
-  val print : Format.formatter -> t -> unit
 
   (** Go under the parameter binding(s) to obtain a freshened set of
       parameters and the code of the handler. *)
@@ -718,7 +696,7 @@ end and Set_of_closures : sig
       wrapper functions (which will be inlined at direct call sites, but will
       penalise indirect call sites).
       N.B. [direct_call_surrogates t] might not be transitively closed. *)
-  val direct_call_surrogates : Closure_id.t Closure_id.Map.t
+  val direct_call_surrogates : t -> Closure_id.t Closure_id.Map.t
 
   (** Returns true iff the given set of closures has an empty environment. *)
   val has_empty_environment : t -> bool
@@ -802,14 +780,14 @@ end and Function_declarations : sig
       function declarations is based.  Used to prevent different
       specialisations of the same functions from being inlined/specialised
       within each other. *)
-  val set_of_closures_origin : Set_of_closures_origin.t
+  val set_of_closures_origin : t -> Set_of_closures_origin.t
 
   (** The function(s) defined by the set of function declarations, indexed
       by closure ID. *)
   val funs : t -> Function_declaration.t Closure_id.Map.t
 
   (** [find f t] raises [Not_found] if [f] is not in [t]. *)
-  val find : t -> Closure_id.t -> t -> Function_declaration.t
+  val find : t -> Closure_id.t -> Function_declaration.t
 
   (** Create a set of function declarations based on another set of function
       declarations. *)
@@ -820,7 +798,9 @@ end and Function_declarations : sig
     -> (Set_of_closures_origin.t -> Set_of_closures_origin.t)
     -> t
 
+(*
   val find_declaration_variable : Closure_id.t -> t -> Variable.t
+*)
 
   (* CR pchambart: Update this comment *)
   (** Within a set of function declarations there is a set of function bodies,
@@ -851,9 +831,9 @@ end and Function_declarations : sig
     -> backend:(module Backend_intf.S)
     -> t
     -> Closure_id.Set.t
-*)
 
   val contains_stub : t -> bool
+*)
 end and Params_and_body : sig
   (** A name abstraction that comprises a function's parameters (together with
       any relations between them), the code of the function, and the
@@ -876,7 +856,11 @@ end and Params_and_body : sig
 
   val pattern_match
      : t
-    -> f:(t -> Expr.t -> my_closure:Variable.t -> 'a)
+    -> f:(Kinded_parameter.t list
+      -> param_relations:Flambda_type.Typing_env_extension.t
+      -> body:Expr.t
+      -> my_closure:Variable.t
+      -> 'a)
     -> 'a
 end and Function_declaration : sig
   type t
@@ -925,8 +909,10 @@ end and Function_declaration : sig
   (** Abstraction value containing the parameters and the body. *)
   val params_and_body : t -> Params_and_body.t
 
+(*
   (* CR mshinwell: bad name *)
   val function_arity : t -> Flambda_arity.t
+*)
 
   (** An identifier to provide fast (conservative) equality checking for
       function bodies. *)
@@ -958,6 +944,7 @@ end and Function_declaration : sig
   val update_params_and_body : t -> Params_and_body.t -> t
 end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
 
+(* To be re-enabled (see .ml file)
 (** A module for the manipulation of terms where the recomputation of free
     name sets is to be kept to a minimum. *)
 module With_free_names : sig
@@ -1014,3 +1001,4 @@ module With_free_names : sig
   (** O(1) time. *)
   val free_names : _ t -> Name_occurrences.t
 end
+*)

@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Kinded_parameter.List.t
+include module type of struct include Kinded_parameter.List end
 
 include Contains_names.S with type t := t
 

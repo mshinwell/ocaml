@@ -46,5 +46,5 @@ let permutation_to_swap t1 t2 =
             free_names1 free_names2
         end)
       (Name_permutation.create ())
-      params1 params2
+      t1 t2
   end
