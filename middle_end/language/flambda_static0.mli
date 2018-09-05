@@ -32,12 +32,12 @@ module Static_part : sig
     | Const of 'a
     | Var of Variable.t
 
+  type mutable_or_immutable = Mutable | Immutable
+
   (** The static structure of a symbol, possibly with holes, ready to be
-      filled with values computed at runtime.  As might be expected, this is
-      isomorphic to a subset of [Flambda_type.t]. *)
+      filled with values computed at runtime. *)
   type t =
-    | Block of Tag.Scannable.t * Flambda0.mutable_or_immutable
-        * (Of_kind_value.t list)
+    | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
     | Set_of_closures of Flambda0.Set_of_closures.t
     | Closure of Symbol.t * Closure_id.t
@@ -61,7 +61,7 @@ end
 
 module Program_body : sig
   type computation = {
-    expr : Flambda0.Expr.t;
+    expr : Flambda.Expr.t;
     (** The expression that is to be evaluated.  It must have no free
         variables and call [return_cont] with its results. *)
     return_cont : Continuation.t;
