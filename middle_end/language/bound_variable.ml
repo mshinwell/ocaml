@@ -18,6 +18,17 @@
 
 include Variable
 
+let free_names t =
+  Name_occurrences.singleton_in_terms (Name (Name.var t))
+
+let apply_name_permutation t perm =
+  match Name_permutation.apply_name perm (Name.var t) with
+  | Var v -> v
+  | _ -> Misc.fatal_error "Permutation changed variety of name"
+
 let permutation_to_swap t1 t2 =
   Name_permutation.add_name (Name_permutation.create ())
     (Name.var t1) (Name.var t2)
+
+let rename t : t =
+  rename t
