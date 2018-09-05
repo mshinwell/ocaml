@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(*
 let make_closure_map' input =
   let map = ref Closure_id.Map.empty in
   let add_set_of_closures _ (function_decls : Flambda.Function_declarations.t) =
@@ -25,6 +26,7 @@ let make_closure_map' input =
   in
   Set_of_closures_id.Map.iter add_set_of_closures input;
   !map
+*)
 
 let make_variable_symbol var =
   Symbol.create (Compilation_unit.get_current_exn ())
@@ -38,6 +40,7 @@ let make_variables_symbol vars =
   in
   Symbol.create (Compilation_unit.get_current_exn ()) (Linkage_name.create name)
 
+(*
 let create_wrapper_params ~params:_ ~freshening_already_assigned:_ = (* XXX *)
   assert false
 (*
@@ -78,3 +81,4 @@ let make_let_cont_alias ~name ~alias_of ~params : Flambda.Let_cont_handlers.t =
       handler = Apply_cont (alias_of, None, args);
     };
   }
+*)

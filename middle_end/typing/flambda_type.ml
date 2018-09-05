@@ -18,4 +18,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Flambda0.Flambda_type
+include Flambda.Flambda_type

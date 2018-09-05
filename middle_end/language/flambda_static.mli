@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -39,7 +39,7 @@ module Static_part : sig
   type t =
     | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
-    | Set_of_closures of Flambda0.Set_of_closures.t
+    | Set_of_closures of Flambda.Set_of_closures.t
     | Closure of Symbol.t * Closure_id.t
     | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
     | Boxed_int32 of Int32.t or_variable
@@ -121,46 +121,6 @@ module Program : sig
   (** All free symbols in the given program.  Imported symbols are not treated
       as free. *)
   val free_symbols : t -> Symbol.Set.t
-end
-
-
-(********)
-
-
-
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCaml                                  *)
-(*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
-(*           Mark Shinwell and Leo White, Jane Street Europe              *)
-(*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
-(** Operations on Flambda statically-allocated code and data whose
-    implementations cannot break invariants enforced by any private or
-    abstract types. *)
-
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
-module Of_kind_value :
-  module type of struct include Flambda_static0.Of_kind_value end
-
-module Static_part :
-  module type of struct include Flambda_static0.Static_part end
-
-module Program_body :
-  module type of struct include Flambda_static0.Program_body end
-
-module Program : sig
-  include module type of struct include Flambda_static0.Program end
 
   (** Perform well-formedness checks on the expression.  This is basically a
       simple type / kind checking algorithm. *)
@@ -206,6 +166,8 @@ module Program : sig
      : t
     -> Flambda.Function_declarations.t Closure_id.Map.t
 *)
+
+(* To be re-enabled
   module Iterators : sig
     (* CR mshinwell: give comment defining semantics. *)
     val iter_sets_of_closures
@@ -259,7 +221,9 @@ module Program : sig
     end
 *)
   end
+*)
 
+(* To be re-enabled
   module Mappers : sig
     (** Apply the given [f] to every expression at toplevel or forming the
         body of a function, including nested functions, within the given [t].
@@ -279,13 +243,14 @@ module Program : sig
         -> Flambda.Expr.t)
       -> t
   end
+*)
 
 (*
   module Mappers : sig    
     (* CR mshinwell: Define semantics -- does it recurse? *)
     val map_set_of_closures
        : t
-      -> f:(Flambda0.Set_of_closures.t -> Flambda0.Set_of_closures.t)
+      -> f:(Flambda.Set_of_closures.t -> Flambda.Set_of_closures.t)
       -> t
 
     (* CR mshinwell: check naming.
@@ -303,12 +268,8 @@ module Program : sig
       -> t
   end
 *)
-end
 
 (*
-
-
-
   val declare_boxed_float : t -> float -> t * Symbol.t
   val declare_boxed_int32 : t -> Int32.t -> t * Symbol.t
   val declare_boxed_int64 : t -> Int64.t -> t * Symbol.t
@@ -320,3 +281,4 @@ end
 
   val declare_single_field_pointing_at : t -> Variable.t -> Flambda_kind.t -> t
 *)
+end

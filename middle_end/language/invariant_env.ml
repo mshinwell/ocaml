@@ -289,7 +289,7 @@ let find_continuation_opt t cont =
 
 let continuation_arity t cont =
   match find_continuation_opt t cont with
-  | Some (arity, _, _) -> arity
+  | Some (arity, _ (*, _ *)) -> arity
   | None ->
     Misc.fatal_errorf "Unbound continuation %a" Continuation.print cont
 

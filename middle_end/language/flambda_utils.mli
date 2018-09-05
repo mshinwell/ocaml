@@ -19,11 +19,13 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* XXX No Set_of_closures_id any more!
 (** Like [Flambda_static.make_closure_map], but takes a mapping from set
     of closures IDs to function declarations, instead of a [Program]. *)
 val make_closure_map'
    : Flambda.Function_declarations.t Set_of_closures_id.Map.t
   -> Flambda.Function_declarations.t Closure_id.Map.t
+*)
 
 val make_variable_symbol : Variable.t -> Symbol.t
 
@@ -31,6 +33,7 @@ val make_variables_symbol
    : Variable.t list
   -> Symbol.t
 
+(*
 val create_wrapper_params
    : params:Flambda_type.Parameters.t
   -> freshening_already_assigned:Freshening.t
@@ -41,3 +44,4 @@ val make_let_cont_alias
   -> alias_of:Continuation.t
   -> params:Parameters.t
   -> Flambda.Let_cont_handlers.t
+*)
