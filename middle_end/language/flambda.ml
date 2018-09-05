@@ -20,12 +20,6 @@ module K = Flambda_kind
 
 let fprintf = Format.fprintf
 
-let unbound_continuation cont reason =
-  Misc.fatal_errorf "Unbound continuation %a in %s: %a"
-    Continuation.print cont
-    reason
-    print expr
-
 module Call_kind = struct
   (* CR-someday xclerc: we could add annotations to external declarations
      (akin to [@@noalloc]) in order to be able to refine the computation of
@@ -33,7 +27,7 @@ module Call_kind = struct
 
   let check_arity arity =
     match arity with
-    | [] -> Misc.fatal_errorf "Invalid empty arity in %a" print t
+    | [] -> Misc.fatal_error "Invalid empty arity"
     | _::_ -> ()
 
   module Function_call = struct
@@ -126,7 +120,7 @@ module Call_kind = struct
     invariant t;
     t
 
-  let method_call method_kind ~obj = Method { kind; obj; }
+  let method_call kind ~obj = Method { kind; obj; }
 
   let c_call ~alloc ~param_arity ~return_arity =
     let t = C_call { alloc; param_arity; return_arity; } in
@@ -191,7 +185,7 @@ module Apply = struct
       Specialise_attribute.print specialise
 
   let invariant
-        { callee;
+        ({ callee;
           continuation;
           exn_continuation;
           args;
@@ -199,7 +193,13 @@ module Apply = struct
           dbg;
           inline;
           specialise;
-        } =
+        } as t) =
+      let unbound_continuation cont reason =
+        Misc.fatal_errorf "Unbound continuation %a in %s: %a"
+          Continuation.print cont
+          reason
+          print t
+      in
       Call_kind.invariant call_kind;
       let stack = E.current_continuation_stack env in
       E.check_name_is_bound_and_of_kind env func (K.value ());
