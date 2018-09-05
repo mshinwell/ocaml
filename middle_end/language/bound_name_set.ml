@@ -14,30 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR mshinwell: Generate this and [Bound_kinded_nameeter_set] from
-   a functor. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Name.Set.t
+include Set_with_permutation_action.Make (struct
+  include Name
 
-let free_names t =
-  Name.Set.fold (fun name free_names ->
-      Name_occurrences.add free_names (Name name) In_terms)
-    t
-    (Name_occurrences.create ())
+  let free_names name = Name_occurrences.singleton_in_terms (Name name)
 
-let apply_name_permutation t perm =
-  let changed = ref false in
-  let result =
-    Name.Set.fold (fun name result ->
-        let name' = Name_permutation.apply_name perm name in
-        if not (name == name') then begin
-          changed := true;
-        end;
-        Name.Set.add name' result)
-      t
-      Name.Set.empty
-  in
-  if not !changed then t
-  else result
+  let apply_name_permutation name perm = Name_permutation.apply_name perm name
+end)

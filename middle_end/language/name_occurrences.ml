@@ -45,6 +45,15 @@ let create_from_set_in_terms in_terms =
     in_debug_only = Bindable_name.Set.empty;
   }
 
+let create_from_name_set_in_terms in_terms =
+  let in_terms =
+    Name.Set.fold (fun name result ->
+        Bindable_name.Set.add (Name name) result)
+      in_terms
+      Bindable_name.Set.empty
+  in
+  create_from_set_in_terms in_terms
+
 let create_from_set_in_types in_types =
   { in_terms = Bindable_name.Set.empty;
     in_types;

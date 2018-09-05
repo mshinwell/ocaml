@@ -30,6 +30,8 @@ val create : unit -> t
 
 val create_from_set_in_terms : Bindable_name.Set.t -> t
 
+val create_from_name_set_in_terms : Name.Set.t -> t
+
 val create_from_set_in_types : Bindable_name.Set.t -> t
 
 val singleton_in_terms : Bindable_name.t -> t

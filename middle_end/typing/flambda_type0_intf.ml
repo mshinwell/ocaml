@@ -289,14 +289,6 @@ module type S = sig
       -> Scope_level.t
       -> t
 
-    (** As for [add_or_meet_env_extension], but also returns the permutation
-        used to open existentials in the supplied extension. *)
-    val add_or_meet_env_extension'
-       : t
-      -> Typing_env_extension.t
-      -> Scope_level.t
-      -> t * Name_permutation.t
-
     (** Follow chains of aliases until either a [No_alias] type is reached
         or a name cannot be resolved.
 

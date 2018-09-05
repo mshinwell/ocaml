@@ -1553,12 +1553,17 @@ middle_end/language/bound_kinded_parameter_set.cmi : \
     middle_end/language/kinded_parameter.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_name_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     middle_end/language/bound_name_set.cmi
 middle_end/language/bound_name_set.cmx : \
+    middle_end/language/set_with_permutation_action.cmx \
+    middle_end/language/name_permutation.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     middle_end/language/bound_name_set.cmi
-middle_end/language/bound_name_set.cmi : middle_end/language/name.cmi \
+middle_end/language/bound_name_set.cmi : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_variable.cmo : middle_end/language/variable.cmi \
     middle_end/language/name_permutation.cmi middle_end/language/name.cmi
@@ -1701,6 +1706,7 @@ middle_end/language/flambda.cmi : middle_end/language/variable.cmi \
     middle_end/language/set_of_closures_origin.cmi \
     middle_end/language/recursive.cmi utils/printing_cache.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    middle_end/language/kinded_parameter.cmi \
     middle_end/language/invariant_env.cmi \
     middle_end/language/invalid_term_semantics.cmi \
     middle_end/language/inline_attribute.cmi \
@@ -1940,6 +1946,21 @@ middle_end/language/set_of_closures_origin.cmx : \
     middle_end/language/set_of_closures_origin.cmi
 middle_end/language/set_of_closures_origin.cmi : \
     middle_end/language/compilation_unit.cmi
+middle_end/language/set_with_permutation_action.cmo : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/name_occurrences.cmi \
+    middle_end/typing/name_like_intf.cmo utils/misc.cmi \
+    middle_end/language/bindable_name.cmi \
+    middle_end/language/set_with_permutation_action.cmi
+middle_end/language/set_with_permutation_action.cmx : \
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx \
+    middle_end/typing/name_like_intf.cmx utils/misc.cmx \
+    middle_end/language/bindable_name.cmx \
+    middle_end/language/set_with_permutation_action.cmi
+middle_end/language/set_with_permutation_action.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/typing/name_like_intf.cmo middle_end/typing/contains_names.cmi
 middle_end/language/simple.cmo : utils/targetint.cmi utils/numbers.cmi \
     middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
@@ -3111,12 +3132,17 @@ middle_end/language/bound_kinded_parameter_set.cmi : \
     middle_end/language/kinded_parameter.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_name_set.cmo : \
+    middle_end/language/set_with_permutation_action.cmi \
+    middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
     middle_end/language/bound_name_set.cmi
 middle_end/language/bound_name_set.cmx : \
+    middle_end/language/set_with_permutation_action.cmx \
+    middle_end/language/name_permutation.cmx \
     middle_end/language/name_occurrences.cmx middle_end/language/name.cmx \
     middle_end/language/bound_name_set.cmi
-middle_end/language/bound_name_set.cmi : middle_end/language/name.cmi \
+middle_end/language/bound_name_set.cmi : \
+    middle_end/language/name_permutation.cmi middle_end/language/name.cmi \
     middle_end/typing/contains_names.cmi
 middle_end/language/bound_variable.cmo : middle_end/language/variable.cmi \
     middle_end/language/name_permutation.cmi middle_end/language/name.cmi
@@ -3259,6 +3285,7 @@ middle_end/language/flambda.cmi : middle_end/language/variable.cmi \
     middle_end/language/set_of_closures_origin.cmi \
     middle_end/language/recursive.cmi utils/printing_cache.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
+    middle_end/language/kinded_parameter.cmi \
     middle_end/language/invariant_env.cmi \
     middle_end/language/invalid_term_semantics.cmi \
     middle_end/language/inline_attribute.cmi \
@@ -3498,6 +3525,21 @@ middle_end/language/set_of_closures_origin.cmx : \
     middle_end/language/set_of_closures_origin.cmi
 middle_end/language/set_of_closures_origin.cmi : \
     middle_end/language/compilation_unit.cmi
+middle_end/language/set_with_permutation_action.cmo : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/language/name_occurrences.cmi \
+    middle_end/typing/name_like_intf.cmo utils/misc.cmi \
+    middle_end/language/bindable_name.cmi \
+    middle_end/language/set_with_permutation_action.cmi
+middle_end/language/set_with_permutation_action.cmx : \
+    middle_end/language/name_permutation.cmx \
+    middle_end/language/name_occurrences.cmx \
+    middle_end/typing/name_like_intf.cmx utils/misc.cmx \
+    middle_end/language/bindable_name.cmx \
+    middle_end/language/set_with_permutation_action.cmi
+middle_end/language/set_with_permutation_action.cmi : \
+    middle_end/language/name_permutation.cmi \
+    middle_end/typing/name_like_intf.cmo middle_end/typing/contains_names.cmi
 middle_end/language/simple.cmo : utils/targetint.cmi utils/numbers.cmi \
     middle_end/language/name_permutation.cmi \
     middle_end/language/name_occurrences.cmi middle_end/language/name.cmi \
@@ -3616,8 +3658,9 @@ middle_end/typing/flambda_type0.cmo : middle_end/language/variable.cmi \
     middle_end/language/tag.cmi middle_end/language/symbol.cmi \
     middle_end/typing/string_info.cmi \
     middle_end/language/specialise_attribute.cmi \
-    middle_end/language/simple.cmi middle_end/language/scope_level.cmi \
-    utils/printing_cache.cmi middle_end/language/parameter.cmi \
+    middle_end/language/simple.cmi \
+    middle_end/language/set_with_permutation_action.cmi \
+    middle_end/language/scope_level.cmi utils/printing_cache.cmi \
     middle_end/typing/or_unknown.cmi middle_end/typing/or_bottom.cmi \
     middle_end/typing/or_absorbing.cmi utils/numbers.cmi \
     middle_end/language/name_permutation.cmi \
@@ -3649,8 +3692,9 @@ middle_end/typing/flambda_type0.cmx : middle_end/language/variable.cmx \
     middle_end/language/tag.cmx middle_end/language/symbol.cmx \
     middle_end/typing/string_info.cmx \
     middle_end/language/specialise_attribute.cmx \
-    middle_end/language/simple.cmx middle_end/language/scope_level.cmx \
-    utils/printing_cache.cmx middle_end/language/parameter.cmx \
+    middle_end/language/simple.cmx \
+    middle_end/language/set_with_permutation_action.cmx \
+    middle_end/language/scope_level.cmx utils/printing_cache.cmx \
     middle_end/typing/or_unknown.cmx middle_end/typing/or_bottom.cmx \
     middle_end/typing/or_absorbing.cmx utils/numbers.cmx \
     middle_end/language/name_permutation.cmx \
