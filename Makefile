@@ -314,7 +314,9 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/invalid_term_semantics.cmo \
   middle_end/language/recursive.cmo \
   middle_end/language/continuation_counts.cmo \
+  middle_end/typing/contains_names.cmo \
   middle_end/language/simple.cmo \
+  middle_end/language/kinded_parameter.cmo \
   middle_end/language/name_permutation.cmo \
   middle_end/language/name_abstraction.cmo \
   middle_end/language/set_with_permutation_action.cmo \
@@ -322,8 +324,8 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/bound_variable.cmo \
   middle_end/language/bound_continuation.cmo \
   middle_end/language/bound_continuations.cmo \
+  middle_end/language/bound_kinded_parameter_list.cmo \
   middle_end/language/name_occurrences.cmo \
-  middle_end/typing/contains_names.cmo \
   middle_end/typing/logical_variable_component.cmo \
   middle_end/language/inline_attribute.cmo \
   middle_end/language/specialise_attribute.cmo \
@@ -331,8 +333,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/flambda_primitive.cmo \
   middle_end/typing/string_info.cmo \
   middle_end/language/allocated_const.cmo \
-  middle_end/language/kinded_parameter.cmo \
-  middle_end/language/bound_kinded_parameter_set.cmo \
   middle_end/typing/type_equality_env.cmo \
   middle_end/typing/name_like_intf.cmo \
   middle_end/language/expr_intf.cmo \
