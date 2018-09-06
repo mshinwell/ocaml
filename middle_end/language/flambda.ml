@@ -1345,7 +1345,7 @@ end = struct
           perm;
           expr_with_perm_and_free_names = _;
         } perm' =
-    let perm = Name_permutation.compose perm perm' in
+    let perm = Name_permutation.compose ~first:perm ~second:perm' in
     { expr_without_perm;
       perm;
       expr_with_perm_and_free_names =

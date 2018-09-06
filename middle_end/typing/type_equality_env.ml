@@ -45,6 +45,8 @@ let shortcut_precondition t =
   t.perm_left == t.perm_right
 
 let compose_name_permutations t ~perm_left ~perm_right =
-  { perm_left = Name_permutation.compose t.perm_left perm_left;
-    perm_right = Name_permutation.compose t.perm_right perm_right;
+  { perm_left =
+      Name_permutation.compose ~first:t.perm_left ~second:perm_left;
+    perm_right =
+      Name_permutation.compose ~first:t.perm_right ~second:perm_right;
   }

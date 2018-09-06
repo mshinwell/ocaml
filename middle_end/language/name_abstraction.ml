@@ -101,7 +101,7 @@ module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
     let perm0 = Name0.permutation_to_swap name0 fresh_name0 in
     let fresh_name1 = Name1.rename name1 in
     let perm1 = Name1.permutation_to_swap name1 fresh_name1 in
-    let perm = Name_permutation.compose perm0 perm1 in
+    let perm = Name_permutation.compose ~first:perm0 ~second:perm1 in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name0 fresh_name1 fresh_term
 
@@ -112,8 +112,8 @@ module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
     let fresh_name1 = Name1.rename name1 in
     let perm1 = Name1.permutation_to_swap name1 fresh_name1 in
     let perm1' = Name1.permutation_to_swap name1' fresh_name1 in
-    let perm = Name_permutation.compose perm0 perm1 in
-    let perm' = Name_permutation.compose perm0' perm1' in
+    let perm = Name_permutation.compose ~first:perm0 ~second:perm1 in
+    let perm' = Name_permutation.compose ~first:perm0' ~second:perm1' in
     let fresh_term = Term.apply_name_permutation term perm in
     let fresh_term' = Term.apply_name_permutation term' perm' in
     f fresh_name0 fresh_name1 fresh_term fresh_term'

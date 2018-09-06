@@ -59,7 +59,11 @@ let create (id : Ident.t) linkage_name =
 let get_persistent_ident cu = cu.id
 let get_linkage_name cu = cu.linkage_name
 
-let current = ref None
+(* XXX hack for testing in the toplevel *)
+let current = (* ref None *)
+  ref (Some (create (Ident.create_persistent "*compunit*")
+    (Linkage_name.create "*compunit*")))
+
 let set_current t = current := Some t
 let get_current () = !current
 let get_current_exn () =

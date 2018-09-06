@@ -26,7 +26,10 @@ val print : Format.formatter -> t -> unit
 
 val is_empty : t -> bool
 
-val compose : t -> t -> t
+(** Note that [compose] is not commutative.  The result of
+    [compose ~second ~first] is that permutation acting initially like
+    [first] then subsequently like [second]. *)
+val compose : second:t -> first:t -> t
 
 val add_continuation : t -> Continuation.t -> Continuation.t -> t
 

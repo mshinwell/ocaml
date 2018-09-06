@@ -2061,7 +2061,9 @@ module Make (Expr : Expr_intf.S) = struct
         let something_changed = ref false in
         let of_kind_foos =
           List.map (fun (of_kind_foo, existing_perm) ->
-              let new_perm = Name_permutation.compose existing_perm perm in
+              let new_perm =
+                Name_permutation.compose ~first:existing_perm ~second:perm
+              in
               if not (new_perm == existing_perm) then begin
                 something_changed := true
               end;
@@ -3836,8 +3838,10 @@ module Make (Expr : Expr_intf.S) = struct
 
     let compose_name_permutations t ~perm_left ~perm_right =
       { t with
-        perm_left = Name_permutation.compose t.perm_left perm_left;
-        perm_right = Name_permutation.compose t.perm_right perm_right;
+        perm_left =
+          Name_permutation.compose ~first:t.perm_left ~second:perm_left;
+        perm_right =
+          Name_permutation.compose ~first:t.perm_right ~second:perm_right;
       }
 (*
   end and Parameters : sig
@@ -4220,6 +4224,7 @@ module Make (Expr : Expr_intf.S) = struct
         (* CR mshinwell: The [kind] may not be needed in [Component] but it
            isn't clear yet. We can sort this out later. At present all
            relational products map to components of kind [Value]. *)
+        (* XXX Isn't this wrong?  Float arrays... *)
         let kind = Flambda_kind.value ()
 
         let environment_for_meet_or_join env (t1 : t) (t2 : t)
