@@ -711,7 +711,7 @@ struct
 
   let hash (a, b) = hash (T1.hash a, T2.hash b)
 
-  let print ppf (a, b) = Format.fprintf ppf " (%a, @ %a)" T1.print a T2.print b
+  let print ppf (a, b) = Format.fprintf ppf "(%a,@ %a)" T1.print a T2.print b
 end
 
 module Make_with_map_pair (T1 : With_map) (T2 : With_map) = struct

@@ -29,14 +29,24 @@ module type Term = sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end
 
+type printing_style =
+  | Normal
+  | Brackets
+  | Existential
+
 module Make (Name : Name) (Term : Term) : sig
   (** The type [t] is the equivalent of an atom-abstraction construction
       "[--]--" in nominal sets. *)
   include Contains_names.S
 
-  val print : Format.formatter -> t -> unit
+  val print : ?style:printing_style -> Format.formatter -> t -> unit
 
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val print_with_cache
+     : ?style:printing_style
+    -> cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
 
   val create : Name.t -> Term.t -> t
 

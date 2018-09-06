@@ -4425,6 +4425,10 @@ module Make (Expr : Expr_intf.S) = struct
       let invariant t =
         pattern_match t ~f:(fun _ t0 -> T0.invariant t0)
 
+      let print ppf t = print ppf t
+
+      let print_with_cache ~cache ppf t = print_with_cache ~cache ppf t
+
       let equal env t1 t2 =
         pattern_match_pair t1 t2 ~f:(fun _ t0_1 t0_2 ->
           T0.equal env t0_1 t0_2)
@@ -4896,9 +4900,12 @@ module Make (Expr : Expr_intf.S) = struct
 
       let meet env t1 t2 : _ Or_bottom.t =
         let t = Meet.meet_or_join (Join_env.create env) t1 t2 in
+(* Not sure this is right -- it means that an empty Immediates part causes a
+   whole meet to go to bottom, which is wrong.
         if Tag_and_index.Map.is_empty t.known && Index.Map.is_empty t.at_least
         then Bottom
         else
+*)
           let join_of_all_maps_to =
             (* Any name permutations have already been applied during
                [Meet.meet_or_join], above. *)
@@ -7316,10 +7323,10 @@ module Make (Expr : Expr_intf.S) = struct
       abst : A.t;
     } [@@unboxed]
 
-    let print ppf { abst; } = A.print ppf abst
+    let print ppf { abst; } = A.print ~style:Existential ppf abst
 
     let print_with_cache ~cache ppf { abst; } =
-      A.print_with_cache ~cache ppf abst
+      A.print_with_cache ~style:Existential ~cache ppf abst
 
     let free_names { abst; } = A.free_names abst
 

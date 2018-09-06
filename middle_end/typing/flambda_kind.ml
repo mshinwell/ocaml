@@ -57,6 +57,8 @@ let naked_nativeint () = Naked_number Naked_nativeint
 
 let fabricated () = Fabricated
 
+let unicode = true  (* CR mshinwell: move elsewhere *)
+
 include Hashtbl.Make_with_map (struct
   type nonrec t = t
 
@@ -65,14 +67,41 @@ include Hashtbl.Make_with_map (struct
   let hash = Hashtbl.hash
 
   let print ppf t =
+    let colour = Misc_color.bold_green () in
     match t with
     | Value ->
-      Format.fprintf ppf "Value"
+      if unicode then
+        Format.fprintf ppf "@<0>%s@<0>\u{1d54d}@<0>%s" colour (Misc_color.reset ())
+      else
+        Format.fprintf ppf "Val"
     | Naked_number naked_number_kind ->
-      Format.fprintf ppf "(Naked_number %a)"
-        Naked_number_kind.print naked_number_kind
+      if unicode then begin
+        match naked_number_kind with
+        | Naked_immediate ->
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d55a}@<0>%s"
+            colour (Misc_color.reset ())
+        | Naked_float ->
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d557}@<0>%s"
+            colour (Misc_color.reset ())
+        | Naked_int32 ->
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d55d}@<0>%s"
+            colour (Misc_color.reset ())
+        | Naked_int64 ->
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d543}@<0>%s"
+            colour (Misc_color.reset ())
+        | Naked_nativeint ->
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d555}@<0>%s"
+            colour (Misc_color.reset ())
+      end else begin
+        Format.fprintf ppf "(Naked_number %a)"
+          Naked_number_kind.print naked_number_kind
+      end
     | Fabricated ->
-      Format.fprintf ppf "Fabricated"
+      if unicode then
+        Format.fprintf ppf "@<0>%s@<0>\u{1d53d}@<0>%s"
+          colour (Misc_color.reset ())
+      else
+        Format.fprintf ppf "Fab"
 end)
 
 let compatible t ~if_used_at =

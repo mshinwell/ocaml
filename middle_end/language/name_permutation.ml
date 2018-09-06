@@ -63,7 +63,7 @@ module Make (N : Map.With_set) = struct
     | n -> n
 
   let add_to_map n1 n2 map =
-    if N.compare n1 n2 = 0 then map
+    if N.compare n1 n2 = 0 then N.Map.remove n1 map
     else N.Map.add n1 n2 map
 
   let flip t =
@@ -86,13 +86,17 @@ module Make (N : Map.With_set) = struct
   let is_empty t =
     N.Map.is_empty t.forwards
 
-  let rec compose ~second ~first =
-    match N.Map.choose_opt second.forwards with
-    | None -> first
-    | Some (n1, n2) ->
-      let first = post_swap first n1 n2 in
-      let second = pre_swap second n1 n2 in
-      compose ~second ~first
+  let compose ~second ~first =
+    let rec compose ~second ~first =
+      match N.Map.choose_opt second.forwards with
+      | None -> first
+      | Some (n1, n2) ->
+        let first = post_swap first n1 n2 in
+        let second = pre_swap second n1 n2 in
+        compose ~second ~first
+    in
+    let t = compose ~second ~first in
+    t
 end
 
 module Continuations = Make (Continuation)

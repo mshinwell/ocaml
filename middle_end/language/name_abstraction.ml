@@ -29,18 +29,13 @@ module type Term = sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end
 
+type printing_style =
+  | Normal
+  | Brackets
+  | Existential
+
 module Make (Name : Name) (Term : Term) = struct
   type t = Name.t * Term.t
-
-  let print ppf (name, term) =
-    Format.fprintf ppf "@[[%a]%a@]"
-      Name.print name
-      Term.print term
-
-  let print_with_cache ~cache ppf (name, term) =
-    Format.fprintf ppf "@[[%a]%a@]"
-      Name.print name
-      (Term.print_with_cache ~cache) term
 
   let create name term = name, term
 
@@ -49,6 +44,42 @@ module Make (Name : Name) (Term : Term) = struct
     let perm = Name.permutation_to_swap name fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
+
+  let before_binding_position style =
+    match style with
+    | Normal -> "\u{0418}"
+    | Brackets -> "["
+    | Existential -> "\u{2203}"
+
+  let after_binding_position style =
+    match style with
+    | Normal -> "."
+    | Brackets -> "]"
+    | Existential -> "."
+
+  let print ?(style = Normal) ppf t =
+    pattern_match t ~f:(fun name term ->
+      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
+        (Misc_color.bold_cyan ())
+        (before_binding_position style)
+        (Misc_color.reset ())
+        Name.print name
+        (Misc_color.bold_cyan ())
+        (after_binding_position style)
+        (Misc_color.reset ())
+        Term.print term)
+
+  let print_with_cache ?(style = Normal) ~cache ppf t =
+    pattern_match t ~f:(fun name term ->
+      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
+        (Misc_color.bold_cyan ())
+        (before_binding_position style)
+        (Misc_color.reset ())
+        Name.print name
+        (Misc_color.bold_cyan ())
+        (after_binding_position style)
+        (Misc_color.reset ())
+        (Term.print_with_cache ~cache) term)
 
   let pattern_match_mapi (name, term) ~f =
     let fresh_name = Name.rename name in
@@ -82,18 +113,6 @@ end
 module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
   type t = Name0.t * Name1.t * Term.t
 
-  let print ppf (name0, name1, term) =
-    Format.fprintf ppf "@[[%a, %a]%a@]"
-      Name0.print name0
-      Name1.print name1
-      Term.print term
-
-  let print_with_cache ~cache ppf (name0, name1, term) =
-    Format.fprintf ppf "@[[%a, %a]%a@]"
-      Name0.print name0
-      Name1.print name1
-      (Term.print_with_cache ~cache) term
-
   let create name0 name1 term = name0, name1, term
 
   let pattern_match (name0, name1, term) ~f =
@@ -104,6 +123,20 @@ module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
     let perm = Name_permutation.compose ~first:perm0 ~second:perm1 in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name0 fresh_name1 fresh_term
+
+  let print ppf t =
+    pattern_match t ~f:(fun name0 name1 term ->
+      Format.fprintf ppf "@[[%a, %a]@,%a@]"
+        Name0.print name0
+        Name1.print name1
+        Term.print term)
+
+  let print_with_cache ~cache ppf t =
+    pattern_match t ~f:(fun name0 name1 term ->
+      Format.fprintf ppf "@[[%a, %a]@,%a@]"
+        Name0.print name0
+        Name1.print name1
+        (Term.print_with_cache ~cache) term)
 
   let pattern_match_pair (name0, name1, term) (name0', name1', term') ~f =
     let fresh_name0 = Name0.rename name0 in
