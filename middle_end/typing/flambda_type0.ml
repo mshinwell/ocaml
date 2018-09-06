@@ -2810,6 +2810,11 @@ module Make (Expr : Expr_intf.S) = struct
               Typing_env_extension.add_equation env_extension name ty
             | Const _ | Discriminant _ -> env_extension
           in
+(*
+Format.eprintf "CS1 %a, CS2 %a\n%!"
+  (Misc.Stdlib.Option.print Simple.print) canonical_simple1
+  (Misc.Stdlib.Option.print Simple.print) canonical_simple2;
+*)
           match canonical_simple1, canonical_simple2 with
           | Some simple1, Some simple2
               when Simple.equal simple1 simple2
@@ -2820,6 +2825,9 @@ module Make (Expr : Expr_intf.S) = struct
           | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
             Equals simple2, Typing_env_extension.empty ()
           | Some simple1, Some simple2 ->
+(*
+Format.eprintf "***\n%!";
+*)
             let meet_unknown_or_join, env_extension_from_meet =
               let env = Meet_env.now_meeting env simple1 simple2 in
               meet_on_unknown_or_join env
@@ -2834,6 +2842,11 @@ module Make (Expr : Expr_intf.S) = struct
               add_equation_if_on_a_name env_extension_from_meet
                 simple2 (S.to_type (Equals simple1))
             in
+(*
+Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
+  Simple.print simple1
+  Typing_env_extension.print env_extension_from_meet;
+*)
             Equals simple1, env_extension_from_meet
           | Some simple1, None ->
             let meet_unknown_or_join, env_extension_from_meet =
@@ -4238,7 +4251,7 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
                 in
                 let env =
                   Join_env.add_definition_central_environment env
-                    (Component.name component) (Flambda_type0_core.bottom kind)
+                    (Component.name component) (Flambda_type0_core.unknown kind)
                 in
                 components_by_index_in_result, env)
               indexes
@@ -4274,7 +4287,7 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
                   let name = Component.name component in
                   let kind = Component.kind component in
                   Typing_env_extension.add_definition_at_beginning env_extension
-                    name (Flambda_type0_core.bottom kind))
+                    name (Flambda_type0_core.unknown kind))
               t.components_by_index
               env_extension
           in
@@ -4384,7 +4397,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               let name = Component.name component in
               let kind = Component.kind component in
               Typing_env_extension.add_definition_at_beginning env_extension
-                name (Flambda_type0_core.bottom kind))
+                name (Flambda_type0_core.unknown kind))
             t.components_by_index
             t.env_extension
 
@@ -5184,6 +5197,8 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Simple.apply_name_permutation simple2
             (Type_equality_env.perm_right env)
         in
+        (* XXX Shouldn't this be resolving aliases to get the final type?
+           We're needing to do this in [add_or_meet_env_extension']. *)
         Simple.equal simple1 simple2
       | (No_alias _ | Type _ | Equals _), _ -> false
 
@@ -6431,13 +6446,15 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let aliases_of_simple (t : t) (simple : Simple.t) =
       match Simple.Map.find simple t.aliases with
-      | exception Not_found ->
+      | exception Not_found -> Name.Set.empty
+(* Think more about this
         begin match simple with
         | Const _ | Discriminant _ -> Name.Set.empty
         | Name name ->
           Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
             Name.print name
         end
+*)
       | aliases -> aliases
 
     let add t (name : Name.t) cont_level (binding : typing_environment_entry) =
@@ -6621,6 +6638,8 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let rec add_or_meet_env_extension' t env_extension scope_level
           ~first_definitions ~at_or_after_cut_point ~last_equations_rev
           ~cse : t =
+Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
+  Typing_env_extension.print env_extension;
       let original_t = t in
       let add_equation t name ty =
         match find_opt t name with
@@ -6635,11 +6654,20 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               in
               Both_meet_and_join.meet meet_env ty existing_ty
             in
+            let t =
+              add_or_meet_env_extension t meet_env_extension scope_level
+            in
+            let meet_ty, _canonical_name = resolve_aliases t meet_ty in
             let as_or_more_precise = Type_equality.equal meet_ty ty in
             let strictly_more_precise =
               as_or_more_precise
                 && not (Type_equality.equal meet_ty existing_ty)
             in
+Format.eprintf "Adding equation on %a: meet_ty is %a; AOMP %b; SMP %b\n%!"
+  Name.print name
+  Type_printers.print meet_ty
+  as_or_more_precise
+  strictly_more_precise;
             if strictly_more_precise then Some (meet_ty, meet_env_extension)
             else None
           in
@@ -6654,7 +6682,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       let add_definition t (name : Name.t) ty =
         (* XXX check the next few lines, conditional seems dubious *)
         if mem t name then
-         add_equation t name ty
+          add_equation t name ty
         else
           let t = add t name scope_level (Definition ty) in
           begin match name with
@@ -6717,9 +6745,13 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       in
       let t =
         List.fold_left (fun t (name, ty) ->
+Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n%!"
+  Name.print name
+  Type_printers.print ty
+  print t;
             add_equation t name ty)
           t
-          last_equations_rev
+          (List.rev last_equations_rev)
       in
       Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
           add_cse t bound_to prim)
@@ -6901,7 +6933,14 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           cse = Flambda_primitive.With_fixed_value.Map.empty;
         }
 
-      let is_empty t = Scope_level.Map.is_empty t.at_or_after_cut_point
+      let is_empty
+            { first_definitions; at_or_after_cut_point;
+              last_equations_rev; cse; } =
+        match first_definitions, last_equations_rev with
+        | [], [] ->
+          Scope_level.Map.is_empty at_or_after_cut_point
+            && Flambda_primitive.With_fixed_value.Map.is_empty cse
+        | _, _ -> false
 
       let create_for_cut ~at_or_after_cut_point =
         { first_definitions = [];
@@ -7503,14 +7542,20 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         let scope_level =
           Scope_level.next (Typing_env.max_level (Meet_env.env env))
         in
+Format.eprintf "meet_env for TEE meet:@ %a\n%!"
+  Typing_env.print (Meet_env.env env);
         let env =
           Meet_env.with_env env (fun env ->
             Typing_env.add_or_meet_env_extension env t1 scope_level)
         in
+Format.eprintf "meet_env for TEE meet, after t1 only:@ %a\n%!"
+  Typing_env.print (Meet_env.env env);
         let env =
           Meet_env.with_env env (fun env ->
             Typing_env.add_or_meet_env_extension env t2 scope_level)
         in
+Format.eprintf "Creating extension again from env after meet:@ %a\n%!"
+  Typing_env.print (Meet_env.env env);
         create_from_cut (Meet_env.env env)
           ~existential_if_defined_at_or_later_than:scope_level
 
