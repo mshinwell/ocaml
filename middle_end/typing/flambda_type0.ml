@@ -2810,11 +2810,9 @@ module Make (Expr : Expr_intf.S) = struct
               Typing_env_extension.add_equation env_extension name ty
             | Const _ | Discriminant _ -> env_extension
           in
-(*
 Format.eprintf "CS1 %a, CS2 %a\n%!"
   (Misc.Stdlib.Option.print Simple.print) canonical_simple1
   (Misc.Stdlib.Option.print Simple.print) canonical_simple2;
-*)
           match canonical_simple1, canonical_simple2 with
           | Some simple1, Some simple2
               when Simple.equal simple1 simple2
@@ -2825,9 +2823,7 @@ Format.eprintf "CS1 %a, CS2 %a\n%!"
           | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
             Equals simple2, Typing_env_extension.empty ()
           | Some simple1, Some simple2 ->
-(*
 Format.eprintf "***\n%!";
-*)
             let meet_unknown_or_join, env_extension_from_meet =
               let env = Meet_env.now_meeting env simple1 simple2 in
               meet_on_unknown_or_join env
@@ -2842,11 +2838,9 @@ Format.eprintf "***\n%!";
               add_equation_if_on_a_name env_extension_from_meet
                 simple2 (S.to_type (Equals simple1))
             in
-(*
 Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
   Simple.print simple1
   Typing_env_extension.print env_extension_from_meet;
-*)
             Equals simple1, env_extension_from_meet
           | Some simple1, None ->
             let meet_unknown_or_join, env_extension_from_meet =
@@ -6645,39 +6639,33 @@ Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
         match find_opt t name with
         | None -> add t name scope_level (Equation ty)
         | Some (existing_ty, _binding_type) ->
-          let meet =
-            let meet_ty, meet_env_extension =
-              let meet_env =
-                Meet_env.create t
-                  ~perm_left:(Name_permutation.create ())
-                  ~perm_right:(Name_permutation.create ())
-              in
-              Both_meet_and_join.meet meet_env ty existing_ty
+          let meet_ty, meet_env_extension =
+            let meet_env =
+              Meet_env.create t
+                ~perm_left:(Name_permutation.create ())
+                ~perm_right:(Name_permutation.create ())
             in
-            let t =
-              add_or_meet_env_extension t meet_env_extension scope_level
-            in
-            let meet_ty, _canonical_name = resolve_aliases t meet_ty in
-            let as_or_more_precise = Type_equality.equal meet_ty ty in
-            let strictly_more_precise =
-              as_or_more_precise
-                && not (Type_equality.equal meet_ty existing_ty)
-            in
+            Both_meet_and_join.meet meet_env ty existing_ty
+          in
+          let ty, _canonical_name = resolve_aliases t ty in
+          let t =
+            add_or_meet_env_extension t meet_env_extension scope_level
+          in
+          let meet_ty, _canonical_name = resolve_aliases t meet_ty in
+          let as_or_more_precise = Type_equality.equal meet_ty ty in
+          let strictly_more_precise =
+            as_or_more_precise
+              && not (Type_equality.equal meet_ty existing_ty)
+          in
 Format.eprintf "Adding equation on %a: meet_ty is %a; AOMP %b; SMP %b\n%!"
   Name.print name
   Type_printers.print meet_ty
   as_or_more_precise
   strictly_more_precise;
-            if strictly_more_precise then Some (meet_ty, meet_env_extension)
-            else None
-          in
-          match meet with
-          | None -> t
-          | Some (new_ty, new_env_extension)->
-            let t =
-              add_or_meet_env_extension t new_env_extension scope_level
-            in
-            add t name scope_level (Equation new_ty)
+          if strictly_more_precise then
+            add t name scope_level (Equation meet_ty)
+          else
+            t
       in
       let add_definition t (name : Name.t) ty =
         (* XXX check the next few lines, conditional seems dubious *)
