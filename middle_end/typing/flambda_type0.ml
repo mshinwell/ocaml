@@ -379,8 +379,7 @@ module Make (Expr : Expr_intf.S) = struct
       | Open -> RL.create_at_least size product
       | Closed tag -> RL.create_exactly tag size product
 
-    let create_bottom () =
-      create ~field_tys:[] (Closed Tag.arbitrary)
+    let create_bottom = RL.create_bottom 
 
     let _invariant _t = () (* CR mshinwell: RL.invariant *)
     let print_with_cache = RL.print
@@ -4232,6 +4231,8 @@ module Make (Expr : Expr_intf.S) = struct
           let components_by_index_in_result, env =
             Index.Set.fold (fun index (components_by_index_in_result, env) ->
                 let component = Component.create kind in
+Format.eprintf "Made fresh component %a for RP meet/join\n%!"
+  Component.print component;
                 let components_by_index_in_result =
                   Index.Map.add index component components_by_index_in_result
                 in
@@ -4246,9 +4247,28 @@ module Make (Expr : Expr_intf.S) = struct
           let result_components =
             Component.Set.of_list (Index.Map.data components_by_index_in_result)
           in
-          let add_definitions_to_extension t =
-            Index.Map.fold (fun _index component env_extension ->
-                if Component.Set.mem component result_components then
+          let add_equalities_to_extension t =
+            Index.Map.fold (fun index component env_extension ->
+                let name = Component.name component in
+                let kind = Component.kind component in
+                match Index.Map.find index components_by_index_in_result with
+                | exception Not_found -> env_extension
+                | result_component ->
+                  let result_name = Component.name result_component in
+                  let name_ty =
+                    Flambda_type0_core.alias_type_of kind
+                      (Simple.name name)
+                  in
+                  Typing_env_extension.add_equation env_extension
+                    result_name name_ty)
+              t.components_by_index
+              t.env_extension
+          in
+          let env_extension1 = add_equalities_to_extension t1 in
+          let env_extension2 = add_equalities_to_extension t2 in
+          let add_definitions_to_extension t env_extension =
+            Index.Map.fold (fun index component env_extension ->
+                if not (Index.Set.mem index indexes) then
                   env_extension
                 else
                   let name = Component.name component in
@@ -4256,33 +4276,10 @@ module Make (Expr : Expr_intf.S) = struct
                   Typing_env_extension.add_definition_at_beginning env_extension
                     name (Flambda_type0_core.bottom kind))
               t.components_by_index
-              t.env_extension
-          in
-          let env_extension1 = add_definitions_to_extension t1 in
-          let env_extension2 = add_definitions_to_extension t2 in
-          let add_equalities_to_extension t env_extension =
-            Index.Map.fold (fun index component env_extension ->
-                let name = Component.name component in
-                let kind = Component.kind component in
-                match Index.Map.find index t.components_by_index with
-                | exception Not_found -> env_extension
-                | stale_component ->
-                  let env = Type_equality_env.empty () in
-                  if Component.equal env component stale_component
-                  then env_extension
-                  else
-                    let stale_name = Component.name stale_component in
-                    let name_ty =
-                      Flambda_type0_core.alias_type_of kind
-                        (Simple.name stale_name)
-                    in
-                    Typing_env_extension.add_equation env_extension
-                      name name_ty)
-              components_by_index_in_result
               env_extension
           in
-          let env_extension1 = add_equalities_to_extension t1 env_extension1 in
-          let env_extension2 = add_equalities_to_extension t2 env_extension2 in
+          let env_extension1 = add_definitions_to_extension t1 env_extension1 in
+          let env_extension2 = add_definitions_to_extension t2 env_extension2 in
           env, env_extension1, env_extension2, components_by_index_in_result,
             result_components
 
@@ -4296,10 +4293,16 @@ module Make (Expr : Expr_intf.S) = struct
             if Index.Set.is_empty indexes then Bottom
             else
               let env = Join_env.create env in
+Format.eprintf "For RP meet:@ t1: %a@;t2: %a\n%!"
+  print t1 print t2;
               let env, env_extension1, env_extension2, components_by_index,
                   result_components =
                 environment_for_meet_or_join env t1 t2 ~indexes
               in
+Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %a\n%!"
+  Typing_env.print (Meet_env.env (Join_env.central_environment env))
+  Typing_env_extension.print env_extension1
+  Typing_env_extension.print env_extension2;
               let env = Join_env.central_environment env in
               let env_extension =
                 Typing_env_extension.meet env env_extension1 env_extension2
@@ -4657,9 +4660,9 @@ module Make (Expr : Expr_intf.S) = struct
 
       val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-(*
-      val create : unit -> t
-*)
+      val create_bottom : unit -> t
+
+      val create_unknown : unit -> t
 
       val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
 
@@ -4684,9 +4687,9 @@ module Make (Expr : Expr_intf.S) = struct
 
       val join : Join_env.t -> t -> t -> t
 
-      val known : t -> Maps_to.t Tag_and_index.Map.t
+      val known : t -> Maps_to.t Tag_and_index.Map.t Or_unknown.t
 
-      val at_least : t -> Maps_to.t Index.Map.t
+      val at_least : t -> Maps_to.t Index.Map.t Or_unknown.t
 
       val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
 
@@ -4741,211 +4744,285 @@ module Make (Expr : Expr_intf.S) = struct
         let index (_tag, index) = index
       end
 
-      (* CR mshinwell: Think about what means bottom and what means unknown for
-         this structure *)
-      type t = {
-        known : Maps_to.t Tag_and_index.Map.t;
-        at_least : Maps_to.t Index.Map.t;
-      }
-
-      let print ~cache ppf ({ known; at_least } : t) =
-        Format.fprintf ppf 
-          "@[<hov 1>(\
-             @[<hov 1>(known@ %a)@]@ \
-             @[<hov 1>(at_least@ %a)@])@]"
-          (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
-          (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
-
-      let _create () =
-        { known = Tag_and_index.Map.empty;
-          at_least = Index.Map.empty;
+      module T0 = struct
+        type t = {
+          known : Maps_to.t Tag_and_index.Map.t;
+          at_least : Maps_to.t Index.Map.t;
         }
 
-      let create_exactly tag index maps_to =
-        let tag_and_index = Tag_and_index.create tag index in
-        { known = Tag_and_index.Map.singleton tag_and_index maps_to;
-          at_least = Index.Map.empty;
-        }
+        let print ~cache ppf ({ known; at_least } : t) =
+          Format.fprintf ppf 
+            "@[<v 1>(\
+               @[<hov 1>(known@ %a)@]@ \
+               @[<hov 1>(at_least@ %a)@])@]"
+            (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
+            (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
 
-      let create_exactly_multiple known =
-        { known;
-          at_least = Index.Map.empty;
-        }
+        let create_bottom () =
+          { known = Tag_and_index.Map.empty;
+            at_least = Index.Map.empty;
+          }
 
-      let create_at_least index maps_to =
-        { known = Tag_and_index.Map.empty;
-          at_least = Index.Map.singleton index maps_to;
-        }
+        let create_exactly tag index maps_to =
+          let tag_and_index = Tag_and_index.create tag index in
+          { known = Tag_and_index.Map.singleton tag_and_index maps_to;
+            at_least = Index.Map.empty;
+          }
 
-      let create_at_least_multiple at_least =
-        { known = Tag_and_index.Map.empty;
-          at_least;
-        }
+        let create_exactly_multiple known =
+          { known;
+            at_least = Index.Map.empty;
+          }
 
-      let equal env
-            { known = known1; at_least = at_least1; }
-            { known = known2; at_least = at_least2; } =
-        Tag_and_index.Map.equal (Maps_to.equal env) known1 known2
-          && Index.Map.equal (Maps_to.equal env) at_least1 at_least2
+        let create_at_least index maps_to =
+          { known = Tag_and_index.Map.empty;
+            at_least = Index.Map.singleton index maps_to;
+          }
 
-      let apply_name_permutation { known; at_least; } perm =
-        let known =
-          (* CR mshinwell: Can just use [Tag_and_index.Map.map] now. *)
-          Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
-              let maps_to = Maps_to.apply_name_permutation maps_to perm in
-              Tag_and_index.Map.add tag_and_index maps_to known)
-            known
-            Tag_and_index.Map.empty
-        in
-        let at_least =
-          Index.Map.fold (fun index maps_to at_least ->
-              let maps_to = Maps_to.apply_name_permutation maps_to perm in
-              Index.Map.add index maps_to at_least)
-            at_least
-            Index.Map.empty
-        in
-        { known;
-          at_least;
-        }
+        let create_at_least_multiple at_least =
+          { known = Tag_and_index.Map.empty;
+            at_least;
+          }
 
-      module Meet_or_join
-        (E : Either_meet_or_join_intf
-          with module Join_env := Join_env
-          with module Meet_env := Meet_env
-          with module Typing_env_extension := Typing_env_extension) =
-      struct
-        let meet_or_join env t1 t2 =
-          let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-          let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-          let env = Join_env.clear_name_permutations env in
-          let ({ known = known1; at_least = at_least1; } : t) = t1 in
-          let ({ known = known2; at_least = at_least2; } : t) = t2 in
-          let one_side_only index1 maps_to1 at_least2
-                ~get_equations_to_deposit1 =
-            let from_at_least2 =
-              Index.Map.find_last_opt
-                (fun index -> Index.compare index index1 <= 0)
-                at_least2
-            in
-            begin match from_at_least2 with
-            | None ->
-              begin match E.op () with
-              | Meet -> None
-              | Join ->
-                let maps_to1 =
-                  Maps_to.add_or_meet_equations
-                    maps_to1
-                    (Join_env.central_environment env)
-                    (get_equations_to_deposit1 env)
-                in
-                Some maps_to1
-              end
-            | Some (index2, from_at_least2) ->
-              assert (Index.compare index2 index1 <= 0);
-              (* CR mshinwell: What happens to any generated equations in the
-                 [meet] case (same below)? *)
-              let maps_to =
-                E.switch' Maps_to.meet Maps_to.join env
-                  maps_to1 from_at_least2
-              in
-              match maps_to with
-              | Bottom -> None
-              | Ok maps_to -> Some maps_to
-            end
-          in
-          let merge index maps_to1 maps_to2 =
-            match maps_to1, maps_to2 with
-            | Some maps_to1, None ->
-              one_side_only index maps_to1 at_least2
-                ~get_equations_to_deposit1:Join_env.holds_on_left
-            | None, Some maps_to2 ->
-              one_side_only index maps_to2 at_least1
-                ~get_equations_to_deposit1:Join_env.holds_on_right
-            | Some maps_to1, Some maps_to2 ->
-              let maps_to =
-                E.switch' Maps_to.meet Maps_to.join env
-                  maps_to1 maps_to2
-              in
-              begin match maps_to with
-              | Bottom -> None
-              | Ok maps_to -> Some maps_to
-              end
-            | None, None -> None
-          in
-          (* CR mshinwell: Shouldn't we be applying name permutations to
-             these two as well? *)
+        let equal env
+              { known = known1; at_least = at_least1; }
+              { known = known2; at_least = at_least2; } =
+          Tag_and_index.Map.equal (Maps_to.equal env) known1 known2
+            && Index.Map.equal (Maps_to.equal env) at_least1 at_least2
+
+        let apply_name_permutation { known; at_least; } perm =
           let known =
-            Tag_and_index.Map.merge (fun tag_and_index maps_to1 maps_to2 ->
-                let index = Tag_and_index.index tag_and_index in
-                merge index maps_to1 maps_to2)
-              known1
-              known2
+            (* CR mshinwell: Can just use [Tag_and_index.Map.map] now. *)
+            Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
+                let maps_to = Maps_to.apply_name_permutation maps_to perm in
+                Tag_and_index.Map.add tag_and_index maps_to known)
+              known
+              Tag_and_index.Map.empty
           in
           let at_least =
-            Index.Map.merge (fun index maps_to1 maps_to2 ->
-                merge index maps_to1 maps_to2)
-              at_least1
-              at_least2
+            Index.Map.fold (fun index maps_to at_least ->
+                let maps_to = Maps_to.apply_name_permutation maps_to perm in
+                Index.Map.add index maps_to at_least)
+              at_least
+              Index.Map.empty
           in
           { known;
             at_least;
           }
+
+        module Meet_or_join
+          (E : Either_meet_or_join_intf
+            with module Join_env := Join_env
+            with module Meet_env := Meet_env
+            with module Typing_env_extension := Typing_env_extension) =
+        struct
+          let meet_or_join env t1 t2 =
+            let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
+            let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
+            let env = Join_env.clear_name_permutations env in
+            let ({ known = known1; at_least = at_least1; } : t) = t1 in
+            let ({ known = known2; at_least = at_least2; } : t) = t2 in
+            let one_side_only index1 maps_to1 at_least2
+                  ~get_equations_to_deposit1 =
+              let from_at_least2 =
+                Index.Map.find_last_opt
+                  (fun index -> Index.compare index index1 <= 0)
+                  at_least2
+              in
+              begin match from_at_least2 with
+              | None ->
+                begin match E.op () with
+                | Meet -> None
+                | Join ->
+                  let maps_to1 =
+                    Maps_to.add_or_meet_equations
+                      maps_to1
+                      (Join_env.central_environment env)
+                      (get_equations_to_deposit1 env)
+                  in
+                  Some maps_to1
+                end
+              | Some (index2, from_at_least2) ->
+                assert (Index.compare index2 index1 <= 0);
+                (* CR mshinwell: What happens to any generated equations in the
+                   [meet] case (same below)? *)
+                let maps_to =
+                  E.switch' Maps_to.meet Maps_to.join env
+                    maps_to1 from_at_least2
+                in
+                match maps_to with
+                | Bottom -> None
+                | Ok maps_to -> Some maps_to
+              end
+            in
+            let merge index maps_to1 maps_to2 =
+              match maps_to1, maps_to2 with
+              | Some maps_to1, None ->
+                one_side_only index maps_to1 at_least2
+                  ~get_equations_to_deposit1:Join_env.holds_on_left
+              | None, Some maps_to2 ->
+                one_side_only index maps_to2 at_least1
+                  ~get_equations_to_deposit1:Join_env.holds_on_right
+              | Some maps_to1, Some maps_to2 ->
+                let maps_to =
+                  E.switch' Maps_to.meet Maps_to.join env
+                    maps_to1 maps_to2
+                in
+                begin match maps_to with
+                | Bottom -> None
+                | Ok maps_to -> Some maps_to
+                end
+              | None, None -> None
+            in
+            (* CR mshinwell: Shouldn't we be applying name permutations to
+               these two as well? *)
+            let known =
+              Tag_and_index.Map.merge (fun tag_and_index maps_to1 maps_to2 ->
+                  let index = Tag_and_index.index tag_and_index in
+                  merge index maps_to1 maps_to2)
+                known1
+                known2
+            in
+            let at_least =
+              Index.Map.merge (fun index maps_to1 maps_to2 ->
+                  merge index maps_to1 maps_to2)
+                at_least1
+                at_least2
+            in
+            { known;
+              at_least;
+            }
+        end
+
+        let all_maps_to { known; at_least; } =
+          (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
+
+        module Meet = Meet_or_join (Either_meet_or_join.For_meet)
+        module Join = Meet_or_join (Either_meet_or_join.For_join)
+
+        let meet = Meet.meet_or_join
+        let join = Join.meet_or_join
+
+        let is_bottom { known; at_least; } =
+          Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
+
+        let known t = t.known
+        let at_least t = t.at_least
+
+        let get_singleton { known; at_least; } =
+          if not (Index.Map.is_empty at_least) then None
+          else Tag_and_index.Map.get_singleton known
+
+        let free_names t =
+          let { known; at_least; } = t in
+          let from_known =
+            Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
+                Name_occurrences.union free_names
+                  (Maps_to.free_names maps_to))
+              known
+              (Name_occurrences.create ())
+          in
+          let from_at_least =
+            Index.Map.fold (fun _index maps_to free_names ->
+                Name_occurrences.union free_names
+                  (Maps_to.free_names maps_to))
+              at_least
+              (Name_occurrences.create ())
+          in
+          Name_occurrences.union from_known from_at_least
+
+        let join_of_all_maps_to env t =
+          (* Any name permutations have already been applied during
+             [Meet.meet_or_join], above. *)
+          let env = Join_env.clear_name_permutations (Join_env.create env) in
+          List.fold_left (fun result maps_to ->
+              Maps_to.join env maps_to result)
+            (Maps_to.bottom ())
+            (all_maps_to t)
       end
 
-      let all_maps_to { known; at_least; } =
-        (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
+      type t = T0.t Or_unknown.t
 
-      module Meet = Meet_or_join (Either_meet_or_join.For_meet)
-      module Join = Meet_or_join (Either_meet_or_join.For_join)
+      let print ~cache ppf (t : t) =
+        match t with
+        | Known t0 -> T0.print ~cache ppf t0
+        | Unknown ->
+          Format.fprintf ppf "%sT%s"
+            (Misc_color.bold_red ())
+            (Misc_color.reset ())
 
-      let meet env t1 t2 : _ Or_bottom.t =
-        let t = Meet.meet_or_join (Join_env.create env) t1 t2 in
-(* Not sure this is right -- it means that an empty Immediates part causes a
-   whole meet to go to bottom, which is wrong.
-        if Tag_and_index.Map.is_empty t.known && Index.Map.is_empty t.at_least
-        then Bottom
-        else
-*)
-          let join_of_all_maps_to =
-            (* Any name permutations have already been applied during
-               [Meet.meet_or_join], above. *)
-            let env = Join_env.clear_name_permutations (Join_env.create env) in
-            List.fold_left (fun result maps_to ->
-                Maps_to.join env maps_to result)
-              (Maps_to.bottom ())
-              (all_maps_to t)
-          in
-          Ok (t, join_of_all_maps_to)
+      let create_bottom () : t = Known (T0.create_bottom ())
 
-      let join = Join.meet_or_join
+      let create_unknown () : t = Unknown
 
-      let is_bottom { known; at_least; } =
-        Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
+      let create_exactly tag index maps_to : t =
+        Known (T0.create_exactly tag index maps_to)
 
-      let known t = t.known
-      let at_least t = t.at_least
+      let create_exactly_multiple known : t =
+        Known (T0.create_exactly_multiple known)
 
-      let get_singleton { known; at_least; } =
-        if not (Index.Map.is_empty at_least) then None
-        else Tag_and_index.Map.get_singleton known
+      let create_at_least index maps_to : t =
+        Known (T0.create_at_least index maps_to)
 
-      let free_names t =
-        let { known; at_least; } = t in
-        let from_known =
-          Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
-              Name_occurrences.union free_names
-                (Maps_to.free_names maps_to))
-            known
-            (Name_occurrences.create ())
-        in
-        let from_at_least =
-          Index.Map.fold (fun _index maps_to free_names ->
-              Name_occurrences.union free_names
-                (Maps_to.free_names maps_to))
-            at_least
-            (Name_occurrences.create ())
-        in
-        Name_occurrences.union from_known from_at_least
+      let create_at_least_multiple at_least : t =
+        Known (T0.create_at_least_multiple at_least)
+
+      let equal env (t1 : t) (t2 : t) =
+        match t1, t2 with
+        | Known t0_1, Known t0_2 -> T0.equal env t0_1 t0_2
+        | Known _, Unknown | Unknown, Known _ -> false
+        | Unknown, Unknown -> true
+
+      let apply_name_permutation (t : t) perm : t =
+        match t with
+        | Known t0 ->
+          let t0' = T0.apply_name_permutation t0 perm in
+          if t0 == t0' then t
+          else Known t0'
+        | Unknown -> Unknown
+
+      let meet env (t1 : t) (t2 : t) : (t * Maps_to.t) Or_bottom.t =
+        match t1, t2 with
+        | Known t0_1, Known t0_2 ->
+          let t0 = T0.meet (Join_env.create env) t0_1 t0_2 in
+          Ok (Known t0, T0.join_of_all_maps_to env t0)
+        | Unknown, Known t0 ->
+          Ok (t2, T0.join_of_all_maps_to env t0)
+        | Known t0, Unknown ->
+          Ok (t1, T0.join_of_all_maps_to env t0)
+        | Unknown, Unknown ->
+          Ok (Unknown, Maps_to.bottom ())
+
+      let join env (t1 : t) (t2 : t) : t =
+        match t1, t2 with
+        | Known t0_1, Known t0_2 -> Known (T0.join env t0_1 t0_2)
+        | Unknown, t2 -> t2
+        | t1, Unknown -> t1
+
+      let is_bottom (t : t) =
+        match t with
+        | Known t0 -> T0.is_bottom t0
+        | Unknown -> false
+
+      let known (t : t) : _ Or_unknown.t =
+        match t with
+        | Known t0 -> Known (T0.known t0)
+        | Unknown -> Unknown
+
+      let at_least (t : t) : _ Or_unknown.t =
+        match t with
+        | Known t0 -> Known (T0.at_least t0)
+        | Unknown -> Unknown
+
+      let get_singleton (t : t) =
+        match t with
+        | Known t0 -> T0.get_singleton t0
+        | Unknown -> None
+
+      let free_names (t : t) =
+        match t with
+        | Known t0 -> T0.free_names t0
+        | Unknown -> Name_occurrences.create ()
     end
   end and Trivial_row_like : sig
     module Make (Thing_without_names : Hashtbl.With_map) : sig
@@ -5028,11 +5105,8 @@ module Make (Expr : Expr_intf.S) = struct
         in
         create_with_equations things_with_env_extensions
 
-      let create_bottom () =
-        create Thing_without_names.Set.empty
-
-      let create_unknown () =
-        RL.create_at_least_multiple Unit.Map.empty
+      let create_bottom = RL.create_bottom
+      let create_unknown = RL.create_unknown
 
       let print = RL.print
       let equal = RL.equal
@@ -5044,16 +5118,18 @@ module Make (Expr : Expr_intf.S) = struct
       let apply_name_permutation = RL.apply_name_permutation
 
       let all t : _ Or_unknown.t =
-        let indexes = RL.at_least t in
-        if not (Unit.Map.is_empty indexes) then Unknown
-        else
-          let things =
-            Thing_without_names_and_unit.Set.fold (fun (thing, ()) things ->
-                Thing_without_names.Set.add thing things)
-              (Thing_without_names_and_unit.Map.keys (RL.known t))
-              Thing_without_names.Set.empty
-          in
-          Known things
+        match RL.at_least t, RL.known t with
+        | Unknown, _ | _, Unknown -> Unknown
+        | Known indexes, Known known ->
+          if not (Unit.Map.is_empty indexes) then Unknown
+          else
+            let things =
+              Thing_without_names_and_unit.Set.fold (fun (thing, ()) things ->
+                  Thing_without_names.Set.add thing things)
+                (Thing_without_names_and_unit.Map.keys known)
+                Thing_without_names.Set.empty
+            in
+            Known things
 
       let get_singleton t =
         match RL.get_singleton t with
@@ -5495,9 +5571,9 @@ module Make (Expr : Expr_intf.S) = struct
         (* CR mshinwell: Improve so that we elide blocks and/or immediates when
            they're empty.  Similarly we can elide the extensions when empty. *)
         Format.fprintf ppf
-          "@[<hov 1>(Blocks_and_immediates@ \
-            @[<hov 1>(blocks@ %a)@]@ \
-            @[<hov 1>(immediates@ %a)@])@]"
+          "(Blocks_and_immediates@ \
+            @[<v>@[<hov 1>(blocks@ %a)@]@ \
+            @[<hov 1>(immediates@ %a)@]@])"
           (Blocks.print_with_cache ~cache) blocks
           (Immediates.print ~cache) immediates
       | Boxed_number n ->
@@ -5595,12 +5671,12 @@ module Make (Expr : Expr_intf.S) = struct
     and print_with_cache ~cache ppf (t : Flambda_types.t) =
       match t with
       | Value ty ->
-        Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
+        Format.fprintf ppf "@[<hov 1>(Val %a)@]"
           (print_ty_value_with_cache ~cache) ty
       | Naked_number (ty, _kind) ->
-        Format.fprintf ppf "@[<hov 1>(Naked@ %a)@]" print_ty_naked_number ty
+        Format.fprintf ppf "@[<hov 1>(Naked %a)@]" print_ty_naked_number ty
       | Fabricated ty ->
-        Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
+        Format.fprintf ppf "@[<hov 1>(Fab %a)@]"
           (print_ty_fabricated_with_cache ~cache) ty
 
     and print ppf t =
@@ -6782,23 +6858,32 @@ module Make (Expr : Expr_intf.S) = struct
       let print_with_cache ~cache ppf
             ({ first_definitions; at_or_after_cut_point; last_equations_rev;
                cse; } : t) =
-        let print_binding_list =
-          Format.pp_print_list ~pp_sep:Format.pp_print_space
-            (fun ppf (name, ty) ->
-              Format.fprintf ppf "@[(%a %a)@]"
-                Name.print name
-                (Type_printers.print_with_cache ~cache) ty)
+        let print_binding_list ppf bindings =
+          match bindings with
+          | [] -> Format.pp_print_string ppf "()"
+          | _::_ ->
+            Format.pp_print_string ppf "(";
+            Format.pp_print_list ~pp_sep:Format.pp_print_space
+              (fun ppf (name, ty) ->
+                Format.fprintf ppf
+                  "@[<hov 1>%s%a%s :@ %a@]"
+                  (Misc_color.bold_green ())
+                  Name.print name
+                  (Misc_color.reset ())
+                  (Type_printers.print_with_cache ~cache) ty)
+              ppf bindings;
+            Format.pp_print_string ppf ")"
         in
         Format.fprintf ppf
-          "@[<hov 1>(\
-              @[<hov 1>(first_definitions@ %a)@]@ \
-              @[<hov 1>(at_or_after_cut_point@ %a)@]@ \
-              @[<hov 1>(last_equations_rev@ %a)@]@ \
+          "@[<v 1>(\
+              @[<hov 1>(first_definitions@ @[<v 1>%a@])@]@;\
+              @[<hov 1>(at_or_after_cut_point@ @[<v 1>%a@])@]@;\
+              @[<hov 1>(last_equations@ @[<v 1>%a@])@]@;\
               @[<hov 1>(cse@ %a)@])@]"
           print_binding_list first_definitions
           (Typing_env.print_levels_to_entries_with_cache ~cache)
             at_or_after_cut_point
-          print_binding_list last_equations_rev
+          print_binding_list (List.rev last_equations_rev)
           (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
       let print ppf t =

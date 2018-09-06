@@ -35,8 +35,11 @@ include Hashtbl.Make_with_map (struct
     Hashtbl.hash (Variable.hash var, Flambda_kind.hash kind)
 
   let print ppf { var; kind; } =
-    Format.fprintf ppf "@[(%a ::@ %a)@]"
+    Format.fprintf ppf "@[@<0>%s(@<0>%s%a@<0>%s ::@ %a)@]"
+      (Misc_color.reset ())
+      (Misc_color.bold_green ())
       Variable.print var
+      (Misc_color.reset ())
       Flambda_kind.print kind
 end)
 
