@@ -16,38 +16,83 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+let check_invariants = true
+
 module Make (N : Map.With_set) = struct
   type t = {
-    permutation : N.t N.Map.t;
+    forwards : N.t N.Map.t;
+    backwards : N.t N.Map.t;
   }
 
   let create () =
-    { permutation = N.Map.empty;
+    { forwards = N.Map.empty;
+      backwards = N.Map.empty;
     }
 
-  let print ppf { permutation; } =
-    Format.fprintf ppf "@[((permutation %a))@]"
-      (N.Map.print N.print) permutation
+  let print ppf { forwards; backwards; } =
+    Format.fprintf ppf "@[((forwards %a)@ (backwards %a))@]"
+      (N.Map.print N.print) forwards
+      (N.Map.print N.print) backwards
+
+  let [@inline always] invariant { forwards; backwards; } =
+    if check_invariants then begin
+      let is_bijection map =
+        let domain = N.Map.keys map in
+        let range_list = N.Map.data map in
+        let range = N.Set.of_list range_list in
+        N.Set.equal domain range
+      in
+      assert (is_bijection forwards);
+      assert (N.Map.cardinal forwards = N.Map.cardinal backwards);
+      assert (N.Map.for_all (fun n1 n2 ->
+          assert (N.compare n1 n2 <> 0);
+          match N.Map.find n2 backwards with
+          | exception Not_found -> false
+          | n1' -> N.compare n1 n1' = 0)
+        forwards)
+    end
 
   let apply t n =
-    match N.Map.find n t.permutation with
+    match N.Map.find n t.forwards with
     | exception Not_found -> n
     | n -> n
 
-  let add t n1 n2 =
-    let n1' = apply t n1 in
-    let n2' = apply t n2 in
-    let permutation = N.Map.add n1' n2 (N.Map.add n2' n1 t.permutation) in
-    { permutation; }
+  let apply_backwards t n =
+    match N.Map.find n t.backwards with
+    | exception Not_found -> n
+    | n -> n
+
+  let add_to_map n1 n2 map =
+    if N.compare n1 n2 = 0 then map
+    else N.Map.add n1 n2 map
+
+  let flip t =
+    { forwards = t.backwards;
+      backwards = t.forwards;
+    }
+
+  let post_swap t n1 n2 =
+    let n1' = apply_backwards t n1 in
+    let n2' = apply_backwards t n2 in
+    let forwards = add_to_map n1' n2 (add_to_map n2' n1 t.forwards) in
+    let backwards = add_to_map n2 n1' (add_to_map n1 n2' t.backwards) in
+    let t = { forwards; backwards; } in
+    invariant t;
+    t
+
+  let pre_swap t n1 n2 =
+    flip (post_swap (flip t) n1 n2)
 
   let is_empty t =
-    N.Map.is_empty t.permutation
+    N.Map.is_empty t.forwards
 
-  let compose ~second:t2 ~first:t1 =
-    N.Map.fold (fun n1 n2 output ->
-        add output n1 n2)
-      t2.permutation
-      t1
+  let rec compose ~second ~first =
+    match N.Map.choose_opt second.forwards with
+    | None -> first
+    | Some (n1, n2) ->
+      let first = post_swap first n1 n2 in
+      let second = pre_swap second n1 n2 in
+      compose ~second ~first
 end
 
 module Continuations = Make (Continuation)
@@ -93,7 +138,7 @@ let compose
 
 let add_continuation t k1 k2 =
   { t with
-    continuations = Continuations.add t.continuations k1 k2;
+    continuations = Continuations.post_swap t.continuations k1 k2;
   }
 
 let apply_continuation t k =
@@ -101,7 +146,7 @@ let apply_continuation t k =
 
 let add_name t n1 n2 =
   { t with
-    names = Names.add t.names n1 n2;
+    names = Names.post_swap t.names n1 n2;
   }
 
 let apply_name t n =
