@@ -6334,7 +6334,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | New_equation_must_be_more_precise
       | Existing_equation_must_be_more_precise
 
-    let print_sense ppf (sense : sense) =
+    let _print_sense ppf (sense : sense) =
       match sense with
       | New_equation_must_be_more_precise ->
         Format.fprintf ppf "New_equation_must_be_more_precise"
@@ -6389,6 +6389,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             print t
         | Equation _ | CSE _ -> ()
 
+    let invariant_for_new_equation _t _name _ty ~sense:_ = ()
+
+(*
     let invariant_for_new_equation t name (ty : Flambda_types.t) ~sense =
       let existing_ty, _binding_type = find_exn t name in
       let meet_ty, _env_extension =
@@ -6399,6 +6402,15 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         in
         Both_meet_and_join.meet meet_env existing_ty ty
       in
+      (* XXX This should be done by [equal] *)
+      (* XXX And we need to think about this (likewise similar code in
+         [add_or_meet_env_extension'].  If correctness is hinging on
+         aliases being preserved, could we cause unsoundness by failing to add
+         an alias due to not being able to prove that the corresponding type is
+         more precise? *)
+      let meet_ty, _ = Typing_env.resolve_aliases t meet_ty in
+      let existing_ty, _ = Typing_env.resolve_aliases t existing_ty in
+      let ty, _ = Typing_env.resolve_aliases t ty in
       let ty_must_be_strictly_more_precise, other_ty =
         match sense with
         | New_equation_must_be_more_precise -> ty, existing_ty
@@ -6435,6 +6447,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           invariant_for_new_equation t name ty
             ~sense:Existing_equation_must_be_more_precise)
   *)
+*)
     let _ = ignore Existing_equation_must_be_more_precise
 
     let invariant_for_new_binding t name level
@@ -6682,16 +6695,17 @@ Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
           let t =
             add_or_meet_env_extension t meet_env_extension scope_level
           in
-          let meet_ty, _canonical_name = resolve_aliases t meet_ty in
+          let meet_ty', _canonical_name = resolve_aliases t meet_ty in
           let as_or_more_precise =
             Flambda_type0_core.is_obviously_bottom meet_ty
-              || Type_equality.equal meet_ty ty
+              || Type_equality.equal meet_ty' ty
           in
           let strictly_more_precise =
             as_or_more_precise
-              && ((Flambda_type0_core.is_obviously_bottom meet_ty
+              && ((Flambda_type0_core.is_obviously_bottom meet_ty'
                     && not (Flambda_type0_core.is_obviously_bottom ty))
-               || (not (Type_equality.equal meet_ty existing_ty)))
+               || (not (Type_equality.equal meet_ty' existing_ty)))
+
           in
 Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     AOMP %b; SMP %b\n%!"
