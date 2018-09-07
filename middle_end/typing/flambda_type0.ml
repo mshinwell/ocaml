@@ -495,6 +495,7 @@ module Make (Expr : Expr_intf.S) = struct
 
     let as_or_more_precise env t1 ~than:t2 =
       if Type_equality.fast_equal t1 t2 then true
+      else if Flambda_type0_core.is_obviously_bottom t1 then true
       else
         let env =
           (* CR mshinwell: We shouldn't have to write out these "empty
@@ -508,6 +509,10 @@ module Make (Expr : Expr_intf.S) = struct
 
     let strictly_more_precise env t1 ~than:t2 =
       if Type_equality.fast_equal t1 t2 then false
+      else if
+        Flambda_type0_core.is_obviously_bottom t1
+          && not (Flambda_type0_core.is_obviously_bottom t2)
+      then true
       else
         let env =
           Meet_env.create env
@@ -2872,6 +2877,9 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               add_equation_if_on_a_name env_extension_from_meet
                 simple1 meet_ty
             in
+Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
+  Simple.print simple1
+  Typing_env_extension.print env_extension_from_meet;
             Equals simple1, env_extension_from_meet
           | None, Some simple2 ->
             let meet_unknown_or_join, env_extension_from_meet =
@@ -5521,7 +5529,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (o : _ Flambda_types.unknown_or_join) =
       let colour = Misc_color.bold_red () in
       match o with
-      | Unknown -> Format.fprintf ppf "%sT%s" colour (Misc_color.reset ())
+      | Unknown ->
+        if unicode then
+          Format.fprintf ppf "%s\u{22a4}%s" colour (Misc_color.reset ())
+        else
+          Format.fprintf ppf "%sT%s" colour (Misc_color.reset ())
       | Join [] ->
         if unicode then
           Format.fprintf ppf "%s\u{22a5}%s" colour (Misc_color.reset ())
@@ -6671,10 +6683,15 @@ Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
             add_or_meet_env_extension t meet_env_extension scope_level
           in
           let meet_ty, _canonical_name = resolve_aliases t meet_ty in
-          let as_or_more_precise = Type_equality.equal meet_ty ty in
+          let as_or_more_precise =
+            Flambda_type0_core.is_obviously_bottom meet_ty
+              || Type_equality.equal meet_ty ty
+          in
           let strictly_more_precise =
             as_or_more_precise
-              && not (Type_equality.equal meet_ty existing_ty)
+              && ((Flambda_type0_core.is_obviously_bottom meet_ty
+                    && not (Flambda_type0_core.is_obviously_bottom ty))
+               || (not (Type_equality.equal meet_ty existing_ty)))
           in
 Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     AOMP %b; SMP %b\n%!"
