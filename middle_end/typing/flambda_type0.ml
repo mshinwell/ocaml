@@ -2734,11 +2734,18 @@ module Make (Expr : Expr_intf.S) = struct
           match ou1, ou2 with
           | Unknown, ou2 -> ou2, Typing_env_extension.empty ()
           | ou1, Unknown -> ou1, Typing_env_extension.empty ()
+          | Join [], Join _ -> ou1, Typing_env_extension.empty ()
+          | Join _, Join [] -> ou2, Typing_env_extension.empty ()
           | Join of_kind_foos1, Join of_kind_foos2 ->
+            (* We rely on the invariant in flambda_type0_intf.ml.
+               Everything in [of_kind_foos1] is mutually incompatible with each
+               other; likewise in [of_kind_foos2]. *)
             let of_kind_foos, env_extension_from_meet =
               List.fold_left
                 (fun (of_kind_foos, env_extension_from_meet)
                      (of_kind_foo, perm1) ->
+                  (* [of_kind_foo] can be compatible with at most one of the
+                     elements of [of_kind_foos]. *)
                   let new_env_extension_from_meet =
                     ref (Typing_env_extension.empty ())
                   in
@@ -2778,9 +2785,22 @@ module Make (Expr : Expr_intf.S) = struct
                        input_of_kind_foo == of_kind_foo)
                      input_of_kind_foos of_kind_foos
             in
-            if same_as of_kind_foos1 then ou1, env_extension_from_meet
-            else if same_as of_kind_foos2 then ou2, env_extension_from_meet
-            else Join of_kind_foos, env_extension_from_meet
+Format.eprintf "lengths: calcd %d, first %d, second %d\n%!"
+  (List.length of_kind_foos)
+  (List.length of_kind_foos1)
+  (List.length of_kind_foos2);
+            if same_as of_kind_foos1 then begin
+Format.eprintf "case 1\n%!";
+ou1, env_extension_from_meet
+end
+            else if same_as of_kind_foos2 then begin
+Format.eprintf "case 2\n%!";
+ou2, env_extension_from_meet
+end
+            else begin
+Format.eprintf "case 3\n%!";
+Join of_kind_foos, env_extension_from_meet
+end
 
       and meet_ty env
             (or_alias1 : S.of_kind_foo Flambda_types.ty)
@@ -2888,15 +2908,11 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         else
           match uj1, uj2 with
           | Unknown, _ | _, Unknown -> Unknown
-          | Join [], Join [] -> Join []
+          | Join [], Join _ -> uj2
+          | Join _, Join [] -> uj1
           | Join of_kind_foos1, Join of_kind_foos2 ->
-            (* We rely on the invariant in flambda_type0_intf.ml.
-               Everything in [of_kind_foos1] is mutually incompatible with each
-               other; likewise in [of_kind_foos2]. *)
             let of_kind_foos =
               List.fold_left (fun of_kind_foos (of_kind_foo, perm1) ->
-                  (* [of_kind_foo] can be compatible with at most one of the
-                     elements of [of_kind_foos]. *)
                   let found_one = ref false in
                   let joined =
                     List.map (fun (of_kind_foo', perm2) ->
@@ -6647,6 +6663,9 @@ Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
             in
             Both_meet_and_join.meet meet_env ty existing_ty
           in
+          (* CR mshinwell: I suspect we could just put [env_extension]'s
+             contents directly into [t] without having to do any more meets,
+             but unsure.  Needs thought. *)
           let ty, _canonical_name = resolve_aliases t ty in
           let t =
             add_or_meet_env_extension t meet_env_extension scope_level
@@ -6657,9 +6676,12 @@ Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
             as_or_more_precise
               && not (Type_equality.equal meet_ty existing_ty)
           in
-Format.eprintf "Adding equation on %a: meet_ty is %a; AOMP %b; SMP %b\n%!"
+Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
+    AOMP %b; SMP %b\n%!"
   Name.print name
   Type_printers.print meet_ty
+  Type_printers.print ty
+  Type_printers.print existing_ty
   as_or_more_precise
   strictly_more_precise;
           if strictly_more_precise then

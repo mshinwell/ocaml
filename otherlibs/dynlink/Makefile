@@ -57,11 +57,11 @@ COMPILEROBJS=\
   ../../typing/primitive.cmo ../../typing/types.cmo \
   ../../typing/btype.cmo ../../typing/subst.cmo ../../typing/predef.cmo \
   ../../typing/datarepr.cmo ../../typing/cmi_format.cmo ../../typing/env.cmo \
-  ../../middle_end/base_types/tag.cmo \
-  ../../middle_end/base_types/linkage_name.cmo \
-  ../../middle_end/base_types/compilation_unit.cmo \
-  ../../middle_end/base_types/variable.cmo \
-  ../../middle_end/base_types/continuation.cmo \
+  ../../middle_end/language/tag.cmo \
+  ../../middle_end/language/linkage_name.cmo \
+  ../../middle_end/language/compilation_unit.cmo \
+  ../../middle_end/language/variable.cmo \
+  ../../middle_end/language/continuation.cmo \
   ../../bytecomp/lambda.cmo ../../bytecomp/instruct.cmo \
   ../../bytecomp/cmo_format.cmi ../../bytecomp/opcodes.cmo \
   ../../bytecomp/runtimedef.cmo ../../bytecomp/bytesections.cmo \

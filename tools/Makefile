@@ -94,7 +94,7 @@ ifeq "$(UNIX_OR_WIN32)" "win32"
 endif
 CAMLLEX=$(CAMLRUN) ../boot/ocamllex
 INCLUDES=-I ../utils -I ../parsing -I ../typing -I ../bytecomp -I ../asmcomp \
-         -I ../middle_end -I ../middle_end/base_types -I ../driver \
+         -I ../middle_end -I ../middle_end/language -I ../driver \
          -I ../toplevel
 COMPFLAGS= -absname -w +a-4-9-41-42-44-45-48 -strict-sequence -warn-error A \
  -safe-string -strict-formats -bin-annot $(INCLUDES)
