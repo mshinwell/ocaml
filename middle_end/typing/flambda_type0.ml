@@ -7054,13 +7054,6 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
             && Flambda_primitive.With_fixed_value.Map.is_empty cse
         | _, _ -> false
 
-      let create_for_cut ~at_or_after_cut_point =
-        { first_definitions = [];
-          at_or_after_cut_point;
-          last_equations_rev = [];
-          cse = Flambda_primitive.With_fixed_value.Map.empty;
-        }
-
       let _fast_equal t1 t2 = (t1 == t2)
 
       let equal env t1 t2 =
@@ -7182,7 +7175,10 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
             cse = cse';
           }
 
-      let free_names
+      (* CR mshinwell: Name may be bad -- doesn't mean that no "defined names"
+         are returned, just that the ones in binding positions aren't counted
+      *)
+      let free_names_without_defined_names
             { first_definitions; at_or_after_cut_point; last_equations_rev;
               cse; } =
         let free_names_first_definitions =
@@ -7264,6 +7260,50 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
           t.at_or_after_cut_point
           from_first_definitions
 
+      (* CR mshinwell: Fix the return type of the above *)
+      let defined_names' t =
+        Name.Set.fold (fun name result ->
+            Bindable_name.Set.add (Name name) result)
+          (defined_names t)
+          Bindable_name.Set.empty
+
+      let free_names t =
+        Name_occurrences.union (free_names_without_defined_names t)
+          (Name_occurrences.create_from_set_in_types (defined_names' t))
+
+(*
+      let defined_names_with_usage_counts t =
+        let defined_names = defined_names t in
+        let count map name =
+          (* CR mshinwell: Used elsewhere too, factor out *)
+          Numbers.Int.Map.update name (function
+              | None -> Some 1
+              | Some n -> Some (n + 1))
+            map
+        in
+        let from_first_definitions =
+          List.fold_left (fun counts (name, ty) ->
+              let free_names =
+                Name_occurrences.everything_must_only_be_names
+                  (Type_free_names.free_names ty)
+              in
+              let uses_of_defined_names =
+              Name.Set.inter defined_names free_names)
+            Numbers.Int.Map.empty
+        in
+        let from_at_or_after_cut_point =
+
+        in
+        let from_last_equations_rev =
+
+        in
+        let merge_maps m1 m2 =
+          Numbers.Int.Map.union_merge (fun n1 n2 -> n1 + n2) m1 m2
+        in
+        merge_maps from_first_definitions
+          (merge_maps from_at_or_after_cut_point from_last_equations_rev)
+*)
+
 (*
       let _equations_domain
             { first_definitions = _; at_or_after_cut_point;
@@ -7333,6 +7373,123 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
         in
         invariant t;
         t
+
+      (* CR mshinwell: These [find] operations need serious optimisation.
+         The tricky thing is keeping a "names_to_types" map for the
+         "at_or_after_cut_point" map without making [cut] expensive. *)
+
+      let find_first_definitions_exn t name =
+        List.assoc name (List.rev t.first_definitions)
+
+      let find_at_or_after_cut_point_exn t name =
+        let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
+        (* CR mshinwell: No point producing [flattened_levels] now, just use
+           [Name.Map.find] *)
+        let flattened_levels =
+          List.concat (List.map (fun (_scope_level, by_name) ->
+              Name.Map.bindings by_name)
+            bindings)
+        in
+        let without_cse =
+          Misc.Stdlib.List.filter_map
+            (fun (name, (entry : Typing_env.typing_environment_entry)) ->
+              match entry with
+              | Definition ty | Equation ty -> Some (name, ty)
+              | CSE _ -> None)
+            flattened_levels
+        in
+        List.assoc name without_cse
+
+      let find_last_equations_rev_exn t name =
+        List.assoc name t.last_equations_rev
+
+      let find_opt t name =
+        match find_last_equations_rev_exn t name with
+        | ty -> Some ty
+        | exception Not_found ->
+          match find_at_or_after_cut_point_exn t name with
+          | ty -> Some ty
+          | exception Not_found ->
+            match find_first_definitions_exn t name with
+            | ty -> Some ty
+            | exception Not_found -> None
+
+      let find t name =
+        match find_opt t name with
+        | Some ty -> ty
+        | None ->
+          Misc.fatal_errorf "Unbound name %a in@ %a"
+            Name.print name
+            print t
+
+      let tidy t =
+        let free_names_without_defined_names' =
+          free_names_without_defined_names t
+        in
+        let defined_names =
+          Name_occurrences.create_from_set_in_types (defined_names' t)
+        in
+        (* CR mshinwell: We should do this "inlining" on [first_definitions]
+           and [last_equations_rev], too. *)
+        let at_or_after_cut_point =
+          Scope_level.Map.map (fun by_name ->
+              Name.Map.map_sharing
+                (fun (entry : Typing_env.typing_environment_entry) ->
+                  match entry with
+                  | CSE _ -> entry
+                  | Definition ty | Equation ty ->
+                    let rec resolve_aliases ty
+                          : Typing_env.typing_environment_entry =
+                      match Flambda_type0_core.get_alias ty with
+                      | None
+                      | Some (Const _ | Discriminant _) ->
+                        begin match entry with
+                        | Definition _ -> Definition ty
+                        | Equation _ -> Equation ty
+                        | CSE _ -> assert false
+                        end
+                      | Some (Name alias) ->
+                        let alias_is_defined_name =
+                          Name_occurrences.mem defined_names (Name alias)
+                        in
+                        let alias_is_not_used_on_rhs =
+                          Name_occurrences.mem free_names_without_defined_names'
+                            (Name alias)
+                        in
+                        if alias_is_defined_name && alias_is_not_used_on_rhs
+                        then resolve_aliases (find t alias)
+                        else entry
+                    in
+                    resolve_aliases ty)
+                by_name)
+            t.at_or_after_cut_point
+        in
+        let t =
+          { t with at_or_after_cut_point; }
+        in
+        (* CR mshinwell: We can probably avoid re-computing this by calculating
+           it as we go along, just above. *)
+        let free_names_without_defined_names =
+          free_names_without_defined_names t
+        in
+        let unused_defined_names =
+          Name_occurrences.diff defined_names free_names_without_defined_names
+        in
+        let allowed =
+          Name_occurrences.diff free_names_without_defined_names
+            unused_defined_names
+        in
+        restrict_to_names t allowed
+
+      let create_for_cut ~at_or_after_cut_point =
+        let t =
+          { first_definitions = [];
+            at_or_after_cut_point;
+            last_equations_rev = [];
+            cse = Flambda_primitive.With_fixed_value.Map.empty;
+          }
+        in
+        tidy t
 
       let add_definition_at_beginning t name ty =
         let first_definitions = (name, ty) :: t.first_definitions in
@@ -7424,54 +7581,6 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
             f acc name (Equation ty))
           acc
           t.last_equations_rev
-
-      (* CR mshinwell: These [find] operations need serious optimisation.
-         The tricky thing is keeping a "names_to_types" map for the
-         "at_or_after_cut_point" map without making [cut] expensive. *)
-
-      let find_first_definitions_exn t name =
-        List.assoc name (List.rev t.first_definitions)
-
-      let find_at_or_after_cut_point_exn t name =
-        let bindings = Scope_level.Map.bindings t.at_or_after_cut_point in
-        (* CR mshinwell: No point producing [flattened_levels] now, just use
-           [Name.Map.find] *)
-        let flattened_levels =
-          List.concat (List.map (fun (_scope_level, by_name) ->
-              Name.Map.bindings by_name)
-            bindings)
-        in
-        let without_cse =
-          Misc.Stdlib.List.filter_map
-            (fun (name, (entry : Typing_env.typing_environment_entry)) ->
-              match entry with
-              | Definition ty | Equation ty -> Some (name, ty)
-              | CSE _ -> None)
-            flattened_levels
-        in
-        List.assoc name without_cse
-
-      let find_last_equations_rev_exn t name =
-        List.assoc name t.last_equations_rev
-
-      let find_opt t name =
-        match find_last_equations_rev_exn t name with
-        | ty -> Some ty
-        | exception Not_found ->
-          match find_at_or_after_cut_point_exn t name with
-          | ty -> Some ty
-          | exception Not_found ->
-            match find_first_definitions_exn t name with
-            | ty -> Some ty
-            | exception Not_found -> None
-
-      let find t name =
-        match find_opt t name with
-        | Some ty -> ty
-        | None ->
-          Misc.fatal_errorf "Unbound name %a in@ %a"
-            Name.print name
-            print t
 
       (* CR mshinwell: This needs to do something with [t.cse] perhaps *)
       (* CR mshinwell: Think carefully about whether the freshening is actually
