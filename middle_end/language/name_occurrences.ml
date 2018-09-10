@@ -60,6 +60,11 @@ let create_from_set_in_types in_types =
     in_debug_only = Bindable_name.Set.empty;
   }
 
+let is_empty { in_terms; in_types; in_debug_only; } =
+  Bindable_name.Set.is_empty in_terms
+    && Bindable_name.Set.is_empty in_types
+    && Bindable_name.Set.is_empty in_debug_only
+
 let singleton_in_terms name =
   create_from_set_in_terms (Bindable_name.Set.singleton name)
 
@@ -130,6 +135,12 @@ let rec union_list ts =
   match  ts with
   | [] -> create ()
   | t::ts -> union t (union_list ts)
+
+let inter t1 t2 =
+  { in_terms = Bindable_name.Set.inter t1.in_terms t2.in_terms;
+    in_types = Bindable_name.Set.inter t1.in_types t2.in_types;
+    in_debug_only = Bindable_name.Set.inter t1.in_debug_only t2.in_debug_only;
+  }
 
 let subset
       { in_terms = in_terms1; in_types = in_types1;

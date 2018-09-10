@@ -6993,6 +6993,8 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
   end = struct
     module T0 = struct
       type t = {
+        (* CR mshinwell: These lists can probably be sets now, since we've
+           changed [Typing_env.t]. *)
         first_definitions : (Name.t * Flambda_types.t) list;
         at_or_after_cut_point : Typing_env.levels_to_entries;
         last_equations_rev : (Name.t * Flambda_types.t) list;
@@ -7422,7 +7424,7 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
             Name.print name
             print t
 
-      let tidy t =
+      let _tidy t =
         let free_names_without_defined_names' =
           free_names_without_defined_names t
         in
@@ -7440,6 +7442,7 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
                   | Definition ty | Equation ty ->
                     let rec resolve_aliases ty
                           : Typing_env.typing_environment_entry =
+                      (* CR mshinwell: Needs check for cycles *)
                       match Flambda_type0_core.get_alias ty with
                       | None
                       | Some (Const _ | Discriminant _) ->
@@ -7489,7 +7492,10 @@ Format.eprintf "Meeting extension into TE: %a of type %a, env is currently@ %a\n
             cse = Flambda_primitive.With_fixed_value.Map.empty;
           }
         in
+t
+(*
         tidy t
+*)
 
       let add_definition_at_beginning t name ty =
         let first_definitions = (name, ty) :: t.first_definitions in

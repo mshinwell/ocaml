@@ -38,6 +38,8 @@ val singleton_in_terms : Bindable_name.t -> t
 
 val singleton_in_types : Bindable_name.t -> t
 
+val is_empty : t -> bool
+
 val of_list_in_terms : Bindable_name.t list -> t
 
 val add : t -> Bindable_name.t -> occurrence_kind -> t
@@ -70,6 +72,8 @@ val diff : t -> t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
+
+val inter : t -> t -> t
 
 val subset : t -> t -> bool
 

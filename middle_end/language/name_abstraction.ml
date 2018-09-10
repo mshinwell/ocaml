@@ -113,7 +113,17 @@ end
 module Make2 (Name0 : Name) (Name1 : Name) (Term : Term) = struct
   type t = Name0.t * Name1.t * Term.t
 
-  let create name0 name1 term = name0, name1, term
+  let create name0 name1 term =
+    let free_names0 = Name.free_names name0 in
+    let free_names1 = Name.free_names name1 in
+    let free_names_both = Name_occurrences.inter free_names0 free_names1 in
+    if not (Name_occurrences.is_empty free_names_both) then begin
+      Misc.fatal_errorf "Cannot create product abstraction value with \
+          [Name]s that have overlapping [free_names]: %a and %a"
+        Name.print name0
+        Name.print name1
+    end;
+    name0, name1, term
 
   let pattern_match (name0, name1, term) ~f =
     let fresh_name0 = Name0.rename name0 in
