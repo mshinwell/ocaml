@@ -126,9 +126,8 @@ module type S = sig
            change it to [Introduce_name] -- the "t" would be implicitly
            bottom) *)
 
-    type levels_to_entries =
-      (Name.t * typing_environment_entry)
-        Scope_level.Sublevel.Map.t Scope_level.Map.t
+    type levels_to_entries = private
+      typing_environment_entry Name.Map.t Scope_level.Map.t
 
     (** Perform various invariant checks upon the given environment. *)
     val invariant : t -> unit
@@ -215,7 +214,7 @@ module type S = sig
     val find_with_scope_level_exn
        : t
       -> Name.t
-      -> flambda_type * Scope_level.With_sublevel.t * binding_type
+      -> flambda_type * Scope_level.t * binding_type
 
     (** Like [find], but returns [None] iff the given name is not in the
         specified environment. *)
@@ -228,7 +227,7 @@ module type S = sig
 
     (** The scoping level known for the given name, which must be bound by the
         given environment. *)
-    val scope_level_exn : t -> Name.t -> Scope_level.With_sublevel.t
+    val scope_level_exn : t -> Name.t -> Scope_level.t
 
     (** Whether the given name is bound in the environment (either normally
         or existentially). *)
@@ -248,7 +247,7 @@ module type S = sig
       -> f:('a
         -> Name.t
         -> binding_type
-        -> Scope_level.With_sublevel.t
+        -> Scope_level.t
         -> typing_environment_entry0
         -> 'a)
       -> 'a
@@ -258,7 +257,7 @@ module type S = sig
        : t
       -> f:(Name.t
         -> binding_type
-        -> Scope_level.With_sublevel.t
+        -> Scope_level.t
         -> typing_environment_entry0
         -> unit)
       -> unit
@@ -267,15 +266,17 @@ module type S = sig
         mentions names which are symbols, not variables. *)
     val restrict_to_symbols : t -> t
 
+(*
     (** Like [restrict_to_names] except using a traditional filtering
         predicate.  A name will only be kept if the predicate returns [true]
         for the name. *)
     val filter
        : t
       -> f:(Name.t
-        -> (Scope_level.With_sublevel.t * typing_environment_entry0)
+        -> (Scope_level.t * typing_environment_entry0)
         -> bool)
       -> t
+*)
 
     (** Add the given environment extension into the given typing environment.
         During the process, if an attempt is made to add a name which is

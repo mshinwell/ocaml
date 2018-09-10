@@ -57,7 +57,7 @@ module Make (Name : Name) (Term : Term) = struct
     | Brackets -> "]"
     | Existential -> "."
 
-  let print ?(style = Normal) ppf t =
+  let print ?(style = Brackets) ppf t =
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
         (Misc_color.bold_cyan ())
@@ -69,7 +69,7 @@ module Make (Name : Name) (Term : Term) = struct
         (Misc_color.reset ())
         Term.print term)
 
-  let print_with_cache ?(style = Normal) ~cache ppf t =
+  let print_with_cache ?(style = Brackets) ~cache ppf t =
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
         (Misc_color.bold_cyan ())
