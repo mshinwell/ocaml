@@ -115,32 +115,22 @@ module type S = sig
     type binding_type = Normal | Was_existential
 
     type typing_environment_entry0 =
-      | Definition of flambda_type
+      | Definition of Flambda_kind.t
       | Equation of flambda_type
 
     type typing_environment_entry = private
-      | Definition of flambda_type
+      | Definition of Flambda_kind.t
       | Equation of flambda_type
       | CSE of Flambda_primitive.With_fixed_value.t
         (* CR mshinwell: Consider removing "of t" for [Definition] (and maybe
            change it to [Introduce_name] -- the "t" would be implicitly
            bottom) *)
 
-    type levels_to_entries = private
-      (Name.t * typing_environment_entry)
-        Scope_level.Sublevel.Map.t Scope_level.Map.t
-
     (** Perform various invariant checks upon the given environment. *)
     val invariant : t -> unit
 
     (** Print the given typing environment to a formatter. *)
     val print : Format.formatter -> t -> unit
-
-    val print_levels_to_entries_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> levels_to_entries
-      -> unit
 
     (** Create an empty environment using the given [resolver] to locate the
         definitions of export identifiers (e.g. by loading .cmx files). *)
