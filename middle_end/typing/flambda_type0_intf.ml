@@ -114,11 +114,11 @@ module type S = sig
 
     type binding_type = Normal | Was_existential
 
-    type typing_environment_entry0 =
+    type typing_env_entry0 =
       | Definition of Flambda_kind.t
       | Equation of flambda_type
 
-    type typing_environment_entry = private
+    type typing_env_entry = private
       | Definition of Flambda_kind.t
       | Equation of flambda_type
       | CSE of Flambda_primitive.With_fixed_value.t
@@ -172,14 +172,14 @@ module type S = sig
         scoping sublevel computed by the environment. *)
     (* CR mshinwell: I think maybe this should be add_definition, and
        add_equation should be used otherwise, which meets. *)
-    val add : t -> Name.t -> Scope_level.t -> typing_environment_entry -> t
+    val add : t -> Name.t -> Scope_level.t -> typing_env_entry -> t
 
     (** The same as [add] on a newly-[create]d environment. *)
     val singleton
        : resolver:(Export_id.t -> flambda_type option)
       -> Name.t
       -> Scope_level.t
-      -> typing_environment_entry
+      -> typing_env_entry
       -> t
 
     (** Add a new equation for a name already bound by the given typing
@@ -239,7 +239,7 @@ module type S = sig
         -> Name.t
         -> binding_type
         -> Scope_level.With_sublevel.t
-        -> typing_environment_entry0
+        -> typing_env_entry0
         -> 'a)
       -> 'a
 
@@ -249,7 +249,7 @@ module type S = sig
       -> f:(Name.t
         -> binding_type
         -> Scope_level.With_sublevel.t
-        -> typing_environment_entry0
+        -> typing_env_entry0
         -> unit)
       -> unit
 
@@ -264,7 +264,7 @@ module type S = sig
     val filter
        : t
       -> f:(Name.t
-        -> (Scope_level.With_sublevel.t * typing_environment_entry0)
+        -> (Scope_level.With_sublevel.t * typing_env_entry0)
         -> bool)
       -> t
 *)
