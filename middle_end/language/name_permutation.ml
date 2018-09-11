@@ -154,7 +154,6 @@ let add_name t n1 n2 =
   }
 
 let add_bindable_name_exn t (bn1 : Bindable_name.t) (bn2 : Bindable_name.t) =
-  assert (Bindable_name.of_same_form bn1 bn2);
   match bn1, bn2 with
   | Continuation k1, Continuation k2 -> add_continuation t k1 k2
   | Name n1, Name n2 -> add_name t n1 n2
@@ -175,7 +174,7 @@ let apply_name_set t names =
     names
     Name.Set.empty
 
-let apply_bindable_name t (bn : Bindable_name.t) =
+let apply_bindable_name t (bn : Bindable_name.t) : Bindable_name.t =
   match bn with
   | Continuation k -> Continuation (apply_continuation t k)
   | Name name -> Name (apply_name t name)
