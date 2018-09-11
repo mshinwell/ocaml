@@ -323,7 +323,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/simple.cmo \
   middle_end/language/kinded_parameter.cmo \
   middle_end/language/name_abstraction.cmo \
-  middle_end/language/set_with_permutation_action.cmo \
   middle_end/language/bound_name_set.cmo \
   middle_end/language/bound_variable.cmo \
   middle_end/language/bound_continuation.cmo \
