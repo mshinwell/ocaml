@@ -153,6 +153,18 @@ let add_name t n1 n2 =
     names = Names.post_swap t.names n1 n2;
   }
 
+let add_bindable_name_exn t (bn1 : Bindable_name.t) (bn2 : Bindable_name.t) =
+  assert (Bindable_name.of_same_form bn1 bn2);
+  match bn1, bn2 with
+  | Continuation k1, Continuation k2 -> add_continuation t k1 k2
+  | Name n1, Name n2 -> add_name t n1 n2
+  | Continuation _, Name _
+  | Name _, Continuation _ ->
+    Misc.fatal_errorf "Cannot add bindable names of different forms to \
+        name permutation: %a and %a"
+      Bindable_name.print bn1
+      Bindable_name.print bn2
+
 let apply_name t n =
   Names.apply t.names n
 
@@ -163,14 +175,18 @@ let apply_name_set t names =
     names
     Name.Set.empty
 
+let apply_bindable_name t (bn : Bindable_name.t) =
+  match bn with
+  | Continuation k -> Continuation (apply_continuation t k)
+  | Name name -> Name (apply_name t name)
+
+let apply_bindable_name_list t bns =
+  List.map (fun bn -> apply_bindable_name t bn) bns
+
 (* CR mshinwell: add phys-equal checks *)
 let apply_bindable_name_set t names =
-  Bindable_name.Set.fold (fun (name : Bindable_name.t) result ->
-      let name : Bindable_name.t =
-        match name with
-        | Continuation k -> Continuation (apply_continuation t k)
-        | Name name -> Name (apply_name t name)
-      in
+  Bindable_name.Set.fold (fun name result ->
+      let name = apply_bindable_name t name in
       Bindable_name.Set.add name result)
     names
     Bindable_name.Set.empty

@@ -36,3 +36,7 @@ end
 
 include T0
 include Map.Make_with_set (T0)
+
+let rename = function
+  | Continuation k -> Continuation (Continuation.create ())
+  | Name name -> Name (Name.rename name)

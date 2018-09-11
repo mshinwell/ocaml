@@ -31,6 +31,11 @@ val is_empty : t -> bool
     [first] then subsequently like [second]. *)
 val compose : second:t -> first:t -> t
 
+(** Adds the swapping of the given two bindable names to the permutation.
+    An exception is raised if the bindable names are not of the same form
+    (e.g. a [Name] with a [Continuation]). *)
+val add_bindable_name_exn : t -> Bindable_name.t -> Bindable_name.t -> t
+
 val add_continuation : t -> Continuation.t -> Continuation.t -> t
 
 val apply_continuation : t -> Continuation.t -> Continuation.t
@@ -40,5 +45,9 @@ val add_name : t -> Name.t -> Name.t -> t
 val apply_name : t -> Name.t -> Name.t
 
 val apply_name_set : t -> Name.Set.t -> Name.Set.t
+
+val apply_bindable_name : t -> Bindable_name.t -> Bindable_name.t
+
+val apply_bindable_name_list : t -> Bindable_name.t list -> Bindable_name.t list
 
 val apply_bindable_name_set : t -> Bindable_name.Set.t -> Bindable_name.Set.t

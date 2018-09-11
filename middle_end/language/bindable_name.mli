@@ -23,3 +23,5 @@ type t =
   | Name of Name.t
 
 include Map.With_set with type t := t
+
+val rename : t -> t
