@@ -2379,7 +2379,12 @@ module Make (Expr : Expr_intf.S) = struct
 
     val create_bottom : unit -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val meet
        : Meet_env.t
@@ -2447,12 +2452,13 @@ module Make (Expr : Expr_intf.S) = struct
       | Product rp -> RP.print_with_cache ~cache ppf rp
       | Bottom -> Format.pp_print_string ppf "Bottom"
 
-    let equal env t1 t2 =
+    let equal env result t1 t2 =
       match t1, t2 with
-      | Product rp1, Product rp2 -> RP.equal env rp1 rp2
-      | Unknown, Unknown -> true
-      | Bottom, Bottom -> true
-      | (Product _ | Unknown | Bottom), _ -> false
+      | Product rp1, Product rp2 -> RP.equal env result rp1 rp2
+      | Unknown, Unknown -> result
+      | Bottom, Bottom -> result
+      | (Product _ | Unknown | Bottom), _ ->
+        Type_equality_result.types_known_unequal result
 
     let meet env t1 t2 : _ Or_bottom.t =
       match t1, t2 with
@@ -2953,7 +2959,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             in
             Join of_kind_foos
 
-      and join_ty env
+      and join_ty env ?bound_name
             (or_alias1 : S.of_kind_foo Flambda_types.ty)
             (or_alias2 : S.of_kind_foo Flambda_types.ty)
             : S.of_kind_foo Flambda_types.ty =
@@ -2965,6 +2971,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               (Join_env.environment_on_left env)
               ~force_to_kind:S.force_to_kind
               ~print_ty
+              ?bound_name
               or_alias1
           in
           let unknown_or_join2, canonical_simple2 =
@@ -2972,6 +2979,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               (Join_env.environment_on_right env)
               ~force_to_kind:S.force_to_kind
               ~print_ty
+              ?bound_name
               or_alias2
           in
           let all_aliases1 =
@@ -2989,6 +2997,16 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                 canonical_simple
           in
           let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
+          let all_aliases =
+            match bound_name with
+            | None -> all_aliases
+            | Some bound_name ->
+              let all_aliases_of_bound_name =
+                Typing_env.aliases_of_simple (Join_env.central_environment env)
+                  (Name bound_name)
+              in
+              Name.Set.diff all_aliases all_aliases_of_bound_name
+          in
           let alias_both_sides = Name.Set.choose_opt all_aliases in
           match alias_both_sides with
           | Some name -> Equals (Simple.name name)
@@ -4022,7 +4040,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
       (Component : sig
         include Name_like_intf.S
         val create : Flambda_kind.t -> t
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end)
@@ -4037,7 +4060,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           -> Format.formatter
           -> t
           -> unit
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val meet
            : Meet_env.t
           -> t
@@ -4070,7 +4098,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
 
       val create_bottom : unit -> t
 
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       val meet
          : Meet_env.t
@@ -4096,7 +4129,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
       (Component : sig
         include Name_like_intf.S
         val create : Flambda_kind.t -> t
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end)
@@ -4111,7 +4149,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           -> Format.formatter
           -> t
           -> unit
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val meet
            : Meet_env.t
           -> t
@@ -4136,7 +4179,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           -> Format.formatter
           -> t
           -> unit
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val meet
            : Meet_env.t
           -> t
@@ -4183,7 +4231,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             (Typing_env_extension.print_with_cache ~cache) env_extension
             (Misc.Stdlib.Option.print (Nested.print_with_cache ~cache)) nested
 
-        let equal env
+        let equal env result
               { components_by_index = components_by_index1;
                 env_extension = env_extension1;
                 nested = nested1;
@@ -4192,10 +4240,37 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                 env_extension = env_extension2;
                 nested = nested2;
               } =
-          Index.Map.equal (Component.equal env)
-            components_by_index1 components_by_index2
-          && Typing_env_extension.equal env env_extension1 env_extension2
-          && Misc.Stdlib.Option.equal (Nested.equal env) nested1 nested2
+          let (>>=) = Type_equality_result.(>>=) in
+          result
+          >>= fun result ->
+          Index.Map.fold2 (fun _index component1 component2 result ->
+              result
+              >>= fun result ->
+              Component.equal env result component1 component2)
+            components_by_index1 components_by_index2 result
+          >>= fun result ->
+          let env =
+            Index.Map.fold (fun _index component env ->
+                let name = Component.name component in
+                Type_equality_env.add_definition_typing_env_left env name ty)
+              components_by_index1
+              env
+          in
+          let env =
+            Index.Map.fold (fun _index component env ->
+                let name = Component.name component in
+                Type_equality_env.add_definition_typing_env_right env name ty)
+              components_by_index2
+              env
+          in
+          Typing_env_extension.equal env result env_extension1 env_extension2
+          >>= fun result ->
+          match nested1, nested2 with
+          | None, None -> result
+          | None, Some _ | Some _, None ->
+            Type_equality_result.types_known_unequal ()
+          | Some nested1, Some nested2 ->
+            Nested.equal env result nested1 nested2
 
         let free_names
               { components_by_index; env_extension; nested; } =
@@ -4463,9 +4538,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
       let print_with_cache ~cache ppf t = print_with_cache ~cache ppf t
 
-      let equal env t1 t2 =
+      let equal env result t1 t2 =
         pattern_match_pair t1 t2 ~f:(fun _ t0_1 t0_2 ->
-          T0.equal env t0_1 t0_2)
+          T0.equal env result t0_1 t0_2)
 
       let meet env t1 t2 =
         pattern_match t1 ~f:(fun _ t0_1 ->
@@ -4549,7 +4624,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       val create_bottom : unit -> t
 
       (** A conservative approximation to equality. *)
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       (** Greatest lower bound of two relational products. *)
       val meet
@@ -4584,7 +4664,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       (Component : sig
         include Name_like_intf.S
         val create : Flambda_kind.t -> t
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end) =
@@ -4613,7 +4698,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
         val create_bottom : unit -> t
 
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
 
         val meet
            : Meet_env.t
@@ -4675,7 +4765,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           -> t
           -> unit
 
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
 
         val add_or_meet_equations
            : t
@@ -4712,7 +4807,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
       val is_bottom : t -> bool
 
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       (** The [Maps_to] value which [meet] returns contains the join of all
           [Maps_to] values in the range of the row-like structure after the meet
@@ -4752,7 +4852,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           -> t
           -> unit
 
-        val equal : Type_equality_env.t -> t -> t -> bool
+        val equal
+           : Type_equality_env.t
+          -> Type_equality_result.t
+          -> t
+          -> t
+          -> Type_equality_result.t
 
         val add_or_meet_equations
            : t
@@ -4822,11 +4927,23 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             at_least;
           }
 
-        let equal env
+        let equal env result
               { known = known1; at_least = at_least1; }
               { known = known2; at_least = at_least2; } =
-          Tag_and_index.Map.equal (Maps_to.equal env) known1 known2
-            && Index.Map.equal (Maps_to.equal env) at_least1 at_least2
+          let (>>=) = Type_equality_result.(>>=) in
+          result
+          >>= fun result ->
+          Tag_and_index.Map.fold2 (fun _index maps_to1 maps_to2 result ->
+              result
+              >>= fun result ->
+              Maps_to.equal env result maps_to1 maps_to2)
+            known1 known2 result
+          >>= fun result ->
+          Index.Map.fold2 (fun _index maps_to1 maps_to2 result ->
+              result
+              >>= fun result ->
+              Maps_to.equal env result maps_to1 maps_to2)
+            at_least1 at_least2 result
 
         let apply_name_permutation { known; at_least; } perm =
           let known =
@@ -5005,11 +5122,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       let create_at_least_multiple at_least : t =
         Known (T0.create_at_least_multiple at_least)
 
-      let equal env (t1 : t) (t2 : t) =
+      let equal env result (t1 : t) (t2 : t) =
         match t1, t2 with
-        | Known t0_1, Known t0_2 -> T0.equal env t0_1 t0_2
-        | Known _, Unknown | Unknown, Known _ -> false
-        | Unknown, Unknown -> true
+        | Known t0_1, Known t0_2 -> T0.equal env result t0_1 t0_2
+        | Known _, Unknown | Unknown, Known _ ->
+          Type_equality_result.types_known_unequal ()
+        | Unknown, Unknown -> result
 
       let apply_name_permutation (t : t) perm : t =
         match t with
@@ -5081,7 +5199,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
          : Typing_env_extension.t Thing_without_names.Map.t
         -> t
 
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       val meet
          : Meet_env.t
@@ -5175,13 +5298,24 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         | Some ((thing, ()), env_extension) -> Some (thing, env_extension)
     end
   end and Type_equality : sig
-    val fast_equal : Flambda_types.t -> Flambda_types.t -> bool
+    val fast_equal
+       : Typing_env.t
+      -> Typing_env.t
+      -> Flambda_types.t
+      -> Flambda_types.t
+      -> bool
 
-    val equal : Flambda_types.t -> Flambda_types.t -> bool
+    val equal
+       : ?bound_name:Name.t
+      -> Typing_env.t
+      -> Typing_env.t
+      -> Flambda_types.t
+      -> Flambda_types.t
+      -> bool
 
-    (* CR mshinwell: Rename to [equal_in_env]. *)
     val equal_with_env
-       : Type_equality_env.t
+       : ?bound_name:Name.t
+      -> Type_equality_env.t
       -> Flambda_types.t
       -> Flambda_types.t
       -> bool
@@ -5202,14 +5336,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     module Int32 = Numbers.Int32
     module Int64 = Numbers.Int64
 
-    let fast_equal (t1 : Flambda_types.t) (t2 : Flambda_types.t) =
-      t1 == t2
+    let fast_equal env1 env2 ty1 ty2 =
+      env1 == env2 && ty1 == ty2
 
-    let (>>=) result f =
-      if not (Type_equality_result.are_types_known_equal result) then result
-      else f result
+    let (>>=) = Type_equality_result.(>>=)
 
-    let equal_or_alias equal_unknown_or_join env result
+    let equal_or_alias ?bound_name equal_unknown_or_join env result
           ~force_to_kind ~print_ty
           (or_alias1 : _ Flambda_types.or_alias)
           (or_alias2 : _ Flambda_types.or_alias) =
@@ -5218,6 +5350,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (Type_equality_env.typing_env_left env)
           ~force_to_kind
           ~print_ty
+          ~bound_name
           or_alias1
       in
       let unknown_or_join2, canonical_simple2 =
@@ -5225,12 +5358,68 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (Type_equality_env.typing_env_right env)
           ~force_to_kind
           ~print_ty
+          ~bound_name
           or_alias2
       in
-      if Type_equality_result.are_simples_known_equal result
-           canonical_simple1 canonical_simple2
-      then result
-      else equal_unknown_or_join env result unknown_or_join1 unknown_or_join2
+      let all_aliases1 =
+        match canonical_simple1 with
+        | None -> Name.Set.empty
+        | Some canonical_simple ->
+          Typing_env.aliases_of_simple (Type_equality_env.typing_env_left env)
+            canonical_simple
+      in
+      let all_aliases2 =
+        match canonical_simple2 with
+        | None -> Name.Set.empty
+        | Some canonical_simple ->
+          Typing_env.aliases_of_simple (Type_equality_env.typing_env_right env)
+            canonical_simple
+      in
+      let all_aliases1 =
+        match bound_name with
+        | None -> all_aliases1
+        | Some bound_name -> Name.Set.remove bound_name all_aliases1
+      in
+      let all_aliases2 =
+        match bound_name with
+        | None -> all_aliases2
+        | Some bound_name -> Name.Set.remove bound_name all_aliases2
+      in
+      let all_aliases1_minus_existentials =
+        Name.Set.diff all_aliases1 (Type_equality_env.existentials_left env)
+      in
+      let all_aliases2_minus_existentials =
+        Name.Set.diff all_aliases2 (Type_equality_env.existentials_right env)
+      in
+      if not (Name.Set.equal all_aliases1_minus_existentials
+        all_aliases2_minus_existentials)
+      then
+        Type_equality_result.types_known_unequal ()
+      else
+        let result =
+          let all_aliases1_that_are_existentials =
+            Name.Set.inter all_aliases1
+              (Type_equality_env.existentials_left env)
+          in
+          let all_aliases2_that_are_existentials =
+            Name.Set.inter all_aliases2
+              (Type_equality_env.existentials_right env)
+          in
+          let delay_existentials result names ~must_equal_one_of =
+            Name.Set.fold (fun name result ->
+                Type_equality_result.delay_existential result name
+                  ~must_equal_one_of)
+              names
+              result
+          in
+          let result =
+            delay_existentials result all_aliases1_that_are_exisistentials
+              ~must_equal_one_of:all_aliases2_that_are_existentials
+          in
+          delay_existentials result all_aliases2_that_are_exisistentials
+            ~must_equal_one_of:all_aliases1_that_are_existentials
+        in
+        equal_unknown_or_join env result unknown_or_join1 unknown_or_join2
 
     let equal_unknown_or_join equal_of_kind_foo env result
           (uj1 : _ Flambda_types.unknown_or_join)
@@ -5254,50 +5443,51 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Unknown, _
       | Join _, _ -> Type_equality_result.types_known_unequal result
 
-    let equal_ty equal_of_kind_foo env result ~force_to_kind ~print_ty ty1 ty2 =
-      equal_or_alias (equal_unknown_or_join equal_of_kind_foo) env result
-        ~force_to_kind ~print_ty ty1 ty2
+    let equal_ty ?bound_name equal_of_kind_foo env result ~force_to_kind
+          ~print_ty ty1 ty2 =
+      equal_or_alias ?bound_name (equal_unknown_or_join equal_of_kind_foo)
+        env result ~force_to_kind ~print_ty ty1 ty2
 
-    let rec equal_with_env env result
+    let rec equal_with_env ?bound_name env result
           (t1 : Flambda_types.t) (t2 : Flambda_types.t) =
       match t1, t2 with
       | Value ty_value1, Value ty_value2 ->
-        equal_ty_value env result
+        equal_ty_value ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_value
           ~print_ty:Type_printers.print_ty_value
           ty_value1 ty_value2
       | Naked_number (ty_naked_number1, Naked_immediate),
           Naked_number (ty_naked_number2, Naked_immediate) ->
-        equal_ty_naked_number env result
+        equal_ty_naked_number ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_naked_immediate
           ~print_ty:Type_printers.print_ty_naked_immediate
           ty_naked_number1 ty_naked_number2
       | Naked_number (ty_naked_number1, Naked_float),
           Naked_number (ty_naked_number2, Naked_float) ->
-        equal_ty_naked_number env result
+        equal_ty_naked_number ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_naked_float
           ~print_ty:Type_printers.print_ty_naked_float
           ty_naked_number1 ty_naked_number2
       | Naked_number (ty_naked_number1, Naked_int32),
           Naked_number (ty_naked_number2, Naked_int32) ->
-        equal_ty_naked_number env result
+        equal_ty_naked_number ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int32
           ~print_ty:Type_printers.print_ty_naked_int32
           ty_naked_number1 ty_naked_number2
       | Naked_number (ty_naked_number1, Naked_int64),
           Naked_number (ty_naked_number2, Naked_int64) ->
-        equal_ty_naked_number env result
+        equal_ty_naked_number ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
           ~print_ty:Type_printers.print_ty_naked_int64
           ty_naked_number1 ty_naked_number2
       | Naked_number (ty_naked_number1, Naked_nativeint),
           Naked_number (ty_naked_number2, Naked_nativeint) ->
-        equal_ty_naked_number env result
+        equal_ty_naked_number ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_naked_nativeint
           ~print_ty:Type_printers.print_ty_naked_nativeint
           ty_naked_number1 ty_naked_number2
       | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-        equal_ty_fabricated env result
+        equal_ty_fabricated ?bound_name env result
           ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
           ~print_ty:Type_printers.print_ty_fabricated
           ty_fabricated1 ty_fabricated2
@@ -5305,25 +5495,29 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Naked_number _, _ -> Type_equality_result.types_known_unequal result
       | Fabricated _, _ -> Type_equality_result.types_known_unequal result
 
-    and equal_ty_value env result ty_value1 ty_value2 =
-      equal_ty equal_of_kind_value env result ty_value1 ty_value2
+    and equal_ty_value ?bound_name env result ty_value1 ty_value2 =
+      equal_ty ?bound_name equal_of_kind_value env result ty_value1 ty_value2
 
     and equal_ty_naked_number
        : type a.
-         Type_equality_env.t
+         ?bound_name:Name.t
+      -> Type_equality_env.t
       -> Type_equality_result.t
       -> a Flambda_types.ty_naked_number
       -> a Flambda_types.ty_naked_number
       -> Type_equality_result.t =
-    fun env result
+    fun ?bound_name env result
         (ty_naked_number1 : a Flambda_types.ty_naked_number)
         (ty_naked_number2 : a Flambda_types.ty_naked_number) ->
-      equal_or_alias (equal_unknown_or_join equal_of_kind_naked_number)
+      equal_or_alias ?bound_name
+        (equal_unknown_or_join equal_of_kind_naked_number)
         env result
         ty_naked_number1 ty_naked_number2
 
-    and equal_ty_fabricated env result ty_fabricated1 ty_fabricated2 =
-      equal_ty equal_of_kind_fabricated env result ty_fabricated1 ty_fabricated2
+    and equal_ty_fabricated ?bound_name env result
+          ty_fabricated1 ty_fabricated2 =
+      equal_ty ?bound_name equal_of_kind_fabricated env result
+        ty_fabricated1 ty_fabricated2
 
     and equal_of_kind_value env result
           ((v1 : Flambda_types.of_kind_value), perm1)
@@ -5453,9 +5647,18 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             : Flambda_types.set_of_closures_entry) =
       Types_by_closure_id.equal env result by_closure_id1 by_closure_id2
 
-    let equal env t1 t2 =
-      let result = equal_with_env (Type_equality_env.empty env) t1 t2 in
-      Type_equality_result.are_types_known_equal ()
+    let equal ~bound_name env_left env_right t1 t2 =
+      let env = Type_equality_env.empty ~env_left ~env_right in
+      let result = Type_equality_result.create () in
+      let rec loop result =
+        if not (Type_equality_result.types_known_equal result) then
+          false
+        else
+          match Type_equality_result.next_pair_of_types result with
+          | None -> true
+          | Some (result, t1, t2) -> loop (equal_with_env env result t1 t2)
+      in
+      loop (equal_with_env ?bound_name env result t1 t2)
   end and Type_equality_env : sig
     type t
 
@@ -5473,6 +5676,18 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     val typing_env_left : t -> Typing_env.t
 
     val typing_env_right : t -> Typing_env.t
+
+    val add_definition_typing_env_left
+       : t
+      -> Name.t
+      -> Flambda_types.t
+      -> t
+
+    val add_definition_typing_env_right
+       : t
+      -> Name.t
+      -> Flambda_types.t
+      -> t
 
     val perm_left : t -> Name_permutation.t
 
@@ -5523,6 +5738,20 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let perm_left t = t.perm_left
     let perm_right t = t.perm_right
 
+    let add_definition_typing_env_left t name ty =
+      let level = Typing_env.max_level t.typing_env_left in
+      let kind = Flambda_type0_core.kind ty in
+      let typing_env_left = Typing_env.add t name level (Definition kind) in
+      let typing_env_left = Typing_env.add t name level (Equation ty) in
+      { t with typing_env_left; }
+
+    let add_definition_typing_env_right t name ty =
+      let level = Typing_env.max_level t.typing_env_right in
+      let kind = Flambda_type0_core.kind ty in
+      let typing_env_right = Typing_env.add t name level (Definition kind) in
+      let typing_env_right = Typing_env.add t name level (Equation ty) in
+      { t with typing_env_right; }
+
     let shortcut_precondition t =
       t.typing_env_left == t.typing_env_right
         && t.perm_left == t.perm_right
@@ -5540,46 +5769,98 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val create : unit -> t
 
-    val names_known_equal : t -> Name.t -> Name.t -> t
+    val (>>=) : t -> (t -> t) -> t
 
-    val are_simples_known_equal : t -> Simple.t -> Simple.t -> bool
+    val delay_existential : t -> Name.t -> must_equal_one_of:Name.Set.t -> t
 
-    val types_known_unequal : t -> bool
+    module Uses : sig
+      type t
+
+      val more_than_one_use_and_empty : t -> bool
+    end
+
+    val leaving_scope_of_existential
+       : t
+      -> bound_names:Name.Set.t
+      -> Uses.t Name.Map.t * t
+
+    val types_known_unequal : unit -> t
 
     val are_types_known_equal : t -> bool
   end = struct
-    module P = Hashtbl.Make_with_map_pair (Name) (Name)
+    module Uses : sig
+      type t
 
-    type t = {
-      names_known_equal : P.Set.t;
-      types_known_equal : bool;
-    }
+      val create : must_equal_one_of:Name.Set.t -> t
+
+      val combine : t -> must_equal_one_of:Name.Set.t -> t
+
+      val more_than_one_use_and_empty : t -> bool
+    end = struct
+      type t =
+        | One of { must_equal_one_of : Name.Set.t; }
+        | Many of { must_equal_one_of : Name.Set.t; }
+
+      let create ~must_equal_one_of =
+        One { must_equal_one_of; }
+
+      let combine t ~must_equal_one_of:must_equal_one_of' =
+        match t with
+        | One { must_equal_one_of; } ->
+        | Many { must_equal_one_of; } ->
+          let must_equal_one_of =
+            Name.Set.inter must_equal_one_of must_equal_one_of'
+          in
+          Many { must_equal_one_of; }
+
+      let more_than_one_use_and_empty = function
+        | One _ -> false
+        | Many { must_equal_one_of; } -> Name.Set.is_empty must_equal_one_of
+    end
+
+    type t =
+      | Ok of { delayed_existentials : Uses.t Name.Map.t; }
+      | Unequal
 
     let create () =
-      { names_known_equal = P.Set.empty;
-        types_known_equal = true;
-      }
+      Ok { delayed_existentials = Name.Map.empty; }
 
-    let known_equal t n1 n2 =
-      { t with
-        names_known_equal = P.Set.add (n1, n2) t;
-      }
+    let (>>=) result f =
+      match result with
+      | Unequal -> Unequal
+      | Ok result -> f result
 
-    let are_names_known_equal { names_known_equal; _ } n1 n2 =
-      P.Set.mem (n1, n2) names_known_equal
-        || P.Set.mem (n2, n1) names_known_equal
+    let delay_existential t name ~must_equal_one_of =
+      match t with
+      | Unequal -> Unequal
+      | Ok { delayed_existentials; } ->
+        let delayed_existentials =
+          Name.Map.update name (function
+              | None -> Some (Uses.create ~must_equal_one_of)
+              | Some uses ->
+                Some (Uses.combine uses ~must_equal_one_of))
+            delayed_existentials
+        in
+        Ok { delayed_existentials; }
 
-    let are_simples_known_equal t (s1 : Simple.t) (s2 : Simple.t) =
-      match s1, s2 with
-      | Name n1, Name n2 -> are_names_known_equal t n1 n2
-      | (Const _ | Discriminant _), _ -> false
+    let leaving_scope_of_existential t names =
+      match t with
+      | Unequal -> Unequal
+      | Ok { delayed_existentials; } ->
+        let check_now, delayed_existentials =
+          Name.Map.partition (fun name must_equal_one_of ->
+              Name.Set.mem name names)
+            delayed_existentials
+        in
+        let t = Ok { delayed_existentials; } in
+        check_now, t
 
-    let types_known_unequal t =
-      { t with
-        types_known_equal = false;
-      }
+    let types_known_unequal () = Unequal
 
-    let are_types_known_equal t = t.types_known_equal
+    let are_types_known_equal t =
+      match t with
+      | Unequal -> false
+      | Ok _ -> true
   end and Type_free_names : sig
     val free_names : Flambda_types.t -> Name_occurrences.t
 
@@ -5925,7 +6206,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val create_bottom : unit -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     (** Greatest lower bound of two values of type [t]. *)
     val meet
@@ -6274,7 +6560,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         | None -> Name_or_export_id.Set.empty
         | Some bound_name -> Name_or_export_id.Set.singleton (Name bound_name)
       in
-      resolve_aliases seen ~canonical_simple:None ty
+      let canonical_simple =
+        match bound_name with
+        | None -> None
+        | Some bound_name -> Simple.name bound_name
+      in
+      resolve_aliases seen ~canonical_simple ty
 
     let resolve_aliases_on_ty t ?bound_name ~force_to_kind ty =
       let ty, canonical_name, names_seen, _still_unresolved =
@@ -6302,10 +6593,6 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | No_alias uoj -> uoj, canonical_name
       | Type _ | Equals _ -> Unknown, canonical_name
 
-    (* CR mshinwell: It should be explicit in the code (maybe an invariant
-       check on the end of this function) that if a canonical name is returned
-       then the original type was an [Equals] or a [Type].  This fact
-       should also be documented in the interface. *)
     let resolve_aliases ?bound_name t (ty : Flambda_types.t)
           : Flambda_types.t * (Simple.t option) =
       match ty with
@@ -6630,16 +6917,16 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let aliases_of_simple (t : t) (simple : Simple.t) =
       match Simple.Map.find simple t.aliases with
-      | exception Not_found -> Name.Set.empty
-(* Think more about this
+      | exception Not_found ->
         begin match simple with
         | Const _ | Discriminant _ -> Name.Set.empty
-        | Name name ->
-          Misc.fatal_errorf "Typing_env.aliases_of_name: unbound name %a"
-            Name.print name
+        | Name name -> Name.Set.singleton name
         end
-*)
-      | aliases -> aliases
+      | aliases ->
+        begin match simple with
+        | Const _ | Discriminant _ -> aliases
+        | Name name -> Name.Set.add name aliases
+        end
 
     let add t (name : Name.t) cont_level (binding : typing_env_entry) =
       invariant_for_new_binding t name cont_level binding;
@@ -7075,7 +7362,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       -> t
       -> unit
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val fast_equal : t -> t -> bool
 
@@ -7144,18 +7436,28 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let fast_equal t1 t2 = (t1 == t2)
 
-    let equal env { abst = abst1; } { abst = abst2; } =
-      A.pattern_match_pair abst1 abst2 ~f:(fun _ t0_1 t0_2 ->
-        T0.equal env t0_1 t0_2)
+    let equal env result { abst = abst1; } { abst = abst2; } =
+      A.pattern_match_pair abst1 abst2 ~f:(fun existentials level_1 level_2 ->
+        let result = Typing_env_level.equal result env level_1 level_2 in
+        let check_now, result =
+          Type_equality_result.leaving_scope_of_existential result
+            existentials
+        in
+        Name.Map.fold (fun _name uses result ->
+            if Type_equality_result.Uses.more_than_one_use_and_empty uses
+            then Type_equality_result.types_known_unequal result
+            else result)
+          check_now
+          result)
 
     let invariant { abst; } =
-      A.pattern_match abst ~f:(fun _ t0 -> T0.invariant t0)
+      A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
 
     let empty () =
-      { abst = A.create [] (T0.empty ()); }
+      { abst = A.create [] (Typing_env_level.empty ()); }
 
     let is_empty { abst; } =
-      A.pattern_match abst ~f:(fun _ t0 -> T0.is_empty t0)
+      A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
 
     let create_from_cut (env : Typing_env.t)
           ~existential_if_defined_at_or_later_than : t =
@@ -7172,23 +7474,23 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           Scope_level.Map.add existential_if_defined_at_or_later_than
             by_sublevel after_cut_point
       in
-      let t0 = T0.create_for_cut ~at_or_after_cut_point in
+      let level = Typing_env_level.create_for_cut ~at_or_after_cut_point in
       let defined_names =
         Name.Set.fold (fun name defined_names ->
             Bindable_name.Set.add (Name name) defined_names)
-          (Name.Map.keys (T0.defined_names t0))
+          (Name.Map.keys (Typing_env_level.defined_names level))
           Bindable_name.Set.empty
       in
       let in_binding_position = Bindable_name.Set.elements defined_names in
-      { abst = A.create in_binding_position t0; }
+      { abst = A.create in_binding_position level; }
 
 (*
     let restrict_to_definitions { abst; } =
       let abst =
-        A.pattern_match_mapi abst ~f:(fun defined_names t0 ->
+        A.pattern_match_mapi abst ~f:(fun defined_names level ->
           (* CR mshinwell: Does "in terms" really make sense (or is it even
              correct?) here? *)
-          T0.restrict_to_names t0
+          Typing_env_level.restrict_to_names level
             (Name_occurrences.create_from_name_set_in_terms defined_names))
       in
       { abst; }
@@ -7201,7 +7503,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       let free_names = free_names_transitive_list t env tys in
       let env_allowed_names = Typing_env.domain env_allowed_names in
       let allowed_names = Name_occurrences.union free_names env_allowed_names in
-      pattern_match_map t ~f:(fun t0 -> T0.restrict_to_names t0 allowed_names)
+      pattern_match_map t ~f:(fun level ->
+        Typing_env_level.restrict_to_names level allowed_names)
 *)
 
     (* CR mshinwell: We should provide a termination proof for this
@@ -7216,9 +7519,10 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
         let env = Meet_env.clear_name_permutations env in
         let abst =
-          A.pattern_match t1.abst ~f:(fun _ t0_1 ->
-            A.pattern_match t2.abst ~f:(fun _ t0_2 ->
-              A.create (T0.defined_names t0) (T0.meet env t0_1 t0_2)))
+          A.pattern_match t1.abst ~f:(fun _ level_1 ->
+            A.pattern_match t2.abst ~f:(fun _ level_2 ->
+              A.create (Typing_env_level.defined_names level)
+                (Typing_env_level.meet env level_1 level_2)))
         in
         { abst; }
 
@@ -7243,52 +7547,61 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
         in
         let abst =
-          A.pattern_match t1.abst ~f:(fun _ t0_1 ->
-            A.pattern_match t2.abst ~f:(fun _ t0_2 ->
+          A.pattern_match t1.abst ~f:(fun _ level_1 ->
+            A.pattern_match t2.abst ~f:(fun _ level_2 ->
               let t =
-                Name.Set.fold (fun name t ->
-                    let ty1 = T0.find t0_1 name in
-                    let ty2 = T0.find t0_2 name in
-                    let join_ty = Both_meet_and_join.join env ty1 ty2 in
-                    add_equation t name join_ty)
+                Name.Set.fold (fun name (t, env) ->
+                    let ty1 = Typing_env_level.find level_1 name in
+                    let ty2 = Typing_env_level.find level_2 name in
+                    let join_ty =
+                      Both_meet_and_join.join ~bound_name:name env ty1 ty2
+                    in
+                    let t = add_equation t name join_ty in
+                    let env =
+                      Join_env.add_definition_central_environment env join_ty
+                    in
+                    t, env)
                   names_in_join
-                  (empty ())
+                  (empty (), env)
               in
-              A.pattern_match_map t.abst ~f:(fun t0 ->
-                T0.update_cse_for_meet_or_join t0 t0_1 t0_2 names_in_join)))
+              A.pattern_match_map t.abst ~f:(fun level ->
+                Typing_env_level.update_cse_for_meet_or_join level
+                  level_1 level_2 names_in_join)))
         in
         { abst; }
 
     let add_definition { abst; } name =
-      A.pattern_match abst ~f:(fun defined_names t0 ->
-        let t0 = T0.add_definition t0 name in
-        { abst = A.create (name :: defined_names) t0; })
+      A.pattern_match abst ~f:(fun defined_names level ->
+        let level = Typing_env_level.add_definition level name in
+        { abst = A.create (name :: defined_names) level; })
 
     let add_equation ?env ({ abst; } as t) name ty =
       let abst =
-        A.pattern_match_map abst ~f:(fun t0 -> T0.add_equation t0 name ty)
+        A.pattern_match_map abst ~f:(fun level ->
+          Typing_env_level.add_equation level name ty)
       in
       { abst; }
 
     let add_cse { abst; } name prim =
       let abst =
-        A.pattern_match_map abst ~f:(fun t0 -> T0.add_cse t0 name prim)
+        A.pattern_match_map abst ~f:(fun level ->
+          Typing_env_level.add_cse level name prim)
       in
       { abst; }
 
 (*
     let diff { abst; } env =
-      A.pattern_match abst ~f:(fun _ t0 ->
-        let t0 = T0.diff t0 env in
-        let defined_names = T0.defined_names t0 in
-        { abst = A.create defined_names t0; })
+      A.pattern_match abst ~f:(fun _ level ->
+        let level = Typing_env_level.diff level env in
+        let defined_names = Typing_env_level.defined_names level in
+        { abst = A.create defined_names level; })
 *)
 
     let pattern_match { abst; } ~f =
-      A.pattern_match abst ~f:(fun _ t0 ->
-        f ~defined_names:t0.defined_names
-          ~equations:t0.equations
-          ~cse:t0.cse)
+      A.pattern_match abst ~f:(fun _ level ->
+        f ~defined_names:level.defined_names
+          ~equations:level.equations
+          ~cse:level.cse)
   end and Typing_env_level : sig
 
   end = struct
@@ -7351,10 +7664,69 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
             equations = equations2;
             cse = cse2;
           } =
-      Name.Map.equal Flambda_kind.equal defined_names1 defined_names2
-        && Name.Map.equal (Type_equality.equal env) equations1 equations2
-        && Flambda_primitive.With_fixed_value.Map.equal Simple.equal
-             cse1 cse2
+      let (>>=) = Type_equality_result.(>>=) in
+      result
+      >>= fun result ->
+      let names_on_outer_env1 =
+        Name.Set.diff (Name.Map.keys equations1) defined_names1
+      in
+      let names_on_outer_env2 =
+        Name.Set.diff (Name.Map.keys equations2) defined_names2
+      in
+      if not (Name.Set.equal names_on_outer_env1 names_on_outer_env2) then
+        Type_equality_result.types_known_unequal ()
+      else
+        let env =
+          Name.Map.fold (fun name kind env ->
+              let ty = Flambda_type0_core.unknown kind in
+              Type_equality_env.add_definition_typing_env_left env name ty)
+            defined_names1
+            env
+        in
+        let env =
+          Name.Map.fold (fun name kind env ->
+              let ty = Flambda_type0_core.unknown kind in
+              Type_equality_env.add_definition_typing_env_right env name ty)
+            defined_names2
+            env
+        in
+        let env =
+          Name.Map.fold (fun name ty env ->
+              if Name.Set.mem name defined_names1 then
+                Type_equality_env.add_definition_typing_env_left env name ty
+              else
+                env)
+            equations1
+            env
+        in
+        let env =
+          Name.Map.fold (fun name ty env ->
+              if Name.Set.mem name defined_names2 then
+                Type_equality_env.add_definition_typing_env_right env name ty
+              else
+                env)
+            equations2
+            env
+        in
+        let equations_on_outer_names1 =
+          Name.Map.filter (fun name _ty ->
+              Name.Set.mem name names_on_outer_env1)
+            equations1
+        in
+        let equations_on_outer_names2 =
+          Name.Map.filter (fun name _ty ->
+              Name.Set.mem name names_on_outer_env2)
+            equations2
+        in
+        Name.Map.fold2 (fun name ty1 ty2 result ->
+            result
+            >>= fun result ->
+            Type_equality.equal_with_env env result ty1 ty2)
+          equations_on_outer_names1 equations_on_outer_names2 result
+        >>= fun result ->
+        if Flambda_primitive.With_fixed_value.Map.equal Simple.equal cse1 cse2
+        then result
+        else Type_equality_result.types_known_unequal ()
 
     let apply_name_permutation ({ defined_names; equations; cse; } as t)
           perm =

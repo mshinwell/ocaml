@@ -337,6 +337,8 @@ module type S =
       -> 'a t
       -> 'a t
 
+    val fold2_opt : (key -> 'a -> 'b -> 'b) -> 'a t -> 'a t -> 'b -> 'b option
+
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 
     val inter : (key -> 'a -> 'a -> 'b option) -> 'a t -> 'a t -> 'b t

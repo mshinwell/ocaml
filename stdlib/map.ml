@@ -591,6 +591,23 @@ module Make(Ord: OrderedType) = struct
       | [key, value] -> Some (key, value)
       | _ -> None
 
+    let rec fold2 f m init =
+      (* CR mshinwell: Provide a proper implementation *)
+      if cardinal t1 <> cardinal t2 then None
+      else
+        let t1 = bindings t1 in
+        let t2 = bindings t2 in
+        let acc =
+          List.fold_left2 (fun acc (key1, datum1) (key2, datum2) ->
+              match acc with
+              | None -> None
+              | Some acc ->
+                if Ord.compare key1 key2 <> 0 then None
+                else Some (f datum1 datum2))
+            init t1 t2
+        in
+        Some acc
+
     let for_all2_opt f t1 t2 =
       (* CR mshinwell: Provide a proper implementation *)
       if cardinal t1 <> cardinal t2 then None
