@@ -7603,7 +7603,57 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           ~equations:level.equations
           ~cse:level.cse)
   end and Typing_env_level : sig
+    include Contains_names.S
 
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val invariant : t -> unit
+
+    val empty : unit -> t
+
+    val is_empty : t -> unit
+
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
+
+    val free_names_minus_defined_names : t -> Name_occurrences.t
+
+    val restrict_to_names : t -> Name_occurrences.t -> t
+
+    val find_opt : t -> Name.t -> Flambda_types.t option
+
+    val create_for_cut
+       : at_or_after_cut_point:t Scope_level.Map.t
+      -> t
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
+
+    val add_cse : t -> Name.t -> Flambda_primitive.With_fixed_value.t -> t
+
+    val update_cse_for_meet_or_join
+       : t
+      -> t
+      -> t
+      -> Name.Set.t
+      -> t
+
+    val meet : Meet_env.t -> t -> t -> t
+
+    val join : Join_env.t -> t -> t -> t
+
+    val defined_names : t -> Bindable_name.Set.t
   end = struct
     type t = {
       (* When used for [Typing_env_extension], the [defined_names] are those
