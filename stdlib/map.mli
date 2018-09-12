@@ -337,7 +337,19 @@ module type S =
       -> 'a t
       -> 'a t
 
-    val fold2_opt : (key -> 'a -> 'b -> 'b) -> 'a t -> 'a t -> 'b -> 'b option
+    val fold2
+       : (key -> 'a option -> 'a option -> 'b -> 'b)
+      -> 'a t
+      -> 'a t
+      -> 'b
+      -> 'b
+
+    val fold2_stop_on_key_mismatch
+       : (key -> 'a -> 'a -> 'b -> 'b)
+      -> 'a t
+      -> 'a t
+      -> 'b
+      -> 'b option
 
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 

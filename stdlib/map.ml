@@ -591,7 +591,23 @@ module Make(Ord: OrderedType) = struct
       | [key, value] -> Some (key, value)
       | _ -> None
 
-    let rec fold2 f m init =
+    let rec fold2 f m0 m1 init =
+      (* CR mshinwell: Provide a proper implementation *)
+      let m0_minus_m1 = diff m0 m1 in
+      let acc =
+        fold (fun key in_m0_only acc -> f (Some in_m0_only) None acc)
+          m0_minus_m1 init
+      in
+      let m1_minus_m0 = diff m1 m0 in
+      let acc =
+        fold (fun key in_m1_only acc -> f None (Some in_m1_only) acc)
+          m1_minus_m0 acc
+      in
+      let in_both = inter_merge (fun datum0 datum1 -> datum0, datum1) m0 m1 in
+      fold (fun key (in_m0, in_m1) acc -> f (Some in_m0) (Some in_m1) acc)
+        in_both acc
+
+    let rec fold2_stop_on_key_mismatch f m init =
       (* CR mshinwell: Provide a proper implementation *)
       if cardinal t1 <> cardinal t2 then None
       else

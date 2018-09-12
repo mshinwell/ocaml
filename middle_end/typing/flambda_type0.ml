@@ -4243,7 +4243,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           let (>>=) = Type_equality_result.(>>=) in
           result
           >>= fun result ->
-          Index.Map.fold2 (fun _index component1 component2 result ->
+          Index.Map.fold2_stop_on_key_mismatch
+            (fun _index component1 component2 result ->
               result
               >>= fun result ->
               Component.equal env result component1 component2)
@@ -4933,13 +4934,15 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           let (>>=) = Type_equality_result.(>>=) in
           result
           >>= fun result ->
-          Tag_and_index.Map.fold2 (fun _index maps_to1 maps_to2 result ->
+          Tag_and_index.Map.fold2_stop_on_key_mismatch
+            (fun _index maps_to1 maps_to2 result ->
               result
               >>= fun result ->
               Maps_to.equal env result maps_to1 maps_to2)
             known1 known2 result
           >>= fun result ->
-          Index.Map.fold2 (fun _index maps_to1 maps_to2 result ->
+          Index.Map.fold2_stop_on_key_mismatch
+            (fun _index maps_to1 maps_to2 result ->
               result
               >>= fun result ->
               Maps_to.equal env result maps_to1 maps_to2)
@@ -7507,9 +7510,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         Typing_env_level.restrict_to_names level allowed_names)
 *)
 
-    (* CR mshinwell: We should provide a termination proof for this
-       algorithm, or find a way of doing this without the recursion, if that
-       is possible. *)
+    (* CR mshinwell: We should provide a termination proof for algorithms
+       such as this. *)
     let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
       else if is_empty t1 then empty ()
@@ -7526,7 +7528,6 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         in
         { abst; }
 
-    (* CR mshinwell: Refactor [join] like [meet]. *)
     let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
       if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
       else if is_empty t1 then empty ()
@@ -7538,35 +7539,10 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let env =
           Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
         in
-        let names_in_join =
-          let free_names t =
-            Name_occurrences.everything_must_only_be_names (free_names t)
-          in
-          let equations_in_t1_on_env = free_names t1 in
-          let equations_in_t2_on_env = free_names t2 in
-          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
-        in
         let abst =
           A.pattern_match t1.abst ~f:(fun _ level_1 ->
             A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              let t =
-                Name.Set.fold (fun name (t, env) ->
-                    let ty1 = Typing_env_level.find level_1 name in
-                    let ty2 = Typing_env_level.find level_2 name in
-                    let join_ty =
-                      Both_meet_and_join.join ~bound_name:name env ty1 ty2
-                    in
-                    let t = add_equation t name join_ty in
-                    let env =
-                      Join_env.add_definition_central_environment env join_ty
-                    in
-                    t, env)
-                  names_in_join
-                  (empty (), env)
-              in
-              A.pattern_match_map t.abst ~f:(fun level ->
-                Typing_env_level.update_cse_for_meet_or_join level
-                  level_1 level_2 names_in_join)))
+              ...))
         in
         { abst; }
 
@@ -7742,19 +7718,13 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         in
         let env =
           Name.Map.fold (fun name ty env ->
-              if Name.Set.mem name defined_names1 then
-                Type_equality_env.add_definition_typing_env_left env name ty
-              else
-                env)
+              Type_equality_env.add_equation_typing_env_left env name ty)
             equations1
             env
         in
         let env =
           Name.Map.fold (fun name ty env ->
-              if Name.Set.mem name defined_names2 then
-                Type_equality_env.add_definition_typing_env_right env name ty
-              else
-                env)
+              Type_equality_env.add_equation_typing_env_right env name ty)
             equations2
             env
         in
@@ -7768,9 +7738,22 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
               Name.Set.mem name names_on_outer_env2)
             equations2
         in
+        (* XXX This should: just add the extension to the environment, and
+           then check for all "outer names" that the types the environment
+           then returns are equal. *)
         Name.Map.fold2 (fun name ty1 ty2 result ->
             result
             >>= fun result ->
+            let ty1 =
+              match ty1 with
+              | None -> Type_equality_env.find_left env name ty1
+              | Some ty1 -> ty1
+            in
+            let ty2 =
+              match ty2 with
+              | None -> Type_equality_env.find_right env name ty2
+              | Some ty2 -> ty2
+            in
             Type_equality.equal_with_env env result ty1 ty2)
           equations_on_outer_names1 equations_on_outer_names2 result
         >>= fun result ->
@@ -8119,6 +8102,34 @@ t
       in
       A.pattern_match_map t.abst ~f:(fun t0 ->
         update_cse_for_meet_or_join t0 t1 t2 all_names_in_meet)
+
+    let rec join env (t1 : t) (t2 : t) : t =
+        let names_in_join =
+          let free_names t =
+            Name_occurrences.everything_must_only_be_names (free_names t)
+          in
+          let equations_in_t1_on_env = free_names t1 in
+          let equations_in_t2_on_env = free_names t2 in
+          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
+        in
+              let t =
+                Name.Set.fold (fun name (t, env) ->
+                    let ty1 = Typing_env_level.find level_1 name in
+                    let ty2 = Typing_env_level.find level_2 name in
+                    let join_ty =
+                      Both_meet_and_join.join ~bound_name:name env ty1 ty2
+                    in
+                    let t = add_equation t name join_ty in
+                    let env =
+                      Join_env.add_definition_central_environment env join_ty
+                    in
+                    t, env)
+                  names_in_join
+                  (empty (), env)
+              in
+              A.pattern_match_map t.abst ~f:(fun level ->
+                Typing_env_level.update_cse_for_meet_or_join level
+                  level_1 level_2 names_in_join)))
 
     let add_equation ?env t name ty =
       let t' =
