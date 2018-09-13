@@ -7212,6 +7212,18 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let levels t = t.levels
+
+    let cut t ~existential_if_defined_at_or_later_than:min_level =
+      let levels =
+        Scope_level.Map.strictly_greater_than t.levels min_level
+      in
+      match Scope_level.Map.choose levels with
+      | None -> Typing_env_extension.empty ()
+      | Some (level, typing_env_level) ->
+        Scope_level.Map.fold (fun _level typing_env_level result ->
+            Typing_env_extension.meet  ...
+          (Scope_level.Map.remove level levels)
+          typing_env_level
   end and Typing_env_extension : sig
     type t
 

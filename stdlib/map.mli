@@ -367,6 +367,8 @@ module type S =
 
     val transpose_keys_and_data : key t -> key t
 
+    val strictly_greater_than : 'a t -> key -> 'a t
+
     (** {6 Iterators} *)
 
     val to_seq : 'a t -> (key * 'a) Seq.t
