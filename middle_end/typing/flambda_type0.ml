@@ -5680,6 +5680,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val typing_env_right : t -> Typing_env.t
 
+    val replace_typing_environments
+       : t
+      -> left:Typing_env.t
+      -> right:Typing_env.t
+      -> t
+
     val add_definition_typing_env_left
        : t
       -> Name.t
@@ -5740,6 +5746,13 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let typing_env_right t = t.typing_env_right
     let perm_left t = t.perm_left
     let perm_right t = t.perm_right
+
+    let replace_typing_environments t ~left:typing_env_left
+          ~right:typing_env_right =
+       { t with
+         typing_env_left;
+         typing_env_right;
+       }
 
     let add_definition_typing_env_left t name ty =
       let level = Typing_env.max_level t.typing_env_left in
@@ -6273,30 +6286,13 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
   end and Typing_env : sig 
     type t
 
-    type binding_type = Normal | Was_existential
-
-    type typing_env_entry0 =
-      | Definition of Flambda_kind.t
-      | Equation of Flambda_types.t
-
-    type typing_env_entry =
-      | Definition of Flambda_kind.t
-      | Equation of Flambda_types.t
-      | CSE of Flambda_primitive.With_fixed_value.t
-
-    type levels_to_entries =
-      (Name.t * typing_env_entry)
-        Scope_level.Sublevel.Map.t Scope_level.Map.t
+    type binding_type = private
+      | Normal
+      | Was_existential
 
     val invariant : t -> unit
 
     val print : Format.formatter -> t -> unit
-
-    val print_levels_to_entries_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> levels_to_entries
-      -> unit
 
     val create : resolver:(Export_id.t -> Flambda_types.t option) -> t
 
@@ -6306,42 +6302,56 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val is_empty : t -> bool
 
+    val increment_scope_level_to : t -> Scope_level.t -> t
+
     val fast_equal : t -> t -> bool
 
     val domain : t -> Name_occurrences.t
 
-    val max_level : t -> Scope_level.t
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val add : t -> Name.t -> Scope_level.t -> typing_env_entry -> t
+    val add_equation : t -> Name.t -> Flambda_types.t -> t
 
-    val singleton
-       : resolver:(Export_id.t -> Flambda_types.t option)
-      -> Name.t
-      -> Scope_level.t
-      -> typing_env_entry
-      -> t
+    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
-    val add_equation : t -> Name.t -> Scope_level.t -> Flambda_types.t -> t
-
-    val remove : t -> Name.t -> t
-
-    val find_exn
-       : t
-      -> Name.t
-      -> Flambda_types.t * binding_type
-
-    val find_with_scope_level_exn
-       : t
-      -> Name.t
-      -> Flambda_types.t * Scope_level.With_sublevel.t * binding_type
+    val find_exn : t -> Name.t -> Flambda_types.t * binding_type
 
     val find_opt : t -> Name.t -> (Flambda_types.t * binding_type) option
 
     val find_cse : t -> Flambda_primitive.t -> Simple.t option
 
-    val scope_level_exn : t -> Name.t -> Scope_level.With_sublevel.t
-
     val mem : t -> Name.t -> bool
+
+    val add_or_meet_env_extension
+       : t
+      -> Typing_env_extension.t
+      -> t
+
+    val add_or_meet_opened_env_extension
+       : t
+      -> Typing_env_level.t
+      -> t
+
+    val resolve_aliases
+       : ?bound_name:Name.t
+      -> t
+      -> Flambda_types.t
+      -> Flambda_types.t * (Simple.t option)
+
+    val resolve_aliases_and_squash_unresolved_names_on_ty'
+       : t
+      -> ?bound_name:Name.t
+      -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
+      -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+      -> 'a Flambda_types.ty
+      -> 'a Flambda_types.unknown_or_join * (Simple.t option)
+
+    val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+    val levels : t -> Typing_env_level.Scope_level.Map.t
+
+(*
+    val scope_level_exn : t -> Name.t -> Scope_level.With_sublevel.t
 
     val was_existential_exn : t -> Name.t -> bool
 
@@ -6373,53 +6383,28 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         -> (Scope_level.With_sublevel.t * typing_env_entry0)
         -> bool)
       -> t
-
-    val add_or_meet_env_extension
-       : t
-      -> Typing_env_extension.t
-      -> Scope_level.t
-      -> t
-
-    val resolve_aliases
-       : ?bound_name:Name.t
-      -> t
-      -> Flambda_types.t
-      -> Flambda_types.t * (Simple.t option)
-
-    val resolve_aliases_and_squash_unresolved_names_on_ty'
-       : t
-      -> ?bound_name:Name.t
-      -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
-      -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
-      -> 'a Flambda_types.ty
-      -> 'a Flambda_types.unknown_or_join * (Simple.t option)
-
-    val aliases_of_simple : t -> Simple.t -> Name.Set.t
-
-    val levels_to_entries : t -> levels_to_entries
+*)
   end = struct
     type binding_type = Normal | Was_existential
 
     type t = {
       resolver : (Export_id.t -> Flambda_types.t option);
       aliases : Name.Set.t Simple.Map.t;
-      names_to_levels : Typing_env_level.t Scope_level.Map.t;
+      levels : Typing_env_level.t Scope_level.Map.t;
+      current_level : Scope_level.t;
+      names_to_types : Flambda_types.t Name.Map.t;
       cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
-      levels_to_entries : levels_to_entries;
-      next_sublevel_by_level : Scope_level.Sublevel.t Scope_level.Map.t;
       were_existentials : Name.Set.t;
     }
 
     let print_with_cache ~cache ppf
-          ({ resolver = _; aliases; names_to_levels; cse; levels_to_entries;
-            next_sublevel_by_level = _; were_existentials; } as t) =
+          ({ resolver = _; aliases; levels; current_level = _;
+             names_to_types; cse; were_existentials; } as t) =
       if Name.Map.is_empty names_to_levels then
         Format.pp_print_string ppf "Empty"
       else
         Printing_cache.with_cache cache ppf "env" t (fun ppf () ->
-          let print_scope_level_and_entry0 ppf (_scope_level, entry) =
-            print_typing_env_entry0_with_cache ~cache ppf entry
-          in
+(*
           (* CR mshinwell: Add flag to disable this filtering *)
           let names_to_levels =
             Name.Map.filter (fun name _entry ->
@@ -6439,40 +6424,44 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
                 else Some by_sublevel)
               levels_to_entries
           in
+*)
           if Name.Set.is_empty were_existentials
               && Flambda_primitive.With_fixed_value.Map.is_empty cse
           then
             Format.fprintf ppf
               "@[<hov 1>(\
                   @[<hov 1>(aliases@ %a)@]@ \
-                  @[<hov 1>(names_to_levels@ %a)@]@ \
-                  @[<hov 1>(levels_to_entries@ %a)@])@]"
+                  @[<hov 1>(levels@ %a)@]@ \
+                  @[<hov 1>(names_to_types@ %a)@])@]"
               (Simple.Map.print Name.Set.print) aliases
-              (Name.Map.print print_scope_level_and_entry0) names_to_levels
-              (print_levels_to_entries_with_cache ~cache) levels_to_entries
+              (Scope_level.Map.print Typing_env_level.print) levels
+              (Name.Map.print (Type_printers.print_with_cache ~cache)
+                names_to_types)
           else if Name.Set.is_empty were_existentials then
             Format.fprintf ppf
               "@[<hov 1>(\
                   @[<hov 1>(aliases@ %a)@]@ \
-                  @[<hov 1>(names_to_levels@ %a)@]@ \
+                  @[<hov 1>(levels@ %a)@]@ \
                   @[<hov 1>(cse@ %a)@]@ \
-                  @[<hov 1>(levels_to_entries@ %a)@])@]"
+                  @[<hov 1>(names_to_types@ %a)@])@]"
               (Simple.Map.print Name.Set.print) aliases
-              (Name.Map.print print_scope_level_and_entry0) names_to_levels
+              (Scope_level.Map.print Typing_env_level.print) levels
               (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
-              (print_levels_to_entries_with_cache ~cache) levels_to_entries
+              (Name.Map.print (Type_printers.print_with_cache ~cache)
+                names_to_types)
           else
             Format.fprintf ppf
               "@[<hov 1>(\
                   @[<hov 1>(aliases@ %a)@]@ \
-                  @[<hov 1>(names_to_levels@ %a)@]@ \
+                  @[<hov 1>(levels@ %a)@]@ \
                   @[<hov 1>(cse@ %a)@]@ \
-                  @[<hov 1>(levels_to_names@ %a)@]@ \
+                  @[<hov 1>(names_to_types@ %a)@]@ \
                   @[<hov 1>(were_existentials@ %a)@])@]"
               (Simple.Map.print Name.Set.print) aliases
-              (Name.Map.print print_scope_level_and_entry0) names_to_levels
+              (Scope_level.Map.print Typing_env_level.print) levels
               (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
-              (print_levels_to_entries_with_cache ~cache) levels_to_entries
+              (Name.Map.print (Type_printers.print_with_cache ~cache)
+                names_to_types)
               Name.Set.print were_existentials)
 
     let print ppf t =
@@ -6481,10 +6470,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let create ~resolver =
       { resolver;
         aliases = Simple.Map.empty;
-        names_to_levels = Name.Map.empty;
+        levels = Scope_level.Map.empty;
+        current_level = Scope_level.initial;
         cse = Flambda_primitive.With_fixed_value.Map.empty;
-        levels_to_entries = Scope_level.Map.empty;
-        next_sublevel_by_level = Scope_level.Map.empty;
+        names_to_types = Name.Map.empty;
         were_existentials = Name.Set.empty;
       }
 
@@ -6492,7 +6481,17 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let resolver t = t.resolver
 
-    let is_empty t = Name.Map.is_empty t.names_to_levels
+    let increment_scope_level_to t level =
+      if Scope_level.(<=) level t.current_level then begin
+        Misc.fatal_errorf "Invalid new level %a:@ %a"
+          Scope_level.print level
+          print t
+      end;
+      { t with
+        current_level = level;
+      }
+
+    let is_empty t = Name.Map.is_empty t.names_to_types
 
     let fast_equal t1 t2 =
       t1 == t2
@@ -6501,7 +6500,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       let names =
         Name.Set.fold (fun name bindable_names ->
             Bindable_name.Set.add (Name name) bindable_names)
-          (Name.Map.keys t.names_to_levels)
+          (Name.Map.keys t.names_to_types)
           Bindable_name.Set.empty
       in
       Name_occurrences.create_from_set_in_terms names
@@ -6509,15 +6508,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let find_exn t name : Flambda_types.t * binding_type =
       (* CR mshinwell: Maybe this should cause a fatal error and we shouldn't
          rely on catching the exception *)
-      let _scope_level, entry = Name.Map.find name t.names_to_levels in
+      let ty = Name.Map.find name t.names_to_types in
       let binding_type : binding_type =
         if Name.Set.mem name t.were_existentials then Was_existential
         else Normal
-      in
-      let ty =
-        match entry with
-        | Definition kind -> Flambda_type0_core.unknown kind
-        | Equation ty -> ty
       in
       ty, binding_type
 
@@ -6620,6 +6614,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         in
         Fabricated ty_fabricated, canonical_name
 
+(*
     let fold_all t ~init ~f =
       Scope_level.Map.fold (fun level by_sublevel acc ->
           Scope_level.Sublevel.Map.fold (fun sublevel (name, entry) acc ->
@@ -6703,10 +6698,14 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               ignore (Sys.opaque_identity (resolve_aliases ~bound_name t ty)))
           t.names_to_levels;
       end
+*)
+
+    let invariant _t = ()
 
     let mem t name =
-      Name.Map.mem name t.names_to_levels
+      Name.Map.mem name t.names_to_types
 
+(*
     let scope_level_exn t name =
       match Name.Map.find name t.names_to_levels with
       | exception Not_found ->
@@ -6720,6 +6719,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       let ty, binding_type = find_exn t name in
       let scope_level = scope_level_exn t name in
       ty, scope_level, binding_type
+*)
 
     let find_opt t name =
       match find_exn t name with
@@ -6740,28 +6740,13 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Normal -> false
       | Was_existential -> true
 
-    let allocate_sublevel t level =
-      let sublevel =
-        match Scope_level.Map.find level t.next_sublevel_by_level with
-        | exception Not_found -> Scope_level.Sublevel.initial
-        | sublevel -> sublevel
-      in
-      let next_sublevel_by_level =
-        Scope_level.Map.add level (Scope_level.Sublevel.next sublevel)
-          t.next_sublevel_by_level
-      in
-      let t =
-        { t with
-          next_sublevel_by_level;
-        }
-      in
-      t, sublevel
-
+(*
     let _min_level_for_new_binding t =
       let all_levels = Scope_level.Map.keys t.levels_to_entries in
       match Scope_level.Set.max_elt_opt all_levels with
       | None -> Scope_level.initial
       | Some level -> level
+*)
 
     type sense =
       | New_equation_must_be_more_precise
@@ -6774,19 +6759,8 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Existing_equation_must_be_more_precise ->
         Format.fprintf ppf "Existing_equation_must_be_more_precise"
 
-    let equal_in_context t ty1 ty2 =
-      let ty1, _ = resolve_aliases t ty1 in
-      let ty2, _ = resolve_aliases t ty2 in
-      Type_equality.equal ty1 ty2
-
-    let invariant_for_any_new_binding t name _level
-          (entry : typing_env_entry) =
-      let free_names =
-        match entry with
-        | Definition _kind -> Name_occurrences.create ()
-        | Equation ty -> Type_free_names.free_names ty
-        | CSE prim -> Flambda_primitive.With_fixed_value.free_names prim
-      in
+    let invariant_for_new_equation t name ty =
+      let free_names = Type_free_names.free_names ty in
       if Name_occurrences.mem free_names (Name name) then begin
         Misc.fatal_errorf "Cannot add binding@ %a = %a@ as it would produce \
             a circular dependency"
@@ -6810,25 +6784,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
   *)
       match find_opt t name with
       | None ->
-        begin match entry with
-        | Definition _ | CSE _ -> ()
-        | Equation _ ->
-          Misc.fatal_errorf "Cannot add@ %a = %a@ for name undefined in \
-              environment:@ %a"
-            Name.print name
-            print_typing_env_entry entry
-            print t
-        end
-      | Some _ ->
-        match entry with
-        | Definition _ ->
-          Misc.fatal_errorf "Cannot redefine@ %a = %a@ in environment:@ %a"
-            Name.print name
-            print_typing_env_entry entry
-            print t
-        | Equation _ | CSE _ -> ()
-
-    let invariant_for_new_equation _t _name _ty ~sense:_ = ()
+        Misc.fatal_errorf "Cannot add@ %a = %a@ for name undefined in \
+            environment:@ %a"
+          Name.print name
+          Flambda_types.print ty
+          print t
+      | Some _ -> ()
 
 (*
     let invariant_for_new_equation t name (ty : Flambda_types.t) ~sense =
@@ -6886,8 +6847,6 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           invariant_for_new_equation t name ty
             ~sense:Existing_equation_must_be_more_precise)
   *)
-*)
-    let _ = ignore Existing_equation_must_be_more_precise
 
     let invariant_for_new_binding t name level
           (entry : typing_env_entry) =
@@ -6897,6 +6856,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Equation ty ->
         invariant_for_new_equation t name ty
           ~sense:New_equation_must_be_more_precise
+*)
+    let _ = ignore New_equation_must_be_more_precise
+    let _ = ignore Existing_equation_must_be_more_precise
 
   (*
     let canonical_name t name =
@@ -6931,94 +6893,80 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         | Name name -> Name.Set.add name aliases
         end
 
-    let add t (name : Name.t) cont_level (binding : typing_env_entry) =
-      invariant_for_new_binding t name cont_level binding;
-      let alias =
-        match binding with
-        | Definition _kind -> None
-        | Equation ty -> Flambda_type0_core.get_alias ty
-        | CSE _ -> None
+    let add_definition t name kind =
+      if Name.Map.mem name t.names_to_types then begin
+        Misc.fatal_errorf "Cannot rebind %a in environment:@ %a" print t
+      end;
+      let levels =
+        Scope_level.Map.update t.current_level
+          (function
+             | None ->
+               let level = Typing_env_level.create () in
+               Some (Typing_env_level.add_definition level name kind)
+             | Some level ->
+               Some (Typing_env_level.add_definition level name kind))
+          t.levels
       in
+      let names_to_types =
+        Name.Map.add name (Flambda_type0_core.unknown kind) t.names_to_types
+      in
+      let t =
+        { t with
+          levels;
+          names_to_types;
+        }
+      in
+      invariant t;
+      t
+
+    let add_equation t name ty =
+      invariant_for_new_equation t name ty;
+      let alias = Flambda_type0_core.get_alias ty in
       let equation_with_reverse_alias_already_present =
-        match binding with
-        | Equation _ ->
-          begin match alias with
-          | None | Some (Const _ | Discriminant _) -> false
-          | Some (Name alias) ->
-            Name.Set.mem alias (aliases_of_simple t (Simple.name name))
-          end
-        | Definition _ | CSE _ -> false
+        match alias with
+        | None | Some (Const _ | Discriminant _) -> false
+        | Some (Name alias) ->
+          Name.Set.mem alias (aliases_of_simple t (Simple.name name))
       in
       if equation_with_reverse_alias_already_present then begin
         t
-      end else begin
-        let aliases =
-          match alias with
-          | None -> t.aliases
-          | Some alias ->
-            Simple.Map.update alias (function
-                | None -> Some (Name.Set.singleton name)
-                | Some aliases -> Some (Name.Set.add name aliases))
-              t.aliases
-        in
-        let t, sublevel = allocate_sublevel t cont_level in
-        let level = Scope_level.With_sublevel.create cont_level sublevel in
-        let names_to_levels =
-          match binding with
-          | Definition kind ->
-            let entry0 : typing_env_entry0 = Definition kind in
-            Name.Map.add name (level, entry0) t.names_to_levels
-          | Equation ty ->
-            let entry0 : typing_env_entry0 = Equation ty in
-            Name.Map.add name (level, entry0) t.names_to_levels
-          | CSE _ -> t.names_to_levels
-        in
-        let levels_to_entries =
-          Scope_level.Map.update cont_level
+      else
+        let levels =
+          Scope_level.Map.update t.current_level
             (function
-              | None ->
-                let by_sublevel =
-                  Scope_level.Sublevel.Map.singleton sublevel (name, binding)
-                in
-                Some by_sublevel
-              | Some by_sublevel ->
-                assert (not (Scope_level.Sublevel.Map.mem sublevel by_sublevel));
-                let by_sublevel =
-                  Scope_level.Sublevel.Map.add sublevel (name, binding)
-                    by_sublevel
-                in
-                Some by_sublevel)
-            t.levels_to_entries
+               | None ->
+                 let level = Typing_env_level.create () in
+                 Some (Typing_env_level.add_or_replace_equation level name ty)
+               | Some level ->
+                 Some (Typing_env_level.add_or_replace_equation level name ty))
+            t.levels
         in
-        let cse =
-          match binding with
-          | Definition _ | Equation _ -> t.cse
-          | CSE prim ->
-            match
-              Flambda_primitive.With_fixed_value.Map.find prim t.cse
-            with
-            | exception Not_found ->
-              Flambda_primitive.With_fixed_value.Map.singleton prim
-                (Simple.name name)
-            | _name -> t.cse  (* Keep the furthest-out binding. *)
-        in
+        let names_to_types = Name.Map.add name ty t.names_to_types in
         let t =
           { t with
-            aliases;
-            names_to_levels;
-            levels_to_entries;
-            cse;
+            levels;
+            names_to_types;
           }
         in
         invariant t;
         t
-      end
 
-    let singleton ~resolver name scope_level binding =
-      add (create ~resolver) name scope_level binding
+    let add_cse t simple prim =
+      let cse =
+       Flambda_primitive.With_fixed_value.Map.update prim
+         (function
+           | None -> Some simple
+           | Some simple ->
+             (* Keep the existing (furthest-out) binding. *)
+             Some simple)
+         t.cse
+      in
+      if cse == t.cse then t
+      else { t with cse; }
 
+(*
     let max_level t =
-      match Scope_level.Map.max_binding_opt t.levels_to_entries with
+      match Scope_level.Map.max_binding_opt t.levels with
       | None -> Scope_level.initial
       | Some (level, _) -> level
 
@@ -7110,7 +7058,6 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       let allowed = Name.Set.remove name (Name.Map.keys t.names_to_levels) in
       restrict_to_names0 t allowed
 
-(*
     let replace_most_recent t name ~(existing : names_to_levels_entry)
           (new_entry0 : typing_env_entry0) =
       let most_recent_ty =
@@ -7166,50 +7113,52 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       }
 *)
 
-    let rec add_or_meet_env_extension' t env_extension scope_level
-          ~defined_names ~equations ~cse : t =
-Format.eprintf "add_or_meet_env_extension':@ %a\n%!"
-  Typing_env_extension.print env_extension;
-      let original_t = t in
-      let add_equation t name ty =
-        match find_opt t name with
-        | None -> add t name scope_level (Equation ty)
-        | Some (existing_ty,_binding_type) ->
-(*
-          let existing_scope_level =
-            names_to_levels_entry.most_recent_level
-          in
-          let same_scope_level_as_existing =
-            Scope_level.equal scope_level existing_scope_level
-          in
-*)
-          let meet_ty, meet_env_extension =
-            let meet_env =
-              Meet_env.create t
-                ~perm_left:(Name_permutation.create ())
-                ~perm_right:(Name_permutation.create ())
-            in
-            Both_meet_and_join.meet meet_env ty existing_ty
-          in
-          (* CR mshinwell: I suspect we could just put [env_extension]'s
-             contents directly into [t] without having to do any more meets,
-             but unsure.  Needs thought. *)
-          let ty, _canonical_name = resolve_aliases t ty in
-          let t =
-            add_or_meet_env_extension t meet_env_extension scope_level
-          in
-          let meet_ty', _canonical_name = resolve_aliases t meet_ty in
-          let as_or_more_precise =
-            Flambda_type0_core.is_obviously_bottom meet_ty
-              || Type_equality.equal meet_ty' ty
-          in
-          let strictly_more_precise =
-            as_or_more_precise
-              && ((Flambda_type0_core.is_obviously_bottom meet_ty'
-                    && not (Flambda_type0_core.is_obviously_bottom ty))
-               || (not (Type_equality.equal meet_ty' existing_ty)))
+    let rec add_or_meet_opened_env_extension t level : t =
+      let t =
+        Name.Map.fold (fun name kind t ->
+            add_definition t name kind)
+          (Typing_env_level.defined_names level)
+          t
+      in
+      let t =
+        Name.Map.fold (fun name ty t ->
+            match find_opt t name with
+            | None -> add_equation t name ty
+            | Some (existing_ty, _binding_type) ->
+              let meet_ty, meet_env_extension =
+                let meet_env =
+                  Meet_env.create t
+                    ~perm_left:(Name_permutation.create ())
+                    ~perm_right:(Name_permutation.create ())
+                in
+                Both_meet_and_join.meet meet_env ty existing_ty
+              in
+              let t = add_or_meet_env_extension t meet_env_extension in
+              let as_or_more_precise =
+                Flambda_type0_core.is_obviously_bottom meet_ty
+                  || Type_equality.equal meet_ty ty
+              in
+              let strictly_more_precise =
+                as_or_more_precise
+                  && ((Flambda_type0_core.is_obviously_bottom meet_ty
+                        && not (Flambda_type0_core.is_obviously_bottom ty))
+                   || (not (Type_equality.equal meet_ty existing_ty)))
+              in
+              if not strictly_more_precise then t
+              else add_equation t name ty)
+          (Typing_env_level.equations level)
+          t
+      in
+      Simple.Map.fold (fun simple prim ->
+          add_cse t simple prim)
+        (Typing_env_level.cse level)
+        t
 
-          in
+    and add_or_meet_env_extension t env_extension : t =
+      Typing_env_extension.pattern_match env_extension
+        ~f:(fun ~defined_names:_ level ->
+          add_or_meet_opened_env_extension t level)
+(*
 Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     AOMP %b; SMP %b\n%!"
   Name.print name
@@ -7218,94 +7167,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
   Type_printers.print existing_ty
   as_or_more_precise
   strictly_more_precise;
-(*
-          let should_replace =
-            match Flambda_type0_core.get_alias existing_ty with
-            | Some _ -> false
-            | None -> same_scope_level_as_existing
-          in
 *)
-          if strictly_more_precise then begin
-(*
-            if should_replace then
-              match names_to_levels_entry.most_recent_entry with
-              | Definition _ ->
-                replace_most_recent t name ~existing:names_to_levels_entry
-                  (Definition meet_ty)
-              | Equation _ ->
-                replace_most_recent t name ~existing:names_to_levels_entry
-                  (Equation meet_ty)
-            else
-*)
-              add t name scope_level (Equation meet_ty)
-          end else begin
-            t
-          end
-      in
-      let add_cse (t : t) (bound_to : Simple.t) prim =
-        match
-          Flambda_primitive.With_fixed_value.Map.find prim t.cse
-        with
-        | exception Not_found ->
-          let t =
-            match bound_to with
-            | Name bound_to -> add t bound_to scope_level (CSE prim)
-            | Const _ | Discriminant _ -> t
-          in
-          let cse =
-            Flambda_primitive.With_fixed_value.Map.add prim bound_to t.cse
-          in
-          { t with cse; }
-        | _bound_to ->
-          (* As above, keep the outer binding. *)
-          t
-      in
-      let t =
-        Name.Map.fold (fun name kind t ->
-            let t = add t name scope_level (Definition kind) in
-            begin match name with
-            | Var _ | Logical_var _ -> ()
-            | Symbol sym ->
-              Misc.fatal_errorf "Definitions of symbols should never occur \
-                  in environment extensions: symbol %a, env@ %a,@ \
-                  env_extension@ %a"
-                Symbol.print sym
-                print original_t
-                Typing_env_extension.print env_extension
-            end;
-            { t with
-              were_existentials = Name.Set.add name t.were_existentials;
-            })
-          defined_names
-          t
-      in
-      let t =
-        Name.Map.fold (fun name ty t -> add_equation t name ty)
-          equations
-          t
-      in
-      Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
-          add_cse t bound_to prim)
-        cse
-        t
-
-    and add_or_meet_env_extension t env_extension scope_level : t =
-      Typing_env_extension.pattern_match env_extension
-        ~f:(fun ~defined_names ~equations ~cse ->
-          add_or_meet_env_extension' t env_extension scope_level
-            ~defined_names ~equations ~cse)
-
-    let add_equation t name scope_level ty =
-      if not (mem t name) then begin
-        Misc.fatal_errorf "Typing_env.replace_meet: name %a not bound in:@ %a"
-          Name.print name
-          print t
-      end;
-      let env_extension =
-        Typing_env_extension.add_equation
-          (Typing_env_extension.empty ()) name ty
-      in
-      add_or_meet_env_extension t env_extension scope_level
 
 (* To be enabled when we re-add removal of unused existentially-bound vars
     let free_names_transitive t ty =
@@ -7349,7 +7211,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         tys
 *)
 
-    let levels_to_entries t = t.levels_to_entries
+    let levels t = t.levels
   end and Typing_env_extension : sig
     type t
 
@@ -7439,19 +7301,29 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let fast_equal t1 t2 = (t1 == t2)
 
-    let equal env result { abst = abst1; } { abst = abst2; } =
-      A.pattern_match_pair abst1 abst2 ~f:(fun existentials level_1 level_2 ->
-        let result = Typing_env_level.equal result env level_1 level_2 in
+    let equal env result t1 t2 =
+      A.pattern_match_pair abst1 abst2 ~f:(fun existentials level1 level2 ->
+        let (>>=) = Type_equality_result.(>>=) in
+        let env, result =
+          Typing_env_level.equal env result level1 level2
+        in
+        result
+        >>= fun result ->
         let check_now, result =
           Type_equality_result.leaving_scope_of_existential result
             existentials
         in
         Name.Map.fold (fun _name uses result ->
+            result
+            >>= fun result ->
             if Type_equality_result.Uses.more_than_one_use_and_empty uses
             then Type_equality_result.types_known_unequal result
             else result)
           check_now
           result)
+        >>= fun _result ->
+        assert (not (Type_equality_result.are_types_known_unequal result));
+        true
 
     let invariant { abst; } =
       A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
@@ -7629,7 +7501,15 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val join : Join_env.t -> t -> t -> t
 
-    val defined_names : t -> Bindable_name.Set.t
+    val defined_names_set : t -> Bindable_name.Set.t
+
+    val equations_on_outer_env : t -> Name.Set.t
+
+    val defined_names : t -> Flambda_kind.t Name.Map.t
+
+    val equations : t -> Flambda_types.t Name.Map.t
+
+    val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t
   end = struct
     type t = {
       (* When used for [Typing_env_extension], the [defined_names] are those
@@ -7681,85 +7561,40 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         && Name.Map.is_empty equations
         && Flambda_primitive.With_fixed_value.Map.is_empty cse
 
-    let equal env
-          { defined_names = defined_names1;
-            equations = equations1;
-            cse = cse1;
-          }
-          { defined_names = defined_names2;
-            equations = equations2;
-            cse = cse2;
-          } =
+    let equal env result t1 t2 =
       let (>>=) = Type_equality_result.(>>=) in
-      result
+      let env_left =
+        Typing_env.add_or_meet_opened_env_extension
+          (Type_equality_env.typing_env_left env)
+          t1
+      in
+      let env_right =
+        Typing_env.add_or_meet_opened_env_extension
+          (Type_equality_env.typing_env_right env)
+          t2
+      in
+      let env =
+        Type_equality_env.replace_typing_environments env
+          ~left:env_left ~right:env_right
+      in
+      let names_to_check =
+        Name.Set.union (Typing_env_level.equations_on_outer_env level1)
+          (Typing_env_level.equations_on_outer_env level2)
+      in
+      Name.Set.fold (fun name result ->
+          result
+          >>= fun result ->
+          let ty1 = Typing_env.find env name env_left in
+          let ty2 = Typing_env.find env name env_right in
+          Type_equality.equal_with_env env result ty1 ty2)
+        names_to_check
+        result
       >>= fun result ->
-      let names_on_outer_env1 =
-        Name.Set.diff (Name.Map.keys equations1) defined_names1
-      in
-      let names_on_outer_env2 =
-        Name.Set.diff (Name.Map.keys equations2) defined_names2
-      in
-      if not (Name.Set.equal names_on_outer_env1 names_on_outer_env2) then
-        Type_equality_result.types_known_unequal ()
-      else
-        let env =
-          Name.Map.fold (fun name kind env ->
-              let ty = Flambda_type0_core.unknown kind in
-              Type_equality_env.add_definition_typing_env_left env name ty)
-            defined_names1
-            env
-        in
-        let env =
-          Name.Map.fold (fun name kind env ->
-              let ty = Flambda_type0_core.unknown kind in
-              Type_equality_env.add_definition_typing_env_right env name ty)
-            defined_names2
-            env
-        in
-        let env =
-          Name.Map.fold (fun name ty env ->
-              Type_equality_env.add_equation_typing_env_left env name ty)
-            equations1
-            env
-        in
-        let env =
-          Name.Map.fold (fun name ty env ->
-              Type_equality_env.add_equation_typing_env_right env name ty)
-            equations2
-            env
-        in
-        let equations_on_outer_names1 =
-          Name.Map.filter (fun name _ty ->
-              Name.Set.mem name names_on_outer_env1)
-            equations1
-        in
-        let equations_on_outer_names2 =
-          Name.Map.filter (fun name _ty ->
-              Name.Set.mem name names_on_outer_env2)
-            equations2
-        in
-        (* XXX This should: just add the extension to the environment, and
-           then check for all "outer names" that the types the environment
-           then returns are equal. *)
-        Name.Map.fold2 (fun name ty1 ty2 result ->
-            result
-            >>= fun result ->
-            let ty1 =
-              match ty1 with
-              | None -> Type_equality_env.find_left env name ty1
-              | Some ty1 -> ty1
-            in
-            let ty2 =
-              match ty2 with
-              | None -> Type_equality_env.find_right env name ty2
-              | Some ty2 -> ty2
-            in
-            Type_equality.equal_with_env env result ty1 ty2)
-          equations_on_outer_names1 equations_on_outer_names2 result
-        >>= fun result ->
-        if Flambda_primitive.With_fixed_value.Map.equal Simple.equal cse1 cse2
-        then result
-        else Type_equality_result.types_known_unequal ()
+      let cse1 = Typing_env_level.cse level1 in
+      let cse2 = Typing_env_level.cse level2 in
+      if Flambda_primitive.With_fixed_value.Map.equal Simple.equal cse1 cse2
+      then result
+      else Type_equality_result.types_known_unequal ()
 
     let apply_name_permutation ({ defined_names; equations; cse; } as t)
           perm =
