@@ -5298,11 +5298,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         let result =
           let all_aliases1_that_are_existentials =
             Name.Set.inter all_aliases1
-              (Type_equality_env.existentials_left env)
+              (Type_equality_env.existentials env)
           in
           let all_aliases2_that_are_existentials =
             Name.Set.inter all_aliases2
-              (Type_equality_env.existentials_right env)
+              (Type_equality_env.existentials env)
           in
           let delay_existentials result names ~must_equal_one_of =
             Name.Set.fold (fun name result ->
@@ -5312,10 +5312,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               result
           in
           let result =
-            delay_existentials result all_aliases1_that_are_exisistentials
+            delay_existentials result all_aliases1_that_are_existentials
               ~must_equal_one_of:all_aliases2_that_are_existentials
           in
-          delay_existentials result all_aliases2_that_are_exisistentials
+          delay_existentials result all_aliases2_that_are_existentials
             ~must_equal_one_of:all_aliases1_that_are_existentials
         in
         equal_unknown_or_join env result unknown_or_join1 unknown_or_join2
@@ -5324,7 +5324,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (uj1 : _ Flambda_types.unknown_or_join)
           (uj2 : _ Flambda_types.unknown_or_join) =
       match uj1, uj2 with
-      | Unknown, Unknown -> true
+      | Unknown, Unknown -> result
       | Join join1, Join join2 ->
         let rec loop join1 join2 result =
           if not (Type_equality_result.are_types_known_equal result) then
@@ -5338,7 +5338,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               let result = equal_of_kind_foo env result join1 join2 in
               loop join1 join2 result
         in
-        loop join1 join2
+        loop join1 join2 result
       | Unknown, _
       | Join _, _ -> Type_equality_result.types_known_unequal ()
 
@@ -5394,29 +5394,34 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Naked_number _, _ -> Type_equality_result.types_known_unequal ()
       | Fabricated _, _ -> Type_equality_result.types_known_unequal ()
 
-    and equal_ty_value ?bound_name env result ty_value1 ty_value2 =
-      equal_ty ?bound_name equal_of_kind_value env result ty_value1 ty_value2
+    and equal_ty_value ?bound_name env result ~force_to_kind ~print_ty
+          ty_value1 ty_value2 =
+      equal_ty ?bound_name equal_of_kind_value env result
+        ~force_to_kind ~print_ty ty_value1 ty_value2
 
     and equal_ty_naked_number
        : type a.
          ?bound_name:Name.t
       -> Type_equality_env.t
       -> Type_equality_result.t
+      -> force_to_kind:(Flambda_types.t -> a Flambda_types.ty_naked_number)
+      -> print_ty:(Format.formatter -> a Flambda_types.ty_naked_number -> unit)
       -> a Flambda_types.ty_naked_number
       -> a Flambda_types.ty_naked_number
       -> Type_equality_result.t =
-    fun ?bound_name env result
+    fun ?bound_name env result ~force_to_kind ~print_ty
         (ty_naked_number1 : a Flambda_types.ty_naked_number)
         (ty_naked_number2 : a Flambda_types.ty_naked_number) ->
       equal_or_alias ?bound_name
         (equal_unknown_or_join equal_of_kind_naked_number)
         env result
+        ~force_to_kind ~print_ty
         ty_naked_number1 ty_naked_number2
 
-    and equal_ty_fabricated ?bound_name env result
+    and equal_ty_fabricated ?bound_name env result ~force_to_kind ~print_ty
           ty_fabricated1 ty_fabricated2 =
       equal_ty ?bound_name equal_of_kind_fabricated env result
-        ty_fabricated1 ty_fabricated2
+        ~force_to_kind ~print_ty ty_fabricated1 ty_fabricated2
 
     and equal_of_kind_value env result
           ((v1 : Flambda_types.of_kind_value), perm1)
@@ -5870,6 +5875,41 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
        : cache:Printing_cache.t
       -> Format.formatter
       -> Flambda_types.t
+      -> unit
+
+    val print_ty_value
+       : Format.formatter
+      -> Flambda_types.ty_value
+      -> unit
+
+    val print_ty_naked_immediate
+       : Format.formatter
+      -> Immediate.Set.t Flambda_types.ty_naked_number
+      -> unit
+
+    val print_ty_naked_float
+       : Format.formatter
+      -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
+      -> unit
+
+    val print_ty_naked_int32
+       : Format.formatter
+      -> Numbers.Int32.Set.t Flambda_types.ty_naked_number
+      -> unit
+
+    val print_ty_naked_int64
+       : Format.formatter
+      -> Numbers.Int64.Set.t Flambda_types.ty_naked_number
+      -> unit
+
+    val print_ty_naked_nativeint
+       : Format.formatter
+      -> Targetint.Set.t Flambda_types.ty_naked_number
+      -> unit
+
+    val print_ty_fabricated
+       : Format.formatter
+      -> Flambda_types.ty_fabricated
       -> unit
 
     val print_ty_value_with_cache
