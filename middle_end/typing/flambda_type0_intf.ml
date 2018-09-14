@@ -28,7 +28,7 @@ module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
 module type S = sig
-  module Function_declaration : Expr_intf.S
+  type term_language_function_declaration
 
   type t
   type flambda_type = t
@@ -67,9 +67,6 @@ module type S = sig
     val create_unknown : unit -> t
 
     val create_bottom : unit -> t
-
-    (** A conservative approximation to equality. *)
-    val equal : Type_equality_env.t -> t -> t -> bool
 
     (** Add or meet the definitions and equations from the given function type
         into the given typing environment. *)
@@ -324,16 +321,6 @@ module type S = sig
       -> Format.formatter
       -> t
       -> unit
-
-    (** Equality on two environment extensions.
-        Note that this doesn't do anything fancy such as making a canonical
-        form of environment from the extensions; it's just a structural
-        comparison. *)
-    val equal : Type_equality_env.t -> t -> t -> bool
-
-    (** A sound but not complete equality function which is much faster than
-        [equal]. *)
-    val fast_equal : t -> t -> bool
 
     (** The unique environment extension containing no information. *)
     val empty : unit -> t
@@ -629,7 +616,7 @@ module type S = sig
 
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
-     : Function_declaration.t
+     : term_language_function_declaration
     -> invariant_params:Variable.Set.t lazy_t
        (* CR mshinwell: [invariant_params], if not replaced by a type-based
           means of specialisation, must reference integer indexes of

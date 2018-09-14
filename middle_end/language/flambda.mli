@@ -952,7 +952,7 @@ end and Function_declaration : sig
   (** Change the parameters and code of a function declaration. *)
   val update_params_and_body : t -> Params_and_body.t -> t
 end and Flambda_type : Flambda_type0_intf.S
-  with module Function_declaration := Function_declaration
+  with type term_language_function_declaration := Function_declaration.t
 
 (* To be re-enabled (see .ml file)
 (** A module for the manipulation of terms where the recomputation of free

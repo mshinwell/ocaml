@@ -344,6 +344,7 @@ module type S =
       -> 'a t
       -> 'b
       -> 'b
+*)
 
     val fold2_stop_on_key_mismatch
        : (key -> 'a -> 'a -> 'b -> 'b)
@@ -351,7 +352,6 @@ module type S =
       -> 'a t
       -> 'b
       -> 'b option
-*)
 
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 

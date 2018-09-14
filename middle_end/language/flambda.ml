@@ -3061,8 +3061,9 @@ end = struct
     in
     update t ~funs
 *)
-end and Flambda_type : Flambda_type0_intf.S with module Expr := Expr
-  = Flambda_type0.Make (Expr)
+end and Flambda_type : Flambda_type0_intf.S
+    with type term_language_function_declaration := Function_declaration.t
+  = Flambda_type0.Make (Function_declaration)
 
 (* To be re-enabled (and thought about some to determine if we still need
    this

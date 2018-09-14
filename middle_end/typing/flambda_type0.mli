@@ -14,15 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Basic definitions and constructors for the type system of Flambda. The types
-    give approximations to the values obtained by evaluating Flambda terms at
-    runtime.  Each type has a kind, as per [Flambda_kind].
+(** The type system of Flambda. *)
 
-    Normal Flambda passes should use the interface provided in [Flambda_types]
-    rather than this one. *)
-
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (** The type system is parameterised over the expression language. *)
-module Make (Expr : Expr_intf.S)
-  : Flambda_type0_intf.S with module Expr := Expr
+module Make (Function_declaration : Expr_intf.S)
+  : Flambda_type0_intf.S
+    with type term_language_function_declaration := Function_declaration.t

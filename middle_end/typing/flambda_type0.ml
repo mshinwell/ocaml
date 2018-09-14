@@ -293,7 +293,7 @@ module type Meet_and_join_naked_number_intf = sig
   end
 end
 
-module Make (Expr : Expr_intf.S) = struct
+module Make (Term_language_function_declaration : Expr_intf.S) = struct
   module rec Blocks : sig
     type t
 
@@ -1287,23 +1287,10 @@ module Make (Expr : Expr_intf.S) = struct
 
     (** Create a description of a function declaration whose code is known. *)
     val create_inlinable_function_declaration
-       : is_classic_mode:bool
-      -> closure_origin:Closure_origin.t
-      -> continuation_param:Continuation.t
-      -> exn_continuation_param:Continuation.t
-      -> params:Kinded_parameter.t list
-      -> body:Expr.t
-      -> code_id:Code_id.t
-      -> result_arity:Flambda_arity.t
-      -> stub:bool
-      -> dbg:Debuginfo.t
-      -> inline:Inline_attribute.t
-      -> specialise:Specialise_attribute.t
-      -> is_a_functor:bool
+       : Term_language_function_declaration.t
       -> invariant_params:Variable.Set.t lazy_t
       -> size:int option lazy_t
       -> direct_call_surrogate:Closure_id.t option
-      -> my_closure:Variable.t
       -> Flambda_types.function_declaration
 
     (** Create a description of a function declaration whose code is unknown.
@@ -2267,7 +2254,7 @@ module Make (Expr : Expr_intf.S) = struct
         that the code of the function's body is known).  Such declarations are
         completely closed entities in terms of names. *)
     and inlinable_function_declaration = {
-      function_decl : Flambda.Function_declaration.t;
+      function_decl : Term_language_function_declaration.t;
       invariant_params : Variable.Set.t lazy_t;
       size : int option lazy_t;
       (** For functions that are very likely to be inlined, the size of the
@@ -3588,13 +3575,13 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           | Inlinable _, Non_inlinable -> Non_inlinable
           | Inlinable {
               (* CR mshinwell: We should be checking the [function_decls] too *)
-              function_decl = function_decl1;
+              function_decl = term_function_decl1;
               invariant_params = invariant_params1;
               size = size1;
               direct_call_surrogate = direct_call_surrogate1;
             },
             Inlinable {
-              function_decl = function_decl2;
+              function_decl = term_function_decl2;
               invariant_params = invariant_params2;
               size = size2;
               direct_call_surrogate = direct_call_surrogate2;
@@ -3602,10 +3589,10 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             match E.op () with
             | Join ->
               let code_id1 =
-                Expr.Function_declaration.code_id function_decl1
+                Term_language_function_declaration.code_id term_function_decl1
               in
               let code_id2 =
-                Expr.Function_declaration.code_id function_decl2
+                Term_language_function_declaration.code_id term_function_decl2
               in
               if Code_id.equal code_id1 code_id2 then begin
                 assert (Variable.Set.equal
@@ -3879,7 +3866,11 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
     include Relational_product.Make (Int_index) (Logical_variable_component)
 
     let create tys =
-      let lvs = List.map (fun _ty -> Logical_variable.create ()) tys in
+      let lvs =
+        List.map (fun ty ->
+          let kind = Flambda_type0_core.kind ty in
+          Logical_variable.create kind) tys
+      in
       let indexes_to_lvs =
         Targetint.OCaml.Map.of_list (
           List.mapi (fun index lv ->
@@ -3888,11 +3879,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
       in
       let env_extension =
         List.fold_left2 (fun env_extension lv ty ->
-            Typing_env_extension.add_equation env_extension lv ty)
+            let name = Name.logical_var lv in
+            Typing_env_extension.add_equation env_extension name ty)
           (Typing_env_extension.empty ())
           lvs tys
       in
-      RP.create indexes_to_lvs env_extension
+      create indexes_to_lvs env_extension
   end and Relational_product0 : sig
     (* A "relational product" represents a list of indexed products.  Each
        indexed product binds a set of components, thus:
@@ -4123,24 +4115,36 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           let (>>=) = Type_equality_result.(>>=) in
           result
           >>= fun result ->
-          Index.Map.fold2_stop_on_key_mismatch
-            (fun _index component1 component2 result ->
-              result
-              >>= fun result ->
-              Component.equal env result component1 component2)
-            components_by_index1 components_by_index2 result
-          >>= fun result ->
+          let equal =
+            Index.Map.fold2_stop_on_key_mismatch
+              (fun _index component1 component2 equal ->
+                if not equal then false
+                else Component.equal env component1 component2)
+              components_by_index1 components_by_index2
+              true
+          in
+          let result =
+            match equal with
+            | None | Some false ->
+              Type_equality_result.types_known_unequal ()
+            | Some true -> result
+          in
+          result
+          >>= function result ->
           let env =
             Index.Map.fold (fun _index component env ->
-                let name = Component.name component in
-                Type_equality_env.add_definition_typing_env_left env name ty)
+                Type_equality_env.add_definition_typing_env_left env
+                  (Component.name component)
+                  (Component.kind component))
               components_by_index1
               env
           in
           let env =
             Index.Map.fold (fun _index component env ->
                 let name = Component.name component in
-                Type_equality_env.add_definition_typing_env_right env name ty)
+                Type_equality_env.add_definition_typing_env_right env
+                  (Component.name component)
+                  (Component.kind component))
               components_by_index2
               env
           in
@@ -4260,8 +4264,8 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
                 else
                   let name = Component.name component in
                   let kind = Component.kind component in
-                  Typing_env_extension.add_definition_at_beginning env_extension
-                    name (Flambda_type0_core.unknown kind))
+                  Typing_env_extension.existentially_bind env_extension
+                    name kind)
               t.components_by_index
               env_extension
           in
@@ -4370,14 +4374,13 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Index.Map.fold (fun _index component env_extension ->
               let name = Component.name component in
               let kind = Component.kind component in
-              Typing_env_extension.add_definition_at_beginning env_extension
-                name (Flambda_type0_core.unknown kind))
+              Typing_env_extension.existentially_bind env_extension
+                name kind)
             t.components_by_index
             t.env_extension
 
         let introduce t env =
           Typing_env.add_or_meet_env_extension env (standalone_extension t)
-            (Typing_env.max_level env)
 
         let add_or_meet_equations t env new_equations =
           let env_extension =
@@ -4813,19 +4816,33 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           let (>>=) = Type_equality_result.(>>=) in
           result
           >>= fun result ->
-          Tag_and_index.Map.fold2_stop_on_key_mismatch
-            (fun _index maps_to1 maps_to2 result ->
-              result
-              >>= fun result ->
-              Maps_to.equal env result maps_to1 maps_to2)
-            known1 known2 result
+          let result =
+            Tag_and_index.Map.fold2_stop_on_key_mismatch
+              (fun _index maps_to1 maps_to2 result ->
+                result
+                >>= fun result ->
+                Maps_to.equal env result maps_to1 maps_to2)
+              known1 known2 result
+          in
+          (* CR mshinwell: factor out *)
+          let result =
+            match result with
+            | None -> Type_equality_result.types_known_unequal ()
+            | Some result -> result
+          in
+          result
           >>= fun result ->
-          Index.Map.fold2_stop_on_key_mismatch
-            (fun _index maps_to1 maps_to2 result ->
-              result
-              >>= fun result ->
-              Maps_to.equal env result maps_to1 maps_to2)
-            at_least1 at_least2 result
+          let result =
+            Index.Map.fold2_stop_on_key_mismatch
+              (fun _index maps_to1 maps_to2 result ->
+                result
+                >>= fun result ->
+                Maps_to.equal env result maps_to1 maps_to2)
+              at_least1 at_least2 result
+          in
+          match result with
+          | None -> Type_equality_result.types_known_unequal ()
+          | Some result -> result 
 
         let apply_name_permutation { known; at_least; } perm =
           let known =
@@ -5232,7 +5249,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (Type_equality_env.typing_env_left env)
           ~force_to_kind
           ~print_ty
-          ~bound_name
+          ?bound_name
           or_alias1
       in
       let unknown_or_join2, canonical_simple2 =
@@ -5240,7 +5257,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (Type_equality_env.typing_env_right env)
           ~force_to_kind
           ~print_ty
-          ~bound_name
+          ?bound_name
           or_alias2
       in
       let all_aliases1 =
@@ -5268,10 +5285,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         | Some bound_name -> Name.Set.remove bound_name all_aliases2
       in
       let all_aliases1_minus_existentials =
-        Name.Set.diff all_aliases1 (Type_equality_env.existentials_left env)
+        Name.Set.diff all_aliases1 (Type_equality_env.existentials env)
       in
       let all_aliases2_minus_existentials =
-        Name.Set.diff all_aliases2 (Type_equality_env.existentials_right env)
+        Name.Set.diff all_aliases2 (Type_equality_env.existentials env)
       in
       if not (Name.Set.equal all_aliases1_minus_existentials
         all_aliases2_minus_existentials)
@@ -5568,14 +5585,18 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     val add_definition_typing_env_left
        : t
       -> Name.t
-      -> Flambda_types.t
+      -> Flambda_kind.t
       -> t
 
     val add_definition_typing_env_right
        : t
       -> Name.t
-      -> Flambda_types.t
+      -> Flambda_kind.t
       -> t
+
+    val entering_scope_of_existentials : t -> Name.Set.t -> t
+
+    val existentials : t -> Name.Set.t
 
     val perm_left : t -> Name_permutation.t
 
@@ -5594,26 +5615,30 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       typing_env_right : Typing_env.t;
       perm_left : Name_permutation.t;
       perm_right : Name_permutation.t;
+      existentials : Name.Set.t;
     }
 
     let print ppf { typing_env_left; typing_env_right;
-                    perm_left; perm_right; } =
+                    perm_left; perm_right; existentials; } =
       Format.fprintf ppf
         "@[<hov 1>(\
           @[<hov 1>(typing_env_left@ %a)@]@ \
           @[<hov 1>(typing_env_right@ %a)@]@ \
           @[<hov 1>(perm_left@ %a)@]@ \
-          @[<hov 1>(perm_right@ %a)@])@]"
+          @[<hov 1>(perm_right@ %a)@]@ \
+          @[<hov 1>(existentials@ %a)@])@]"
         Typing_env.print typing_env_left
         Typing_env.print typing_env_right
         Name_permutation.print perm_left
         Name_permutation.print perm_right
+        Name.Set.print existentials
 
     let create ~typing_env_left ~typing_env_right ~perm_left ~perm_right =
       { typing_env_left;
         typing_env_right;
         perm_left;
         perm_right;
+        existentials = Name.Set.empty;
       }
 
     let empty ~typing_env_left ~typing_env_right =
@@ -5625,6 +5650,19 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let typing_env_right t = t.typing_env_right
     let perm_left t = t.perm_left
     let perm_right t = t.perm_right
+    let existentials t = t.existentials
+
+    let entering_scope_of_existentials t names =
+      if not (Name.Set.is_empty (Name.Set.inter names t.existentials))
+      then begin
+        Misc.fatal_errorf "Already in scope of one or more of the \
+            existential(s) %a:@ %a"
+          Name.Set.print names
+          print t
+      end;
+      { t with
+        existentials = Name.Set.union t.existentials names;
+      }
 
     let replace_typing_environments t ~left:typing_env_left
           ~right:typing_env_right =
@@ -7237,7 +7275,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val create : Typing_env_level.t -> t
 
-    val add_definition_at_beginning : t -> Name.t -> Flambda_types.t -> t
+    val existentially_bind : t -> Name.t -> Flambda_kind.t -> t
 
     val add_equation : ?env:Typing_env.t -> t -> Name.t -> Flambda_types.t -> t
 
@@ -7296,6 +7334,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     let equal env result t1 t2 =
       A.pattern_match_pair abst1 abst2 ~f:(fun existentials level1 level2 ->
         let (>>=) = Type_equality_result.(>>=) in
+        let env =
+          Type_equality_env.entering_scope_of_existentials existentials
+        in
         let env, result =
           Typing_env_level.equal env result level1 level2
         in
