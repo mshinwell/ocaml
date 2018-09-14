@@ -1955,30 +1955,14 @@ module Make (Expr : Expr_intf.S) = struct
     let bottom_like t = bottom (kind t)
     let unknown_like t = unknown (kind t)
 
-    let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
-          ~continuation_param ~exn_continuation_param ~params ~body ~code_id
-          ~result_arity ~stub ~dbg ~inline ~specialise ~is_a_functor
-          ~invariant_params ~size ~direct_call_surrogate ~my_closure
+    let create_inlinable_function_declaration function_decl
+          ~invariant_params ~size ~direct_call_surrogate
           : function_declaration =
       Inlinable {
-        closure_origin;
-        continuation_param;
-        exn_continuation_param;
-        is_classic_mode;
-        params;
-        body;
-        code_id;
-        free_names_in_body = Expr.free_names body;
-        result_arity;
-        stub;
-        dbg;
-        inline;
-        specialise;
-        is_a_functor;
+        function_decl;
         invariant_params;
         size;
         direct_call_surrogate;
-        my_closure;
       }
 
     let create_non_inlinable_function_declaration () : function_declaration =
@@ -2451,7 +2435,7 @@ module Make (Expr : Expr_intf.S) = struct
       | Unknown, Unknown -> result
       | Bottom, Bottom -> result
       | (Product _ | Unknown | Bottom), _ ->
-        Type_equality_result.types_known_unequal result
+        Type_equality_result.types_known_unequal ()
 
     let meet env t1 t2 : _ Or_bottom.t =
       match t1, t2 with
@@ -2564,6 +2548,8 @@ module Make (Expr : Expr_intf.S) = struct
 
     val central_environment : t -> Meet_env.t
 
+    val central_typing_environment : t -> Typing_env.t
+
     val environment_on_left : t -> Typing_env.t
 
     val environment_on_right : t -> Typing_env.t
@@ -2608,7 +2594,7 @@ module Make (Expr : Expr_intf.S) = struct
     let add_extensions t ~holds_on_left ~holds_on_right =
       let env_plus_extension1 =
         Typing_env.add_or_meet_env_extension t.env_plus_extension1
-          holds_on_left (Typing_env.max_level (Meet_env.env t.env))
+          holds_on_left
       in
       let extension1 =
         Typing_env_extension.meet t.env t.extension1 holds_on_left
@@ -2616,7 +2602,6 @@ module Make (Expr : Expr_intf.S) = struct
       let env_plus_extension2 =
         Typing_env.add_or_meet_env_extension t.env_plus_extension2
           holds_on_right
-          (Typing_env.max_level (Meet_env.env t.env))
       in
       let extension2 =
         Typing_env_extension.meet t.env t.extension2 holds_on_right
@@ -2635,7 +2620,9 @@ module Make (Expr : Expr_intf.S) = struct
     let add_definition_central_environment t name ty =
       let env =
         Meet_env.with_env t.env (fun env ->
-          Typing_env.add env name (Typing_env.max_level env) (Definition ty))
+          let kind = Flambda_type0_core.kind ty in
+          let env = Typing_env.add_definition env name kind in
+          Typing_env.add_equation env name ty)
       in
       let t = { t with env; } in
       invariant t;
@@ -2645,15 +2632,15 @@ module Make (Expr : Expr_intf.S) = struct
           ~holds_on_left ~holds_on_right ~central_extension =
       let env =
         Meet_env.with_env t.env (fun env ->
-          Typing_env.add_or_meet_env_extension env
-            central_extension
-            (Typing_env.max_level (Meet_env.env t.env)))
+          Typing_env.add_or_meet_env_extension env central_extension)
       in
       let t = { t with env; } in
       invariant t;
       add_extensions t ~holds_on_left ~holds_on_right
 
     let central_environment t = t.env
+
+    let central_typing_environment t = Meet_env.env t.env
 
     let environment_on_left t = t.env_plus_extension1
 
@@ -2985,7 +2972,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             in
             Join of_kind_foos
 
-      and join_ty env ?bound_name
+      and join_ty ?bound_name env
             (or_alias1 : S.of_kind_foo Flambda_types.ty)
             (or_alias2 : S.of_kind_foo Flambda_types.ty)
             : S.of_kind_foo Flambda_types.ty =
@@ -3028,8 +3015,9 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             | None -> all_aliases
             | Some bound_name ->
               let all_aliases_of_bound_name =
-                Typing_env.aliases_of_simple (Join_env.central_environment env)
-                  (Name bound_name)
+                Typing_env.aliases_of_simple
+                  (Join_env.central_typing_environment env)
+                  (Simple.name bound_name)
               in
               Name.Set.diff all_aliases all_aliases_of_bound_name
           in
@@ -3064,7 +3052,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               in
               No_alias unknown_or_join
 
-      let meet_or_join_ty env
+      let meet_or_join_ty ?bound_name env
             (or_alias1 : S.of_kind_foo Flambda_types.ty)
             (or_alias2 : S.of_kind_foo Flambda_types.ty) =
         let meet_env = Join_env.central_environment env in
@@ -3088,7 +3076,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             if simple == simple' then or_alias2
             else Equals simple'
         in
-        E.switch_no_bottom meet_ty join_ty env or_alias1 or_alias2
+        E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
     end
   end and Meet_and_join : sig
     module Make
@@ -3155,7 +3143,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           Make_meet_or_join.Make (E) (Meet_and_join_of_kind_fabricated)
         in
         if Join_env.shortcut_precondition env
-          && Type_equality.fast_equal t1 t2
+          && Type_equality.fast_equal (Join_env.central_typing_environment env)
+               (Join_env.central_typing_environment env) t1 t2
         then t1, Typing_env_extension.empty ()
         else begin
           Join_env.invariant env;
@@ -3598,64 +3587,27 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           | Non_inlinable, (Non_inlinable | Inlinable _)
           | Inlinable _, Non_inlinable -> Non_inlinable
           | Inlinable {
-              closure_origin = closure_origin1;
-              continuation_param = continuation_param1;
-              exn_continuation_param = exn_continuation_param1;
-              is_classic_mode = is_classic_mode1;
-              params = params1;
-              body = _;
-              code_id = code_id1;
-              free_names_in_body = free_names_in_body1;
-              stub = stub1;
-              result_arity = result_arity1;
-              dbg = dbg1;
-              inline = inline1;
-              specialise = specialise1;
-              is_a_functor = is_a_functor1;
+              (* CR mshinwell: We should be checking the [function_decls] too *)
+              function_decl = function_decl1;
               invariant_params = invariant_params1;
               size = size1;
               direct_call_surrogate = direct_call_surrogate1;
-              my_closure = my_closure1;
             },
             Inlinable {
-              closure_origin = closure_origin2;
-              continuation_param = continuation_param2;
-              exn_continuation_param = exn_continuation_param2;
-              is_classic_mode = is_classic_mode2;
-              params = params2;
-              body = _;
-              code_id = code_id2;
-              free_names_in_body = free_names_in_body2;
-              stub = stub2;
-              result_arity = result_arity2;
-              dbg = dbg2;
-              inline = inline2;
-              specialise = specialise2;
-              is_a_functor = is_a_functor2;
+              function_decl = function_decl2;
               invariant_params = invariant_params2;
               size = size2;
               direct_call_surrogate = direct_call_surrogate2;
-              my_closure = my_closure2;
             } ->
             match E.op () with
             | Join ->
+              let code_id1 =
+                Expr.Function_declaration.code_id function_decl1
+              in
+              let code_id2 =
+                Expr.Function_declaration.code_id function_decl2
+              in
               if Code_id.equal code_id1 code_id2 then begin
-                assert (Closure_origin.equal closure_origin1 closure_origin2);
-                assert (Continuation.equal continuation_param1
-                  continuation_param2);
-                assert (Continuation.equal exn_continuation_param1
-                  exn_continuation_param2);
-                assert (Pervasives.(=) is_classic_mode1 is_classic_mode2);
-                assert (Misc.Stdlib.List.equal Kinded_parameter.equal
-                  params1 params2);
-                assert (Name_occurrences.equal free_names_in_body1
-                  free_names_in_body2);
-                assert (Pervasives.(=) stub1 stub2);
-                assert (Flambda_arity.equal result_arity1 result_arity2);
-                assert (Debuginfo.equal dbg1 dbg2);
-                assert (Inline_attribute.equal inline1 inline2);
-                assert (Specialise_attribute.equal specialise1 specialise2);
-                assert (Pervasives.(=) is_a_functor1 is_a_functor2);
                 assert (Variable.Set.equal
                   (Lazy.force invariant_params1)
                   (Lazy.force invariant_params2));
@@ -3663,7 +3615,6 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                   (Lazy.force size1) (Lazy.force size2));
                 assert (Misc.Stdlib.Option.equal Closure_id.equal
                   direct_call_surrogate1 direct_call_surrogate2);
-                assert (Variable.equal my_closure1 my_closure2);
                 function_decl1
               end else begin
                 Non_inlinable
@@ -3707,6 +3658,27 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           Ok (closures_entry, env_extension)
         | _, _ -> Absorbing
 
+      module Meet_and_join_of_kind_naked_immediate =
+        Meet_and_join_naked_immediate.Make (E)
+      module Meet_and_join_of_kind_naked_float =
+        Meet_and_join_naked_float.Make (E)
+      module Meet_and_join_of_kind_naked_int32 =
+        Meet_and_join_naked_int32.Make (E)
+      module Meet_and_join_of_kind_naked_int64 =
+        Meet_and_join_naked_int64.Make (E)
+      module Meet_and_join_of_kind_naked_nativeint =
+        Meet_and_join_naked_nativeint.Make (E)
+      module Meet_and_join_naked_immediate =
+        Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_immediate)
+      module Meet_and_join_naked_float =
+        Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_float)
+      module Meet_and_join_naked_int32 =
+        Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int32)
+      module Meet_and_join_naked_int64 =
+        Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int64)
+      module Meet_and_join_naked_nativeint =
+        Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_nativeint)
+
       let meet_or_join_of_kind_foo env
             (of_kind1 : Flambda_types.of_kind_value)
             (of_kind2 : Flambda_types.of_kind_value)
@@ -3717,36 +3689,6 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         then
           Ok (of_kind1, Typing_env_extension.empty ())
         else
-          let module Meet_and_join_of_kind_naked_immediate =
-            Meet_and_join_naked_immediate.Make (E)
-          in
-          let module Meet_and_join_of_kind_naked_float =
-            Meet_and_join_naked_float.Make (E)
-          in
-          let module Meet_and_join_of_kind_naked_int32 =
-            Meet_and_join_naked_int32.Make (E)
-          in
-          let module Meet_and_join_of_kind_naked_int64 =
-            Meet_and_join_naked_int64.Make (E)
-          in
-          let module Meet_and_join_of_kind_naked_nativeint =
-            Meet_and_join_naked_nativeint.Make (E)
-          in
-          let module Meet_and_join_naked_immediate =
-            Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_immediate)
-          in
-          let module Meet_and_join_naked_float =
-            Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_float)
-          in
-          let module Meet_and_join_naked_int32 =
-            Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int32)
-          in
-          let module Meet_and_join_naked_int64 =
-            Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int64)
-          in
-          let module Meet_and_join_naked_nativeint =
-            Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_nativeint)
-          in
           match of_kind1, of_kind2 with
           | Blocks_and_tagged_immediates blocks_imms1,
               Blocks_and_tagged_immediates blocks_imms2 ->
@@ -5381,7 +5323,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         in
         loop join1 join2
       | Unknown, _
-      | Join _, _ -> Type_equality_result.types_known_unequal result
+      | Join _, _ -> Type_equality_result.types_known_unequal ()
 
     let equal_ty ?bound_name equal_of_kind_foo env result ~force_to_kind
           ~print_ty ty1 ty2 =
@@ -5431,9 +5373,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
           ~print_ty:Type_printers.print_ty_fabricated
           ty_fabricated1 ty_fabricated2
-      | Value _, _ -> Type_equality_result.types_known_unequal result
-      | Naked_number _, _ -> Type_equality_result.types_known_unequal result
-      | Fabricated _, _ -> Type_equality_result.types_known_unequal result
+      | Value _, _ -> Type_equality_result.types_known_unequal ()
+      | Naked_number _, _ -> Type_equality_result.types_known_unequal ()
+      | Fabricated _, _ -> Type_equality_result.types_known_unequal ()
 
     and equal_ty_value ?bound_name env result ty_value1 ty_value2 =
       equal_ty ?bound_name equal_of_kind_value env result ty_value1 ty_value2
@@ -5488,10 +5430,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           by_closure_id1 by_closure_id2
       | String string_set1, String string_set2 ->
         if String_info.Set.equal string_set1 string_set2 then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | (Blocks_and_tagged_immediates _ | Boxed_number _
           | Closures _ | String _), _ ->
-        Type_equality_result.types_known_unequal result
+        Type_equality_result.types_known_unequal ()
 
     and equal_blocks_and_tagged_immediates env
           ({ immediates = immediates1; blocks = blocks1; }
@@ -5509,11 +5451,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Inlinable decl1, Inlinable decl2 ->
         (* CR mshinwell: Add assertions like in the meet/join code? *)
         if Code_id.equal decl1.code_id decl2.code_id then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | Non_inlinable, Non_inlinable -> result
       | Inlinable _, Non_inlinable
       | Non_inlinable, Inlinable _ ->
-        Type_equality_result.types_known_unequal result
+        Type_equality_result.types_known_unequal ()
 
     and equal_of_kind_naked_number
        : type a b.
@@ -5526,24 +5468,24 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       match of_kind_naked_number1, of_kind_naked_number2 with
       | Immediate imms1, Immediate imms2 ->
         if Immediate.Set.equal imms1 imms2 then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | Float floats1, Float floats2 ->
         if Float.Set.equal floats1 floats2 then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | Int32 ints1, Int32 ints2 ->
         if Int32.Set.equal ints1 ints2 then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | Int64 ints1, Int64 ints2 ->
         if Int64.Set.equal ints1 ints2 then result
-        else Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
       | Nativeint ints1, Nativeint ints2 ->
         if Targetint.Set.equal ints1 ints2 then result
-        else Type_equality_result.types_known_unequal result
-      | Immediate _, _ -> Type_equality_result.types_known_unequal result
-      | Float _, _ -> Type_equality_result.types_known_unequal result
-      | Int32 _, _ -> Type_equality_result.types_known_unequal result
-      | Int64 _, _ -> Type_equality_result.types_known_unequal result
-      | Nativeint _, _ -> Type_equality_result.types_known_unequal result
+        else Type_equality_result.types_known_unequal ()
+      | Immediate _, _ -> Type_equality_result.types_known_unequal ()
+      | Float _, _ -> Type_equality_result.types_known_unequal ()
+      | Int32 _, _ -> Type_equality_result.types_known_unequal ()
+      | Int64 _, _ -> Type_equality_result.types_known_unequal ()
+      | Nativeint _, _ -> Type_equality_result.types_known_unequal ()
 
     and equal_of_kind_fabricated env result
           ((of_kind_fabricated1 : Flambda_types.of_kind_fabricated), perm1)
@@ -7367,7 +7309,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
             result
             >>= fun result ->
             if Type_equality_result.Uses.more_than_one_use_and_empty uses
-            then Type_equality_result.types_known_unequal result
+            then Type_equality_result.types_known_unequal ()
             else result)
           check_now
           result)

@@ -28,9 +28,7 @@ module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
 module type S = sig
-  module Expr : sig
-    type t
-  end
+  module Function_declaration : Expr_intf.S
 
   type t
   type flambda_type = t
@@ -631,7 +629,7 @@ module type S = sig
 
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
-     : function_declaration
+     : Function_declaration.t
     -> invariant_params:Variable.Set.t lazy_t
        (* CR mshinwell: [invariant_params], if not replaced by a type-based
           means of specialisation, must reference integer indexes of

@@ -16,9 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Rename this file to [Function_decl_intf] *)
+
 module type S = sig
   type t
 
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val code_id : t -> Code_id.t
   val free_names : t -> Name_occurrences.t
+(*
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+*)
 end
