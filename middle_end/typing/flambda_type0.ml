@@ -497,12 +497,12 @@ module Make (Expr : Expr_intf.S) = struct
       if Type_equality.fast_equal env env t1 t2 then true
       else if Flambda_type0_core.is_obviously_bottom t1 then true
       else
-        let env =
+        let meet_env =
           Meet_env.create env
             ~perm_left:(Name_permutation.create ())
             ~perm_right:(Name_permutation.create ())
         in
-        let meet_t, env_extension = meet env t1 t2 in
+        let meet_t, env_extension = meet meet_env t1 t2 in
         let env = Typing_env.add_or_meet_env_extension env env_extension in
         Type_equality.equal env env meet_t t1
 
@@ -513,12 +513,12 @@ module Make (Expr : Expr_intf.S) = struct
           && not (Flambda_type0_core.is_obviously_bottom t2)
       then true
       else
-        let env =
+        let meet_env =
           Meet_env.create env
             ~perm_left:(Name_permutation.create ())
             ~perm_right:(Name_permutation.create ())
         in
-        let meet_t, env_extension = meet env t1 t2 in
+        let meet_t, env_extension = meet meet_env t1 t2 in
         let env = Typing_env.add_or_meet_env_extension env env_extension in
         Type_equality.equal env env meet_t t1
           && not (Type_equality.equal env env meet_t t2)
@@ -1036,7 +1036,12 @@ module Make (Expr : Expr_intf.S) = struct
         -> Typing_env_extension.t
         -> t
 
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       val meet
          : Meet_env.t
@@ -1066,7 +1071,12 @@ module Make (Expr : Expr_intf.S) = struct
         -> Typing_env_extension.t
         -> t
 
-      val equal : Type_equality_env.t -> t -> t -> bool
+      val equal
+         : Type_equality_env.t
+        -> Type_equality_result.t
+        -> t
+        -> t
+        -> Type_equality_result.t
 
       val meet
          : Meet_env.t
@@ -2672,6 +2682,39 @@ module Make (Expr : Expr_intf.S) = struct
       { t with
         env = Meet_env.compose_name_permutations t.env ~perm_left ~perm_right;
       }
+  end and Logical_variable_component : sig
+    type t = Logical_variable.t
+    
+    val create : Flambda_kind.t -> t
+    val kind : t -> Flambda_kind.t
+    val rename : t -> t
+    val in_compilation_unit : t -> Compilation_unit.t -> bool
+    val equal : Type_equality_env.t -> t -> t -> bool
+    val name : t -> Name.t
+
+    include Map.With_set with type t := t
+    include Contains_names.S with type t := t
+  end = struct
+    include Logical_variable
+    
+    let free_names t =
+      Name_occurrences.singleton_in_types (Name (Name.logical_var t))
+    
+    (* CR mshinwell: This is strange.  Should logical variables not be in [Name]
+       and instead separately in [Bindable_name]? *)
+    let apply_name_permutation t perm =
+      match Name_permutation.apply_name perm (Name.logical_var t) with
+      | Logical_var var -> var
+      | _ ->
+        Misc.fatal_errorf "Illegal name permutation on logical variables: %a"
+          Name_permutation.print perm
+    
+    let name t = Name.logical_var t
+    
+    let equal env t1 t2 =
+      let t1 = apply_name_permutation t1 (Type_equality_env.perm_left env) in
+      let t2 = apply_name_permutation t2 (Type_equality_env.perm_right env) in
+      equal t1 t2
   end and Make_meet_or_join : sig
     module Make
       (E : Either_meet_or_join_intf
@@ -3939,10 +3982,9 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         val create : Flambda_kind.t -> t
         val equal
            : Type_equality_env.t
-          -> Type_equality_result.t
           -> t
           -> t
-          -> Type_equality_result.t
+          -> bool
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end)
@@ -4028,10 +4070,9 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         val create : Flambda_kind.t -> t
         val equal
            : Type_equality_env.t
-          -> Type_equality_result.t
           -> t
           -> t
-          -> Type_equality_result.t
+          -> bool
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end)
@@ -4564,10 +4605,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         val create : Flambda_kind.t -> t
         val equal
            : Type_equality_env.t
-          -> Type_equality_result.t
           -> t
           -> t
-          -> Type_equality_result.t
+          -> bool
         val name : t -> Name.t
         val kind : t -> Flambda_kind.t
       end) =
@@ -6244,8 +6284,6 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
     val aliases_of_simple : t -> Simple.t -> Name.Set.t
-
-    val levels : t -> Typing_env_level.Scope_level.Map.t
 
     val cut
        : t

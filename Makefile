@@ -324,8 +324,6 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/kinded_parameter.cmo \
   middle_end/language/name_abstraction.cmo \
   middle_end/language/invariant_env.cmo \
-  middle_end/typing/type_equality_env.cmo \
-  middle_end/typing/logical_variable_component.cmo \
   middle_end/language/inline_attribute.cmo \
   middle_end/language/specialise_attribute.cmo \
   middle_end/typing/flambda_arity.cmo \
