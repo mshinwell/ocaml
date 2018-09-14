@@ -95,20 +95,22 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val env : t -> Typing_env.t
-(*
   end and Parameters : sig
     include Contains_names.S
 
-    val print_or_omit_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
+    val print : Format.formatter -> t -> unit
 
-    val create : unit -> t
+    val invariant : t -> unit
 
-    val to_set : t -> Kinded_parameter.Set.t
-*)
+    val create_bottom : unit -> t
+
+    val create : Flambda_types.t list -> t
+
+    (** Greatest lower bound. *)
+    val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+
+    (** Least upper bound. *)
+    val join : Join_env.t -> t -> t -> t
   end and Typing_env : sig
     type t
 
@@ -273,13 +275,7 @@ module type S = sig
         During the process, if an attempt is made to add a name which is
         already bound, the given name's type will be determined using a meet
         operation. *)
-    (* CR mshinwell: Maybe this (and the next function) doesn't need to take
-       a level and instead use the max? *)
-    val add_or_meet_env_extension
-       : t
-      -> Typing_env_extension.t
-      -> Scope_level.t
-      -> t
+    val add_or_meet_env_extension : t -> Typing_env_extension.t -> t
 
     (** Follow chains of aliases until either a [No_alias] type is reached
         or a name cannot be resolved.
@@ -635,23 +631,14 @@ module type S = sig
 
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
-     : is_classic_mode:bool
-    -> closure_origin:Closure_origin.t
-    -> continuation_param:Continuation.t
-    -> exn_continuation_param:Continuation.t
-    -> params:Kinded_parameter.t list
-    -> body:Expr.t
-    -> code_id:Code_id.t
-    -> result_arity:Flambda_arity.t
-    -> stub:bool
-    -> dbg:Debuginfo.t
-    -> inline:Inline_attribute.t
-    -> specialise:Specialise_attribute.t
-    -> is_a_functor:bool
+     : function_declaration
     -> invariant_params:Variable.Set.t lazy_t
+       (* CR mshinwell: [invariant_params], if not replaced by a type-based
+          means of specialisation, must reference integer indexes of
+          parameters.  (The parameters themselves are not bound over this
+          value.) *)
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
-    -> my_closure:Variable.t
     -> function_declaration
 
   (** Create a description of a function declaration whose code is unknown.

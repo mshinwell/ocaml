@@ -619,8 +619,16 @@ end and Continuation_handler : sig
 
   val create
      : Kinded_parameter.t list
+       (** The parameters of the continuation, in order.  These will be bound
+           over the [handler] and the [param_relations]. *)
     -> param_relations:Flambda_type.Typing_env_extension.t
+       (** Relations between the parameters (directly on their underlying
+           variables). *)
     -> handler:Expr.t
+    -> Flambda_type.Parameters.t
+       (** Extra typing information, expressed as a relational product on
+           logical variables, inferred during simplification.  The parameters
+           of the continuation are not bound over this product. *)
     -> stub:bool
     -> is_exn_handler:bool
     -> t
@@ -676,6 +684,7 @@ end and Set_of_closures : sig
       closure variables. *)
   val create
      : function_decls:Function_declarations.t
+    -> set_of_closures_ty:Flambda_type.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
@@ -849,7 +858,7 @@ end and Params_and_body : sig
 
   val create
      : Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
+    -> Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
@@ -857,7 +866,7 @@ end and Params_and_body : sig
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
+      -> Flambda_type.Parameters.t
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)

@@ -2171,6 +2171,7 @@ end and Continuation_handler : sig
      : Kinded_parameter.t list
     -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
+    -> Flambda_type.Parameters.t
     -> stub:bool
     -> is_exn_handler:bool
     -> t
@@ -2188,6 +2189,7 @@ end and Continuation_handler : sig
 end = struct
   type t = {
     params_and_handler : Params_and_handler.t;
+    param_relations_lvs : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
   }
@@ -2260,11 +2262,13 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 *)
 
-  let create params ~param_relations ~handler ~stub ~is_exn_handler =
+  let create params ~param_relations ~handler ~param_relations_lvs ~stub
+        ~is_exn_handler =
     let params_and_handler =
       Params_and_handler.create params ~param_relations ~handler
     in
     { params_and_handler;
+      param_relations_lvs;
       stub;
       is_exn_handler;
     }
@@ -2272,8 +2276,12 @@ end = struct
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
 
-  let free_names { params_and_handler; stub = _; is_exn_handler = _; } =
-    Params_and_handler.free_names params_and_handler
+  let free_names
+        { params_and_handler; param_relations_lvs; stub = _;
+          is_exn_handler = _;
+        } =
+    Name_occurrences.union (Params_and_handler.free_names params_and_handler)
+      (Flambda_type.Parameters.free_names param_relations_lvs)
 
   let apply_name_permutation
         ({ params_and_handler; stub; is_exn_handler; } as t) perm =
@@ -2293,6 +2301,7 @@ end = struct
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
+    set_of_closures_ty : Flambda_type.t;
     closure_elements : Simple.t Var_within_closure.Map.t;
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   }
@@ -2470,13 +2479,16 @@ end = struct
       free_vars
 *)
 
-  let create ~function_decls ~closure_elements ~direct_call_surrogates =
+  let create ~function_decls ~set_of_closures_ty ~closure_elements
+        ~direct_call_surrogates =
     { function_decls;
+      set_of_closures_ty;
       closure_elements;
       direct_call_surrogates;
     }
 
   let function_decls t = t.function_decls
+  let set_of_closures_ty t = t.set_of_closures_ty
   let closure_elements t = t.closure_elements
   let direct_call_surrogates t = t.direct_call_surrogates
 
@@ -2485,41 +2497,48 @@ end = struct
 
   let print_with_cache ~cache ppf
         { function_decls; 
+          set_of_closures_ty;
           closure_elements;
           direct_call_surrogates;
         } =
     fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
         @[<hov 1>(function_decls %a)@]@ \
+        @[<hov 1>(set_of_closures_ty %a)@]@ \
         @[<hov 1>(closure_elements %a)@]\
         @[<hov 1>(direct_call_surrogates %a)@]@ \
         )@]"
       (Misc_color.bold_green ())
       (Misc_color.reset ())
       (Function_declarations.print_with_cache ~cache) function_decls
+      (Flambda_type.print_with_cache ~cache) set_of_closures_ty
       (Var_within_closure.Map.print Simple.print) closure_elements
       (Closure_id.Map.print Closure_id.print) direct_call_surrogates
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let free_names
-        { function_decls; 
+        { function_decls;
+          set_of_closures_ty;
           closure_elements;
           direct_call_surrogates = _;
         } =
-    let in_decls = Function_declarations.free_names function_decls in
-    let in_closure_elements =
-      Simple.List.free_names
-        (Var_within_closure.Map.data closure_elements)
-    in
-    Name_occurrences.union in_decls in_closure_elements
+    Name_occurrences.union_list [
+      Function_declarations.free_names function_decls;
+      Flambda_type.free_names set_of_closures_ty;
+      Simple.List.free_names (Var_within_closure.Map.data closure_elements);
+    ]
 
   let apply_name_permutation
         ({ function_decls; 
+           set_of_closures_ty;
            closure_elements;
            direct_call_surrogates;
          } as t) perm =
     let function_decls' =
       Function_declarations.apply_name_permutation function_decls perm
+    in
+    let set_of_closures_ty' =
+      Flambda_type.apply_name_permutation set_of_closures_ty perm
     in
     let closure_elements' =
       Var_within_closure.Map.map_sharing (fun simple ->
@@ -2527,10 +2546,12 @@ end = struct
         closure_elements
     in
     if function_decls == function_decls'
+      && set_of_closures_ty == set_of_closures_ty'
       && closure_elements == closure_elements'
     then t
     else
       { function_decls = function_decls';
+        set_of_closures_ty = set_of_closures_ty';
         closure_elements = closure_elements';
         direct_call_surrogates;
       }
