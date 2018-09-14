@@ -7462,13 +7462,15 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       -> t
       -> Type_equality_result.t
 
-    val free_names_minus_defined_names : t -> Name_occurrences.t
-
+(*
     val restrict_to_names : t -> Name_occurrences.t -> t
+*)
 
     val find_opt : t -> Name.t -> Flambda_types.t option
 
     val existentially_bind : t -> Name.t -> Flambda_kind.t -> t
+
+    val meet_equation : t -> Name.t -> Flambda_types.t -> t
 
     val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
@@ -7480,9 +7482,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val defined_names_set : t -> Bindable_name.Set.t
 
-    val equations_on_outer_env : t -> Name.Set.t
-
     val defined_names : t -> Flambda_kind.t Name.Map.t
+
+    val equations_domain : t -> Name.Set.t
+
+    val equations_on_outer_env_domain : t -> Name.Set.t
 
     val equations : t -> Flambda_types.t Name.Map.t
 
@@ -7782,7 +7786,10 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       { t with cse; }
 
-    let update_cse_for_meet_or_join t t1 t2 names =
+    let update_cse_for_meet_or_join t _t1 _t2 _meet_or_join _names =
+      t
+
+(* XXX Uncomment once the rest is working again
       (* XXX This should follow aliases to the canonical name. *)
       let preserved_cse_equations t =
         (* CR-someday mshinwell: This could be improved to preserve some of
@@ -7825,6 +7832,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       invariant t;
       t
+*)
+
+    let equations_domain t = Name.Map.keys t1.equations
+
+    let equations_on_outer_env_domain t =
+      Name.Set.remove (equations_domain t) t.defined_names
 
     let rec meet env (t1 : t) (t2 : t) : t =
       let defined_names =
@@ -7835,21 +7848,18 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           defined_names;
         }
       in
-      let names_with_equations_in_meet =
-        let free_names t =
-          Name_occurrences.everything_must_only_be_names (
-            free_names_minus_defined_names t)
-        in
-        Name.Set.union (free_names t1) (free_names t2)
+      let names_in_meet =
+        Name.Set.union (equations_domain t1) (equations_domain t2)
       in
       let t =
         Name.Set.fold (fun name t ->
+            assert (not (Name.Map.mem name t.equations));
             let ty1 = find_opt t1 name in
             let ty2 = find_opt t2 name in
             match ty1, ty2 with
             | None, None -> assert false
-            | Some ty1, None -> add_equation t name ty1
-            | None, Some ty2 -> add_equation t name ty2
+            | Some ty1, None -> add_or_replace_equation t name ty1
+            | None, Some ty2 -> add_or_replace_equation t name ty2
             | Some ty1, Some ty2 ->
               let meet_ty, meet_equations =
                 Both_meet_and_join.meet env ty1 ty2
@@ -7858,47 +7868,31 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
                 let t = meet meet_env t t' in
                 assert (not (Name.Map.mem name t.equations));
                 add_or_replace_equation t name meet_ty))
-          names_with_equations_in_meet
+          names_in_meet
           t
       in
-      let all_names_in_meet =
-        let free_names t =
-          Name_occurrences.everything_must_only_be_names (free_names t)
-        in
-        Name.Set.union (free_names t1) (free_names t2)
-      in
-      A.pattern_match_map t.abst ~f:(fun t0 ->
-        update_cse_for_meet_or_join t0 t1 t2 all_names_in_meet)
+      update_cse_for_meet_or_join t0 t1 t2 Meet names_in_meet
 
     let rec join env (t1 : t) (t2 : t) : t =
-        let names_in_join =
-          let free_names t =
-            Name_occurrences.everything_must_only_be_names (free_names t)
-          in
-          let equations_in_t1_on_env = free_names t1 in
-          let equations_in_t2_on_env = free_names t2 in
-          Name.Set.inter equations_in_t1_on_env equations_in_t2_on_env
-        in
-              let t =
-                Name.Set.fold (fun name (t, env) ->
-                    let ty1 = Typing_env_level.find level_1 name in
-                    let ty2 = Typing_env_level.find level_2 name in
-                    let join_ty =
-                      Both_meet_and_join.join ~bound_name:name env ty1 ty2
-                    in
-                    let t = add_equation t name join_ty in
-                    let env =
-                      Join_env.add_definition_central_environment env join_ty
-                    in
-                    t, env)
-                  names_in_join
-                  (empty (), env)
-              in
-              A.pattern_match_map t.abst ~f:(fun level ->
-                Typing_env_level.update_cse_for_meet_or_join level
-                  level_1 level_2 names_in_join)))
+      let names_with_equations_in_join =
+        Name.Set.inter (equations_on_outer_env_domain t1)
+          (equations_on_outer_env_domain t2)
+      in
+      let t =
+        Name.Set.fold (fun name t ->
+            assert (not (Name.Map.mem name t.equations));
+            let ty1 = Typing_env_level.find level_1 name in
+            let ty2 = Typing_env_level.find level_2 name in
+            let join_ty =
+              Both_meet_and_join.join ~bound_name:name env ty1 ty2
+            in
+            add_or_replace_equation t name join_ty)
+          names_in_join
+          t
+      in
+      update_cse_for_meet_or_join t0 t1 t2 Join names_in_join
 
-    let add_equation ?env t name ty =
+    let meet_equation ?env t name ty =
       let t' =
         { empty () with
           equations = Name.Map.singleton name ty;
