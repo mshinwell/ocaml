@@ -284,7 +284,9 @@ val invariant : Invariant_env.t -> t -> unit
 
 include Contains_names.S with type t := t
 
+(*
 val map_args : t -> f:(Simple.t -> Simple.t) -> t
+*)
 
 (** Simpler version (e.g. for [Inlining_cost]), where only the actual
     primitive matters, not the arguments. *)
@@ -410,7 +412,9 @@ module With_fixed_value : sig
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Map.With_set with type t := t
 
+(*
   val apply_name_permutation_set : Set.t -> Name_permutation.t -> Set.t
+*)
 end
 
 (** Total ordering, printing, sets, maps etc. *)

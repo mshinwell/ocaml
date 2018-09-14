@@ -198,7 +198,6 @@ module Map : sig
       val data : 'a t -> 'a list
       val get_singleton : 'a t -> (key * 'a) option
       val transpose_keys_and_data : key t -> key t
-      val strictly_greater_than : 'a t -> key -> 'a t
       val to_seq : 'a t -> (key * 'a) Seq.t
       val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
       val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t

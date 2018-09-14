@@ -104,7 +104,7 @@ module type S = sig
 
     val create_bottom : unit -> t
 
-    val create : Flambda_types.t list -> t
+    val create : flambda_type list -> t
 
     (** Greatest lower bound. *)
     val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t

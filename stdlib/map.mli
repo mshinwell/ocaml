@@ -337,6 +337,7 @@ module type S =
       -> 'a t
       -> 'a t
 
+(*
     val fold2
        : (key -> 'a option -> 'a option -> 'b -> 'b)
       -> 'a t
@@ -350,6 +351,7 @@ module type S =
       -> 'a t
       -> 'b
       -> 'b option
+*)
 
     val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
 
@@ -367,7 +369,9 @@ module type S =
 
     val transpose_keys_and_data : key t -> key t
 
+(*
     val strictly_greater_than : 'a t -> key -> 'a t
+*)
 
     (** {6 Iterators} *)
 

@@ -5719,7 +5719,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
       let combine t ~must_equal_one_of:must_equal_one_of' =
         match t with
-        | One { must_equal_one_of; } ->
+        | One { must_equal_one_of; }
         | Many { must_equal_one_of; } ->
           let must_equal_one_of =
             Name.Set.inter must_equal_one_of must_equal_one_of'
@@ -6870,7 +6870,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         | Some (Name alias) ->
           Name.Set.mem alias (aliases_of_simple t (Simple.name name))
       in
-      if equation_with_reverse_alias_already_present then begin
+      if equation_with_reverse_alias_already_present then
         t
       else
         let level =
@@ -6982,13 +6982,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           if Scope_level.Map.is_empty strictly_less then
             empty ~resolver:t.resolver
           else
-            let (current_level, current_level_data) =
+            let current_level, current_level_data =
               Scope_level.Map.max_elt strictly_less
             in
             let prev_levels =
               Scope_level.Map.remove current_level strictly_less
             in
-            let prev
             { resolver = t.resolver;
               prev_levels;
               current_level = (current_level, current_level_data);
@@ -7402,7 +7401,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let abst =
           A.pattern_match t1.abst ~f:(fun _ level_1 ->
             A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              ...))
+              A.create (Typing_env_level.defined_names level)
+                (Typing_env_level.join env level_1 level_2)))
         in
         { abst; }
 
@@ -7844,7 +7844,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         Name.Map.disjoint_union t1.defined_names t2.defined_names
       in
       let t =
-        { empty () with
+        { (empty ()) with
           defined_names;
         }
       in
@@ -7894,7 +7894,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let meet_equation ?env t name ty =
       let t' =
-        { empty () with
+        { (empty ()) with
           equations = Name.Map.singleton name ty;
         }
       in

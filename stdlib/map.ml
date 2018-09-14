@@ -80,7 +80,9 @@ module type S =
     val data : 'a t -> 'a list
     val get_singleton : 'a t -> (key * 'a) option
     val transpose_keys_and_data : key t -> key t
+(*
     val strictly_greater_than : 'a t -> key -> 'a t
+*)
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
     val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
@@ -592,6 +594,7 @@ module Make(Ord: OrderedType) = struct
       | [key, value] -> Some (key, value)
       | _ -> None
 
+(*
     let rec fold2 f m0 m1 init =
       (* CR mshinwell: Provide a proper implementation *)
       let m0_minus_m1 = diff m0 m1 in
@@ -624,6 +627,7 @@ module Make(Ord: OrderedType) = struct
             init t1 t2
         in
         Some acc
+*)
 
     let for_all2_opt f t1 t2 =
       (* CR mshinwell: Provide a proper implementation *)
@@ -638,12 +642,14 @@ module Make(Ord: OrderedType) = struct
         in
         Some for_all2
 
+(*
     (* CR mshinwell: Provide a proper implementation based on [split] *)
     let strictly_greater_than t key =
       let _strictly_less, equal, strictly_greater = split t key in
       match equal with
       | None -> strictly_greater
       | Some datum -> add key datum strictly_greater
+*)
 
     let add_seq i m =
       Seq.fold_left (fun m (k,v) -> add k v m) m i
