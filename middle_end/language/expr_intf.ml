@@ -21,6 +21,8 @@
 module type S = sig
   type t
 
+  val print : Format.formatter -> t -> unit
+
   val code_id : t -> Code_id.t
   val free_names : t -> Name_occurrences.t
 (*

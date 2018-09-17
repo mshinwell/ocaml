@@ -24,6 +24,7 @@ module type S = sig
   val prev : t -> t
   val next : t -> t
 
+  val (<=): t -> t -> bool
   val (<): t -> t -> bool
   val (>): t -> t -> bool
   val (>=): t -> t -> bool
@@ -54,6 +55,7 @@ module T0 = struct
   let prev t =
     half_prev (half_prev t)
 
+  let (<=) (t1 : t) t2 = t1 <= t2
   let (<) (t1 : t) t2 = t1 < t2
   let (>) (t1 : t) t2 = t1 > t2
   let (>=) (t1 : t) t2 = t1 >= t2
@@ -79,6 +81,7 @@ module Sublevel = struct
     end;
     t - 1
 
+  let (<=) (t1 : t) t2 = t1 <= t2
   let (<) (t1 : t) t2 = t1 < t2
   let (>) (t1 : t) t2 = t1 > t2
   let (>=) (t1 : t) t2 = t1 >= t2

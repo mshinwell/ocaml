@@ -16,6 +16,9 @@
 
 (** Numbering of the nesting depth of continuations and bindings. *)
 
+(* CR mshinwell: To avoid confusion amongst variables called "level", maybe
+   this module should just be [Scope], not [Scope_level]? *)
+
 module type S = sig
   type t
 
@@ -26,6 +29,7 @@ module type S = sig
   val prev : t -> t
   val next : t -> t
 
+  val (<=): t -> t -> bool
   val (<): t -> t -> bool
   val (>): t -> t -> bool
   val (>=): t -> t -> bool
