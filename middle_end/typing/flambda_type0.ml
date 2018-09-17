@@ -314,7 +314,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       -> t
       -> unit
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val meet
        : Meet_env.t
@@ -504,7 +509,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         in
         let meet_t, env_extension = meet meet_env t1 t2 in
         let env = Typing_env.add_or_meet_env_extension env env_extension in
-        Type_equality.equal env env meet_t t1
+        Type_equality.equal ~bound_name:None env env meet_t t1
 
     let strictly_more_precise env t1 ~than:t2 =
       if Type_equality.fast_equal env env t1 t2 then false
@@ -520,8 +525,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         in
         let meet_t, env_extension = meet meet_env t1 t2 in
         let env = Typing_env.add_or_meet_env_extension env env_extension in
-        Type_equality.equal env env meet_t t1
-          && not (Type_equality.equal env env meet_t t2)
+        Type_equality.equal ~bound_name:None env env meet_t t1
+          && not (Type_equality.equal ~bound_name:None env env meet_t t2)
   end and Closure_elements : sig
     type t
 
@@ -531,7 +536,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
 
     val create_bottom : unit -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     (** Greatest lower bound of two values of type [t]. *)
     val meet
@@ -612,7 +622,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
 
     val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val meet
        : Meet_env.t
@@ -747,7 +762,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
        : Typing_env_extension.t Discriminant.Map.t
       -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val meet
        : Meet_env.t
@@ -2483,7 +2503,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
        : Typing_env_extension.t Immediate.Map.t
       -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     val meet
        : Meet_env.t
@@ -5205,7 +5230,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> bool
 
     val equal
-       : ?bound_name:Name.t
+       : bound_name:Name.t option
       -> Typing_env.t
       -> Typing_env.t
       -> Flambda_types.t
@@ -5335,7 +5360,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
               Type_equality_result.types_known_unequal ()
             | [], [] -> result
             | of_kind_foo1::join1, of_kind_foo2::join2 ->
-              let result = equal_of_kind_foo env result join1 join2 in
+              let result =
+                equal_of_kind_foo env result of_kind_foo1 of_kind_foo2
+              in
               loop join1 join2 result
         in
         loop join1 join2 result
@@ -5436,20 +5463,34 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         equal_blocks_and_tagged_immediates env result blocks1 blocks2
       | Boxed_number (Boxed_float ty_naked_number1),
           Boxed_number (Boxed_float ty_naked_number2) ->
-        equal_ty_naked_number env result ty_naked_number1 ty_naked_number2
+        equal_ty_naked_number env result
+          ~force_to_kind:Flambda_type0_core.force_to_kind_naked_float
+          ~print_ty:Type_printers.print_ty_naked_float
+          ty_naked_number1 ty_naked_number2
       | Boxed_number (Boxed_int32 ty_naked_number1),
           Boxed_number (Boxed_int32 ty_naked_number2) ->
-        equal_ty_naked_number env result ty_naked_number1 ty_naked_number2
+        equal_ty_naked_number env result
+          ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int32
+          ~print_ty:Type_printers.print_ty_naked_int32
+          ty_naked_number1 ty_naked_number2
       | Boxed_number (Boxed_int64 ty_naked_number1),
           Boxed_number (Boxed_int64 ty_naked_number2) ->
-        equal_ty_naked_number env result ty_naked_number1 ty_naked_number2
+        equal_ty_naked_number env result
+          ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
+          ~print_ty:Type_printers.print_ty_naked_int64
+          ty_naked_number1 ty_naked_number2
       | Boxed_number (Boxed_nativeint ty_naked_number1),
           Boxed_number (Boxed_nativeint ty_naked_number2) ->
-        equal_ty_naked_number env result ty_naked_number1 ty_naked_number2
+        equal_ty_naked_number env result
+          ~force_to_kind:Flambda_type0_core.force_to_kind_naked_nativeint
+          ~print_ty:Type_printers.print_ty_naked_nativeint
+          ty_naked_number1 ty_naked_number2
       | Closures { by_closure_id = by_closure_id1; },
           Closures { by_closure_id = by_closure_id2; } ->
-        Closures_entry_by_closure_id.equal env result
-          by_closure_id1 by_closure_id2
+        if not (Closures_entry_by_closure_id.equal env
+            by_closure_id1 by_closure_id2)
+        then Type_equality_result.types_known_unequal ()
+        else result
       | String string_set1, String string_set2 ->
         if String_info.Set.equal string_set1 string_set2 then result
         else Type_equality_result.types_known_unequal ()
@@ -5457,22 +5498,28 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           | Closures _ | String _), _ ->
         Type_equality_result.types_known_unequal ()
 
-    and equal_blocks_and_tagged_immediates env
+    and equal_blocks_and_tagged_immediates env result
           ({ immediates = immediates1; blocks = blocks1; }
             : Flambda_types.blocks_and_tagged_immediates)
           ({ immediates = immediates2; blocks = blocks2; }
             : Flambda_types.blocks_and_tagged_immediates) =
-      Immediates.equal env immediates1 immediates2
+      Immediates.equal env result immediates1 immediates2
       >>= fun result ->
-      Blocks.equal env blocks1 blocks2
+      Blocks.equal env result blocks1 blocks2
 
-    and equal_function_declaration _env
+    and equal_function_declaration _env result
           (decl1 : Flambda_types.function_declaration)
           (decl2 : Flambda_types.function_declaration) =
       match decl1, decl2 with
       | Inlinable decl1, Inlinable decl2 ->
         (* CR mshinwell: Add assertions like in the meet/join code? *)
-        if Code_id.equal decl1.code_id decl2.code_id then result
+        let code_id1 =
+          Term_language_function_declaration.code_id decl1.function_decl
+        in
+        let code_id2 =
+          Term_language_function_declaration.code_id decl2.function_decl
+        in
+        if Code_id.equal code_id1 code_id2 then result
         else Type_equality_result.types_known_unequal ()
       | Non_inlinable, Non_inlinable -> result
       | Inlinable _, Non_inlinable
@@ -5486,7 +5533,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> (a Flambda_types.of_kind_naked_number * Name_permutation.t)
       -> (b Flambda_types.of_kind_naked_number * Name_permutation.t)
       -> Type_equality_result.t =
-    fun _env (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
+    fun _env result (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
       match of_kind_naked_number1, of_kind_naked_number2 with
       | Immediate imms1, Immediate imms2 ->
         if Immediate.Set.equal imms1 imms2 then result
@@ -5542,7 +5589,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       >>= fun result ->
       Closure_elements.equal env result closure_elements1 closure_elements2
       >>= fun result ->
-      equal_ty_fabricated env result set_of_closures1 set_of_closures2
+      equal_ty_fabricated env result
+        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+        ~print_ty:Type_printers.print_ty_fabricated
+        set_of_closures1 set_of_closures2
 
     and equal_set_of_closures_entry env result
           ({ by_closure_id = by_closure_id1; }
@@ -5554,15 +5604,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let equal ~bound_name env_left env_right t1 t2 =
       let env = Type_equality_env.empty ~env_left ~env_right in
       let result = Type_equality_result.create () in
-      let rec loop result =
-        if not (Type_equality_result.types_known_equal result) then
-          false
-        else
-          match Type_equality_result.next_pair_of_types result with
-          | None -> true
-          | Some (result, t1, t2) -> loop (equal_with_env env result t1 t2)
-      in
-      loop (equal_with_env ?bound_name env result t1 t2)
+      equal_with_env ?bound_name env result t1 t2
   end and Type_equality_env : sig
     type t
 
@@ -5676,18 +5718,25 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
          typing_env_right;
        }
 
+    (* CR mshinwell: Misleading name?  Adds an equation too... *)
     let add_definition_typing_env_left t name ty =
-      let level = Typing_env.max_level t.typing_env_left in
       let kind = Flambda_type0_core.kind ty in
-      let typing_env_left = Typing_env.add t name level (Definition kind) in
-      let typing_env_left = Typing_env.add t name level (Equation ty) in
+      let typing_env_left =
+        Typing_env.add_definition t.typing_env_left name kind
+      in
+      let typing_env_left =
+        Typing_env.add_equation typing_env_left name ty
+      in
       { t with typing_env_left; }
 
     let add_definition_typing_env_right t name ty =
-      let level = Typing_env.max_level t.typing_env_right in
       let kind = Flambda_type0_core.kind ty in
-      let typing_env_right = Typing_env.add t name level (Definition kind) in
-      let typing_env_right = Typing_env.add t name level (Equation ty) in
+      let typing_env_right =
+        Typing_env.add_definition t.typing_env_right name kind
+      in
+      let typing_env_right =
+        Typing_env.add_equation typing_env_right name ty
+      in
       { t with typing_env_right; }
 
     let shortcut_precondition t =
@@ -5701,6 +5750,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Name_permutation.compose ~first:t.perm_left ~second:perm_left;
         perm_right =
           Name_permutation.compose ~first:t.perm_right ~second:perm_right;
+        existentials = t.existentials;
       }
   end and Type_equality_result : sig
     type t
