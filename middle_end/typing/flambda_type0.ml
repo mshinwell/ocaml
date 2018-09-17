@@ -5240,9 +5240,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     val equal_with_env
        : ?bound_name:Name.t
       -> Type_equality_env.t
+      -> Type_equality_result.t
       -> Flambda_types.t
       -> Flambda_types.t
-      -> bool
+      -> Type_equality_result.t
 
     val equal_closures_entry
        : Type_equality_env.t
@@ -7058,8 +7059,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     and add_or_meet_env_extension t env_extension : t =
       Typing_env_extension.pattern_match env_extension
-        ~f:(fun ~defined_names:_ level ->
-          add_or_meet_opened_env_extension t level)
+        ~f:(fun level -> add_or_meet_opened_env_extension t level)
 
     let current_level t = fst (t.current_level)
     let current_level_data t = snd (t.current_level)
@@ -7383,9 +7383,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val pattern_match
        : t
-      -> f:(defined_names:Flambda_kind.t Name.Map.t
-        -> Typing_env_level.t
-        -> 'a)
+      -> f:(Typing_env_level.t -> 'a)
       -> 'a
   end = struct
     module A = Name_abstraction.Make_list (Typing_env_level)
@@ -7414,21 +7412,29 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let fast_equal t1 t2 = (t1 == t2)
 
-    let equal env result t1 t2 =
+    let equal env result { abst = abst1; } { abst = abst2; } =
       A.pattern_match_pair abst1 abst2 ~f:(fun existentials level1 level2 ->
+        let existentials =
+          List.fold_left (fun result (bindable_name : Bindable_name.t) ->
+              match bindable_name with
+              | Name name -> Name.Set.add name result
+              | Continuation _ ->
+                Misc.fatal_error "[Continuation] not allowed here")
+            Name.Set.empty
+            existentials
+        in
         let (>>=) = Type_equality_result.(>>=) in
         let env =
-          Type_equality_env.entering_scope_of_existentials existentials
+          Type_equality_env.entering_scope_of_existentials env existentials
         in
-        let env, result =
-          Typing_env_level.equal env result level1 level2
-        in
-        result
+        Typing_env_level.equal env result level1 level2
         >>= fun result ->
         let check_now, result =
           Type_equality_result.leaving_scope_of_existential result
-            existentials
+            ~bound_names:existentials
         in
+        result
+        >>= fun result ->
         Name.Map.fold (fun _name uses result ->
             result
             >>= fun result ->
@@ -7437,9 +7443,6 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
             else result)
           check_now
           result)
-        >>= fun _result ->
-        assert (not (Type_equality_result.are_types_known_unequal result));
-        true
 
     let invariant { abst; } =
       A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
@@ -7486,8 +7489,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let abst =
           A.pattern_match t1.abst ~f:(fun _ level_1 ->
             A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              A.create (Typing_env_level.defined_names level)
-                (Typing_env_level.meet env level_1 level_2)))
+              let level = Typing_env_level.meet env level_1 level_2 in
+              A.create (Typing_env_level.defined_names_in_order level) level))
         in
         { abst; }
 
@@ -7505,27 +7508,28 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let abst =
           A.pattern_match t1.abst ~f:(fun _ level_1 ->
             A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              A.create (Typing_env_level.defined_names level)
-                (Typing_env_level.join env level_1 level_2)))
+              let level = Typing_env_level.join env level_1 level_2 in
+              A.create (Typing_env_level.defined_names_in_order level) level))
         in
         { abst; }
 
-    let add_definition { abst; } name =
+    let add_definition { abst; } name kind =
       A.pattern_match abst ~f:(fun defined_names level ->
-        let level = Typing_env_level.add_definition level name in
+        let level = Typing_env_level.add_definition level name kind in
+        let name = Bindable_name.Name name in
         { abst = A.create (name :: defined_names) level; })
 
-    let add_equation ?env ({ abst; } as t) name ty =
+    let meet_equation ?env ({ abst; } as t) name ty =
       let abst =
         A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.add_equation level name ty)
+          Typing_env_level.meet_equation level name ty)
       in
       { abst; }
 
-    let add_cse { abst; } name prim =
+    let add_cse { abst; } simple prim =
       let abst =
         A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.add_cse level name prim)
+          Typing_env_level.add_cse level simple prim)
       in
       { abst; }
 
@@ -7538,10 +7542,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let pattern_match { abst; } ~f =
-      A.pattern_match abst ~f:(fun _ level ->
-        f ~defined_names:level.defined_names
-          ~equations:level.equations
-          ~cse:level.cse)
+      A.pattern_match abst ~f:(fun _ level -> f level)
   end and Typing_env_level : sig
     include Contains_names.S
 
@@ -7587,6 +7588,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     val defined_names_set : t -> Bindable_name.Set.t
 
     val defined_names : t -> Flambda_kind.t Name.Map.t
+
+    val defined_names_in_order : t -> Bindable_name.t list
 
     val equations_domain : t -> Name.Set.t
 
@@ -7646,6 +7649,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         && Name.Map.is_empty equations
         && Flambda_primitive.With_fixed_value.Map.is_empty cse
 
+    let equations_domain t = Name.Map.keys t.equations
+
+    let equations_on_outer_env_domain t =
+      Name.Set.diff (equations_domain t) (Name.Map.keys t.defined_names)
+
     let equal env result t1 t2 =
       let (>>=) = Type_equality_result.(>>=) in
       let env_left =
@@ -7663,21 +7671,21 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           ~left:env_left ~right:env_right
       in
       let names_to_check =
-        Name.Set.union (Typing_env_level.equations_on_outer_env level1)
-          (Typing_env_level.equations_on_outer_env level2)
+        Name.Set.union (equations_on_outer_env_domain t1)
+          (equations_on_outer_env_domain t2)
       in
+      result
+      >>= fun result ->
       Name.Set.fold (fun name result ->
           result
           >>= fun result ->
-          let ty1 = Typing_env.find env name env_left in
-          let ty2 = Typing_env.find env name env_right in
-          Type_equality.equal_with_env env result ty1 ty2)
+          let ty1, _ = Typing_env.find_exn env_left name in
+          let ty2, _ = Typing_env.find_exn env_right name in
+          Type_equality.equal_with_env ~bound_name:name env result ty1 ty2)
         names_to_check
         result
       >>= fun result ->
-      let cse1 = Typing_env_level.cse level1 in
-      let cse2 = Typing_env_level.cse level2 in
-      if Flambda_primitive.With_fixed_value.Map.equal Simple.equal cse1 cse2
+      if Flambda_primitive.With_fixed_value.Map.equal Simple.equal t1.cse t2.cse
       then result
       else Type_equality_result.types_known_unequal ()
 
@@ -7803,6 +7811,14 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         end
       | ty -> Some ty
 
+    let find_exn t name =
+      match find_opt t name with
+      | Some ty -> ty
+      | None ->
+        Misc.fatal_errorf "Unbound name %a in@ %a"
+          Name.print name
+          print t
+
 (*
     let _tidy t =
       let free_names_without_defined_names' =
@@ -7890,7 +7906,10 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       { t with cse; }
 
-    let update_cse_for_meet_or_join t _t1 _t2 _meet_or_join _names =
+    type cse_meet_or_join = Meet | Join
+
+    let update_cse_for_meet_or_join t _t1 _t2 (_meet_or_join : cse_meet_or_join)
+          _names =
       t
 
 (* XXX Uncomment once the rest is working again
@@ -7938,11 +7957,6 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       t
 *)
 
-    let equations_domain t = Name.Map.keys t1.equations
-
-    let equations_on_outer_env_domain t =
-      Name.Set.remove (equations_domain t) t.defined_names
-
     let rec meet env (t1 : t) (t2 : t) : t =
       let defined_names =
         Name.Map.disjoint_union t1.defined_names t2.defined_names
@@ -7968,14 +7982,15 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
               let meet_ty, meet_equations =
                 Both_meet_and_join.meet env ty1 ty2
               in
-              A.pattern_match meet_equations.abst ~f:(fun _ t' ->
-                let t = meet meet_env t t' in
-                assert (not (Name.Map.mem name t.equations));
-                add_or_replace_equation t name meet_ty))
+              Typing_env_extension.pattern_match meet_equations
+                ~f:(fun t' ->
+                  let t = meet env t t' in
+                  assert (not (Name.Map.mem name t.equations));
+                  add_or_replace_equation t name meet_ty))
           names_in_meet
           t
       in
-      update_cse_for_meet_or_join t0 t1 t2 Meet names_in_meet
+      update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
 
     let rec join env (t1 : t) (t2 : t) : t =
       let names_with_equations_in_join =
@@ -7985,8 +8000,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       let t =
         Name.Set.fold (fun name t ->
             assert (not (Name.Map.mem name t.equations));
-            let ty1 = Typing_env_level.find level_1 name in
-            let ty2 = Typing_env_level.find level_2 name in
+            let ty1 = find_exn t1 name in
+            let ty2 = find_exn t2 name in
             let join_ty =
               Both_meet_and_join.join ~bound_name:name env ty1 ty2
             in
@@ -8018,11 +8033,16 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       meet env t t'
 
-    let defined_names t =
+    let defined_names t = t.defined_names
+
+    let defined_names_set t =
       Name.Set.fold (fun name defined_names ->
           Bindable_name.Set.add (Name name) defined_names)
         (Name.Map.keys t.defined_names)
         Bindable_name.Set.empty
+
+    let defined_names_in_order t =
+      Bindable_name.Set.elements (defined_names_set t)
 
 (*
     type fold_info =

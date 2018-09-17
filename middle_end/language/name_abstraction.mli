@@ -47,6 +47,9 @@ module Make (Term : Term) : sig
   include Contains_names.S
   include Common with type t := t
 
+  (* CR mshinwell: Always using [Bindable_name] isn't ideal---it means that
+     continuations are admitted statically when only variables are allowed,
+     for example.  We should reintroduce a signature. *)
   val create : Bindable_name.t -> Term.t -> t
 
   (** Concretion of an abstraction at a fresh name. *)
