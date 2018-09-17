@@ -5816,7 +5816,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let (>>=) result f =
       match result with
       | Unequal -> Unequal
-      | Ok result -> f result
+      | Ok _ -> f result
 
     let delay_existential t name ~must_equal_one_of =
       match t with
@@ -5833,7 +5833,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let leaving_scope_of_existential t names =
       match t with
-      | Unequal -> Unequal
+      | Unequal -> Name.Map.empty, t
       | Ok { delayed_existentials; } ->
         let check_now, delayed_existentials =
           Name.Map.partition (fun name must_equal_one_of ->
