@@ -7893,14 +7893,19 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       invariant t;
       t
 
-    let find_opt t name =
+    let find_equation_opt t name =
       match Name.Map.find name t.equations with
-      | exception Not_found ->
+      | exception Not_found -> None
+      | ty -> Some ty
+
+    let find_opt t name =
+      match find_equation_opt t name with
+      | None ->
         begin match Name.Map.find name t.defined_names with
         | exception Not_found -> None
         | kind -> Some (Flambda_type0_core.unknown kind)
         end
-      | ty -> Some ty
+      | some_ty -> some_ty
 
     let find_exn t name =
       match find_opt t name with
@@ -8049,6 +8054,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let rec meet env (t1 : t) (t2 : t) : t =
+Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
+  Meet_env.print env;
       let defined_names =
         Name.Map.disjoint_union t1.defined_names t2.defined_names
       in
@@ -8057,14 +8064,21 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           defined_names;
         }
       in
+      let env =
+        Name.Map.fold (fun name kind env ->
+            Meet_env.with_env env (fun typing_env ->
+              Typing_env.add_definition typing_env name kind))
+          defined_names
+          env
+      in
       let names_in_meet =
         Name.Set.union (equations_domain t1) (equations_domain t2)
       in
       let t =
         Name.Set.fold (fun name t ->
             assert (not (Name.Map.mem name t.equations));
-            let ty1 = find_opt t1 name in
-            let ty2 = find_opt t2 name in
+            let ty1 = find_equation_opt t1 name in
+            let ty2 = find_equation_opt t2 name in
             match ty1, ty2 with
             | None, None -> assert false
             | Some ty1, None -> add_or_replace_equation t name ty1
