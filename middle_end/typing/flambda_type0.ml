@@ -5946,6 +5946,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> Flambda_types.ty_value
       -> unit
 
+    val print_ty_naked_number
+       : Format.formatter
+      -> _ Flambda_types.ty_naked_number
+      -> unit
+
     val print_ty_naked_immediate
        : Format.formatter
       -> Immediate.Set.t Flambda_types.ty_naked_number
@@ -6585,7 +6590,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Still_unresolved
 
     let resolve_aliases_on_ty0 (type a) t ?bound_name ~force_to_kind
-          (ty : a Flambda_types.ty)
+          ~print_ty (ty : a Flambda_types.ty)
           : (a Flambda_types.ty) * (Simple.t option) * Name_or_export_id.Set.t
               * still_unresolved =
       let rec resolve_aliases names_seen ~canonical_simple
@@ -6603,8 +6608,16 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           in
           match name with
           | Name name ->
-            let ty, _binding_type = find_exn t name in
-            continue_resolving ty ~canonical_simple:(Some (Simple.name name))
+            begin match find_exn t name with
+            | exception Not_found ->
+              Misc.fatal_errorf "Unbound name %a whilst resolving aliases \
+                  for type:@ %a@ in environment:@ %a"
+                Name.print name
+                print_ty ty
+                print t
+            | ty, _ ->
+              continue_resolving ty ~canonical_simple:(Some (Simple.name name))
+            end
           | Export_id export_id ->
             match t.resolver export_id with
             | Some ty -> continue_resolving ty ~canonical_simple
@@ -6629,9 +6642,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       in
       resolve_aliases seen ~canonical_simple ty
 
-    let resolve_aliases_on_ty t ?bound_name ~force_to_kind ty =
+    let resolve_aliases_on_ty t ?bound_name ~force_to_kind ~print_ty ty =
       let ty, canonical_name, names_seen, _still_unresolved =
-        resolve_aliases_on_ty0 t ?bound_name ~force_to_kind ty
+        resolve_aliases_on_ty0 t ?bound_name ~force_to_kind ~print_ty ty
       in
       ty, canonical_name, names_seen
 
@@ -6639,7 +6652,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           ~print_ty ~force_to_kind ty
           : _ Flambda_types.unknown_or_join * (Simple.t option) =
       let ty, canonical_name, _names_seen, _still_unresolved =
-        try resolve_aliases_on_ty0 env ?bound_name ~force_to_kind ty
+        try resolve_aliases_on_ty0 env ?bound_name ~force_to_kind ~print_ty ty
         with Misc.Fatal_error -> begin
           Format.eprintf "\n%sContext is: \
               resolve_aliases_and_squash_unresolved_names_on_ty':%s\
@@ -6661,7 +6674,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       | Value ty_value ->
         let force_to_kind = Flambda_type0_core.force_to_kind_value in
         let ty_value, canonical_name, _names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_value
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind
+            ~print_ty:Type_printers.print_ty_value
+            ty_value
         in
         Value ty_value, canonical_name
       | Naked_number (ty_naked_number, kind) ->
@@ -6669,13 +6684,17 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Flambda_type0_core.force_to_kind_naked_number kind
         in
         let ty_naked_number, canonical_name, _names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_naked_number
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind
+            ~print_ty:Type_printers.print_ty_naked_number
+            ty_naked_number
         in
         Naked_number (ty_naked_number, kind), canonical_name
       | Fabricated ty_fabricated ->
         let force_to_kind = Flambda_type0_core.force_to_kind_fabricated in
         let ty_fabricated, canonical_name, _names_seen =
-          resolve_aliases_on_ty t ?bound_name ~force_to_kind ty_fabricated
+          resolve_aliases_on_ty t ?bound_name ~force_to_kind
+            ~print_ty:Type_printers.print_ty_fabricated
+            ty_fabricated
         in
         Fabricated ty_fabricated, canonical_name
 
@@ -7666,7 +7685,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     }
 
     let print_with_cache ~cache ppf
-          ({ defined_names = _; equations; cse; } : t) =
+          ({ defined_names; equations; cse; } : t) =
       let print_equations ppf equations =
         let equations = Name.Map.bindings equations in
         match equations with
@@ -7686,8 +7705,15 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       Format.fprintf ppf
         "@[<v 1>(\
+            @[<hov 1>(defined_names@ @[<v 1>%a@])@]@;\
             @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
             @[<hov 1>(cse@ %a)@])@]"
+        (* CR mshinwell: Fix this.  The problem is that Logical_variable prints
+           the types *)
+        Name.Set.print (Name.Map.keys defined_names)
+(*
+        (Name.Map.print Flambda_kind.print) defined_names
+*)
         print_equations equations
         (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
