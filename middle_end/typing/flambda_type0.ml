@@ -410,7 +410,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       -> Flambda_types.t * Typing_env_extension.t
 
     val join
-       : Join_env.t
+       : ?bound_name:Name.t
+      -> Join_env.t
       -> Flambda_types.t
       -> Flambda_types.t
       -> Flambda_types.t
@@ -458,8 +459,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
     let meet env t1 t2 =
       Meet.meet_or_join (Join_env.create env) t1 t2
 
-    let join env t1 t2 =
-      let join_ty, _env_extension = Join.meet_or_join env t1 t2 in
+    let join ?bound_name env t1 t2 =
+      let join_ty, _env_extension = Join.meet_or_join ?bound_name env t1 t2 in
       join_ty
 
     module Meet_value = Meet_and_join_value.Make (Either_meet_or_join.For_meet)
@@ -699,7 +700,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
        : Flambda_types.closures_entry Var_within_closure_set.Map.t
       -> t
 
-    val equal : Type_equality_env.t -> t -> t -> bool
+    val equal
+       : Type_equality_env.t
+      -> Type_equality_result.t
+      -> t
+      -> t
+      -> Type_equality_result.t
 
     (** Greatest lower bound of two values of type [t]. *)
     val meet
@@ -2726,7 +2732,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         with module Typing_env_extension := Typing_env_extension) :
     sig
       val meet_or_join_ty
-         : Join_env.t
+         : ?bound_name:Name.t
+        -> Join_env.t
         -> S.of_kind_foo Flambda_types.ty
         -> S.of_kind_foo Flambda_types.ty
         -> S.of_kind_foo Flambda_types.ty * Typing_env_extension.t
@@ -3098,7 +3105,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         with module Typing_env_extension := Typing_env_extension) :
     sig
       val meet_or_join
-         : Join_env.t
+         : ?bound_name:Name.t
+        -> Join_env.t
         -> Flambda_types.t
         -> Flambda_types.t
         -> Flambda_types.t * Typing_env_extension.t
@@ -3110,7 +3118,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         with module Meet_env := Meet_env
         with module Typing_env_extension := Typing_env_extension) =
     struct
-      let meet_or_join env (t1 : Flambda_types.t) (t2 : Flambda_types.t)
+      let meet_or_join ?bound_name env
+            (t1 : Flambda_types.t) (t2 : Flambda_types.t)
             : Flambda_types.t * Typing_env_extension.t =
         let module Meet_and_join_of_kind_value =
           Meet_and_join_value.Make (E)
@@ -3164,7 +3173,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             match t1, t2 with
             | Value ty_value1, Value ty_value2 ->
               let ty_value, env_extension =
-                Meet_and_join_value.meet_or_join_ty env ty_value1 ty_value2
+                Meet_and_join_value.meet_or_join_ty ?bound_name env
+                  ty_value1 ty_value2
               in
               if ty_value == ty_value1 then t1, env_extension
               else if ty_value == ty_value2 then t2, env_extension
@@ -3175,7 +3185,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               begin match kind1, kind2 with
               | N.Naked_immediate, N.Naked_immediate ->
                 let ty_naked_number, env_extension =
-                  Meet_and_join_naked_immediate.meet_or_join_ty env
+                  Meet_and_join_naked_immediate.meet_or_join_ty ?bound_name env
                     ty_naked_number1 ty_naked_number2
                 in
                 if ty_naked_number == ty_naked_number1 then t1, env_extension
@@ -3187,7 +3197,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                     env_extension
               | N.Naked_float, N.Naked_float ->
                 let ty_naked_number, env_extension =
-                  Meet_and_join_naked_float.meet_or_join_ty env
+                  Meet_and_join_naked_float.meet_or_join_ty ?bound_name env
                     ty_naked_number1 ty_naked_number2
                 in
                 if ty_naked_number == ty_naked_number1 then t1, env_extension
@@ -3198,7 +3208,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                     env_extension
               | N.Naked_int32, N.Naked_int32 ->
                 let ty_naked_number, env_extension =
-                  Meet_and_join_naked_int32.meet_or_join_ty env
+                  Meet_and_join_naked_int32.meet_or_join_ty ?bound_name env
                     ty_naked_number1 ty_naked_number2
                 in
                 if ty_naked_number == ty_naked_number1 then t1, env_extension
@@ -3209,7 +3219,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                     env_extension
               | N.Naked_int64, N.Naked_int64 ->
                 let ty_naked_number, env_extension =
-                  Meet_and_join_naked_int64.meet_or_join_ty env
+                  Meet_and_join_naked_int64.meet_or_join_ty ?bound_name env
                     ty_naked_number1 ty_naked_number2
                 in
                 if ty_naked_number == ty_naked_number1 then t1, env_extension
@@ -3220,7 +3230,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
                     env_extension
               | N.Naked_nativeint, N.Naked_nativeint ->
                 let ty_naked_number, env_extension =
-                  Meet_and_join_naked_nativeint.meet_or_join_ty env
+                  Meet_and_join_naked_nativeint.meet_or_join_ty ?bound_name env
                     ty_naked_number1 ty_naked_number2
                 in
                 if ty_naked_number == ty_naked_number1 then t1, env_extension
@@ -3238,7 +3248,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
               end
             | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
               let ty_fabricated, env_extension =
-                Meet_and_join_fabricated.meet_or_join_ty env
+                Meet_and_join_fabricated.meet_or_join_ty ?bound_name env
                   ty_fabricated1 ty_fabricated2
               in
               if ty_fabricated == ty_fabricated1 then
@@ -5247,15 +5257,17 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val equal_closures_entry
        : Type_equality_env.t
+      -> Type_equality_result.t
       -> Flambda_types.closures_entry
       -> Flambda_types.closures_entry
-      -> bool
+      -> Type_equality_result.t
 
     val equal_set_of_closures_entry
        : Type_equality_env.t
+      -> Type_equality_result.t
       -> Flambda_types.set_of_closures_entry
       -> Flambda_types.set_of_closures_entry
-      -> bool
+      -> Type_equality_result.t
   end = struct
     module Float = Numbers.Float_by_bit_pattern
     module Int32 = Numbers.Int32
@@ -5488,10 +5500,8 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           ty_naked_number1 ty_naked_number2
       | Closures { by_closure_id = by_closure_id1; },
           Closures { by_closure_id = by_closure_id2; } ->
-        if not (Closures_entry_by_closure_id.equal env
-            by_closure_id1 by_closure_id2)
-        then Type_equality_result.types_known_unequal ()
-        else result
+        Closures_entry_by_closure_id.equal env result
+          by_closure_id1 by_closure_id2
       | String string_set1, String string_set2 ->
         if String_info.Set.equal string_set1 string_set2 then result
         else Type_equality_result.types_known_unequal ()
@@ -7992,7 +8002,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
 
-    let rec join env (t1 : t) (t2 : t) : t =
+    let join env (t1 : t) (t2 : t) : t =
       let names_with_equations_in_join =
         Name.Set.inter (equations_on_outer_env_domain t1)
           (equations_on_outer_env_domain t2)
@@ -8006,10 +8016,10 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
               Both_meet_and_join.join ~bound_name:name env ty1 ty2
             in
             add_or_replace_equation t name join_ty)
-          names_in_join
-          t
+          names_with_equations_in_join
+          (empty ())
       in
-      update_cse_for_meet_or_join t0 t1 t2 Join names_in_join
+      update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
 
     let meet_equation ?env t name ty =
       let t' =
@@ -8026,7 +8036,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
               Export_id.print name_or_export_id)
         | Some env -> env
       in
-      let meet_env =
+      let env =
         Meet_env.create env
           ~perm_left:(Name_permutation.create ())
           ~perm_right:(Name_permutation.create ())
