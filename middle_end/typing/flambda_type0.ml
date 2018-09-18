@@ -370,7 +370,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         List.fold_left (fun (env_extension, index) field_ty ->
             let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
             let env_extension =
-              Typing_env_extension.add_equation env_extension
+              Typing_env_extension.meet_equation env_extension
                 (Name.logical_var logical_var) field_ty
             in
             let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
@@ -590,7 +590,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
               Var_within_closure.Map.find var
                 closure_elements_to_logical_variables
             in
-            Typing_env_extension.add_equation env_extension
+            Typing_env_extension.meet_equation env_extension
               (Name.logical_var logical_var) ty)
           closure_elements_to_tys
           (Typing_env_extension.empty ())
@@ -2408,7 +2408,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
           List.fold_left (fun (env_extension, index) ty ->
               let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
               let env_extension =
-                Typing_env_extension.add_equation env_extension
+                Typing_env_extension.meet_equation env_extension
                   (Name.logical_var logical_var) ty
               in
               let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
@@ -2693,7 +2693,9 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
     val create : Flambda_kind.t -> t
     val kind : t -> Flambda_kind.t
     val rename : t -> t
+(*
     val in_compilation_unit : t -> Compilation_unit.t -> bool
+*)
     val equal : Type_equality_env.t -> t -> t -> bool
     val name : t -> Name.t
 
@@ -2870,7 +2872,7 @@ end
           let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
             match simple with
             | Name name ->
-              Typing_env_extension.add_equation env_extension name ty
+              Typing_env_extension.meet_equation env_extension name ty
             | Const _ | Discriminant _ -> env_extension
           in
 Format.eprintf "CS1 %a, CS2 %a\n%!"
@@ -3915,7 +3917,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
       let env_extension =
         List.fold_left2 (fun env_extension lv ty ->
             let name = Name.logical_var lv in
-            Typing_env_extension.add_equation env_extension name ty)
+            Typing_env_extension.meet_equation env_extension name ty)
           (Typing_env_extension.empty ())
           lvs tys
       in
@@ -4176,7 +4178,6 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           in
           let env =
             Index.Map.fold (fun _index component env ->
-                let name = Component.name component in
                 Type_equality_env.add_definition_typing_env_right env
                   (Component.name component)
                   (Component.kind component))
@@ -4285,7 +4286,7 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
                     Flambda_type0_core.alias_type_of kind
                       (Simple.name name)
                   in
-                  Typing_env_extension.add_equation env_extension
+                  Typing_env_extension.meet_equation env_extension
                     result_name name_ty)
               t.components_by_index
               t.env_extension
@@ -5612,23 +5613,32 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             : Flambda_types.set_of_closures_entry) =
       Types_by_closure_id.equal env result by_closure_id1 by_closure_id2
 
-    let equal ~bound_name env_left env_right t1 t2 =
-      let env = Type_equality_env.empty ~env_left ~env_right in
+    let equal ~(bound_name : Name.t option)
+          typing_env_left typing_env_right t1 t2 =
+      let env = Type_equality_env.empty ~typing_env_left ~typing_env_right in
       let result = Type_equality_result.create () in
-      equal_with_env ?bound_name env result t1 t2
+      let result = equal_with_env ?bound_name env result t1 t2 in
+      Type_equality_result.are_types_known_equal result
   end and Type_equality_env : sig
     type t
 
+(*
     val create
        : typing_env_left:Typing_env.t
       -> typing_env_right:Typing_env.t
       -> perm_left:Name_permutation.t
       -> perm_right:Name_permutation.t
       -> t
+*)
 
-    val empty : env_left:Typing_env.t -> env_right:Typing_env.t -> t
+    val empty
+       : typing_env_left:Typing_env.t
+      -> typing_env_right:Typing_env.t
+      -> t
 
+(*
     val print : Format.formatter -> t -> unit
+*)
 
     val typing_env_left : t -> Typing_env.t
 
@@ -5660,7 +5670,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val perm_right : t -> Name_permutation.t
 
+(*
     val shortcut_precondition : t -> bool
+*)
 
     val compose_name_permutations
        : t
@@ -5729,28 +5741,19 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
          typing_env_right;
        }
 
-    (* CR mshinwell: Misleading name?  Adds an equation too... *)
-    let add_definition_typing_env_left t name ty =
-      let kind = Flambda_type0_core.kind ty in
+    let add_definition_typing_env_left t name kind =
       let typing_env_left =
         Typing_env.add_definition t.typing_env_left name kind
       in
-      let typing_env_left =
-        Typing_env.add_equation typing_env_left name ty
-      in
       { t with typing_env_left; }
 
-    let add_definition_typing_env_right t name ty =
-      let kind = Flambda_type0_core.kind ty in
+    let add_definition_typing_env_right t name kind =
       let typing_env_right =
         Typing_env.add_definition t.typing_env_right name kind
       in
-      let typing_env_right =
-        Typing_env.add_equation typing_env_right name ty
-      in
       { t with typing_env_right; }
 
-    let shortcut_precondition t =
+    let _shortcut_precondition t =
       t.typing_env_left == t.typing_env_right
         && t.perm_left == t.perm_right
 
@@ -5842,12 +5845,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         in
         Ok { delayed_existentials; }
 
-    let leaving_scope_of_existential t names =
+    let leaving_scope_of_existential t ~bound_names:names =
       match t with
       | Unequal -> Name.Map.empty, t
       | Ok { delayed_existentials; } ->
         let check_now, delayed_existentials =
-          Name.Map.partition (fun name must_equal_one_of ->
+          Name.Map.partition (fun name _must_equal_one_of ->
               Name.Set.mem name names)
             delayed_existentials
         in
@@ -6082,7 +6085,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           (ty : n Flambda_types.ty_naked_number) =
       print_ty_generic print_of_kind_naked_number ppf ty
 
-    let print_ty_naked_immediate_with_cache ~cache:_ ppf ty =
+    let _print_ty_naked_immediate_with_cache ~cache:_ ppf ty =
       print_ty_generic (print_of_kind_naked_number) ppf ty
 
     let print_ty_naked_int32_with_cache ~cache:_ ppf ty =
@@ -6096,6 +6099,29 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let print_ty_naked_float_with_cache ~cache:_ ppf ty =
       print_ty_generic (print_of_kind_naked_number) ppf ty
+
+    let print_ty_naked_immediate_with_cache ~cache:_ ppf ty =
+      print_ty_generic (print_of_kind_naked_number) ppf ty
+
+    let print_ty_naked_int32 ppf ty =
+      print_ty_naked_int32_with_cache ~cache:(Printing_cache.create ())
+        ppf ty
+
+    let print_ty_naked_int64 ppf ty =
+      print_ty_naked_int64_with_cache ~cache:(Printing_cache.create ())
+        ppf ty
+
+    let print_ty_naked_nativeint ppf ty =
+      print_ty_naked_nativeint_with_cache ~cache:(Printing_cache.create ())
+        ppf ty
+
+    let print_ty_naked_float ppf ty =
+      print_ty_naked_float_with_cache ~cache:(Printing_cache.create ())
+        ppf ty
+
+    let print_ty_naked_immediate ppf ty =
+      print_ty_naked_immediate_with_cache ~cache:(Printing_cache.create ())
+        ppf ty
 
     let print_of_kind_value_boxed_number (type n)
           ppf (n : n Flambda_types.of_kind_value_boxed_number) =
@@ -6189,6 +6215,12 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     and print ppf t =
       let cache : Printing_cache.t = Printing_cache.create () in
       print_with_cache ~cache ppf t
+
+    let print_ty_value ppf ty =
+      print_ty_value_with_cache ~cache:(Printing_cache.create ()) ppf ty
+
+    let print_ty_fabricated ppf ty =
+      print_ty_fabricated_with_cache ~cache:(Printing_cache.create ()) ppf ty
   end and Types_by_closure_id : sig
     type t
 
@@ -6253,7 +6285,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             let logical_var =
               Closure_id.Map.find closure_id closure_ids_to_logical_variables
             in
-            Typing_env_extension.add_equation env_extension
+            Typing_env_extension.meet_equation env_extension
               (Name.logical_var logical_var) ty)
           closure_ids_to_tys
           (Typing_env_extension.empty ())
@@ -6329,10 +6361,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> existential_if_defined_at_or_later_than:Scope_level.t
       -> Typing_env_extension.t
 
+    val was_existential_exn : t -> Name.t -> bool
+
 (*
     val scope_level_exn : t -> Name.t -> Scope_level.With_sublevel.t
 
-    val was_existential_exn : t -> Name.t -> bool
 
     val fold
        : t
@@ -6392,7 +6425,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
                Typing_env_level.is_empty one_level.level)
              t.prev_levels
 
-    let print_cached ~cache ppf
+    let _print_cached ~cache ppf
           { names_to_types; cse; were_existentials; aliases; } =
       Format.fprintf ppf
         "@[<hov 1>(\
@@ -6405,7 +6438,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
         Name.Set.print were_existentials
         (Simple.Map.print Name.Set.print) aliases
 
-    let print_one_level ~cache ppf { level; just_after_level = _; } =
+    let print_one_level ~cache:_ ppf { level; just_after_level = _; } =
       Typing_env_level.print ppf level
 
     let print_with_cache ~cache ppf
@@ -7372,7 +7405,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val add_equation : ?env:Typing_env.t -> t -> Name.t -> Flambda_types.t -> t
+    val meet_equation : ?env:Typing_env.t -> t -> Name.t -> Flambda_types.t -> t
 
     val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
@@ -7380,6 +7413,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val join : Join_env.t -> t -> t -> t
 
+(*
     val restrict_to_definitions : t -> t
 
     val restrict_names_to_those_occurring_in_types
@@ -7390,6 +7424,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       -> t
 
     val diff : t -> Typing_env.t -> t
+*)
 
     val pattern_match
        : t
@@ -7463,6 +7498,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     let is_empty { abst; } =
       A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
 
+    let create level =
+      let abst =
+        A.create (Typing_env_level.defined_names_in_order level) level
+      in
+      { abst; }
+
 (*
     let restrict_to_definitions { abst; } =
       let abst =
@@ -7529,7 +7570,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let name = Bindable_name.Name name in
         { abst = A.create (name :: defined_names) level; })
 
-    let meet_equation ?env ({ abst; } as t) name ty =
+    (* XXX Check this [env] parameter *)
+    let meet_equation ?env { abst; } name ty =
+      ignore env;
       let abst =
         A.pattern_match_map abst ~f:(fun level ->
           Typing_env_level.meet_equation level name ty)
@@ -7585,7 +7628,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val meet_equation : t -> Name.t -> Flambda_types.t -> t
+    val meet_equation
+       : ?env:Typing_env.t
+      -> t
+      -> Name.t
+      -> Flambda_types.t
+      -> t
 
     val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
@@ -7659,10 +7707,14 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         && Name.Map.is_empty equations
         && Flambda_primitive.With_fixed_value.Map.is_empty cse
 
+    let equations t = t.equations
+
     let equations_domain t = Name.Map.keys t.equations
 
     let equations_on_outer_env_domain t =
       Name.Set.diff (equations_domain t) (Name.Map.keys t.defined_names)
+
+    let cse t = t.cse
 
     let equal env result t1 t2 =
       let (>>=) = Type_equality_result.(>>=) in
@@ -7759,8 +7811,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           { defined_names = _; equations; cse; } =
       let free_names_equations =
         Name.Map.fold (fun name ty free_names ->
-            Name_occurrences.add (Type_free_names.free_names ty)
-              (Bindable_name.Name name) In_types)
+            let free_names' = 
+              Name_occurrences.add (Type_free_names.free_names ty)
+                (Bindable_name.Name name) In_types
+            in
+            Name_occurrences.union free_names free_names')
           equations
           (Name_occurrences.create ())
       in
@@ -7779,11 +7834,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       Name_occurrences.union (free_names_in_defined_names t)
         (free_names_in_equations_and_cse t)
 
-    let free_names_minus_defined_names t =
+    let _free_names_minus_defined_names t =
       Name_occurrences.union (free_names_in_equations_and_cse t)
         (free_names_in_defined_names t)
 
-    let restrict_to_names { defined_names; equations; cse; } allowed_names =
+    let _restrict_to_names { defined_names; equations; cse; } allowed_names =
       let allowed_names =
         Name_occurrences.everything_must_only_be_names allowed_names
       in
@@ -8169,8 +8224,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
   let meet = Both_meet_and_join.meet
   let join = Both_meet_and_join.join
 
+(*
   let _meet_skeleton env t ~skeleton ~result ~result_kind =
-    let level = Typing_env.max_level env in
     let env =
       Typing_env.add env result level (Definition (bottom result_kind))
     in
@@ -8181,6 +8236,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     in
     let _meet_ty, env_extension = meet env t skeleton in
     env_extension
+*)
 
   (* Or maybe: the caller should provide the variable and this should just
      return the env_extension

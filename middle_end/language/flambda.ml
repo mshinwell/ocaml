@@ -1580,7 +1580,7 @@ end and Let : sig
   val no_effects_or_coeffects : t -> bool
 end = struct
   module Bound_var_and_body =
-    Name_abstraction.Make (Bound_variable) (Expr_with_permutation)
+    Name_abstraction.Make (Expr_with_permutation)
 
   type t = {
     bound_var_and_body : Bound_var_and_body.t;
@@ -1588,10 +1588,12 @@ end = struct
     defining_expr : Named.t;
   }
 
-  let pattern_match t ~f =
+  let pattern_match _t ~f:_ = assert false
+(*
     Bound_var_and_body.pattern_match t.bound_var_and_body
       ~f:(fun bound_var body ->
         f ~bound_var ~body:(Expr_with_permutation.expr body))
+*)
 
   let print_with_cache ~cache ppf
         ({ bound_var_and_body = _; kind; defining_expr; } as t) =
@@ -1600,7 +1602,7 @@ end = struct
       | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
         pattern_match t ~f:(fun ~bound_var ~body ->
           fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Variable.print bound_var
+            Bindable_name.print bound_var
             (Misc_color.bold_white ())
             Flambda_kind.print kind
             (Misc_color.reset ())
@@ -1612,7 +1614,7 @@ end = struct
       fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
         (Misc_color.bold_cyan ())
         (Misc_color.reset ())
-        Variable.print bound_var
+        Bindable_name.print bound_var
         (Misc_color.bold_white ())
         Flambda_kind.print kind
         (Misc_color.reset ())
@@ -1624,6 +1626,7 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create ~bound_var ~kind ~defining_expr ~body =
+    let bound_var = Bindable_name.Name (Name.var bound_var) in
     let bound_var_and_body =
       Bound_var_and_body.create bound_var (Expr_with_permutation.create body)
     in
@@ -1652,6 +1655,12 @@ end = struct
             print t
         end
       end;
+      (* XXX Bindable_name strikes again *)
+      let bound_var =
+        match (bound_var : Bindable_name.t) with
+        | Name (Var var) -> var
+        | _ -> assert false
+      in
       let env = E.add_variable env bound_var t.kind in
       Expr.invariant env body)
 
@@ -1662,6 +1671,12 @@ end = struct
     pattern_match t ~f:(fun ~bound_var ~body ->
       let from_defining_expr = Named.free_names defining_expr in
       let from_body = Expr.free_names body in
+      (* XXX Bindable_name strikes again *)
+      let bound_var =
+        match (bound_var : Bindable_name.t) with
+        | Name (Var var) -> var
+        | _ -> assert false
+      in
       Name_occurrences.union from_defining_expr
         (Name_occurrences.remove from_body (Name (Name.var bound_var))))
 
@@ -1918,8 +1933,7 @@ end and Non_recursive_let_cont_handler : sig
 
   val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
-  module Continuation_and_body =
-    Name_abstraction.Make (Bound_continuation) (Expr)
+  module Continuation_and_body = Name_abstraction.Make (Expr)
 
   type t = {
     continuation_and_body : Continuation_and_body.t;
@@ -1928,15 +1942,17 @@ end = struct
 
   let create continuation ~body handler =
     let continuation_and_body =
-      Continuation_and_body.create continuation body
+      Continuation_and_body.create (Continuation continuation) body
     in
     { continuation_and_body;
       handler;
     }
 
-  let pattern_match t ~f =
+  let pattern_match _t ~f:_ = assert false
+(*
     Continuation_and_body.pattern_match t.continuation_and_body
       ~f:(fun continuation body -> f continuation ~body)
+*)
 
   let handler t = t.handler
 
@@ -2025,11 +2041,14 @@ end and Recursive_let_cont_handlers : sig
 
   val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
-  include Name_abstraction.Make (Bound_continuations)
-    (Recursive_let_cont_handlers0)
+  include Name_abstraction.Make_list (Recursive_let_cont_handlers0)
 
   let create ~body handlers =
     let bound = Continuation_handlers.domain handlers in
+    let bound = (* XXX *)
+      List.map (fun k -> Bindable_name.Continuation k)
+        (Continuation.Set.elements bound)
+    in
     let handlers0 =
       Recursive_let_cont_handlers0.create ~body handlers
     in
@@ -2101,7 +2120,7 @@ end = struct
       else { param_relations = param_relations'; handler = handler'; }
   end
 
-  include Name_abstraction.Make (Bound_kinded_parameter_list) (T0)
+  include Name_abstraction.Make_list (T0)
 
   let create params ~param_relations ~handler =
     let t0 : T0.t =
@@ -2109,11 +2128,17 @@ end = struct
         handler = Expr_with_permutation.create handler;
       }
     in
+    let params = (* XXX *)
+      List.map (fun p -> Bindable_name.Name (Kinded_parameter.name p))
+        params
+    in
     create params t0
 
-  let pattern_match t ~f =
+  let pattern_match _t ~f:_ = assert false
+(*
     pattern_match t ~f:(fun params { param_relations; handler; } ->
       f params ~param_relations ~handler:(Expr_with_permutation.expr handler))
+*)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -2198,7 +2223,9 @@ end = struct
     Params_and_handler.pattern_match t.params_and_handler ~f
 
   let print_using_where_with_cache ~cache ppf k
-        ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
+    (* XXX Print [param_relations_lvs] *)
+        ({ params_and_handler = _; param_relations_lvs = _;
+           stub; is_exn_handler; } as t) ~first =
     if not first then begin
       fprintf ppf "@ "
     end;
@@ -2262,7 +2289,7 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 *)
 
-  let create params ~param_relations ~handler ~param_relations_lvs ~stub
+  let create params ~param_relations ~handler param_relations_lvs ~stub
         ~is_exn_handler =
     let params_and_handler =
       Params_and_handler.create params ~param_relations ~handler
@@ -2284,13 +2311,18 @@ end = struct
       (Flambda_type.Parameters.free_names param_relations_lvs)
 
   let apply_name_permutation
-        ({ params_and_handler; stub; is_exn_handler; } as t) perm =
+        ({ params_and_handler; param_relations_lvs; stub;
+           is_exn_handler; } as t) perm =
     let params_and_handler' =
       Params_and_handler.apply_name_permutation params_and_handler perm
+    in
+    let param_relations_lvs =
+      Flambda_type.Parameters.apply_name_permutation param_relations_lvs perm
     in
     if params_and_handler == params_and_handler' then t
     else
       { params_and_handler = params_and_handler';
+        param_relations_lvs;
         stub;
         is_exn_handler;
       }
@@ -2311,10 +2343,12 @@ end and Set_of_closures : sig
   val invariant : Invariant_env.t -> t -> unit
   val create
      : function_decls:Function_declarations.t
+    -> set_of_closures_ty:Flambda_type.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
   val function_decls : t -> Function_declarations.t
+  val set_of_closures_ty : t -> Flambda_type.t
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
   val direct_call_surrogates : t -> Closure_id.t Closure_id.Map.t
   val has_empty_environment : t -> bool
@@ -2690,8 +2724,8 @@ end = struct
 
   let print_with_cache ~cache ppf (t : t) =
     let funs ppf t =
-      Closure_id.Map.iter (fun var decl ->
-          (Function_declaration.print_with_cache ~cache) var ppf decl)
+      Closure_id.Map.iter (fun _ decl ->
+          Function_declaration.print_with_cache ~cache ppf decl)
         t
     in
     fprintf ppf "@[<2>(%a)(origin = %a)@]" funs t.funs
@@ -2770,8 +2804,7 @@ end = struct
       else { param_relations = param_relations'; body = body'; }
   end
 
-  include
-    Name_abstraction.Make2 (Bound_kinded_parameter_list) (Bound_variable) (T0)
+  include Name_abstraction.Make_list (T0)
 
   let create params ~param_relations ~body ~my_closure =
     let t0 : T0.t =
@@ -2779,12 +2812,21 @@ end = struct
         body = Expr_with_permutation.create body;
       }
     in
-    create params my_closure t0
+    let params = (* XXX *)
+      List.map (fun p -> Bindable_name.Name (Kinded_parameter.name p))
+        params
+    in
+    let bound = params @ [Bindable_name.Name (Name.var my_closure)] in
+    create bound t0
 
-  let pattern_match t ~f =
-    pattern_match t ~f:(fun params my_closure t0 ->
+  let print ppf t : unit = print ppf t
+
+  let pattern_match _t ~f:_ = assert false
+(*
+    pattern_match t ~f:(fun params_and_my_closure t0 ->
       f params ~param_relations:t0.param_relations
         ~body:(Expr_with_permutation.expr t0.body) ~my_closure)
+*)
 end and Function_declaration : sig
   include Contains_names.S
   val create
@@ -2799,10 +2841,9 @@ end and Function_declaration : sig
     -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
     -> t
-  val print : Closure_id.t -> Format.formatter -> t -> unit
+  val print : Format.formatter -> t -> unit
   val print_with_cache
      : cache:Printing_cache.t
-    -> Closure_id.t
     -> Format.formatter
     -> t
     -> unit
@@ -2867,7 +2908,7 @@ end = struct
       is_a_functor;
     }
 
-  let print_with_cache ~cache closure_id ppf
+  let print_with_cache ~cache ppf
         { closure_origin;
           continuation_param;
           exn_continuation_param;
@@ -2885,9 +2926,8 @@ end = struct
     Params_and_body.pattern_match params_and_body
       ~f:(fun params ~param_relations ~body ~my_closure ->
         fprintf ppf
-          "@[<2>(%a%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
+          "@[<2>(%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
             %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s"
-          Closure_id.print closure_id
           stub
           is_a_functor
           Inline_attribute.print inline

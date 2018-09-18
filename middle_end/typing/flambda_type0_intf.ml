@@ -107,6 +107,8 @@ module type S = sig
     (** Least upper bound. *)
     val join : Join_env.t -> t -> t -> t
   end and Typing_env : sig
+
+(*
     type t
 
     type binding_type = Normal | Was_existential
@@ -304,7 +306,128 @@ module type S = sig
         is the usual notion of alias; for [Const]s and [Discriminant]s an
         "alias" is just another name known to hold that same value.) *)
     val aliases_of_simple : t -> Simple.t -> Name.Set.t
+*)
+    type t
+
+    type binding_type = private
+      | Normal
+      | Was_existential
+
+    val invariant : t -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val create : resolver:(Export_id.t -> flambda_type option) -> t
+
+    val create_using_resolver_from : t -> t
+
+    val resolver : t -> (Export_id.t -> flambda_type option)
+
+    val is_empty : t -> bool
+
+    val increment_scope_level_to : t -> Scope_level.t -> t
+
+    val fast_equal : t -> t -> bool
+
+    val domain : t -> Name_occurrences.t
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val add_equation : t -> Name.t -> flambda_type -> t
+
+    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
+
+    val find_exn : t -> Name.t -> flambda_type * binding_type
+
+    val find_opt : t -> Name.t -> (flambda_type * binding_type) option
+
+    val find_cse : t -> Flambda_primitive.t -> Simple.t option
+
+    val mem : t -> Name.t -> bool
+
+    val add_or_meet_env_extension
+       : t
+      -> Typing_env_extension.t
+      -> t
+
+    val add_or_meet_opened_env_extension
+       : t
+      -> Typing_env_level.t
+      -> t
+
+    val resolve_aliases
+       : ?bound_name:Name.t
+      -> t
+      -> flambda_type
+      -> flambda_type * (Simple.t option)
+
+    val resolve_aliases_and_squash_unresolved_names_on_ty'
+       : t
+      -> ?bound_name:Name.t
+      -> print_ty:(Format.formatter -> 'a ty -> unit)
+      -> force_to_kind:(flambda_type -> 'a ty)
+      -> 'a ty
+      -> 'a unknown_or_join * (Simple.t option)
+
+    val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+    val cut
+       : t
+      -> existential_if_defined_at_or_later_than:Scope_level.t
+      -> Typing_env_extension.t
+
+    val was_existential_exn : t -> Name.t -> bool
   end and Typing_env_extension : sig
+    type t
+
+    include Contains_names.S with type t := t
+
+    val invariant : t -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val fast_equal : t -> t -> bool
+
+    val empty : unit -> t
+
+    val is_empty : t -> bool
+
+    val create : Typing_env_level.t -> t
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val meet_equation : ?env:Typing_env.t -> t -> Name.t -> flambda_type -> t
+
+    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
+
+    val meet : Meet_env.t -> t -> t -> t
+
+    val join : Join_env.t -> t -> t -> t
+
+(*
+    val restrict_to_definitions : t -> t
+
+    val restrict_names_to_those_occurring_in_types
+       : t
+      -> Typing_env.t
+      -> Typing_env.t
+      -> flambda_type list
+      -> t
+
+    val diff : t -> Typing_env.t -> t
+*)
+
+    val pattern_match
+       : t
+      -> f:(Typing_env_level.t -> 'a)
+      -> 'a
+(*
     type t
 
     include Contains_names.S with type t := t
@@ -397,7 +520,63 @@ module type S = sig
     *)
     val diff : t -> Typing_env.t -> t
 *)
+*)
+  end and Typing_env_level : sig
+    include Contains_names.S
+
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val invariant : t -> unit
+
+    val empty : unit -> t
+
+    val is_empty : t -> bool
+
+(*
+    val restrict_to_names : t -> Name_occurrences.t -> t
+*)
+
+    val find_opt : t -> Name.t -> flambda_type option
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val meet_equation
+       : ?env:Typing_env.t
+      -> t
+      -> Name.t
+      -> flambda_type
+      -> t
+
+    val add_or_replace_equation : t -> Name.t -> flambda_type -> t
+
+    val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
+
+    val meet : Meet_env.t -> t -> t -> t
+
+    val join : Join_env.t -> t -> t -> t
+
+    val defined_names_set : t -> Bindable_name.Set.t
+
+    val defined_names : t -> Flambda_kind.t Name.Map.t
+
+    val defined_names_in_order : t -> Bindable_name.t list
+
+    val equations_domain : t -> Name.Set.t
+
+    val equations_on_outer_env_domain : t -> Name.Set.t
+
+    val equations : t -> flambda_type Name.Map.t
+
+    val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t
   end
+
+  include Contains_names.S with type t := t
 
   val print : Format.formatter -> t -> unit
 
@@ -408,7 +587,7 @@ module type S = sig
   val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 
   (** Least upper bound of two types.  This never generates any equations. *)
-  val join : Join_env.t  -> t -> t -> t
+  val join : ?bound_name:Name.t -> Join_env.t  -> t -> t -> t
 
   (** Like [strictly_more_precise], but also returns [true] when the two
       input types are equally precise. *)
@@ -419,10 +598,21 @@ module type S = sig
   val strictly_more_precise : Typing_env.t -> t -> than:t -> bool
 
   (** Slow type equality. *)
-  val equal : t -> t -> bool
+  val equal
+     : bound_name:Name.t option
+    -> Typing_env.t
+    -> Typing_env.t
+    -> flambda_type
+    -> flambda_type
+    -> bool
 
   (** Fast type equality---sound but far from complete. *)
-  val fast_equal : t -> t -> bool
+  val fast_equal
+     : Typing_env.t
+    -> Typing_env.t
+    -> flambda_type
+    -> flambda_type
+    -> bool
 
   val get_alias : t -> Simple.t option
 

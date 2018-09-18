@@ -697,6 +697,8 @@ end and Set_of_closures : sig
 
   val function_decls : t -> Function_declarations.t
 
+  val set_of_closures_ty : t -> Flambda_type.t
+
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
 
   (** If [direct_call_surrogates t] maps [closure_id1] to [closure_id2] then
@@ -858,7 +860,7 @@ end and Params_and_body : sig
 
   val create
      : Kinded_parameter.t list
-    -> Flambda_type.Typing_env_extension.t
+    -> param_relations:Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
@@ -866,7 +868,7 @@ end and Params_and_body : sig
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
-      -> Flambda_type.Parameters.t
+      -> param_relations:Flambda_type.Typing_env_extension.t
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)
@@ -899,7 +901,7 @@ end and Function_declaration : sig
     -> is_a_functor:bool
     -> t
 
-  val print : Closure_id.t -> Format.formatter -> t -> unit
+  val print : Format.formatter -> t -> unit
 
   (** The closure from which this function declaration originally came.
       Used as a backstop against unbounded recursion during inlining. *)
