@@ -370,7 +370,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         List.fold_left (fun (env_extension, index) field_ty ->
             let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
             let env_extension =
-              Typing_env_extension.meet_equation env_extension
+              Typing_env_extension.add_equation env_extension
                 (Name.logical_var logical_var) field_ty
             in
             let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
@@ -590,7 +590,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
               Var_within_closure.Map.find var
                 closure_elements_to_logical_variables
             in
-            Typing_env_extension.meet_equation env_extension
+            Typing_env_extension.add_equation env_extension
               (Name.logical_var logical_var) ty)
           closure_elements_to_tys
           (Typing_env_extension.empty ())
@@ -2408,7 +2408,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
           List.fold_left (fun (env_extension, index) ty ->
               let logical_var = Targetint.OCaml.Map.find index indexes_to_vars in
               let env_extension =
-                Typing_env_extension.meet_equation env_extension
+                Typing_env_extension.add_equation env_extension
                   (Name.logical_var logical_var) ty
               in
               let next_index = Targetint.OCaml.add index Targetint.OCaml.one in
@@ -2872,7 +2872,8 @@ end
           let add_equation_if_on_a_name env_extension (simple : Simple.t) ty =
             match simple with
             | Name name ->
-              Typing_env_extension.meet_equation env_extension name ty
+              Typing_env_extension.meet_equation env_extension
+                (Meet_env.env env) name ty
             | Const _ | Discriminant _ -> env_extension
           in
 Format.eprintf "CS1 %a, CS2 %a\n%!"
@@ -3922,7 +3923,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
       let env_extension =
         List.fold_left2 (fun env_extension lv ty ->
             let name = Name.logical_var lv in
-            Typing_env_extension.meet_equation env_extension name ty)
+            Typing_env_extension.add_equation env_extension name ty)
           (Typing_env_extension.empty ())
           lvs tys
       in
@@ -4291,7 +4292,7 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
                     Flambda_type0_core.alias_type_of kind
                       (Simple.name name)
                   in
-                  Typing_env_extension.meet_equation env_extension
+                  Typing_env_extension.add_equation env_extension
                     result_name name_ty)
               t.components_by_index
               t.env_extension
@@ -6295,7 +6296,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             let logical_var =
               Closure_id.Map.find closure_id closure_ids_to_logical_variables
             in
-            Typing_env_extension.meet_equation env_extension
+            Typing_env_extension.add_equation env_extension
               (Name.logical_var logical_var) ty)
           closure_ids_to_tys
           (Typing_env_extension.empty ())
@@ -7442,7 +7443,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val meet_equation : ?env:Typing_env.t -> t -> Name.t -> Flambda_types.t -> t
+    val add_equation : t -> Name.t -> Flambda_types.t -> t
+
+    val meet_equation : t -> Typing_env.t -> Name.t -> Flambda_types.t -> t
 
     val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
@@ -7607,8 +7610,14 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let name = Bindable_name.Name name in
         { abst = A.create (name :: defined_names) level; })
 
+    let add_equation { abst; } name ty =
+      let abst =
+        A.pattern_match_map abst ~f:(fun level ->
+          Typing_env_level.add_equation level name ty)
+      in
+      { abst; }
+
     let meet_equation { abst; } env name ty =
-      ignore env;
       let abst =
         A.pattern_match_map abst ~f:(fun level ->
           Typing_env_level.meet_equation level env name ty)
@@ -7663,6 +7672,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     val find_opt : t -> Name.t -> Flambda_types.t option
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val add_equation : t -> Name.t -> Flambda_types.t -> t
 
     val meet_equation
        : t
@@ -8013,6 +8024,16 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         defined_names = Name.Map.add name kind t.defined_names
       }
 
+    let add_equation t name ty =
+      if Name.Map.mem name t.equations then begin
+        Misc.fatal_errorf "Equation on %a already exists in@ %a"
+          Name.print name
+          print t
+      end;
+      { t with
+        equations = Name.Map.add name ty t.equations;
+      }
+
     let add_or_replace_equation t name ty =
       { t with
         equations = Name.Map.add name ty t.equations;
@@ -8152,20 +8173,11 @@ Format.eprintf "---> result is:@ %a\n%!" print t;
       in
       update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
 
-    let meet_equation ?env t name ty =
+    let meet_equation t env name ty =
       let t' =
         { (empty ()) with
           equations = Name.Map.singleton name ty;
         }
-      in
-      let env =
-        match env with
-        | None ->
-          Typing_env.create ~resolver:(fun name_or_export_id ->
-            Misc.fatal_errorf "Cannot resolve external names in this \
-                environment: %a"
-              Export_id.print name_or_export_id)
-        | Some env -> env
       in
       let env =
         Meet_env.create env

@@ -402,7 +402,9 @@ module type S = sig
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val meet_equation : ?env:Typing_env.t -> t -> Name.t -> flambda_type -> t
+    val add_equation : t -> Name.t -> flambda_type -> t
+
+    val meet_equation : t -> Typing_env.t -> Name.t -> flambda_type -> t
 
     val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
@@ -538,20 +540,23 @@ module type S = sig
 
     val is_empty : t -> bool
 
+    val find_opt : t -> Name.t -> flambda_type option
+
+    val defined_names_set : t -> Bindable_name.Set.t
+
+    val equations_domain : t -> Name.Set.t
+
+    val equations_on_outer_env_domain : t -> Name.Set.t
+
 (*
     val restrict_to_names : t -> Name_occurrences.t -> t
-*)
 
-    val find_opt : t -> Name.t -> flambda_type option
 
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
-    val meet_equation
-       : ?env:Typing_env.t
-      -> t
-      -> Name.t
-      -> flambda_type
-      -> t
+    val add_equation : t -> Typing_env.t -> Name.t -> flambda_type -> t
+
+    val meet_equation : t -> Typing_env.t -> Name.t -> flambda_type -> t
 
     val add_or_replace_equation : t -> Name.t -> flambda_type -> t
 
@@ -561,19 +566,14 @@ module type S = sig
 
     val join : Join_env.t -> t -> t -> t
 
-    val defined_names_set : t -> Bindable_name.Set.t
-
     val defined_names : t -> Flambda_kind.t Name.Map.t
 
     val defined_names_in_order : t -> Bindable_name.t list
 
-    val equations_domain : t -> Name.Set.t
-
-    val equations_on_outer_env_domain : t -> Name.Set.t
-
     val equations : t -> flambda_type Name.Map.t
 
     val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t
+*)
   end
 
   include Contains_names.S with type t := t
