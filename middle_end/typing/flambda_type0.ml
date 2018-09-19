@@ -5102,11 +5102,18 @@ Format.eprintf "AOME %a\n%!" print t;
         let join_of_all_maps_to env t =
           (* Any name permutations have already been applied during
              [Meet.meet_or_join], above. *)
+let maps_to =
           let env = Join_env.clear_name_permutations (Join_env.create env) in
           List.fold_left (fun result maps_to ->
+Format.eprintf "Joining one Maps_to:@ %a\n%!"
+  (Maps_to.print_with_cache ~cache:(Printing_cache.create ())) maps_to;
               Maps_to.join env maps_to result)
             (Maps_to.bottom ())
             (all_maps_to t)
+in
+Format.eprintf "Join of all Maps_to:@ %a\n%!"
+  (Maps_to.print_with_cache ~cache:(Printing_cache.create ())) maps_to;
+maps_to
       end
 
       type t = T0.t Or_unknown.t
@@ -5151,6 +5158,8 @@ Format.eprintf "AOME %a\n%!" print t;
         | Unknown -> Unknown
 
       let meet env (t1 : t) (t2 : t) : (t * Maps_to.t) Or_bottom.t =
+        (* CR mshinwell: Perhaps we should subtract the "join of all maps" from
+           the returned extension *)
         match t1, t2 with
         | Known t0_1, Known t0_2 ->
           let t0 = T0.meet (Join_env.create env) t0_1 t0_2 in
@@ -7656,6 +7665,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
        such as this. *)
     let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
+      (* XXX This is wrong, it should be "is_unknown" and there should be a top
+         element *)
       else if is_empty t1 then t2
       else if is_empty t2 then t1
       else
@@ -7672,8 +7683,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
       if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_empty t1 then empty ()
-      else if is_empty t2 then empty ()
+      else if is_empty t1 then t2
+      else if is_empty t2 then t1
       else
         let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
         let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
@@ -7697,15 +7708,19 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let add_equation { abst; } name ty =
       let abst =
-        A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.add_equation level name ty)
+        A.pattern_match abst ~f:(fun _defined_names level ->
+          let level = Typing_env_level.add_equation level name ty in
+          A.create (Typing_env_level.defined_names_in_order level) level)
       in
       { abst; }
 
+    (* CR mshinwell: Consider an [A.pattern_match] variant that does not
+       pass [defined_names] but where 'a is returned *)
     let meet_equation { abst; } env name ty =
       let abst =
-        A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.meet_equation level env name ty)
+        A.pattern_match abst ~f:(fun _defined_names level ->
+          let level = Typing_env_level.meet_equation level env name ty in
+          A.create (Typing_env_level.defined_names_in_order level) level)
       in
       { abst; }
 
@@ -8037,6 +8052,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           print t
 
     let tidy t =
+Format.eprintf "TIDY:@ %a\n%!" print t;
       let free_names_minus_defined_names' =
         free_names_minus_defined_names t
       in
@@ -8087,9 +8103,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           Name.print name
           print t
       end;
-      { t with
-        defined_names = Name.Map.add name kind t.defined_names
-      }
+      let t =
+        { t with
+          defined_names = Name.Map.add name kind t.defined_names
+        }
+      in
+      tidy t
 
     let add_equation t name ty =
       if Name.Map.mem name t.equations then begin
@@ -8097,9 +8116,13 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           Name.print name
           print t
       end;
-      { t with
-        equations = Name.Map.add name ty t.equations;
-      }
+      (* CR mshinwell: Must be much more careful about when [tidy] is called *)
+      let t =
+        { t with
+          equations = Name.Map.add name ty t.equations;
+        }
+      in
+      tidy t
 
     let add_or_replace_equation t name ty =
       { t with
@@ -8168,6 +8191,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let meet env (t1 : t) (t2 : t) : t =
+(* XXX As elsewhere, this should be a test against "top" *)
       if is_empty t1 then begin
         t2
       end else if is_empty t2 then begin
@@ -8260,7 +8284,10 @@ Format.eprintf "LEVEL MEET: cut\n%!";
           names_with_equations_in_join
           t
       in
-      update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
+      let t =
+        update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
+      in
+      tidy t
 
     let meet_equation t env name ty =
       let t' =
