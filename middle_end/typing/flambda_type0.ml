@@ -8059,11 +8059,7 @@ Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 pri
       let defined_names =
         Name.Map.disjoint_union t1.defined_names t2.defined_names
       in
-      let t =
-        { (empty ()) with
-          defined_names;
-        }
-      in
+      let t = empty () in
       let env =
         Name.Map.fold (fun name kind env ->
             Meet_env.with_env env (fun typing_env ->
@@ -8094,6 +8090,12 @@ Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 pri
                   add_or_replace_equation t name meet_ty))
           names_in_meet
           t
+      in
+      assert (Name.Map.is_empty t.defined_names);
+      let t =
+        { t with
+          defined_names;
+        }
       in
       update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
 
