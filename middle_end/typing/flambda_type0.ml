@@ -387,6 +387,10 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
     let create_bottom = RL.create_bottom 
 
     let _invariant _t = () (* CR mshinwell: RL.invariant *)
+    (* CR mshinwell: Here is an invariant: the number of variables in the name
+       abstraction for the relational product (= number of indexes in the RP)
+       must be equal to the number of fields in the block (for a known size)
+       or the minimum number of fields in the block (for "at least size of") *)
     let print_with_cache = RL.print
 
     let equal = RL.equal
@@ -4302,10 +4306,12 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
           let env_extension1 = add_equalities_to_extension t1 in
           let env_extension2 = add_equalities_to_extension t2 in
           let add_definitions_to_extension t env_extension =
-            Index.Map.fold (fun index component env_extension ->
+            Index.Map.fold (fun _index component env_extension ->
+(*
                 if not (Index.Set.mem index indexes) then
                   env_extension
                 else
+*)
                   let name = Component.name component in
                   let kind = Component.kind component in
                   Typing_env_extension.add_definition env_extension
@@ -4324,7 +4330,10 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
           if Meet_env.shortcut_precondition env && t1 == t2 then
             Ok None
           else
-            let indexes = Index.Set.inter (indexes t1) (indexes t2) in
+            let indexes = Index.Set.union (indexes t1) (indexes t2) in
+            (* CR mshinwell: This used to say [Index.Set.inter].  However we
+               need to widen these products e.g. for meeting a block of fixed
+               width 2 with a block of at least width 1. *)
             if Index.Set.is_empty indexes then Bottom
             else
               let env = Join_env.create env in
