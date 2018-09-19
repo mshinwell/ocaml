@@ -2547,6 +2547,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
     (** Perform various invariant checks upon the given join environment. *)
     val invariant : t -> unit
 
+    val print : Format.formatter -> t -> unit
+
     val create : Meet_env.t -> t
 
     val add_definition_central_environment
@@ -2555,10 +2557,17 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       -> Flambda_types.t
       -> t
 
+    (* CR mshinwell: Rename to [add_or_meet_extensions] *)
     val add_extensions
        : t
       -> holds_on_left:Typing_env_extension.t
       -> holds_on_right:Typing_env_extension.t
+      -> t
+
+    val add_or_meet_opened_extensions
+       : t
+      -> holds_on_left:Typing_env_level.t
+      -> holds_on_right:Typing_env_level.t
       -> t
 
 (*
@@ -2615,6 +2624,22 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
     let invariant _t =
       ()
 
+    let print ppf
+          { env; env_plus_extension1; env_plus_extension2;
+            extension1; extension2; } =
+      Format.fprintf ppf
+        "@[<v 1>(\
+            @[<hov 1>(env@ @[<v 1>%a@])@]@;\
+            @[<hov 1>(env_plus_extension1@ @[<v 1>%a@])@]@;\
+            @[<hov 1>(env_plus_extension2@ @[<v 1>%a@])@]@;\
+            @[<hov 1>(extension1@ @[<v 1>%a@])@]@;\
+            @[<hov 1>(extension2@ @[<v 1>%a@])@])@]"
+          Meet_env.print env
+          Typing_env.print env_plus_extension1
+          Typing_env.print env_plus_extension2
+          Typing_env_extension.print extension1
+          Typing_env_extension.print extension2
+
     let add_extensions t ~holds_on_left ~holds_on_right =
       let env_plus_extension1 =
         Typing_env.add_or_meet_env_extension t.env_plus_extension1
@@ -2629,6 +2654,34 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       in
       let extension2 =
         Typing_env_extension.meet t.env t.extension2 holds_on_right
+      in
+      let t = {
+        env = t.env;
+        env_plus_extension1;
+        env_plus_extension2;
+        extension1;
+        extension2;
+      }
+      in
+      invariant t;
+      t
+
+    let add_or_meet_opened_extensions t ~holds_on_left ~holds_on_right =
+      let env_plus_extension1 =
+        Typing_env.add_or_meet_opened_env_extension t.env_plus_extension1
+          holds_on_left
+      in
+      let extension1 =
+        Typing_env_extension.meet t.env t.extension1
+          (Typing_env_extension.create holds_on_left)
+      in
+      let env_plus_extension2 =
+        Typing_env.add_or_meet_opened_env_extension t.env_plus_extension2
+          holds_on_right
+      in
+      let extension2 =
+        Typing_env_extension.meet t.env t.extension2
+          (Typing_env_extension.create holds_on_right)
       in
       let t = {
         env = t.env;
@@ -4436,10 +4489,16 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Typing_env.add_or_meet_env_extension env (standalone_extension t)
 
         let add_or_meet_equations t env new_equations =
+Format.eprintf "AOME %a, new equations %a\n%!" print t
+  Typing_env_extension.print new_equations;
+          (* XXX mshinwell: check again *)
+          let env = Meet_env.with_env env (fun env -> introduce t env) in
           let env_extension =
             Typing_env_extension.meet env t.env_extension new_equations
           in
-          { t with env_extension; }
+          let t = { t with env_extension; } in
+Format.eprintf "AOME %a\n%!" print t;
+          t
       end
 
       include Name_abstraction.Make_list (T0)
@@ -4936,6 +4995,8 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
                   (fun index -> Index.compare index index1 <= 0)
                   at_least2
               in
+              (* XXX This should widen the products as required rather than
+                 having such code in RP0 *)
               begin match from_at_least2 with
               | None ->
                 begin match E.op () with
@@ -7595,8 +7656,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
        such as this. *)
     let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_empty t1 then empty ()
-      else if is_empty t2 then empty ()
+      else if is_empty t1 then t2
+      else if is_empty t2 then t1
       else
         let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
         let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
@@ -8169,11 +8230,24 @@ Format.eprintf "LEVEL MEET: cut\n%!";
       end
 
     let join env (t1 : t) (t2 : t) : t =
+  Format.eprintf "Typing_env_level.join@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
+    Join_env.print env;
       let names_with_equations_in_join =
         Name.Set.inter (equations_on_outer_env_domain t1)
           (equations_on_outer_env_domain t2)
       in
-      (* XXX Think more about this *)
+      let defined_names =
+        Name.Map.disjoint_union t1.defined_names t2.defined_names
+      in
+      let t =
+        { (empty ()) with
+          defined_names;
+        }
+      in
+      let env =
+        Join_env.add_or_meet_opened_extensions env
+          ~holds_on_left:t1 ~holds_on_right:t2
+      in
       let t =
         Name.Set.fold (fun name t ->
             assert (not (Name.Map.mem name t.equations));
@@ -8184,7 +8258,7 @@ Format.eprintf "LEVEL MEET: cut\n%!";
             in
             add_or_replace_equation t name join_ty)
           names_with_equations_in_join
-          (empty ())
+          t
       in
       update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
 
