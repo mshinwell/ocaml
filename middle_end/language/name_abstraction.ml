@@ -151,35 +151,30 @@ module Make_list (Term : Term) = struct
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_names fresh_term
 
-  let print_bindable_name_list ppf bns =
+  let print_bindable_name_list style ppf bns =
     match bns with
-    | [] -> Format.pp_print_string ppf "[]"
+    | [] -> ()
     | _ ->
-      Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Bindable_name.print ppf bns
-
-  let print ?(style = Brackets) ppf t =
-    pattern_match t ~f:(fun names term ->
-      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
+      Format.fprintf ppf "@<1>%s%s@<1>%s%a@<1>%s%s@<1>%s"
         (Misc_color.bold_cyan ())
         (before_binding_position style)
         (Misc_color.reset ())
-        print_bindable_name_list names
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          Bindable_name.print) bns
         (Misc_color.bold_cyan ())
         (after_binding_position style)
         (Misc_color.reset ())
+
+  let print ?(style = Brackets) ppf t =
+    pattern_match t ~f:(fun names term ->
+      Format.fprintf ppf "@[%a@,%a@]"
+        (print_bindable_name_list style) names
         Term.print term)
 
   let print_with_cache ?(style = Brackets) ~cache ppf t =
     pattern_match t ~f:(fun names term ->
-      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
-        (Misc_color.bold_cyan ())
-        (before_binding_position style)
-        (Misc_color.reset ())
-        print_bindable_name_list names
-        (Misc_color.bold_cyan ())
-        (after_binding_position style)
-        (Misc_color.reset ())
+      Format.fprintf ppf "@[%a@,%a@]"
+        (print_bindable_name_list style) names
         (Term.print_with_cache ~cache) term)
 
   let pattern_match_mapi t ~f =

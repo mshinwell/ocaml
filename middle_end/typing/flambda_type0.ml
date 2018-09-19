@@ -2755,12 +2755,12 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
          Distributivity of meet over join:
            X n (X' u Y') == (X n X') u (X n Y'). *)
 
-      let unknown_or_join_is_bottom (uj : _ Flambda_types.unknown_or_join) =
+      let _unknown_or_join_is_bottom (uj : _ Flambda_types.unknown_or_join) =
         match uj with
         | Join [] -> true
         | Unknown | Join _ -> false
 
-      let unknown_or_join_is_unknown (uj : _ Flambda_types.unknown_or_join) =
+      let _unknown_or_join_is_unknown (uj : _ Flambda_types.unknown_or_join) =
         match uj with
         | Join _ -> false
         | Unknown -> true
@@ -2883,18 +2883,21 @@ Format.eprintf "CS1 %a, CS2 %a\n%!"
               when Simple.equal simple1 simple2
                      || Meet_env.already_meeting env simple1 simple2 ->
             Equals simple1, Typing_env_extension.empty ()
+(*
           | Some simple1, _ when unknown_or_join_is_unknown unknown_or_join2 ->
             Equals simple1, Typing_env_extension.empty ()
           | _, Some simple2 when unknown_or_join_is_unknown unknown_or_join1 ->
             Equals simple2, Typing_env_extension.empty ()
+*)
           | Some simple1, Some simple2 ->
-Format.eprintf "***\n%!";
+Format.eprintf "*** env:@ %a\n%!" Meet_env.print env;
             let meet_unknown_or_join, env_extension_from_meet =
               let env = Meet_env.now_meeting env simple1 simple2 in
               meet_on_unknown_or_join env
                 unknown_or_join1 unknown_or_join2
             in
             let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
+Format.eprintf "meet_ty %a\n%!" Type_printers.print meet_ty;
             let env_extension_from_meet =
               add_equation_if_on_a_name env_extension_from_meet
                 simple1 meet_ty
@@ -3049,10 +3052,12 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
             let alias1 = Name.Set.choose_opt all_aliases1 in
             let alias2 = Name.Set.choose_opt all_aliases2 in
             match alias1, alias2 with
+(*
             | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
               Equals (Simple.name name1)
             | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
               Equals (Simple.name name2)
+*)
             | None, None ->
               let unknown_or_join =
                 join_on_unknown_or_join env
@@ -6315,6 +6320,10 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     val is_empty : t -> bool
 
+    val current_level : t -> Scope_level.t
+
+    val increment_scope_level : t -> t
+
     val increment_scope_level_to : t -> Scope_level.t -> t
 
     val fast_equal : t -> t -> bool
@@ -6360,6 +6369,11 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
     val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+    val cut0
+       : t
+      -> existential_if_defined_at_or_later_than:Scope_level.t
+      -> Typing_env_level.t
 
     val cut
        : t
@@ -6556,6 +6570,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
       { t with
         current_level = (current_level, empty_one_level ());
       }
+
+    let increment_scope_level t =
+      increment_scope_level_to t (Scope_level.next (fst t.current_level))
 
     let fast_equal t1 t2 =
       t1 == t2
@@ -7126,9 +7143,9 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
     let current_level t = fst (t.current_level)
     let current_level_data t = snd (t.current_level)
 
-    let cut t ~existential_if_defined_at_or_later_than:min_level =
+    let cut0 t ~existential_if_defined_at_or_later_than:min_level =
       if Scope_level.(>) min_level (current_level t) then
-        Typing_env_extension.empty ()
+        Typing_env_level.empty ()
       else
         let all_levels =
           Scope_level.Map.add (current_level t) (current_level_data t)
@@ -7164,13 +7181,14 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             ~perm_left:(Name_permutation.create ())
             ~perm_right:(Name_permutation.create ())
         in
-        let level =
-          Scope_level.Map.fold (fun _level one_level result ->
-              Typing_env_level.meet meet_env one_level.level result)
-            at_or_after_cut
-            (Typing_env_level.empty ())
-        in
-        Typing_env_extension.create level
+        Scope_level.Map.fold (fun _level one_level result ->
+            Typing_env_level.meet meet_env one_level.level result)
+          at_or_after_cut
+          (Typing_env_level.empty ())
+
+    let cut t ~existential_if_defined_at_or_later_than =
+      let level = cut0 t ~existential_if_defined_at_or_later_than in
+      Typing_env_extension.create level
 
 (*
 Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
@@ -7589,12 +7607,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let name = Bindable_name.Name name in
         { abst = A.create (name :: defined_names) level; })
 
-    (* XXX Check this [env] parameter *)
-    let meet_equation ?env { abst; } name ty =
+    let meet_equation { abst; } env name ty =
       ignore env;
       let abst =
         A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.meet_equation level name ty)
+          Typing_env_level.meet_equation level env name ty)
       in
       { abst; }
 
@@ -7648,8 +7665,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
     val meet_equation
-       : ?env:Typing_env.t
-      -> t
+       : t
+      -> Typing_env.t
       -> Name.t
       -> Flambda_types.t
       -> t
@@ -7703,19 +7720,27 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
             ppf equations;
           Format.pp_print_string ppf ")"
       in
-      Format.fprintf ppf
-        "@[<v 1>(\
-            @[<hov 1>(defined_names@ @[<v 1>%a@])@]@;\
-            @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
-            @[<hov 1>(cse@ %a)@])@]"
-        (* CR mshinwell: Fix this.  The problem is that Logical_variable prints
-           the types *)
-        Name.Set.print (Name.Map.keys defined_names)
-(*
-        (Name.Map.print Flambda_kind.print) defined_names
-*)
-        print_equations equations
-        (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+      if Name.Map.is_empty defined_names then
+        Format.fprintf ppf
+          "@[<v 1>(\
+              @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
+              @[<hov 1>(cse@ %a)@])@]"
+          print_equations equations
+          (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
+      else
+        Format.fprintf ppf
+          "@[<v 1>(\
+              @[<hov 1>(defined_names@ @[<v 1>%a@])@]@;\
+              @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
+              @[<hov 1>(cse@ %a)@])@]"
+          (* CR mshinwell: Fix this.  The problem is that Logical_variable prints
+             the types *)
+          Name.Set.print (Name.Map.keys defined_names)
+  (*
+          (Name.Map.print Flambda_kind.print) defined_names
+  *)
+          print_equations equations
+          (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
     let print ppf t =
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -8003,6 +8028,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       { t with cse; }
 
     type cse_meet_or_join = Meet | Join
+    let _ : cse_meet_or_join = Meet
 
     let update_cse_for_meet_or_join t _t1 _t2 (_meet_or_join : cse_meet_or_join)
           _names =
@@ -8053,19 +8079,27 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       t
 *)
 
-    let rec meet env (t1 : t) (t2 : t) : t =
+    let meet env (t1 : t) (t2 : t) : t =
 Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
   Meet_env.print env;
+      let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+      let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+      let env = Meet_env.env env in
+      let env = Typing_env.increment_scope_level env in
+      let env = Typing_env.add_or_meet_opened_env_extension env t1 in
+      let env = Typing_env.add_or_meet_opened_env_extension env t2 in
+      let level = Typing_env.current_level env in
+      let t =
+        Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
+      in
+(*
       let defined_names =
         Name.Map.disjoint_union t1.defined_names t2.defined_names
       in
-      let t = empty () in
-      let env =
-        Name.Map.fold (fun name kind env ->
-            Meet_env.with_env env (fun typing_env ->
-              Typing_env.add_definition typing_env name kind))
-          defined_names
-          env
+      let t =
+        { (empty ()) with
+          defined_names;
+        }
       in
       let names_in_meet =
         Name.Set.union (equations_domain t1) (equations_domain t2)
@@ -8091,19 +8125,19 @@ Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 pri
           names_in_meet
           t
       in
-      assert (Name.Map.is_empty t.defined_names);
       let t =
-        { t with
-          defined_names;
-        }
+        update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
       in
-      update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
+*)
+Format.eprintf "---> result is:@ %a\n%!" print t;
+      t
 
     let join env (t1 : t) (t2 : t) : t =
       let names_with_equations_in_join =
         Name.Set.inter (equations_on_outer_env_domain t1)
           (equations_on_outer_env_domain t2)
       in
+      (* XXX Think more about this *)
       let t =
         Name.Set.fold (fun name t ->
             assert (not (Name.Map.mem name t.equations));
