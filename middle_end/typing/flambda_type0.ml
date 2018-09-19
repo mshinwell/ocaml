@@ -6567,9 +6567,18 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
           Scope_level.print level
           print t
       end;
+      let one_level =
+        { level = Typing_env_level.empty ();
+          just_after_level = (snd t.current_level).just_after_level;
+        }
+      in
       let current_level = Scope_level.next (fst t.current_level) in
+      let prev_levels =
+        Scope_level.Map.add current_level (snd t.current_level) t.prev_levels
+      in
       { t with
-        current_level = (current_level, empty_one_level ());
+        prev_levels;
+        current_level = (level, one_level);
       }
 
     let increment_scope_level t =
@@ -8101,57 +8110,63 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let meet env (t1 : t) (t2 : t) : t =
-Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
-  Meet_env.print env;
-      let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-      let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-      let env = Meet_env.env env in
-      let env = Typing_env.increment_scope_level env in
-      let env = Typing_env.add_or_meet_opened_env_extension env t1 in
-      let env = Typing_env.add_or_meet_opened_env_extension env t2 in
-      let level = Typing_env.current_level env in
-      let t =
-        Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
-      in
-(*
-      let defined_names =
-        Name.Map.disjoint_union t1.defined_names t2.defined_names
-      in
-      let t =
-        { (empty ()) with
-          defined_names;
-        }
-      in
-      let names_in_meet =
-        Name.Set.union (equations_domain t1) (equations_domain t2)
-      in
-      let t =
-        Name.Set.fold (fun name t ->
-            assert (not (Name.Map.mem name t.equations));
-            let ty1 = find_equation_opt t1 name in
-            let ty2 = find_equation_opt t2 name in
-            match ty1, ty2 with
-            | None, None -> assert false
-            | Some ty1, None -> add_or_replace_equation t name ty1
-            | None, Some ty2 -> add_or_replace_equation t name ty2
-            | Some ty1, Some ty2 ->
-              let meet_ty, meet_equations =
-                Both_meet_and_join.meet env ty1 ty2
-              in
-              Typing_env_extension.pattern_match meet_equations
-                ~f:(fun t' ->
-                  let t = meet env t t' in
-                  assert (not (Name.Map.mem name t.equations));
-                  add_or_replace_equation t name meet_ty))
-          names_in_meet
-          t
-      in
-      let t =
-        update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
-      in
-*)
-Format.eprintf "---> result is:@ %a\n%!" print t;
-      t
+      if is_empty t1 then begin
+        t2
+      end else if is_empty t2 then begin
+        t1
+      end else begin
+  Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
+    Meet_env.print env;
+        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+        let env = Meet_env.env env in
+        let env = Typing_env.increment_scope_level env in
+        let env = Typing_env.add_or_meet_opened_env_extension env t1 in
+        let env = Typing_env.add_or_meet_opened_env_extension env t2 in
+        let level = Typing_env.current_level env in
+        let t =
+          Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
+        in
+  (*
+        let defined_names =
+          Name.Map.disjoint_union t1.defined_names t2.defined_names
+        in
+        let t =
+          { (empty ()) with
+            defined_names;
+          }
+        in
+        let names_in_meet =
+          Name.Set.union (equations_domain t1) (equations_domain t2)
+        in
+        let t =
+          Name.Set.fold (fun name t ->
+              assert (not (Name.Map.mem name t.equations));
+              let ty1 = find_equation_opt t1 name in
+              let ty2 = find_equation_opt t2 name in
+              match ty1, ty2 with
+              | None, None -> assert false
+              | Some ty1, None -> add_or_replace_equation t name ty1
+              | None, Some ty2 -> add_or_replace_equation t name ty2
+              | Some ty1, Some ty2 ->
+                let meet_ty, meet_equations =
+                  Both_meet_and_join.meet env ty1 ty2
+                in
+                Typing_env_extension.pattern_match meet_equations
+                  ~f:(fun t' ->
+                    let t = meet env t t' in
+                    assert (not (Name.Map.mem name t.equations));
+                    add_or_replace_equation t name meet_ty))
+            names_in_meet
+            t
+        in
+        let t =
+          update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
+        in
+  *)
+  Format.eprintf "---> result is:@ %a\n%!" print t;
+        t
+      end
 
     let join env (t1 : t) (t2 : t) : t =
       let names_with_equations_in_join =
