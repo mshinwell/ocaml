@@ -7701,10 +7701,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         { abst; }
 
     let add_definition { abst; } name kind =
-      A.pattern_match abst ~f:(fun defined_names level ->
-        let level = Typing_env_level.add_definition level name kind in
-        let name = Bindable_name.Name name in
-        { abst = A.create (name :: defined_names) level; })
+      let abst =
+        A.pattern_match abst ~f:(fun _defined_names level ->
+          let level = Typing_env_level.add_definition level name kind in
+          A.create (Typing_env_level.defined_names_in_order level) level)
+      in
+      { abst; }
 
     let add_equation { abst; } name ty =
       let abst =
