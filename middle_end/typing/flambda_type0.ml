@@ -499,6 +499,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       | Ok (entry, _env_extension) -> entry
       | Absorbing -> assert false
 
+    (* XXX These may be wrong, check.  The version in the adding env
+       extension function is correct *)
     let as_or_more_precise env t1 ~than:t2 =
       if Type_equality.fast_equal env env t1 t2 then true
       else if Flambda_type0_core.is_obviously_bottom t1 then true
@@ -5621,9 +5623,16 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
 
     let equal ~(bound_name : Name.t option)
           typing_env_left typing_env_right t1 t2 =
+Format.eprintf "Equality check: %a@ and@ %a\n%!"
+  Type_printers.print t1
+  Type_printers.print t2;
       let env = Type_equality_env.empty ~typing_env_left ~typing_env_right in
       let result = Type_equality_result.create () in
       let result = equal_with_env ?bound_name env result t1 t2 in
+let b =
+      Type_equality_result.are_types_known_equal result
+in
+Format.eprintf "Equality check result: %b\n%!" b;
       Type_equality_result.are_types_known_equal result
   end and Type_equality_env : sig
     type t
@@ -7122,22 +7131,19 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
                 Both_meet_and_join.meet meet_env ty existing_ty
               in
               let t = add_or_meet_env_extension t meet_env_extension in
-              let as_or_more_precise =
-                Flambda_type0_core.is_obviously_bottom meet_ty
-                  || Type_equality.equal ~bound_name:(Some name)
-                       t_before_equations t_before_equations
-                       meet_ty ty
+              let as_or_strictly_less_precise =
+                Type_equality.equal ~bound_name:(Some name)
+                  t_before_equations t_before_equations
+                  meet_ty existing_ty
               in
-              let strictly_more_precise =
-                as_or_more_precise
-                  && ((Flambda_type0_core.is_obviously_bottom meet_ty
-                        && not (Flambda_type0_core.is_obviously_bottom ty))
-                   || (not (Type_equality.equal ~bound_name:(Some name)
-                        t_before_equations t_before_equations
-                        meet_ty existing_ty)))
-              in
-              if not strictly_more_precise then t
-              else add_equation t name ty)
+              let strictly_more_precise = not as_or_strictly_less_precise in
+Format.eprintf "AOMOEE: name %a,@ meet_ty %a,@ existing_ty %a,@ SMP %b\n%!"
+  Name.print name
+  Type_printers.print meet_ty
+  Type_printers.print existing_ty
+  strictly_more_precise;
+              if strictly_more_precise then add_equation t name meet_ty
+              else t)
           (Typing_env_level.equations level)
           t_before_equations
       in
@@ -7905,11 +7911,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       Name_occurrences.union (free_names_in_defined_names t)
         (free_names_in_equations_and_cse t)
 
-    let _free_names_minus_defined_names t =
-      Name_occurrences.union (free_names_in_equations_and_cse t)
+    let free_names_minus_defined_names t =
+      Name_occurrences.diff (free_names_in_equations_and_cse t)
         (free_names_in_defined_names t)
 
-    let _restrict_to_names { defined_names; equations; cse; } allowed_names =
+    let restrict_to_names { defined_names; equations; cse; } allowed_names =
       let allowed_names =
         Name_occurrences.everything_must_only_be_names allowed_names
       in
@@ -7960,67 +7966,49 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           Name.print name
           print t
 
-(*
-    let _tidy t =
-      let free_names_without_defined_names' =
-        free_names_without_defined_names t
+    let tidy t =
+      let free_names_minus_defined_names' =
+        free_names_minus_defined_names t
       in
-      let defined_names =
-        Name_occurrences.create_from_set_in_types (defined_names' t)
-      in
-      (* CR mshinwell: We should do this "inlining" on [first_definitions]
-         and [last_equations_rev], too. *)
-      let at_or_after_cut_point =
-        Scope_level.Map.map (fun by_name ->
-            Name.Map.map_sharing
-              (fun (entry : Typing_env.typing_env_entry) ->
-                match entry with
-                | CSE _ -> entry
-                | Definition ty | Equation ty ->
-                  let rec resolve_aliases ty
-                        : Typing_env.typing_env_entry =
-                    (* CR mshinwell: Needs check for cycles *)
-                    match Flambda_type0_core.get_alias ty with
-                    | None
-                    | Some (Const _ | Discriminant _) ->
-                      begin match entry with
-                      | Definition _ -> Definition ty
-                      | Equation _ -> Equation ty
-                      | CSE _ -> assert false
-                      end
-                    | Some (Name alias) ->
-                      let alias_is_defined_name =
-                        Name_occurrences.mem defined_names (Name alias)
-                      in
-                      let alias_is_not_used_on_rhs =
-                        Name_occurrences.mem free_names_without_defined_names'
-                          (Name alias)
-                      in
-                      if alias_is_defined_name && alias_is_not_used_on_rhs
-                      then resolve_aliases (find t alias)
-                      else entry
-                  in
-                  resolve_aliases ty)
-              by_name)
-          t.at_or_after_cut_point
+      let defined_names = free_names_in_defined_names t in
+      let equations =
+        Name.Map.map_sharing (fun ty ->
+            let rec resolve_aliases ty =
+              (* CR mshinwell: Needs check for cycles *)
+              match Flambda_type0_core.get_alias ty with
+              | None
+              | Some (Const _ | Discriminant _) -> ty
+              | Some (Name alias) ->
+                let alias_is_defined_name =
+                  Name_occurrences.mem defined_names (Name alias)
+                in
+                let alias_is_not_used_on_rhs =
+                  Name_occurrences.mem free_names_minus_defined_names'
+                    (Name alias)
+                in
+                if alias_is_defined_name && alias_is_not_used_on_rhs
+                then resolve_aliases (find_exn t alias)
+                else ty
+            in
+            resolve_aliases ty)
+          t.equations
       in
       let t =
-        { t with at_or_after_cut_point; }
+        { t with equations; }
       in
       (* CR mshinwell: We can probably avoid re-computing this by calculating
          it as we go along, just above. *)
-      let free_names_without_defined_names =
-        free_names_without_defined_names t
+      let free_names_minus_defined_names =
+        free_names_minus_defined_names t
       in
       let unused_defined_names =
-        Name_occurrences.diff defined_names free_names_without_defined_names
+        Name_occurrences.diff defined_names free_names_minus_defined_names
       in
       let allowed =
-        Name_occurrences.diff free_names_without_defined_names
+        Name_occurrences.diff free_names_minus_defined_names
           unused_defined_names
       in
       restrict_to_names t allowed
-*)
 
     let add_definition t name kind =
       if Name.Map.mem name t.defined_names then begin
@@ -8121,8 +8109,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
         let env = Meet_env.env env in
         let env = Typing_env.increment_scope_level env in
+Format.eprintf "LEVEL MEET: adding t1\n%!";
         let env = Typing_env.add_or_meet_opened_env_extension env t1 in
+Format.eprintf "LEVEL MEET: adding t2\n%!";
         let env = Typing_env.add_or_meet_opened_env_extension env t2 in
+Format.eprintf "LEVEL MEET: cut\n%!";
         let level = Typing_env.current_level env in
         let t =
           Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
@@ -8165,7 +8156,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         in
   *)
   Format.eprintf "---> result is:@ %a\n%!" print t;
-        t
+        tidy t
       end
 
     let join env (t1 : t) (t2 : t) : t =
