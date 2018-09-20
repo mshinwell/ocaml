@@ -2702,14 +2702,25 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       invariant t;
       t
 
+    (* CR mshinwell: Misleading name? *)
     let add_definition_central_environment t name ty =
-      let env =
-        Meet_env.with_env t.env (fun env ->
-          let kind = Flambda_type0_core.kind ty in
-          let env = Typing_env.add_definition env name kind in
-          Typing_env.add_equation env name ty)
+      let kind = Flambda_type0_core.kind ty in
+      let add env =
+        let env = Typing_env.add_definition env name kind in
+        Typing_env.add_equation env name ty
       in
-      let t = { t with env; } in
+      let env =
+        Meet_env.with_env t.env (fun env -> add env)
+      in
+      let env_plus_extension1 = add t.env_plus_extension1 in
+      let env_plus_extension2 = add t.env_plus_extension2 in
+      let t =
+        { t with
+          env;
+          env_plus_extension1;
+          env_plus_extension2;
+        }
+      in
       invariant t;
       t
 
