@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module A = Number_adjuncts
 module B = Inlining_cost.Benefit
@@ -70,7 +70,9 @@ let refine_set_of_closures_type_to_identify_closure_element
 
 let simplify_project_closure env ~closure ~set_of_closures dbg ~result =
   let skeleton = T.set_of_closures_containing_at_least closure in
-  let set_of_closures_ty = TE.find_exn (E.get_typing_environment env) result in
+  let set_of_closures_ty =
+    TE.find_exn (E.get_typing_environment env) set_of_closures
+  in
   T.meet_skeleton env set_of_closures_ty ~skeleton ~result
     ~result_kind:(K.value ())
 

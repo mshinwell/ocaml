@@ -8451,10 +8451,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
   let meet = Both_meet_and_join.meet
   let join = Both_meet_and_join.join
 
-(*
-  let _meet_skeleton env t ~skeleton ~result ~result_kind =
+  let meet_skeleton env t ~skeleton ~result ~result_kind =
     let env =
-      Typing_env.add env result level (Definition (bottom result_kind))
+      Typing_env.add env result level (Definition (unknown result_kind))
     in
     let env =
       Meet_env.create env
@@ -8463,7 +8462,6 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     in
     let _meet_ty, env_extension = meet env t skeleton in
     env_extension
-*)
 
   (* Or maybe: the caller should provide the variable and this should just
      return the env_extension
