@@ -22,16 +22,10 @@ module type Env = sig
   type t
 
   type result
-  type continuation_uses = Continuation_uses.t
 
   val invariant : t -> unit
 
-  (** Create a new environment.  If [never_inline] is true then the returned
-      environment will prevent [Simplify] from inlining.  The
-      [backend] parameter is used for passing information about the compiler
-      backend being used.
-      Newly-created environments have inactive [Freshening]s (see below) and do
-      not initially hold any approximation information. *)
+  (** Create a new environment. *)
   val create
      : never_inline:bool
     -> allow_continuation_inlining:bool
@@ -48,7 +42,7 @@ module type Env = sig
       -> exn_continuation:Continuation.t
       -> descr:string
       -> scope_level_for_lifted_constants:Scope_level.t
-      -> Flambda.Expr.t * result * continuation_uses
+      -> Flambda.Expr.t * result * Continuation_uses.t
            * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
                Symbol.Map.t)
     -> simplify_expr:(
@@ -85,7 +79,7 @@ module type Env = sig
       -> exn_continuation:Continuation.t
       -> descr:string
       -> scope_level_for_lifted_constants:Scope_level.t
-      -> Flambda.Expr.t * result * continuation_uses
+      -> Flambda.Expr.t * result * Continuation_uses.t
            * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
                Symbol.Map.t)
 
@@ -399,7 +393,7 @@ module type Result = sig
 
   val union : Flambda_type.Typing_env.t -> t -> t -> t
 
-  (** Check that [prepare_for_continuation_uses] has been called on the given
+  (** Check that [prepare_for_Continuation_uses.t] has been called on the given
       result structure. *)
   val is_used_continuation : t -> Continuation.t -> bool
 
@@ -413,7 +407,7 @@ module type Result = sig
     -> Continuation_uses.Use.Kind.t
     -> t
 
-  val snapshot_continuation_uses : t -> Roll_back_after_speculation.t
+  val snapshot_Continuation_uses : t -> Roll_back_after_speculation.t
 
   val snapshot_and_forget_continuation_uses
      : t
@@ -437,7 +431,6 @@ module type Result = sig
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
-    -> freshening:Freshening.t
     -> default_env:Flambda_type.Typing_env.t
     -> Flambda_type.t list * Flambda_type.Typing_env.t
 
@@ -445,7 +438,6 @@ module type Result = sig
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
-    -> freshening:Freshening.t
     -> default_env:Flambda_type.Typing_env.t
     -> Flambda_type.t list * Flambda_type.Typing_env.t
 
@@ -518,7 +510,7 @@ module type Result = sig
   (** Check that there is no continuation binding construct in scope. *)
   val no_continuations_in_scope : t -> bool
 
-  (** All continuations for which [continuation_uses] has been
+  (** All continuations for which [Continuation_uses.t] has been
       called on the given result structure.  O(n*log(n)). *)
   val used_continuations : t -> Continuation.Set.t
 

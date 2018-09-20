@@ -350,16 +350,20 @@ MIDDLE_END_REMOVAL=
   # middle_end/removal/remove_unused_program_constructs.cmo \
   # middle_end/removal/unrecursify.cmo
 
-MIDDLE_END_SIMPLIFY=
+MIDDLE_END_SIMPLIFY=\
+  middle_end/simplify/simplify_simple.cmo \
+  middle_end/simplify/simplify_generic_array.cmo \
+  middle_end/simplify/simplify_unary_primitive.cmo \
+  middle_end/simplify/simplify_binary_primitive.cmo \
+  middle_end/simplify/simplify_ternary_primitive.cmo \
+  middle_end/simplify/simplify_variadic_primitive.cmo \
+  middle_end/simplify/simplify_primitive.cmo \
+  middle_end/simplify/simplify_expr_intf.cmo \
+  middle_end/simplify/simplify_named_intf.cmo \
+  middle_end/simplify/simplify_program_intf.cmo \
+  middle_end/simplify/simplify_toplevel_intf.cmo
 #  middle_end/simplify/continuation_uses.cmo \
 #  middle_end/simplify/join_point.cmo \
-#  middle_end/simplify/simplify_simple.cmo \
-#  middle_end/simplify/simplify_generic_array.cmo \
-#  middle_end/simplify/simplify_unary_primitive.cmo \
-#  middle_end/simplify/simplify_binary_primitive.cmo \
-#  middle_end/simplify/simplify_ternary_primitive.cmo \
-#  middle_end/simplify/simplify_variadic_primitive.cmo \
-#  middle_end/simplify/simplify_primitive.cmo \
 #  middle_end/simplify/simplify_named.cmo \
 #  middle_end/simplify/simplify_expr.cmo \
 #  middle_end/simplify/simplify_program.cmo \

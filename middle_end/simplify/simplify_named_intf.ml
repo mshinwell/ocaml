@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2016--2017 OCamlPro SAS                                    *)
-(*   Copyright 2016--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,37 +14,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Approximations of continuations.  Used during simplification. *)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* To be fixed later... *)
+module type S = sig
+  val simplify_named
+     : Simplify_env_and_result.Env.t
+    -> Simplify_env_and_result.Result.t
+    -> Flambda.Named.t
+    -> result_var:Variable.t
+    -> (Variable.t * Flambda_kind.t * Flambda.Named.t) list
+         * Flambda.Reachable.t
+         * Flambda_type.t
+         * Simplify_env_and_result.Result.t
 
-type t
-
-type continuation_handlers =
-  | Non_recursive of Flambda.Non_recursive_let_cont_handler.t
-  | Recursive of Flambda.Recursive_let_cont_handlers.t
-
-val create
-   : name:Continuation.t
-  -> continuation_handlers
-  -> t
-
-(* CR mshinwell: Bad name.  Only the code of the continuation itself is
-   unknown. *)
-val create_unknown
-   : name:Continuation.t
-(* Maybe the arity should be:  Flambda_arity.t Continuation.Map.t?
-  -> Flambda_arity.t
-*)
-  -> t
-
-val name : t -> Continuation.t
-
-(*val params : t -> Kinded_parameter.t list
-val arity : t -> Flambda_arity.t
-*)
-val handlers : t -> continuation_handlers option
-
-val is_alias : t -> Continuation.t option
-
-val print : Format.formatter -> t -> unit
+  val simplify_set_of_closures
+     : Simplify_env_and_result.Env.t
+    -> Simplify_env_and_result.Result.t
+    -> Flambda.Set_of_closures.t
+    -> Flambda.Set_of_closures.t * Flambda_type.t
+         * Simplify_env_and_result.Result.t
+end

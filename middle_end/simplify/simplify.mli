@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,11 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Simplification of Flambda programs: for the most part a beta-reduction pass.
+(** Simplification of Flambda programs: inlining, specialisation,
+    unboxing and so forth.
 
-    Readers interested in the inlining strategy should read the
+    Readers interested in the function inlining strategy should read the
     [Inlining_decision] module first.
 *)
 val run
@@ -30,24 +31,3 @@ val run
   -> round:int
   -> Flambda_static.Program.t
   -> Flambda_static.Program.t
-
-val simplify_toplevel
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Flambda.Expr.t
-  -> continuation:Continuation.t
-  -> continuation_params:Flambda.Typed_parameter.t list
-  -> exn_continuation:Continuation.t
-  -> descr:string
-  -> scope_level_for_lifted_constants:Scope_level.t
-  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-       * Continuation_uses.t
-       * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-           Symbol.Map.t
-
-val duplicate_function
-   : env:Simplify_env_and_result.Env.t
-  -> set_of_closures:Flambda.Set_of_closures.t
-  -> closure_id:Closure_id.t
-  -> new_closure_id:Closure_id.t
-  -> Flambda.Function_declaration.t

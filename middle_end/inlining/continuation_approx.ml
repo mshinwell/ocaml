@@ -17,33 +17,29 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type continuation_handlers =
-  | Non_recursive of Flambda.Continuation_handler.t
-  | Recursive of Flambda.Continuation_handlers.t
+  | Non_recursive of Flambda.Non_recursive_let_cont_handler.t
+  | Recursive of Flambda.Recursive_let_cont_handlers.t
 
 type t = {
   name : Continuation.t;
   handlers : continuation_handlers option;
-  params : Flambda.Typed_parameter.t list;
 }
 
-let create ~name ~(handlers : continuation_handlers) ~params =
+let create ~name ~(handlers : continuation_handlers) =
   { name;
     handlers = Some handlers;
-    params;
   }
 
-let create_unknown ~name ~params =
+let create_unknown ~name =
   { name;
     handlers = None;
-    params;
   }
 
 let name t = t.name
-let params t = t.params
-let arity t = Flambda.Typed_parameter.List.arity t.params
 let handlers t = t.handlers
 
-let is_alias t =
+let is_alias _t = assert false
+(*
   match t.handlers with
   | None | Some (Recursive _) -> None
   | Some (Non_recursive handler) ->
@@ -61,8 +57,10 @@ let is_alias t =
       then Some cont
       else None
     | _ -> None
+*)
 
-let print ppf t =
+let print ppf _t = Format.pp_print_string ppf "NYI"
+(*
   let print_handlers ppf = function
     | None -> Format.fprintf ppf "Unknown"
     | Some handlers ->
@@ -79,3 +77,4 @@ let print ppf t =
       Flambda.Typed_parameter.print)
     t.params
     print_handlers t.handlers
+*)
