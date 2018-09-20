@@ -30,92 +30,27 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-(*
-let _refine_set_of_closures_type_to_identify_projection ~type_of_name
-      env r ~set_of_closures_name ~result_var ~closure_id =
-  let set_of_closures_ty =
-    let closure_ty =
-      (* XXX this is wrong.  [result_var] is of kind [Value] *)
-      T.alias_type_of_as_ty_fabricated (Name.var result_var)
-    in
-    let closures =
-      Closure_id.Map.add closure_id closure_ty Closure_id.Map.empty
-    in
-    let closure_elements = Var_within_closure.Map.empty in
-    T.set_of_closures ~closures:(Open closures)
-      ~closure_elements:(Open closure_elements)
-  in
-  R.add_or_meet_equation
-    r set_of_closures_name
-    (E.continuation_scope_level env) set_of_closures_ty
-*)
+let meet_skeleton env ~original_term ~deconstructing ~skeleton ~result
+      ~result_kind : _ Or_bottom.t =
+  let env = E.typing_env env in
+  let ty = TE.find_exn env deconstructing in
+  match T.meet_skeleton env ty ~skeleton ~result ~result_kind with
+  | Bottom -> Bottom
+  | Ok env_extension -> Ok (original_term, env_extension)
 
-let refine_set_of_closures_type_to_identify_closure_element
-      env r ~set_of_closures_name ~result_var ~var_within_closure =
-  let set_of_closures_ty =
-    let closures = Closure_id.Map.empty in
-    let var_within_closure_ty =
-      T.alias_type_of_as_ty_value (Name.var result_var)
-    in
-    let closure_elements =
-      Var_within_closure.Map.add var_within_closure var_within_closure_ty
-        Var_within_closure.Map.empty
-    in
-    T.set_of_closures ~closures:(Open closures)
-      ~closure_elements:(Open closure_elements)
-  in
-  R.add_or_meet_equation r
-    set_of_closures_name (E.continuation_scope_level env)
-    set_of_closures_ty
+let simplify_project_closure env ~original_term ~closure ~set_of_closures
+      ~result =
+  meet_skeleton env ~original_term ~deconstructing:set_of_closures
+    ~skeleton:(T.set_of_closures_containing_at_least closure)
+    ~result ~result_kind:(K.value ())
 
-let simplify_project_closure env ~closure ~set_of_closures dbg ~result =
-  let skeleton = T.set_of_closures_containing_at_least closure in
-  let set_of_closures_ty =
-    TE.find_exn (E.get_typing_environment env) set_of_closures
-  in
-  T.meet_skeleton env set_of_closures_ty ~skeleton ~result
-    ~result_kind:(K.value ())
+let simplify_project_var env ~original_term ~closure ~closure_element
+      ~result : _ Or_bottom.t =
+  meet_skeleton env ~original_term ~deconstructing:closure
+    ~skeleton:(T.closure_containing_at_least closure_element)
+    ~result ~result_kind:(K.value ())
 
 (*
-  let set_of_closures, ty = S.simplify_simple env set_of_closures in
-  let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
-  let unknown r =
-    Reachable.reachable (original_term ()), T.any_value (), r
-  in
-  let invalid r =
-    Reachable.invalid (), T.bottom (K.value ()),
-      R.map_benefit r (B.remove_primitive (Unary prim))
-  in
-(*
-  let r =
-    match set_of_closures with
-    | Const _ -> r
-    | Name set_of_closures_name ->
-      refine_set_of_closures_type_to_identify_projection (E.get_typing_environment env)
-        env r
-        ~set_of_closures_name
-        ~result_var
-        ~closure_id:closure
-  in
-*)
-  let proof = T.prove_sets_of_closures (E.get_typing_environment env) ty in
-  match proof with
-  | Proved (_set_of_closures_name, set_of_closures) ->
-    let closures = T.extensibility_contents set_of_closures.closures in
-    begin match Closure_id.Map.find closure closures with
-    | exception Not_found -> invalid r
-    | _closure_ty ->
-      (* CR mshinwell: seems a bit ugly to use force_to_kind *)
-      let set_of_closures = T.force_to_kind_fabricated ty in
-      let closures_entry = T.closures_entry ~set_of_closures in
-      let closures = Closure_id.Map.singleton closure closures_entry in
-      let ty = T.closures closures in
-      Reachable.reachable (original_term ()), ty, r
-    end
-  | Unknown -> unknown r
-  | Invalid -> invalid r
-*)
-
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       ~closures dbg ~result_var:_ =
   let closures, ty = S.simplify_simple env closures in
@@ -176,7 +111,9 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_value (), r
   | Invalid -> invalid r
+*)
 
+(*
 let simplify_project_var env r prim ~closure_id ~var_within_closure
       ~closures dbg ~result_var =
   let closures, ty = S.simplify_simple env closures in
@@ -221,6 +158,7 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_value (), r
   | Invalid -> invalid r
+*)
 
 let simplify_duplicate_block _env _r _prim _arg _dbg
       ~(kind : Flambda_primitive.duplicate_block_kind)
@@ -325,13 +263,11 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
   term, ty, r
 *)
 
-let simplify_is_int env r prim arg dbg ~result_var =
-  let result_name = Name.var result_var in
+let simplify_is_int env r prim arg dbg ~result =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let proof = T.prove_is_tagged_immediate (E.get_typing_environment env) ty in
-  (* CR mshinwell: The 0 and 1 constants should be bound somewhere with
-     proper names. *)
+  let typing_env = E.typing_env env in
+  let proof = T.prove_is_tagged_immediate typing_env ty in
   let proved ~is_tagged_immediate =
     let discriminant =
       if is_tagged_immediate then Discriminant.bool_true
@@ -342,14 +278,9 @@ let simplify_is_int env r prim arg dbg ~result_var =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let r =
-    R.add_or_meet_equation r result_name
-      (E.continuation_scope_level env)
-      (T.unknown (K.fabricated ()))
-  in
-  let r =
     match arg with
     | Name arg ->
-      R.add_cse r ~bound_to:result_name
+      R.add_cse r ~bound_to:(Simple.name result)
         (Flambda_primitive.With_fixed_value.create_is_int
           ~immediate_or_block:arg)
     | Const _ | Discriminant _ -> r
@@ -358,7 +289,7 @@ let simplify_is_int env r prim arg dbg ~result_var =
   | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
   | Proved Never_a_tagged_immediate -> proved ~is_tagged_immediate:false
   | Unknown ->
-    (* CR mshinwell: This should use the [result_var] as the [is_int] in a
+    (* CR mshinwell: This should use the [result] as the [is_int] in a
        refined type of [arg]. *)
     let no_env_extension = T.Typing_env_extension.empty in
     let all_results =
@@ -417,7 +348,6 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
   in
   let r =
     R.add_or_meet_equation r (Name.var result_var)
-      (E.continuation_scope_level env)
       (T.unknown (K.fabricated ()))
   in
   let r =
@@ -910,9 +840,12 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Project_closure closure ->
     simplify_project_closure env r prim ~closure ~set_of_closures:arg dbg
       ~result_var
+  | Move_within_set_of_closures _ -> Misc.fatal_error "Not yet implemented"
+(*
   | Move_within_set_of_closures { move_from; move_to; } ->
     simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       ~closures:arg dbg ~result_var
+*)
   | Project_var (closure_id, var_within_closure) ->
     simplify_project_var env r prim ~closure_id ~var_within_closure
       ~closures:arg dbg ~result_var

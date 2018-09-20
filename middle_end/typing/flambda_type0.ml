@@ -335,6 +335,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
 
     val is_empty : t -> bool
 
+    val classify : t -> unit Or_unknown_or_bottom.t
+
     include Contains_names.S with type t := t
   end = struct
     module RP = struct
@@ -406,6 +408,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
 
     let free_names = RL.free_names
     let apply_name_permutation = RL.apply_name_permutation
+
+    let classify = RL.classify
   end and Both_meet_and_join : sig
     val meet
        : Meet_env.t
@@ -1348,7 +1352,6 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         closure that holds the given closure variable with the given type. *)
     val closure_containing_at_least
        : Var_within_closure.t
-      -> Flambda_types.ty_value
       -> Flambda_types.t
 
     (** The type of a set of closures containing exactly those closure IDs
@@ -2018,7 +2021,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       in
       Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
 
-    let closure_containing_at_least var_within_closure ty_value =
+    let closure_containing_at_least var_within_closure =
+      let ty_value = any_value_as_ty_value () in
       let closure_elements =
         Var_within_closure.Map.singleton var_within_closure (Value ty_value)
       in
@@ -4875,6 +4879,8 @@ Format.eprintf "AOME %a\n%!" print t;
 
       val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
 
+      val classify : t -> unit Or_unknown_or_bottom.t
+
       include Contains_names.S with type t := t
     end
   end = struct
@@ -5253,6 +5259,11 @@ maps_to
         match t with
         | Known t0 -> T0.free_names t0
         | Unknown -> Name_occurrences.create ()
+
+      let classify (t : t) : unit Or_unknown_or_bottom.t =
+        match t with
+        | Known t0 -> if T0.is_bottom t0 then Bottom else Ok ()
+        | Unknown -> Unknown
     end
   end and Trivial_row_like : sig
     module Make (Thing_without_names : Hashtbl.With_map) : sig
@@ -5297,6 +5308,8 @@ maps_to
       val get_singleton
          : t
         -> (Thing_without_names.t * Typing_env_extension.t) option
+
+      val classify : t -> unit Or_unknown_or_bottom.t
 
       include Contains_names.S with type t := t
     end
@@ -5367,6 +5380,8 @@ maps_to
                 Thing_without_names.Set.empty
             in
             Known things
+
+      let classify = RL.classify
 
       let get_singleton t =
         match RL.get_singleton t with
@@ -8451,7 +8466,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
   let meet = Both_meet_and_join.meet
   let join = Both_meet_and_join.join
 
-  let meet_skeleton env t ~skeleton ~result ~result_kind =
+  let meet_skeleton env t ~skeleton ~result ~result_kind : _ Or_bottom.t =
     let env =
       Typing_env.add env result level (Definition (unknown result_kind))
     in
@@ -8460,8 +8475,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         ~perm_left:(Name_permutation.create ())
         ~perm_right:(Name_permutation.create ())
     in
-    let _meet_ty, env_extension = meet env t skeleton in
-    env_extension
+    let meet_ty, env_extension = meet env t skeleton in
+    if is_obviously_bottom meet_ty then Bottom
+    else Ok env_extension
 
   (* Or maybe: the caller should provide the variable and this should just
      return the env_extension
@@ -8990,6 +9006,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       end
     | Simplified_type.Naked_number _ -> wrong_kind ()
     | Fabricated _ -> wrong_kind ()
+*)
 
   type is_tagged_immediate =
     | Never_a_tagged_immediate
@@ -9002,28 +9019,29 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
         print t
     in
     let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.check_not_phantom simplified "prove_is_tagged_immediate";
     match simplified with
     | Value ty_value ->
       begin match ty_value with
       | Unknown -> Unknown
       | Bottom -> Invalid
-      | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-        begin match blocks_imms.blocks, blocks_imms.immediates with
-        | Unknown, _ | _, Unknown -> Unknown
-        | Known blocks, Known imms ->
-          match no_blocks blocks, Immediate.Map.is_empty imms with
-          | true, true -> Invalid
-          | false, false -> Unknown
-          | true, false -> Proved Always_a_tagged_immediate
-          | false, true -> Proved Never_a_tagged_immediate
+      | Ok (Blocks_and_tagged_immediates { blocks; immediates; }, _perm) ->
+        let blocks = Blocks.classify blocks in
+        let immediates = Immediates.classify immediates in
+        begin match blocks, immediates with
+        | Bottom, Ok () -> Proved Always_a_tagged_immediate
+        | Ok (), Bottom -> Proved Never_a_tagged_immediate
+        | Unknown, _
+        | _, Unknown
+        | Ok (), Ok () -> Unknown
+        | Bottom, Bottom -> Invalid
         end
-      | Ok (Boxed_number _) -> Invalid
-      | Ok (Closures _ | String _) -> Invalid
+      | Ok (Boxed_number _) -> Proved Never_a_tagged_immediate
+      | Ok (Closures _ | String _) -> Proved Never_a_tagged_immediate
       end
     | Simplified_type.Naked_number _ -> wrong_kind ()
     | Fabricated _ -> wrong_kind ()
 
+(*
   let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
     (* CR-someday mshinwell: Note that we could easily extend
        this to handle blocks of the other unboxed number kinds. *)

@@ -641,6 +641,8 @@ module type S = sig
 
   val get_alias : t -> Simple.t option
 
+  (* CR mshinwell: Shouldn't this take an environment, so it can
+     resolve aliases? *)
   val is_obviously_bottom : t -> bool
 
   val of_ty_value : ty_value -> t
@@ -860,7 +862,6 @@ module type S = sig
       closure that holds the given closure variable with the given type. *)
   val closure_containing_at_least
      : Var_within_closure.t
-    -> ty_value
     -> t
 
   (** The type of a set of closures containing exactly those closure IDs

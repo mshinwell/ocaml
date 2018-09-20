@@ -306,6 +306,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/language/var_within_closure.cmo \
   middle_end/typing/or_bottom.cmo \
   middle_end/typing/or_unknown.cmo \
+  middle_end/typing/or_unknown_or_bottom.cmo \
   middle_end/typing/or_absorbing.cmo \
   middle_end/typing/tag_and_size.cmo \
   middle_end/typing/changes.cmo \
