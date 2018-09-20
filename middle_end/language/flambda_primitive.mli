@@ -333,6 +333,9 @@ val result_kind_of_variadic_primitive : variadic_primitive -> result_kind
 (** Describe the kind of the result of the given primitive. *)
 val result_kind : t -> result_kind
 
+(** Like [result_kind], but returns the appropriate [Flambda_kind]. *)
+val result_kind' : t -> Flambda_kind.t
+
 (** Things that a primitive application does to the world. *)
 type effects =
   | No_effects
@@ -395,13 +398,6 @@ module With_fixed_value : sig
   include Contains_names.S with type t := t
 
   val create : primitive_application -> t option
-
-  val create_is_int : immediate_or_block:Name.t -> t
-
-  val create_get_tag
-     : block:Name.t
-    -> tags_to_sizes:(Targetint.OCaml.t Tag.Map.t)
-    -> t
 
   val equal : t -> t -> bool
 

@@ -30,23 +30,23 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-let meet_skeleton env ~original_term ~deconstructing ~skeleton ~result
+let meet_skeleton env r ~original_term ~deconstructing ~skeleton ~result
       ~result_kind : _ Or_bottom.t =
   let env = E.typing_env env in
   let ty = TE.find_exn env deconstructing in
   match T.meet_skeleton env ty ~skeleton ~result ~result_kind with
   | Bottom -> Bottom
-  | Ok env_extension -> Ok (original_term, env_extension)
+  | Ok env_extension -> Ok (original_term, env_extension, r)
 
-let simplify_project_closure env ~original_term ~closure ~set_of_closures
+let simplify_project_closure env r ~original_term ~closure ~set_of_closures
       ~result =
-  meet_skeleton env ~original_term ~deconstructing:set_of_closures
+  meet_skeleton env r ~original_term ~deconstructing:set_of_closures
     ~skeleton:(T.set_of_closures_containing_at_least closure)
     ~result ~result_kind:(K.value ())
 
-let simplify_project_var env ~original_term ~closure ~closure_element
+let simplify_project_var env r ~original_term ~closure ~closure_element
       ~result : _ Or_bottom.t =
-  meet_skeleton env ~original_term ~deconstructing:closure
+  meet_skeleton env r ~original_term ~deconstructing:closure
     ~skeleton:(T.closure_containing_at_least closure_element)
     ~result ~result_kind:(K.value ())
 
@@ -263,49 +263,57 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
   term, ty, r
 *)
 
-let simplify_is_int env r prim arg dbg ~result =
-  let arg, ty = S.simplify_simple env arg in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+let initial_env_extension prim ~result =
+  match Flambda_primitive.With_fixed_value.create prim with
+  | None -> TEE.empty ()
+  | Some prim -> TEE.add_cse (TEE.empty ()) (Simple.name result) prim
+
+let pre_simplification env prim dbg ~result arg =
   let typing_env = E.typing_env env in
+  let arg, arg_ty = S.simplify_simple typing_env arg in
+  let env_extension = initial_env_extension prim ~result in
+  let original_term : Named.t = Prim (prim, dbg) in
+  typing_env, original_term, arg, arg_ty, env_extension
+
+let simplify_is_int typing_env r env_extension ~original_term prim arg arg_ty
+      ~result : _ Or_bottom.t =
   let proof = T.prove_is_tagged_immediate typing_env ty in
-  let proved ~is_tagged_immediate =
-    let discriminant =
-      if is_tagged_immediate then Discriminant.bool_true
-      else Discriminant.bool_false
-    in
-    Reachable.reachable (Simple (Simple.discriminant discriminant)),
-      T.this_discriminant discriminant,
-      R.map_benefit r (B.remove_primitive (Unary prim))
-  in
-  let r =
-    match arg with
-    | Name arg ->
-      R.add_cse r ~bound_to:(Simple.name result)
-        (Flambda_primitive.With_fixed_value.create_is_int
-          ~immediate_or_block:arg)
-    | Const _ | Discriminant _ -> r
+  let proved discriminant : _ Or_bottom.t =
+    let result_term : Named.t = Simple (Simple.discriminant discriminant) in
+    let result_ty = T.this_discriminant discriminant in
+    let env_extension = TEE.add_equation env_extension result result_ty in
+    let r = R.map_benefit r (B.remove_primitive (Unary prim)) in
+    Ok (result_term, env_extension, r)
   in
   match proof with
-  | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
-  | Proved Never_a_tagged_immediate -> proved ~is_tagged_immediate:false
+  | Proved Always_a_tagged_immediate -> proved Discriminant.bool_true
+  | Proved Never_a_tagged_immediate -> proved Discriminant.bool_false
   | Unknown ->
-    (* CR mshinwell: This should use the [result] as the [is_int] in a
-       refined type of [arg]. *)
-    let no_env_extension = T.Typing_env_extension.empty in
-    let all_results =
+    let result_ty =
       T.these_discriminants (Discriminant.Map.of_list [
-        Discriminant.bool_false, no_env_extension;
-        Discriminant.bool_true, no_env_extension;
+        Discriminant.bool_false, TEE.empty ();
+        Discriminant.bool_true, TEE.empty ();
       ])
     in
-    Reachable.reachable (original_term ()), all_results, r
-  | Invalid -> 
-    Reachable.invalid (), T.bottom (K.fabricated ()),
-      R.map_benefit r (B.remove_primitive (Unary prim))
+    let env_extension = TEE.add_equation env_extension result result_ty in
+    Ok (original_term, env_extension, r)
+  | Invalid -> Bottom
 
-let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
+let post_simplification typing_env r prim (result : _ Or_bottom.t) =
+  match result with
+  | Bottom ->
+    let r = R.map_benefit r (B.remove_primitive (Unary prim)) in
+    let term : _ Or_bottom.t = Bottom in
+    typing_env, r, term, result
+  | Ok (term, env_extension, r) ->
+    let kind = Flambda_primitive.result_kind' prim in
+    let typing_env = TE.add_definition typing_env result kind in
+    let typing_env = TE.add_env_extension typing_env result env_extension in
+    let term : _ Or_bottom.t = Ok term in
+    typing_env, r, term, result
+
+let simplify_get_tag env r prim ~tags_to_sizes block block_ty dbg ~result_var =
   let result_name = Name.var result_var in
-  let block, block_ty = S.simplify_simple env block in
   let inferred_tags = T.prove_tags (E.get_typing_environment env) block_ty in
   let possible_tags = Tag.Map.keys tags_to_sizes in
   let invalid r =
@@ -345,18 +353,6 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
         Discriminant.Map.empty
     in
     T.these_discriminants discriminants_to_env_extension
-  in
-  let r =
-    R.add_or_meet_equation r (Name.var result_var)
-      (T.unknown (K.fabricated ()))
-  in
-  let r =
-    match block with
-    | Name block ->
-      R.add_cse r ~bound_to:result_name
-        (Flambda_primitive.With_fixed_value.create_get_tag
-          ~block ~tags_to_sizes)
-    | Const _ | Discriminant _ -> r
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -770,6 +766,8 @@ let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
   let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
   Reachable.reachable named, T.unknown result_kind, r
 
+(* When [Bottom] is received here from a simplifier, we should call
+   [B.remove_primitive] *)
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var : Reachable.t * T.t * R.t =
   match prim with
