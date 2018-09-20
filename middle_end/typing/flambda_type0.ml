@@ -7669,8 +7669,11 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
        such as this. *)
     let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_bottom t1 then t1
-      else if is_bottom t2 then t2
+      (* Care: the domains of [t1] and [t2] are treated as contravariant.
+         So if one of them is bottom, the result of meeting it with any other
+         level is that level, not bottom. *)
+      else if is_bottom t1 then t2
+      else if is_bottom t2 then t1
       else
         let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
         let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
@@ -7685,8 +7688,8 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
       if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_bottom t1 then t2
-      else if is_bottom t2 then t1
+      else if is_bottom t1 then t1
+      else if is_bottom t2 then t2
       else
         let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
         let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
