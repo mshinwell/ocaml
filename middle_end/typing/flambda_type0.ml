@@ -1075,6 +1075,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         -> t
         -> Type_equality_result.t
 
+      val widen : t -> to_match:t -> t
+
       val meet
          : Meet_env.t
         -> t
@@ -1109,6 +1111,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         -> t
         -> t
         -> Type_equality_result.t
+
+      val widen : t -> to_match:t -> t
 
       val meet
          : Meet_env.t
@@ -2149,6 +2153,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         in
         { by_closure_id; }
 
+      let widen t ~to_match:_ = t  (* XXX Think about this *)
+
       let meet = Both_meet_and_join.meet_set_of_closures_entry
       let join = Both_meet_and_join.join_set_of_closures_entry
 
@@ -2191,6 +2197,8 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
         t
 
       let equal = Type_equality.equal_closures_entry
+
+      let widen t ~to_match:_ = t  (* XXX Think about this *)
 
       let meet = Both_meet_and_join.meet_closures_entry
       let join = Both_meet_and_join.join_closures_entry
@@ -4080,6 +4088,8 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         -> t
         -> Type_equality_result.t
 
+      val widen : t -> to_match:t -> t
+
       val meet
          : Meet_env.t
         -> t
@@ -4159,6 +4169,7 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
           -> t
           -> t
           -> Type_equality_result.t
+        val widen : t -> to_match:t -> t
         val meet
            : Meet_env.t
           -> t
@@ -4318,6 +4329,23 @@ Format.eprintf "Returning =%a, env_extension:@ %a\n%!"
         (* XXX Isn't this wrong?  Float arrays... *)
         let kind = Flambda_kind.value ()
 
+        let kind_of_index _t _index = kind (* XXX *)
+
+        let widen t ~to_match =
+          let missing_indexes =
+            Index.Set.diff (indexes to_match) (indexes t)
+          in
+          let components_by_index =
+            Index.Set.fold (fun index components_by_index ->
+                assert (not (Index.Map.mem index components_by_index));
+                let kind = kind_of_index to_match index in
+                let component = Component.create kind in
+                Index.Map.add index component components_by_index)
+              missing_indexes
+              t.components_by_index
+          in
+          { t with components_by_index; }
+
         let environment_for_meet_or_join env (t1 : t) (t2 : t)
               ~indexes =
           let components_by_index_in_result, env =
@@ -4383,10 +4411,7 @@ Format.eprintf "Made fresh component %a for RP meet/join\n%!"
           if Meet_env.shortcut_precondition env && t1 == t2 then
             Ok None
           else
-            let indexes = Index.Set.union (indexes t1) (indexes t2) in
-            (* CR mshinwell: This used to say [Index.Set.inter].  However we
-               need to widen these products e.g. for meeting a block of fixed
-               width 2 with a block of at least width 1. *)
+            let indexes = Index.Set.inter (indexes t1) (indexes t2) in
             if Index.Set.is_empty indexes then Bottom
             else
               let env = Join_env.create env in
@@ -4538,6 +4563,11 @@ Format.eprintf "AOME %a\n%!" print t;
         pattern_match_pair t1 t2 ~f:(fun _ t0_1 t0_2 ->
           T0.equal env result t0_1 t0_2)
 
+      let widen t ~to_match =
+        pattern_match_map t ~f:(fun t0 ->
+          pattern_match to_match ~f:(fun _ to_match ->
+            T0.widen t0 ~to_match))
+
       let meet env t1 t2 =
         pattern_match t1 ~f:(fun _ t0_1 ->
           pattern_match t2 ~f:(fun _ t0_2 : _ Or_bottom.t ->
@@ -4627,6 +4657,10 @@ Format.eprintf "AOME %a\n%!" print t;
         -> t
         -> Type_equality_result.t
 
+      (** Ensure that the given relational product contains components for
+          all indexes less than or equal to the given index. *)
+      val widen : t -> to_match:t -> t
+
       (** Greatest lower bound of two relational products. *)
       val meet
          : Meet_env.t
@@ -4700,6 +4734,8 @@ Format.eprintf "AOME %a\n%!" print t;
           -> t
           -> Type_equality_result.t
 
+        val widen : t -> to_match:t -> t
+
         val meet
            : Meet_env.t
           -> t
@@ -4772,6 +4808,8 @@ Format.eprintf "AOME %a\n%!" print t;
           -> Meet_env.t
           -> Typing_env_extension.t
           -> t
+
+        val widen : t -> to_match:t -> t
 
         val meet
            : Meet_env.t
@@ -4859,6 +4897,8 @@ Format.eprintf "AOME %a\n%!" print t;
           -> Meet_env.t
           -> Typing_env_extension.t
           -> t
+
+        val widen : t -> to_match:t -> t
 
         val meet
            : Meet_env.t
@@ -5016,7 +5056,8 @@ Format.eprintf "AOME %a\n%!" print t;
                    [meet] case (same below)? *)
                 let maps_to =
                   E.switch' Maps_to.meet Maps_to.join env
-                    maps_to1 from_at_least2
+                    maps_to1
+                    (Maps_to.widen from_at_least2 ~to_match:maps_to1)
                 in
                 match maps_to with
                 | Bottom -> None
@@ -5255,6 +5296,8 @@ maps_to
 
         let add_or_meet_equations t env t' =
           meet env t t'
+
+        let widen t ~to_match:_ = t
 
         let meet env t1 t2 : _ Or_bottom.t =
           let t = meet env t1 t2 in
@@ -8197,6 +8240,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let meet env (t1 : t) (t2 : t) : t =
+      (* Care: as per comment in [Typing_env_extension.meet]. *)
       if is_empty t1 then begin
         t2
       end else if is_empty t2 then begin
