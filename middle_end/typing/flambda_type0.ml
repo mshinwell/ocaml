@@ -515,7 +515,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
             ~perm_right:(Name_permutation.create ())
         in
         let meet_t, env_extension = meet meet_env t1 t2 in
-        let env = Typing_env.add_or_meet_env_extension env env_extension in
+        let env = Typing_env.add_env_extension env env_extension in
         Type_equality.equal ~bound_name:None env env meet_t t1
 
     let strictly_more_precise env t1 ~than:t2 =
@@ -531,7 +531,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
             ~perm_right:(Name_permutation.create ())
         in
         let meet_t, env_extension = meet meet_env t1 t2 in
-        let env = Typing_env.add_or_meet_env_extension env env_extension in
+        let env = Typing_env.add_env_extension env env_extension in
         Type_equality.equal ~bound_name:None env env meet_t t1
           && not (Type_equality.equal ~bound_name:None env env meet_t t2)
   end and Closure_elements : sig
@@ -2564,7 +2564,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       -> holds_on_right:Typing_env_extension.t
       -> t
 
-    val add_or_meet_opened_extensions
+    val add_opened_extensions
        : t
       -> holds_on_left:Typing_env_level.t
       -> holds_on_right:Typing_env_level.t
@@ -2642,14 +2642,14 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
 
     let add_extensions t ~holds_on_left ~holds_on_right =
       let env_plus_extension1 =
-        Typing_env.add_or_meet_env_extension t.env_plus_extension1
+        Typing_env.add_env_extension t.env_plus_extension1
           holds_on_left
       in
       let extension1 =
         Typing_env_extension.meet t.env t.extension1 holds_on_left
       in
       let env_plus_extension2 =
-        Typing_env.add_or_meet_env_extension t.env_plus_extension2
+        Typing_env.add_env_extension t.env_plus_extension2
           holds_on_right
       in
       let extension2 =
@@ -2666,9 +2666,9 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
       invariant t;
       t
 
-    let add_or_meet_opened_extensions t ~holds_on_left ~holds_on_right =
+    let add_opened_extensions t ~holds_on_left ~holds_on_right =
       let env_plus_extension1 =
-        Typing_env.add_or_meet_opened_env_extension t.env_plus_extension1
+        Typing_env.add_opened_env_extension t.env_plus_extension1
           holds_on_left
       in
       let extension1 =
@@ -2676,7 +2676,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
           (Typing_env_extension.create holds_on_left)
       in
       let env_plus_extension2 =
-        Typing_env.add_or_meet_opened_env_extension t.env_plus_extension2
+        Typing_env.add_opened_env_extension t.env_plus_extension2
           holds_on_right
       in
       let extension2 =
@@ -2709,7 +2709,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
           ~holds_on_left ~holds_on_right ~central_extension =
       let env =
         Meet_env.with_env t.env (fun env ->
-          Typing_env.add_or_meet_env_extension env central_extension)
+          Typing_env.add_env_extension env central_extension)
       in
       let t = { t with env; } in
       invariant t;
@@ -2851,7 +2851,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
                   (* [of_kind_foo] can be compatible with at most one of the
                      elements of [of_kind_foos]. *)
                   let new_env_extension_from_meet =
-                    ref (Typing_env_extension.empty ())
+                    ref (Typing_env_extension.unknown ())
                   in
                   let of_kind_foos =
                     Misc.Stdlib.List.filter_map (fun (of_kind_foo', perm2) ->
@@ -2879,7 +2879,7 @@ module Make (Term_language_function_declaration : Expr_intf.S) = struct
                       env_extension_from_meet !new_env_extension_from_meet;
                   in
                   of_kind_foos, env_extension_from_meet)
-                (of_kind_foos2, Typing_env_extension.empty ())
+                (of_kind_foos2, Typing_env_extension.unknown ())
                 of_kind_foos1
             in
             let same_as input_of_kind_foos =
@@ -4486,7 +4486,7 @@ Format.eprintf "Env for RP meet:@ env: %a@;env_extension1: %a@;env_extension2: %
             t.env_extension
 
         let introduce t env =
-          Typing_env.add_or_meet_env_extension env (standalone_extension t)
+          Typing_env.add_env_extension env (standalone_extension t)
 
         let add_or_meet_equations t env new_equations =
 Format.eprintf "AOME %a, new equations %a\n%!" print t
@@ -6433,12 +6433,12 @@ Format.eprintf "Equality check result: %b\n%!" b;
 
     val mem : t -> Name.t -> bool
 
-    val add_or_meet_env_extension
+    val add_env_extension
        : t
       -> Typing_env_extension.t
       -> t
 
-    val add_or_meet_opened_env_extension
+    val add_opened_env_extension
        : t
       -> Typing_env_level.t
       -> t
@@ -7009,7 +7009,7 @@ Format.eprintf "Equality check result: %b\n%!" b;
       in
       (* XXX This should be done by [equal] *)
       (* XXX And we need to think about this (likewise similar code in
-         [add_or_meet_env_extension'].  If correctness is hinging on
+         [add_env_extension'].  If correctness is hinging on
          aliases being preserved, could we cause unsoundness by failing to add
          an alias due to not being able to prove that the corresponding type is
          more precise? *)
@@ -7189,7 +7189,7 @@ Format.eprintf "Equality check result: %b\n%!" b;
        (* Keep the existing (furthest-out) binding. *)
        t
 
-    let rec add_or_meet_opened_env_extension t level : t =
+    let rec add_opened_env_extension t level : t =
       let t_before_equations =
         Name.Map.fold (fun name kind t ->
             add_definition t name kind)
@@ -7209,7 +7209,7 @@ Format.eprintf "Equality check result: %b\n%!" b;
                 in
                 Both_meet_and_join.meet meet_env ty existing_ty
               in
-              let t = add_or_meet_env_extension t meet_env_extension in
+              let t = add_env_extension t meet_env_extension in
               let as_or_strictly_less_precise =
                 Type_equality.equal ~bound_name:(Some name)
                   t_before_equations t_before_equations
@@ -7231,9 +7231,9 @@ Format.eprintf "AOMOEE: name %a,@ meet_ty %a,@ existing_ty %a,@ SMP %b\n%!"
         (Typing_env_level.cse level)
         t
 
-    and add_or_meet_env_extension t env_extension : t =
+    and add_env_extension t env_extension : t =
       Typing_env_extension.pattern_match env_extension
-        ~f:(fun level -> add_or_meet_opened_env_extension t level)
+        ~f:(fun level -> add_opened_env_extension t level)
 
     let current_level t = fst (t.current_level)
     let current_level_data t = snd (t.current_level)
@@ -7499,7 +7499,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 
     let free_names_transitive_list (env : Typing_env.t) tys =
       let scope_level = Scope_level.next (Typing_env.max_level env) in
-      let env = add_or_meet_env_extension env scope_level in
+      let env = add_env_extension env scope_level in
       List.fold_left (fun names ty ->
           Name_occurrences.union names (free_names_transitive env ty))
         (Name_occurrences.create ())
@@ -7565,17 +7565,193 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       -> f:(Typing_env_level.t -> 'a)
       -> 'a
   end = struct
-    module A = Name_abstraction.Make_list (Typing_env_level)
+    module T0 = struct
+      module A = Name_abstraction.Make_list (Typing_env_level)
 
-    (* The record is here to avoid the double vision problem.  (Otherwise
-       there would already be an equality
-         t = Name_abstraction.Make_list (Typing_env_level)
-       meaning that the equality
-         t = Typing_env_extension.t
-       could not be added by the type checker.) *)
-    type t = {
-      abst : A.t;
-    } [@@unboxed]
+      (* The record is here to avoid the double vision problem.  (Otherwise
+         there would already be an equality
+           t = Name_abstraction.Make_list (Typing_env_level)
+         meaning that the equality
+           t = Typing_env_extension.t
+         could not be added by the type checker.) *)
+      type t = {
+        abst : A.t;
+      } [@@unboxed]
+
+      let print ppf { abst; } = A.print ~style:Existential ppf abst
+
+      let print_with_cache ~cache ppf { abst; } =
+        A.print_with_cache ~style:Existential ~cache ppf abst
+
+      let free_names { abst; } = A.free_names abst
+
+      let apply_name_permutation ({ abst; } as t) perm =
+        let abst' = A.apply_name_permutation abst perm in
+        if abst == abst' then t
+        else { abst = abst'; }
+
+      let fast_equal t1 t2 = (t1 == t2)
+
+      let equal env result { abst = abst1; } { abst = abst2; } =
+        A.pattern_match_pair abst1 abst2 ~f:(fun existentials level1 level2 ->
+          let existentials =
+            List.fold_left (fun result (bindable_name : Bindable_name.t) ->
+                match bindable_name with
+                | Name name -> Name.Set.add name result
+                | Continuation _ ->
+                  Misc.fatal_error "[Continuation] not allowed here")
+              Name.Set.empty
+              existentials
+          in
+          let (>>=) = Type_equality_result.(>>=) in
+          let env =
+            Type_equality_env.entering_scope_of_existentials env existentials
+          in
+          Typing_env_level.equal env result level1 level2
+          >>= fun result ->
+          let check_now, result =
+            Type_equality_result.leaving_scope_of_existential result
+              ~bound_names:existentials
+          in
+          result
+          >>= fun result ->
+          Name.Map.fold (fun _name uses result ->
+              result
+              >>= fun result ->
+              if Type_equality_result.Uses.more_than_one_use_and_empty uses
+              then Type_equality_result.types_known_unequal ()
+              else result)
+            check_now
+            result)
+
+      let invariant { abst; } =
+        A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
+
+      let empty () =
+        { abst = A.create [] (Typing_env_level.empty ()); }
+
+      let is_empty { abst; } =
+        A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
+
+      let create level =
+        let abst =
+          A.create (Typing_env_level.defined_names_in_order level) level
+        in
+        { abst; }
+
+  (*
+      let restrict_to_definitions { abst; } =
+        let abst =
+          A.pattern_match_mapi abst ~f:(fun defined_names level ->
+            (* CR mshinwell: Does "in terms" really make sense (or is it even
+               correct?) here? *)
+            Typing_env_level.restrict_to_names level
+              (Name_occurrences.create_from_name_set_in_terms defined_names))
+        in
+        { abst; }
+
+      let restrict_names_to_those_occurring_in_types _t _env _env_allowed_names
+            _tys =
+        Misc.fatal_error "Not yet implemented"
+  *)
+  (*
+        let free_names = free_names_transitive_list t env tys in
+        let env_allowed_names = Typing_env.domain env_allowed_names in
+        let allowed_names =
+          Name_occurrences.union free_names env_allowed_names
+        in
+        pattern_match_map t ~f:(fun level ->
+          Typing_env_level.restrict_to_names level allowed_names)
+  *)
+
+      let is_unknown (t : t) =
+        match t with
+        | Known _ -> false
+        | Unknown -> true
+
+      let is_bottom t = is_empty t
+
+      (* CR mshinwell: We should provide a termination proof for algorithms
+         such as this. *)
+      let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
+        if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
+        else if is_unknown t1 then t2
+        else if is_unknown t2 then t1
+        else
+          let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+          let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+          let env = Meet_env.clear_name_permutations env in
+          let abst =
+            A.pattern_match t1.abst ~f:(fun _ level_1 ->
+              A.pattern_match t2.abst ~f:(fun _ level_2 ->
+                let level = Typing_env_level.meet env level_1 level_2 in
+                A.create (Typing_env_level.defined_names_in_order level) level))
+          in
+          { abst; }
+
+      let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
+        if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
+        else if is_bottom t1 then t2
+        else if is_bottom t2 then t1
+        else
+          let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
+          let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
+          let env = Join_env.clear_name_permutations env in
+          let env =
+            Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
+          in
+          let abst =
+            A.pattern_match t1.abst ~f:(fun _ level_1 ->
+              A.pattern_match t2.abst ~f:(fun _ level_2 ->
+                let level = Typing_env_level.join env level_1 level_2 in
+                A.create (Typing_env_level.defined_names_in_order level) level))
+          in
+          { abst; }
+
+      let add_definition { abst; } name kind =
+        let abst =
+          A.pattern_match abst ~f:(fun _defined_names level ->
+            let level = Typing_env_level.add_definition level name kind in
+            A.create (Typing_env_level.defined_names_in_order level) level)
+        in
+        { abst; }
+
+      let add_equation { abst; } name ty =
+        let abst =
+          A.pattern_match abst ~f:(fun _defined_names level ->
+            let level = Typing_env_level.add_equation level name ty in
+            A.create (Typing_env_level.defined_names_in_order level) level)
+        in
+        { abst; }
+
+      (* CR mshinwell: Consider an [A.pattern_match] variant that does not
+         pass [defined_names] but where 'a is returned *)
+      let meet_equation { abst; } env name ty =
+        let abst =
+          A.pattern_match abst ~f:(fun _defined_names level ->
+            let level = Typing_env_level.meet_equation level env name ty in
+            A.create (Typing_env_level.defined_names_in_order level) level)
+        in
+        { abst; }
+
+      let add_cse { abst; } simple prim =
+        let abst =
+          A.pattern_match_map abst ~f:(fun level ->
+            Typing_env_level.add_cse level simple prim)
+        in
+        { abst; }
+
+  (*
+      let diff { abst; } env =
+        A.pattern_match abst ~f:(fun _ level ->
+          let level = Typing_env_level.diff level env in
+          let defined_names = Typing_env_level.defined_names level in
+          { abst = A.create defined_names level; })
+  *)
+
+      let pattern_match { abst; } ~f =
+        A.pattern_match abst ~f:(fun _ level -> f level)
+    end
 
     let print ppf { abst; } = A.print ~style:Existential ppf abst
 
@@ -7626,8 +7802,9 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     let invariant { abst; } =
       A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
 
-    let empty () =
-      { abst = A.create [] (Typing_env_level.empty ()); }
+    let empty () : t = Known (T0.empty ())
+
+    let unknown () : t = Unknown
 
     let is_empty { abst; } =
       A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
@@ -7638,111 +7815,55 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
       in
       { abst; }
 
-(*
-    let restrict_to_definitions { abst; } =
-      let abst =
-        A.pattern_match_mapi abst ~f:(fun defined_names level ->
-          (* CR mshinwell: Does "in terms" really make sense (or is it even
-             correct?) here? *)
-          Typing_env_level.restrict_to_names level
-            (Name_occurrences.create_from_name_set_in_terms defined_names))
-      in
-      { abst; }
+    let is_unknown (t : t) =
+      match t with
+      | Known _ -> false
+      | Unknown -> true
 
-    let restrict_names_to_those_occurring_in_types _t _env _env_allowed_names
-          _tys =
-      Misc.fatal_error "Not yet implemented"
-*)
-(*
-      let free_names = free_names_transitive_list t env tys in
-      let env_allowed_names = Typing_env.domain env_allowed_names in
-      let allowed_names = Name_occurrences.union free_names env_allowed_names in
-      pattern_match_map t ~f:(fun level ->
-        Typing_env_level.restrict_to_names level allowed_names)
-*)
+    let is_bottom t = is_empty t
 
-    (* CR mshinwell: We should provide a termination proof for algorithms
-       such as this. *)
-    let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
+    let meet env t1 t2 t =
       if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      (* XXX This is wrong, it should be "is_unknown" and there should be a top
-         element *)
-      else if is_empty t1 then t2
-      else if is_empty t2 then t1
       else
-        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-        let env = Meet_env.clear_name_permutations env in
-        let abst =
-          A.pattern_match t1.abst ~f:(fun _ level_1 ->
-            A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              let level = Typing_env_level.meet env level_1 level_2 in
-              A.create (Typing_env_level.defined_names_in_order level) level))
-        in
-        { abst; }
+        match t1, t2 with
+        | Unknown, _ -> t2
+        | _, Unknown -> t1
+        | Known t0_1, Known t0_2 -> Known (T0.meet env t0_1 t0_2)
 
-    let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
+    let join env t1 t2 t =
       if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
-      else if is_empty t1 then t2
-      else if is_empty t2 then t1
       else
-        let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-        let env = Join_env.clear_name_permutations env in
-        let env =
-          Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
-        in
-        let abst =
-          A.pattern_match t1.abst ~f:(fun _ level_1 ->
-            A.pattern_match t2.abst ~f:(fun _ level_2 ->
-              let level = Typing_env_level.join env level_1 level_2 in
-              A.create (Typing_env_level.defined_names_in_order level) level))
-        in
-        { abst; }
+        match t1, t2 with
+        | Unknown, _ -> t1
+        | _, Unknown -> t2
+        | Known t0_1, Known t0_2 -> Known (T0.join env t0_1 t0_2)
 
-    let add_definition { abst; } name kind =
-      let abst =
-        A.pattern_match abst ~f:(fun _defined_names level ->
-          let level = Typing_env_level.add_definition level name kind in
-          A.create (Typing_env_level.defined_names_in_order level) level)
-      in
-      { abst; }
+    let add_definition t name kind =
+      match t with
+      | Known t0 -> Known (T0.add_definition t0 name kind)
+      | Unknown -> Known (T0.add_definition (T0.empty ()) name kind)
 
-    let add_equation { abst; } name ty =
-      let abst =
-        A.pattern_match abst ~f:(fun _defined_names level ->
-          let level = Typing_env_level.add_equation level name ty in
-          A.create (Typing_env_level.defined_names_in_order level) level)
-      in
-      { abst; }
+    let add_equation t name ty =
+      match t with
+      | Known t0 -> Known (T0.add_equation t0 name ty)
+      | Unknown -> Known (T0.add_equation (T0.empty ()) name ty)
 
-    (* CR mshinwell: Consider an [A.pattern_match] variant that does not
-       pass [defined_names] but where 'a is returned *)
-    let meet_equation { abst; } env name ty =
-      let abst =
-        A.pattern_match abst ~f:(fun _defined_names level ->
-          let level = Typing_env_level.meet_equation level env name ty in
-          A.create (Typing_env_level.defined_names_in_order level) level)
-      in
-      { abst; }
+    let meet_equation t env name ty =
+      match t with
+      | Known t0 -> Known (T0.meet_equation t0 env name ty)
+      | Unknown -> Known (T0.add_equation (T0.empty ()) name ty)
 
-    let add_cse { abst; } simple prim =
-      let abst =
-        A.pattern_match_map abst ~f:(fun level ->
-          Typing_env_level.add_cse level simple prim)
-      in
-      { abst; }
+    let add_cse t simple prim =
+      match t with
+      | Known t0 -> Known (T0.add_cse t0 simple prim)
+      | Unknown -> Known (T0.add_cse (T0.empty ()) simple prim)
 
-(*
-    let diff { abst; } env =
-      A.pattern_match abst ~f:(fun _ level ->
-        let level = Typing_env_level.diff level env in
-        let defined_names = Typing_env_level.defined_names level in
-        { abst = A.create defined_names level; })
-*)
-
-    let pattern_match { abst; } ~f =
-      A.pattern_match abst ~f:(fun _ level -> f level)
+    let pattern_match t ~(f : _ Or_unknown.t -> _) =
+      match t with
+      | Known t0 ->
+        T0.pattern_match t0 ~f:(fun defined_names level -> 
+          f (Known (defined_names, level)))
+      | Unknown -> f Unknown
   end and Typing_env_level : sig
     include Contains_names.S
 
@@ -7883,12 +8004,12 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
     let equal env result t1 t2 =
       let (>>=) = Type_equality_result.(>>=) in
       let env_left =
-        Typing_env.add_or_meet_opened_env_extension
+        Typing_env.add_opened_env_extension
           (Type_equality_env.typing_env_left env)
           t1
       in
       let env_right =
-        Typing_env.add_or_meet_opened_env_extension
+        Typing_env.add_opened_env_extension
           (Type_equality_env.typing_env_right env)
           t2
       in
@@ -8193,72 +8314,28 @@ Format.eprintf "TIDY:@ %a\n%!" print t;
 *)
 
     let meet env (t1 : t) (t2 : t) : t =
-(* XXX As elsewhere, this should be a test against "top" *)
-      if is_empty t1 then begin
-        t2
-      end else if is_empty t2 then begin
-        t1
-      end else begin
-  Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
-    Meet_env.print env;
-        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-        let env = Meet_env.env env in
-        let env = Typing_env.increment_scope_level env in
-Format.eprintf "LEVEL MEET: adding t1\n%!";
-        let env = Typing_env.add_or_meet_opened_env_extension env t1 in
-Format.eprintf "LEVEL MEET: adding t2\n%!";
-        let env = Typing_env.add_or_meet_opened_env_extension env t2 in
-Format.eprintf "LEVEL MEET: cut\n%!";
-        let level = Typing_env.current_level env in
-        let t =
-          Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
-        in
-  (*
-        let defined_names =
-          Name.Map.disjoint_union t1.defined_names t2.defined_names
-        in
-        let t =
-          { (empty ()) with
-            defined_names;
-          }
-        in
-        let names_in_meet =
-          Name.Set.union (equations_domain t1) (equations_domain t2)
-        in
-        let t =
-          Name.Set.fold (fun name t ->
-              assert (not (Name.Map.mem name t.equations));
-              let ty1 = find_equation_opt t1 name in
-              let ty2 = find_equation_opt t2 name in
-              match ty1, ty2 with
-              | None, None -> assert false
-              | Some ty1, None -> add_or_replace_equation t name ty1
-              | None, Some ty2 -> add_or_replace_equation t name ty2
-              | Some ty1, Some ty2 ->
-                let meet_ty, meet_equations =
-                  Both_meet_and_join.meet env ty1 ty2
-                in
-                Typing_env_extension.pattern_match meet_equations
-                  ~f:(fun t' ->
-                    let t = meet env t t' in
-                    assert (not (Name.Map.mem name t.equations));
-                    add_or_replace_equation t name meet_ty))
-            names_in_meet
-            t
-        in
-        let t =
-          update_cse_for_meet_or_join t t1 t2 Meet names_in_meet
-        in
-  *)
-  Format.eprintf "---> result is:@ %a\n%!" print t;
-        tidy t
-      end
+Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
+  Meet_env.print env;
+      let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+      let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+      let env = Meet_env.env env in
+      let env = Typing_env.increment_scope_level env in
+      (* The domains of the levels are treated as contravariant.  As such,
+         since this is [meet], we perform a union on the domains. *)
+      let env = Typing_env.add_opened_env_extension env t1 in
+      let env = Typing_env.add_opened_env_extension env t2 in
+      let level = Typing_env.current_level env in
+      let t =
+        Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
+      in
+      tidy t
 
     let join env (t1 : t) (t2 : t) : t =
   Format.eprintf "Typing_env_level.join@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
     Join_env.print env;
       let names_with_equations_in_join =
+        (* Analogously to above, since this is [join], we perform an
+           intersection on the domains of the levels. *)
         Name.Set.inter (equations_on_outer_env_domain t1)
           (equations_on_outer_env_domain t2)
       in
@@ -8271,7 +8348,7 @@ Format.eprintf "LEVEL MEET: cut\n%!";
         }
       in
       let env =
-        Join_env.add_or_meet_opened_extensions env
+        Join_env.add_opened_extensions env
           ~holds_on_left:t1 ~holds_on_right:t2
       in
       let t =
