@@ -297,7 +297,7 @@ module type S = sig
         During the process, if an attempt is made to add a name which is
         already bound, the given name's type will be determined using a meet
         operation. *)
-    val add_or_meet_env_extension : t -> Typing_env_extension.t -> t
+    val add_env_extension : t -> Typing_env_extension.t -> t
 
     (** Follow chains of aliases until either a [No_alias] type is reached
         or a name cannot be resolved.
@@ -370,12 +370,12 @@ module type S = sig
 
     val mem : t -> Name.t -> bool
 
-    val add_or_meet_env_extension
+    val add_env_extension
        : t
       -> Typing_env_extension.t
       -> t
 
-    val add_or_meet_opened_env_extension
+    val add_opened_env_extension
        : t
       -> Typing_env_level.t
       -> t
