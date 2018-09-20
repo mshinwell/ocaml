@@ -8197,21 +8197,27 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
 *)
 
     let meet env (t1 : t) (t2 : t) : t =
-Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
-  Meet_env.print env;
-      let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-      let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-      let env = Meet_env.env env in
-      let env = Typing_env.increment_scope_level env in
-      (* The domains of the levels are treated as contravariant.  As such,
-         since this is [meet], we perform a union on the domains. *)
-      let env = Typing_env.add_opened_env_extension env t1 in
-      let env = Typing_env.add_opened_env_extension env t2 in
-      let level = Typing_env.current_level env in
-      let t =
-        Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
-      in
-      tidy t
+      if is_empty t1 then begin
+        t2
+      end else if is_empty t2 then begin
+        t1
+      end else begin
+  Format.eprintf "Typing_env_level.meet@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
+    Meet_env.print env;
+        let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
+        let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
+        let env = Meet_env.env env in
+        let env = Typing_env.increment_scope_level env in
+        (* The domains of the levels are treated as contravariant.  As such,
+           since this is [meet], we perform a union on the domains. *)
+        let env = Typing_env.add_opened_env_extension env t1 in
+        let env = Typing_env.add_opened_env_extension env t2 in
+        let level = Typing_env.current_level env in
+        let t =
+          Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
+        in
+        tidy t
+      end
 
     let join env (t1 : t) (t2 : t) : t =
   Format.eprintf "Typing_env_level.join@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
