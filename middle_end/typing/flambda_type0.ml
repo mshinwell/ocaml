@@ -8875,7 +8875,7 @@ Format.eprintf "Adding equation on %a: meet_ty is %a; ty %a; existing_ty %a; \
           | Bottom -> Invalid
           | Ok (Immediate imms, _perm) ->
             begin match Immediate.Set.get_singleton imms with
-            | Some imm -> Term (Simple.const (Untagged_immediate imm), t)
+            | Some imm -> Term (Simple.const (Naked_immediate imm), t)
             | None -> try_canonical_var ()
             end
           | Ok (Float fs, _perm) ->

@@ -2143,34 +2143,32 @@ middle_end/simplify/simplify_env_and_result.cmx : \
 middle_end/simplify/simplify_env_and_result.cmi : \
     middle_end/simplify/simplify_env_and_result_intf.cmo
 middle_end/simplify/simplify_env_and_result_intf.cmo : \
-    middle_end/language/variable.cmi middle_end/language/symbol.cmi \
-    middle_end/language/simple.cmi \
+    middle_end/language/symbol.cmi \
     middle_end/language/set_of_closures_origin.cmi \
-    middle_end/language/scope_level.cmi middle_end/language/name.cmi \
+    middle_end/language/scope_level.cmi middle_end/language/recursive.cmi \
+    middle_end/language/name.cmi middle_end/language/kinded_parameter.cmi \
     middle_end/inlining/inlining_stats_types.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/typing/flambda_type.cmi \
     middle_end/language/flambda_static.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/language/flambda.cmi middle_end/language/export_id.cmi \
-    middle_end/language/debuginfo.cmi \
+    middle_end/language/export_id.cmi middle_end/language/debuginfo.cmi \
     middle_end/simplify/continuation_uses.cmi \
     middle_end/inlining/continuation_approx.cmi \
     middle_end/language/continuation.cmi \
     middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi \
     middle_end/to_clambda/backend_intf.cmi
 middle_end/simplify/simplify_env_and_result_intf.cmx : \
-    middle_end/language/variable.cmx middle_end/language/symbol.cmx \
-    middle_end/language/simple.cmx \
+    middle_end/language/symbol.cmx \
     middle_end/language/set_of_closures_origin.cmx \
-    middle_end/language/scope_level.cmx middle_end/language/name.cmx \
+    middle_end/language/scope_level.cmx middle_end/language/recursive.cmx \
+    middle_end/language/name.cmx middle_end/language/kinded_parameter.cmx \
     middle_end/inlining/inlining_stats_types.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/typing/flambda_type.cmx \
     middle_end/language/flambda_static.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
-    middle_end/language/flambda.cmx middle_end/language/export_id.cmx \
-    middle_end/language/debuginfo.cmx \
+    middle_end/language/export_id.cmx middle_end/language/debuginfo.cmx \
     middle_end/simplify/continuation_uses.cmx \
     middle_end/inlining/continuation_approx.cmx \
     middle_end/language/continuation.cmx \
@@ -3905,34 +3903,32 @@ middle_end/simplify/simplify_env_and_result.cmx : \
 middle_end/simplify/simplify_env_and_result.cmi : \
     middle_end/simplify/simplify_env_and_result_intf.cmo
 middle_end/simplify/simplify_env_and_result_intf.cmo : \
-    middle_end/language/variable.cmi middle_end/language/symbol.cmi \
-    middle_end/language/simple.cmi \
+    middle_end/language/symbol.cmi \
     middle_end/language/set_of_closures_origin.cmi \
-    middle_end/language/scope_level.cmi middle_end/language/name.cmi \
+    middle_end/language/scope_level.cmi middle_end/language/recursive.cmi \
+    middle_end/language/name.cmi middle_end/language/kinded_parameter.cmi \
     middle_end/inlining/inlining_stats_types.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/typing/flambda_type.cmi \
     middle_end/language/flambda_static.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/typing/flambda_kind.cmi middle_end/typing/flambda_arity.cmi \
-    middle_end/language/flambda.cmi middle_end/language/export_id.cmi \
-    middle_end/language/debuginfo.cmi \
+    middle_end/language/export_id.cmi middle_end/language/debuginfo.cmi \
     middle_end/simplify/continuation_uses.cmi \
     middle_end/inlining/continuation_approx.cmi \
     middle_end/language/continuation.cmi \
     middle_end/language/closure_origin.cmi middle_end/language/closure_id.cmi \
     middle_end/to_clambda/backend_intf.cmi
 middle_end/simplify/simplify_env_and_result_intf.cmx : \
-    middle_end/language/variable.cmx middle_end/language/symbol.cmx \
-    middle_end/language/simple.cmx \
+    middle_end/language/symbol.cmx \
     middle_end/language/set_of_closures_origin.cmx \
-    middle_end/language/scope_level.cmx middle_end/language/name.cmx \
+    middle_end/language/scope_level.cmx middle_end/language/recursive.cmx \
+    middle_end/language/name.cmx middle_end/language/kinded_parameter.cmx \
     middle_end/inlining/inlining_stats_types.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/typing/flambda_type.cmx \
     middle_end/language/flambda_static.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/typing/flambda_kind.cmx middle_end/typing/flambda_arity.cmx \
-    middle_end/language/flambda.cmx middle_end/language/export_id.cmx \
-    middle_end/language/debuginfo.cmx \
+    middle_end/language/export_id.cmx middle_end/language/debuginfo.cmx \
     middle_end/simplify/continuation_uses.cmx \
     middle_end/inlining/continuation_approx.cmx \
     middle_end/language/continuation.cmx \

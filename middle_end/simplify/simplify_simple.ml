@@ -14,15 +14,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module E = Simplify_env_and_result.Env
 module T = Flambda_type
+module TE = T.Typing_env
 
 let type_for_const (const : Simple.Const.t) =
   match const with
-  (* CR mshinwell: unify terminology: "untagged" vs "naked" *)
-  | Untagged_immediate i -> T.this_naked_immediate i
+  | Naked_immediate i -> T.this_naked_immediate i
   | Tagged_immediate i -> T.this_tagged_immediate i
   | Naked_float f -> T.this_naked_float f
   | Naked_int32 n -> T.this_naked_int32 n
@@ -30,45 +30,40 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_nativeint n -> T.this_naked_nativeint n
 
 let simplify_name_for_let env r name =
-  let name = Freshening.apply_name (E.freshening env) name in
-  let ty = E.find_name env name in
-  let ty, canonical_name =
-    T.Typing_env.resolve_aliases (E.get_typing_environment env, ty)
+  let typing_env = E.typing_env env in
+  let ty, _ = TE.find_exn typing_env name in
+  let ty, canonical_simple = TE.resolve_aliases typing_env ty in
+  let simple =
+    match canonical_simple with
+    | None -> Simple.name name
+    | Some canonical_simple -> canonical_simple
   in
-  let name =
-    match canonical_name with
-    | None -> name
-    | Some canonical_name -> canonical_name
-  in
-  name, T.alias_type_of (T.kind ty) name, r
+  simple, T.alias_type_of (T.kind ty) simple, r
 
 let simplify_simple_for_let env r (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c, r
   | Discriminant t -> simple, T.this_discriminant t, r
-  | Name name ->
-    let name, ty, r = simplify_name_for_let env r name in
-    Simple.name name, ty, r
+  | Name name -> simplify_name_for_let env r name
 
 let simplify_name env name =
-  let name = Freshening.apply_name (E.freshening env) name in
-  let ty = E.find_name env name in
-  let ty, canonical_name =
-    T.Typing_env.resolve_aliases (E.get_typing_environment env, ty)
-  in
-  match canonical_name with
-  | None -> name, ty
-  | Some canonical_name -> canonical_name, ty
+  let typing_env = E.typing_env env in
+  let ty, _ = TE.find_exn typing_env name in
+  let ty, canonical_simple = TE.resolve_aliases typing_env ty in
+  match canonical_simple with
+  | None -> Simple.name name, ty
+  | Some canonical_simple -> canonical_simple, ty
 
 let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
   | Name name ->
-    let name = Freshening.apply_name (E.freshening env) name in
-    let ty = E.find_name env name in
+    let typing_env = E.typing_env env in
+    let ty, _ = TE.find_exn typing_env name in
 (* Experiment: don't reify so that we preserve relations *)
-    Simple.name name, T.alias_type_of (T.kind ty) name
+    let simple = Simple.name name in
+    simple, T.alias_type_of (T.kind ty) simple
 (* The following works.  Maybe we could do this only for names which were
    syntactically bound to constants.
     let reified =

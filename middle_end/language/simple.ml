@@ -18,7 +18,7 @@
 
 module Const = struct
   type t =
-    | Untagged_immediate of Immediate.t
+    | Naked_immediate of Immediate.t
     | Tagged_immediate of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
@@ -38,7 +38,7 @@ module Const = struct
 
     let compare t1 t2 =
       match t1, t2 with
-      | Untagged_immediate i1, Untagged_immediate i2 ->
+      | Naked_immediate i1, Naked_immediate i2 ->
         Immediate.compare i1 i2
       | Tagged_immediate i1, Tagged_immediate i2 ->
         Immediate.compare i1 i2
@@ -50,8 +50,8 @@ module Const = struct
         Int64.compare n1 n2
       | Naked_nativeint n1, Naked_nativeint n2 ->
         Targetint.compare n1 n2
-      | Untagged_immediate _, _ -> -1
-      | _, Untagged_immediate _ -> 1
+      | Naked_immediate _, _ -> -1
+      | _, Naked_immediate _ -> 1
       | Tagged_immediate _, _ -> -1
       | _, Tagged_immediate _ -> 1
       | Naked_float _, _ -> -1
@@ -63,7 +63,7 @@ module Const = struct
 
     let hash t =
       match t with
-      | Untagged_immediate n -> Immediate.hash n
+      | Naked_immediate n -> Immediate.hash n
       | Tagged_immediate n -> Immediate.hash n
       | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
       | Naked_int32 n -> Hashtbl.hash n
@@ -72,7 +72,7 @@ module Const = struct
 
     let print ppf (t : t) =
       match t with
-      | Untagged_immediate i -> Format.fprintf ppf "%a!" Immediate.print i
+      | Naked_immediate i -> Format.fprintf ppf "%a!" Immediate.print i
       | Tagged_immediate i -> Format.fprintf ppf "%a" Immediate.print i
       | Naked_float f ->
         Format.fprintf ppf "%a!" Numbers.Float_by_bit_pattern.print f
@@ -84,7 +84,7 @@ module Const = struct
   let kind t =
     let module K = Flambda_kind in
     match t with
-    | Untagged_immediate _ -> K.naked_immediate ()
+    | Naked_immediate _ -> K.naked_immediate ()
     | Tagged_immediate _ -> K.value ()
     | Naked_float _ -> K.naked_float ()
     | Naked_int32 _ -> K.naked_int32 ()

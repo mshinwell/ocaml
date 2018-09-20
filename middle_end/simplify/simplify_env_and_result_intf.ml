@@ -33,29 +33,6 @@ module type Env = sig
     -> round:int
     -> backend:(module Backend_intf.S)
     -> scope_level_for_lifted_constants:Scope_level.t
-    -> simplify_toplevel:(
-         t
-      -> result
-      -> Flambda.Expr.t
-      -> continuation:Continuation.t
-      -> continuation_params:Flambda.Typed_parameter.t list
-      -> exn_continuation:Continuation.t
-      -> descr:string
-      -> scope_level_for_lifted_constants:Scope_level.t
-      -> Flambda.Expr.t * result * Continuation_uses.t
-           * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-               Symbol.Map.t)
-    -> simplify_expr:(
-         t
-      -> result
-      -> Flambda.Expr.t
-      -> Flambda.Expr.t * result)
-    -> simplify_continuation_use_cannot_inline:(
-         t
-      -> result
-      -> Continuation.t
-      -> params:Flambda.Typed_parameter.t list
-      -> Continuation.t * result)
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -69,81 +46,10 @@ module type Env = sig
       at runtime.) *)
   val const_float_prop : t -> bool
 
-  val simplify_toplevel
-     : t
-    -> (t
-      -> result
-      -> Flambda.Expr.t
-      -> continuation:Continuation.t
-      -> continuation_params:Flambda.Typed_parameter.t list
-      -> exn_continuation:Continuation.t
-      -> descr:string
-      -> scope_level_for_lifted_constants:Scope_level.t
-      -> Flambda.Expr.t * result * Continuation_uses.t
-           * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-               Symbol.Map.t)
-
-  val simplify_expr
-     : t
-    -> (t
-      -> result
-      -> Flambda.Expr.t
-      -> Flambda.Expr.t * result)
-
-  val simplify_continuation_use_cannot_inline
-     : t
-    -> (t
-      -> result
-      -> Continuation.t
-      -> params:Flambda.Typed_parameter.t list
-      -> Continuation.t * result)
-
   (** Which simplification round we are currently in. *)
   val round : t -> int
 
-  (** Add the type of a variable---that is to say, some knowledge
-      about the value(s) the variable may take on at runtime---to the
-      environment. *)
-  val add_variable : t -> Variable.t -> Flambda_type.t -> t
-
-  val add_or_replace_meet_variable
-     : t
-    -> Variable.t
-    -> Flambda_type.t
-    -> t
-
-  val replace_meet_variable
-     : t
-    -> Variable.t
-    -> Flambda_type.t
-    -> t
-
-  (** Find the type of a given variable, raising a fatal error if the
-      environment does not know about the variable, or if the variable is
-      existentially bound. *)
-  val find_variable : t -> Variable.t -> Flambda_type.t
-
-  (** Whether the given variable is in scope. *)
-  val mem_variable : t -> Variable.t -> bool
-
-  val scope_level_of_name : t -> Name.t -> Scope_level.t
-
-  val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
-
   val add_symbol_for_lifted_constant : t -> Symbol.t -> Flambda_type.t -> t
-
-  val redefine_symbol : t -> Symbol.t -> Flambda_type.t -> t
-
-  val find_symbol : t -> Symbol.t -> Flambda_type.t
-
-  val mem_simple : t -> Simple.t -> bool
-
-  val find_name : t -> Name.t -> Flambda_type.t
-
-  val mem_name : t -> Name.t -> bool
-
-  (** Like [add_variable], but for mutable variables. *)
-  val add_mutable : t -> Mutable_variable.t -> Flambda_type.t -> t
 
   val continuation_scope_level : t -> Scope_level.t
 
@@ -164,56 +70,12 @@ module type Env = sig
 
   val mem_continuation : t -> Continuation.t -> bool
 
-  (** Like [find_exn], but for mutable variables. *)
-  val find_mutable_exn : t -> Mutable_variable.t -> Flambda_type.t
+  val typing_env : t -> Flambda_type.Typing_env.t
 
-(*
-  (** Like [find_exn], but for a list of variables. *)
-  val find_list_exn : t -> Variable.t list -> Flambda_type.t list
-
-  val vars_in_scope : t -> Variable.Set.t
-
-  val does_not_bind : t -> Variable.t list -> bool
-
-  val does_not_freshen : t -> Variable.t list -> bool
-*)
-
-  val add_cse
+  val with_typing_env
      : t
-    -> Flambda_primitive.With_fixed_value.t
-    -> bound_to:Name.t
+    -> f:(Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t)
     -> t
-
-  val find_cse
-     : t
-    -> Flambda_primitive.t
-    -> Name.t option
-
-  val get_typing_environment : t -> Flambda_type.Typing_env.t
-
-  val extend_typing_environment
-     : t
-    -> env_extension:Flambda_type.Typing_env_extension.t
-    -> t
-
-  val replace_typing_environment
-     : t
-    -> Flambda_type.Typing_env.t
-    -> t
-
-  (** Return the freshening that should be applied to variables when
-      rewriting code (in [Simplify], etc.) using the given
-      environment. *)
-  val freshening : t -> Freshening.t
-
-  (** Set the freshening that should be used as per [freshening], above. *)
-  val set_freshening : t -> Freshening.t -> t
-
-  (** Causes every bound variable in code rewritten during inlining and
-      simplification, using the given environment, to be freshened.  This is
-      used when descending into subexpressions substituted into existing
-      expressions. *)
-  val activate_freshening : t -> t
 
   (** Erase all variable approximation information and freshening information
       from the given environment.  However, the freshening activation state
@@ -366,11 +228,6 @@ module type Env = sig
   val add_inlined_debuginfo : t -> dbg:Debuginfo.t -> Debuginfo.t
 
   val continuations_in_scope : t -> Continuation_approx.t Continuation.Map.t
-
-  val with_typing_env
-     : t
-    -> (Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t)
-    -> t
 end
 
 module type Result = sig
@@ -403,7 +260,7 @@ module type Result = sig
     : t
     -> env
     -> Continuation.t
-    -> params:Flambda.Typed_parameter.t list
+    -> params:Kinded_parameter.t list
     -> Continuation_uses.Use.Kind.t
     -> t
 
@@ -457,7 +314,7 @@ module type Result = sig
      : t
     -> env
     -> Continuation.t
-    -> params:Flambda.Typed_parameter.t list
+    -> params:Kinded_parameter.t list
     -> t * Continuation_uses.t
 
   (** Record the post-simplification definition of a continuation. *)
@@ -465,7 +322,7 @@ module type Result = sig
      : t
     -> Continuation.t
     -> env
-    -> Flambda.recursive
+    -> Recursive.t
     -> Continuation_uses.t
     -> Continuation_approx.t
     -> t
@@ -486,7 +343,7 @@ module type Result = sig
   val update_continuation_parameters
      : t
     -> Continuation.t
-    -> params:Flambda.Typed_parameter.t list
+    -> params:Kinded_parameter.t list
     -> t
 
   (** Update the approximation for a defined continuation. *)
@@ -500,7 +357,7 @@ module type Result = sig
   val continuation_definitions_with_uses
      : t
     -> (Continuation_uses.t * Continuation_approx.t * env
-      * Flambda.recursive) Continuation.Map.t
+      * Recursive.t) Continuation.Map.t
 
   val forget_continuation_definition
      : t

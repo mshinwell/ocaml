@@ -1498,7 +1498,7 @@ end = struct
       match kind with
       | Value -> Simple.const_zero
       | Naked_number Naked_immediate ->
-        Simple.const (Untagged_immediate Immediate.zero)
+        Simple.const (Naked_immediate Immediate.zero)
       | Naked_number Naked_float ->
         Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
       | Naked_number Naked_int32 ->
