@@ -304,13 +304,13 @@ let post_simplification typing_env r prim (result : _ Or_bottom.t) =
   | Bottom ->
     let r = R.map_benefit r (B.remove_primitive (Unary prim)) in
     let term : _ Or_bottom.t = Bottom in
-    typing_env, r, term, result
+    typing_env, r, term
   | Ok (term, env_extension, r) ->
     let kind = Flambda_primitive.result_kind' prim in
     let typing_env = TE.add_definition typing_env result kind in
     let typing_env = TE.add_env_extension typing_env result env_extension in
     let term : _ Or_bottom.t = Ok term in
-    typing_env, r, term, result
+    typing_env, r, term
 
 let simplify_get_tag env r prim ~tags_to_sizes block block_ty dbg ~result_var =
   let result_name = Name.var result_var in
