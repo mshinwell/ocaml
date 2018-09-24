@@ -407,9 +407,11 @@ Working version
   use [Backend_var.With_provenance] for variables in binding position.
   (Mark Shinwell, review by Pierre Chambart)
 
-<<<<<<< HEAD
 - GPR#2060: "Phantom let" support for the Clambda language.
   (Mark Shinwell)
+
+- GPR#2061: Add [Linearize.Lcapture_stack_offset].
+  (Mark Shinwell, review by Xavier Leroy)
 
 - GPR#2063: Generate [Iname_for_debugger] in [Selectgen].  Skip over certain
   naming operations in [Spill].
@@ -425,6 +427,7 @@ Working version
 
 - GPR#2068: Propagate availability information in [Linearize] and adjust
   position of prologue.
+  (Mark Shinwell)
 
 - GPR#2070: "Phantom let" support for the Cmm language.
   (Mark Shinwell)
