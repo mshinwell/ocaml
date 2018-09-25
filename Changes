@@ -439,6 +439,9 @@ Working version
   the use of the DWARF debugging information emitter.
   (Mark Shinwell)
 
+- GPR#2069: Add [Available_ranges] pass.
+  (Mark Shinwell)
+
 - GPR#2076: Add [Targetint.print].
   (Mark Shinwell)
 
