@@ -469,6 +469,9 @@ Working version
   human name and module path fields in [Closure].
   (Mark Shinwell)
 
+- GPR#2088: Add [Clambda.usymbol_provenance].
+  (Mark Shinwell)
+
 ### Bug fixes:
 
 - MPR#7847, GPR#2019: Fix an infinite loop that could occur when the
