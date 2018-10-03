@@ -98,6 +98,32 @@ let rec regalloc ~ppf_dump round fd =
     Reg.reinit(); Liveness.fundecl newfd; regalloc ~ppf_dump (round + 1) newfd
   end else newfd
 
+let emit ppf fundecl ~dwarf =
+  let end_of_function_label = Cmm.new_label () in
+  match dwarf with
+  | None -> ignore ((Emit.fundecl fundecl ~end_of_function_label) : Emit_info.t)
+  | Some dwarf ->
+    let available_ranges, fundecl =
+      Available_ranges.create ~fundecl:(Available_filtering.fundecl fundecl)
+    in
+    if !Clflags.dump_linear then begin
+      Format.fprintf ppf
+        "*** %s@.%a@." "Available subranges before coalescing of labels"
+        (Printlinear.fundecl_with_available_ranges available_ranges) fundecl
+    end;
+    let label_rewriting, fundecl = Coalesce_labels.fundecl fundecl in
+    let available_ranges =
+      Available_ranges.rewrite_labels available_ranges ~env:label_rewriting
+    in
+    if !Clflags.dump_linear then begin
+      Format.fprintf ppf
+        "*** %s@.%a@." "Available subranges after coalescing of labels"
+        (Printlinear.fundecl_with_available_ranges available_ranges) fundecl
+    end;
+    Emit.fundecl fundecl ~end_of_function_label in
+    Dwarf.dwarf_for_function_definition dwarf ~fundecl ~available_ranges
+          ~end_of_function_label
+
 let (++) x f = f x
 
 let compile_fundecl ~ppf_dump fd_cmm =

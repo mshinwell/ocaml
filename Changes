@@ -455,6 +455,9 @@ Working version
 - GPR#2081: Mark [Iname_for_debugger] as an impure operation.
   (Mark Shinwell)
 
+- GPR#2085: Add [end_of_function_label] to the interface of [Emit.fundecl].
+  (Mark Shinwell)
+
 - GPR#2086: Add [Available_filtering] pass.
   (Mark Shinwell)
 
