@@ -1054,7 +1054,7 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
-let end_assembly() =
+let end_assembly dwarf =
   if !float_constants <> [] then begin
     begin match system with
     | S_macosx -> D.section ["__TEXT";"__literal8"] None ["8byte_literals"]
@@ -1126,7 +1126,10 @@ let end_assembly() =
     symbols_used := String.Set.empty;
     symbols_defined := String.Set.empty;
   end;
-
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf -> Dwarf.emit dwarf
+  end;
   let asm =
     if !Emitaux.create_asm_file then
       Some
