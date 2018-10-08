@@ -106,11 +106,11 @@ libcamlruni_OBJECTS := $(BYTECODE_C_SOURCES:.c=_bi.$(O))
 
 libcamlrunpic_OBJECTS := $(BYTECODE_C_SOURCES:.c=_bpic.$(O))
 
-libasmrun_OBJECTS := $(NATIVE_C_SOURCES:.c=_n.$(O)) $(ASM_OBJECTS)
+libasmrun_OBJECTS := $(NATIVE_C_SOURCES:.c=_n.$(O)) $(ASM_OBJECTS) ringbuf.o
 
-libasmrund_OBJECTS := $(NATIVE_C_SOURCES:.c=_nd.$(O)) $(ASM_OBJECTS)
+libasmrund_OBJECTS := $(NATIVE_C_SOURCES:.c=_nd.$(O)) $(ASM_OBJECTS) ringbuf.o
 
-libasmruni_OBJECTS := $(NATIVE_C_SOURCES:.c=_ni.$(O)) $(ASM_OBJECTS)
+libasmruni_OBJECTS := $(NATIVE_C_SOURCES:.c=_ni.$(O)) $(ASM_OBJECTS) ringbuf.o
 
 libasmrunp_OBJECTS := $(NATIVE_C_SOURCES:.c=_np.$(O)) \
   $(ASM_OBJECTS:.$(O)=_libasmrunp.$(O))
