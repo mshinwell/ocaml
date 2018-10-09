@@ -35,7 +35,8 @@ BYTECODE_C_SOURCES := $(addsuffix .c, \
 
 NATIVE_C_SOURCES := $(addsuffix .c, \
   startup_aux startup_nat main fail_nat roots_nat signals \
-  signals_nat misc freelist major_gc minor_gc memory alloc compare ints \
+  signals_nat misc tracing \
+  freelist major_gc minor_gc memory alloc compare ints \
   floats str array io extern intern hash sys parsing gc_ctrl md5 obj \
   lexing $(UNIX_OR_WIN32) printexc callback weak compact finalise custom \
   globroots backtrace_nat backtrace dynlink_nat debugger meta \
