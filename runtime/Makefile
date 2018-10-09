@@ -362,6 +362,9 @@ endef
 
 object_types := % %_b %_bd %_bi %_bpic %_n %_nd %_ni %_np %_npic
 
+tracing_n.o: tracing.c
+	cc -c -std=c11 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE -D_DEFAULT_SOURCE $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $<
+
 $(foreach object_type, $(object_types), \
   $(eval $(call COMPILE_C_FILE,$(object_type))))
 
