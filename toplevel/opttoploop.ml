@@ -33,13 +33,23 @@ external ndl_run_toplevel: string -> string -> res
   = "caml_natdynlink_run_toplevel"
 
 let global_symbol id =
-  let sym = Compilenv.symbol_for_global id in
-  match Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym with
+  let comp_unit = Compilation_state.compilation_unit_for_global id in
+  let sym =
+    match comp_unit with
+    | Compilation_state.Compilation_unit comp_unit ->
+      Symbol.for_module_block comp_unit
+    | Compilation_state.Predef ->
+      Symbol.for_predefined_exn id
+  in
+  let backend_sym = Backend_sym.of_symbol sym in
+  let bytecode_or_asm_symbol = Backend_sym.to_string backend_sym in
+  match Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol with
   | None ->
     fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
   | Some obj -> obj
 
 let need_symbol sym =
+  let sym = Backend_sym.to_string sym in
   Option.is_none (Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym)
 
 let dll_run dll entry =
@@ -224,12 +234,6 @@ let phrase_name = ref "TOP"
 module Backend = struct
   (* See backend_intf.mli. *)
 
-  let symbol_for_global' = Compilenv.symbol_for_global'
-  let closure_symbol = Compilenv.closure_symbol
-
-  let really_import_approx = Import_approx.really_import_approx
-  let import_symbol = Import_approx.import_symbol
-
   let size_int = Arch.size_int
   let big_endian = Arch.big_endian
 
@@ -315,7 +319,12 @@ let execute_phrase print_outcome ppf phr =
       let oldenv = !toplevel_env in
       incr phrase_seqid;
       phrase_name := Printf.sprintf "TOP%i" !phrase_seqid;
-      Compilenv.reset ?packname:None !phrase_name;
+      let compilation_unit =
+        Compilation_unit.create (Compilation_unit.Name.of_string !phrase_name)
+      in
+      Compilation_unit.set_current compilation_unit;
+      Compilation_state.reset compilation_unit;
+      Linking_state.reset ();
       Typecore.reset_delayed_checks ();
       let sstr, rewritten =
         match sstr with
@@ -362,7 +371,7 @@ let execute_phrase print_outcome ppf phr =
                 (* CR-someday trefis: *)
                 ()
               else
-                Compilenv.record_global_approx_toplevel ();
+                Compilation_state.Closure_only.record_global_approx_toplevel ();
               if print_outcome then
                 Printtyp.wrap_printing_env ~error:false oldenv (fun () ->
                 match str.str_items with

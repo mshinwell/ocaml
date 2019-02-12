@@ -14,21 +14,173 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Misc.Stdlib.String
+module BCU = Backend_compilation_unit
 
 type kind = Text | Data
 
-let create ?compilation_unit ~base_name _kind =
-  ignore compilation_unit;
-  Compilenv.make_symbol (Some base_name)
+type t = {
+  kind : kind;
+  object_file : Object_file.t;
+  name : string;
+  (* The [name] uniquely determines the symbol within a whole program. *)
+}
 
-let of_external_name _object_file name _kind =
+type backend_sym = t
+
+let to_string { name; _ } = name
+
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  (* CR mshinwell: check every field *)
+
+  let compare t1 t2 = String.compare (to_string t1) (to_string t2)
+
+  let equal t1 t2 = (compare t1 t2 = 0)
+
+  let hash t = Hashtbl.hash (to_string t)
+
+  let print ppf { name; _ } = Format.pp_print_string ppf name
+
+  let output chan t = print (Format.formatter_of_out_channel chan) t
+end)
+
+let compute_object_file (compilation_unit : BCU.t) =
+  match compilation_unit with
+  | Compilation_unit compilation_unit ->
+    begin match Compilation_unit.get_current () with
+    | None -> Object_file.another_compilation_unit
+    | Some current_unit ->
+      if Compilation_unit.equal compilation_unit current_unit then
+        Object_file.current_compilation_unit
+      else
+        Object_file.another_compilation_unit
+    end
+  | Startup -> Object_file.startup
+  | Shared_startup -> Object_file.shared_startup
+  | Runtime_and_external_libs -> Object_file.runtime_and_external_libs
+
+let first_part = "caml"
+let separator = "__"
+
+let create ?compilation_unit ~base_name kind =
+  let compilation_unit =
+    match compilation_unit with
+    | None ->
+      BCU.compilation_unit (
+        Compilation_unit.get_current_exn ())
+    | Some compilation_unit -> compilation_unit
+  in
+  let object_file = compute_object_file compilation_unit in
+  let name =
+    Printf.sprintf "%s%s%s%s"
+      first_part
+      (BCU.name_for_backend_sym ~separator compilation_unit)
+      separator
+      base_name
+  in
+  { kind;
+    object_file;
+    name;
+  }
+
+let create_for_external_call (prim : Primitive.description) =
+  { kind = Text;
+    object_file = Object_file.runtime_and_external_libs;
+    name = Primitive.native_name prim;
+  }
+
+let unsafe_create ?compilation_unit name kind =
+  let compilation_unit =
+    match compilation_unit with
+    | None ->
+      BCU.compilation_unit (
+        Compilation_unit.get_current_exn ())
+    | Some compilation_unit -> compilation_unit
+  in
+  let object_file = compute_object_file compilation_unit in
+  { kind;
+    object_file;
+    name;
+  }
+
+let compute_name_for_middle_end_symbol sym =
+  let first_part, separator =
+    match Symbol.compilation_unit sym with
+    | Compilation_unit compilation_unit ->
+      let comp_unit =
+        BCU.name_for_backend_sym ~separator (
+          BCU.compilation_unit compilation_unit)
+      in
+      first_part ^ comp_unit, separator
+    | Predef -> first_part ^ "_exn_", ""
+  in
+  match Symbol.name_for_backend sym with
+  | None -> first_part
+  | Some name -> first_part ^ separator ^ name
+
+let of_symbol sym =
+  let object_file =
+    match Symbol.compilation_unit sym with
+    | Compilation_unit sym_unit ->
+      compute_object_file (BCU.compilation_unit sym_unit)
+    | Predef -> Object_file.startup
+  in
+  let kind : kind =
+    match Symbol.kind sym with
+    | Text -> Text
+    | Data -> Data
+  in
+  { kind;
+    object_file;
+    name = compute_name_for_middle_end_symbol sym;
+  }
+
+let of_external_name object_file name kind =
   (* This is deliberately not exposed in the .mli.  (Add things to [Names],
      below, instead.) *)
-  name
+  { kind;
+    object_file;
+    name;
+  }
+
+let kind t = t.kind
+
+let object_file t = t.object_file
+
+let next_lifted_anonymous_constant_stamp = ref 0
+
+(* CR mshinwell: Add [reset] function? *)
+
+let for_lifted_anonymous_constant ?compilation_unit () =
+  let stamp = !next_lifted_anonymous_constant_stamp in
+  incr next_lifted_anonymous_constant_stamp;
+  let compilation_unit =
+    match compilation_unit with
+    | None ->
+      BCU.compilation_unit (
+        Compilation_unit.get_current_exn ())
+    | Some compilation_unit -> compilation_unit
+  in
+  let name =
+    (* Care: these must not clash with the names produced in
+       [Symbol.name_for_backend]. *)
+    Printf.sprintf "%s%s%sc%d"
+      first_part
+      (BCU.name_for_backend_sym ~separator compilation_unit)
+      separator
+      stamp
+  in
+  { kind = Data;
+    object_file = compute_object_file compilation_unit;
+    name;
+  }
 
 let add_suffix t new_suffix =
-  t ^ new_suffix
+  { kind = t.kind;
+    object_file = t.object_file;
+    name = t.name ^ new_suffix;
+  }
 
 let add_suffixes t new_suffixes =
   List.fold_left (fun t new_suffix -> add_suffix t new_suffix) t new_suffixes
@@ -36,7 +188,7 @@ let add_suffixes t new_suffixes =
 let add_int_suffix t new_suffix =
   add_suffix t (string_of_int new_suffix)
 
-let name_for_asm_symbol t = t
+let name_for_asm_symbol t = t.name
 
 module Names = struct
   let runtime = Object_file.runtime_and_external_libs

@@ -131,7 +131,7 @@ let function_variable_alias
     let module Backend = (val backend : Backend_intf.S) in
     Variable.Set.fold (fun fun_var symbols_to_fun_vars ->
         let closure_id = Closure_id.wrap fun_var in
-        let symbol = Backend.closure_symbol closure_id in
+        let symbol = Symbol.for_lifted_closure closure_id in
         Symbol.Map.add symbol fun_var symbols_to_fun_vars)
       fun_vars
       Symbol.Map.empty

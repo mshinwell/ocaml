@@ -68,7 +68,6 @@ let startup = Startup
 let shared_startup = Shared_startup
 let runtime_and_external_libs = Runtime_and_external_libs
 
-(* To be enabled later.
 let name_for_backend_sym ~separator t =
   match t with
   | Compilation_unit comp_unit ->
@@ -80,4 +79,3 @@ let name_for_backend_sym ~separator t =
   | Startup -> "_startup"
   | Shared_startup -> "_shared_startup"
   | Runtime_and_external_libs -> "_system"
-*)

@@ -12,10 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** This is a temporary placeholder for a module whose description is as
-    follows:
-
-    Names of object file symbols (including OCaml-specific, but not
+(** Names of object file symbols (including OCaml-specific, but not
     target-specific, mangling conventions) together with knowledge about
     whether such symbols refer to code or data.
 
@@ -27,16 +24,68 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include module type of struct include Misc.Stdlib.String end
+(** The type of backend symbols. *)
+type t
+type backend_sym = t
 
+(** Sets, maps, total ordering, etc.
+
+    The [print] function sends a non-escaped version of the symbol to a
+    formatter. This must not be used for assembly emission or similar
+    (use [Asm_symbol] instead). *)
+include Identifiable.S with type t := t
+
+(** Like [print] but returns a string.  The returned name will be unique to
+    the given symbol, but as for [print], such name is not for assembly
+    emission or similar. *)
+val to_string : t -> string
+
+(** Whether a symbol points at executable code ("text") or data.
+
+    Unlike [Asm_symbol]s, [Backend_sym]s of kind [Data] always point at
+    correctly-structured OCaml values, just like [Symbol]s.
+*)
 type kind = Text | Data
 
-(** At present, only the [base_name] is used. *)
+(** Create a backend symbol, in the current compilation unit (translated
+    to a [Backend_compilation_unit]) unless specified otherwise, given a base
+    name.  The base name should not be escaped, prefixed or mangled in any
+    way; such operations are performed by this module and then [Asm_symbol]. *)
 val create
    : ?compilation_unit:Backend_compilation_unit.t
   -> base_name:string
   -> kind
   -> t
+
+(** Create a backend symbol to refer to an external function. *)
+val create_for_external_call : Primitive.description -> t
+
+(** Create a backend symbol given the mangled form.  This function should not
+    currently be used except in the Cmm testsuite. *)
+val unsafe_create
+   : ?compilation_unit:Backend_compilation_unit.t
+  -> string
+  -> kind
+  -> t
+
+(** Create a backend symbol from a middle end symbol.  (The resulting symbol
+    will always be of kind [Data].) *)
+val of_symbol : Symbol.t -> t
+
+(** Create a symbol to correspond to a lifted constant that does not have a
+    source-level name associated with it.  If [compilation_unit] is not provided
+    then it is assumed that [Compilation_unit.set_current] has been called
+    appropriately. *)
+val for_lifted_anonymous_constant
+   : ?compilation_unit:Backend_compilation_unit.t
+  -> unit
+  -> t
+
+(** A description of where the given symbol is defined. *)
+val object_file : t -> Object_file.t
+
+(** The kind of the symbol. *)
+val kind : t -> kind
 
 (** The mangled name of the symbol, for the use of [Asm_symbol] only. *)
 val name_for_asm_symbol : t -> string

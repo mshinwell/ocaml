@@ -26,7 +26,7 @@ type middle_end =
 
 (** Compile an implementation from Lambda using the given middle end. *)
 val compile_implementation
-   : ?toplevel:(string -> bool)
+   : ?toplevel:(Backend_sym.t -> bool)
   -> backend:(module Backend_intf.S)
   -> filename:string
   -> prefixname:string

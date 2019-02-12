@@ -308,11 +308,11 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     | Read_mutable _ -> mark_curr curr
     | Symbol symbol -> begin
         let current_unit = Compilation_unit.get_current_exn () in
-        if Compilation_unit.equal current_unit (Symbol.compilation_unit symbol)
+        if Symbol.in_compilation_unit symbol current_unit
         then
           ()
         else
-          match (Backend.import_symbol symbol).descr with
+          match (Import_approx.import_symbol symbol).descr with
           | Value_unresolved _ ->
             (* Constant when 'for_clambda' means: can be a symbol (which is
                obviously the case here) with a known approximation.  If this

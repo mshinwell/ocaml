@@ -28,16 +28,12 @@ type t = {
 }
 
 let create backend_sym =
-  let section = Asm_section.Data in
-  let object_file = Object_file.current_compilation_unit in
-(* To be enabled once [Backend_sym] is merged.
   let section : Asm_section.t =
     match Backend_sym.kind backend_sym with
     | Text -> Text
     | Data -> Data
   in
   let object_file = Backend_sym.object_file backend_sym in
-*)
   let name = Backend_sym.name_for_asm_symbol backend_sym in
   if String.length name <= 0 then begin
     Misc.fatal_errorf "[Backend_sym] returned an empty name for %a"
@@ -67,11 +63,9 @@ let add_prefix t section object_file ~prefix =
     never_add_prefix = t.never_add_prefix;
   }
 
-(* To be enabled once [Backend_sym] is merged.
 let section t = t.section
 
 let object_file t = t.object_file
-*)
 
 let symbol_prefix t =
   if t.never_add_prefix then ""
@@ -155,20 +149,18 @@ let is_generic_function t =
 include Identifiable.Make (struct
   type nonrec t = t
 
-  let compare { section = _section1; object_file = _object_file1;
+  let compare { section = section1; object_file = object_file1;
                 name = name1; never_add_prefix = never_add_prefix1;
               }
-              { section = _section2; object_file = _object_file2;
+              { section = section2; object_file = object_file2;
                 name = name2; never_add_prefix = never_add_prefix2;
               } =
-(* To be enabled once [Backend_sym] is merged.
     let c = Asm_section.compare section1 section2 in
     if c <> 0 then c
     else
       let c = Object_file.compare object_file1 object_file2 in
       if c <> 0 then c
       else
-*)
         let c = String.compare name1 name2 in
         if c <> 0 then c
         else
@@ -176,12 +168,10 @@ include Identifiable.Make (struct
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
-  let hash { section = _; object_file = _; name; never_add_prefix; } =
+  let hash { section; object_file; name; never_add_prefix; } =
     Hashtbl.hash (
-(* To be enabled once [Backend_sym] is merged.
       Asm_section.hash section,
       Object_file.hash object_file,
-*)
       name,
       never_add_prefix)
 

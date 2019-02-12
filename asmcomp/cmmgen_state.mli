@@ -27,13 +27,13 @@ type constant =
   | Const_closure of is_global * Clambda.ufunction list * Clambda.uconstant list
   | Const_table of is_global * Cmm.data_item list
 
-val add_constant : Misc.Stdlib.String.t -> constant -> unit
+val add_constant : Backend_sym.t -> constant -> unit
 
 val add_data_items : Cmm.data_item list -> unit
 
 val add_function : Clambda.ufunction -> unit
 
-val constants : unit -> constant Misc.Stdlib.String.Map.t
+val constants : unit -> constant Backend_sym.Map.t
 
 val data_items : unit -> Cmm.data_item list
 

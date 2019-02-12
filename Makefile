@@ -123,6 +123,8 @@ COMP=\
   bytecomp/symtable.cmo \
   driver/pparse.cmo driver/main_args.cmo \
   driver/compenv.cmo driver/compmisc.cmo \
+  middle_end/compilation_unit.cmo \
+  file_formats/cmxs_format.cmo \
   driver/makedepend.cmo \
   driver/compile_common.cmo
 
@@ -164,6 +166,7 @@ ASMCOMP=\
   asmcomp/reg.cmo asmcomp/debug/reg_with_debug_info.cmo \
   asmcomp/debug/reg_availability_set.cmo \
   asmcomp/mach.cmo asmcomp/proc.cmo \
+  asmcomp/linking_state.cmo \
   asmcomp/afl_instrument.cmo \
   asmcomp/strmatch.cmo \
   asmcomp/cmmgen_state.cmo \
@@ -198,7 +201,7 @@ MIDDLE_END_CLOSURE=\
   middle_end/closure/closure.cmo \
   middle_end/closure/closure_middle_end.cmo
 
-# Owing to dependencies through [Compilenv], which would be
+# Owing to dependencies through [Compilation_state], which would be
 # difficult to remove, some of the lower parts of Flambda (anything that is
 # saved in a .cmx file) have to be included in the [MIDDLE_END] stanza, below.
 MIDDLE_END_FLAMBDA=\
@@ -243,8 +246,6 @@ MIDDLE_END_FLAMBDA=\
 
 MIDDLE_END=\
   middle_end/internal_variable_names.cmo \
-  middle_end/linkage_name.cmo \
-  middle_end/compilation_unit.cmo \
   middle_end/variable.cmo \
   middle_end/flambda/base_types/closure_element.cmo \
   middle_end/flambda/base_types/closure_id.cmo \
@@ -277,8 +278,9 @@ MIDDLE_END=\
   middle_end/flambda/inlining_cost.cmo \
   middle_end/flambda/simple_value_approx.cmo \
   middle_end/flambda/export_info.cmo \
-  middle_end/flambda/export_info_for_pack.cmo \
-  middle_end/compilenv.cmo \
+  file_formats/cmx_format.cmo \
+  file_formats/cmxa_format.cmo \
+  middle_end/compilation_state.cmo \
   $(MIDDLE_END_CLOSURE) \
   $(MIDDLE_END_FLAMBDA)
 

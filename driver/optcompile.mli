@@ -23,11 +23,11 @@ val implementation:
 
 (** {2 Internal functions} **)
 
-val clambda :
+val closure :
   Compile_common.info ->
   (module Backend_intf.S) ->
   Typedtree.structure * Typedtree.module_coercion -> unit
-(** [clambda info typed] applies the regular compilation pipeline to the
+(** [closure info typed] applies the Closure compilation pipeline to the
     given typechecked implementation and outputs the resulting files.
 *)
 

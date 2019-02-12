@@ -53,13 +53,11 @@ val of_external_name
     change during a prefixing. *)
 val add_prefix : t -> Asm_section.t -> Object_file.t -> prefix:string -> t
 
-(* To be enabled once [Backend_sym] is merged.
 (** The section enclosing the symbol. *)
 val section : t -> Asm_section.t
 
 (** A description of the object file where the given symbol is defined. *)
 val object_file : t -> Object_file.t
-*)
 
 (** Convert a symbol to the corresponding textual form, suitable for direct
     emission into an assembly file.  This may be useful e.g. when emitting
