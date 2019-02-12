@@ -150,6 +150,57 @@ module Stdlib = struct
           | t::q -> aux (n-1) (t::acc) q
       in
       aux n [] l
+
+    let rec is_prefix ~equal t ~of_ =
+      match t, of_ with
+      | [], [] -> true
+      | _::_, [] -> false
+      | [], _::_ -> true
+      | x1::t, x2::of_ ->
+        if equal x1 x2 then is_prefix ~equal t ~of_
+        else false
+
+    type 'a longest_common_prefix_result = {
+      longest_common_prefix : 'a list;
+      first : 'a list;
+      second : 'a list;
+    }
+
+    let longest_common_prefix ~equal l1 l2 =
+      let rec find_prefix ~longest_common_prefix_rev l1 l2 =
+        match l1, l2 with
+        | [], []
+        | [], _::_
+        | _::_, [] ->
+          let longest_common_prefix = List.rev longest_common_prefix_rev in
+          { longest_common_prefix;
+            first = l1;
+            second = l2;
+          }
+        | elt1::l1_tail, elt2::l2_tail ->
+          if equal elt1 elt2 then
+            let longest_common_prefix_rev = elt1 :: longest_common_prefix_rev in
+            find_prefix ~longest_common_prefix_rev l1_tail l2_tail
+          else
+            let longest_common_prefix = List.rev longest_common_prefix_rev in
+            { longest_common_prefix;
+              first = l1;
+              second = l2;
+            }
+      in
+      find_prefix ~longest_common_prefix_rev:[] l1 l2
+(*
+    let rec chop_longest_common_prefix ~equal l1 l2 =
+      match l1, l2 with
+      | [], []
+      | [], _::_
+      | _::_, [] -> l1, l2
+      | elt1::l1_tail, elt2::l2_tail ->
+        if equal elt1 elt2 then
+          chop_longest_common_prefix ~equal l1_tail l2_tail
+        else
+          l1, l2
+*)
   end
 
   module Option = struct
@@ -162,6 +213,13 @@ module Stdlib = struct
     let is_some = function
       | None -> false
       | Some _ -> true
+
+    let compare f t1 t2 =
+      match t1, t2 with
+      | None, None -> 0
+      | None, Some _ -> -1
+      | Some _, None -> 1
+      | Some contents1, Some contents2 -> f contents1 contents2
 
     let equal eq o1 o2 =
       match o1, o2 with
@@ -186,6 +244,17 @@ module Stdlib = struct
       match a with
       | None -> default
       | Some a -> f a
+
+    let (>>=) t f =
+      match t with
+      | None -> None
+      | Some x -> f x
+
+    let print print_contents ppf t =
+      match t with
+      | None -> Format.pp_print_string ppf "None"
+      | Some contents ->
+        Format.fprintf ppf "@[(Some@ %a)@]" print_contents contents 
   end
 
   module Array = struct
@@ -214,6 +283,9 @@ module Stdlib = struct
         i = len || (f t.[i] && loop (i + 1))
       in
       loop 0
+
+    let print ppf t =
+      Format.pp_print_string ppf t
   end
 
   external compare : 'a -> 'a -> int = "%compare"
@@ -347,6 +419,12 @@ let output_to_file_via_temporary ?(mode = [Open_text]) filename fn =
       end
   | exception exn ->
       close_out oc; remove_file temp_filename; raise exn
+
+let protect_writing_to_file ~filename ~f =
+  let outchan = open_out_bin filename in
+  try_finally ~always:(fun () -> close_out outchan)
+    ~exceptionally:(fun () -> remove_file filename)
+    (fun () -> f outchan)
 
 (* Integer operations *)
 

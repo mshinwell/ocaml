@@ -35,22 +35,42 @@ type global_map = {
 module Native = struct
   type handle
 
-  external ndl_open : string -> bool -> handle * Cmxs_format.dynheader
+  external ndl_open : string -> bool -> handle * Cmxs_format.Dynheader_info.t
     = "caml_natdynlink_open"
   external ndl_run : handle -> string -> unit = "caml_natdynlink_run"
   external ndl_getmap : unit -> global_map list = "caml_natdynlink_getmap"
   external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
 
   module Unit_header = struct
-    type t = Cmxs_format.dynunit
+    module CU = Compilation_unit
+    module DU = Cmxs_format.Dynunit_info
 
-    let name (t : t) = t.dynu_name
-    let crc (t : t) = Some t.dynu_crc
+    type t = DU.t
 
-    let interface_imports (t : t) = t.dynu_imports_cmi
-    let implementation_imports (t : t) = t.dynu_imports_cmx
+    (* CR-someday mshinwell: Change the whole dynlink library to use
+       [CU.Name], or maybe a new type, which could also be used
+       elsewhere in the compiler (superceding type [modname]). *)
 
-    let defined_symbols (t : t) = t.dynu_defines
+    let name t =
+      CU.Name.to_string (CU.name (DU.unit t))
+
+    let crc t = Some (DU.crc t)
+
+    let interface_imports t =
+      List.map (fun (name, crc_opt) ->
+          CU.Name.to_string name, crc_opt)
+        (CU.Name.Map.bindings (DU.imports_cmi t))
+
+    let implementation_imports t =
+      List.map (fun (unit, crc_opt) ->
+          CU.Name.to_string (CU.name unit), crc_opt)
+        (CU.Map.bindings (DU.imports_cmx t))
+
+    let defined_symbols t =
+      List.map (fun unit ->
+          CU.Name.to_string (CU.name unit))
+        (DU.defines t)
+
     let unsafe_module _t = false
   end
 
@@ -87,10 +107,11 @@ module Native = struct
       try ndl_open filename (not priv)
       with exn -> raise (DT.Error (Cannot_open_dynamic_library exn))
     in
-    if header.dynu_magic <> Config.cmxs_magic_number then begin
+    if Cmxs_format.Dynheader_info.magic header <> Config.cmxs_magic_number
+    then begin
       raise (DT.Error (Not_a_bytecode_file filename))
     end;
-    handle, header.dynu_units
+    handle, Cmxs_format.Dynheader_info.units header
 
   let finish _handle = ()
 end

@@ -171,13 +171,33 @@ dynlink_compilerlibs/cmo_format.cmi : \
     dynlink_compilerlibs/lambda.cmi \
     dynlink_compilerlibs/ident.cmi
 dynlink_compilerlibs/cmxs_format.cmo : \
-    dynlink_compilerlibs/misc.cmi \
+    dynlink_compilerlibs/config.cmi \
+    dynlink_compilerlibs/compilation_unit.cmi \
     dynlink_compilerlibs/cmxs_format.cmi
 dynlink_compilerlibs/cmxs_format.cmx : \
-    dynlink_compilerlibs/misc.cmx \
+    dynlink_compilerlibs/config.cmx \
+    dynlink_compilerlibs/compilation_unit.cmx \
     dynlink_compilerlibs/cmxs_format.cmi
 dynlink_compilerlibs/cmxs_format.cmi : \
-    dynlink_compilerlibs/misc.cmi
+    dynlink_compilerlibs/compilation_unit.cmi
+dynlink_compilerlibs/compilation_unit.cmo : \
+    dynlink_compilerlibs/path.cmi \
+    dynlink_compilerlibs/misc.cmi \
+    dynlink_compilerlibs/int_replace_polymorphic_compare.cmi \
+    dynlink_compilerlibs/identifiable.cmi \
+    dynlink_compilerlibs/ident.cmi \
+    dynlink_compilerlibs/compilation_unit.cmi
+dynlink_compilerlibs/compilation_unit.cmx : \
+    dynlink_compilerlibs/path.cmx \
+    dynlink_compilerlibs/misc.cmx \
+    dynlink_compilerlibs/int_replace_polymorphic_compare.cmx \
+    dynlink_compilerlibs/identifiable.cmx \
+    dynlink_compilerlibs/ident.cmx \
+    dynlink_compilerlibs/compilation_unit.cmi
+dynlink_compilerlibs/compilation_unit.cmi : \
+    dynlink_compilerlibs/path.cmi \
+    dynlink_compilerlibs/identifiable.cmi \
+    dynlink_compilerlibs/ident.cmi
 dynlink_compilerlibs/config.cmo : \
     dynlink_compilerlibs/config.cmi
 dynlink_compilerlibs/config.cmx : \
@@ -325,6 +345,11 @@ dynlink_compilerlibs/instruct.cmi : \
     dynlink_compilerlibs/lambda.cmi \
     dynlink_compilerlibs/ident.cmi \
     dynlink_compilerlibs/env.cmi
+dynlink_compilerlibs/int_replace_polymorphic_compare.cmo : \
+    dynlink_compilerlibs/int_replace_polymorphic_compare.cmi
+dynlink_compilerlibs/int_replace_polymorphic_compare.cmx : \
+    dynlink_compilerlibs/int_replace_polymorphic_compare.cmi
+dynlink_compilerlibs/int_replace_polymorphic_compare.cmi :
 dynlink_compilerlibs/lambda.cmo : \
     dynlink_compilerlibs/types.cmi \
     dynlink_compilerlibs/primitive.cmi \
@@ -472,6 +497,7 @@ dynlink_compilerlibs/persistent_env.cmi : \
     dynlink_compilerlibs/types.cmi \
     dynlink_compilerlibs/misc.cmi \
     dynlink_compilerlibs/location.cmi \
+    dynlink_compilerlibs/consistbl.cmi \
     dynlink_compilerlibs/cmi_format.cmi
 dynlink_compilerlibs/pprintast.cmo : \
     dynlink_compilerlibs/parsetree.cmi \

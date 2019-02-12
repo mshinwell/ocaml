@@ -78,7 +78,9 @@ CAMLC = $(CAMLRUN) $(ROOTDIR)/boot/ocamlc -g -nostdlib -I $(ROOTDIR)/boot \
 CAMLOPT = $(CAMLRUN) $(ROOTDIR)/ocamlopt -g -nostdlib -I $(ROOTDIR)/stdlib
 CAMLLEX = $(CAMLRUN) $(ROOTDIR)/boot/ocamllex
 INCLUDES = $(addprefix -I $(ROOTDIR)/,utils parsing typing bytecomp asmcomp \
-                       middle_end middle_end/base_types driver toplevel)
+                       asmcomp/asm_target file_formats \
+                       middle_end middle_end/closure middle_end/flambda \
+                       middle_end/flambda/base_types driver toplevel)
 COMPFLAGS = -absname -w +a-4-9-41-42-44-45-48 -strict-sequence -warn-error A \
  -safe-string -strict-formats -bin-annot $(INCLUDES)
 LINKFLAGS = $(INCLUDES)
@@ -328,9 +330,6 @@ objinfo_helper$(EXE): objinfo_helper.c $(ROOTDIR)/runtime/caml/s.h
 OBJINFO=$(ROOTDIR)/compilerlibs/ocamlcommon.cma \
         $(ROOTDIR)/compilerlibs/ocamlbytecomp.cma \
         $(ROOTDIR)/compilerlibs/ocamlmiddleend.cma \
-        $(ROOTDIR)/asmcomp/backend_var.cmo \
-        $(ROOTDIR)/asmcomp/printclambda.cmo \
-        $(ROOTDIR)/asmcomp/export_info.cmo \
         objinfo.cmo
 
 $(call byte_and_opt,ocamlobjinfo,$(OBJINFO),objinfo_helper$(EXE))
@@ -349,10 +348,7 @@ $(call byte_and_opt,primreq,$(primreq),)
 LINTAPIDIFF=$(ROOTDIR)/compilerlibs/ocamlcommon.cmxa \
         $(ROOTDIR)/compilerlibs/ocamlbytecomp.cmxa \
         $(ROOTDIR)/compilerlibs/ocamlmiddleend.cmxa \
-        $(ROOTDIR)/asmcomp/backend_var.cmx \
-        $(ROOTDIR)/asmcomp/printclambda.cmx \
-        $(ROOTDIR)/asmcomp/export_info.cmx \
-	$(ROOTDIR)/otherlibs/str/str.cmxa \
+        $(ROOTDIR)/otherlibs/str/str.cmxa \
 	lintapidiff.cmx
 
 lintapidiff.opt: INCLUDES+= -I $(ROOTDIR)/otherlibs/str

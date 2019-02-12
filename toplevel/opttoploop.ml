@@ -34,12 +34,20 @@ external ndl_run_toplevel: string -> string -> res
 external ndl_loadsym: string -> Obj.t = "caml_natdynlink_loadsym"
 
 let global_symbol id =
-  let sym = Compilenv.symbol_for_global id in
-  try ndl_loadsym sym
+  let comp_unit = Compilation_state.compilation_unit_for_global id in
+  let sym =
+    match comp_unit with
+    | Compilation_state.Compilation_unit comp_unit ->
+      Symbol.for_module_block comp_unit
+    | Compilation_state.Predef ->
+      Symbol.for_predefined_exn id
+  in
+  let backend_sym = Backend_sym.of_symbol sym in
+  try ndl_loadsym (Backend_sym.to_string backend_sym)
   with _ -> fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
 
 let need_symbol sym =
-  try ignore (ndl_loadsym sym); false
+  try ignore (ndl_loadsym (Backend_sym.to_string sym)); false
   with _ -> true
 
 let dll_run dll entry =
@@ -224,12 +232,6 @@ let phrase_name = ref "TOP"
 module Backend = struct
   (* See backend_intf.mli. *)
 
-  let symbol_for_global' = Compilenv.symbol_for_global'
-  let closure_symbol = Compilenv.closure_symbol
-
-  let really_import_approx = Import_approx.really_import_approx
-  let import_symbol = Import_approx.import_symbol
-
   let size_int = Arch.size_int
   let big_endian = Arch.big_endian
 
@@ -248,19 +250,24 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
     if !Clflags.keep_asm_file then !phrase_name ^ ext_dll
     else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
-  let fn = Filename.chop_extension dll in
-  if not Config.flambda then
-    Asmgen.compile_implementation_clambda
-      ~toplevel:need_symbol fn ~ppf_dump:ppf
-      { Lambda.code=slam ; main_module_block_size=size;
-        module_ident; required_globals }
-  else
-    Asmgen.compile_implementation_flambda
-      ~required_globals ~backend ~toplevel:need_symbol fn ~ppf_dump:ppf
-      (Middle_end.middle_end ~ppf_dump:ppf ~prefixname:"" ~backend ~size
-         ~module_ident ~module_initializer:slam ~filename:"toplevel");
-  Asmlink.call_linker_shared [fn ^ ext_obj] dll;
-  Sys.remove (fn ^ ext_obj);
+  let filename = Filename.chop_extension dll in
+  let program =
+    { Lambda.
+      code = slam;
+      main_module_block_size = size;
+      module_ident;
+      required_globals;
+    }
+  in
+  let middle_end =
+    if Config.flambda then Flambda_middle_end.lambda_to_clambda
+    else Closure_middle_end.lambda_to_clambda
+  in
+  Asmgen.compile_implementation ~toplevel:need_symbol
+    ~backend ~filename ~prefixname:""
+    ~middle_end ~ppf_dump:ppf program;
+  Asmlink.call_linker_shared [filename ^ ext_obj] dll;
+  Sys.remove (filename ^ ext_obj);
 
   let dll =
     if Filename.is_implicit dll
@@ -310,7 +317,12 @@ let execute_phrase print_outcome ppf phr =
       let oldenv = !toplevel_env in
       incr phrase_seqid;
       phrase_name := Printf.sprintf "TOP%i" !phrase_seqid;
-      Compilenv.reset ?packname:None !phrase_name;
+      let compilation_unit =
+        Compilation_unit.create (Compilation_unit.Name.of_string !phrase_name)
+      in
+      Compilation_unit.set_current compilation_unit;
+      Compilation_state.reset compilation_unit;
+      Linking_state.reset ();
       Typecore.reset_delayed_checks ();
       let sstr, rewritten =
         match sstr with
@@ -357,7 +369,7 @@ let execute_phrase print_outcome ppf phr =
                 (* CR-someday trefis: *)
                 ()
               else
-                Compilenv.record_global_approx_toplevel ();
+                Compilation_state.Closure_only.record_global_approx_toplevel ();
               if print_outcome then
                 Printtyp.wrap_printing_env ~error:false oldenv (fun () ->
                 match str.str_items with

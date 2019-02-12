@@ -67,13 +67,13 @@ COMPILERLIBS_INTFS=\
   parsing/asttypes.mli \
   parsing/parsetree.mli \
   typing/outcometree.mli \
-  bytecomp/cmo_format.mli \
-  asmcomp/cmxs_format.mli
+  file_formats/cmo_format.mli
 
 # .ml files from compilerlibs that have corresponding .mli files.
 COMPILERLIBS_SOURCES=\
   utils/config.ml \
   utils/build_path_prefix_map.ml \
+  utils/int_replace_polymorphic_compare.ml \
   utils/misc.ml \
   utils/identifiable.ml \
   utils/numbers.ml \
@@ -101,7 +101,7 @@ COMPILERLIBS_SOURCES=\
   typing/subst.ml \
   typing/predef.ml \
   typing/datarepr.ml \
-  typing/cmi_format.ml \
+  file_formats/cmi_format.ml \
   typing/persistent_env.ml \
   typing/env.ml \
   bytecomp/lambda.ml \
@@ -112,6 +112,8 @@ COMPILERLIBS_SOURCES=\
   bytecomp/dll.ml \
   bytecomp/meta.ml \
   bytecomp/symtable.ml
+  middle_end/compilation_unit.ml \
+  file_formats/cmxs_format.ml)
 
 # Rules to make a local copy of the .ml and .mli files required.  We also
 # provide .ml files for .mli-only modules---without this, such modules do

@@ -1,0 +1,214 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*          Fabrice Le Fessant, projet Gallium, INRIA Rocquencourt        *)
+(*                  Mark Shinwell, Jane Street Europe                     *)
+(*                                                                        *)
+(*   Copyright 2014 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*   Copyright 2016--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* CR mshinwell: Address Damien's comments on this file from the
+   Asm_directives GPR *)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
+type t = {
+  section : Asm_section.t;
+  object_file : Object_file.t;
+  name : string;
+  (* Just like for [Backend_sym], the [name] uniquely determines the
+     symbol. *)
+  name_without_prefix : string;
+  (* Like [name], but without any symbol prefix.  This is required for
+     emission into DWARF information in situations where GDB may look up
+     a symbol name via the minsyms table, whose entries appear to lack the
+     prefix.  In particular this happens when resolving call site chains. *)
+}
+
+let escape name =
+  let spec = ref false in
+  for i = 0 to String.length name - 1 do
+    match String.unsafe_get name i with
+    | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' -> ()
+    | _ -> spec := true;
+  done;
+  if not !spec then begin
+    name
+  end else begin
+    let b = Buffer.create (String.length name + 10) in
+    String.iter
+      (function
+        | ('A'..'Z' | 'a'..'z' | '0'..'9' | '_') as c -> Buffer.add_char b c
+        | c -> Printf.bprintf b "$%02x" (Char.code c)
+      )
+      name;
+    Buffer.contents b
+  end
+
+let symbol_prefix () = (* CR mshinwell: needs checking *)
+  match Target_system.architecture () with
+  | IA32 | X86_64 ->
+    begin match Target_system.system () with
+    | Linux
+    | Windows Cygwin
+    | Windows MinGW
+    | FreeBSD
+    | NetBSD
+    | OpenBSD
+    | Generic_BSD
+    | Solaris
+    | BeOS
+    | GNU
+    | Dragonfly
+    | Windows Native
+    | Unknown -> "" (* checked ok. *)
+    | MacOS_like -> "_" (* checked ok. *)
+    end
+  | ARM
+  | AArch64
+  | POWER
+  | Z -> ""
+
+let encode ?without_prefix backend_sym =
+  let symbol_prefix =
+    match without_prefix with
+    | None -> symbol_prefix ()
+    | Some () -> ""
+  in
+  Backend_sym.to_escaped_string
+    ~symbol_prefix
+    ~escape backend_sym
+
+let create backend_sym =
+  let section : Asm_section.t =
+    match Backend_sym.kind backend_sym with
+    | Text -> Text
+    | Data -> Data
+  in
+  let object_file = Backend_sym.object_file backend_sym in
+  { section;
+    object_file;
+    name = encode backend_sym;
+    name_without_prefix = encode ~without_prefix:() backend_sym;
+  }
+
+let of_external_name section object_file name =
+  let name_without_prefix = escape name in
+  let name = (symbol_prefix ()) ^ name_without_prefix in
+  { section;
+    object_file;
+    name;
+    name_without_prefix;
+  }
+
+let of_external_name_no_prefix section object_file name =
+  let name_without_prefix = escape name in
+  { section;
+    object_file;
+    name = name_without_prefix;
+    (* CR mshinwell: [name] might have a prefix...
+       Let's look through and find where this function is being used, and
+       see whether we can supply the name without a prefix at all times. *)
+    name_without_prefix;
+  }
+
+let section t = t.section
+
+let encode ?reloc t =
+  assert (String.length t.name > 0);
+  match reloc with
+  | None -> t.name
+  | Some reloc -> t.name ^ reloc
+
+let prefix t section object_file ~prefix =
+  let prefix = escape prefix in
+  { section;
+    object_file;
+    name = prefix ^ t.name;
+    name_without_prefix = prefix ^ t.name_without_prefix;
+  }
+
+(* Detection of functions that can be duplicated between a DLL and
+   the main program (PR#4690) *)
+
+let isprefix s1 s2 =
+  String.length s1 <= String.length s2
+    && String.sub s2 0 (String.length s1) = s1
+
+let is_generic_function t =
+  List.exists
+    (fun p -> isprefix p t.name)
+    ["caml_apply"; "caml_curry"; "caml_send"; "caml_tuplify"]
+
+let object_file t = t.object_file
+
+include Identifiable.Make (struct
+  type nonrec t = t
+  let compare t1 t2 = String.compare t1.name t2.name
+  let equal t1 t2 = String.equal t1.name t2.name
+  let hash t = Hashtbl.hash t.name
+  let output _ _ = Misc.fatal_error "Not yet implemented"
+  let print ppf t = Format.pp_print_string ppf t.name
+end)
+
+module Names = struct
+  let runtime = Object_file.runtime_and_external_libs
+
+  let mcount =
+    of_external_name Text runtime "mcount"
+
+  let _mcount =
+    of_external_name Text runtime "_mcount"
+
+  let __gnu_mcount_nc =
+    of_external_name Text runtime "__gnu_mcount_nc"
+
+  let caml_young_ptr =
+    of_external_name Data runtime "caml_young_ptr"
+
+  let caml_young_limit =
+    of_external_name Data runtime "caml_young_limit"
+
+  let caml_exception_pointer =
+    of_external_name Data runtime "caml_exception_pointer"
+
+  let caml_negf_mask =
+    of_external_name Eight_byte_literals Object_file.current_compilation_unit
+      "caml_negf_mask"
+
+  let caml_absf_mask =
+    of_external_name Eight_byte_literals Object_file.current_compilation_unit
+      "caml_absf_mask"
+
+  let caml_call_gc =
+    of_external_name Text runtime "caml_call_gc"
+
+  let caml_c_call =
+    of_external_name Text runtime "caml_c_call"
+
+  let caml_alloc1 =
+    of_external_name Text runtime "caml_alloc1"
+
+  let caml_alloc2 =
+    of_external_name Text runtime "caml_alloc2"
+
+  let caml_alloc3 =
+    of_external_name Text runtime "caml_alloc3"
+
+  let caml_allocN =
+    of_external_name Text runtime "caml_allocN"
+
+  let caml_ml_array_bound_error =
+    of_external_name Text runtime "caml_ml_array_bound_error"
+
+  let caml_raise_exn =
+    of_external_name Text runtime "caml_raise_exn"
+end

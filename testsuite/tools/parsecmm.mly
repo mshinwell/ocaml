@@ -161,7 +161,10 @@ phrase:
 fundecl:
     LPAREN FUNCTION fun_name LPAREN params RPAREN sequence RPAREN
       { List.iter (fun (id, ty) -> unbind_ident id) $5;
-        {fun_name = $3; fun_args = $5; fun_body = $7;
+        let fun_name =
+          Backend_sym.unsafe_create $3 Backend_sym.Text
+        in
+        {fun_name; fun_args = $5; fun_body = $7;
          fun_codegen_options =
            if Config.flambda then [
              Reduce_code_size;
@@ -197,7 +200,8 @@ componentlist:
 expr:
     INTCONST    { Cconst_int $1 }
   | FLOATCONST  { Cconst_float (float_of_string $1) }
-  | STRING      { Cconst_symbol $1 }
+  | STRING      { Cconst_symbol (
+                    Backend_sym.unsafe_create $1 Backend_sym.Data) }
   | POINTER     { Cconst_pointer $1 }
   | IDENT       { Cvar(find_ident $1) }
   | LBRACKET RBRACKET { Ctuple [] }
@@ -206,7 +210,9 @@ expr:
   | LPAREN APPLY location expr exprlist machtype RPAREN
                 { Cop(Capply $6, $4 :: List.rev $5, debuginfo ?loc:$3 ()) }
   | LPAREN EXTCALL STRING exprlist machtype RPAREN
-               {Cop(Cextcall($3, $5, false, None), List.rev $4, debuginfo ())}
+               { Cop(Cextcall(Backend_sym.unsafe_create $3 Backend_sym.Text,
+                   $5, false, None), List.rev $4, debuginfo ())
+               }
   | LPAREN ALLOC exprlist RPAREN { Cop(Calloc, List.rev $3, debuginfo ()) }
   | LPAREN SUBF expr RPAREN { Cop(Cnegf, [$3], debuginfo ()) }
   | LPAREN SUBF expr expr RPAREN { Cop(Csubf, [$3; $4], debuginfo ()) }
@@ -358,17 +364,25 @@ datalist:
   | /**/                        { [] }
 ;
 dataitem:
-    STRING COLON                { Cdefine_symbol $1 }
+    STRING COLON                { Cdefine_symbol (
+                                    Backend_sym.unsafe_create $1
+                                      Backend_sym.Data) }
   | BYTE INTCONST               { Cint8 $2 }
   | HALF INTCONST               { Cint16 $2 }
   | INT INTCONST                { Cint(Nativeint.of_int $2) }
   | FLOAT FLOATCONST            { Cdouble (float_of_string $2) }
-  | ADDR STRING                 { Csymbol_address $2 }
-  | VAL STRING                 { Csymbol_address $2 }
+  | ADDR STRING                 { Csymbol_address (
+                                    Backend_sym.unsafe_create $2
+                                      Backend_sym.Text) }
+  | VAL STRING                  { Csymbol_address (
+                                    Backend_sym.unsafe_create $2
+                                      Backend_sym.Data) }
   | KSTRING STRING              { Cstring $2 }
   | SKIP INTCONST               { Cskip $2 }
   | ALIGN INTCONST              { Calign $2 }
-  | GLOBAL STRING               { Cglobal_symbol $2 }
+  | GLOBAL STRING               { Cglobal_symbol (
+                                    Backend_sym.unsafe_create $2
+                                      Backend_sym.Data) }
 ;
 catch_handlers:
   | catch_handler
