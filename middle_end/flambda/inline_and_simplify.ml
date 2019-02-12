@@ -583,7 +583,6 @@ and simplify_set_of_closures original_env r
        references to functions via symbols or variables. *)
     Freshening.rewrite_recursive_calls_with_symbols (E.freshening original_env)
       set_of_closures.function_decls
-      ~make_closure_symbol:Backend.closure_symbol
   in
   let env = E.increase_closure_depth original_env in
   let free_vars, specialised_args, function_decls, parameter_approximations,
@@ -1649,7 +1648,7 @@ let simplify_program env r (program : Flambda.program) =
             let module Backend = (val (E.backend env) : Backend_intf.S) in
             (* CR-someday mshinwell for mshinwell: Is there a reason we cannot
                use [simplify_named_using_approx_and_env] here? *)
-            let approx = Backend.import_symbol symbol in
+            let approx = Import_approx.import_symbol symbol in
             E.add_symbol env symbol approx, approx
           | approx -> env, approx
         in
@@ -1665,7 +1664,7 @@ let add_predef_exns_to_environment ~env ~backend =
   let module Backend = (val backend : Backend_intf.S) in
   List.fold_left (fun env predef_exn ->
       assert (Ident.is_predef predef_exn);
-      let symbol = Backend.symbol_for_global' predef_exn in
+      let symbol = Symbol.for_predefined_exn predef_exn in
       let name = Ident.name predef_exn in
       let approx =
         A.value_block Tag.object_tag

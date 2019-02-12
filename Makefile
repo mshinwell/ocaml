@@ -49,7 +49,7 @@ ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
         -I lambda -I middle_end -I middle_end/closure \
         -I middle_end/flambda -I middle_end/flambda/base_types \
-        -I asmcomp -I asmcomp/debug \
+        -I asmcomp -I asmcomp/asm_target -I asmcomp/debug \
         -I driver -I toplevel
 
 COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48-66 \
@@ -123,6 +123,8 @@ COMP=\
   bytecomp/symtable.cmo \
   driver/pparse.cmo driver/main_args.cmo \
   driver/compenv.cmo driver/compmisc.cmo \
+  middle_end/compilation_unit.cmo \
+  file_formats/cmxs_format.cmo \
   driver/makedepend.cmo \
   driver/compile_common.cmo
 
@@ -152,12 +154,19 @@ ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
 ASMCOMP=\
+  asmcomp/object_file.cmo \
+  asmcomp/backend_compilation_unit.cmo \
+  asmcomp/backend_sym.cmo \
+  asmcomp/target_system.cmo \
+  asmcomp/asm_target/asm_section.cmo \
+  asmcomp/asm_target/asm_symbol.cmo \
   $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/debug/reg_with_debug_info.cmo \
   asmcomp/debug/reg_availability_set.cmo \
   asmcomp/mach.cmo asmcomp/proc.cmo \
+  asmcomp/linking_state.cmo \
   asmcomp/afl_instrument.cmo \
   asmcomp/strmatch.cmo \
   asmcomp/cmmgen_state.cmo \
@@ -192,7 +201,7 @@ MIDDLE_END_CLOSURE=\
   middle_end/closure/closure.cmo \
   middle_end/closure/closure_middle_end.cmo
 
-# Owing to dependencies through [Compilenv], which would be
+# Owing to dependencies through [Compilation_state], which would be
 # difficult to remove, some of the lower parts of Flambda (anything that is
 # saved in a .cmx file) have to be included in the [MIDDLE_END] stanza, below.
 MIDDLE_END_FLAMBDA=\
@@ -237,8 +246,6 @@ MIDDLE_END_FLAMBDA=\
 
 MIDDLE_END=\
   middle_end/internal_variable_names.cmo \
-  middle_end/linkage_name.cmo \
-  middle_end/compilation_unit.cmo \
   middle_end/variable.cmo \
   middle_end/flambda/base_types/closure_element.cmo \
   middle_end/flambda/base_types/closure_id.cmo \
@@ -271,8 +278,9 @@ MIDDLE_END=\
   middle_end/flambda/inlining_cost.cmo \
   middle_end/flambda/simple_value_approx.cmo \
   middle_end/flambda/export_info.cmo \
-  middle_end/flambda/export_info_for_pack.cmo \
-  middle_end/compilenv.cmo \
+  file_formats/cmx_format.cmo \
+  file_formats/cmxa_format.cmo \
+  middle_end/compilation_state.cmo \
   $(MIDDLE_END_CLOSURE) \
   $(MIDDLE_END_FLAMBDA)
 
@@ -646,6 +654,9 @@ endif
 	$(INSTALL_DATA) \
 	    asmcomp/*.cmi \
 	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    asmcomp/asm_target/*.cmi \
+	    "$(INSTALL_COMPLIBDIR)"
 ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
 	$(INSTALL_DATA) \
 	    middle_end/*.cmt middle_end/*.cmti \
@@ -667,6 +678,10 @@ ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
 	$(INSTALL_DATA) \
 	    asmcomp/*.cmt asmcomp/*.cmti \
 	    asmcomp/*.mli \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    asmcomp/asm_target/*.cmt asmcomp/asm_target/*.cmti \
+	    asmcomp/asm_target/*.mli \
 	    "$(INSTALL_COMPLIBDIR)"
 endif
 	$(INSTALL_DATA) \
@@ -707,7 +722,7 @@ installoptopt:
 	$(INSTALL_DATA) \
 	   utils/*.cmx parsing/*.cmx typing/*.cmx bytecomp/*.cmx \
 	   file_formats/*.cmx \
-	   lambda/*.cmx \
+	   lambda/*.cmx asmcomp/asm_target/*.cmx asmcomp/debug/*.cmx \
 	   driver/*.cmx asmcomp/*.cmx middle_end/*.cmx \
            middle_end/closure/*.cmx \
            middle_end/flambda/*.cmx \
@@ -1300,7 +1315,7 @@ partialclean::
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end file_formats \
            lambda middle_end/closure middle_end/flambda \
-           middle_end/flambda/base_types asmcomp/debug \
+           middle_end/flambda/base_types asmcomp/debug asmcomp/asm_target \
            driver toplevel tools; do \
 	  rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.$(S) \
 	    $$d/*.$(O) $$d/*.$(SO) $$d/*~; \
@@ -1311,7 +1326,7 @@ partialclean::
 depend: beforedepend
 	(for d in utils parsing typing bytecomp asmcomp middle_end \
          lambda file_formats middle_end/closure middle_end/flambda \
-         middle_end/flambda/base_types asmcomp/debug \
+         middle_end/flambda/base_types asmcomp/debug asmcomp/asm_target \
          driver toplevel; \
          do $(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES) $$d/*.mli $$d/*.ml || exit; \
          done) > .depend

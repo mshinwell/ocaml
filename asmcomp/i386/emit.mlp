@@ -24,7 +24,10 @@ open Reg
 open Mach
 open Linearize
 open Emitaux
-module String = Misc.Stdlib.String
+
+module AS = Asm_section
+module S = Asm_symbol
+open Asm_symbol.Names
 
 open X86_ast
 open X86_proc
@@ -78,26 +81,15 @@ let slot_offset loc cl =
 (* Record symbols used and defined - at the end generate extern for those
    used but not defined *)
 
-let symbols_defined = ref String.Set.empty
-let symbols_used = ref String.Set.empty
+let symbols_defined = ref S.Set.empty
+let symbols_used = ref S.Set.empty
 
-let add_def_symbol s = symbols_defined := String.Set.add s !symbols_defined
-let add_used_symbol s = symbols_used := String.Set.add s !symbols_used
+let add_def_symbol s = symbols_defined := S.Set.add s !symbols_defined
+let add_used_symbol s = symbols_used := S.Set.add s !symbols_used
 
 let trap_frame_size = Misc.align 8 stack_alignment
 
-(* Prefixing of symbols with "_" *)
-
-let symbol_prefix =
-  match system with
-  | S_linux_elf -> ""
-  | S_bsd_elf -> ""
-  | S_solaris -> ""
-  | S_beos -> ""
-  | S_gnu -> ""
-  | _ -> "_" (* win32 & others *)
-
-let emit_symbol s = string_of_symbol symbol_prefix s
+let emit_symbol s = Asm_symbol.encode s
 
 let immsym s = sym (emit_symbol s)
 
@@ -530,15 +522,20 @@ let emit_instr fallthrough i =
         I.jmp (reg i.arg.(0))
       end
   | Lop(Itailcall_imm { func; label_after = _; }) ->
-      if func = !function_name then
-        I.jmp (label !tailrec_entry_point)
-      else begin
-        output_epilogue begin fun () ->
-          add_used_symbol func;
-          I.jmp (immsym func)
+      let func = S.create func in
+      begin match !function_name with
+      | None -> Misc.fatal_error "[function_name] not set"
+      | Some function_name ->
+        if S.equal func function_name then begin
+          I.jmp (label !tailrec_entry_point)
+        end else begin
+          output_epilogue begin fun () ->
+            add_used_symbol func;
+            I.jmp (immsym func)
+          end
         end
-      end
   | Lop(Iextcall { func; alloc; label_after; }) ->
+      let func = S.create func in
       add_used_symbol func;
       if alloc then begin
         I.mov (immsym func) eax;

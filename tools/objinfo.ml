@@ -18,10 +18,21 @@
 (* Dump info on .cmi, .cmo, .cmx, .cma, .cmxa, .cmxs files
    and on bytecode executables. *)
 
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 open Printf
-open Misc
 open Config
+open Misc
 open Cmo_format
+
+module CU = Compilation_unit
+module LI = Cmxa_format.Library_info
+module DH = Cmxs_format.Dynheader_info
+module DU = Cmxs_format.Dynunit_info
+module UI = Cmx_format.Unit_info
+module UIL = Cmx_format.Unit_info_link_time
+
+module Int = Numbers.Int
 
 (* Command line options to prevent printing approximation,
    function code and CRC
@@ -115,15 +126,30 @@ let print_cmt_infos cmt =
      | None -> ""
      | Some crc -> string_of_crc crc)
 
+let print_name_crc_native print_name (name, crco) =
+  let crc =
+    match crco with
+      None -> dummy_crc
+    | Some crc -> string_of_crc crc
+  in
+  printf "\t%s\t%s\n" crc (Format.asprintf "%a" print_name name)
+
 let print_general_infos name crc defines cmi cmx =
-  printf "Name: %s\n" name;
+  printf "Name: %s\n" (Format.asprintf "%a" CU.Name.print (CU.name name));
   printf "CRC of implementation: %s\n" (string_of_crc crc);
   printf "Globals defined:\n";
+  let defines =
+    List.map (fun comp_unit ->
+        CU.Name.to_string (CU.name comp_unit))
+      defines
+  in
   List.iter print_line defines;
   printf "Interfaces imported:\n";
-  List.iter print_name_crc cmi;
+  let cmi = CU.Name.Map.bindings cmi in
+  List.iter (print_name_crc_native CU.Name.print) cmi;
   printf "Implementations imported:\n";
-  List.iter print_name_crc cmx
+  let cmx = CU.Map.bindings cmx in
+  List.iter (print_name_crc_native CU.print) cmx
 
 let print_global_table table =
   printf "Globals defined:\n";
@@ -131,14 +157,11 @@ let print_global_table table =
     (fun id _ -> print_line (Ident.name id))
     table
 
-open Cmx_format
-open Cmxs_format
-
-let print_cmx_infos (ui, crc) =
-  print_general_infos
-    ui.ui_name crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
-  begin match ui.ui_export_info with
-  | Clambda approx ->
+let print_cmx_infos (ui, ui_link, crc) =
+  print_general_infos (UI.unit ui) crc (UI.defines ui)
+    (UI.imports_cmi ui) (UI.imports_cmx ui);
+  begin match UI.export_info ui with
+  | Closure approx ->
     if not !no_approx then begin
       printf "Clambda approximation:\n";
       Format.fprintf Format.std_formatter "  %a@." Printclambda.approx approx
@@ -150,15 +173,11 @@ let print_cmx_infos (ui, crc) =
     else
       printf "Flambda unit\n";
     if not !no_approx then begin
-      let cu =
-        Compilation_unit.create (Ident.create_persistent ui.ui_name)
-          (Linkage_name.create "__dummy__")
-      in
-      Compilation_unit.set_current cu;
+      let cu = UI.unit ui in
+      CU.set_current cu;
       let root_symbols =
-        List.map (fun s ->
-            Symbol.of_global_linkage cu (Linkage_name.create ("caml"^s)))
-          ui.ui_defines
+        List.map (fun comp_unit -> Symbol.for_module_block comp_unit)
+          (UI.defines ui)
       in
       Format.printf "approximations@ %a@.@."
         Export_info.print_approx (export, root_symbols)
@@ -169,29 +188,32 @@ let print_cmx_infos (ui, crc) =
   end;
   let pr_funs _ fns =
     List.iter (fun arity -> printf " %d" arity) fns in
-  printf "Currying functions:%a\n" pr_funs ui.ui_curry_fun;
-  printf "Apply functions:%a\n" pr_funs ui.ui_apply_fun;
-  printf "Send functions:%a\n" pr_funs ui.ui_send_fun;
-  printf "Force link: %s\n" (if ui.ui_force_link then "YES" else "no")
+  printf "Currying functions:%a\n" pr_funs
+    (Int.Set.elements (UIL.curry_fun ui_link));
+  printf "Apply functions:%a\n" pr_funs
+    (Int.Set.elements (UIL.apply_fun ui_link));
+  printf "Send functions:%a\n" pr_funs
+    (Int.Set.elements (UIL.send_fun ui_link));
+  printf "Force link: %s\n" (if (UIL.force_link ui_link) then "YES" else "no")
 
-let print_cmxa_infos (lib : Cmx_format.library_infos) =
+let print_cmxa_infos lib =
   printf "Extra C object files:";
-  List.iter print_spaced_string (List.rev lib.lib_ccobjs);
+  List.iter print_spaced_string (List.rev (LI.ccobjs lib));
   printf "\nExtra C options:";
-  List.iter print_spaced_string lib.lib_ccopts;
+  List.iter print_spaced_string (LI.ccopts lib);
   printf "\n";
-  List.iter print_cmx_infos lib.lib_units
+  List.iter print_cmx_infos (LI.units lib)
 
 let print_cmxs_infos header =
   List.iter
     (fun ui ->
        print_general_infos
-         ui.dynu_name
-         ui.dynu_crc
-         ui.dynu_defines
-         ui.dynu_imports_cmi
-         ui.dynu_imports_cmx)
-    header.dynu_units
+         (DU.unit ui)
+         (DU.crc ui)
+         (DU.defines ui)
+         (DU.imports_cmi ui)
+         (DU.imports_cmx ui))
+    (DH.units header)
 
 let p_title title = printf "%s:\n" title
 
@@ -210,7 +232,7 @@ let p_list title print = function
 let dump_byte ic =
   Bytesections.read_toc ic;
   let toc = Bytesections.toc () in
-  let toc = List.sort Stdlib.compare toc in
+  let toc = List.sort compare toc in
   List.iter
     (fun (section, _) ->
        try
@@ -260,7 +282,7 @@ let read_dyn_header filename ic =
            (fun () ->
               let ofs = Scanf.bscanf tc "%Ld" (fun x -> x) in
               LargeFile.seek_in ic ofs;
-              Some(input_value ic : dynheader)))
+              Some(input_value ic : DH.t)))
   with Failure _ | Sys_error _ -> None
 
 let dump_obj filename =
@@ -294,13 +316,12 @@ let dump_obj filename =
      | Some cmt -> print_cmt_infos cmt
     end
   end else if magic_number = cmx_magic_number then begin
-    let ui = (input_value ic : unit_infos) in
-    let crc = Digest.input ic in
     close_in ic;
-    print_cmx_infos (ui, crc)
+    let ui, ui_link, crc = Cmx_format.load ~filename in
+    print_cmx_infos (ui, ui_link, crc)
   end else if magic_number = cmxa_magic_number then begin
-    let li = (input_value ic : library_infos) in
     close_in ic;
+    let li = Cmxa_format.load ~filename in
     print_cmxa_infos li
   end else begin
     let pos_trailer = in_channel_length ic - len_magic_number in
@@ -316,7 +337,7 @@ let dump_obj filename =
           printf "Unable to read info on file %s\n" filename;
           exit 2
       | Some header ->
-          if header.dynu_magic = Config.cmxs_magic_number then
+          if DH.magic header = Config.cmxs_magic_number then
             print_cmxs_infos header
           else begin
             printf "Wrong magic number\n"; exit 2

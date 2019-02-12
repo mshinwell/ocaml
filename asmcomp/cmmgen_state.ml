@@ -17,7 +17,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module S = Misc.Stdlib.String
+module S = Backend_sym
 
 type is_global = Global | Local
 
