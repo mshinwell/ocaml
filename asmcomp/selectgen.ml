@@ -26,7 +26,7 @@ module V = Backend_var
 module VP = Backend_var.With_provenance
 
 type environment =
-  { vars : (Reg.t array * Backend_var.Provenance.t option) V.Map.t;
+  { vars : (Reg.t array * Provenance.t option) V.Map.t;
     static_exceptions : Reg.t array list Int.Map.t;
     (** Which registers must be populated when jumping to the given
         handler. *)

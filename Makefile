@@ -248,6 +248,7 @@ MIDDLE_END_FLAMBDA=\
   middle_end/flambda/flambda_middle_end.cmo
 
 MIDDLE_END=\
+  middle_end/provenance.cmo \
   middle_end/internal_variable_names.cmo \
   middle_end/variable.cmo \
   middle_end/flambda/base_types/closure_element.cmo \
