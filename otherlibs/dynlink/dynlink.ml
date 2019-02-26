@@ -18,7 +18,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Dynlink_compilerlibs  (* REMOVE_ME for ../../debugger/dynlink.ml *)
+open! Dynlink_compilerlibs  (* REMOVE_ME for use in the compiler etc. *)
 
 module DC = Dynlink_common
 module DT = Dynlink_types
