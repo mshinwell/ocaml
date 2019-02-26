@@ -18,8 +18,8 @@ open Format
 open Asttypes
 open Clambda
 
-module V = Backend_var
-module VP = Backend_var.With_provenance
+module V = Variable
+module VP = Variable.With_provenance
 
 let mutable_flag = function
   | Mutable-> "[mut]"
@@ -74,17 +74,17 @@ and one_fun ppf f =
 
 and phantom_defining_expr ppf = function
   | Uphantom_const const -> uconstant ppf const
-  | Uphantom_var var -> Ident.print ppf var
+  | Uphantom_var var -> V.print ppf var
   | Uphantom_offset_var { var; offset_in_words; } ->
-    Format.fprintf ppf "%a+(%d)" Backend_var.print var offset_in_words
+    Format.fprintf ppf "%a+(%d)" V.print var offset_in_words
   | Uphantom_read_field { var; field; } ->
-    Format.fprintf ppf "%a[%d]" Backend_var.print var field
+    Format.fprintf ppf "%a[%d]" V.print var field
   | Uphantom_read_symbol_field { sym; field; } ->
     Format.fprintf ppf "%a[%d]" Symbol.print sym field
   | Uphantom_block { tag; fields; } ->
     Format.fprintf ppf "[%d: " tag;
     List.iter (fun field ->
-        Format.fprintf ppf "%a; " Backend_var.print field)
+        Format.fprintf ppf "%a; " V.print field)
       fields;
     Format.fprintf ppf "]"
 
@@ -135,12 +135,12 @@ and lam ppf = function
       let rec letbody ul = match ul with
         | Uphantom_let (id, defining_expr, body) ->
             fprintf ppf "@ @[<2>%a@ %a@]"
-              Backend_var.With_provenance.print id
+              V.With_provenance.print id
               phantom_defining_expr_opt defining_expr;
             letbody body
         | _ -> ul in
       fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a@ %a@]"
-        Backend_var.With_provenance.print id
+        V.With_provenance.print id
         phantom_defining_expr_opt defining_expr;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr

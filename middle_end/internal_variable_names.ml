@@ -17,6 +17,7 @@ open! Int_replace_polymorphic_compare
 
 type t = string
 
+let arg = "arg"
 let apply_arg = "apply_arg"
 let apply_funct = "apply_funct"
 let block_symbol = "block_symbol"
@@ -46,6 +47,7 @@ let dummy = "dummy"
 let dup_func = "dup_func"
 let dup_set_of_closures = "dup_set_of_closures"
 let const_float_array = "const_float_array"
+let env = "env"
 let fake_effect_symbol = "fake_effect_symbol"
 let for_from = "for_from"
 let for_to = "for_to"

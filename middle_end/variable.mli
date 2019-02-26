@@ -76,4 +76,11 @@ module With_provenance : sig
 
   val var : t -> variable
   val provenance : t -> Provenance.t option
+
+  val name : t -> string
+
+  val rename
+    : ?current_compilation_unit:Compilation_unit.t
+    -> t
+    -> t
 end

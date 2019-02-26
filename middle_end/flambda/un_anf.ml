@@ -25,8 +25,8 @@
    provenance.
 *)
 
-module V = Backend_var
-module VP = Backend_var.With_provenance
+module V = Variable
+module VP = Variable.With_provenance
 
 (* We say that an [V.t] is "linear" iff:
    (a) it is used exactly once;
@@ -241,7 +241,7 @@ let let_bound_vars_that_can_be_moved var_info (clam : Clambda.ulambda) =
           when V.Set.mem arg !obviously_constant ->
         loop let_bound_vars args
       | let_bound_var::let_bound_vars, (Uvar arg)::args
-          when V.same let_bound_var arg
+          when V.equal let_bound_var arg
             && not (V.Set.mem arg var_info.assigned) ->
         assert (V.Set.mem arg var_info.used);
         assert (V.Set.mem arg var_info.linear);
@@ -653,7 +653,7 @@ let rec un_anf_and_moveable var_info env (clam : Clambda.ulambda)
     let clam, moveable = un_anf_and_moveable var_info env clam in
     Uoffset (clam, n), both_moveable Moveable moveable
   | Ulet (_let_kind, _value_kind, var, def, Uvar var')
-      when V.same (VP.var var) var' ->
+      when V.equal (VP.var var) var' ->
     un_anf_and_moveable var_info env def
   | Ulet (let_kind, value_kind, var, def, body) ->
     let def, def_moveable = un_anf_and_moveable var_info env def in

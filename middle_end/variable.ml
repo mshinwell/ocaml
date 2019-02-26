@@ -145,6 +145,16 @@ module With_provenance = struct
     | Without_provenance _ -> None
     | With_provenance { var = _; provenance; } -> Some provenance
 
+  let rename ?current_compilation_unit t =
+    match t with
+    | Without_provenance v ->
+      Without_provenance (rename ?current_compilation_unit v)
+    | With_provenance { var; provenance; } ->
+      With_provenance { var = rename ?current_compilation_unit var;
+                        provenance; }
+
+  let name t = name (var t)
+
   let print ppf t =
     match provenance t with
     | None -> print ppf (var t)

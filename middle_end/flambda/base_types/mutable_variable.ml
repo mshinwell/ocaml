@@ -20,3 +20,4 @@ open! Int_replace_polymorphic_compare
 include Variable
 
 let create_from_variable = rename
+let rename_into_variable = rename
