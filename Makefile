@@ -1202,15 +1202,13 @@ driver/compdynlink_platform_intf.ml: $(DYNLINK_DIR)/dynlink_platform_intf.ml \
 	driver/compify_dynlink.sh $< $@
 
 ifeq ($(NATDYNLINK),true)
-driver/compdynlink.mlopt: $(DYNLINK_DIR)/natdynlink.ml driver/compdynlink.mli
-	cat $(DYNLINK_DIR)/natdynlink.ml | \
-	  sed 's/Dynlink_/Compdynlink_/g' \
-	  > driver/compdynlink.mlopt
+driver/compdynlink.mlopt: $(DYNLINK_DIR)/natdynlink.ml driver/compdynlink.mli \
+  driver/compify_dynlink.sh
+	driver/compify_dynlink.sh $< $@
 else
-driver/compdynlink.mlopt: $(DYNLINK_DIR)/nodynlink.ml driver/compdynlink.mli
-	cat $(DYNLINK_DIR)/nodynlink.ml | \
-	  sed 's/Dynlink_/Compdynlink_/g' \
-	  > driver/compdynlink.mlopt
+driver/compdynlink.mlopt: $(DYNLINK_DIR)/nodynlink.ml driver/compdynlink.mli \
+  driver/compify_dynlink.sh
+	driver/compify_dynlink.sh $< $@
 endif
 
 driver/compdynlink.mli: $(DYNLINK_DIR)/dynlink.mli \
