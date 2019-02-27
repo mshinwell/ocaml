@@ -55,7 +55,24 @@ let escape name =
 
 let symbol_prefix () = (* CR mshinwell: needs checking *)
   match Target_system.architecture () with
-  | IA32 | X86_64 ->
+  | IA32 ->
+    begin match Target_system.system () with
+    | Linux
+    | FreeBSD
+    | NetBSD
+    | OpenBSD
+    | Generic_BSD
+    | Solaris
+    | BeOS
+    | GNU
+    | Dragonfly -> ""
+    | Windows Cygwin
+    | Windows MinGW
+    | Windows Native
+    | Unknown
+    | MacOS_like -> "_"
+    end
+  | X86_64 ->
     begin match Target_system.system () with
     | Linux
     | Windows Cygwin
@@ -69,8 +86,8 @@ let symbol_prefix () = (* CR mshinwell: needs checking *)
     | GNU
     | Dragonfly
     | Windows Native
-    | Unknown -> "" (* checked ok. *)
-    | MacOS_like -> "_" (* checked ok. *)
+    | Unknown -> ""
+    | MacOS_like -> "_"
     end
   | ARM
   | AArch64

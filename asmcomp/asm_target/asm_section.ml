@@ -34,6 +34,7 @@ type t =
   | Sixteen_byte_literals
   | Jump_tables
   | DWARF of dwarf_section
+  | Platform_specific_non_text
 
 let all_sections_in_order () =
   let sections = [
@@ -73,7 +74,8 @@ let section_is_text = function
   | Read_only_data
   | Eight_byte_literals
   | Sixteen_byte_literals
-  | DWARF _ -> false
+  | DWARF _
+  | Platform_specific_non_text -> false
 
 (* Modified version of [TS.system] for easier matching in [flags], below. *)
 type derived_system =
@@ -203,12 +205,18 @@ let flags t ~first_occurrence =
       [".rdata"], Some "dr", []
     | Read_only_data, _, _ ->
       rodata ()
+    | Platform_specific_non_text, _, _ ->
+      Misc.fatal_error "Cannot calculate section [flags] for platform-specific \
+        section"
   in
   { names; flags; args; }
 
 let to_string t =
-  let { names; flags = _; args = _; } = flags t ~first_occurrence:true in
-  String.concat " " names
+  match t with
+  | Platform_specific_non_text -> "Platform_specific_non_text"
+  | _ ->
+    let { names; flags = _; args = _; } = flags t ~first_occurrence:true in
+    String.concat " " names
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -232,6 +240,7 @@ include Identifiable.Make (struct
       | DWARF Debug_rnglists -> "(DWARF Debug_rnglists)"
       | DWARF Debug_str -> "(DWARF Debug_str)"
       | DWARF Debug_line -> "(DWARF Debug_line)"
+      | Platform_specific_non_text -> "Platform_specific_non_text"
     in
     Format.pp_print_string ppf str
 

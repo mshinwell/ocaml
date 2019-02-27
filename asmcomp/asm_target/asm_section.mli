@@ -60,6 +60,10 @@ type t =
     (** A section containing the code of jump tables. *)
   | DWARF of dwarf_section
     (** The sections holding DWARF debugging information. *)
+  | Platform_specific_non_text
+    (** A platform-specific section that holds something other than code.
+        The [flags] function, below, will raise an exception if passed this
+        value. *)
 
 (** Printing, comparison, sets, maps, etc. *)
 include Identifiable.S with type t := t
