@@ -295,7 +295,6 @@ main.cmo : \
     debugger_config.cmi \
     ../utils/config.cmi \
     command_line.cmi \
-    ../typing/cmi_format.cmi \
     ../utils/clflags.cmi \
     checkpoints.cmi
 main.cmx : \
@@ -317,7 +316,6 @@ main.cmx : \
     debugger_config.cmx \
     ../utils/config.cmx \
     command_line.cmx \
-    ../typing/cmi_format.cmx \
     ../utils/clflags.cmx \
     checkpoints.cmx
 parameters.cmo : \

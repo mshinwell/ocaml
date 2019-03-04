@@ -33,7 +33,7 @@ DEPFLAGS=-slash
 DEPINCLUDES=$(INCLUDES)
 
 DIRECTORIES=$(UNIXDIR) $(addprefix $(ROOTDIR)/,\
-  utils parsing typing bytecomp toplevel driver)
+  utils parsing typing bytecomp toplevel driver file_formats)
 
 INCLUDES=$(addprefix -I ,$(DIRECTORIES))
 
@@ -47,7 +47,10 @@ parsing_modules := $(addprefix parsing/,\
 
 typing_modules := $(addprefix typing/,\
   ident path types btype primitive typedtree subst predef datarepr \
-  cmi_format persistent_env env oprint ctype printtyp mtype envaux)
+  persistent_env env oprint ctype printtyp mtype envaux)
+
+file_formats_modules := $(addprefix file_formats/,\
+  cmi_format)
 
 bytecomp_modules := $(addprefix bytecomp/,\
   runtimedef bytesections dll meta symtable opcodes)
@@ -57,8 +60,8 @@ other_compiler_modules := driver/compdynlink_types \
   driver/compdynlink_common driver/compdynlink toplevel/genprintval
 
 compiler_modules := $(addprefix $(ROOTDIR)/,\
-  $(utils_modules) $(parsing_modules) $(typing_modules) \
-  $(bytecomp_modules) $(other_compiler_modules))
+  $(utils_modules) $(parsing_modules) $(file_formats_modules) \
+  $(typing_modules) $(bytecomp_modules) $(other_compiler_modules))
 
 debugger_modules := \
   int64ops primitives unix_tools debugger_config parameters lexer \

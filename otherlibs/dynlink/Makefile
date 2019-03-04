@@ -27,7 +27,7 @@ CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 OCAMLC    = $(CAMLRUN) $(ROOTDIR)/ocamlc -nostdlib -I $(ROOTDIR)/stdlib
 OCAMLOPT  = $(CAMLRUN) $(ROOTDIR)/ocamlopt -nostdlib -I $(ROOTDIR)/stdlib
 
-INCLUDES=$(addprefix -I $(ROOTDIR)/,utils typing bytecomp asmcomp)
+INCLUDES=$(addprefix -I $(ROOTDIR)/,utils typing bytecomp asmcomp file_formats)
 COMPFLAGS=$(INCLUDES) -absname -w +a-4-9-41-42-44-45-48 -bin-annot -g \
    -I $(ROOTDIR)/stdlib -warn-error A \
    -safe-string -strict-sequence -strict-formats
@@ -53,7 +53,7 @@ COMPILEROBJS = $(addprefix $(ROOTDIR)/,\
   parsing/attr_helper.cmo parsing/builtin_attributes.cmo \
   typing/ident.cmo typing/path.cmo typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/subst.cmo typing/predef.cmo \
-  typing/datarepr.cmo typing/cmi_format.cmo \
+  typing/datarepr.cmo file_formats/cmi_format.cmo \
   typing/persistent_env.cmo \
   typing/env.cmo \
   bytecomp/lambda.cmo bytecomp/instruct.cmo \
@@ -61,7 +61,7 @@ COMPILEROBJS = $(addprefix $(ROOTDIR)/,\
   bytecomp/dll.cmo bytecomp/meta.cmo bytecomp/symtable.cmo)
 
 COMPILERINTFS = $(addprefix $(ROOTDIR)/,\
-  bytecomp/cmo_format.cmi)
+  file_formats/cmo_format.cmi)
 
 all: dynlink.cma extract_crc
 
