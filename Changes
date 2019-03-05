@@ -24,6 +24,9 @@ Working version
 - GPR#2265: Add bytecomp/opcodes.mli
   (Mark Shinwell, review by Nicolas Ojeda Bar)
 
+- GPR#2281: Move some middle-end files around
+  (Mark Shinwell)
+
 ### Runtime system:
 
 - GPR#1725: Deprecate Obj.set_tag
