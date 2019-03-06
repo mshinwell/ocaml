@@ -832,7 +832,7 @@ let close_var fenv cenv id =
 let rec close fenv cenv = function
     Lvar id ->
       close_approx_var fenv cenv id
-  | Lconst cst ->
+  | Lconst (cst, _loc) ->
       let str ?(shared = true) cst =
         let name =
           Compilenv.new_structured_constant cst ~shared
@@ -1060,7 +1060,7 @@ let rec close fenv cenv = function
       let dbg = Debuginfo.from_location loc in
       simplif_prim !Clflags.float_const_prop
                    p (close_list_approx fenv cenv args) dbg
-  | Lswitch(arg, sw, dbg) ->
+  | Lswitch(arg, sw, loc) ->
       let fn fail =
         let (uarg, _) = close fenv cenv arg in
         let const_index, const_actions, fconst =
@@ -1074,20 +1074,20 @@ let rec close fenv cenv = function
               us_actions_consts = const_actions;
               us_index_blocks = block_index;
               us_actions_blocks = block_actions},
-             Debuginfo.from_location dbg)
+             Debuginfo.from_location loc)
         in
         (fconst (fblock ulam),Value_unknown) in
 (* NB: failaction might get copied, thus it should be some Lstaticraise *)
       let fail = sw.sw_failaction in
       begin match fail with
-      | None|Some (Lstaticraise (_,_)) -> fn fail
-      | Some lamfail ->
+      | None|Some (Lstaticraise (_,_), _) -> fn fail
+      | Some (lamfail, fail_loc) ->
           if
             (sw.sw_numconsts - List.length sw.sw_consts) +
             (sw.sw_numblocks - List.length sw.sw_blocks) > 1
           then
             let i = next_raise_count () in
-            let ubody,_ = fn (Some (Lstaticraise (i,[])))
+            let ubody,_ = fn (Some (Lstaticraise (i,[]), fail_loc))
             and uhandler,_ = close fenv cenv lamfail in
             Ucatch (i,[],ubody,uhandler),Value_unknown
           else fn fail
@@ -1096,28 +1096,28 @@ let rec close fenv cenv = function
       let uarg,_ = close fenv cenv arg in
       let usw =
         List.map
-          (fun (s,act) ->
+          (fun (s,act,_loc) ->
             let uact,_ = close fenv cenv act in
             s,uact)
           sw in
       let ud =
         Misc.may_map
-          (fun d ->
+          (fun (d, _loc) ->
             let ud,_ = close fenv cenv d in
             ud) d in
       Ustringswitch (uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
       (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
-  | Lstaticcatch(body, (i, vars), handler) ->
+  | Lstaticcatch(body, (i, vars), handler, _loc) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
       let vars = List.map (fun (var, k) -> VP.create var, k) vars in
       (Ucatch(i, vars, ubody, uhandler), Value_unknown)
-  | Ltrywith(body, id, handler) ->
+  | Ltrywith(body, id, handler, _loc) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
       (Utrywith(ubody, VP.create id, uhandler), Value_unknown)
-  | Lifthenelse(arg, ifso, ifnot) ->
+  | Lifthenelse(arg, _ifso_loc, ifso, _ifnot_loc, ifnot, _loc) ->
       begin match close fenv cenv arg with
         (uarg, Value_const (Uconst_ptr n)) ->
           sequence_constant_expr uarg
@@ -1131,11 +1131,11 @@ let rec close fenv cenv = function
       let (ulam1, _) = close fenv cenv lam1 in
       let (ulam2, approx) = close fenv cenv lam2 in
       (Usequence(ulam1, ulam2), approx)
-  | Lwhile(cond, body) ->
+  | Lwhile(cond, body, _loc) ->
       let (ucond, _) = close fenv cenv cond in
       let (ubody, _) = close fenv cenv body in
       (Uwhile(ucond, ubody), Value_unknown)
-  | Lfor(id, lo, hi, dir, body) ->
+  | Lfor(id, lo, hi, dir, body, _loc) ->
       let (ulo, _) = close fenv cenv lo in
       let (uhi, _) = close fenv cenv hi in
       let (ubody, _) = close fenv cenv body in
@@ -1191,7 +1191,9 @@ and close_functions fenv cenv fun_defs =
     !function_nesting_depth < excessive_function_nesting_depth in
   (* Determine the free variables of the functions *)
   let fv =
-    V.Set.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
+    V.Set.elements (free_variables (
+      Lletrec(fun_defs, lambda_unit Location.none)))
+  in
   (* Build the function descriptors for the functions.
      Initially all functions are assumed not to need their environment
      parameter. *)
@@ -1329,13 +1331,13 @@ and close_switch fenv cenv cases num_keys default =
 
   (* First default case *)
   begin match default with
-  | Some def when ncases < num_keys ->
+  | Some (def, _loc) when ncases < num_keys ->
       assert (store.act_store () def = 0)
   | _ -> ()
   end ;
   (* Then all other cases *)
   List.iter
-    (fun (key,lam) ->
+    (fun (key,lam,_loc) ->
      index.(key) <- store.act_store () lam)
     cases ;
 

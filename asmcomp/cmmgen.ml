@@ -1680,27 +1680,24 @@ struct
 
   type act = expression
 
-  (* CR mshinwell: GPR#2294 will fix the Debuginfo here *)
+  type location = Debuginfo.t
+  let no_location = Debuginfo.none
 
-  let make_const i =  Cconst_int (i, Debuginfo.none)
-  let make_prim p args = Cop (p,args, Debuginfo.none)
-  let make_offset arg n = add_const arg n Debuginfo.none
-  let make_isout h arg = Cop (Ccmpa Clt, [h ; arg], Debuginfo.none)
-  let make_isin h arg = Cop (Ccmpa Cge, [h ; arg], Debuginfo.none)
-  let make_if cond ifso ifnot =
-    Cifthenelse (cond, Debuginfo.none, ifso, Debuginfo.none, ifnot,
-      Debuginfo.none)
-  let make_switch loc arg cases actions =
-    let dbg = Debuginfo.from_location loc in
-    let actions = Array.map (fun expr -> expr, dbg) actions in
+  let make_const dbg i = Cconst_int i
+  let make_prim dbg p args = Cop (p, args, dbg)
+  let make_offset dbg arg n = add_const arg n dbg
+  let make_isout dbg h arg = Cop (Ccmpa Clt, [h ; arg], dbg)
+  let make_isin dbg h arg = Cop (Ccmpa Cge, [h ; arg], dbg)
+  let make_if dbg cond ifso_dbg ifso ifnot_dbg ifnot =
+    Cifthenelse (cond, Debuginfo.none, ifso, Debuginfo.none, ifnot, dbg)
+  let make_switch dbg arg cases actions =
+    let actions = Array.map (fun (_dbg, act) -> act) actions in
     make_switch arg cases actions dbg
   let bind arg body = bind "switcher" arg body
 
-  let make_catch handler =
-  match handler with
+  let make_catch dbg handler = match handler with
   | Cexit (i,[]) -> i,fun e -> e
   | _ ->
-      let dbg = Debuginfo.none in
       let i = next_raise_count () in
 (*
       Printf.eprintf  "SHARE CMM: %i\n" i ;
@@ -1727,10 +1724,10 @@ end
 module StoreExpForSwitch =
   Switch.CtxStore
     (struct
-      type t = expression
+      type t = Debuginfo.t * expression
       type key = int option * int
       type context = int
-      let make_key index expr =
+      let make_key index (_dbg, expr) =
         let continuation =
           match expr with
           | Cexit (i,[]) -> Some i
@@ -1747,9 +1744,10 @@ module StoreExpForSwitch =
 module StoreExp =
   Switch.Store
     (struct
-      type t = expression
+      type t = Debuginfo.t * expression
       type key = int
-      let make_key = function
+      let make_key (_dbg, expr) =
+        match expr with
         | Cexit (i,[]) -> Some i
         | _ -> None
       let compare_key = Stdlib.compare
@@ -1760,51 +1758,106 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 (* Int switcher, arg in [low..high],
    cases is list of individual cases, and is sorted by first component *)
 
-let transl_int_switch loc arg low high cases default = match cases with
+let transl_int_switch dbg arg low high cases default = match cases with
 | [] -> assert false
 | _::_ ->
     let store = StoreExp.mk_store () in
-    assert (store.Switch.act_store () default = 0) ;
+    assert (store.Switch.act_store () (dbg, default) = 0) ;
     let cases =
-      List.map
-        (fun (i,act) -> i,store.Switch.act_store () act)
-        cases in
+      List.map (fun (i, act) ->
+          (dbg, i), store.Switch.act_store () act)
+        cases
+    in
     let rec inters plow phigh pact = function
       | [] ->
-          if phigh = high then [plow,phigh,pact]
-          else [(plow,phigh,pact); (phigh+1,high,0) ]
-      | (i,act)::rem ->
+          let case =
+            { SwitcherBlocks.
+              low_loc = dbg;
+              low = plow;
+              high_plus_one_loc = dbg;
+              high = phigh;
+              action_index = pact;
+            }
+          in
+          if phigh = high then [case]
+          else
+            let next_case =
+              { SwitcherBlocks.
+                low_loc = dbg;
+                low = phigh + 1;
+                high_plus_one_loc = dbg;
+                high = high;
+                action_index = 0;
+              }
+            in
+            [case; next_case]
+      | ((_i_dbg, i), act)::rem ->
           if i = phigh+1 then
             if pact = act then
               inters plow i pact rem
             else
-              (plow,phigh,pact)::inters i i act rem
+              let case =
+                { SwitcherBlocks.
+                  low_loc = dbg;
+                  low = plow;
+                  high_plus_one_loc = dbg;
+                  high = phigh;
+                  action_index = pact;
+                }
+              in
+              case :: inters i i act rem
           else (* insert default *)
             if pact = 0 then
               if act = 0 then
                 inters plow i 0 rem
               else
-                (plow,i-1,pact)::
-                inters i i act rem
+                let case =
+                  { SwitcherBlocks.
+                    low_loc = dbg;
+                    low = plow;
+                    high_plus_one_loc = dbg;
+                    high = i - 1;
+                    action_index = pact;
+                  }
+                in
+                case :: inters i i act rem
             else (* pact <> 0 *)
-              (plow,phigh,pact)::
+              let case =
+                { SwitcherBlocks.
+                  low_loc = dbg;
+                  low = plow;
+                  high_plus_one_loc = dbg;
+                  high = phigh;
+                  action_index = pact;
+                }
+              in
+              case ::
               begin
                 if act = 0 then inters (phigh+1) i 0 rem
-                else (phigh+1,i-1,0)::inters i i act rem
+                else
+                  let case =
+                    { SwitcherBlocks.
+                      low_loc = dbg;
+                      low = phigh + 1;
+                      high_plus_one_loc = dbg;
+                      high = i - 1;
+                      action_index = 0;
+                    }
+                  in
+                  case :: inters i i act rem
               end in
     let inters = match cases with
     | [] -> assert false
-    | (k0,act0)::rem ->
+    | ((_, k0), act0)::rem ->
         if k0 = low then inters k0 k0 act0 rem
         else inters low (k0-1) 0 cases in
     bind "switcher" arg
       (fun a ->
         SwitcherBlocks.zyva
-          loc
+          dbg
           (low,high)
           a
           (Array.of_list inters) store)
-
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
@@ -2172,7 +2225,6 @@ let rec transl env e =
 
   (* Control structures *)
   | Uswitch(arg, s, dbg) ->
-      let loc = Debuginfo.to_location dbg in
       (* As in the bytecode interpreter, only matching against constants
          can be checked *)
       if Array.length s.us_index_blocks = 0 then
@@ -2183,25 +2235,26 @@ let rec transl env e =
           dbg
       else if Array.length s.us_index_consts = 0 then
         bind "switch" (transl env arg) (fun arg ->
-          transl_switch loc env (get_tag arg dbg)
+          transl_switch dbg env (get_tag arg dbg)
             s.us_index_blocks s.us_actions_blocks)
       else
         bind "switch" (transl env arg) (fun arg ->
           Cifthenelse(
           Cop(Cand, [arg; Cconst_int (1, dbg)], dbg),
           dbg,
-          transl_switch loc env
+          transl_switch dbg env
             (untag_int arg dbg) s.us_index_consts s.us_actions_consts,
           dbg,
-          transl_switch loc env
+          transl_switch dbg env
             (get_tag arg dbg) s.us_index_blocks s.us_actions_blocks,
           dbg))
   | Ustringswitch(arg,sw,d) ->
       let dbg = Debuginfo.none in
       bind "switch" (transl env arg)
         (fun arg ->
-          strmatch_compile dbg arg (Misc.may_map (transl env) d)
-            (List.map (fun (s,act) -> s,transl env act) sw))
+          strmatch_compile dbg arg
+            (Misc.may_map (fun expr -> dbg, transl env expr) d)
+            (List.map (fun (s, act) -> s, (dbg, transl env act)) sw))
   | Ustaticfail (nfail, args) ->
       Cexit (nfail, List.map (transl env) args)
   | Ucatch(nfail, [], body, handler) ->
@@ -3111,11 +3164,12 @@ and transl_sequor env (approx : then_else)
     then_
 
 (* This assumes that [arg] can be safely discarded if it is not used. *)
-and transl_switch loc env arg index cases = match Array.length cases with
+and transl_switch dbg env arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
-| 1 -> transl env cases.(0)
+| 1 ->
+    transl env cases.(0)
 | _ ->
-    let cases = Array.map (transl env) cases in
+    let cases = Array.map (fun case -> dbg, transl env case) cases in
     let store = StoreExpForSwitch.mk_store () in
     let index =
       Array.map
@@ -3131,20 +3185,40 @@ and transl_switch loc env arg index cases = match Array.length cases with
       if act = !this_act then
         decr this_low
       else begin
-        inters := (!this_low, !this_high, !this_act) :: !inters ;
+        let case =
+          { SwitcherBlocks.
+            low_loc = dbg;
+            low = !this_low;
+            high_plus_one_loc = dbg;
+            high = !this_high;
+            action_index = !this_act;
+          }
+        in
+        inters := case :: !inters ;
         this_high := i ;
         this_low := i ;
         this_act := act
       end
     done ;
-    inters := (0, !this_high, !this_act) :: !inters ;
+    let case =
+      { SwitcherBlocks.
+        low_loc = dbg;
+        low = 0;
+        high_plus_one_loc = dbg;
+        high = !this_high;
+        action_index = !this_act;
+      }
+    in
+    inters := case :: !inters ;
     match !inters with
-    | [_] -> cases.(0)
+    | [_] ->
+        let _dbg, case = cases.(0) in
+        case
     | inters ->
         bind "switcher" arg
           (fun a ->
             SwitcherBlocks.zyva
-              loc
+              dbg
               (0,n_index-1)
               a
               (Array.of_list inters) store)

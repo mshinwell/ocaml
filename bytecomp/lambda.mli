@@ -254,7 +254,7 @@ type function_attribute = {
 
 type lambda =
     Lvar of Ident.t
-  | Lconst of structured_constant
+  | Lconst of structured_constant * Location.t
   | Lapply of lambda_apply
   | Lfunction of lfunction
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
@@ -264,14 +264,17 @@ type lambda =
 (* switch on strings, clauses are sorted by string order,
    strings are pairwise distinct *)
   | Lstringswitch of
-      lambda * (string * lambda) list * lambda option * Location.t
+      lambda * (string * lambda * Location.t) list
+        * (lambda * Location.t) option * Location.t
   | Lstaticraise of int * lambda list
-  | Lstaticcatch of lambda * (int * (Ident.t * value_kind) list) * lambda
-  | Ltrywith of lambda * Ident.t * lambda
-  | Lifthenelse of lambda * lambda * lambda
+  | Lstaticcatch of
+      lambda * (int * (Ident.t * value_kind) list) * lambda * Location.t
+  | Ltrywith of lambda * Ident.t * lambda * Location.t
+  | Lifthenelse of
+      lambda * Location.t * lambda * Location.t * lambda * Location.t
   | Lsequence of lambda * lambda
-  | Lwhile of lambda * lambda
-  | Lfor of Ident.t * lambda * lambda * direction_flag * lambda
+  | Lwhile of lambda * lambda * Location.t
+  | Lfor of Ident.t * lambda * lambda * direction_flag * lambda * Location.t
   | Lassign of Ident.t * lambda
   | Lsend of meth_kind * lambda * lambda * lambda list * Location.t
   | Levent of lambda * lambda_event
@@ -294,11 +297,11 @@ and lambda_apply =
     ap_specialised : specialise_attribute; }
 
 and lambda_switch =
-  { sw_numconsts: int;                  (* Number of integer cases *)
-    sw_consts: (int * lambda) list;     (* Integer cases *)
-    sw_numblocks: int;                  (* Number of tag block cases *)
-    sw_blocks: (int * lambda) list;     (* Tag block cases *)
-    sw_failaction : lambda option}      (* Action to take if failure *)
+  { sw_numconsts: int;                           (* Number of integer cases *)
+    sw_consts: (int * lambda * Location.t) list; (* Integer cases *)
+    sw_numblocks: int;                           (* Number of tag block cases *)
+    sw_blocks: (int * lambda * Location.t) list; (* Tag block cases *)
+    sw_failaction : (lambda * Location.t) option}(* Action to take if failure *)
 and lambda_event =
   { lev_loc: Location.t;
     lev_kind: lambda_event_kind;
@@ -334,7 +337,7 @@ type program =
 val make_key: lambda -> lambda option
 
 val const_unit: structured_constant
-val lambda_unit: lambda
+val lambda_unit: Location.t -> lambda
 val name_lambda: let_kind -> lambda -> (Ident.t -> lambda) -> lambda
 val name_lambda_list: lambda list -> (lambda list -> lambda) -> lambda
 
@@ -366,7 +369,7 @@ val transl_value_path: Location.t -> Env.t -> Path.t -> lambda
 val transl_extension_path: Location.t -> Env.t -> Path.t -> lambda
 val transl_class_path: Location.t -> Env.t -> Path.t -> lambda
 
-val make_sequence: ('a -> lambda) -> 'a list -> lambda
+val make_sequence: Location.t -> ('a -> lambda) -> 'a list -> lambda
 
 val subst: (Ident.t -> Types.value_description -> Env.t -> Env.t) ->
   lambda Ident.Map.t -> lambda -> lambda
