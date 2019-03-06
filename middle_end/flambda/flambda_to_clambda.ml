@@ -38,7 +38,8 @@ type t = {
 
 let get_fun_offset t closure_id =
   let fun_offset_table =
-    if Closure_id.in_compilation_unit closure_id (Compilation_unit.get_current_exn ())
+    if Closure_id.in_compilation_unit closure_id
+        (Compilation_unit.get_current_exn ())
     then
       t.current_unit.fun_offset_table
     else

@@ -885,8 +885,9 @@ let rec expr_size env = function
   | Uletrec(bindings, body) ->
       let env =
         List.fold_right
-          (fun (id, exp) env -> Var.Map.add (VarP.var id) (expr_size env exp) env)
-          bindings env
+          (fun (id, exp) env ->
+             Var.Map.add (VarP.var id) (expr_size env exp) env)
+        bindings env
       in
       expr_size env body
   | Uprim(Pmakeblock _, args, _) ->
@@ -3033,7 +3034,9 @@ and transl_letrec env bindings body =
 let transl_function ~ppf_dump:_ f =
   let body = f.body in
   let env = create_env ~environment_param:f.env in
-  let fun_args, env = add_fresh_backend_vars_with_provenance_and_type env f.params in
+  let fun_args, env =
+    add_fresh_backend_vars_with_provenance_and_type env f.params
+  in
   let cmm_body =
     if !Clflags.afl_instrument then
       Afl_instrument.instrument_function (transl env body)

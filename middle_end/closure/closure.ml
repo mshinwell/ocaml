@@ -844,7 +844,8 @@ let close_approx_var fenv cenv id =
   | approx ->
       let subst =
         try Ident.Map.find id cenv with
-        | Not_found -> Misc.fatal_errorf "close_approx_var: unbound %a" Ident.print id
+        | Not_found ->
+            Misc.fatal_errorf "close_approx_var: unbound %a" Ident.print id
       in
       (subst, approx)
 
@@ -1054,7 +1055,8 @@ let rec close fenv cenv lam =
         | (id, var, lam) :: rem ->
             let (udefs, fenv_body) = clos_defs rem in
             let (ulam, approx) = close_named fenv cenv id lam in
-            ((VP.create var, ulam) :: udefs, Ident.Map.add id approx fenv_body) in
+            ((VP.create var, ulam) :: udefs, Ident.Map.add id approx fenv_body)
+        in
         let (udefs, fenv_body) = clos_defs defs in
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)

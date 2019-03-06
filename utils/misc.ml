@@ -254,7 +254,7 @@ module Stdlib = struct
       match t with
       | None -> Format.pp_print_string ppf "None"
       | Some contents ->
-        Format.fprintf ppf "@[(Some@ %a)@]" print_contents contents 
+        Format.fprintf ppf "@[(Some@ %a)@]" print_contents contents
   end
 
   module Array = struct
