@@ -64,6 +64,10 @@ Working version
 - GPR#2291: Add [Compute_ranges] pass
   (Mark Shinwell, review by Vincent Laviron)
 
+- GPR#2294: Add more locations to [Lambda] code; produce accurate location
+  information in the pattern matching and switch compilers.
+  (Mark Shinwell, review by Thomas Refis)
+
 - GPR#2308: More debugging information on [Cmm] terms
   (Mark Shinwell, review by Stephen Dolan)
 
