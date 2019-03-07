@@ -1644,6 +1644,7 @@ bytecomp/bytegen.cmo : \
     typing/primitive.cmi \
     utils/misc.cmi \
     bytecomp/matching.cmi \
+    parsing/location.cmi \
     bytecomp/lambda.cmi \
     bytecomp/instruct.cmi \
     typing/ident.cmi \
@@ -1658,6 +1659,7 @@ bytecomp/bytegen.cmx : \
     typing/primitive.cmx \
     utils/misc.cmx \
     bytecomp/matching.cmx \
+    parsing/location.cmx \
     bytecomp/lambda.cmx \
     bytecomp/instruct.cmx \
     typing/ident.cmx \
@@ -1960,18 +1962,22 @@ bytecomp/printlambda.cmo : \
     typing/types.cmi \
     typing/printtyp.cmi \
     typing/primitive.cmi \
+    utils/misc.cmi \
     parsing/location.cmi \
     bytecomp/lambda.cmi \
     typing/ident.cmi \
+    utils/clflags.cmi \
     parsing/asttypes.cmi \
     bytecomp/printlambda.cmi
 bytecomp/printlambda.cmx : \
     typing/types.cmx \
     typing/printtyp.cmx \
     typing/primitive.cmx \
+    utils/misc.cmx \
     parsing/location.cmx \
     bytecomp/lambda.cmx \
     typing/ident.cmx \
+    utils/clflags.cmx \
     parsing/asttypes.cmi \
     bytecomp/printlambda.cmi
 bytecomp/printlambda.cmi : \
@@ -2011,13 +2017,10 @@ bytecomp/simplif.cmi : \
     bytecomp/lambda.cmi \
     typing/ident.cmi
 bytecomp/switch.cmo : \
-    parsing/location.cmi \
     bytecomp/switch.cmi
 bytecomp/switch.cmx : \
-    parsing/location.cmx \
     bytecomp/switch.cmi
-bytecomp/switch.cmi : \
-    parsing/location.cmi
+bytecomp/switch.cmi :
 bytecomp/symtable.cmo : \
     bytecomp/runtimedef.cmi \
     typing/predef.cmi \
@@ -2672,18 +2675,21 @@ asmcomp/clambda_primitives.cmo : \
     typing/types.cmi \
     typing/primitive.cmi \
     bytecomp/lambda.cmi \
+    middle_end/debuginfo.cmi \
     parsing/asttypes.cmi \
     asmcomp/clambda_primitives.cmi
 asmcomp/clambda_primitives.cmx : \
     typing/types.cmx \
     typing/primitive.cmx \
     bytecomp/lambda.cmx \
+    middle_end/debuginfo.cmx \
     parsing/asttypes.cmi \
     asmcomp/clambda_primitives.cmi
 asmcomp/clambda_primitives.cmi : \
     typing/types.cmi \
     typing/primitive.cmi \
     bytecomp/lambda.cmi \
+    middle_end/debuginfo.cmi \
     parsing/asttypes.cmi
 asmcomp/closure.cmo : \
     utils/warnings.cmi \
@@ -2928,12 +2934,14 @@ asmcomp/convert_primitives.cmo : \
     bytecomp/printlambda.cmi \
     utils/misc.cmi \
     bytecomp/lambda.cmi \
+    middle_end/debuginfo.cmi \
     asmcomp/clambda_primitives.cmi \
     asmcomp/convert_primitives.cmi
 asmcomp/convert_primitives.cmx : \
     bytecomp/printlambda.cmx \
     utils/misc.cmx \
     bytecomp/lambda.cmx \
+    middle_end/debuginfo.cmx \
     asmcomp/clambda_primitives.cmx \
     asmcomp/convert_primitives.cmi
 asmcomp/convert_primitives.cmi : \
@@ -3603,7 +3611,6 @@ asmcomp/split.cmx : \
 asmcomp/split.cmi : \
     asmcomp/mach.cmi
 asmcomp/strmatch.cmo : \
-    parsing/location.cmi \
     bytecomp/lambda.cmi \
     middle_end/debuginfo.cmi \
     asmcomp/cmm.cmi \
@@ -3612,7 +3619,6 @@ asmcomp/strmatch.cmo : \
     asmcomp/arch.cmo \
     asmcomp/strmatch.cmi
 asmcomp/strmatch.cmx : \
-    parsing/location.cmx \
     bytecomp/lambda.cmx \
     middle_end/debuginfo.cmx \
     asmcomp/cmm.cmx \
@@ -3621,7 +3627,6 @@ asmcomp/strmatch.cmx : \
     asmcomp/arch.cmx \
     asmcomp/strmatch.cmi
 asmcomp/strmatch.cmi : \
-    parsing/location.cmi \
     middle_end/debuginfo.cmi \
     asmcomp/cmm.cmi
 asmcomp/traverse_for_exported_symbols.cmo : \

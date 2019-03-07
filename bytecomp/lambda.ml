@@ -176,8 +176,8 @@ and bigarray_layout =
   | Pbigarray_fortran_layout
 
 and raise_kind =
-  | Raise_regular
-  | Raise_reraise
+  | Raise_regular of Location.t option
+  | Raise_reraise of Location.t option
   | Raise_notrace
 
 let equal_boxed_integer x y =
@@ -888,8 +888,8 @@ let swap_float_comparison = function
   | CFnge -> CFnle
 
 let raise_kind = function
-  | Raise_regular -> "raise"
-  | Raise_reraise -> "reraise"
+  | Raise_regular _loc -> "raise"
+  | Raise_reraise _loc -> "reraise"
   | Raise_notrace -> "raise_notrace"
 
 let merge_inline_attributes attr1 attr2 =

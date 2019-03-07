@@ -183,9 +183,13 @@ and bigarray_layout =
   | Pbigarray_c_layout
   | Pbigarray_fortran_layout
 
+(** The [Location.t] values in [raise_kind], if specified, are the locations
+    that will be used for generating backtraces.  Otherwise the location from
+    the surrounding [Lprim] will be used.  (See cmm.mli for why this is
+    useful.) *)
 and raise_kind =
-  | Raise_regular
-  | Raise_reraise
+  | Raise_regular of Location.t option
+  | Raise_reraise of Location.t option
   | Raise_notrace
 
 val equal_primitive : primitive -> primitive -> bool

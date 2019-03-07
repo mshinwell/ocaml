@@ -122,8 +122,8 @@ let primitives_table =
     "%setfield0", Primitive ((Psetfield(0, Pointer, Assignment)), 2);
     "%makeblock", Primitive ((Pmakeblock(0, Immutable, None)), 1);
     "%makemutable", Primitive ((Pmakeblock(0, Mutable, None)), 1);
-    "%raise", Raise Raise_regular;
-    "%reraise", Raise Raise_reraise;
+    "%raise", Raise (Raise_regular None);
+    "%reraise", Raise (Raise_reraise None);
     "%raise_notrace", Raise Raise_notrace;
     "%raise_with_backtrace", Raise_with_backtrace;
     "%sequand", Primitive (Psequand, 2);
@@ -655,8 +655,8 @@ let lambda_of_prim prim_name prim loc args arg_exps =
   | Raise kind, [arg] ->
       let kind =
         match kind, arg with
-        | Raise_regular, Lvar argv when Hashtbl.mem try_ids argv ->
-            Raise_reraise
+        | Raise_regular loc, Lvar argv when Hashtbl.mem try_ids argv ->
+            Raise_reraise loc
         | _, _ ->
             kind
       in
@@ -679,7 +679,7 @@ let lambda_of_prim prim_name prim loc args arg_exps =
            Lsequence(Lprim(Pccall caml_restore_raw_backtrace,
                            [Lvar vexn; bt],
                            loc),
-                     Lprim(Praise Raise_reraise, [raise_arg], loc)))
+                     Lprim(Praise (Raise_reraise None), [raise_arg], loc)))
   | Lazy_force, [arg] ->
       Matching.inline_lazy_force arg Location.none
   | Loc kind, [] ->

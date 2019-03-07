@@ -428,15 +428,15 @@ let validate d m p =
   ucompare2 twoszp md < 0 && ucompare2 md (add2 twoszp twop1) <= 0
 *)
 
-let raise_regular dbg exc =
+let raise_regular dbg ~raise_dbg exc =
   Csequence(
     Cop(Cstore (Thirtytwo_signed, Assignment),
-        [(Cconst_symbol ("caml_backtrace_pos", dbg));
+        [(Cconst_symbol "caml_backtrace_pos", dbg);
          Cconst_int (0, dbg)], dbg),
-      Cop(Craise Raise_withtrace,[exc], dbg))
+      Cop(Craise (Raise_withtrace raise_dbg), [exc], dbg))
 
 let raise_symbol dbg symb =
-  raise_regular dbg (Cconst_symbol (symb, dbg))
+  raise_regular dbg ~raise_dbg:dbg (Cconst_symbol symb)
 
 let rec div_int c1 c2 is_safe dbg =
   match (c1, c2) with
@@ -2403,12 +2403,14 @@ and transl_prim_1 env p arg dbg =
   (* Exceptions *)
   | Praise _ when not (!Clflags.debug) ->
       Cop(Craise Cmm.Raise_notrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_notrace ->
+  | Praise Raise_notrace ->
       Cop(Craise Cmm.Raise_notrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_reraise ->
-      Cop(Craise Cmm.Raise_withtrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_regular ->
-      raise_regular dbg (transl env arg)
+  | Praise (Raise_reraise dbg_opt)->
+      let raise_dbg = Option.value dbg_opt ~default:dbg in
+      Cop(Craise (Cmm.Raise_withtrace raise_dbg), [transl env arg], dbg)
+  | Praise (Raise_regular dbg_opt) ->
+      let raise_dbg = Option.value dbg_opt ~default:dbg in
+      raise_regular dbg ~raise_dbg (transl env arg)
   (* Integer operations *)
   | Pnegint ->
       Cop(Csubi, [Cconst_int (2, dbg); transl env arg], dbg)

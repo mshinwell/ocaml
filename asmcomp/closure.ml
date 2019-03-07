@@ -1052,6 +1052,14 @@ let rec close fenv cenv = function
   | Lprim(Praise k, [arg], loc) ->
       let (ulam, _approx) = close fenv cenv arg in
       let dbg = Debuginfo.from_location loc in
+      let k =
+        match k with
+        | Raise_regular loc ->
+          P.Raise_regular (Option.map Debuginfo.from_location loc)
+        | Raise_reraise loc ->
+          P.Raise_reraise (Option.map Debuginfo.from_location loc)
+        | Raise_notrace -> P.Raise_notrace
+      in
       (Uprim(P.Praise k, [ulam], dbg),
        Value_unknown)
   | Lprim (Pmakearray _, [], _loc) -> make_const_ref (Uconst_block (0, []))

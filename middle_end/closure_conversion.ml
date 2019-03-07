@@ -372,7 +372,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
             (Flambda.create_let is_zero
               (Prim (comparison, [zero; denominator], dbg))
                 (If_then_else (is_zero,
-                  name_expr (Prim (Praise Raise_regular, [exn], dbg))
+                  name_expr (Prim (Praise (Raise_regular None), [exn], dbg))
                     ~name:Names.dummy,
                   (* CR-someday pchambart: find the right event.
                      mshinwell: I briefly looked at this, and couldn't
@@ -432,6 +432,14 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
   | Lprim (Praise kind, [arg], loc) ->
     let arg_var = Variable.create Names.raise_arg in
     let dbg = Debuginfo.from_location loc in
+    let kind : Clambda_primitives.raise_kind =
+      match kind with
+      | Raise_regular loc ->
+        Raise_regular (Option.map Debuginfo.from_location loc)
+      | Raise_reraise loc ->
+        Raise_reraise (Option.map Debuginfo.from_location loc)
+      | Raise_notrace -> Raise_notrace
+    in
     Flambda.create_let arg_var (Expr (close t env arg))
       (name_expr
         (Prim (Praise kind, [arg_var], dbg))

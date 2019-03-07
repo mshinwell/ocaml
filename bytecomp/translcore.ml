@@ -174,7 +174,7 @@ let assert_failed exp =
   let (fname, line, char) =
     Location.get_pos_info exp.exp_loc.Location.loc_start
   in
-  Lprim(Praise Raise_regular, [event_after exp
+  Lprim(Praise (Raise_regular None), [event_after exp
     (Lprim(Pmakeblock(0, Immutable, None),
           [slot;
            Lconst(Const_block(0,

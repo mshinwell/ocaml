@@ -3277,7 +3277,7 @@ let partial_function loc () =
       Env.initial_safe_string Predef.path_match_failure
   in
   let (fname, line, char) = Location.get_pos_info loc.Location.loc_start in
-  Lprim(Praise Raise_regular, [Lprim(Pmakeblock(0, Immutable, None),
+  Lprim(Praise (Raise_regular None), [Lprim(Pmakeblock(0, Immutable, None),
           [slot; Lconst(Const_block(0,
                    [Const_base(Const_string (fname, None));
                     Const_base(Const_int line);
@@ -3289,7 +3289,9 @@ let for_function loc repr param (pat_act_list : pat_act_list) partial =
 (* In the following two cases, exhaustiveness info is not available! *)
 let for_trywith loc param (pat_act_list : pat_act_list) =
   compile_matching loc None
-    (fun () -> Lprim(Praise Raise_reraise, [param], loc))
+    (* The [Location.none] ensures that the try-with itself does not appear
+       as a "reraise" frame in any backtrace. *)
+    (fun () -> Lprim(Praise (Raise_reraise (Some Location.none)), [param], loc))
     param pat_act_list Partial
 
 let simple_for_let loc param pat body body_loc =
@@ -3531,6 +3533,7 @@ let compile_flattened loc repr partial ctx _ pmh = match pmh with
 | PmVar _ -> assert false
 
 let do_for_multiple_match loc paraml pat_act_list partial =
+  let outer_loc = loc in
   let repr = None in
   let partial = check_partial pat_act_list partial in
   let raise_num,pm1 =
@@ -3573,7 +3576,7 @@ let do_for_multiple_match loc paraml pat_act_list partial =
       List.fold_right2 (bind Strict) idl paraml
         (match partial with
         | Partial ->
-            check_total loc total lam raise_num (partial_function loc)
+            check_total loc total lam raise_num (partial_function outer_loc)
         | Total ->
             assert (jumps_is_empty total) ;
             lam)
@@ -3583,7 +3586,7 @@ let do_for_multiple_match loc paraml pat_act_list partial =
       in
       begin match partial with
       | Partial ->
-          check_total loc total lambda raise_num (partial_function loc)
+          check_total loc total lambda raise_num (partial_function outer_loc)
       | Total ->
           assert (jumps_is_empty total) ;
           lambda

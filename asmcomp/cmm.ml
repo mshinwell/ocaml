@@ -111,7 +111,7 @@ let label_counter = ref 99
 let new_label() = incr label_counter; !label_counter
 
 type raise_kind =
-  | Raise_withtrace
+  | Raise_withtrace of Debuginfo.t
   | Raise_notrace
 
 type rec_flag = Nonrecursive | Recursive

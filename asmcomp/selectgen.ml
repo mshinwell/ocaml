@@ -392,7 +392,7 @@ method mark_instr = function
   | Iraise raise_kind ->
     begin match raise_kind with
       | Cmm.Raise_notrace -> ()
-      | Cmm.Raise_withtrace ->
+      | Cmm.Raise_withtrace _ ->
           (* PR#6239 *)
           (* caml_stash_backtrace; we #mark_call rather than
              #mark_c_tailcall to get a good stack backtrace *)

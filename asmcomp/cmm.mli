@@ -88,7 +88,13 @@ type label = int
 val new_label: unit -> label
 
 type raise_kind =
-  | Raise_withtrace
+  | Raise_withtrace of Debuginfo.t
+    (** The frame descriptor, which is read by the backtrace code, associated
+        with a [Raise_withtrace] has location information taken from the
+        specified [Debuginfo.t]---not from the Linearize instruction's
+        debug info field.  This in particular allows backtrace frames to be
+        suppressed without disturbing DWARF debugging information.  This is
+        used when compiling pattern-matches that reraise uncaught exceptions. *)
   | Raise_notrace
 
 type rec_flag = Nonrecursive | Recursive
