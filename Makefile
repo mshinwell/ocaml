@@ -801,7 +801,7 @@ natruntop:
 
 # Native dynlink
 
-otherlibs/dynlink/dynlink.cmxa: otherlibs/dynlink/dynlink.mlopt
+otherlibs/dynlink/dynlink.cmxa: otherlibs/dynlink/native/dynlink.ml
 	$(MAKE) -C otherlibs/dynlink allopt
 
 # The lexer
