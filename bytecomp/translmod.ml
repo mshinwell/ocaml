@@ -1307,7 +1307,7 @@ let toploop_getvalue id =
 
 let toploop_setvalue id lam =
   let loc = Location.none in
-  let ap_args = 
+  let ap_args =
     [Lconst(Const_base(Const_string (toplevel_name id, None)), loc); lam]
   in
   Lapply{ap_should_be_tailcall=false;

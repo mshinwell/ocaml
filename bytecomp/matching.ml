@@ -2435,7 +2435,7 @@ let mk_failaction_neg loc partial ctx def = match partial with
 
 
 (* In line with the article and simpler than before *)
-  
+
 let mk_failaction_pos loc partial seen ctx defs  =
   if dbg then begin
     Format.eprintf "**POS**\n" ;

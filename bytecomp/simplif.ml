@@ -264,7 +264,7 @@ let simplify_exits lam =
      end
   | Lswitch(l, sw, loc) ->
       let new_l = simplif l
-      and new_consts = 
+      and new_consts =
         List.map (fun (n, e, loc) -> (n, simplif e, loc)) sw.sw_consts
       and new_blocks =
         List.map (fun (n, e, loc) -> (n, simplif e, loc)) sw.sw_blocks

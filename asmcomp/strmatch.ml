@@ -88,11 +88,7 @@ module Make(I:I) = struct
     let test =
       Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer (nat, dbg) ], dbg)
     in
-<<<<<<< HEAD
     Cifthenelse (test, dbg, ifso, dbg, ifnot, dbg)
-=======
-    Cifthenelse (test, ifso, ifnot) 
->>>>>>> ce57b960d... More locations in Lambda
 
   let mk_lt = mk_cmp_gen Clt
   let mk_eq = mk_cmp_gen Ceq

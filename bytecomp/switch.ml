@@ -931,7 +931,7 @@ let rec pkey chan  = function
             low;
             high_plus_one_loc;
             high;
-            action_index = add_index loc (make_switch low_loc s i j) 
+            action_index = add_index loc (make_switch low_loc s i j)
           }
       end ;
       if i > 0 then zyva (i-1) (ir-1) in
