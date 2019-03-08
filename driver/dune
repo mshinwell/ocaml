@@ -14,7 +14,7 @@
 
 (rule
  (targets compdynlink.ml)
- (deps (:ml ../otherlibs/dynlink/dynlink.ml)
+ (deps (:ml ../otherlibs/dynlink/byte/dynlink.ml)
        (:sh ./compify_dynlink.sh))
  (action (run %{sh} %{ml} %{targets})))
 

@@ -1179,8 +1179,8 @@ endif
 
 DYNLINK_DIR=otherlibs/dynlink
 
-driver/compdynlink.mlbyte: $(DYNLINK_DIR)/dynlink.ml driver/compdynlink.mli \
-    driver/compify_dynlink.sh
+driver/compdynlink.mlbyte: $(DYNLINK_DIR)/byte/dynlink.ml \
+    driver/compdynlink.mli driver/compify_dynlink.sh
 	driver/compify_dynlink.sh $< $@
 
 driver/compdynlink_common.ml: $(DYNLINK_DIR)/dynlink_common.ml \
