@@ -803,7 +803,7 @@ natruntop:
 
 # Native dynlink
 
-otherlibs/dynlink/dynlink.cmxa: otherlibs/dynlink/dynlink.mlopt
+otherlibs/dynlink/dynlink.cmxa: otherlibs/dynlink/native/dynlink.ml
 	$(MAKE) -C otherlibs/dynlink allopt
 
 # The lexer
@@ -1202,8 +1202,8 @@ driver/compdynlink_platform_intf.ml: $(DYNLINK_DIR)/dynlink_platform_intf.ml \
 	driver/compify_dynlink.sh $< $@
 
 ifeq ($(NATDYNLINK),true)
-driver/compdynlink.mlopt: $(DYNLINK_DIR)/dynlink.mlopt driver/compdynlink.mli \
-  driver/compify_dynlink.sh
+driver/compdynlink.mlopt: $(DYNLINK_DIR)/native/dynlink.ml \
+  driver/compdynlink.mli driver/compify_dynlink.sh
 	driver/compify_dynlink.sh $< $@
 else
 driver/compdynlink.mlopt: $(DYNLINK_DIR)/nodynlink.ml driver/compdynlink.mli \
