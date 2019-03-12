@@ -97,7 +97,6 @@ INCLUDES_NODEP=\
   -I $(ROOTDIR)/compilerlibs \
   -I $(ROOTDIR)/otherlibs/str \
   -I $(ROOTDIR)/otherlibs/dynlink \
-  -I $(ROOTDIR)/otherlibs/dynlink/native \
   -I $(ROOTDIR)/otherlibs/$(UNIXLIB) \
   -I $(ROOTDIR)/otherlibs/$(GRAPHLIB)
 
