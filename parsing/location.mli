@@ -38,9 +38,6 @@ type t = Warnings.loc = {
 val none : t
 (** An arbitrary value of type [t]; describes an empty ghost range. *)
 
-val is_none : t -> bool
-(** Returns [true] iff the given location is [none]. *)
-
 val in_file : string -> t
 (** Return an empty ghost range located in a given file. *)
 
