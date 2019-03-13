@@ -354,6 +354,10 @@ let default_function_attribute = {
 let default_stub_attribute =
   { default_function_attribute with stub = true }
 
+let map_default f = function
+  | None -> None
+  | Some (failaction, loc) -> Some (f failaction, loc)
+
 (* Build sharing keys *)
 (*
    Those keys are later compared with Stdlib.compare.
@@ -437,11 +441,7 @@ let make_key e =
       sw_failaction = tr_default env sw.sw_failaction;
     }
 
-  and tr_default env = function
-    | None -> None
-    | Some (failaction, loc) ->
-      let failaction = tr_rec env failaction in
-      Some (failaction, loc)
+  and tr_default env = map_default (tr_rec env)
   in
   try
     Some (tr_rec Ident.empty e)
@@ -767,10 +767,6 @@ let rename idmap lam =
   in
   let s = Ident.Map.map (fun new_id -> Lvar new_id) idmap in
   subst update_env s lam
-
-let map_default f = function
-  | None -> None
-  | Some (failaction, loc) -> Some (f failaction, loc)
 
 let shallow_map f = function
   | Lvar _
