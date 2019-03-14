@@ -223,6 +223,7 @@ dynlink.cmxa: $(NATOBJS)
 # careful that compilation of the .cmx file does not write the .cmi file again,
 # which would cause rebuilding of ocamlopt.  The easiest way to do this seems
 # to be to copy the .ml file, which is a valid .mli, to the .mli.
+.INTERMEDIATE: dynlink_platform_intf.mli
 dynlink_platform_intf.mli: dynlink_platform_intf.ml
 	cp $< $@
 
@@ -269,10 +270,9 @@ DEPEND_DUMMY_FILES=\
   native/dynlink_compilerlibs.ml \
   byte/dynlink_compilerlibs.mli \
   byte/dynlink.mli \
-  native/dynlink.mli \
-  dynlink_platform_intf.mli
+  native/dynlink.mli
 
-depend:
+depend: dynlink_platform_intf.mli
 	touch $(DEPEND_DUMMY_FILES)
 	$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend -slash \
     -I byte -bytecode *.mli *.ml byte/dynlink.ml > .depend
