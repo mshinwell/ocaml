@@ -1023,7 +1023,7 @@ and split_constr loc (cls : pats_act_list) args def k =
   match ex_pat.pat_desc with
   | Tpat_any -> precompile_var loc args cls def k
   | Tpat_construct (_,{cstr_tag=Cstr_extension _},_) ->
-      split_naive ex_pat.pat_loc cls args def k
+      split_naive loc cls args def k
   | _ ->
       let group = get_group ex_pat in
 
