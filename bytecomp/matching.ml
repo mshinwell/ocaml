@@ -66,6 +66,7 @@ let string_of_lam lam =
 
 let omega pat_loc = { omega with pat_loc }
 let omegas pat_loc n = List.map (fun o -> { o with pat_loc }) (omegas n)
+let omega_list = List.map (fun p -> omega p.pat_loc)
 
 let all_record_args lbls = match lbls with
 | (_,{lbl_all=lbl_all},pat)::_ ->
@@ -1152,7 +1153,7 @@ and precompile_or loc argo cls ors args def k = match ors with
             |> List.map (fun (id,_,ty) -> id,Typeopt.value_kind orp.pat_env ty)
           in
           let or_num = next_raise_count () in
-          let new_patl = Parmatch.omega_list patl in
+          let new_patl = omega_list patl in
 
           let mk_new_action _loc vs =
             Lstaticraise
