@@ -1962,28 +1962,17 @@ let first_location_in rem =
 (* Note: dichotomic search requires sorted input with no duplicates *)
 let rec uniq_lambda_list sw = match sw with
   | []|[_] -> sw
-  | (c1,_ as p1)::((c2,_)::sw2 as sw1) ->
+  | (((_c1_loc, c1), _) as p1)::(((_c2_loc, c2),_)::sw2 as sw1) ->
       if const_compare c1 c2 = 0 then uniq_lambda_list (p1::sw2)
       else p1::uniq_lambda_list sw1
 
-let rec uniq_lambda_list_with_locations sw = match sw with
-  | []|[_] -> sw
-  | (((_c1_loc, c1), _) as p1)::(((_c2_loc, c2),_)::sw2 as sw1) ->
-      if const_compare c1 c2 = 0 then uniq_lambda_list_with_locations (p1::sw2)
-      else p1::uniq_lambda_list_with_locations sw1
-
 let sort_lambda_list l =
-  let l =
-    List.stable_sort (fun (x,_) (y,_) -> const_compare x y) l in
-  uniq_lambda_list l
-
-let sort_lambda_list_with_locations l =
   let l =
     List.stable_sort (fun ((_loc, x),_) ((_loc, y),_) ->
         const_compare x y)
       l
   in
-  uniq_lambda_list_with_locations l
+  uniq_lambda_list l
 
 let rec cut n l =
   if n = 0 then [],l
@@ -2018,7 +2007,7 @@ let make_test_sequence loc fail tst lt_tst arg
       (const_lambda_list :
         ((Location.t * Asttypes.constant)
           * (Location.t * Lambda.lambda)) list) =
-  let const_lambda_list = sort_lambda_list_with_locations const_lambda_list in
+  let const_lambda_list = sort_lambda_list const_lambda_list in
   let hs,const_lambda_list,fail =
     share_actions_tree const_lambda_list fail in
 
@@ -2517,15 +2506,10 @@ let combine_constant loc arg cst partial ctx def
    the clauses of stringswitch  are sorted with duplicates removed.
    This partly applies to the native code compiler, which requires
    no duplicates *)
-        let const_lambda_list =
-          List.map (fun ((_pat_loc, cst), loc_and_act) ->
-              cst, loc_and_act)
-            const_lambda_list
-        in
         let const_lambda_list = sort_lambda_list const_lambda_list in
         let sw =
           List.map
-            (fun (c,(loc,act)) -> match c with
+            (fun ((_cloc, c),(loc,act)) -> match c with
             | Const_string (s,_) -> s,(loc,act)
             | _ -> assert false)
             const_lambda_list in
