@@ -341,7 +341,7 @@ module Make(I:I) = struct
 
 
     let by_size
-          (cases : (DivideNative.OMap.key list * ('a * Cmm.expression)) list) =
+          (cases : (Nativeint.t list * ('a * Cmm.expression)) list) =
       DivideInt.divide
         (List.map
            (fun (ps,_ as case) -> List.length ps,case)
@@ -354,7 +354,7 @@ module Make(I:I) = struct
  *)
 
     let compile_by_size dbg from_ind str default
-          (cases : (DivideNative.OMap.key list * ('a * Cmm.expression)) list) =
+          (cases : (Nativeint.t list * ('a * Cmm.expression)) list) =
       let size_cases =
         List.map
           (fun (len,cases) ->
@@ -377,7 +377,7 @@ module Make(I:I) = struct
   'least discriminant' heuristics.
  *)
     let top_compile debuginfo str default
-          (cases : (DivideNative.OMap.key list * ('a * Cmm.expression)) list) =
+          (cases : (Nativeint.t list * ('a * Cmm.expression)) list) =
       let a_len = count_arities_length cases
       and a_fst = count_arities_first cases in
       if a_len <= a_fst then begin
