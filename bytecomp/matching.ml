@@ -811,11 +811,29 @@ let get_group p = match p.pat_desc with
 | Tpat_lazy _ -> group_lazy
 |  _ -> fatal_error "Matching.get_group"
 
+(* Check anticipated failure... *)
+let rec is_guarded = function
+  | Lifthenelse(_cond, _ifso_loc, _body, _ifnot_loc, Lstaticraise (0,[]), _) ->
+      true
+  | Llet(_str, _k, _id, _lam, body) -> is_guarded body
+  | Levent(lam, _ev) -> is_guarded lam
+  | _ -> false
 
+(* ...and substitute its final value. *)
+let rec patch_guarded patch = function
+  | Lifthenelse (cond, ifso_loc, body, ifnot_loc, Lstaticraise (0,[]), loc) ->
+      Lifthenelse (cond, ifso_loc, body, ifnot_loc, patch, loc)
+  | Llet(str, k, id, lam, body) ->
+      Llet (str, k, id, lam, patch_guarded patch body)
+  | Levent(lam, ev) ->
+      Levent (patch_guarded patch lam, ev)
+  | _ -> fatal_error "Matching.patch_guarded"
 
 let is_or p = match p.pat_desc with
 | Tpat_or _ -> true
 | _ -> false
+
+
 
 (* Conditions for appending to the Or matrix *)
 let conda p q = not (may_compat p q)

@@ -615,22 +615,6 @@ let next_raise_count () =
 (* Anticipated staticraise, for guards *)
 let staticfail = Lstaticraise (0,[])
 
-let rec is_guarded = function
-  | Lifthenelse(_cond, _ifso_loc, _body, _ifnot_loc, Lstaticraise (0,[]), _) ->
-      true
-  | Llet(_str, _k, _id, _lam, body) -> is_guarded body
-  | Levent(lam, _ev) -> is_guarded lam
-  | _ -> false
-
-let rec patch_guarded patch = function
-  | Lifthenelse (cond, ifso_loc, body, ifnot_loc, Lstaticraise (0,[]), loc) ->
-      Lifthenelse (cond, ifso_loc, body, ifnot_loc, patch, loc)
-  | Llet(str, k, id, lam, body) ->
-      Llet (str, k, id, lam, patch_guarded patch body)
-  | Levent(lam, ev) ->
-      Levent (patch_guarded patch lam, ev)
-  | _ -> fatal_error "Lambda.patch_guarded"
-
 (* Translate an access path *)
 
 let rec transl_address loc = function
