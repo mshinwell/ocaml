@@ -1301,8 +1301,8 @@ let divide_constant ctx m =
 
 let make_field_args binding_kind arg first_pos last_pos field_pat_locs
       (argl : args) =
-  assert (List.length field_pat_locs = 1 + last_pos - first_pos);
   let field_pat_locs = Array.of_list field_pat_locs in
+  assert (Array.length field_pat_locs = 1 + last_pos - first_pos);
   let rec make_args pos =
     if pos > last_pos
     then argl
