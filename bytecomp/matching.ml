@@ -2845,7 +2845,7 @@ let compile_list compile_fun division =
   c_rec [] division
 
 
-let compile_orhandlers _loc compile_fun (loc1, lambda1) total1 ctx to_catch =
+let compile_orhandlers compile_fun (loc1, lambda1) total1 ctx to_catch =
   let rec do_rec loc_r r total_r = function
     | [] -> (loc_r, r), total_r
     | (mat,i,vars,pm)::rem ->
@@ -3107,7 +3107,7 @@ match pmh with
     loc_and_lam, jumps_map ctx_rshift total
 | PmOr {body=body ; handlers=handlers; loc} ->
     let loc_and_lam, total = compile_match loc repr partial ctx body in
-    compile_orhandlers loc (compile_match loc repr partial)
+    compile_orhandlers (compile_match loc repr partial)
       loc_and_lam total ctx handlers
 
 and compile_no_test loc divide up_ctx repr partial ctx to_match
@@ -3513,7 +3513,7 @@ let compile_flattened loc repr partial ctx _ pmh = match pmh with
 | Pm pm -> compile_match loc repr partial ctx pm
 | PmOr {body=b ; handlers=hs; loc} ->
     let lam, total = compile_match loc repr partial ctx b in
-    compile_orhandlers loc (compile_match loc repr partial) lam total ctx hs
+    compile_orhandlers (compile_match loc repr partial) lam total ctx hs
 | PmVar _ -> assert false
 
 let do_for_multiple_match loc paraml pat_act_list partial =
