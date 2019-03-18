@@ -738,6 +738,10 @@ let pat_as_constr = function
   | {pat_desc=Tpat_construct (_, cstr,_)} -> cstr
   | _ -> fatal_error "Matching.pat_as_constr"
 
+let pat_as_constr_with_field_pats = function
+  | {pat_desc=Tpat_construct (_, cstr, field_pats)} -> cstr, field_pats
+  | _ -> fatal_error "Matching.pat_as_constr_with_field_pats"
+
 let group_const_int = function
   | {pat_desc= Tpat_constant Const_int _ } -> true
   | _                                      -> false
@@ -1397,12 +1401,7 @@ let matcher_constr cstr = match cstr.cstr_arity with
 let make_constr_matching p def ctx = function
     [] -> fatal_error "Matching.make_constr_matching"
   | ((arg, _mut, arg_loc) :: argl) ->
-      let cstr = pat_as_constr p in
-      let field_pats =
-        match p.pat_desc with
-        | Tpat_construct (_, _, field_pats) -> field_pats
-        | _ -> Misc.fatal_error "Only [Tpat_construct] expected"
-      in
+      let cstr, field_pats = pat_as_constr_with_field_pats p in
       let field_pat_locs = List.map (fun pat -> pat.pat_loc) field_pats in
       let newargs : args =
         if cstr.cstr_inlined <> None then
