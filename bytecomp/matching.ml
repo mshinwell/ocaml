@@ -2945,7 +2945,7 @@ let comp_exit loc ctx m = match m.default with
 
 
 
-let rec comp_match_handlers loc comp_fun partial ctx arg first_match
+let rec comp_match_handlers comp_fun partial ctx arg first_match
       next_matchs : (Location.t * lambda) * jumps =
   match next_matchs with
   | [] -> comp_fun partial ctx arg first_match
@@ -2983,7 +2983,7 @@ let rec comp_match_handlers loc comp_fun partial ctx arg first_match
       c_rec first_loc first_lam total rem
    with Unused -> match next_matchs with
    | [] -> raise Unused
-   | (_,x)::xs ->  comp_match_handlers loc comp_fun partial ctx arg x xs
+   | (_,x)::xs ->  comp_match_handlers comp_fun partial ctx arg x xs
 
 (* To find reasonable names for variables *)
 
@@ -3032,7 +3032,7 @@ let rec compile_match loc repr partial ctx m = match m with
       split_precompile loc (Some v)
         { m with args = (newarg, Alias, loc) :: argl } in
     let ((action_loc, action), total) =
-      comp_match_handlers loc
+      comp_match_handlers
         ((if dbg then do_compile_matching_pr else do_compile_matching) loc repr)
         partial ctx newarg first_match rem in
     let action = bind_check str v arg action in
@@ -3227,10 +3227,10 @@ let pats_act_list_of_pat_act_list (pat_act_list : pat_act_list) =
 let compile_matching loc repr handler_fun arg (pat_act_list : pat_act_list)
       partial : lambda =
   let partial = check_partial pat_act_list partial in
+  let cases = pats_act_list_of_pat_act_list pat_act_list in
   match partial with
   | Partial ->
       let raise_num = next_raise_count () in
-      let cases = pats_act_list_of_pat_act_list pat_act_list in
       let pm =
         { cases;
           args = [arg, Strict, loc] ;
@@ -3244,7 +3244,6 @@ let compile_matching loc repr handler_fun arg (pat_act_list : pat_act_list)
       | Unused -> assert false (* ; handler_fun() *)
       end
   | Total ->
-      let cases = pats_act_list_of_pat_act_list pat_act_list in
       let pm =
         { cases;
           args = [arg, Strict, loc] ;
@@ -3521,18 +3520,17 @@ let do_for_multiple_match loc paraml pat_act_list partial =
   let outer_loc = loc in
   let repr = None in
   let partial = check_partial pat_act_list partial in
+  let cases = pats_act_list_of_pat_act_list pat_act_list in
   let raise_num,pm1 =
     match partial with
     | Partial ->
         let raise_num = next_raise_count () in
-        let cases = pats_act_list_of_pat_act_list pat_act_list in
         raise_num,
         { cases;
           args = [Lprim(Pmakeblock(0, Immutable, None), paraml, loc), Strict,
                   loc];
           default = [[[omega loc]],raise_num] }
     | _ ->
-        let cases = pats_act_list_of_pat_act_list pat_act_list in
         -1,
         { cases;
           args = [Lprim(Pmakeblock(0, Immutable, None), paraml, loc), Strict,
@@ -3555,7 +3553,7 @@ let do_for_multiple_match loc paraml pat_act_list partial =
           nexts in
 
       let (loc, lam), total =
-        comp_match_handlers loc
+        comp_match_handlers
           (compile_flattened loc repr)
           partial (start_ctx loc size) () flat_next flat_nexts in
       List.fold_right2 (bind Strict) idl paraml
