@@ -431,12 +431,12 @@ let validate d m p =
 let raise_regular dbg ~raise_dbg exc =
   Csequence(
     Cop(Cstore (Thirtytwo_signed, Assignment),
-        [(Cconst_symbol "caml_backtrace_pos", dbg);
+        [Cconst_symbol ("caml_backtrace_pos", dbg);
          Cconst_int (0, dbg)], dbg),
       Cop(Craise (Raise_withtrace raise_dbg), [exc], dbg))
 
 let raise_symbol dbg symb =
-  raise_regular dbg ~raise_dbg:dbg (Cconst_symbol symb)
+  raise_regular dbg ~raise_dbg:dbg (Cconst_symbol (symb, dbg))
 
 let rec div_int c1 c2 is_safe dbg =
   match (c1, c2) with
@@ -1683,15 +1683,15 @@ struct
   type location = Debuginfo.t
   let no_location = Debuginfo.none
 
-  let make_const dbg i = Cconst_int i
+  let make_const dbg i = Cconst_int (i, dbg)
   let make_prim dbg p args = Cop (p, args, dbg)
   let make_offset dbg arg n = add_const arg n dbg
   let make_isout dbg h arg = Cop (Ccmpa Clt, [h ; arg], dbg)
   let make_isin dbg h arg = Cop (Ccmpa Cge, [h ; arg], dbg)
   let make_if dbg cond ifso_dbg ifso ifnot_dbg ifnot =
-    Cifthenelse (cond, Debuginfo.none, ifso, Debuginfo.none, ifnot, dbg)
+    Cifthenelse (cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
   let make_switch dbg arg cases actions =
-    let actions = Array.map (fun (_dbg, act) -> act) actions in
+    let actions = Array.map (fun (dbg, act) -> act, dbg) actions in
     make_switch arg cases actions dbg
   let bind arg body = bind "switcher" arg body
 

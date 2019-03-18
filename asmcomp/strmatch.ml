@@ -392,7 +392,7 @@ module Make(I:I) = struct
 
 (* Module entry point *)
 
-    let catch _dbg arg k = match arg with
+    let catch dbg arg k = match arg with
     | Cexit (_e,[]) ->  k arg
     | _ ->
         let e =  next_raise_count () in
