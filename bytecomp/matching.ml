@@ -2116,102 +2116,171 @@ module SArg = struct
   type location = Location.t
   let no_location = Location.none
 
-  let make_prim loc p args = Lprim (p,args,loc)
-  let make_offset loc arg n = match n with
-  | 0 -> arg
-  | _ -> Lprim (Poffsetint n,[arg],loc)
+  let make_prim loc p args =
+    let args = List.map (fun act -> act.expr) args in
+    { block_loc = loc;
+      expr = Lprim (p, args, loc);
+    }
 
-  let bind arg body =
-    let newvar,newarg = match arg with
-    | Lvar v -> v,arg
-    | _      ->
-        let newvar = Ident.create_local "*switcher*" in
-        newvar,Lvar newvar in
-    bind Alias newvar arg (body newarg)
-  let make_const loc i = Lconst (Const_base (Const_int i), loc)
-  let make_isout loc h arg = Lprim (Pisout, [h ; arg], loc)
-  let make_isin loc h arg = Lprim (Pnot,[make_isout loc h arg], loc)
-  let make_if loc cond ifso ifnot = Lifthenelse (cond, ifso, ifnot, loc)
+  let make_offset loc arg n =
+    let expr =
+      let arg = arg.expr in
+      match n with
+      | 0 -> arg
+      | _ -> Lprim (Poffsetint n, [arg], loc)
+    in
+    { block_loc = loc;
+      expr;
+    }
+
+  let bind (arg : act) (body : act -> act) : act =
+    let newvar, newarg =
+      match arg.expr with
+      | Lvar v -> v, arg
+      | _ ->
+          let newvar = Ident.create_local "*switcher*" in
+          let expr = Lvar newvar in
+          let block =
+            { block_loc = arg.block_loc;
+              expr;
+            }
+          in
+          newvar, block
+    in
+    let expr = bind Alias newvar arg.expr ((body newarg).expr) in
+    { block_loc = arg.block_loc;
+      expr;
+    }
+
+  let make_const loc i =
+    { block_loc = loc;
+      expr = Lconst (Const_base (Const_int i), loc);
+    }
+
+  let make_isout_expr loc h arg =
+    Lprim (Pisout, [h.expr; arg.expr], loc)
+
+  let make_isout loc h arg =
+    { block_loc = loc;
+      expr = make_isout_expr loc h arg;
+    }
+
+  let make_isin loc h arg =
+    { block_loc = loc;
+      expr = Lprim (Pnot, [make_isout_expr loc h arg], loc);
+    }
+
+  let make_if loc cond ifso ifnot =
+    { block_loc = loc;
+      expr = Lifthenelse (cond.expr, ifso, ifnot, loc);
+    }
+
   let make_switch loc arg cases acts =
     let l = ref [] in
     for i = Array.length cases-1 downto 0 do
-      let loc, act = acts.(cases.(i)) in
-      l := (i, act, loc) ::  !l
-    done ;
-    Lswitch(arg,
-            {sw_numconsts = Array.length cases ; sw_consts = !l ;
-             sw_numblocks = 0 ; sw_blocks =  []  ;
-             sw_failaction = None},
-            loc)
-  let make_catch lam loc = make_catch_delayed loc lam
-  let make_exit = make_exit
+      let act = acts.(cases.(i)) in
+      l := (i, act) :: !l
+    done;
+    let expr =
+      Lswitch(arg,
+              {sw_numconsts = Array.length cases; sw_consts = !l;
+               sw_numblocks = 0; sw_blocks = [];
+               sw_failaction = None},
+              loc)
+    in
+    { block_loc = loc;
+      expr;
+    }
 
+  let make_catch expr block_loc =
+    let block =
+      { block_loc;
+        expr;
+      }
+    in
+    make_catch_delayed block
+
+  let make_exit = make_exit
 end
 
 (* Action sharing for Lswitch argument *)
 let share_actions_sw _loc sw =
 (* Attempt sharing on all actions *)
   let store = StoreExp.mk_store () in
-  let fail = match sw.sw_failaction with
-  | None -> None
-  | Some (fail, fail_loc) ->
-      (* Fail is translated to exit, whatever happens *)
-      Some (store.Switch.act_store_shared () (fail_loc, fail), fail_loc) in
+  let default =
+    match sw.sw_failaction with
+    | None -> None
+    | Some default ->
+        (* The default case is compiled using exit, whatever happens. *)
+        Some (store.Switch.act_store_shared () default)
+  in
   let consts =
-    List.map
-      (fun (i,e,loc) -> i,store.Switch.act_store () (loc, e), loc)
+    List.map (fun (key, act) -> key, store.Switch.act_store () act)
       sw.sw_consts
   and blocks =
-    List.map
-      (fun (i,e,loc) -> i,store.Switch.act_store () (loc, e), loc)
-      sw.sw_blocks in
+    List.map (fun (key, act) -> key, store.Switch.act_store () act)
+      sw.sw_blocks
+  in
   let acts = store.Switch.act_get_shared () in
-  let hs,handle_shared = handle_shared () in
+  let hs, handle_shared = handle_shared () in
   let acts = Array.map handle_shared acts in
-  let fail = match fail with
-  | None -> None
-  | Some (fail, fail_loc) -> Some (snd acts.(fail), fail_loc) in
-  !hs,
-  { sw with
-    sw_consts = List.map (fun (i,j,loc) -> i, snd acts.(j), loc) consts ;
-    sw_blocks = List.map (fun (i,j,loc) -> i, snd acts.(j), loc) blocks ;
-    sw_failaction = fail; }
+  let default =
+    match default with
+    | None -> None
+    | Some act_index -> Some acts.(act_index)
+  in
+  let make_arms arms =
+    List.map (fun (key, act_index) -> key, acts.(act_index)) arms
+  in
+  let sw =
+    { sw with
+      sw_consts = make_arms consts;
+      sw_blocks = make_arms blocks;
+      sw_failaction = default;
+    }
+  in
+  !hs, sw
 
 (* Reintroduce fail action in switch argument,
    for the sake of avoiding carrying over huge switches *)
 
-let reintroduce_fail sw = match sw.sw_failaction with
-| None ->
-    let t = Hashtbl.create 17 in
-    let seen (_, l, loc) = match as_simple_exit l with
-    | Some i ->
-        let old = try fst (Hashtbl.find t i) with Not_found -> 0 in
-        Hashtbl.replace t i (old+1, loc)
-    | None -> () in
-    List.iter seen sw.sw_consts ;
-    List.iter seen sw.sw_blocks ;
-    let i_max = ref (-1, Location.none)
-    and max = ref (-1) in
-    Hashtbl.iter
-      (fun i (c, loc) ->
-        if c > !max then begin
-          i_max := (i, loc) ;
-          max := c
-        end) t ;
-    if !max >= 3 then
-      let default, default_loc = !i_max in
-      let remove =
-        List.filter
-          (fun (_, lam, _loc) -> match as_simple_exit lam with
-          | Some j -> j <> default
-          | None -> true) in
-      {sw with
-       sw_consts = remove sw.sw_consts ;
-       sw_blocks = remove sw.sw_blocks ;
-       sw_failaction = Some (make_exit default, default_loc)}
-    else sw
-| Some _ -> sw
-
+let reintroduce_fail sw =
+  match sw.sw_failaction with
+  | None ->
+      let t = Hashtbl.create 17 in
+      let seen (_, act) =
+        match as_simple_exit act with
+        | Some i ->
+            let old = try fst (Hashtbl.find t i) with Not_found -> 0 in
+            Hashtbl.replace t i (old+1, act.block_loc)
+        | None -> ()
+      in
+      List.iter seen sw.sw_consts ;
+      List.iter seen sw.sw_blocks ;
+      let i_max = ref (-1, Location.none)
+      and max = ref (-1) in
+      Hashtbl.iter
+        (fun i (c, loc) ->
+          if c > !max then begin
+            i_max := (i, loc) ;
+            max := c
+          end) t ;
+      if !max < 3 then sw
+      else
+        let default, default_loc = !i_max in
+        let remove arms =
+          List.filter (fun (_, act) ->
+              match as_simple_exit act with
+              | Some j -> j <> default
+              | None -> true)
+            arms
+        in
+        {sw with
+         sw_consts = remove sw.sw_consts;
+         sw_blocks = remove sw.sw_blocks;
+         sw_failaction = Some (make_exit default_loc default);
+        }
+  | Some _ -> sw
 
 module Switcher = Switch.Make(SArg)
 open Switch
