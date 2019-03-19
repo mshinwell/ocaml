@@ -490,46 +490,54 @@ let pretty_precompiled_res first nexts =
    in case action sharing is present.
 *)
 
-
 module StoreExp =
   Switch.Store
     (struct
-      type t = Location.t * lambda
-      type key = lambda
+      type t = Lambda.block
+      type key = Lambda.lambda
       let compare_key = Stdlib.compare
-      let make_key (_loc, lam) = Lambda.make_key lam
+      let make_key act = Lambda.make_key act.expr
     end)
 
-
-let make_exit i = Lstaticraise (i,[])
+let make_exit block_loc cont : Lambda.block =
+  { block_loc;
+    expr = Lstaticraise (cont, []);
+  }
 
 (* Introduce a catch, if worth it *)
-let make_catch d k loc = match d with
-| Lstaticraise (_,[]) -> k d
-| _ ->
-    let e = next_raise_count () in
-    Lstaticcatch (k (make_exit e),(e,[]),d,loc)
+let make_catch d (k : Lambda.block -> _) =
+  match d.expr with
+  | Lstaticraise (_,[]) -> k d
+  | _ ->
+    let cont = next_raise_count () in
+    Lstaticcatch (k (make_exit d.block_loc cont),(cont,[]),d)
 
 (* Introduce a catch, if worth it, delayed version *)
-let rec as_simple_exit = function
+let rec as_simple_exit block =
+  as_simple_exit_expr block.expr
+
+and as_simple_exit_expr expr =
+  match expr with
   | Lstaticraise (i,[]) -> Some i
-  | Llet (Alias,_k,_,_,e) -> as_simple_exit e
+  | Llet (Alias,_k,_,_,e) -> as_simple_exit_expr e
   | _ -> None
 
-
-let make_catch_delayed handler loc = match as_simple_exit handler with
-| Some i -> i,(fun act -> act)
-| None ->
-    let i = next_raise_count () in
-(*
-    Printf.eprintf "SHARE LAMBDA: %i\n%s\n" i (string_of_lam handler);
-*)
-    i,
-    (fun body -> match body with
-    | Lstaticraise (j,_) ->
-        if i=j then handler else body
-    | _ -> Lstaticcatch (body,(i,[]),handler,loc))
-
+let make_catch_delayed (handler : Lambda.block) =
+  match as_simple_exit handler with
+  | Some i -> i, (fun act -> act)
+  | None ->
+      let i = next_raise_count () in
+  (*
+      Printf.eprintf "SHARE LAMBDA: %i\n%s\n" i (string_of_lam handler);
+  *)
+      i,
+      (fun body ->
+        match body.expr with
+        | Lstaticraise (j,_) -> if i=j then handler else body
+        | _ ->
+          { block_loc = body.block_loc;
+            expr = Lstaticcatch (body.expr,(i,[]),handler);
+          })
 
 let raw_action l =
   match make_key l with | Some l -> l | None -> l
@@ -817,7 +825,7 @@ let get_group p = match p.pat_desc with
 
 (* Check anticipated failure... *)
 let rec is_guarded = function
-  | Lifthenelse(_cond, _ifso_loc, _body, _ifnot_loc, Lstaticraise (0,[]), _) ->
+  | Lifthenelse(_cond, _ifso, { expr = Lstaticraise (0,[]); _ }, _loc) ->
       true
   | Llet(_str, _k, _id, _lam, body) -> is_guarded body
   | Levent(lam, _ev) -> is_guarded lam
@@ -825,8 +833,8 @@ let rec is_guarded = function
 
 (* ...and substitute its final value. *)
 let rec patch_guarded patch = function
-  | Lifthenelse (cond, ifso_loc, body, ifnot_loc, Lstaticraise (0,[]), loc) ->
-      Lifthenelse (cond, ifso_loc, body, ifnot_loc, patch, loc)
+  | Lifthenelse (cond, ifso, { expr = Lstaticraise (0,[]); }, loc) ->
+      Lifthenelse (cond, ifso, patch, loc)
   | Llet(str, k, id, lam, body) ->
       Llet (str, k, id, lam, patch_guarded patch body)
   | Levent(lam, ev) ->
@@ -1578,6 +1586,11 @@ let inline_lazy_force_cond arg loc =
   let varg = Lvar idarg in
   let tag = Ident.create_local "*tag*" in
   let force_fun = Lazy.force code_force_lazy_block in
+  let make_block expr =
+    { block_loc = loc;
+      expr;
+    }
+  in
   Llet(Strict, Pgenval, idarg, arg,
        Llet(Alias, Pgenval, tag, Lprim(Pccall prim_obj_tag, [varg], loc),
             Lifthenelse(
@@ -1586,52 +1599,57 @@ let inline_lazy_force_cond arg loc =
                     [Lvar tag;
                      Lconst(Const_base(Const_int Obj.forward_tag), loc)],
                     loc),
-              loc,
-              Lprim(Pfield 0, [varg], loc),
-              loc,
-              Lifthenelse(
+              make_block (Lprim(Pfield 0, [varg], loc)),
+              make_block (Lifthenelse(
                 (* ... if (tag == Obj.lazy_tag) then Lazy.force varg else ... *)
                 Lprim(Pintcomp Ceq,
                       [Lvar tag;
                        Lconst(Const_base(Const_int Obj.lazy_tag), loc)],
                       loc),
-                loc,
-                Lapply{ap_should_be_tailcall=false;
+                make_block (Lapply{ap_should_be_tailcall=false;
                        ap_loc=loc;
                        ap_func=force_fun;
                        ap_args=[varg];
                        ap_inlined=Default_inline;
                        ap_specialised=Default_specialise;
-                      },
+                      }),
                 (* ... arg *)
-                loc,
-                  varg,
-                  loc),
+                make_block varg,
+                loc)),
               loc)))
 
 let inline_lazy_force_switch arg loc =
   let idarg = Ident.create_local "*lzarg*" in
   let varg = Lvar idarg in
   let force_fun = Lazy.force code_force_lazy_block in
+  let make_block expr =
+    { block_loc = loc;
+      expr;
+    }
+  in
   Llet(Strict, Pgenval, idarg, arg,
        Lifthenelse(
-         Lprim(Pisint, [varg], loc), loc, varg, loc,
-         (Lswitch
+         Lprim(Pisint, [varg], loc),
+         make_block varg,
+         make_block ((Lswitch
             (varg,
              { sw_numconsts = 0; sw_consts = [];
                sw_numblocks = 256;  (* PR#6033 - tag ranges from 0 to 255 *)
                sw_blocks =
-                 [ (Obj.forward_tag, Lprim(Pfield 0, [varg], loc), loc);
+                 [ (Obj.forward_tag, make_block (Lprim(Pfield 0, [varg], loc)));
                    (Obj.lazy_tag,
-                    Lapply{ap_should_be_tailcall=false;
-                           ap_loc=loc;
-                           ap_func=force_fun;
-                           ap_args=[varg];
-                           ap_inlined=Default_inline;
-                           ap_specialised=Default_specialise;
-                          },
-                    loc) ];
-               sw_failaction = Some (varg, loc) }, loc )), loc))
+                    make_block (
+                      Lapply{ap_should_be_tailcall=false;
+                             ap_loc=loc;
+                             ap_func=force_fun;
+                             ap_args=[varg];
+                             ap_inlined=Default_inline;
+                             ap_specialised=Default_specialise;
+                            }))
+                 ];
+               sw_failaction = Some (make_block varg) },
+             loc))),
+         loc))
 
 let inline_lazy_force arg loc =
   if !Clflags.afl_instrument then
@@ -1859,23 +1877,31 @@ let bind_sw arg k = match arg with
 
 (* Sequential equality tests *)
 
-let make_string_test_sequence arg sw d =
-  let d, sw = match d with
+let make_string_test_sequence arg sw ~(default : Lambda.block option) =
+  let d, sw = match default with
   | None ->
       begin match sw with
-      | (_,d,_loc)::sw -> d, sw
+      | (_,d)::sw -> d.expr, sw
       | [] -> assert false
       end
-  | Some d -> d,sw in
+  | Some d -> d.expr, sw in
   bind_sw arg
     (fun arg ->
       List.fold_right
-        (fun (s,lam,loc) k ->
+        (fun (s, (act : Lambda.block)) k ->
+          let loc = act.block_loc in
+          let make_block expr =
+            { block_loc = loc;
+              expr;
+            }
+          in
           Lifthenelse
             (Lprim
                (prim_string_notequal,
                 [arg; Lconst (Const_immstring s, loc)], loc),
-             loc,k,loc,lam,loc))
+             make_block k,
+             make_block act.expr,
+             loc))
         sw d)
 
 let rec split k xs = match xs with
@@ -1888,43 +1914,55 @@ let rec split k xs = match xs with
 
 let zero_lam loc = Lconst (Const_base (Const_int 0), loc)
 
-let tree_way_test loc arg lt eq gt =
+let three_way_test loc arg lt eq gt =
+  let make_block expr =
+    { block_loc = loc;
+      expr;
+    }
+  in
   Lifthenelse
-    (Lprim (Pintcomp Clt,[arg;zero_lam loc], loc),loc,lt,loc,
-     Lifthenelse(
-       Lprim (Pintcomp Clt,[zero_lam loc;arg], loc),loc,gt,loc,eq,loc),
+    (Lprim (Pintcomp Clt, [arg; zero_lam loc], loc),
+     make_block lt,
+     make_block (
+       Lifthenelse(
+         Lprim (Pintcomp Clt, [zero_lam loc; arg], loc),
+         make_block gt,
+         eq,
+         loc)),
      loc)
 
 (* Dichotomic tree *)
 
-
 let rec do_make_string_test_tree arg
-      (sw : (string * lambda * Location.t) list) delta d =
+      (sw : (string * Lambda.block) list) delta
+      ~(default : Lambda.block option) =
   let len = List.length sw in
   if len <= strings_test_threshold+delta then
-    make_string_test_sequence arg sw d
+    make_string_test_sequence arg sw ~default
   else
-    let lt,(s,act,loc),gt = split len sw in
+    let lt,(s,act),gt = split len sw in
+    let loc = act.block_loc in
     bind_sw
       (Lprim
          (prim_string_compare,
           [arg; Lconst (Const_immstring s, loc)], loc))
       (fun r ->
-        tree_way_test loc r
-          (do_make_string_test_tree arg lt delta d)
+        three_way_test loc r
+          (do_make_string_test_tree arg lt delta ~default)
           act
-          (do_make_string_test_tree arg gt delta d))
+          (do_make_string_test_tree arg gt delta ~default))
 
 (* Entry point *)
-let expand_stringswitch arg sw d = match d with
-| None ->
-    bind_sw arg
-      (fun arg -> do_make_string_test_tree arg sw 0 None)
-| Some (e, default_loc) ->
-    bind_sw arg
-      (fun arg ->
-        make_catch e
-          (fun d -> do_make_string_test_tree arg sw 1 (Some d)) default_loc)
+let expand_stringswitch arg sw ~(default : Lambda.block option) =
+  match default with
+  | None ->
+      bind_sw arg (fun arg ->
+        do_make_string_test_tree arg sw 0 ~default:None)
+  | Some default ->
+      bind_sw arg (fun arg ->
+        make_catch default (fun default ->
+          let default = Some default in
+          do_make_string_test_tree arg sw 1 ~default))
 
 (**********************)
 (* Generic test trees *)
@@ -1935,121 +1973,133 @@ let expand_stringswitch arg sw d = match d with
 (* Add handler, if shared *)
 let handle_shared () =
   let hs = ref (fun x -> x) in
-  let handle_shared act = match act with
-  | Switch.Single (loc, act) -> loc, act
-  | Switch.Shared (loc, act) ->
-      let i,h = make_catch_delayed act loc in
-      let ohs = !hs in
-      hs := (fun act -> h (ohs act)) ;
-      loc, make_exit i in
-  hs,handle_shared
+  let handle_shared act =
+    match act with
+    | Switch.Single act -> act
+    | Switch.Shared act ->
+        let i,h = make_catch_delayed act in
+        let ohs = !hs in
+        hs := (fun act -> h (ohs act));
+        make_exit act.block_loc i
+  in
+  hs, handle_shared
 
-
-let share_actions_tree sw d =
+let share_actions_tree sw ~(default : Lambda.block option) =
   let store = StoreExp.mk_store () in
-(* Default action is always shared *)
-  let d =
-    match d with
+  (* Default action is always shared *)
+  let default =
+    match default with
     | None -> None
-    | Some d -> Some (store.Switch.act_store_shared () d) in
-(* Store all other actions *)
+    | Some default -> Some (store.Switch.act_store_shared () default)
+  in
+  (* Store all other actions *)
   let sw =
-    List.map  (fun (cst,act) -> cst,store.Switch.act_store () act) sw in
-
-(* Retrieve all actions, including potential default *)
+    List.map (fun (cst,act) -> cst,store.Switch.act_store () act) sw
+  in
+  (* Retrieve all actions, including potential default *)
   let acts = store.Switch.act_get_shared () in
-
-(* Array of actual actions *)
+  (* Array of actual actions *)
   let hs,handle_shared = handle_shared () in
   let acts = Array.map handle_shared acts in
-
-(* Reconstruct default and switch list *)
-  let d = match d with
-  | None -> None
-  | Some d -> Some (acts.(d)) in
-  let sw =
-    List.map (fun (cst, j) -> cst, acts.(j)) sw
+  (* Reconstruct default and switch list *)
+  let default =
+    match default with
+    | None -> None
+    | Some default -> Some (acts.(default))
   in
-  !hs,sw,d
+  let sw = List.map (fun (cst, j) -> cst, acts.(j)) sw in
+  !hs,sw,default
 
 let first_location_in rem =
   match rem with
   | [] -> Location.none
   | ((loc, _), _) :: _ -> loc
 
-(* Note: dichotomic search requires sorted input with no duplicates *)
-let rec uniq_lambda_list sw = match sw with
-  | []|[_] -> sw
-  | (((_c1_loc, c1), _) as p1)::(((_c2_loc, c2),_)::sw2 as sw1) ->
-      if const_compare c1 c2 = 0 then uniq_lambda_list (p1::sw2)
-      else p1::uniq_lambda_list sw1
+type const_with_loc = Location.t * Asttypes.constant
 
-let sort_lambda_list l =
-  let l =
-    List.stable_sort (fun ((_loc, x),_) ((_loc, y),_) ->
-        const_compare x y)
-      l
-  in
-  uniq_lambda_list l
+module Tests = struct
+  type t = (const_with_loc * Lambda.block) list
 
-let rec cut n l =
-  if n = 0 then [],l
-  else match l with
-    [] -> raise (Invalid_argument "cut")
-  | a::l -> let l1,l2 = cut (n-1) l in a::l1, l2
+  (* Note: dichotomic search requires sorted input with no duplicates *)
+  let rec uniq_lambda_list sw = match sw with
+    | [] | [_] -> sw
+    | (((_c1_loc, c1), _) as p1)::(((_c2_loc, c2),_)::sw2 as sw1) ->
+        if const_compare c1 c2 = 0 then uniq_lambda_list (p1::sw2)
+        else p1::uniq_lambda_list sw1
 
-let rec do_tests_fail fail tst arg = function
-  | [] -> fail
-  | ((c_loc, c), (act_loc, act))::rem ->
-      Lifthenelse
-        (Lprim (tst, [arg ; Lconst (Const_base c, c_loc)], c_loc),
-         first_location_in rem,
-         do_tests_fail fail tst arg rem,
-         act_loc,
-         act,
-         c_loc)
+  let sort l =
+    let l =
+      List.stable_sort (fun ((_loc, x),_) ((_loc, y),_) ->
+          const_compare x y)
+        l
+    in
+    uniq_lambda_list l
 
-let rec do_tests_nofail tst arg = function
+  let rec cut n l =
+    if n = 0 then [],l
+    else match l with
+    | [] -> raise (Invalid_argument "cut")
+    | a::l -> let l1,l2 = cut (n-1) l in a::l1, l2
+end
+
+let rec do_tests_default ~(default : Lambda.block) tst arg (tests : Tests.t)
+      : Lambda.block =
+  match tests with
+  | [] -> default
+  | ((const_loc, const), act)::rem ->
+      let expr =
+        Lifthenelse
+          (Lprim (tst, [arg; Lconst (Const_base const, const_loc)], const_loc),
+           do_tests_default ~default tst arg rem,
+           act,
+           const_loc)
+      in
+      { block_loc = const_loc;
+        expr;
+      }
+
+let rec do_tests_no_default tst arg (tests : Tests.t) : Lambda.block =
+  match tests with
   | [] -> fatal_error "Matching.do_tests_nofail"
-  | [_, (_loc, act)] -> act
-  | ((c_loc, c), (act_loc, act))::rem ->
-      Lifthenelse
-        (Lprim (tst, [arg ; Lconst (Const_base c, c_loc)], c_loc),
-         first_location_in rem,
-         do_tests_nofail tst arg rem,
-         act_loc,
-         act,
-         c_loc)
+  | [_, act] -> act
+  | ((const_loc, const), act)::rem ->
+      let expr =
+        Lifthenelse
+          (Lprim (tst, [arg; Lconst (Const_base const, const_loc)], const_loc),
+           do_tests_no_default tst arg rem,
+           act,
+           const_loc)
+      in
+      { block_loc = const_loc;
+        expr;
+      }
 
-let make_test_sequence loc fail tst lt_tst arg
-      (const_lambda_list :
-        ((Location.t * Asttypes.constant)
-          * (Location.t * Lambda.lambda)) list) =
-  let const_lambda_list = sort_lambda_list const_lambda_list in
-  let hs,const_lambda_list,fail =
-    share_actions_tree const_lambda_list fail in
-
-  let rec make_test_sequence const_lambda_list =
-    if List.length const_lambda_list >= 4 && lt_tst <> Pignore then
-      split_sequence const_lambda_list
-    else match fail with
-    | None -> do_tests_nofail tst arg const_lambda_list
-    | Some (_fail_loc, fail) ->
-      do_tests_fail fail tst arg const_lambda_list
-
-  and split_sequence const_lambda_list =
-    let list1, list2 =
-      cut (List.length const_lambda_list / 2) const_lambda_list in
-    Lifthenelse(Lprim(lt_tst,
-                      [arg;
-                       Lconst(Const_base (snd (fst (List.hd list2))), loc)],
-                      loc),
-                first_location_in list1, make_test_sequence list1,
-                first_location_in list2, make_test_sequence list2,
-                loc)
+let make_test_sequence loc ~(default : Lambda.block option) tst lt_tst arg
+      (tests : Tests.t) : Lambda.block =
+  let tests = Tests.sort tests in
+  let hs, tests, default = share_actions_tree tests ~default in
+  let rec make_test_sequence tests =
+    if List.length tests >= 4 && lt_tst <> Pignore then
+      split_sequence tests
+    else match default with
+    | None -> do_tests_no_default tst arg tests
+    | Some default -> do_tests_default ~default tst arg tests
+  and split_sequence tests =
+    let list1, list2 = Tests.cut (List.length tests / 2) tests in
+    let expr =
+      Lifthenelse(Lprim(lt_tst,
+                        [arg;
+                         Lconst(Const_base (snd (fst (List.hd list2))), loc)],
+                        loc),
+                  make_test_sequence list1,
+                  make_test_sequence list2,
+                  loc)
+    in
+    { block_loc = loc;
+      expr;
+    }
   in
-  hs (make_test_sequence const_lambda_list)
-
+  hs (make_test_sequence tests)
 
 module SArg = struct
   type primitive = Lambda.primitive
@@ -2061,7 +2111,7 @@ module SArg = struct
   let geint = Pintcomp Cge
   let gtint = Pintcomp Cgt
 
-  type act = Lambda.lambda
+  type act = Lambda.block
 
   type location = Location.t
   let no_location = Location.none
@@ -2081,8 +2131,7 @@ module SArg = struct
   let make_const loc i = Lconst (Const_base (Const_int i), loc)
   let make_isout loc h arg = Lprim (Pisout, [h ; arg], loc)
   let make_isin loc h arg = Lprim (Pnot,[make_isout loc h arg], loc)
-  let make_if loc cond ifso_loc ifso ifnot_loc ifnot =
-    Lifthenelse (cond, ifso_loc, ifso, ifnot_loc, ifnot, loc)
+  let make_if loc cond ifso ifnot = Lifthenelse (cond, ifso, ifnot, loc)
   let make_switch loc arg cases acts =
     let l = ref [] in
     for i = Array.length cases-1 downto 0 do
@@ -2092,7 +2141,8 @@ module SArg = struct
     Lswitch(arg,
             {sw_numconsts = Array.length cases ; sw_consts = !l ;
              sw_numblocks = 0 ; sw_blocks =  []  ;
-             sw_failaction = None}, loc)
+             sw_failaction = None},
+            loc)
   let make_catch lam loc = make_catch_delayed loc lam
   let make_exit = make_exit
 
@@ -2524,7 +2574,7 @@ let combine_constant loc arg cst partial ctx def
    the clauses of stringswitch  are sorted with duplicates removed.
    This partly applies to the native code compiler, which requires
    no duplicates *)
-        let const_lambda_list = sort_lambda_list const_lambda_list in
+        let const_lambda_list = Tests.sort const_lambda_list in
         let sw =
           List.map
             (fun ((_cloc, c),(loc,act)) -> match c with

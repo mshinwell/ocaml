@@ -564,28 +564,28 @@ let rec lam ppf = function
       let switch ppf sw =
         let spc = ref false in
         List.iter
-         (fun (n, l, loc) ->
+         (fun (n,act) ->
            if !spc then fprintf ppf "@ " else spc := true;
            fprintf ppf "@[<hv 1>case int %i:%a@ %a@]"
              n
-             print_loc loc
-             lam l)
+             print_loc act.block_loc
+             lam act.expr)
          sw.sw_consts;
         List.iter
-          (fun (n, l, loc) ->
+          (fun (n, act) ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>case tag %i:%a@ %a@]"
               n
-              print_loc loc
-              lam l)
+              print_loc act.block_loc
+              lam act.expr)
           sw.sw_blocks ;
         begin match sw.sw_failaction with
         | None  -> ()
-        | Some (l, loc) ->
+        | Some act ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>default:%a@ %a@]"
-              print_loc loc
-              lam l
+              print_loc act.block_loc
+              lam act.expr
         end in
       fprintf ppf
        "@[<1>(%s%a %a@ @[<v 0>%a@])@]"
@@ -596,19 +596,19 @@ let rec lam ppf = function
       let switch ppf cases =
         let spc = ref false in
         List.iter
-         (fun (s, l, loc) ->
+         (fun (s, act) ->
            if !spc then fprintf ppf "@ " else spc := true;
            fprintf ppf "@[<hv 1>case \"%s\":%a@ %a@]"
              (String.escaped s)
-             print_loc loc
-             lam l)
+             print_loc act.block_loc
+             lam act.expr)
           cases;
         begin match default with
-        | Some (default, loc) ->
+        | Some default ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>default:%a@ %a@]"
-              print_loc loc
-              lam default
+              print_loc default.block_loc
+              lam default.expr
         | None -> ()
         end in
       fprintf ppf
@@ -619,7 +619,7 @@ let rec lam ppf = function
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(exit@ %d%a)@]" i lams ls;
-  | Lstaticcatch(lbody, (i, vars), lhandler, loc) ->
+  | Lstaticcatch(lbody, (i, vars), lhandler) ->
       fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%d%a%a)@ %a)@]"
         lam lbody i
         (fun ppf vars ->
@@ -628,33 +628,41 @@ let rec lam ppf = function
              vars
         )
         vars
-        print_loc loc
-        lam lhandler
-  | Ltrywith(lbody, param, lhandler, loc) ->
-      fprintf ppf "@[<2>(try%a@ %a@;<1 -1>with %a@ %a)@]"
-        print_loc loc
-        lam lbody Ident.print param lam lhandler
-  | Lifthenelse(lcond, ifso_loc, lif, ifnot_loc, lelse, loc) ->
+        print_loc lhandler.block_loc
+        lam lhandler.expr
+  | Ltrywith(lbody, param, lhandler) ->
+      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a%a)@]"
+        lam lbody
+        Ident.print param
+        print_loc lhandler.block_loc
+        lam lhandler.expr
+  | Lifthenelse(lcond, lif, lelse, loc) ->
       fprintf ppf "@[<2>(if%a@ %a%a@ %a%a%a@ %a%a%a)@]"
         print_loc_opening loc
         lam lcond
-        print_loc_opening ifso_loc
-        lam lif
+        print_loc_opening lif.block_loc
+        lam lif.expr
         print_loc_closing ()
-        print_loc_opening ifnot_loc
-        lam lelse
+        print_loc_opening lelse.block_loc
+        lam lelse.expr
         print_loc_closing ()
         print_loc_closing ()
   | Lsequence(l1, l2) ->
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" lam l1 sequence l2
   | Lwhile(lcond, lbody, loc) ->
-      fprintf ppf "@[<2>(while%a@ %a@ %a)@]" print_loc loc lam lcond lam lbody
+      fprintf ppf "@[<2>(while%a@ %a@ %a%a)@]"
+        print_loc loc
+        lam lcond
+        print_loc lbody.block_loc
+        lam lbody.expr
   | Lfor(param, lo, hi, dir, body, loc) ->
-      fprintf ppf "@[<2>(for%a %a@ %a@ %s@ %a@ %a)@]"
+      fprintf ppf "@[<2>(for%a %a@ %a@ %s@ %a@ %a%a)@]"
        print_loc loc
        Ident.print param lam lo
        (match dir with Upto -> "to" | Downto -> "downto")
-       lam hi lam body
+       lam hi
+       print_loc body.block_loc
+       lam body.expr
   | Lassign(id, expr) ->
       fprintf ppf "@[<2>(assign@ %a@ %a)@]" Ident.print id lam expr
   | Lsend (k, met, obj, largs, loc) ->

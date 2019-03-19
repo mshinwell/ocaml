@@ -256,6 +256,14 @@ type function_attribute = {
   stub: bool;
 }
 
+(** A [Location.t] value as the final argument to one of the [lambda]
+    constructors refers to the location of the whole construct.
+
+    Locations are provided:
+    - at jump targets;
+    - at operations (constants, primitives, etc.);
+    - at the start of conditional expressions.
+*)
 type lambda =
     Lvar of Ident.t
   | Lconst of structured_constant * Location.t
@@ -267,22 +275,23 @@ type lambda =
   | Lswitch of lambda * lambda_switch * Location.t
 (* switch on strings, clauses are sorted by string order,
    strings are pairwise distinct *)
-  | Lstringswitch of
-      lambda * (string * lambda * Location.t) list
-        * (lambda * Location.t) option * Location.t
+  | Lstringswitch of lambda * (string * block) list * block option * Location.t
   | Lstaticraise of int * lambda list
-  | Lstaticcatch of
-      lambda * (int * (Ident.t * value_kind) list) * lambda * Location.t
-  | Ltrywith of lambda * Ident.t * lambda * Location.t
-  | Lifthenelse of
-      lambda * Location.t * lambda * Location.t * lambda * Location.t
+  | Lstaticcatch of lambda * (int * (Ident.t * value_kind) list) * block
+  | Ltrywith of lambda * Ident.t * block
+  | Lifthenelse of lambda * block * block * Location.t
   | Lsequence of lambda * lambda
-  | Lwhile of lambda * lambda * Location.t
-  | Lfor of Ident.t * lambda * lambda * direction_flag * lambda * Location.t
+  | Lwhile of lambda * block * Location.t
+  | Lfor of Ident.t * lambda * lambda * direction_flag * block * Location.t
   | Lassign of Ident.t * lambda
   | Lsend of meth_kind * lambda * lambda * lambda list * Location.t
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+
+and block = {
+  block_loc : Location.t;
+  expr : lambda;
+}
 
 and lfunction =
   { kind: function_kind;
@@ -302,10 +311,10 @@ and lambda_apply =
 
 and lambda_switch =
   { sw_numconsts: int;                           (* Number of integer cases *)
-    sw_consts: (int * lambda * Location.t) list; (* Integer cases *)
+    sw_consts: (int * block) list;               (* Integer cases *)
     sw_numblocks: int;                           (* Number of tag block cases *)
-    sw_blocks: (int * lambda * Location.t) list; (* Tag block cases *)
-    sw_failaction : (lambda * Location.t) option}(* Action to take if failure *)
+    sw_blocks: (int * block) list;               (* Tag block cases *)
+    sw_failaction : block option}                (* Action to take if failure *)
 and lambda_event =
   { lev_loc: Location.t;
     lev_kind: lambda_event_kind;
