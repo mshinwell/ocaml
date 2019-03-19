@@ -3164,7 +3164,7 @@ let rec comp_match_handlers comp_fun partial ctx arg first_match
   | rem ->
       let rec c_rec body_loc body total_body rem : Lambda.block * _ =
         match rem with
-        | [] -> (body_loc, body), total_body
+        | [] -> body, total_body
         (* Hum, -1 means never taken
         | (-1,pm)::rem -> c_rec body total_body rem *)
         | (i,pm)::rem ->
@@ -3546,17 +3546,21 @@ let simple_for_let loc param pat body body_loc =
 let rec map_return f = function
   | Llet (str, k, id, l1, l2) -> Llet (str, k, id, l1, map_return f l2)
   | Lletrec (l1, l2) -> Lletrec (l1, map_return f l2)
-  | Lifthenelse (lcond, ifso_loc, lthen, ifnot_loc, lelse, loc) ->
-      Lifthenelse (lcond, ifso_loc, map_return f lthen,
-        ifnot_loc, map_return f lelse, loc)
+  | Lifthenelse (lcond, lthen, lelse, loc) ->
+      Lifthenelse (lcond, map_return_block f lthen, map_return_block f lelse,
+        loc)
   | Lsequence (l1, l2) -> Lsequence (l1, map_return f l2)
   | Levent (l, ev) -> Levent (map_return f l, ev)
-  | Ltrywith (l1, id, l2, loc) ->
-      Ltrywith (map_return f l1, id, map_return f l2, loc)
-  | Lstaticcatch (l1, b, l2, loc) ->
-      Lstaticcatch (map_return f l1, b, map_return f l2, loc)
+  | Ltrywith (l1, id, l2) ->
+      Ltrywith (map_return f l1, id, map_return_block f l2)
+  | Lstaticcatch (l1, b, l2) ->
+      Lstaticcatch (map_return f l1, b, map_return_block f l2)
   | Lstaticraise _ | Lprim(Praise _, _, _) as l -> l
   | l -> f l
+and map_return_block f (block : Lambda.block) : Lambda.block =
+  { block_loc = block.block_loc;
+    expr = map_return f block.expr;
+  }
 
 (* The 'opt' reference indicates if the optimization is worthy.
 
