@@ -2969,8 +2969,12 @@ let combine_array loc arg kind partial ctx def
       call_switcher loc
         ~default (Lvar newvar)
         0 max_int len_lambda_list in
-    bind
-      Alias newvar (Lprim(Parraylength kind, [arg], loc)) switch
+    let expr =
+      bind Alias newvar (Lprim(Parraylength kind, [arg], loc)) switch.expr
+    in
+    { block_loc = loc;
+      expr;
+    }
   in
   block, jumps_union local_jumps total1
 
@@ -3013,7 +3017,6 @@ let rec event_branch repr lam =
 exception Unused
 
 let compile_list compile_fun division =
-
   let rec c_rec totals = function
   | [] -> [], jumps_unions totals, []
   | (key, cell) :: rem ->
@@ -3021,51 +3024,65 @@ let compile_list compile_fun division =
       | [] -> c_rec totals rem
       | _  ->
           try
-            let ((loc_and_lambda1 : Location.t * lambda), total1) =
-              compile_fun cell.ctx cell.pm
-            in
+            let (block1, total1) = compile_fun cell.ctx cell.pm in
             let c_rem, total, new_pats =
               c_rec
                 (jumps_map ctx_combine total1::totals) rem in
-            ((key, loc_and_lambda1)::c_rem), total, (cell.pat::new_pats)
+            ((key, block1)::c_rem), total, (cell.pat::new_pats)
           with
           | Unused -> c_rec totals rem
       end in
   c_rec [] division
 
-
-let compile_orhandlers compile_fun (loc1, lambda1) total1 ctx to_catch =
-  let rec do_rec loc_r r total_r = function
-    | [] -> (loc_r, r), total_r
-    | (mat,i,vars,pm)::rem ->
+let compile_orhandlers compile_fun (block1 : Lambda.block) total1 ctx to_catch =
+  let rec do_rec (r : Lambda.block) (total_r : jumps_union) = function
+    | [] -> r, total_r
+    | (mat, i, vars, pm)::rem ->
         begin try
           let ctx = select_columns mat ctx in
-          let (loc_i, handler_i), total_i =
-            compile_fun ctx pm in
-          match raw_action r with
-          | Lstaticraise (j,args) ->
+          let handler_i, total_i = compile_fun ctx pm in
+          let loc_i = handler_i.block_loc in
+          match raw_action r.expr with
+          | Lstaticraise (j, args) ->
               if i=j then
-                (loc_i,
+                let r =
                   List.fold_right2 (bind_with_value_kind Alias)
-                    vars args handler_i),
-                jumps_map (ctx_rshift_num (ncols mat)) total_i
+                    vars args handler_i
+                in
+                let total_r =
+                  jumps_map (ctx_rshift_num (ncols mat)) total_i
+                in
+                r, total_r
               else
-                do_rec loc_r r total_r rem
+                do_rec r total_r rem
           | _ ->
-              do_rec
-                loc_i
-                (Lstaticcatch (r,(i,vars), handler_i, loc_i))
-                (jumps_union
-                   (jumps_remove i total_r)
-                   (jumps_map (ctx_rshift_num (ncols mat)) total_i))
-              rem
+              let r =
+                { block_loc = loc_i;
+                  expr = Lstaticcatch (r.expr, (i, vars), handler_i);
+                }
+              in
+              let total_r =
+                jumps_union
+                  (jumps_remove i total_r)
+                  (jumps_map (ctx_rshift_num (ncols mat)) total_i)
+              in
+              do_rec r total_r rem
         with
         | Unused ->
-            do_rec loc_r (Lstaticcatch (r, (i,vars), lambda_unit loc_r, loc_r))
-              total_r rem
-        end in
-  do_rec loc1 lambda1 total1 to_catch
-
+            let handler =
+              { block_loc = r.block_loc;
+                expr = lambda_unit r.block_loc;
+              }
+            in
+            let r =
+              { block_loc = r.block_loc;
+                expr = Lstaticcatch (r.expr, (i, vars), handler);
+              }
+            in
+            do_rec r total_r rem
+        end
+  in
+  do_rec block1 total1 to_catch
 
 let compile_test ~fail_loc compile_fun partial divide combine ctx to_match
       : Lambda.block * jumps =
@@ -3094,34 +3111,40 @@ let rec approx_present v = function
   | Lvar vv -> Ident.same v vv
   | _ -> true
 
-let rec lower_bind v arg lam = match lam with
-| Lifthenelse (cond, ifso_loc, ifso, ifnot_loc, ifnot, loc) ->
-    let pcond = approx_present v cond
-    and pso = approx_present v ifso
-    and pnot = approx_present v ifnot in
-    begin match pcond, pso, pnot with
-    | false, false, false -> lam
-    | false, true, false ->
-        Lifthenelse (cond, ifso_loc, lower_bind v arg ifso,
-          ifnot_loc, ifnot, loc)
-    | false, false, true ->
-        Lifthenelse (cond, ifso_loc, ifso,
-          ifnot_loc, lower_bind v arg ifnot, loc)
-    | _,_,_ -> bind Alias v arg lam
-    end
-| Lswitch (ls,({sw_consts=[i,act,loc'] ; sw_blocks = []} as sw), loc)
-    when not (approx_present v ls) ->
-      Lswitch (ls, {sw with sw_consts = [i,lower_bind v arg act,loc']}, loc)
-| Lswitch (ls,({sw_consts=[] ; sw_blocks = [i,act,loc']} as sw), loc)
-    when not (approx_present v ls) ->
-      Lswitch (ls, {sw with sw_blocks = [i,lower_bind v arg act,loc']}, loc)
-| Llet (Alias, k, vv, lv, l) ->
-    if approx_present v lv then
+let rec lower_bind v arg lam =
+  match lam with
+  | Lifthenelse (cond, ifso, ifnot, loc) ->
+      let pcond = approx_present v cond
+      and pso = approx_present v ifso.expr
+      and pnot = approx_present v ifnot.expr in
+      begin match pcond, pso, pnot with
+      | false, false, false -> lam
+      | false, true, false ->
+          Lifthenelse (cond, lower_bind_block v arg ifso, ifnot, loc)
+      | false, false, true ->
+          Lifthenelse (cond, ifso, lower_bind_block v arg ifnot, loc)
+      | _,_,_ -> bind Alias v arg lam
+      end
+  | Lswitch (ls, ({sw_consts = [i, act]; sw_blocks = []} as sw), loc)
+        when not (approx_present v ls) ->
+      let act = lower_bind_block v arg act in
+      Lswitch (ls, {sw with sw_consts = [i, act]}, loc)
+  | Lswitch (ls, ({sw_consts = []; sw_blocks = [i, act]} as sw), loc)
+        when not (approx_present v ls) ->
+      let act = lower_bind_block v arg act in
+      Lswitch (ls, {sw with sw_blocks = [i, act]}, loc)
+  | Llet (Alias, k, vv, lv, l) ->
+      if approx_present v lv then
+        bind Alias v arg lam
+      else
+        Llet (Alias, k, vv, lv, lower_bind v arg l)
+  | _ ->
       bind Alias v arg lam
-    else
-      Llet (Alias, k, vv, lv, lower_bind v arg l)
-| _ ->
-    bind Alias v arg lam
+and lower_bind_block v arg (block : Lambda.block) : Lambda.block =
+  let expr = lower_bind v arg block.expr in
+  { block_loc = block.block_loc;
+    expr;
+  }
 
 let bind_check str v arg lam = match str,arg with
 | _, Lvar _ ->bind str v arg lam
