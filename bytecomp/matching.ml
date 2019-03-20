@@ -3417,16 +3417,25 @@ let for_function loc repr param (pat_act_list : pat_act_list) partial =
   compile_matching loc repr (partial_function loc) param pat_act_list partial
 
 (* In the following two cases, exhaustiveness info is not available! *)
-let for_trywith loc param (pat_act_list : pat_act_list) =
-  compile_matching loc None
-    (fun () ->
-      let expr =
-        (* The [Location.none] ensures that the try-with itself does not appear
-           as a "reraise" frame in any backtrace. *)
-        Lprim(Praise (Raise_reraise (Some Location.none)), [param], loc)
-      in
-      Lambda.block loc expr)
-    param pat_act_list Partial
+let for_trywith param (pat_act_list : pat_act_list) =
+  let loc =
+    (* The location is supposed to point just after the "with". *)
+    match pat_act_list with
+    | (_pat, block)::_ -> block.block_loc
+    | [] -> Location.none
+  in
+  let handler =
+    compile_matching loc None
+      (fun () ->
+        let expr =
+          (* The [Location.none] ensures that the try-with itself does not
+             appear as a "reraise" frame in any backtrace. *)
+          Lprim(Praise (Raise_reraise (Some Location.none)), [param], loc)
+        in
+        Lambda.block loc expr)
+      param pat_act_list Partial
+  in
+  Lambda.block loc handler
 
 let simple_for_let loc param pat body body_loc =
   let act = Lambda.block body_loc body in
@@ -3746,5 +3755,8 @@ let bind_opt (v,eo) k = match eo with
 let for_multiple_match loc paraml pat_act_list partial =
   let v_paraml = List.map param_to_var paraml in
   let paraml = List.map (fun (v,_) -> Lvar v) v_paraml in
-  List.fold_right bind_opt v_paraml
-    (do_for_multiple_match loc paraml pat_act_list partial)
+  let expr =
+    List.fold_right bind_opt v_paraml
+      (do_for_multiple_match loc paraml pat_act_list partial)
+  in
+  Lambda.block loc expr

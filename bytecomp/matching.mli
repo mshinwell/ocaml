@@ -25,12 +25,12 @@ val for_function:
         (pattern * block) list ->
         partial -> lambda
 val for_trywith:
-        Location.t -> lambda -> (pattern * block) list -> lambda
+        lambda -> (pattern * block) list -> block
 val for_let:
         Location.t -> lambda -> pattern -> lambda -> Location.t -> lambda
 val for_multiple_match:
         Location.t -> lambda list -> (pattern * block) list
-        -> partial -> lambda
+        -> partial -> block
 
 val for_tupled_function:
         Location.t -> Ident.t list ->
