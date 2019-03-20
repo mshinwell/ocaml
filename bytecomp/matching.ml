@@ -830,22 +830,32 @@ let get_group p = match p.pat_desc with
 |  _ -> fatal_error "Matching.get_group"
 
 (* Check anticipated failure... *)
-let rec is_guarded = function
+let rec is_guarded_expr (expr : Lambda.lambda) =
+  match expr with
   | Lifthenelse(_cond, _ifso, { expr = Lstaticraise (0,[]); _ }, _loc) ->
       true
-  | Llet(_str, _k, _id, _lam, body) -> is_guarded body
-  | Levent(lam, _ev) -> is_guarded lam
+  | Llet(_str, _k, _id, _lam, body) -> is_guarded_expr body
+  | Levent(lam, _ev) -> is_guarded_expr lam
   | _ -> false
 
+let is_guarded (action : Lambda.block) =
+  is_guarded_expr action.expr
+
 (* ...and substitute its final value. *)
-let rec patch_guarded patch = function
+let rec patch_guarded_expr (patch : Lambda.block) (expr : Lambda.lambda) =
+  match expr with
   | Lifthenelse (cond, ifso, { expr = Lstaticraise (0,[]); }, loc) ->
       Lifthenelse (cond, ifso, patch, loc)
   | Llet(str, k, id, lam, body) ->
-      Llet (str, k, id, lam, patch_guarded patch body)
+      Llet (str, k, id, lam, patch_guarded_expr patch body)
   | Levent(lam, ev) ->
-      Levent (patch_guarded patch lam, ev)
+      Levent (patch_guarded_expr patch lam, ev)
   | _ -> fatal_error "Matching.patch_guarded"
+
+let patch_guarded (patch : Lambda.block) (action : Lambda.block) =
+  { block_loc = action.block_loc;
+    expr = patch_guarded_expr patch action.expr;
+  }
 
 let is_or p = match p.pat_desc with
 | Tpat_or _ -> true
@@ -855,7 +865,7 @@ let is_or p = match p.pat_desc with
 
 (* Conditions for appending to the Or matrix *)
 let conda p q = not (may_compat p q)
-and condb act ps qs =  not (is_guarded act.expr) && Parmatch.le_pats qs ps
+and condb act ps qs =  not (is_guarded act) && Parmatch.le_pats qs ps
 
 let or_ok p ps (l : pats_act_list) =
   List.for_all
@@ -2980,7 +2990,7 @@ let combine_array loc arg kind partial ctx def
 
 (* Insertion of debugging events *)
 
-let rec event_branch repr lam =
+let rec event_branch_expr repr (lam : Lambda.lambda) =
   begin match lam, repr with
     (_, None) ->
       lam
@@ -2991,7 +3001,7 @@ let rec event_branch repr lam =
                     lev_repr = repr;
                     lev_env = ev.lev_env})
   | (Llet(str, k, id, lam, body), _) ->
-      Llet(str, k, id, lam, event_branch repr body)
+      Llet(str, k, id, lam, event_branch_expr repr body)
   | Lstaticraise _,_ -> lam
   | (_, Some _) ->
       Printlambda.lambda Format.str_formatter lam ;
@@ -2999,6 +3009,10 @@ let rec event_branch repr lam =
         ("Matching.event_branch: "^Format.flush_str_formatter ())
   end
 
+let event_branch repr (block : Lambda.block) =
+  { block_loc = block.block_loc;
+    expr = event_branch_expr repr block.expr;
+  }
 
 (*
    This exception is raised when the compiler cannot produce code
@@ -3034,7 +3048,8 @@ let compile_list compile_fun division =
       end in
   c_rec [] division
 
-let compile_orhandlers compile_fun (block1 : Lambda.block) total1 ctx to_catch =
+let compile_orhandlers compile_fun (block1 : Lambda.block) total1 ctx to_catch
+      : Lambda.block * jumps_union =
   let rec do_rec (r : Lambda.block) (total_r : jumps_union) = function
     | [] -> r, total_r
     | (mat, i, vars, pm)::rem ->
@@ -3146,23 +3161,34 @@ and lower_bind_block v arg (block : Lambda.block) : Lambda.block =
     expr;
   }
 
-let bind_check str v arg lam = match str,arg with
-| _, Lvar _ ->bind str v arg lam
-| Alias,_ -> lower_bind v arg lam
-| _,_     -> bind str v arg lam
+let bind_check str v arg (block : Lambda.block) =
+  let expr =
+    match str, arg with
+    | _, Lvar _ -> bind str v arg block.expr
+    | Alias, _ -> lower_bind v arg block.expr
+    | _, _ -> bind str v arg block.expr
+  in
+  { block_loc = block.block_loc;
+    expr;
+  }
 
-let comp_exit loc ctx m = match m.default with
-| (_,i)::_ -> (loc, Lstaticraise (i,[])), jumps_singleton i ctx
-| _        -> fatal_error "Matching.comp_exit"
+let comp_exit block_loc ctx m =
+  match m.default with
+  | (_, i)::_ ->
+    let block =
+      { block_loc;
+        expr = Lstaticraise (i, []);
+      }
+    in
+    block, jumps_singleton i ctx
+  | _ -> fatal_error "Matching.comp_exit"
 
-
-
-let rec comp_match_handlers comp_fun partial ctx arg first_match
-      next_matchs : Lambda.block * jumps =
-  match next_matchs with
+let rec comp_match_handlers comp_fun partial ctx arg ~first_match
+      ~next_matches : Lambda.block * jumps =
+  match next_matches with
   | [] -> comp_fun partial ctx arg first_match
   | rem ->
-      let rec c_rec body_loc body total_body rem : Lambda.block * _ =
+      let rec c_rec (body : Lambda.block) total_body rem : Lambda.block * _ =
         match rem with
         | [] -> body, total_body
         (* Hum, -1 means never taken
@@ -3170,32 +3196,46 @@ let rec comp_match_handlers comp_fun partial ctx arg first_match
         | (i,pm)::rem ->
             let ctx_i,total_rem = jumps_extract i total_body in
             begin match ctx_i with
-            | [] -> c_rec body_loc body total_body rem
+            | [] -> c_rec body total_body rem
             | _ ->
                 try
-                  let (li_loc, li), total_i =
+                  let li, total_i =
                     comp_fun
                       (match rem with [] -> partial | _ -> Partial)
-                      ctx_i arg pm in
-                  c_rec li_loc
-                    (Lstaticcatch (body,(i,[]),li,li_loc))
-                    (jumps_union total_i total_rem)
-                    rem
+                      ctx_i arg pm
+                  in
+                  let new_body =
+                    { block_loc = body.block_loc;
+                      expr = Lstaticcatch (body.expr, (i, []), li);
+                    }
+                  in
+                  c_rec new_body (jumps_union total_i total_rem) rem
                 with
                 | Unused ->
-                    c_rec body_loc
-                      (Lstaticcatch (body, (i, []), lambda_unit body_loc,
-                        body_loc))
-                      total_rem rem
-            end in
-   try
-      let (first_loc, first_lam), total =
-        comp_fun Partial ctx arg first_match
+                    let unit =
+                      { block_loc = body.block_loc;
+                        expr = lambda_unit body.block_loc;
+                      }
+                    in
+                    let new_body =
+                      { block_loc = body.block_loc;
+                        expr = Lstaticcatch (body.expr, (i, []), unit);
+                      }
+                    in
+                    c_rec new_body total_rem rem
+            end
       in
-      c_rec first_loc first_lam total rem
-   with Unused -> match next_matchs with
-   | [] -> raise Unused
-   | (_,x)::xs ->  comp_match_handlers comp_fun partial ctx arg x xs
+      try
+         let first_lam, total =
+           comp_fun Partial ctx arg first_match
+         in
+         c_rec first_lam total rem
+      with Unused ->
+        match next_matches with
+        | [] -> raise Unused
+        | (_, first_match)::next_matches ->
+            comp_match_handlers comp_fun partial ctx arg
+              ~first_match ~next_matches
 
 (* To find reasonable names for variables *)
 
@@ -3223,34 +3263,39 @@ let arg_to_var arg cls = match arg with
       ctx=a context
       m=a pattern matching
 
-   Output: a lambda term, a jump summary {..., exit number -> context, .. }
+   Output: a lambda block, a jump summary {..., exit number -> context, .. }
 *)
 
-let rec compile_match loc repr partial ctx m = match m with
-| { cases = []; args = [] } -> comp_exit loc ctx m
-| { cases = ([], action, action_loc) :: rem } ->
-    if is_guarded action then begin
-      let ((action_loc, new_action), total) =
-        compile_match loc None partial ctx { m with cases = rem }
+let rec compile_match loc repr partial ctx (m : pattern_matching)
+      : Lambda.block * jumps =
+  match m with
+  | { cases = []; args = [] } -> comp_exit loc ctx m
+  | { cases = ([], action) :: next_matches } ->
+      if is_guarded action then begin
+        let (new_action, total) =
+          compile_match loc None partial ctx { m with cases = next_matches }
+        in
+        let new_action = event_branch repr (patch_guarded new_action action) in
+        new_action, total
+      end else
+        let action = event_branch repr action in
+        action, jumps_empty
+  | { args = (arg, str, _arg_loc)::argl } ->
+      let v,newarg = arg_to_var arg m.cases in
+      let first_match, next_matches =
+        split_precompile loc (Some v)
+          { m with args = (newarg, Alias, loc) :: argl }
       in
-      let new_action = event_branch repr (patch_guarded new_action action) in
-      (action_loc, new_action), total
-    end else
-      let action = event_branch repr action in
-      (action_loc, action), jumps_empty
-| { args = (arg, str, _arg_loc)::argl } ->
-    let v,newarg = arg_to_var arg m.cases in
-    let first_match,rem =
-      split_precompile loc (Some v)
-        { m with args = (newarg, Alias, loc) :: argl } in
-    let ((action_loc, action), total) =
-      comp_match_handlers
-        ((if dbg then do_compile_matching_pr else do_compile_matching) loc repr)
-        partial ctx newarg first_match rem in
-    let action = bind_check str v arg action in
-    (action_loc, action), total
-| _ -> assert false
-
+      let (action, total) =
+        let comp_fun =
+          if dbg then do_compile_matching_pr else do_compile_matching
+        in
+        comp_match_handlers (comp_fun loc repr)
+          partial ctx newarg ~first_match ~next_matches
+      in
+      let action = bind_check str v arg action in
+      action, total
+  | _ -> assert false
 
 (* verbose version of do_compile_matching, for debug *)
 
@@ -3325,8 +3370,8 @@ match pmh with
 and compile_no_test loc divide up_ctx repr partial ctx to_match
       : Lambda.block * jumps =
   let {pm=this_match ; ctx=this_ctx } = divide ctx to_match in
-  let (_loc, lam), total = compile_match loc repr partial this_ctx this_match in
-  (loc, lam), jumps_map up_ctx total
+  let block, total = compile_match loc repr partial this_ctx this_match in
+  block, jumps_map up_ctx total
 
 
 
@@ -3381,20 +3426,21 @@ let is_lazy_pat = function
 
 let is_lazy p = find_in_pat is_lazy_pat p
 
-let have_mutable_field p = match p with
-| Tpat_record (lps,_) ->
-    List.exists
-      (fun (_,lbl,_) ->
-        match lbl.Types.lbl_mut with
-        | Mutable -> true
-        | Immutable -> false)
-      lps
-| Tpat_alias _ | Tpat_variant _ | Tpat_lazy _
-| Tpat_tuple _|Tpat_construct _ | Tpat_array _
-| Tpat_or _
-| Tpat_constant _ | Tpat_var _ | Tpat_any
-  -> false
-| Tpat_exception _ -> assert false
+let have_mutable_field p =
+  match p with
+  | Tpat_record (lps,_) ->
+      List.exists
+        (fun (_,lbl,_) ->
+          match lbl.Types.lbl_mut with
+          | Mutable -> true
+          | Immutable -> false)
+        lps
+  | Tpat_alias _ | Tpat_variant _ | Tpat_lazy _
+  | Tpat_tuple _|Tpat_construct _ | Tpat_array _
+  | Tpat_or _
+  | Tpat_constant _ | Tpat_var _ | Tpat_any
+    -> false
+  | Tpat_exception _ -> assert false
 
 let is_mutable p = find_in_pat have_mutable_field p
 
@@ -3409,8 +3455,8 @@ let check_partial is_mutable is_lazy pat_or_pats_act_list = function
       if
         pat_or_pats_act_list = [] ||  (* allow empty case list *)
         List.exists
-          (fun (pat_or_pats, lam, _loc) ->
-            is_mutable pat_or_pats && (is_guarded lam || is_lazy pat_or_pats))
+          (fun (pat_or_pats, act) ->
+            is_mutable pat_or_pats && (is_guarded act || is_lazy pat_or_pats))
           pat_or_pats_act_list
       then Partial
       else Total
@@ -3426,18 +3472,15 @@ let check_partial (pat_act_list : pat_act_list) =
 let start_ctx loc n = [{left=[] ; right = omegas loc n}]
 
 let check_total loc total lambda i handler_fun =
-  if jumps_is_empty total then
-    lambda
-  else begin
-    Lstaticcatch(lambda, (i,[]), handler_fun(), loc)
-  end
+  if jumps_is_empty total then lambda
+  else Lstaticcatch (lambda, (i,[]), handler_fun ())
 
 let pats_act_list_of_pat_act_list (pat_act_list : pat_act_list) =
   List.map (fun (pat, act) -> ([pat], act))
     pat_act_list
 
-let compile_matching loc repr handler_fun arg (pat_act_list : pat_act_list)
-      partial : lambda =
+let compile_matching loc repr (handler_fun : unit -> Lambda.block)
+      arg (pat_act_list : pat_act_list) partial : Lambda.lambda =
   let partial = check_partial pat_act_list partial in
   let cases = pats_act_list_of_pat_act_list pat_act_list in
   match partial with
@@ -3445,39 +3488,47 @@ let compile_matching loc repr handler_fun arg (pat_act_list : pat_act_list)
       let raise_num = next_raise_count () in
       let pm =
         { cases;
-          args = [arg, Strict, loc] ;
-          default = [[[omega loc]],raise_num]} in
+          args = [arg, Strict, loc];
+          default = [[[omega loc]], raise_num];
+        }
+      in
       begin try
-        let ((loc, lambda), total) =
+        let action, total =
           compile_match loc repr partial (start_ctx loc 1) pm
         in
-        check_total loc total lambda raise_num handler_fun
+        check_total loc total action.expr raise_num handler_fun
       with
       | Unused -> assert false (* ; handler_fun() *)
       end
   | Total ->
       let pm =
         { cases;
-          args = [arg, Strict, loc] ;
-          default = []} in
-      let ((_loc, lambda), total) =
+          args = [arg, Strict, loc];
+          default = [];
+        }
+      in
+      let action, total =
         compile_match loc repr partial (start_ctx loc 1) pm
       in
-      assert (jumps_is_empty total) ;
-      lambda
+      assert (jumps_is_empty total);
+      action.expr
 
-
-let partial_function loc () =
+let partial_function loc () : Lambda.block =
   let slot =
     transl_extension_path loc
       Env.initial_safe_string Predef.path_match_failure
   in
-  let (fname, line, char) = Location.get_pos_info loc.Location.loc_start in
-  Lprim(Praise (Raise_regular None), [Lprim(Pmakeblock(0, Immutable, None),
-          [slot; Lconst(Const_block(0,
-                   [Const_base(Const_string (fname, None));
-                    Const_base(Const_int line);
-                    Const_base(Const_int char)]), loc)], loc)], loc)
+  let fname, line, char = Location.get_pos_info loc.Location.loc_start in
+  let expr =
+    Lprim(Praise (Raise_regular None), [Lprim(Pmakeblock(0, Immutable, None),
+            [slot; Lconst(Const_block(0,
+                     [Const_base(Const_string (fname, None));
+                      Const_base(Const_int line);
+                      Const_base(Const_int char)]), loc)], loc)], loc)
+  in
+  { block_loc = loc;
+    expr;
+  }
 
 let for_function loc repr param (pat_act_list : pat_act_list) partial =
   compile_matching loc repr (partial_function loc) param pat_act_list partial
@@ -3485,14 +3536,24 @@ let for_function loc repr param (pat_act_list : pat_act_list) partial =
 (* In the following two cases, exhaustiveness info is not available! *)
 let for_trywith loc param (pat_act_list : pat_act_list) =
   compile_matching loc None
-    (* The [Location.none] ensures that the try-with itself does not appear
-       as a "reraise" frame in any backtrace. *)
-    (fun () -> Lprim(Praise (Raise_reraise (Some Location.none)), [param], loc))
+    (fun () ->
+      let expr =
+        (* The [Location.none] ensures that the try-with itself does not appear
+           as a "reraise" frame in any backtrace. *)
+        Lprim(Praise (Raise_reraise (Some Location.none)), [param], loc)
+      in
+      { block_loc = loc;
+        expr;
+      })
     param pat_act_list Partial
 
 let simple_for_let loc param pat body body_loc =
-  compile_matching loc None (partial_function loc) param [pat, body, body_loc]
-    Partial
+  let act =
+    { block_loc = body_loc;
+      expr = body;
+    }
+  in
+  compile_matching loc None (partial_function loc) param [pat, act] Partial
 
 
 (* Optimize binding of immediate tuples
