@@ -357,6 +357,11 @@ let default_function_attribute = {
 let default_stub_attribute =
   { default_function_attribute with stub = true }
 
+let block block_loc expr =
+  { block_loc;
+    expr;
+  }
+
 (* Build sharing keys *)
 (*
    Those keys are later compared with Stdlib.compare.

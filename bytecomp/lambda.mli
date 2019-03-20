@@ -288,7 +288,7 @@ type lambda =
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
 
-and block = {
+and block = private {
   block_loc : Location.t;
   expr : lambda;
 }
@@ -409,6 +409,10 @@ val shallow_map  : (lambda -> lambda) -> lambda -> lambda
 val bind : let_kind -> Ident.t -> lambda -> lambda -> lambda
 val bind_with_value_kind:
   let_kind -> (Ident.t * value_kind) -> lambda -> lambda -> lambda
+
+(** Construct a block given a location for the top of the block and an
+    expression. *)
+val block : Location.t -> lambda -> block
 
 val negate_integer_comparison : integer_comparison -> integer_comparison
 val swap_integer_comparison : integer_comparison -> integer_comparison
