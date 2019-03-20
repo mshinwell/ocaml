@@ -159,7 +159,7 @@ and operation =
   | Ccheckbound
 
 type expression =
-    Cconst_int of int * Debuginfo.t
+  | Cconst_int of int * Debuginfo.t
   | Cconst_natint of nativeint * Debuginfo.t
   | Cconst_float of float * Debuginfo.t
   | Cconst_symbol of string * Debuginfo.t
@@ -174,7 +174,7 @@ type expression =
   | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of block * block * block
+  | Cifthenelse of expression * block * block * Debuginfo.t
   | Cswitch of expression * int array * block array * Debuginfo.t
   | Ccatch of
       rec_flag
@@ -218,8 +218,14 @@ type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
 
+let block block_dbg expr =
+  { block_dbg;
+    expr;
+  }
+
 let ccatch (i, ids, e1, e2, dbg) =
-  Ccatch(Nonrecursive, [i, ids, e2, dbg], e1)
+  let handler = block dbg e2 in
+  Ccatch(Nonrecursive, [i, ids, handler], e1)
 
 let reset () =
   label_counter := 99

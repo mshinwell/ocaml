@@ -304,7 +304,9 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
   | Cconst_int (0, _) -> ifnot
   | Cconst_int (1, _) -> ifso
   | _ ->
-    Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+    let ifso = Cmm.block ifso_dbg ifso in
+    let ifnot = Cmm.block ifnot_dbg ifnot in
+    Cifthenelse(cond, ifso, ifnot, dbg)
 
 let mk_not dbg cmm =
   match cmm with
@@ -336,8 +338,8 @@ let mk_not dbg cmm =
 let create_loop body dbg =
   let cont = next_raise_count () in
   let call_cont = Cexit (cont, []) in
-  let body = Csequence (body, call_cont) in
-  Ccatch (Recursive, [cont, [], body, dbg], call_cont)
+  let body = Cmm.block dbg (Csequence (body, call_cont)) in
+  Ccatch (Recursive, [cont, [], body], call_cont)
 
 (* Turning integer divisions into multiply-high then shift.
    The [division_parameters] function is used in module Emit for
@@ -488,10 +490,9 @@ let rec div_int c1 c2 is_safe dbg =
       bind "divisor" c2 (fun c2 ->
         bind "dividend" c1 (fun c1 ->
           Cifthenelse(c2,
-                      dbg,
-                      Cop(Cdivi, [c1; c2], dbg),
-                      dbg,
-                      raise_symbol dbg "caml_exn_Division_by_zero",
+                      Cmm.block dbg (Cop(Cdivi, [c1; c2], dbg)),
+                      Cmm.block dbg (
+                        raise_symbol dbg "caml_exn_Division_by_zero"),
                       dbg)))
 
 let mod_int c1 c2 is_safe dbg =
@@ -528,10 +529,9 @@ let mod_int c1 c2 is_safe dbg =
       bind "divisor" c2 (fun c2 ->
         bind "dividend" c1 (fun c1 ->
           Cifthenelse(c2,
-                      dbg,
-                      Cop(Cmodi, [c1; c2], dbg),
-                      dbg,
-                      raise_symbol dbg "caml_exn_Division_by_zero",
+                      Cmm.block dbg (Cop(Cmodi, [c1; c2], dbg)),
+                      Cmm.block dbg (
+                        raise_symbol dbg "caml_exn_Division_by_zero"),
                       dbg)))
 
 (* Division or modulo on boxed integers.  The overflow case min_int / -1
@@ -551,8 +551,8 @@ let safe_divmod_bi mkop is_safe mkm1 c1 c2 bi dbg =
     && not (is_different_from (-1) c2)
     then
       Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int (-1, dbg)], dbg),
-        dbg, c,
-        dbg, mkm1 c1 dbg,
+        Cmm.block dbg c,
+        Cmm.block dbg (mkm1 c1 dbg),
         dbg)
     else
       c))
@@ -582,9 +582,12 @@ let test_bool dbg cmm =
 let box_float dbg c = Cop(Calloc, [alloc_float_header dbg; c], dbg)
 
 let map_ccatch f rec_flag handlers body =
-  let handlers = List.map
-      (fun (n, ids, handler, dbg) -> (n, ids, f handler, dbg))
-      handlers in
+  let handlers =
+    List.map (fun (n, ids, handler) ->
+        let handler = Cmm.block handler.block_dbg (f handler.expr) in
+        n, ids, handler)
+      handlers
+  in
   Ccatch(rec_flag, handlers, f body)
 
 let rec unbox_float dbg cmm =
@@ -592,20 +595,20 @@ let rec unbox_float dbg cmm =
   | Cop(Calloc, [Cblockheader (header, _); c], _) when header = float_header ->
       c
   | Clet(id, exp, body) -> Clet(id, exp, unbox_float dbg body)
-  | Cifthenelse(cond, ifso_dbg, e1, ifnot_dbg, e2, dbg) ->
-      Cifthenelse(cond,
-        ifso_dbg, unbox_float dbg e1,
-        ifnot_dbg, unbox_float dbg e2,
-        dbg)
+  | Cifthenelse(cond, e1, e2, dbg) ->
+      Cifthenelse(cond, unbox_float_block e1, unbox_float_block e2, dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_float dbg e2)
   | Cswitch(e, tbl, el, dbg') ->
-    Cswitch(e, tbl,
-      Array.map (fun (expr, dbg) -> unbox_float dbg expr, dbg) el, dbg')
+    Cswitch(e, tbl, Array.map (fun act -> unbox_float_block act) el, dbg')
   | Ccatch(rec_flag, handlers, body) ->
     map_ccatch (unbox_float dbg) rec_flag handlers body
-  | Ctrywith(e1, id, e2, dbg) ->
-      Ctrywith(unbox_float dbg e1, id, unbox_float dbg e2, dbg)
+  | Ctrywith(e1, id, e2) ->
+      Ctrywith(unbox_float dbg e1, id, unbox_float_block e2)
   | c -> Cop(Cload (Double_u, Immutable), [c], dbg)
+
+and unbox_float_block block =
+  let dbg = block.block_dbg in
+  Cmm.block dbg (unbox_float dbg block.expr)
 
 (* Complex *)
 
@@ -626,19 +629,14 @@ let rec remove_unit = function
   | Csequence(c, Cconst_pointer (1, _)) -> c
   | Csequence(c1, c2) ->
       Csequence(c1, remove_unit c2)
-  | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
-      Cifthenelse(cond,
-        ifso_dbg, remove_unit ifso,
-        ifnot_dbg,
-        remove_unit ifnot, dbg)
+  | Cifthenelse(cond, ifso, ifnot, dbg) ->
+      Cifthenelse(cond, remove_unit_block ifso, remove_unit_block ifnot, dbg)
   | Cswitch(sel, index, cases, dbg) ->
-      Cswitch(sel, index,
-        Array.map (fun (case, dbg) -> remove_unit case, dbg) cases,
-        dbg)
+      Cswitch(sel, index, Array.map remove_unit_block cases, dbg)
   | Ccatch(rec_flag, handlers, body) ->
       map_ccatch remove_unit rec_flag handlers body
-  | Ctrywith(body, exn, handler, dbg) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler, dbg)
+  | Ctrywith(body, exn, handler) ->
+      Ctrywith(remove_unit body, exn, remove_unit_block handler)
   | Clet(id, c1, c2) ->
       Clet(id, c1, remove_unit c2)
   | Cop(Capply _mty, args, dbg) ->
@@ -648,6 +646,9 @@ let rec remove_unit = function
   | Cexit (_,_) as c -> c
   | Ctuple [] as c -> c
   | c -> Csequence(c, Ctuple [])
+
+and remove_unit_block block =
+  Cmm.block block.block_dbg (remove_unit block.expr)
 
 (* Access to block fields *)
 
@@ -1127,21 +1128,17 @@ let rec unbox_int bi arg dbg =
     when alloc_matches_boxed_int bi ~hdr ~ops ->
       contents
   | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body dbg)
-  | Cifthenelse(cond, ifso_dbg, e1, ifnot_dbg, e2, dbg) ->
-      Cifthenelse(cond,
-        ifso_dbg, unbox_int bi e1 ifso_dbg,
-        ifnot_dbg, unbox_int bi e2 ifnot_dbg,
-        dbg)
+  | Cifthenelse(cond, e1, e2, dbg) ->
+      Cifthenelse(cond, unbox_int_block bi e1, unbox_int_block bi e2, dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
   | Cswitch(e, tbl, el, dbg') ->
       Cswitch(e, tbl,
-        Array.map (fun (e, dbg) -> unbox_int bi e dbg, dbg) el,
+        Array.map (fun act -> unbox_int_block bi act) el,
         dbg')
   | Ccatch(rec_flag, handlers, body) ->
       map_ccatch (fun e -> unbox_int bi e dbg) rec_flag handlers body
-  | Ctrywith(e1, id, e2, handler_dbg) ->
-      Ctrywith(unbox_int bi e1 dbg, id,
-        unbox_int bi e2 handler_dbg, handler_dbg)
+  | Ctrywith(e1, id, e2) ->
+      Ctrywith(unbox_int bi e1 dbg, id, unbox_int_block bi e2)
   | _ ->
       if size_int = 4 && bi = Pint64 then
         split_int64_for_32bit_target arg dbg
@@ -1149,6 +1146,9 @@ let rec unbox_int bi arg dbg =
         Cop(
           Cload((if bi = Pint32 then Thirtytwo_signed else Word_int), Mutable),
           [Cop(Cadda, [arg; Cconst_int (size_addr, dbg)], dbg)], dbg)
+
+and unbox_int_block bi block =
+  Cmm.block block.block_dbg (unbox_int bi block.expr block.block_dbg)
 
 let make_unsigned_int bi arg dbg =
   if bi = Pint32 && size_int = 8
@@ -1649,9 +1649,9 @@ let make_switch arg cases actions dbg =
     | Cconst_natpointer (n, _) -> (Nativeint.(to_int (logand n one) = 1))
     | Cconst_symbol _ -> true
     | _ -> false in
-  if Array.for_all (fun (expr, _dbg) -> is_const expr) actions then
-    let to_data_item (expr, _dbg) =
-      match expr with
+  if Array.for_all (fun act -> is_const act.expr) actions then
+    let to_data_item act =
+      match act.expr with
       | Cconst_int (n, _)
       | Cconst_pointer (n, _) -> Cint (Nativeint.of_int n)
       | Cconst_natint (n, _)
@@ -1678,41 +1678,56 @@ struct
   let geint = Ccmpi Cge
   let gtint = Ccmpi Cgt
 
-  type act = expression
+  type act = block
 
   type location = Debuginfo.t
   let no_location = Debuginfo.none
 
-  let make_const dbg i = Cconst_int (i, dbg)
-  let make_prim dbg p args = Cop (p, args, dbg)
-  let make_offset dbg arg n = add_const arg n dbg
-  let make_isout dbg h arg = Cop (Ccmpa Clt, [h ; arg], dbg)
-  let make_isin dbg h arg = Cop (Ccmpa Cge, [h ; arg], dbg)
-  let make_if dbg cond ifso_dbg ifso ifnot_dbg ifnot =
-    Cifthenelse (cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+  let location_of_action (act : act) = act.block_dbg
+
+  let make_const dbg i = block dbg (Cconst_int (i, dbg))
+
+  let make_prim dbg p args =
+    let args = List.map (fun act -> act.expr) args in
+    block dbg (Cop (p, args, dbg))
+
+  let make_offset dbg arg n = block dbg (add_const arg.expr n dbg)
+
+  let make_isout dbg h arg =
+    block dbg (Cop (Ccmpa Clt, [h.expr; arg.expr], dbg))
+
+  let make_isin dbg h arg = block dbg (Cop (Ccmpa Cge, [h.expr; arg.expr], dbg))
+
+  let make_if dbg cond ifso ifnot =
+    block dbg (Cifthenelse (cond.expr, ifso, ifnot, dbg))
+
   let make_switch dbg arg cases actions =
-    let actions = Array.map (fun (dbg, act) -> act, dbg) actions in
-    make_switch arg cases actions dbg
-  let bind arg body = bind "switcher" arg body
+    block dbg (make_switch arg.expr cases actions dbg)
 
-  let make_catch dbg handler = match handler with
-  | Cexit (i,[]) -> i,fun e -> e
-  | _ ->
-      let i = next_raise_count () in
+  let bind arg make_body =
+    let dbg = arg.block_dbg in
+    let make_body expr = (make_body (block dbg expr)).expr in
+    block dbg (bind "switcher" arg.expr make_body)
+
+  let make_catch dbg handler =
+    match handler.expr with
+    | Cexit (i,[]) -> i, fun act -> act
+    | _ ->
+        let i = next_raise_count () in
 (*
-      Printf.eprintf  "SHARE CMM: %i\n" i ;
-      Printcmm.expression Format.str_formatter handler ;
-      Printf.eprintf "%s\n" (Format.flush_str_formatter ()) ;
+        Printf.eprintf  "SHARE CMM: %i\n" i ;
+        Printcmm.expression Format.str_formatter handler ;
+        Printf.eprintf "%s\n" (Format.flush_str_formatter ()) ;
 *)
-      i,
-      (fun body -> match body with
-      | Cexit (j,_) ->
-          if i=j then handler
-          else body
-      | _ ->  ccatch (i,[],body,handler, dbg))
+        i,
+        (fun body ->
+          match body.expr with
+          | Cexit (j,_) ->
+              if i=j then handler
+              else Cmm.block dbg body.expr
+          | _ -> Cmm.block dbg (ccatch (i,[],body.expr,handler.expr,dbg)))
 
-  let make_exit i = Cexit (i,[])
-
+  let make_exit dbg i = Cmm.block dbg (Cexit (i,[]))
 end
 
 (* cmm store, as sharing as normally been detected in previous
@@ -1744,10 +1759,10 @@ module StoreExpForSwitch =
 module StoreExp =
   Switch.Store
     (struct
-      type t = Debuginfo.t * expression
+      type t = block
       type key = int
-      let make_key (_dbg, expr) =
-        match expr with
+      let make_key block =
+        match block.expr with
         | Cexit (i,[]) -> Some i
         | _ -> None
       let compare_key = Stdlib.compare
@@ -1758,14 +1773,14 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 (* Int switcher, arg in [low..high],
    cases is list of individual cases, and is sorted by first component *)
 
-let transl_int_switch dbg arg low high cases default = match cases with
+let transl_int_switch dbg arg low high cases ~default = match cases with
 | [] -> assert false
 | _::_ ->
     let store = StoreExp.mk_store () in
-    assert (store.Switch.act_store () (dbg, default) = 0) ;
+    assert (store.Switch.act_store () default = 0) ;
     let cases =
       List.map (fun (i, act) ->
-          (dbg, i), store.Switch.act_store () act)
+          i, store.Switch.act_store () act)
         cases
     in
     let rec inters plow phigh pact = function
@@ -1791,7 +1806,7 @@ let transl_int_switch dbg arg low high cases default = match cases with
               }
             in
             [case; next_case]
-      | ((_i_dbg, i), act)::rem ->
+      | (i, act)::rem ->
           if i = phigh+1 then
             if pact = act then
               inters plow i pact rem
@@ -1848,16 +1863,19 @@ let transl_int_switch dbg arg low high cases default = match cases with
               end in
     let inters = match cases with
     | [] -> assert false
-    | ((_, k0), act0)::rem ->
+    | (k0, act0)::rem ->
         if k0 = low then inters k0 k0 act0 rem
         else inters low (k0-1) 0 cases in
     bind "switcher" arg
       (fun a ->
-        SwitcherBlocks.zyva
-          dbg
-          (low,high)
-          a
-          (Array.of_list inters) store)
+        let block =
+          SwitcherBlocks.zyva
+            dbg
+            (low,high)
+            (Cmm.block dbg a)
+            (Array.of_list inters) store
+        in
+        block.expr)
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)

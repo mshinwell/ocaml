@@ -624,7 +624,7 @@ let rec substitute loc fpc sb rn ulam =
       Ustringswitch
         (substitute loc fpc sb rn arg,
          List.map (fun (s,act) -> s,substitute loc fpc sb rn act) sw,
-         Misc.may_map (substitute loc fpc sb rn) d)
+         Option.map (substitute loc fpc sb rn) d)
   | Ustaticfail (nfail, args) ->
       let nfail =
         match rn with
@@ -1088,51 +1088,53 @@ let rec close fenv cenv = function
 (* NB: failaction might get copied, thus it should be some Lstaticraise *)
       let fail = sw.sw_failaction in
       begin match fail with
-      | None|Some (Lstaticraise (_,_), _) -> fn fail
-      | Some (lamfail, fail_loc) ->
+      | None -> fn None
+      | Some { expr = (Lstaticraise (_,_) as expr); } -> fn (Some expr)
+      | Some { expr = lamfail; } ->
           if
             (sw.sw_numconsts - List.length sw.sw_consts) +
             (sw.sw_numblocks - List.length sw.sw_blocks) > 1
           then
             let i = next_raise_count () in
-            let ubody,_ = fn (Some (Lstaticraise (i,[]), fail_loc))
+            let ubody,_ = fn (Some (Lstaticraise (i,[])))
             and uhandler,_ = close fenv cenv lamfail in
             Ucatch (i,[],ubody,uhandler),Value_unknown
-          else fn fail
+          else
+            fn (Some lamfail)
       end
   | Lstringswitch(arg,sw,d,_) ->
       let uarg,_ = close fenv cenv arg in
       let usw =
         List.map
-          (fun (s,act,_loc) ->
-            let uact,_ = close fenv cenv act in
+          (fun (s,act) ->
+            let uact,_ = close fenv cenv act.expr in
             s,uact)
           sw in
       let ud =
-        Misc.may_map
-          (fun (d, _loc) ->
-            let ud,_ = close fenv cenv d in
+        Option.map
+          (fun d ->
+            let ud,_ = close fenv cenv d.expr in
             ud) d in
       Ustringswitch (uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
       (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
-  | Lstaticcatch(body, (i, vars), handler, _loc) ->
+  | Lstaticcatch(body, (i, vars), handler) ->
       let (ubody, _) = close fenv cenv body in
-      let (uhandler, _) = close fenv cenv handler in
+      let (uhandler, _) = close fenv cenv handler.expr in
       let vars = List.map (fun (var, k) -> VP.create var, k) vars in
       (Ucatch(i, vars, ubody, uhandler), Value_unknown)
-  | Ltrywith(body, id, handler, _loc) ->
+  | Ltrywith(body, id, handler) ->
       let (ubody, _) = close fenv cenv body in
-      let (uhandler, _) = close fenv cenv handler in
+      let (uhandler, _) = close fenv cenv handler.expr in
       (Utrywith(ubody, VP.create id, uhandler), Value_unknown)
-  | Lifthenelse(arg, _ifso_loc, ifso, _ifnot_loc, ifnot, _loc) ->
+  | Lifthenelse(arg, ifso, ifnot, _loc) ->
       begin match close fenv cenv arg with
-        (uarg, Value_const (Uconst_ptr n)) ->
+      | (uarg, Value_const (Uconst_ptr n)) ->
           sequence_constant_expr uarg
-            (close fenv cenv (if n = 0 then ifnot else ifso))
+            (close fenv cenv (if n = 0 then ifnot.expr else ifso.expr))
       | (uarg, _ ) ->
-          let (uifso, _) = close fenv cenv ifso in
-          let (uifnot, _) = close fenv cenv ifnot in
+          let (uifso, _) = close fenv cenv ifso.expr in
+          let (uifnot, _) = close fenv cenv ifnot.expr in
           (Uifthenelse(uarg, uifso, uifnot), Value_unknown)
       end
   | Lsequence(lam1, lam2) ->
@@ -1141,12 +1143,12 @@ let rec close fenv cenv = function
       (Usequence(ulam1, ulam2), approx)
   | Lwhile(cond, body, _loc) ->
       let (ucond, _) = close fenv cenv cond in
-      let (ubody, _) = close fenv cenv body in
+      let (ubody, _) = close fenv cenv body.expr in
       (Uwhile(ucond, ubody), Value_unknown)
   | Lfor(id, lo, hi, dir, body, _loc) ->
       let (ulo, _) = close fenv cenv lo in
       let (uhi, _) = close fenv cenv hi in
-      let (ubody, _) = close fenv cenv body in
+      let (ubody, _) = close fenv cenv body.expr in
       (Ufor(VP.create id, ulo, uhi, dir, ubody), Value_unknown)
   | Lassign(id, lam) ->
       let (ulam, _) = close fenv cenv lam in
@@ -1339,14 +1341,14 @@ and close_switch fenv cenv cases num_keys default =
 
   (* First default case *)
   begin match default with
-  | Some (def, _loc) when ncases < num_keys ->
+  | Some def when ncases < num_keys ->
       assert (store.act_store () def = 0)
   | _ -> ()
   end ;
   (* Then all other cases *)
   List.iter
-    (fun (key,lam,_loc) ->
-     index.(key) <- store.act_store () lam)
+    (fun (key,act) ->
+     index.(key) <- store.act_store () act.expr)
     cases ;
 
   (*  Explicit sharing with catch/exit, as switcher compilation may

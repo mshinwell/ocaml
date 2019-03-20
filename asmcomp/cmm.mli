@@ -158,8 +158,10 @@ and operation =
   | Craise of raise_kind
   | Ccheckbound
 
+(** The criteria for placement of [Debuginfo.t] are analogous to those
+    documented in lambda.mli. *)
 and expression =
-    Cconst_int of int * Debuginfo.t
+  | Cconst_int of int * Debuginfo.t
   | Cconst_natint of nativeint * Debuginfo.t
   | Cconst_float of float * Debuginfo.t
   | Cconst_symbol of string * Debuginfo.t
@@ -174,12 +176,11 @@ and expression =
   | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of block * block * block
+  | Cifthenelse of expression * block * block * Debuginfo.t
   | Cswitch of expression * int array * block array * Debuginfo.t
   | Ccatch of
       rec_flag
-        * (int * (Backend_var.With_provenance.t * machtype) list
-          * block) list
+        * (int * (Backend_var.With_provenance.t * machtype) list * block) list
         * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * block
@@ -223,5 +224,7 @@ val ccatch :
      int * (Backend_var.With_provenance.t * machtype) list
        * expression * expression * Debuginfo.t
   -> expression
+
+val block : Debuginfo.t -> expression -> block
 
 val reset : unit -> unit
