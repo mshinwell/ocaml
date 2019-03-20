@@ -174,14 +174,15 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
       (inh_init,
        let build params rem =
          let param = name_pattern "param" pat in
+         (* CR mshinwell: pat.pat_loc may not be right *)
+         let rem = Lambda.block pat.pat_loc rem in
          Lfunction {kind = Curried; params = (param, Pgenval)::params;
                     return = Pgenval;
                     attr = default_function_attribute;
                     loc = pat.pat_loc;
                     body = Matching.for_function
                              pat.pat_loc None (Lvar param)
-                             (* CR mshinwell: [pat.pat_loc] may not be right *)
-                             [pat, rem, pat.pat_loc] partial}
+                             [pat, rem] partial}
        in
        begin match obj_init with
          Lfunction {kind = Curried; params; body = rem} -> build params rem
@@ -429,6 +430,7 @@ let rec transl_class_rebind obj_init cl vf =
       let path, path_lam, obj_init = transl_class_rebind obj_init cl vf in
       let build params rem =
         let param = name_pattern "param" pat in
+        let rem = Lambda.block pat.pat_loc rem in
         Lfunction {kind = Curried; params = (param, Pgenval)::params;
                    return = Pgenval;
                    attr = default_function_attribute;
@@ -436,7 +438,7 @@ let rec transl_class_rebind obj_init cl vf =
                    body = Matching.for_function
                             pat.pat_loc None (Lvar param)
                             (* CR mshinwell: pat.pat_loc may not be right *)
-                            [pat, rem, pat.pat_loc] partial}
+                            [pat, rem] partial}
       in
       (path, path_lam,
        match obj_init with
@@ -651,9 +653,9 @@ let free_methods l =
         fv := Ident.Set.remove id !fv
     | Lletrec(decl, _body) ->
         List.iter (fun (id, _exp) -> fv := Ident.Set.remove id !fv) decl
-    | Lstaticcatch(_e1, (_,vars), _e2, _loc) ->
+    | Lstaticcatch(_e1, (_,vars), _e2) ->
         List.iter (fun (id, _) -> fv := Ident.Set.remove id !fv) vars
-    | Ltrywith(_e1, exn, _e2, _loc) ->
+    | Ltrywith(_e1, exn, _e2) ->
         fv := Ident.Set.remove exn !fv
     | Lfor(v, _e1, _e2, _dir, _e3, _loc) ->
         fv := Ident.Set.remove v !fv
@@ -907,8 +909,9 @@ let transl_class ids cl_id pub_meths cl vflag =
          so that the program's behaviour does not change between runs *)
       lupdate_cache
     else
-      Lifthenelse(lfield cached 0, Location.none, lambda_unit Location.none,
-        Location.none, lupdate_cache, Location.none)
+      let ifso = Lambda.block Location.none (lambda_unit Location.none) in
+      let ifnot = Lambda.block Location.none lupdate_cache in
+      Lifthenelse(lfield cached 0, ifso, ifnot, Location.none)
   in
   llets (
   lcache (
