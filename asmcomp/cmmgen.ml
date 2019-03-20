@@ -1736,12 +1736,12 @@ end
 module StoreExpForSwitch =
   Switch.CtxStore
     (struct
-      type t = Debuginfo.t * expression
+      type t = block
       type key = int option * int
       type context = int
-      let make_key index (_dbg, expr) =
+      let make_key index block =
         let continuation =
-          match expr with
+          match block.expr with
           | Cexit (i,[]) -> Some i
           | _ -> None
         in
@@ -3160,32 +3160,32 @@ and transl_sequand env (approx : then_else)
       (arg2_dbg : Debuginfo.t) arg2
       (then_ : Cmm.block)
       (else_ : Cmm.block) =
-  make_shareable_cont else_dbg
+  make_shareable_cont else_
     (fun shareable_else ->
        transl_if env Unknown
          arg1_dbg arg1
-         arg2_dbg (transl_if env approx
-           arg2_dbg arg2
-           then_
-           shareable_else)
+         (Cmm.block arg2_dbg (
+           transl_if env approx
+             arg2_dbg arg2
+             then_
+             shareable_else))
          shareable_else)
-    else_
 
 and transl_sequor env (approx : then_else)
       (arg1_dbg : Debuginfo.t) arg1
       (arg2_dbg : Debuginfo.t) arg2
       (then_ : Cmm.block)
       (else_ : Cmm.block) =
-  make_shareable_cont then_dbg
+  make_shareable_cont then_
     (fun shareable_then ->
        transl_if env Unknown
          arg1_dbg arg1
          shareable_then
-         arg2_dbg (transl_if env approx
-           arg2_dbg arg2
-           shareable_then
-           else_))
-    then_
+         (Cmm.block arg2_dbg (
+           transl_if env approx
+             arg2_dbg arg2
+             shareable_then
+             else_)))
 
 (* This assumes that [arg] can be safely discarded if it is not used. *)
 and transl_switch dbg env arg index cases = match Array.length cases with
@@ -3193,7 +3193,7 @@ and transl_switch dbg env arg index cases = match Array.length cases with
 | 1 ->
     transl env cases.(0)
 | _ ->
-    let cases = Array.map (fun case -> dbg, transl env case) cases in
+    let cases = Array.map (fun case -> Cmm.block dbg (transl env case)) cases in
     let store = StoreExpForSwitch.mk_store () in
     let index =
       Array.map
@@ -3235,17 +3235,18 @@ and transl_switch dbg env arg index cases = match Array.length cases with
     in
     inters := case :: !inters ;
     match !inters with
-    | [_] ->
-        let _dbg, case = cases.(0) in
-        case
+    | [_] -> cases.(0).expr
     | inters ->
         bind "switcher" arg
           (fun a ->
-            SwitcherBlocks.zyva
-              dbg
-              (0,n_index-1)
-              a
-              (Array.of_list inters) store)
+            let block =
+              SwitcherBlocks.zyva
+                dbg
+                (0,n_index-1)
+                (Cmm.block dbg a)
+                (Array.of_list inters) store
+            in
+            block.expr)
 
 and transl_letrec env bindings cont =
   let dbg = Debuginfo.none in
@@ -3550,13 +3551,13 @@ let cache_public_method meths tag cache dbg =
                           [meths; lsl_const (Cvar mi) log2_size_addr dbg],
                           dbg)],
                      dbg)], dbg),
-          dbg, Cassign(hi, Cop(Csubi, [Cvar mi; cconst_int 2], dbg)),
-          dbg, Cassign(li, Cvar mi),
+          Cmm.block dbg (Cassign(hi, Cop(Csubi, [Cvar mi; cconst_int 2], dbg))),
+          Cmm.block dbg (Cassign(li, Cvar mi)),
           dbg),
         Cifthenelse
           (Cop(Ccmpi Cge, [Cvar li; Cvar hi], dbg),
-           dbg, Cexit (raise_num, []),
-           dbg, Ctuple [],
+           Cmm.block dbg (Cexit (raise_num, [])),
+           Cmm.block dbg (Ctuple []),
            dbg))))
        dbg,
      Ctuple [],
@@ -3609,13 +3610,12 @@ let apply_function_body arity =
    Cifthenelse(
    Cop(Ccmpi Ceq,
      [get_field env (Cvar clos) 1 (dbg ()); int_const (dbg ()) arity], dbg ()),
-   dbg (),
-   Cop(Capply typ_val,
+   Cmm.block (dbg ())
+     (Cop(Capply typ_val,
        get_field env (Cvar clos) 2 (dbg ())
          :: List.map (fun s -> Cvar s) all_args,
-       dbg ()),
-   dbg (),
-   app_fun clos 0,
+       dbg ())),
+   Cmm.block (dbg ()) (app_fun clos 0),
    dbg ()))
 
 let send_function arity =
@@ -3644,10 +3644,9 @@ let send_function arity =
     Clet (
     VP.create real,
     Cifthenelse(Cop(Ccmpa Cne, [tag'; tag], dbg ()),
-                dbg (),
-                cache_public_method (Cvar meths) tag cache (dbg ()),
-                dbg (),
-                cached_pos,
+                Cmm.block (dbg ())
+                  (cache_public_method (Cvar meths) tag cache (dbg ())),
+                Cmm.block (dbg ()) cached_pos,
                 dbg ()),
     Cop(Cload (Word_val, Mutable),
       [Cop(Cadda, [Cop (Cadda, [Cvar real; Cvar meths], dbg ());
