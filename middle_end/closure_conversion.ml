@@ -496,14 +496,14 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
           ~name:(Names.of_primitive lambda_p))
   | Lswitch (arg, sw, _loc) ->
     let scrutinee = Variable.create Names.switch in
-    let aux (i, lam, _loc) = i, close t env lam in
+    let aux (i, (act : Lambda.block)) = i, close t env act.expr in
     let nums sw_num cases default =
       let module I = Numbers.Int in
       match default with
       | Some _ ->
           I.zero_to_n (sw_num - 1)
       | None ->
-          List.fold_left (fun set (i, _, _loc) -> I.Set.add i set)
+          List.fold_left (fun set (i, _) -> I.Set.add i set)
             I.Set.empty cases
     in
     Flambda.create_let scrutinee (Expr (close t env arg))
@@ -513,14 +513,17 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
           numblocks = nums sw.sw_numblocks sw.sw_blocks sw.sw_failaction;
           blocks = List.map aux sw.sw_blocks;
           failaction =
-            Misc.may_map (fun (lam, _) -> close t env lam) sw.sw_failaction;
+            Option.map (fun (default : Lambda.block) ->
+                close t env default.expr)
+              sw.sw_failaction;
         }))
   | Lstringswitch (arg, sw, def, _) ->
     let scrutinee = Variable.create Names.string_switch in
     Flambda.create_let scrutinee (Expr (close t env arg))
       (String_switch (scrutinee,
-        List.map (fun (s, e, _loc) -> s, close t env e) sw,
-        Misc.may_map (fun (lam, _) -> close t env lam) def))
+        List.map (fun (s, (e : Lambda.block)) -> s, close t env e.expr) sw,
+        Option.map (fun (default : Lambda.block) ->
+          close t env default.expr) def))
   | Lstaticraise (i, args) ->
     Lift_code.lifting_helper (close_list t env args)
       ~evaluation_order:`Right_to_left
@@ -529,32 +532,33 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
         let static_exn = Env.find_static_exception env i in
         Static_raise (static_exn, args))
   (* CR mshinwell for pchambart: Propagate locations. *)
-  | Lstaticcatch (body, (i, ids), handler, _loc) ->
+  | Lstaticcatch (body, (i, ids), handler) ->
     let st_exn = Static_exception.create () in
     let env = Env.add_static_exception env i st_exn in
     let ids = List.map fst ids in
     let vars = List.map Variable.create_with_same_name_as_ident ids in
     Static_catch (st_exn, vars, close t env body,
-      close t (Env.add_vars env ids vars) handler)
-  | Ltrywith (body, id, handler, _loc) ->
+      close t (Env.add_vars env ids vars) handler.expr)
+  | Ltrywith (body, id, handler) ->
     let var = Variable.create_with_same_name_as_ident id in
-    Try_with (close t env body, var, close t (Env.add_var env id var) handler)
-  | Lifthenelse (cond, _ifso_loc, ifso, _ifnot_loc, ifnot, _loc) ->
+    Try_with (close t env body, var,
+      close t (Env.add_var env id var) handler.expr)
+  | Lifthenelse (cond, ifso, ifnot, _loc) ->
     let cond = close t env cond in
     let cond_var = Variable.create Names.cond in
     Flambda.create_let cond_var (Expr cond)
-      (If_then_else (cond_var, close t env ifso, close t env ifnot))
+      (If_then_else (cond_var, close t env ifso.expr, close t env ifnot.expr))
   | Lsequence (lam1, lam2) ->
     let var = Variable.create Names.sequence in
     let lam1 = Flambda.Expr (close t env lam1) in
     let lam2 = close t env lam2 in
     Flambda.create_let var lam1 lam2
-  | Lwhile (cond, body, _loc) -> While (close t env cond, close t env body)
+  | Lwhile (cond, body, _loc) -> While (close t env cond, close t env body.expr)
   | Lfor (id, lo, hi, direction, body, _loc) ->
     let bound_var = Variable.create_with_same_name_as_ident id in
     let from_value = Variable.create Names.for_from in
     let to_value = Variable.create Names.for_to in
-    let body = close t (Env.add_var env id bound_var) body in
+    let body = close t (Env.add_var env id bound_var) body.expr in
     Flambda.create_let from_value (Expr (close t env lo))
       (Flambda.create_let to_value (Expr (close t env hi))
         (For { bound_var; from_value; to_value; direction; body; }))
