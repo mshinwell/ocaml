@@ -99,29 +99,22 @@ let emit_addressing addr r n =
 
 (* Record live pointers at call points *)
 
-let record_frame_label ?label live raise_ dbg =
-  let lbl =
-    match label with
-    | None -> new_label()
-    | Some label -> label
-  in
-  let live_offset = ref [] in
-  Reg.Set.iter
-    (function
-      | {typ = Val; loc = Reg r} ->
-          live_offset := ((r lsl 1) + 1) :: !live_offset
-      | {typ = Val; loc = Stack s} as reg ->
-          live_offset := slot_offset s (register_class reg) :: !live_offset
-      | {typ = Addr} as r ->
-          Misc.fatal_error ("bad GC root " ^ Reg.name r)
-      | _ -> ())
-    live;
-  record_frame_descr ~label:lbl ~frame_size:(frame_size())
-    ~live_offset:!live_offset ~raise_frame:raise_ dbg;
-  lbl
+let def_label lbl = `{emit_label lbl}:\n`
 
-let record_frame ?label live raise_ dbg =
-  let lbl = record_frame_label ?label live raise_ dbg in `{emit_label lbl}:`
+let record_frame_label = Emitaux.record_frame_label ~slot_offset ~frame_size
+let record_frame =
+  Emitaux.record_frame ~slot_offset ~frame_size ~def_label
+
+let wrap_call_with_frame ~call_labels call live raise_frame dbg =
+  let frame_descr =
+    Emitaux.mk_frame_descr
+      ~slot_offset ~label:call_labels.after ~frame_size:(frame_size ())
+      ~live ~raise_frame ~dbg
+  in
+  Emitaux.wrap_call ~def_label call ~frame_descr ~call_labels
+
+let wrap_call_no_frame ~call_labels call =
+  Emitaux.wrap_call ~def_label call ?frame_descr:None ~call_labels
 
 (* Record calls to the GC -- we've moved them out of the way *)
 
@@ -443,23 +436,6 @@ let emit_load_handler_address handler =
   `	add	lr, pc, lr\n`;
   2
 
-(* Emission of labels immediately prior to and after calls, used for DWARF
-   call site support. *)
-
-let supports_dwarf_call_sites () = false  (* To be filled in by a later GPR. *)
-
-let maybe_add_label_before_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    `{emit_label call_labels.before}:\n`
-  end
-
-(* This function should not be called if [record_frame] is going to be used,
-   since the latter defines the same label as this function. *)
-let maybe_add_label_after_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    `{emit_label call_labels.after}:\n`
-  end
-
 (* Output the assembly code for an instruction *)
 
 let emit_instr i =
@@ -553,56 +529,52 @@ let emit_instr i =
         emit_load_symbol_addr i.res.(0) s
     | Lop(Icall_ind { call_labels; }) ->
         if !arch >= ARMv5 then begin
-          maybe_add_label_before_call ~call_labels;
-          `	blx	{emit_reg i.arg.(0)}\n`;
-          `{record_frame i.live false i.dbg ~label:call_labels.after}\n`; 1
+          wrap_call_with_frame ~call_labels
+            (fun () -> `	blx	{emit_reg i.arg.(0)}\n`)
+            i.live false i.dbg; 1
         end else begin
           `	mov	lr, pc\n`;
-          maybe_add_label_before_call ~call_labels;
-          `	bx	{emit_reg i.arg.(0)}\n`;
-          `{record_frame i.live false i.dbg ~label:call_labels.after}\n`; 2
+          wrap_call_with_frame ~call_labels
+            (fun () -> `	bx	{emit_reg i.arg.(0)}\n`)
+            i.live false i.dbg; 2
         end
     | Lop(Icall_imm { func; call_labels; }) ->
-        maybe_add_label_before_call ~call_labels;
-        `	{emit_call func}\n`;
-        `{record_frame i.live false i.dbg ~label:call_labels.after}\n`; 1
+        wrap_call_with_frame ~call_labels
+          (fun () -> `	{emit_call func}\n`)
+          i.live false i.dbg; 1
     | Lop(Itailcall_ind { call_labels; }) ->
         output_epilogue begin fun () ->
           if !contains_calls then begin
             `	ldr	lr, [sp, #{emit_int (-4)}]\n`
           end;
-          maybe_add_label_before_call ~call_labels;
-          `	bx	{emit_reg i.arg.(0)}\n`;
-          maybe_add_label_after_call ~call_labels;
+          wrap_call_no_frame ~call_labels
+            (fun () -> `	bx	{emit_reg i.arg.(0)}\n`);
           2
         end
     | Lop(Itailcall_imm { func; call_labels; }) ->
         if func = !function_name then begin
-          maybe_add_label_before_call ~call_labels;
-          `	b	{emit_label !tailrec_entry_point}\n`;
-          maybe_add_label_after_call ~call_labels;
+          wrap_call_no_frame ~call_labels
+            (fun () -> `	b	{emit_label !tailrec_entry_point}\n`);
           1
         end else begin
           output_epilogue begin fun () ->
             if !contains_calls then begin
               `	ldr	lr, [sp, #{emit_int (-4)}]\n`
             end;
-            maybe_add_label_before_call ~call_labels;
-            `	{emit_jump func}\n`;
-            maybe_add_label_after_call ~call_labels;
+            wrap_call_no_frame ~call_labels
+              (fun () -> `	{emit_jump func}\n`);
             2
           end
         end
     | Lop(Iextcall { func; alloc = false; call_labels; }) ->
-        maybe_add_label_before_call ~call_labels;
-        `	{emit_call func}\n`;
-        maybe_add_label_after_call ~call_labels;
+        wrap_call_no_frame ~call_labels
+          (fun () -> `	{emit_call func}\n`);
         1
     | Lop(Iextcall { func; alloc = true; call_labels; }) ->
         let ninstr = emit_load_symbol_addr (phys_reg 7 (* r7 *)) func in
-        maybe_add_label_before_call ~call_labels;
-        `	{emit_call "caml_c_call"}\n`;
-        `{record_frame i.live false i.dbg ~label:call_labels.after}\n`;
+        wrap_call_with_frame ~call_labels
+          (fun () -> `	{emit_call "caml_c_call"}\n`)
+          i.live false i.dbg;
         1 + ninstr
     | Lop(Istackoffset n) ->
         assert (n mod 8 = 0);

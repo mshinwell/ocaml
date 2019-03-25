@@ -842,6 +842,7 @@ typing/persistent_env.cmi : \
     typing/types.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
+    utils/consistbl.cmi \
     typing/cmi_format.cmi
 typing/predef.cmo : \
     typing/types.cmi \
@@ -2999,6 +3000,10 @@ asmcomp/emit.cmi : \
     asmcomp/linearize.cmi \
     asmcomp/cmm.cmi
 asmcomp/emitaux.cmo : \
+    asmcomp/reg.cmi \
+    asmcomp/proc.cmi \
+    utils/misc.cmi \
+    asmcomp/mach.cmi \
     middle_end/debuginfo.cmi \
     utils/config.cmi \
     asmcomp/cmm.cmi \
@@ -3006,6 +3011,10 @@ asmcomp/emitaux.cmo : \
     asmcomp/arch.cmo \
     asmcomp/emitaux.cmi
 asmcomp/emitaux.cmx : \
+    asmcomp/reg.cmx \
+    asmcomp/proc.cmx \
+    utils/misc.cmx \
+    asmcomp/mach.cmx \
     middle_end/debuginfo.cmx \
     utils/config.cmx \
     asmcomp/cmm.cmx \
@@ -3013,7 +3022,10 @@ asmcomp/emitaux.cmx : \
     asmcomp/arch.cmx \
     asmcomp/emitaux.cmi
 asmcomp/emitaux.cmi : \
-    middle_end/debuginfo.cmi
+    asmcomp/reg.cmi \
+    asmcomp/mach.cmi \
+    middle_end/debuginfo.cmi \
+    asmcomp/cmm.cmi
 asmcomp/export_info.cmo : \
     middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
@@ -5598,7 +5610,6 @@ driver/compplugin.cmo : \
     driver/compmisc.cmi \
     driver/compenv.cmi \
     driver/compdynlink.cmi \
-    utils/clflags.cmi \
     driver/compplugin.cmi
 driver/compplugin.cmx : \
     parsing/location.cmx \
@@ -5606,7 +5617,6 @@ driver/compplugin.cmx : \
     driver/compmisc.cmx \
     driver/compenv.cmx \
     driver/compdynlink.cmi \
-    utils/clflags.cmx \
     driver/compplugin.cmi
 driver/compplugin.cmi :
 driver/errors.cmo : \
@@ -6030,6 +6040,7 @@ toplevel/topdirs.cmo : \
     bytecomp/symtable.cmi \
     typing/printtyp.cmi \
     typing/predef.cmi \
+    typing/persistent_env.cmi \
     typing/path.cmi \
     parsing/parsetree.cmi \
     bytecomp/opcodes.cmi \
@@ -6042,7 +6053,6 @@ toplevel/topdirs.cmo : \
     typing/env.cmi \
     bytecomp/dll.cmi \
     typing/ctype.cmi \
-    utils/consistbl.cmi \
     utils/config.cmi \
     bytecomp/cmo_format.cmi \
     utils/clflags.cmi \
@@ -6059,6 +6069,7 @@ toplevel/topdirs.cmx : \
     bytecomp/symtable.cmx \
     typing/printtyp.cmx \
     typing/predef.cmx \
+    typing/persistent_env.cmx \
     typing/path.cmx \
     parsing/parsetree.cmi \
     bytecomp/opcodes.cmx \
@@ -6071,7 +6082,6 @@ toplevel/topdirs.cmx : \
     typing/env.cmx \
     bytecomp/dll.cmx \
     typing/ctype.cmx \
-    utils/consistbl.cmx \
     utils/config.cmx \
     bytecomp/cmo_format.cmi \
     utils/clflags.cmx \

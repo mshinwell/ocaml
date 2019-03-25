@@ -165,6 +165,8 @@ let offset_addressing (Iindexed n) delta = Iindexed(n + delta)
 
 let num_args_addressing (Iindexed _) = 1
 
+let supports_dwarf_call_sites () = false  (* To be filled in by a later GPR. *)
+
 (* Printing operations and addressing modes *)
 
 let print_addressing printreg addr ppf arg =
