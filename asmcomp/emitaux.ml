@@ -117,7 +117,7 @@ let frame_descriptors = ref([] : frame_descr list)
 let record_frame_descr frame_descr =
   frame_descriptors := frame_descr :: !frame_descriptors
 
-let mk_frame_descr ~slot_offset ~label ~frame_size ~live ~raise_frame ~dbg =
+let mk_frame_descr ~slot_offset ~return_label ~frame_size ~live ~raise_frame ~dbg =
   let live_offset = ref [] in
   Reg.Set.iter
     (function
@@ -131,30 +131,31 @@ let mk_frame_descr ~slot_offset ~label ~frame_size ~live ~raise_frame ~dbg =
       | _ -> ()
     )
     live;
-  { fd_lbl = label;
+  { fd_lbl = return_label;
     fd_frame_size = frame_size;
     fd_live_offset = List.sort_uniq (-) !live_offset;
     fd_raise = raise_frame;
     fd_debuginfo = dbg;
   }
 
-let record_frame_label ~slot_offset ~frame_size ?label live raise_ dbg =
+let record_frame_label ~slot_offset ~frame_size
+    ?label ~live ~raise_frame ~dbg =
   let lbl =
     match label with
     | None -> Cmm.new_label ()
     | Some label -> label
   in
   let frame_descr =
-    mk_frame_descr ~slot_offset ~label:lbl ~frame_size:(frame_size ())
-      ~live ~raise_frame:raise_ ~dbg
+    mk_frame_descr ~slot_offset ~return_label:lbl ~frame_size:(frame_size ())
+      ~live ~raise_frame ~dbg
   in
   record_frame_descr frame_descr;
   lbl
 
 let record_frame ~slot_offset ~frame_size ~def_label
-    ?label live raise_ dbg =
+    ?label ~live ~raise_frame ~dbg =
   let lbl =
-    record_frame_label ~slot_offset ~frame_size ?label live raise_ dbg
+    record_frame_label ~slot_offset ~frame_size ?label ~live ~raise_frame ~dbg
   in
   def_label lbl
 

@@ -39,16 +39,17 @@ val emit_debug_info_gen :
   (file_num:int -> line:int -> col:int -> unit) -> unit
 
 type frame_descr
+
+(** Functions to compute stack offsets (in bytes) from stack locations *)
 type slot_offset := Reg.stack_location -> (* register class *) int -> int
 
 val mk_frame_descr :
   slot_offset : slot_offset ->
-                            (* Offsets from stack slots *)
-  label : Cmm.label ->      (* Return address *)
-  frame_size : int ->       (* Size of stack frame *)
-  live : Reg.Set.t ->       (* Live registers *)
-  raise_frame : bool ->     (* Is frame for a raise? *)
-  dbg : Debuginfo.t ->      (* Location, if any *)
+  return_label : Cmm.label ->
+  frame_size : int ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
   frame_descr
 
 val record_frame_descr : frame_descr -> unit
@@ -57,9 +58,9 @@ val record_frame_label :
   slot_offset : slot_offset ->
   frame_size : (unit -> int) ->
   ?label : Cmm.label ->
-  Reg.Set.t ->              (* live *)
-  bool ->                   (* is_raise_frame *)
-  Debuginfo.t ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
   Cmm.label
 
 val record_frame :
@@ -67,9 +68,9 @@ val record_frame :
   frame_size : (unit -> int) ->
   def_label : (Cmm.label -> unit) ->
   ?label : Cmm.label ->
-  Reg.Set.t ->              (* live *)
-  bool ->                   (* is_raise_frame *)
-  Debuginfo.t ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
   unit
 
 val wrap_call :

@@ -240,7 +240,7 @@ let record_frame =
 let wrap_call_with_frame ~call_labels call live raise_frame dbg =
   let frame_descr =
     Emitaux.mk_frame_descr
-      ~slot_offset ~label:call_labels.after ~frame_size:(frame_size ())
+      ~slot_offset ~return_label:call_labels.after ~frame_size:(frame_size ())
       ~live ~raise_frame ~dbg
   in
   Emitaux.wrap_call ~def_label call ~frame_descr ~call_labels
@@ -303,7 +303,9 @@ let bound_error_call = ref 0
 let bound_error_label ?label dbg ~spacetime =
   if !Clflags.debug || Config.spacetime then begin
     let lbl_bound_error = new_label() in
-    let lbl_frame = record_frame_label ?label Reg.Set.empty false dbg in
+    let lbl_frame =
+      record_frame_label ?label ~live:Reg.Set.empty ~raise_frame:false ~dbg
+    in
     bound_error_sites :=
       { bd_lbl = lbl_bound_error; bd_frame = lbl_frame;
         bd_spacetime = spacetime; } :: !bound_error_sites;
@@ -673,7 +675,8 @@ let emit_instr fallthrough i =
           else i.dbg
         in
         let lbl_frame =
-          record_frame_label ?label:label_after_call_gc i.live false dbg
+          record_frame_label ?label:label_after_call_gc ~live:i.live
+            ~raise_frame:false ~dbg
         in
         I.jb (label lbl_call_gc);
         I.lea (mem64 NONE 8 R15) (res i 0);
@@ -700,8 +703,8 @@ let emit_instr fallthrough i =
             emit_call "caml_allocN"
         end;
         let label =
-          record_frame_label ?label:label_after_call_gc i.live false
-            Debuginfo.none
+          record_frame_label ?label:label_after_call_gc ~live:i.live
+            ~raise_frame:false ~dbg:Debuginfo.none
         in
         def_label label;
         I.lea (mem64 NONE 8 R15) (res i 0)
@@ -896,7 +899,8 @@ let emit_instr fallthrough i =
       begin match k with
       | Cmm.Raise_withtrace ->
           emit_call "caml_raise_exn";
-          record_frame Reg.Set.empty true i.dbg
+          let label = Cmm.new_label () in
+          record_frame ~label ~live:Reg.Set.empty ~raise_frame:true ~dbg:i.dbg
       | Cmm.Raise_notrace ->
           I.mov r14 rsp;
           I.pop r14;
