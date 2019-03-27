@@ -83,6 +83,9 @@ let label_prefix = ".L"
 let emit_label lbl =
   emit_string label_prefix; emit_int lbl
 
+let def_label lbl =
+  `{emit_label lbl}:\n`
+
 (* Section switching *)
 
 let code_space =
@@ -300,26 +303,19 @@ let adjust_stack_offset delta =
 
 (* Record live pointers at call points *)
 
-let record_frame ?label live raise_ dbg =
-  let lbl =
-    match label with
-    | None -> new_label()
-    | Some label -> label
+let record_frame =
+  Emitaux.record_frame ~slot_offset ~frame_size ~def_label
+
+let wrap_call_with_frame ~call_labels call live raise_frame dbg =
+  let frame_descr =
+    Emitaux.mk_frame_descr
+      ~slot_offset ~return_label:call_labels.after ~frame_size:(frame_size ())
+      ~live ~raise_frame ~dbg
   in
-  let live_offset = ref [] in
-  Reg.Set.iter
-    (function
-      | {typ = Val; loc = Reg r} ->
-          live_offset := ((r lsl 1) + 1) :: !live_offset
-      | {typ = Val; loc = Stack s} as reg ->
-          live_offset := slot_offset s (register_class reg) :: !live_offset
-      | {typ = Addr} as r ->
-          Misc.fatal_error ("bad GC root " ^ Reg.name r)
-      | _ -> ())
-    live;
-  record_frame_descr ~label:lbl ~frame_size:(frame_size())
-    ~live_offset:!live_offset ~raise_frame:raise_ dbg;
-  `{emit_label lbl}:\n`
+  Emitaux.wrap_call ~def_label call ~frame_descr ~call_labels
+
+let wrap_call_no_frame ~call_labels call =
+  Emitaux.wrap_call ~def_label call ?frame_descr:None ~call_labels
 
 (* Record floating-point literals (for PPC32) *)
 
@@ -539,23 +535,6 @@ let emit_profile () =
       `	bl	{emit_symbol "caml_after_mcount"}\n`;
       `	mtlr	0\n`
 
-(* Emission of labels immediately prior to and after calls, used for DWARF
-   call site support. *)
-
-let supports_dwarf_call_sites () = false  (* To be filled in by a later GPR. *)
-
-let maybe_add_label_before_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    `{emit_label call_labels.before}:\n`
-  end
-
-(* This function should not be called if [record_frame] is going to be used,
-   since the latter defines the same label as this function. *)
-let maybe_add_label_after_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    `{emit_label call_labels.after}:\n`
-  end
-
 (* Output the assembly code for an instruction *)
 
 let emit_instr i =
@@ -652,31 +631,31 @@ let emit_instr i =
         begin match abi with
         | ELF32 ->
           `	mtctr	{emit_reg i.arg.(0)}\n`;
-          maybe_add_label_before_call ~call_labels;
-          `	bctrl\n`;
-          record_frame i.live false i.dbg ~label:call_labels.after
+          wrap_call_with_frame ~call_labels
+            (fun () -> `	bctrl\n`)
+            i.live false i.dbg
         | ELF64v1 ->
           `	ld	0, 0({emit_reg i.arg.(0)})\n`;  (* code pointer *)
           `	mtctr	0\n`;
           `	ld	2, 8({emit_reg i.arg.(0)})\n`;  (* TOC for callee *)
-          maybe_add_label_before_call ~call_labels;
-          `	bctrl\n`;
-          record_frame i.live false i.dbg ~label:call_labels.after;
+          wrap_call_with_frame ~call_labels
+            (fun () -> `	bctrl\n`)
+            i.live false i.dbg;
           emit_reload_toc()
         | ELF64v2 ->
           `	mtctr	{emit_reg i.arg.(0)}\n`;
           `	mr	12, {emit_reg i.arg.(0)}\n`;  (* addr of fn in r12 *)
-          maybe_add_label_before_call ~call_labels;
-          `	bctrl\n`;
-          record_frame i.live false i.dbg ~label:call_labels.after;
+          wrap_call_with_frame ~call_labels
+            (fun () -> `	bctrl\n`)
+            i.live false i.dbg;
           emit_reload_toc()
         end
     | Lop(Icall_imm { func; call_labels; }) ->
         begin match abi with
         | ELF32 ->
-            maybe_add_label_before_call ~call_labels;
-            emit_call func;
-            record_frame i.live false i.dbg ~label:call_labels.after
+            wrap_call_with_frame ~call_labels
+              (fun () -> emit_call func)
+              i.live false i.dbg
         | ELF64v1 | ELF64v2 ->
         (* For PPC64, we cannot just emit a "bl s; nop" sequence, because
            of the following scenario:
@@ -695,9 +674,9 @@ let emit_instr i =
                 by the linker, but this is harmless.
                 Cost: 3 instructions if same TOC, 7 if different TOC.
            Let's try option 2. *)
-            maybe_add_label_before_call ~call_labels;
-            emit_call func;
-            record_frame i.live false i.dbg ~label:call_labels.after;
+            wrap_call_with_frame ~call_labels
+              (fun () -> emit_call func)
+              i.live false i.dbg;
             `	nop\n`;
             emit_reload_toc()
         end
@@ -718,14 +697,12 @@ let emit_instr i =
           `	mtlr	11\n`
         end;
         emit_free_frame();
-        maybe_add_label_before_call ~call_labels;
-        `	bctr\n`;
-        maybe_add_label_after_call ~call_labels
+        wrap_call_no_frame ~call_labels
+          (fun () -> `	bctr\n`)
     | Lop(Itailcall_imm { func; call_labels; }) ->
         if func = !function_name then begin
-          maybe_add_label_before_call ~call_labels;
-          `	b	{emit_label !tailrec_entry_point}\n`;
-          maybe_add_label_after_call ~call_labels
+          wrap_call_no_frame ~call_labels
+            (fun () -> `	b	{emit_label !tailrec_entry_point}\n`)
         end else begin
           begin match abi with
           | ELF32 ->
@@ -744,34 +721,33 @@ let emit_instr i =
             `	mtlr	11\n`
           end;
           emit_free_frame();
-          maybe_add_label_before_call ~call_labels;
-          begin match abi with
-          | ELF32 ->
-            `	b	{emit_symbol func}\n`
-          | ELF64v1 | ELF64v2 ->
-            `	bctr\n`
-          end;
-          maybe_add_label_after_call ~call_labels
+          wrap_call_no_frame ~call_labels
+            begin fun () ->
+              match abi with
+              | ELF32 ->
+                `	b	{emit_symbol func}\n`
+              | ELF64v1 | ELF64v2 ->
+                `	bctr\n`
+            end
         end
     | Lop(Iextcall { func; alloc; call_labels; }) ->
         if not alloc then begin
-          maybe_add_label_before_call ~call_labels;
-          emit_call func;
-          maybe_add_label_after_call ~call_labels;
+          wrap_call_no_frame ~call_labels
+            (fun () -> emit_call func);
           emit_call_nop()
         end else begin
           match abi with
           | ELF32 ->
             `	addis	28, 0, {emit_upper emit_symbol func}\n`;
             `	addi	28, 28, {emit_lower emit_symbol func}\n`;
-            maybe_add_label_before_call ~call_labels;
-            emit_call "caml_c_call";
-            record_frame i.live false i.dbg
+            wrap_call_with_frame ~call_labels
+              (fun () -> emit_call "caml_c_call")
+              i.live false i.dbg
           | ELF64v1 | ELF64v2 ->
             emit_tocload emit_gpr 28 (TocSym func);
-            maybe_add_label_before_call ~call_labels;
-            emit_call "caml_c_call";
-            record_frame i.live false i.dbg;
+            wrap_call_with_frame ~call_labels
+              (fun () -> emit_call "caml_c_call")
+              i.live false i.dbg;
             `	nop\n`
         end
     | Lop(Istackoffset n) ->
@@ -813,7 +789,8 @@ let emit_instr i =
         `	addi	{emit_reg i.res.(0)}, 31, {emit_int size_addr}\n`;
         `	bltl	{emit_label !call_gc_label}\n`;
         (* Exactly 4 instructions after the beginning of the alloc sequence *)
-        record_frame i.live false Debuginfo.none
+        record_frame ?label:None ~live:i.live
+          ~raise_frame:false ~dbg:Debuginfo.none
     | Lop(Ispecific(Ialloc_far { bytes = n; label_after_call_gc; })) ->
         if !call_gc_label = 0 then begin
           match label_after_call_gc with
@@ -826,7 +803,8 @@ let emit_instr i =
         `	bge	{emit_label lbl}\n`;
         `	bl	{emit_label !call_gc_label}\n`;
         (* Exactly 4 instructions after the beginning of the alloc sequence *)
-        record_frame i.live false Debuginfo.none;
+        record_frame ?label:None ~live:i.live
+          ~raise_frame:false ~dbg:Debuginfo.none;
         `{emit_label lbl}:	addi	{emit_reg i.res.(0)}, 31, {emit_int size_addr}\n`
     | Lop(Iintop Isub) ->               (* subfc has swapped arguments *)
         `	subfc	{emit_reg i.res.(0)}, {emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}\n`
@@ -845,7 +823,8 @@ let emit_instr i =
         end
     | Lop(Iintop (Icheckbound { label_after_error; })) ->
         if !Clflags.debug then
-          record_frame Reg.Set.empty false i.dbg ?label:label_after_error;
+          record_frame ~live:Reg.Set.empty ~raise_frame:false
+            ~dbg:i.dbg ?label:label_after_error;
         `	{emit_string tglle}   {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`
     | Lop(Iintop op) ->
         let instr = name_for_intop op in
@@ -863,7 +842,8 @@ let emit_instr i =
         end
     | Lop(Iintop_imm(Icheckbound { label_after_error; }, n)) ->
         if !Clflags.debug then
-          record_frame Reg.Set.empty false i.dbg ?label:label_after_error;
+          record_frame ~live:Reg.Set.empty ~raise_frame:false
+            ~dbg:i.dbg ?label:label_after_error;
         `	{emit_string tglle}i   {emit_reg i.arg.(0)}, {emit_int n}\n`
     | Lop(Iintop_imm(op, n)) ->
         let instr = name_for_intop_imm op in
@@ -1037,7 +1017,8 @@ let emit_instr i =
         begin match k with
         | Cmm.Raise_withtrace ->
             emit_call "caml_raise_exn";
-            record_frame Reg.Set.empty true i.dbg;
+            record_frame ?label:None ~live:Reg.Set.empty
+              ~raise_frame:true ~dbg:i.dbg;
             emit_call_nop()
         | Cmm.Raise_notrace ->
             `	{emit_string lg}	0, {emit_int trap_handler_offset}(29)\n`;

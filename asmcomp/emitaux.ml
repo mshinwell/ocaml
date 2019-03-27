@@ -114,13 +114,62 @@ type frame_descr =
 
 let frame_descriptors = ref([] : frame_descr list)
 
-let record_frame_descr ~label ~frame_size ~live_offset ~raise_frame debuginfo =
-  frame_descriptors :=
-    { fd_lbl = label;
-      fd_frame_size = frame_size;
-      fd_live_offset = List.sort_uniq (-) live_offset;
-      fd_raise = raise_frame;
-      fd_debuginfo = debuginfo } :: !frame_descriptors
+let record_frame_descr frame_descr =
+  frame_descriptors := frame_descr :: !frame_descriptors
+
+let mk_frame_descr ~slot_offset ~return_label ~frame_size ~live ~raise_frame ~dbg =
+  let live_offset = ref [] in
+  Reg.Set.iter
+    (function
+      | {Reg.typ = Cmm.Val; loc = Reg.Reg r} ->
+          live_offset := ((r lsl 1) + 1) :: !live_offset
+      | {Reg.typ = Cmm.Val; loc = Reg.Stack s} as reg ->
+          live_offset :=
+            slot_offset s (Proc.register_class reg) :: !live_offset
+      | {Reg.typ = Cmm.Addr} as r ->
+          Misc.fatal_error ("bad GC root " ^ Reg.name r)
+      | _ -> ()
+    )
+    live;
+  { fd_lbl = return_label;
+    fd_frame_size = frame_size;
+    fd_live_offset = List.sort_uniq (-) !live_offset;
+    fd_raise = raise_frame;
+    fd_debuginfo = dbg;
+  }
+
+let record_frame_label ~slot_offset ~frame_size
+    ?label ~live ~raise_frame ~dbg =
+  let lbl =
+    match label with
+    | None -> Cmm.new_label ()
+    | Some label -> label
+  in
+  let frame_descr =
+    mk_frame_descr ~slot_offset ~return_label:lbl ~frame_size:(frame_size ())
+      ~live ~raise_frame ~dbg
+  in
+  record_frame_descr frame_descr;
+  lbl
+
+let record_frame ~slot_offset ~frame_size ~def_label
+    ?label ~live ~raise_frame ~dbg =
+  let lbl =
+    record_frame_label ~slot_offset ~frame_size ?label ~live ~raise_frame ~dbg
+  in
+  def_label lbl
+
+let wrap_call ~def_label call ?frame_descr ~call_labels =
+  let dcs = Arch.supports_dwarf_call_sites () in
+  if dcs then begin def_label call_labels.Mach.before end;
+  call ();
+  match frame_descr with
+  | None -> if dcs then begin def_label call_labels.Mach.after end
+  | Some f -> begin
+      def_label call_labels.Mach.after;
+      frame_descriptors :=
+        { f with fd_lbl = call_labels.Mach.after; } :: !frame_descriptors
+    end
 
 type emit_frame_actions =
   { efa_code_label: int -> unit;

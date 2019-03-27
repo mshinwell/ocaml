@@ -233,31 +233,20 @@ let addressing addr typ i n =
 
 (* Record live pointers at call points -- see Emitaux *)
 
-let record_frame_label ?label live raise_ dbg =
-  let lbl =
-    match label with
-    | None -> new_label()
-    | Some label -> label
-  in
-  let live_offset = ref [] in
-  Reg.Set.iter
-    (function
-      | {typ = Val; loc = Reg r} ->
-          live_offset := ((r lsl 1) + 1) :: !live_offset
-      | {typ = Val; loc = Stack s} as reg ->
-          live_offset := slot_offset s (register_class reg) :: !live_offset
-      | {typ = Addr} as r ->
-          Misc.fatal_error ("bad GC root " ^ Reg.name r)
-      | _ -> ()
-    )
-    live;
-  record_frame_descr ~label:lbl ~frame_size:(frame_size())
-    ~live_offset:!live_offset ~raise_frame:raise_ dbg;
-  lbl
+let record_frame_label = Emitaux.record_frame_label ~slot_offset ~frame_size
+let record_frame =
+  Emitaux.record_frame ~slot_offset ~frame_size ~def_label
 
-let record_frame ?label live raise_ dbg =
-  let lbl = record_frame_label ?label live raise_ dbg in
-  def_label lbl
+let wrap_call_with_frame ~call_labels call live raise_frame dbg =
+  let frame_descr =
+    Emitaux.mk_frame_descr
+      ~slot_offset ~return_label:call_labels.after ~frame_size:(frame_size ())
+      ~live ~raise_frame ~dbg
+  in
+  Emitaux.wrap_call ~def_label call ~frame_descr ~call_labels
+
+let wrap_call_no_frame ~call_labels call =
+  Emitaux.wrap_call ~def_label call ?frame_descr:None ~call_labels
 
 (* Spacetime instrumentation *)
 
@@ -314,7 +303,9 @@ let bound_error_call = ref 0
 let bound_error_label ?label dbg ~spacetime =
   if !Clflags.debug || Config.spacetime then begin
     let lbl_bound_error = new_label() in
-    let lbl_frame = record_frame_label ?label Reg.Set.empty false dbg in
+    let lbl_frame =
+      record_frame_label ?label ~live:Reg.Set.empty ~raise_frame:false ~dbg
+    in
     bound_error_sites :=
       { bd_lbl = lbl_bound_error; bd_frame = lbl_frame;
         bd_spacetime = spacetime; } :: !bound_error_sites;
@@ -490,23 +481,6 @@ let emit_profile () =
     I.pop r10
   end
 
-(* Emission of labels immediately prior to and after calls, used for DWARF
-   call site support. *)
-
-let supports_dwarf_call_sites () = false  (* To be filled in by a later GPR. *)
-
-let maybe_add_label_before_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    _label (emit_label call_labels.before)
-  end
-
-(* This function should not be called if [record_frame] is going to be used,
-   since the latter defines the same label as this function. *)
-let maybe_add_label_after_call ~call_labels =
-  if supports_dwarf_call_sites () then begin
-    _label (emit_label call_labels.after)
-  end
-
 (* Output the assembly code for an instruction *)
 
 (* Name of current function *)
@@ -563,50 +537,49 @@ let emit_instr fallthrough i =
       add_used_symbol s;
       load_symbol_addr s (res i 0)
   | Lop(Icall_ind { call_labels; }) ->
-      maybe_add_label_before_call ~call_labels;
-      I.call (arg i 0);
-      record_frame i.live false i.dbg ~label:call_labels.after
+      wrap_call_with_frame ~call_labels
+        (fun () -> I.call (arg i 0))
+        i.live false i.dbg
   | Lop(Icall_imm { func; call_labels; }) ->
       add_used_symbol func;
-      maybe_add_label_before_call ~call_labels;
-      emit_call func;
-      record_frame i.live false i.dbg ~label:call_labels.after
+      wrap_call_with_frame ~call_labels
+        (fun () -> emit_call func)
+        i.live false i.dbg
   | Lop(Itailcall_ind { call_labels; }) ->
       output_epilogue begin fun () ->
-        maybe_add_label_before_call ~call_labels;
-        I.jmp (arg i 0);
+        let call () = I.jmp (arg i 0) in
         if Config.spacetime then begin
-          record_frame Reg.Set.empty false i.dbg ~label:call_labels.after
+          wrap_call_with_frame ~call_labels call
+            Reg.Set.empty false i.dbg
         end else begin
-          maybe_add_label_after_call ~call_labels
+          wrap_call_no_frame ~call_labels call
         end
       end
   | Lop(Itailcall_imm { func; call_labels; }) ->
       if func = !function_name then begin
-        maybe_add_label_before_call ~call_labels;
-        I.jmp (label !tailrec_entry_point);
-        if not Config.spacetime then begin
-          maybe_add_label_after_call ~call_labels
-        end
+        let call () = I.jmp (label !tailrec_entry_point) in
+        if Config.spacetime then
+          wrap_call_with_frame ~call_labels call
+            Reg.Set.empty false i.dbg
+        else
+          wrap_call_no_frame ~call_labels call
       end else begin
         output_epilogue (fun () ->
           add_used_symbol func;
-          maybe_add_label_before_call ~call_labels;
-          emit_jump func;
-          if not Config.spacetime then begin
-            maybe_add_label_after_call ~call_labels
-          end)
-      end;
-      if Config.spacetime then begin
-        record_frame Reg.Set.empty false i.dbg ~label:call_labels.after
+          let call () = emit_jump func in
+          if Config.spacetime then
+            wrap_call_with_frame ~call_labels call
+              Reg.Set.empty false i.dbg
+          else
+            wrap_call_no_frame ~call_labels call)
       end
   | Lop(Iextcall { func; alloc; call_labels; }) ->
       add_used_symbol func;
       if alloc then begin
         load_symbol_addr func rax;
-        maybe_add_label_before_call ~call_labels;
-        emit_call "caml_c_call";
-        record_frame i.live false i.dbg ~label:call_labels.after;
+        wrap_call_with_frame ~call_labels
+          (fun () -> emit_call "caml_c_call")
+          i.live false i.dbg;
         if system <> S_win64 then begin
           (* TODO: investigate why such a diff.
              This comes from:
@@ -619,12 +592,12 @@ let emit_instr fallthrough i =
           I.mov (mem64 QWORD 0 R11) r15
         end
       end else begin
-        maybe_add_label_before_call ~call_labels;
-        emit_call func;
+        let call () = emit_call func in
         if Config.spacetime then begin
-          record_frame Reg.Set.empty false i.dbg ~label:call_labels.after
+          wrap_call_with_frame ~call_labels call
+            Reg.Set.empty false i.dbg
         end else begin
-          maybe_add_label_after_call ~call_labels
+          wrap_call_no_frame ~call_labels call
         end
       end
   | Lop(Istackoffset n) ->
@@ -702,7 +675,8 @@ let emit_instr fallthrough i =
           else i.dbg
         in
         let lbl_frame =
-          record_frame_label ?label:label_after_call_gc i.live false dbg
+          record_frame_label ?label:label_after_call_gc ~live:i.live
+            ~raise_frame:false ~dbg
         in
         I.jb (label lbl_call_gc);
         I.lea (mem64 NONE 8 R15) (res i 0);
@@ -729,8 +703,8 @@ let emit_instr fallthrough i =
             emit_call "caml_allocN"
         end;
         let label =
-          record_frame_label ?label:label_after_call_gc i.live false
-            Debuginfo.none
+          record_frame_label ?label:label_after_call_gc ~live:i.live
+            ~raise_frame:false ~dbg:Debuginfo.none
         in
         def_label label;
         I.lea (mem64 NONE 8 R15) (res i 0)
@@ -925,7 +899,8 @@ let emit_instr fallthrough i =
       begin match k with
       | Cmm.Raise_withtrace ->
           emit_call "caml_raise_exn";
-          record_frame Reg.Set.empty true i.dbg
+          let label = Cmm.new_label () in
+          record_frame ~label ~live:Reg.Set.empty ~raise_frame:true ~dbg:i.dbg
       | Cmm.Raise_notrace ->
           I.mov r14 rsp;
           I.pop r14;

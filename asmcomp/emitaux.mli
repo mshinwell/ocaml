@@ -38,12 +38,46 @@ val emit_debug_info_gen :
   (file_num:int -> file_name:string -> unit) ->
   (file_num:int -> line:int -> col:int -> unit) -> unit
 
-val record_frame_descr :
-  label:int ->              (* Return address *)
-  frame_size:int ->         (* Size of stack frame *)
-  live_offset:int list ->   (* Offsets/regs of live addresses *)
-  raise_frame:bool ->       (* Is frame for a raise? *)
-  Debuginfo.t ->            (* Location, if any *)
+type frame_descr
+
+(** Functions to compute stack offsets (in bytes) from stack locations *)
+type slot_offset := Reg.stack_location -> (* register class *) int -> int
+
+val mk_frame_descr :
+  slot_offset : slot_offset ->
+  return_label : Cmm.label ->
+  frame_size : int ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
+  frame_descr
+
+val record_frame_descr : frame_descr -> unit
+
+val record_frame_label :
+  slot_offset : slot_offset ->
+  frame_size : (unit -> int) ->
+  ?label : Cmm.label ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
+  Cmm.label
+
+val record_frame :
+  slot_offset : slot_offset ->
+  frame_size : (unit -> int) ->
+  def_label : (Cmm.label -> unit) ->
+  ?label : Cmm.label ->
+  live : Reg.Set.t ->
+  raise_frame : bool ->
+  dbg : Debuginfo.t ->
+  unit
+
+val wrap_call :
+  def_label : (Cmm.label -> unit) ->  (* Label emitter *)
+  (unit -> unit) ->                        (* Call emitter *)
+  ?frame_descr : frame_descr ->            (* Record frame if present *)
+  call_labels : Mach.call_labels ->        (* Labels *)
   unit
 
 type emit_frame_actions =

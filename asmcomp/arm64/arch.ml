@@ -93,6 +93,8 @@ let num_args_addressing = function
   | Iindexed _ -> 1
   | Ibased _ -> 0
 
+let supports_dwarf_call_sites () = false  (* To be filled in by a later GPR. *)
+
 (* Printing operations and addressing modes *)
 
 let print_addressing printreg addr ppf arg =
