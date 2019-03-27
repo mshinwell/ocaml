@@ -33,8 +33,9 @@ module Storer =
       let compare_key = Stdlib.compare
     end)
 
-module V = Backend_var
-module VP = Backend_var.With_provenance
+module I = Internal_variable_names
+module V = Variable
+module VP = Variable.With_provenance
 
 (* The current backend *)
 
@@ -58,9 +59,9 @@ let rec split_list n l =
   end
 
 let rec build_closure_env env_param pos = function
-    [] -> V.Map.empty
+    [] -> Ident.Map.empty
   | id :: rem ->
-      V.Map.add id
+      Ident.Map.add id
         (Uprim(P.Pfield pos, [Uvar env_param], Debuginfo.none))
           (build_closure_env env_param (pos+1) rem)
 
@@ -837,11 +838,15 @@ let excessive_function_nesting_depth = 5
 exception NotClosed
 
 let close_approx_var fenv cenv id =
-  let approx = try V.Map.find id fenv with Not_found -> Value_unknown in
+  let approx = try Ident.Map.find id fenv with Not_found -> Value_unknown in
   match approx with
     Value_const c -> make_const c
   | approx ->
-      let subst = try V.Map.find id cenv with Not_found -> Uvar id in
+      let subst =
+        try Ident.Map.find id cenv with
+        | Not_found ->
+            Misc.fatal_errorf "close_approx_var: unbound %a" Ident.print id
+      in
       (subst, approx)
 
 let close_var fenv cenv id =
@@ -908,23 +913,34 @@ let rec close fenv cenv lam =
       | ((ufunct, (Value_closure(fundesc, _) as fapprox)), uargs)
           when nargs < fundesc.fun_arity ->
         let first_args = List.map (fun arg ->
-          (V.create_local "arg", arg) ) uargs in
+          let id = Ident.create_local "arg" in
+          let var = V.create_with_same_name_as_ident id in
+          (id, var, arg) ) uargs in
         let final_args =
           Array.to_list (Array.init (fundesc.fun_arity - nargs)
-                                    (fun _ -> V.create_local "arg")) in
-        let rec iter args body =
+                                    (fun _ -> Ident.create_local "arg")) in
+        let rec bind_vars args body =
           match args with
               [] -> body
-            | (arg1, arg2) :: args ->
-              iter args
-                (Ulet (Immutable, Pgenval, VP.create arg1, arg2, body))
+            | (_, var, arg2) :: args ->
+              bind_vars args
+                (Ulet (Immutable, Pgenval, VP.create var, arg2, body))
         in
         let internal_args =
-          (List.map (fun (arg1, _arg2) -> Lvar arg1) first_args)
+          (List.map (fun (arg1, _var, _arg2) -> Lvar arg1) first_args)
           @ (List.map (fun arg -> Lvar arg ) final_args)
         in
-        let funct_var = V.create_local "funct" in
-        let fenv = V.Map.add funct_var fapprox fenv in
+        let funct_id = Ident.create_local "funct" in
+        let funct_var = V.create_with_same_name_as_ident funct_id in
+        let fenv = Ident.Map.add funct_id fapprox fenv in
+        let cenv = Ident.Map.add funct_id (Uvar funct_var) cenv in
+        let cenv =
+          List.fold_right
+            (fun (id, var, _arg) cenv ->
+               assert(Ident.Map.find_opt id cenv = None);
+               Ident.Map.add id (Uvar var) cenv)
+            first_args cenv
+        in
         let (new_fun, approx) = close fenv cenv
           (Lfunction{
                kind = Curried;
@@ -932,7 +948,7 @@ let rec close fenv cenv lam =
                params = List.map (fun v -> v, Pgenval) final_args;
                body = Lapply{ap_should_be_tailcall=false;
                              ap_loc=loc;
-                             ap_func=(Lvar funct_var);
+                             ap_func=(Lvar funct_id);
                              ap_args=internal_args;
                              ap_inlined=Default_inline;
                              ap_specialised=Default_specialise};
@@ -940,7 +956,7 @@ let rec close fenv cenv lam =
                attr = default_function_attribute})
         in
         let new_fun =
-          iter first_args
+          bind_vars first_args
             (Ulet (Immutable, Pgenval, VP.create funct_var, ufunct, new_fun))
         in
         warning_if_forced_inline ~loc ~attribute "Partial application";
@@ -948,7 +964,7 @@ let rec close fenv cenv lam =
 
       | ((ufunct, Value_closure(fundesc, _approx_res)), uargs)
         when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
-          let args = List.map (fun arg -> V.create_local "arg", arg) uargs in
+          let args = List.map (fun arg -> V.create I.arg, arg) uargs in
           let (first_args, rem_args) = split_list fundesc.fun_arity args in
           let first_args = List.map (fun (id, _) -> Uvar id) first_args in
           let rem_args = List.map (fun (id, _) -> Uvar id) rem_args in
@@ -981,14 +997,18 @@ let rec close fenv cenv lam =
       let (ulam, alam) = close_named fenv cenv id lam in
       begin match (str, alam) with
         (Variable, _) ->
+          let var = V.create_with_same_name_as_ident id in
+          let cenv = Ident.Map.add id (Uvar var) cenv in
           let (ubody, abody) = close fenv cenv body in
-          (Ulet(Mutable, kind, VP.create id, ulam, ubody), abody)
+          (Ulet(Mutable, kind, VP.create var, ulam, ubody), abody)
       | (_, Value_const _)
         when str = Alias || is_pure ulam ->
-          close (V.Map.add id alam fenv) cenv body
+          close (Ident.Map.add id alam fenv) cenv body
       | (_, _) ->
-          let (ubody, abody) = close (V.Map.add id alam fenv) cenv body in
-          (Ulet(Immutable, kind, VP.create id, ulam, ubody), abody)
+          let var = V.create_with_same_name_as_ident id in
+          let cenv = Ident.Map.add id (Uvar var) cenv in
+          let (ubody, abody) = close (Ident.Map.add id alam fenv) cenv body in
+          (Ulet(Immutable, kind, VP.create var, ulam, ubody), abody)
       end
   | Lletrec(defs, body) ->
       if List.for_all
@@ -997,28 +1017,46 @@ let rec close fenv cenv lam =
       then begin
         (* Simple case: only function definitions *)
         let (clos, infos) = close_functions fenv cenv defs in
-        let clos_ident = V.create_local "clos" in
+        let clos_ident = V.create I.closure in
         let fenv_body =
           List.fold_right
-            (fun (id, _pos, approx) fenv -> V.Map.add id approx fenv)
+            (fun (id, _var, _pos, approx) fenv -> Ident.Map.add id approx fenv)
             infos fenv in
-        let (ubody, approx) = close fenv_body cenv body in
+        let cenv_body =
+          List.fold_right
+            (fun (id, var, _pos, _approx) cenv ->
+               assert(Ident.Map.find_opt id cenv = None);
+               Ident.Map.add id (Uvar var) cenv)
+            infos cenv in
+        let (ubody, approx) = close fenv_body cenv_body body in
         let sb =
           List.fold_right
-            (fun (id, pos, _approx) sb ->
-              V.Map.add id (Uoffset(Uvar clos_ident, pos)) sb)
+            (fun (_id, var, pos, _approx) sb ->
+              V.Map.add var (Uoffset(Uvar clos_ident, pos)) sb)
             infos V.Map.empty in
         (Ulet(Immutable, Pgenval, VP.create clos_ident, clos,
               substitute Location.none !Clflags.float_const_prop sb None ubody),
          approx)
       end else begin
         (* General case: recursive definition of values *)
+        let defs =
+          List.map (fun (id, lam) ->
+              let var = V.create_with_same_name_as_ident id in
+              id, var, lam)
+            defs
+        in
+        let cenv =
+          List.fold_left (fun cenv (id, var, _) ->
+              Ident.Map.add id (Uvar var) cenv)
+            cenv defs
+        in
         let rec clos_defs = function
           [] -> ([], fenv)
-        | (id, lam) :: rem ->
+        | (id, var, lam) :: rem ->
             let (udefs, fenv_body) = clos_defs rem in
             let (ulam, approx) = close_named fenv cenv id lam in
-            ((VP.create id, ulam) :: udefs, V.Map.add id approx fenv_body) in
+            ((VP.create var, ulam) :: udefs, Ident.Map.add id approx fenv_body)
+        in
         let (udefs, fenv_body) = clos_defs defs in
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)
@@ -1039,7 +1077,8 @@ let rec close fenv cenv lam =
       in
       let arg, _approx = close fenv cenv arg in
       let id = Ident.create_local "dummy" in
-      Ulet(Immutable, Pgenval, VP.create id, arg, cst), approx
+      let var = V.create_with_same_name_as_ident id in
+      Ulet(Immutable, Pgenval, VP.create var, arg, cst), approx
   | Lprim(Pignore, [arg], _loc) ->
       let expr, approx = make_const_ptr 0 in
       Usequence(fst (close fenv cenv arg), expr), approx
@@ -1127,15 +1166,28 @@ let rec close fenv cenv lam =
       Ustringswitch (uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
       (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
-  | Lstaticcatch(body, (i, vars), handler) ->
+  | Lstaticcatch(body, (i, ids), handler) ->
       let (ubody, _) = close fenv cenv body in
+      let vars =
+        List.map (fun (id, k) ->
+            let var = V.create_with_same_name_as_ident id in
+            id, var, k)
+          ids
+      in
+      let cenv =
+        List.fold_left (fun cenv (id, var, _k) ->
+          Ident.Map.add id (Uvar var) cenv)
+          cenv vars
+      in
       let (uhandler, _) = close fenv cenv handler in
-      let vars = List.map (fun (var, k) -> VP.create var, k) vars in
+      let vars = List.map (fun (_id, var, k) -> VP.create var, k) vars in
       (Ucatch(i, vars, ubody, uhandler), Value_unknown)
   | Ltrywith(body, id, handler) ->
       let (ubody, _) = close fenv cenv body in
+      let var = V.create_with_same_name_as_ident id in
+      let cenv = Ident.Map.add id (Uvar var) cenv in
       let (uhandler, _) = close fenv cenv handler in
-      (Utrywith(ubody, VP.create id, uhandler), Value_unknown)
+      (Utrywith(ubody, VP.create var, uhandler), Value_unknown)
   | Lifthenelse(arg, ifso, ifnot) ->
       begin match close fenv cenv arg with
         (uarg, Value_const (Uconst_ptr n)) ->
@@ -1157,11 +1209,18 @@ let rec close fenv cenv lam =
   | Lfor(id, lo, hi, dir, body) ->
       let (ulo, _) = close fenv cenv lo in
       let (uhi, _) = close fenv cenv hi in
+      let var = V.create_with_same_name_as_ident id in
+      let cenv = Ident.Map.add id (Uvar var) cenv in
       let (ubody, _) = close fenv cenv body in
-      (Ufor(VP.create id, ulo, uhi, dir, ubody), Value_unknown)
+      (Ufor(VP.create var, ulo, uhi, dir, ubody), Value_unknown)
   | Lassign(id, lam) ->
       let (ulam, _) = close fenv cenv lam in
-      (Uassign(id, ulam), Value_unknown)
+      let var =
+        match Ident.Map.find id cenv with
+        | Uvar var -> var
+        | _ -> assert false (* Yurk ! *)
+      in
+      (Uassign(var, ulam), Value_unknown)
   | Levent(lam, _) ->
       close fenv cenv lam
   | Lifused _ ->
@@ -1210,7 +1269,7 @@ and close_functions fenv cenv fun_defs =
     !function_nesting_depth < excessive_function_nesting_depth in
   (* Determine the free variables of the functions *)
   let fv =
-    V.Set.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
+    Ident.Set.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
   (* Build the function descriptors for the functions.
      Initially all functions are assumed not to need their environment
      parameter. *)
@@ -1218,7 +1277,7 @@ and close_functions fenv cenv fun_defs =
     List.map
       (function
           (id, Lfunction{kind; params; return; body; loc}) ->
-            let fun_var = Variable.create_with_same_name_as_ident id in
+            let fun_var = V.create_with_same_name_as_ident id in
             let label = Symbol.for_lifted_variable fun_var in
             let arity = List.length params in
             let fundesc =
@@ -1228,20 +1287,20 @@ and close_functions fenv cenv fun_defs =
                fun_inline = None;
                fun_float_const_prop = !Clflags.float_const_prop } in
             let dbg = Debuginfo.from_location loc in
-            (id, params, return, body, fundesc, dbg)
+            (id, fun_var, params, return, body, fundesc, dbg)
         | (_, _) -> fatal_error "Closure.close_functions")
       fun_defs in
   (* Build an approximate fenv for compiling the functions *)
   let fenv_rec =
     List.fold_right
-      (fun (id, _params, _return, _body, fundesc, _dbg) fenv ->
-        V.Map.add id (Value_closure(fundesc, Value_unknown)) fenv)
+      (fun (id, _var, _params, _return, _body, fundesc, _dbg) fenv ->
+        Ident.Map.add id (Value_closure(fundesc, Value_unknown)) fenv)
       uncurried_defs fenv in
   (* Determine the offsets of each function's closure in the shared block *)
   let env_pos = ref (-1) in
   let clos_offsets =
     List.map
-      (fun (_id, _params, _return, _body, fundesc, _dbg) ->
+      (fun (_id, _var, _params, _return, _body, fundesc, _dbg) ->
         let pos = !env_pos + 1 in
         env_pos := !env_pos + 1 + (if fundesc.fun_arity <> 1 then 3 else 2);
         pos)
@@ -1251,18 +1310,32 @@ and close_functions fenv cenv fun_defs =
      does not use its environment parameter is invalidated. *)
   let useless_env = ref initially_closed in
   (* Translate each function definition *)
-  let clos_fundef (id, params, return, body, fundesc, dbg) env_pos =
-    let env_param = V.create_local "env" in
+  let clos_fundef (id, var, params, return, body, fundesc, dbg) env_pos =
+    let env_param = V.create I.env in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
       List.fold_right2
-        (fun (id, _params, _return, _body, _fundesc, _dbg) pos env ->
-          V.Map.add id (Uoffset(Uvar env_param, pos - env_pos)) env)
+        (fun (id, _var, _params, _return, _body, _fundesc, _dbg) pos env ->
+          Ident.Map.add id (Uoffset(Uvar env_param, pos - env_pos)) env)
         uncurried_defs clos_offsets cenv_fv in
+    let params =
+      List.map (fun (id, k) ->
+          let var = V.create_with_same_name_as_ident id in
+          id, var, k)
+        params
+    in
+    let cenv_body =
+      List.fold_left (fun cenv (id, var, _) ->
+          Ident.Map.add id (Uvar var) cenv)
+        cenv_body params
+    in
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
     let fun_params =
+      let params =
+        List.map (fun (_id, var, k) -> var, k) params
+      in
       if !useless_env
       then params
       else params @ [env_param, Pgenval]
@@ -1302,7 +1375,7 @@ and close_functions fenv cenv fun_defs =
     if lambda_smaller ubody threshold
     then fundesc.fun_inline <- Some(fun_params, ubody);
 
-    (f, (id, env_pos, Value_closure(fundesc, approx))) in
+    (f, (id, var, env_pos, Value_closure(fundesc, approx))) in
   (* Translate all function definitions. *)
   let clos_info_list =
     if initially_closed then begin
@@ -1314,7 +1387,7 @@ and close_functions fenv cenv fun_defs =
          recompile *)
         Compilation_state.Closure_only.backtrack snap; (* PR#6337 *)
         List.iter
-          (fun (_id, _params, _return, _body, fundesc, _dbg) ->
+          (fun (_id, _var, _params, _return, _body, fundesc, _dbg) ->
              fundesc.fun_closed <- false;
              fundesc.fun_inline <- None;
           )
@@ -1337,7 +1410,7 @@ and close_functions fenv cenv fun_defs =
 
 and close_one_function fenv cenv id funct =
   match close_functions fenv cenv [id, funct] with
-  | (clos, (i, _, approx) :: _) when id = i -> (clos, approx)
+  | (clos, (i, _var, _, approx) :: _) when id = i -> (clos, approx)
   | _ -> fatal_error "Closure.close_one_function"
 
 (* Close a switch *)
@@ -1465,7 +1538,7 @@ let intro ~backend:backend' ~size lam =
     Array.init size (fun i -> Value_global_field (module_block, i));
   Compilation_state.Closure_only.set_global_approx
     (Value_tuple !global_approx);
-  let (ulam, _approx) = close V.Map.empty V.Map.empty lam in
+  let (ulam, _approx) = close Ident.Map.empty Ident.Map.empty lam in
   let opaque =
     !Clflags.opaque
     || Env.is_imported_opaque (Compilation_unit.Name.to_string (

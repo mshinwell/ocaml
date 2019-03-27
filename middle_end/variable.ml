@@ -24,6 +24,8 @@ type t = {
   (** [name_stamp]s are unique within any given compilation unit. *)
 }
 
+type variable = t
+
 include Identifiable.Make (struct
   type nonrec t = t
 
@@ -119,3 +121,45 @@ let output_full chan t =
   Compilation_unit.output chan t.compilation_unit;
   output_string chan ".";
   output chan t
+
+module With_provenance = struct
+  type t =
+    | Without_provenance of variable
+    | With_provenance of {
+        var : variable;
+        provenance : Provenance.t;
+      }
+
+  let create ?provenance var =
+    match provenance with
+    | None -> Without_provenance var
+    | Some provenance -> With_provenance { var; provenance; }
+
+  let var t =
+    match t with
+    | Without_provenance var
+    | With_provenance { var; provenance = _; } -> var
+
+  let provenance t =
+    match t with
+    | Without_provenance _ -> None
+    | With_provenance { var = _; provenance; } -> Some provenance
+
+  let rename ?current_compilation_unit t =
+    match t with
+    | Without_provenance v ->
+      Without_provenance (rename ?current_compilation_unit v)
+    | With_provenance { var; provenance; } ->
+      With_provenance { var = rename ?current_compilation_unit var;
+                        provenance; }
+
+  let name t = name (var t)
+
+  let print ppf t =
+    match provenance t with
+    | None -> print ppf (var t)
+    | Some provenance ->
+      Format.fprintf ppf "%a[%a]"
+        print (var t)
+        Provenance.print provenance
+end

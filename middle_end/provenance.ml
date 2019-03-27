@@ -3,8 +3,10 @@
 (*                                 OCaml                                  *)
 (*                                                                        *)
 (*                  Mark Shinwell, Jane Street Europe                     *)
+(*                       Pierre Chambart, OCamlPro                        *)
 (*                                                                        *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2018-2019 Jane Street Group LLC                            *)
+(*   Copyright 2019 OCamlPro SAS                                          *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -12,32 +14,30 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Variables used in the backend, optionally equipped with "provenance"
-    information, used for the emission of debugging information. *)
-
-(* CR-soon mshinwell: Move this into the asmcomp/ directory and change
-   [Clambda] to use [Variable].  This should be done once the Flambda gdb
-   patches are ready, so we can add the necessary provenance info. to
-   [Variable]. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include module type of struct include Ident end
+type t = {
+  module_path : Path.t;
+  location : Debuginfo.t;
+  original_ident : Ident.t;
+}
 
-type backend_var = t
+let print ppf { module_path; location; original_ident; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(module_path@ %a)@]@ \
+      @[<hov 1>(location@ %a)@]@ \
+      @[<hov 1>(original_ident@ %a)@]\
+      )@]"
+    Path.print module_path
+    Debuginfo.print_compact location
+    Ident.print original_ident
 
-module With_provenance : sig
-  (** Values of type [t] should be used for variables in binding position. *)
-  type t
+let create ~module_path ~location ~original_ident =
+  { module_path;
+    location;
+    original_ident;
+  }
 
-  val print : Format.formatter -> t -> unit
-
-  val create : ?provenance:Provenance.t -> backend_var -> t
-
-  val var : t -> backend_var
-  val provenance : t -> Provenance.t option
-
-  val name : t -> string
-
-  val rename : t -> t
-end
+let module_path t = t.module_path
+let location t = t.location
+let original_ident t = t.original_ident

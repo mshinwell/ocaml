@@ -30,6 +30,11 @@ val create_from_variable
   -> Variable.t
   -> t
 
+val rename_into_variable
+  : ?current_compilation_unit:Compilation_unit.t
+  -> t
+  -> Variable.t
+
 val rename
    : ?current_compilation_unit:Compilation_unit.t
   -> t

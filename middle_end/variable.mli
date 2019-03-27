@@ -28,6 +28,8 @@
 
 include Identifiable.S
 
+type variable = t
+
 val create
    : ?current_compilation_unit:Compilation_unit.t
   -> Internal_variable_names.t
@@ -63,3 +65,22 @@ val compare_lists : t list -> t list -> int
 
 val output_full : out_channel -> t -> unit
 (** Unlike [output], [output_full] includes the compilation unit. *)
+
+module With_provenance : sig
+  (** Values of type [t] should be used for variables in binding position. *)
+  type t
+
+  val print : Format.formatter -> t -> unit
+
+  val create : ?provenance:Provenance.t -> variable -> t
+
+  val var : t -> variable
+  val provenance : t -> Provenance.t option
+
+  val name : t -> string
+
+  val rename
+    : ?current_compilation_unit:Compilation_unit.t
+    -> t
+    -> t
+end

@@ -16,8 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module V = Backend_var
-module VP = Backend_var.With_provenance
+module V = Variable
+module VP = Variable.With_provenance
 
 type 'a for_one_or_more_units = {
   fun_offset_table : int Closure_id.Map.t;
@@ -38,7 +38,8 @@ type t = {
 
 let get_fun_offset t closure_id =
   let fun_offset_table =
-    if Closure_id.in_compilation_unit closure_id (Compilation_unit.get_current_exn ())
+    if Closure_id.in_compilation_unit closure_id
+        (Compilation_unit.get_current_exn ())
     then
       t.current_unit.fun_offset_table
     else
@@ -152,14 +153,14 @@ end = struct
   let ident_for_var_exn t id = Variable.Map.find id t.var
 
   let add_fresh_ident t var =
-    let id = V.create_local (Variable.name var) in
+    let id = Variable.rename var in
     id, { t with var = Variable.Map.add var id t.var }
 
   let ident_for_mutable_var_exn t mut_var =
     Mutable_variable.Map.find mut_var t.mutable_var
 
   let add_fresh_mutable_ident t mut_var =
-    let id = V.create_local (Mutable_variable.name mut_var) in
+    let id = Mutable_variable.rename_into_variable mut_var in
     let mutable_var = Mutable_variable.Map.add mut_var id t.mutable_var in
     id, { t with mutable_var; }
 
@@ -478,7 +479,7 @@ and to_clambda_set_of_closures t env
       (({ function_decls; free_vars } : Flambda.set_of_closures)
         as set_of_closures) : Clambda.ulambda =
   let all_functions = Variable.Map.bindings function_decls.funs in
-  let env_var = V.create_local "env" in
+  let env_var = Variable.create Internal_variable_names.env in
   let to_clambda_function
         (closure_id, (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
