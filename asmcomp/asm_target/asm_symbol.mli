@@ -86,11 +86,6 @@ val is_generic_function : t -> bool
 
 (** The names of various predefined symbols, for convenience. *)
 module Names : sig
-  (** External variables from the C library. *)
-  val mcount : t
-  val _mcount : t
-  val __gnu_mcount_nc : t
-
   (** Global variables in the OCaml runtime accessed by OCaml code. *)
   val caml_young_ptr : t
   val caml_young_limit : t

@@ -294,6 +294,8 @@ let kind t : kind =
   | Predefined_exn _ -> Data
 
 let name_for_backend t =
+  (* Care: these must not clash with the names produced in
+     [Backend_sym.for_lifted_anonymous_constant]. *)
   match t with
   | Module_block _ -> None
   | Lifted_variable { name; stamp; _ } ->

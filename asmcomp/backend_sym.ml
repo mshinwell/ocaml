@@ -32,6 +32,8 @@ let to_string { name; _ } = name
 include Identifiable.Make (struct
   type nonrec t = t
 
+  (* CR mshinwell: check every field *)
+
   let compare t1 t2 = String.compare (to_string t1) (to_string t2)
 
   let equal t1 t2 = (compare t1 t2 = 0)
@@ -40,7 +42,7 @@ include Identifiable.Make (struct
 
   let print ppf { name; _ } = Format.pp_print_string ppf name
 
-  let output chn t = output_string chn (to_string t)
+  let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
 let compute_object_file (compilation_unit : BCU.t) =
@@ -192,8 +194,74 @@ module Names = struct
   let runtime = Object_file.runtime_and_external_libs
   let startup = Object_file.startup
 
+  let atan =
+    of_external_name runtime "atan" Text
+
+  let atan2 =
+    of_external_name runtime "atan2" Text
+
+  let cos =
+    of_external_name runtime "cos" Text
+
+  let log =
+    of_external_name runtime "log" Text
+
+  let log10 =
+    of_external_name runtime "log10" Text
+
+  let sin =
+    of_external_name runtime "sin" Text
+
   let sqrt =
     of_external_name runtime "sqrt" Text
+
+  let tan =
+    of_external_name runtime "tan" Text
+
+  let __aeabi_idivmod =
+    of_external_name runtime "__aeabi_idivmod" Text
+
+  let __aeabi_idiv =
+    of_external_name runtime "__aeabi_idiv" Text
+
+  let __aeabi_dadd =
+    of_external_name runtime "__aeabi_dadd" Text
+
+  let __aeabi_dsub =
+    of_external_name runtime "__aeabi_dsub" Text
+
+  let __aeabi_dmul =
+    of_external_name runtime "__aeabi_dmul" Text
+
+  let __aeabi_ddiv =
+    of_external_name runtime "__aeabi_ddiv" Text
+
+  let __aeabi_i2d =
+    of_external_name runtime "__aeabi_i2d" Text
+
+  let __aeabi_d2iz =
+    of_external_name runtime "__aeabi_d2iz" Text
+
+  let __aeabi_dcmpeq =
+    of_external_name runtime "__aeabi_dcmpeq" Text
+
+  let __aeabi_dcmplt =
+    of_external_name runtime "__aeabi_dcmplt" Text
+
+  let __aeabi_dcmple =
+    of_external_name runtime "__aeabi_dcmple" Text
+
+  let __aeabi_dcmpgt =
+    of_external_name runtime "__aeabi_dcmpgt" Text
+
+  let __aeabi_dcmpge =
+    of_external_name runtime "__aeabi_dcmpge" Text
+
+  let __aeabi_f2d =
+    of_external_name runtime "__aeabi_f2d" Text
+
+  let __aeabi_d2f =
+    of_external_name runtime "__aeabi_d2f" Text
 
   let caml_exception_pointer =
     of_external_name runtime "caml_exception_pointer" Data

@@ -30,15 +30,8 @@ let emit_printf fmt =
 
 let emit_int32 n = emit_printf "0x%lx" n
 
-let emit_symbol esc s =
-  for i = 0 to String.length s - 1 do
-    let c = s.[i] in
-    match c with
-      'A'..'Z' | 'a'..'z' | '0'..'9' | '_' ->
-        output_char !output_channel c
-    | _ ->
-        Printf.fprintf !output_channel "%c%02x" esc (Char.code c)
-  done
+let emit_symbol ?reloc s =
+  output_string !output_channel (Asm_symbol.to_escaped_string ?reloc s)
 
 let emit_string_literal s =
   let last_was_escape = ref false in

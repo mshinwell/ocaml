@@ -91,11 +91,14 @@ val kind : t -> kind
 val name_for_asm_symbol : t -> string
 
 (** Symbols either defined in the runtime or defined in (shared) startup
-    files with standard names. *)
-module Names : sig
-  (** External variables from the C library. *)
-  val sqrt : t
+    files with standard names.
 
+    This does include target-specific functions.  The alternative would be
+    to expose the function in the .ml file called [of_external_name]---but that
+    is deliberately not done to try to avoid erroneous construction of
+    symbol names from plain text.
+*)
+module Names : sig
   (** Global variables in the OCaml runtime accessed by OCaml code. *)
   val caml_exception_pointer : t
   val caml_backtrace_pos : t
@@ -163,4 +166,31 @@ module Names : sig
   (** Standard OCaml auxiliary data structures. *)
   val caml_frametable : t
   val caml_spacetime_shapes : t
+
+  (** Maths functions from the C library. *)
+  val atan : t
+  val atan2 : t
+  val cos : t
+  val log : t
+  val log10 : t
+  val sin : t
+  val sqrt : t
+  val tan : t
+
+  (** ARM EABI-specific functions. *)
+  val __aeabi_idivmod : t
+  val __aeabi_idiv : t
+  val __aeabi_dadd : t
+  val __aeabi_dsub : t
+  val __aeabi_dmul : t
+  val __aeabi_ddiv : t
+  val __aeabi_i2d : t
+  val __aeabi_d2iz : t
+  val __aeabi_dcmpeq : t
+  val __aeabi_dcmplt : t
+  val __aeabi_dcmple : t
+  val __aeabi_dcmpgt : t
+  val __aeabi_dcmpge : t
+  val __aeabi_f2d : t
+  val __aeabi_d2f : t
 end
