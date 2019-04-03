@@ -132,8 +132,13 @@ let compile_unit asm_filename keep_asm obj_filename gen =
     )
 
 let end_gen_implementation ?toplevel ~ppf_dump
+    (clambda:clambda_and_constants) =
     (clambda : Clambda.with_constants) =
-  Emit.begin_assembly ();
+  let comp_unit =
+    Backend_compilation_unit.compilation_unit
+      (Compilation_unit.get_current_exn ())
+  in
+  Emit.begin_assembly comp_unit;
   Cmmgen.reset ();
   clambda
   ++ Profile.record "cmm" Cmmgen.compunit
@@ -151,7 +156,7 @@ let end_gen_implementation ?toplevel ~ppf_dump
            if not (Primitive.native_name_is_external prim) then None
            else Some (Primitive.native_name prim))
           !Translmod.primitive_declarations));
-  Emit.end_assembly ()
+  Emit.end_assembly comp_unit
 
 type middle_end =
      backend:(module Backend_intf.S)
