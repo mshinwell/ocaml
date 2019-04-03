@@ -15,49 +15,6 @@
 
 open X86_ast
 
-type system =
-  (* 32 bits and 64 bits *)
-  | S_macosx
-  | S_gnu
-  | S_cygwin
-
-  (* 32 bits only *)
-  | S_solaris
-  | S_win32
-  | S_linux_elf
-  | S_bsd_elf
-  | S_beos
-  | S_mingw
-
-  (* 64 bits only *)
-  | S_win64
-  | S_linux
-  | S_mingw64
-
-  | S_unknown
-
-
-let system = match Config.system with
-  | "macosx" -> S_macosx
-  | "solaris" -> S_solaris
-  | "win32" -> S_win32
-  | "linux_elf" -> S_linux_elf
-  | "bsd_elf" -> S_bsd_elf
-  | "beos" -> S_beos
-  | "gnu" -> S_gnu
-  | "cygwin" -> S_cygwin
-  | "mingw" -> S_mingw
-  | "mingw64" -> S_mingw64
-  | "win64" -> S_win64
-  | "linux" -> S_linux
-
-  | _ -> S_unknown
-
-let windows =
-  match system with
-  | S_mingw64 | S_cygwin | S_win64 -> true
-  | _ -> false
-
 let string_of_string_literal s =
   let b = Buffer.create (String.length s + 2) in
   let last_was_escape = ref false in
@@ -76,25 +33,6 @@ let string_of_string_literal s =
     end
   done;
   Buffer.contents b
-
-let string_of_symbol prefix s =
-  let spec = ref false in
-  for i = 0 to String.length s - 1 do
-    match String.unsafe_get s i with
-    | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' -> ()
-    | _ -> spec := true;
-  done;
-  if not !spec then if prefix = "" then s else prefix ^ s
-  else
-    let b = Buffer.create (String.length s + 10) in
-    Buffer.add_string b prefix;
-    String.iter
-      (function
-        | ('A'..'Z' | 'a'..'z' | '0'..'9' | '_') as c -> Buffer.add_char b c
-        | c -> Printf.bprintf b "$%02x" (Char.code c)
-      )
-      s;
-    Buffer.contents b
 
 let buf_bytes_directive b directive s =
   let pos = ref 0 in
@@ -224,13 +162,17 @@ let register_internal_assembler f = internal_assembler := Some f
 
 (* Which asm conventions to use *)
 let masm =
-  match system with
-  | S_win32 | S_win64 -> true
-  | _ -> false
+  match Target_system.assembler with
+  | MASM -> true
+  | GAS_like
+  | MacOS -> false
 
 let use_plt =
-  match system with
-  | S_macosx | S_mingw64 | S_cygwin | S_win64 -> false
+  match Target_system.architecture, Target_system.system with
+  | _, MacOS_like
+  | X86_64, Windows MinGW
+  | _, Windows Cygwin
+  | X86_64, Windows Native -> false
   | _ -> !Clflags.dlcode
 
 (* Shall we use an external assembler command ?

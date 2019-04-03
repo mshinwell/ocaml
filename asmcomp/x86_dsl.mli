@@ -76,23 +76,24 @@ module D : sig
   val cfi_startproc: unit -> unit
   val comment: string -> unit
   val data: unit -> unit
-  val extrn: string -> data_type -> unit
+  val extrn: Asm_symbol.t -> data_type -> unit
   val file: file_num:int -> file_name:string -> unit
-  val global: string -> unit
-  val indirect_symbol: string -> unit
+  val global: Asm_symbol.t -> unit
+  val indirect_symbol: Asm_symbol.t -> unit
   val label: ?typ:data_type -> string -> unit
   val loc: file_num:int -> line:int -> col:int -> unit
   val long: constant -> unit
   val mode386: unit -> unit
   val model: string -> unit
-  val private_extern: string -> unit
+  val private_extern: Asm_symbol.t -> unit
   val qword: constant -> unit
-  val section: string list -> string option -> string list -> unit
+  val section0: string list -> string option -> string list -> unit
+  val section: Asm_section.t -> unit
   val setvar: string * constant -> unit
-  val size: string -> constant -> unit
+  val size: Asm_symbol.t -> constant -> unit
   val space: int -> unit
   val text: unit -> unit
-  val type_: string -> string -> unit
+  val type_: Asm_symbol.t -> string -> unit
   val word: constant -> unit
 end
 

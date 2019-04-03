@@ -28,7 +28,6 @@ val string_of_reg64: reg64 -> string
 val string_of_registerf: registerf -> string
 val string_of_string_literal: string -> string
 val string_of_condition: condition -> string
-val string_of_symbol: (*prefix*) string -> string -> string
 val string_of_rounding: rounding -> string
 val buf_bytes_directive:
   Buffer.t -> (*directive*) string -> (*data*)string -> unit
@@ -54,32 +53,8 @@ val assemble_file: (*infile*) string -> (*outfile*) string -> (*retcode*) int
     the input file is ignored). Otherwise, the source asm file with an
     external assembler. *)
 
-(** System detection *)
-
-type system =
-  (* 32 bits and 64 bits *)
-  | S_macosx
-  | S_gnu
-  | S_cygwin
-
-  (* 32 bits only *)
-  | S_solaris
-  | S_win32
-  | S_linux_elf
-  | S_bsd_elf
-  | S_beos
-  | S_mingw
-
-  (* 64 bits only *)
-  | S_win64
-  | S_linux
-  | S_mingw64
-
-  | S_unknown
-
-val system: system
-val masm: bool
-val windows:bool
+(** Whether the MASM assembler is being used. *)
+val masm : bool
 
 (** Whether calls need to go via the PLT. *)
 val use_plt : bool
