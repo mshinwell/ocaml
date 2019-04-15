@@ -367,7 +367,17 @@ module Canonical_availability_map = struct
     t
 
   let inter t1 t2 =
-    let t = Availability_map.inter t1 t2 in
+    let t =
+      Reg.Map.filter (fun reg debug_info_t1 ->
+          let occurs_in_t2 =
+            match Reg.Map.find reg t2 with
+            | exception Not_found -> false
+            | debug_info_t2 ->
+              Option.equal Debug_info.equal debug_info_t1 debug_info_t2
+          in
+          occurs_in_t2)
+        t1
+    in
     invariant t;
     t
 
