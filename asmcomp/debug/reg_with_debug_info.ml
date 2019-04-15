@@ -350,6 +350,13 @@ module Canonical_availability_map = struct
     end
 
   (* [diff] and [inter], by construction, preserve the canonical form. *)
+  (* [Compute_ranges] expects the [diff] and [inter] functions to satisfy
+     the usual axioms of set theory. Here we will consider elements of
+     type t to be representing sets of pairs (register, debug_info),
+     which means that the function [Availability_map.inter] is not
+     suitable for that purpose (it merges registers with different debug info).
+     Because of the representation as maps, we could not define a [union]
+     function, but fortunately this isn't necessary for [Compute_ranges]. *)
 
   let diff t1 t2 =
     let t =
