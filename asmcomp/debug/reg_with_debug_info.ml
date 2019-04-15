@@ -350,6 +350,13 @@ module Canonical_availability_map = struct
     end
 
   (* [diff] and [inter], by construction, preserve the canonical form. *)
+  (* [Compute_ranges] expects the [diff] and [inter] functions to satisfy
+     the usual axioms of set theory. Here we will consider elements of
+     type t to be representing sets of pairs (register, debug_info),
+     which means that the function [Availability_map.inter] is not
+     suitable for that purpose (it merges registers with different debug info).
+     Because of the representation as maps, we could not define a [union]
+     function, but fortunately this isn't necessary for [Compute_ranges]. *)
 
   let diff t1 t2 =
     let t =
@@ -367,7 +374,17 @@ module Canonical_availability_map = struct
     t
 
   let inter t1 t2 =
-    let t = Availability_map.inter t1 t2 in
+    let t =
+      Reg.Map.filter (fun reg debug_info_t1 ->
+          let occurs_in_t2 =
+            match Reg.Map.find reg t2 with
+            | exception Not_found -> false
+            | debug_info_t2 ->
+              Option.equal Debug_info.equal debug_info_t1 debug_info_t2
+          in
+          occurs_in_t2)
+        t1
+    in
     invariant t;
     t
 

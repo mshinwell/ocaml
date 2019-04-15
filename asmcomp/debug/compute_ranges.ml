@@ -241,32 +241,47 @@ module Make (S : Compute_ranges_intf.S_functor) = struct
       | None -> KS.empty
       | Some prev_insn -> S.available_across prev_insn
     in
+    let exactly_one ~is_in ~is_out1 ~is_out2 =
+      KS.diff (KS.diff is_in is_out1) is_out2
+    in
+    let exactly_two ~is_in1 ~is_in2 ~is_out =
+      KS.diff (KS.inter is_in1 is_in2) is_out
+    in
     let case_1b =
-      KS.diff
-        (KS.diff available_across available_before)
-        opt_available_across_prev_insn
+      exactly_one
+        ~is_in:  available_across
+        ~is_out1:available_before
+        ~is_out2:opt_available_across_prev_insn
     in
     let case_1c =
-      KS.diff
-        (KS.diff available_before available_across)
-        opt_available_across_prev_insn
+      exactly_one
+        ~is_out1:available_across
+        ~is_in:  available_before
+        ~is_out2:opt_available_across_prev_insn
     in
     let case_1d =
-      KS.diff (KS.inter available_before available_across)
-        opt_available_across_prev_insn
+      exactly_two
+        ~is_in1: available_across
+        ~is_in2: available_before
+        ~is_out: opt_available_across_prev_insn
     in
     let case_2a =
-      KS.inter
-        (KS.diff opt_available_across_prev_insn available_before)
-        (KS.diff opt_available_across_prev_insn available_across)
+      exactly_one
+        ~is_out1:available_across
+        ~is_out2:available_before
+        ~is_in:  opt_available_across_prev_insn
     in
     let case_2b =
-      KS.inter opt_available_across_prev_insn
-        (KS.diff available_across available_before)
+      exactly_two
+        ~is_in1: available_across
+        ~is_out: available_before
+        ~is_in2: opt_available_across_prev_insn
     in
     let case_2c =
-      KS.inter opt_available_across_prev_insn
-        (KS.diff available_before available_across)
+      exactly_two
+        ~is_out: available_across
+        ~is_in1: available_before
+        ~is_in2: opt_available_across_prev_insn
     in
     let handle case action result =
       (* We use [K.all_parents] here to circumvent a potential performance
