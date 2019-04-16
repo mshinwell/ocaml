@@ -108,6 +108,7 @@ let pccall = "Pccall"
 let pctconst = "Pctconst"
 let pcvtbint = "Pcvtbint"
 let pdirapply = "Pdirapply"
+let pdiscriminant_of_int = "Pdiscrimnant_of_int"
 let pdivbint = "Pdivbint"
 let pdivfloat = "Pdivfloat"
 let pdivint = "Pdivint"
@@ -119,6 +120,7 @@ let pfloatcomp = "Pfloatcomp"
 let pfloatfield = "Pfloatfield"
 let pfloatofint = "Pfloatofint"
 let pgetglobal = "Pgetglobal"
+let pgettag = "Pgettag"
 let pidentity = "Pidentity"
 let pignore = "Pignore"
 let pint_as_pointer = "Pint_as_pointer"
@@ -207,6 +209,7 @@ let pccall_arg = "Pccall_arg"
 let pctconst_arg = "Pctconst_arg"
 let pcvtbint_arg = "Pcvtbint_arg"
 let pdirapply_arg = "Pdirapply_arg"
+let pdiscriminant_of_int_arg = "Pdiscriminant_of_int_arg"
 let pdivbint_arg = "Pdivbint_arg"
 let pdivfloat_arg = "Pdivfloat_arg"
 let pdivint_arg = "Pdivint_arg"
@@ -218,6 +221,7 @@ let pfloatcomp_arg = "Pfloatcomp_arg"
 let pfloatfield_arg = "Pfloatfield_arg"
 let pfloatofint_arg = "Pfloatofint_arg"
 let pgetglobal_arg = "Pgetglobal_arg"
+let pgettag_arg = "Pgettag_arg"
 let pidentity_arg = "Pidentity_arg"
 let pignore_arg = "Pignore_arg"
 let pint_as_pointer_arg = "Pint_as_pointer_arg"
@@ -404,6 +408,8 @@ let of_primitive : Lambda.primitive -> string = function
   | Pbbswap _ -> pbbswap
   | Pint_as_pointer -> pint_as_pointer
   | Popaque -> popaque
+  | Pgettag _ -> pgettag
+  | Pdiscriminant_of_int -> pdiscriminant_of_int
 
 let of_primitive_arg : Lambda.primitive -> string = function
   | Pidentity -> pidentity_arg
@@ -507,3 +513,5 @@ let of_primitive_arg : Lambda.primitive -> string = function
   | Pbbswap _ -> pbbswap_arg
   | Pint_as_pointer -> pint_as_pointer_arg
   | Popaque -> popaque_arg
+  | Pgettag _ -> pgettag_arg
+  | Pdiscriminant_of_int -> pdiscriminant_of_int_arg

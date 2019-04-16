@@ -1,0 +1,7 @@
+(include_subdirs unqualified)
+
+(library
+  (name flambda2)
+  (flags (:standard -principal -nostdlib))
+  (libraries stdlib ocamlcommon ocamlbytecomp ocamlmiddleend)
+)

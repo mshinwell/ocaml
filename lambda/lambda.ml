@@ -91,6 +91,8 @@ type primitive =
   | Parraysets of array_kind
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
+  (* Extract a block's tag *)
+  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -142,6 +144,7 @@ type primitive =
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
+  | Pdiscriminant_of_int
 
 and integer_comparison =
     Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -203,6 +206,89 @@ let equal_value_kind x y =
   | Pintval, Pintval -> true
   | (Pgenval | Pfloatval | Pboxedintval _ | Pintval), _ -> false
 
+let primitive_can_raise = function
+  | Pccall _
+  | Praise _ -> true
+  | Pidentity
+  | Pbytes_to_string
+  | Pbytes_of_string
+  | Pignore
+  | Prevapply
+  | Pdirapply
+  | Pgetglobal _
+  | Psetglobal _
+  | Pmakeblock _
+  | Pfield _
+  | Pfield_computed
+  | Psetfield _
+  | Psetfield_computed _
+  | Pfloatfield _
+  | Psetfloatfield _
+  | Pduprecord _
+  | Psequand | Psequor | Pnot
+  | Pnegint | Paddint | Psubint | Pmulint
+  | Pmodint _ | Pdivint _
+  | Pandint | Porint | Pxorint
+  | Plslint | Plsrint | Pasrint
+  | Pintcomp _
+  | Poffsetint _
+  | Poffsetref _
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
+  | Pfloatcomp _
+  | Pstringlength | Pstringrefu  | Pstringrefs
+  | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
+  | Pmakearray _
+  | Pduparray _
+  | Parraylength _
+  | Parrayrefu _
+  | Parraysetu _
+  | Parrayrefs _
+  | Parraysets _
+  | Pisint
+  | Pisout
+  | Pbintofint _
+  | Pintofbint _
+  | Pcvtbint _
+  | Pnegbint _
+  | Paddbint _
+  | Psubbint _
+  | Pmulbint _
+  | Pdivbint _
+  | Pmodbint _
+  | Pandbint _
+  | Porbint _
+  | Pxorbint _
+  | Plslbint _
+  | Plsrbint _
+  | Pasrbint _
+  | Pbintcomp _
+  | Pbigarrayref _
+  | Pbigarrayset _
+  | Pbigarraydim _
+  | Pstring_load_16 _
+  | Pstring_load_32 _
+  | Pstring_load_64 _
+  | Pbytes_load_16 _
+  | Pbytes_load_32 _
+  | Pbytes_load_64 _
+  | Pbytes_set_16 _
+  | Pbytes_set_32 _
+  | Pbytes_set_64 _
+  | Pbigstring_load_16 _
+  | Pbigstring_load_32 _
+  | Pbigstring_load_64 _
+  | Pbigstring_set_16 _
+  | Pbigstring_set_32 _
+  | Pbigstring_set_64 _
+  | Pctconst _
+  | Pbswap16
+  | Pbbswap _
+  | Pint_as_pointer
+  | Popaque
+  | Pgettag _
+  | Pdiscriminant_of_int -> false
 
 type structured_constant =
     Const_base of constant
@@ -314,8 +400,13 @@ and lambda_switch =
   { sw_numconsts: int;
     sw_consts: (int * lambda) list;
     sw_numblocks: int;
-    sw_blocks: (int * lambda) list;
+    sw_blocks: (lambda_switch_block_key * lambda) list;
     sw_failaction : lambda option}
+
+and lambda_switch_block_key =
+  { sw_tag : int;
+    sw_size : int;
+  }
 
 and lambda_event =
   { lev_loc: Location.t;
@@ -705,7 +796,7 @@ let subst update_env s lam =
     | Lswitch(arg, sw, loc) ->
         Lswitch(subst s arg,
                 {sw with sw_consts = List.map (subst_case s) sw.sw_consts;
-                        sw_blocks = List.map (subst_case s) sw.sw_blocks;
+                        sw_blocks = List.map (subst_case' s) sw.sw_blocks;
                         sw_failaction = subst_opt s sw.sw_failaction; },
                 loc)
     | Lstringswitch (arg,cases,default,loc) ->
@@ -741,6 +832,7 @@ let subst update_env s lam =
   and subst_list s l = List.map (subst s) l
   and subst_decl s (id, exp) = (id, subst s exp)
   and subst_case s (key, case) = (key, subst s case)
+  and subst_case' s (key, case) = (key, subst s case)
   and subst_strcase s (key, case) = (key, subst s case)
   and subst_opt s = function
     | None -> None
@@ -874,6 +966,65 @@ let raise_kind = function
   | Raise_reraise -> "reraise"
   | Raise_notrace -> "raise_notrace"
 
+(**** Auxiliary for compiling "let rec" ****)
+
+type rhs_kind =
+  | RHS_block of int
+  | RHS_floatblock of int
+  | RHS_nonrec
+  | RHS_function of int * int
+;;
+
+let rec check_recordwith_updates id e =
+  match e with
+  | Lsequence (Lprim ((Psetfield _ | Psetfloatfield _), [Lvar id2; _], _), cont)
+      -> id2 = id && check_recordwith_updates id cont
+  | Lvar id2 -> id2 = id
+  | _ -> false
+;;
+
+let rec size_of_lambda' env = function
+  | Lvar id ->
+      begin try Ident.find_same id env with Not_found -> RHS_nonrec end
+  | Lfunction{params} as funct ->
+      RHS_function (1 + Ident.Set.cardinal(free_variables funct),
+                    List.length params)
+  | Llet (Strict, _k, id, Lprim (Pduprecord (kind, size), _, _), body)
+    when check_recordwith_updates id body ->
+      begin match kind with
+      | Record_regular | Record_inlined _ -> RHS_block size
+      | Record_unboxed _ -> assert false
+      | Record_float -> RHS_floatblock size
+      | Record_extension _ -> RHS_block (size + 1)
+      end
+  | Llet(_str, _k, id, arg, body) ->
+      size_of_lambda' (Ident.add id (size_of_lambda' env arg) env) body
+  | Lletrec(bindings, body) ->
+      let env = List.fold_right
+        (fun (id, e) env -> Ident.add id (size_of_lambda' env e) env)
+        bindings env
+      in
+      size_of_lambda' env body
+  | Lprim(Pmakeblock _, args, _) -> RHS_block (List.length args)
+  | Lprim (Pmakearray ((Paddrarray|Pintarray), _), args, _) ->
+      RHS_block (List.length args)
+  | Lprim (Pmakearray (Pfloatarray, _), args, _) ->
+      RHS_floatblock (List.length args)
+  | Lprim (Pmakearray (Pgenarray, _), _, _) ->
+     (* Pgenarray is excluded from recursive bindings by the
+        check in Translcore.check_recursive_lambda *)
+      RHS_nonrec
+  | Lprim (Pduprecord ((Record_regular | Record_inlined _), size), _, _) ->
+      RHS_block size
+  | Lprim (Pduprecord (Record_unboxed _, _), _, _) ->
+      assert false
+  | Lprim (Pduprecord (Record_extension _, size), _, _) ->
+      RHS_block (size + 1)
+  | Lprim (Pduprecord (Record_float, size), _, _) -> RHS_floatblock size
+  | Levent (lam, _) -> size_of_lambda' env lam
+  | Lsequence (_lam, lam') -> size_of_lambda' env lam'
+  | _ -> RHS_nonrec
+
 let merge_inline_attributes attr1 attr2 =
   match attr1, attr2 with
   | Default_inline, _ -> Some attr2
@@ -881,6 +1032,8 @@ let merge_inline_attributes attr1 attr2 =
   | _, _ ->
     if attr1 = attr2 then Some attr1
     else None
+
+let size_of_lambda lam = size_of_lambda' Ident.empty lam
 
 let reset () =
   raise_count := 0

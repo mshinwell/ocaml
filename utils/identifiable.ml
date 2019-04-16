@@ -254,3 +254,18 @@ module Make (T : Thing) = struct
   module Map = Make_map (T)
   module Tbl = Make_tbl (T)
 end
+
+module Make_pair (T1 : S) (T2 : S) = struct
+  module Pair = Pair (T1.T) (T2.T)
+
+  include Make (Pair)
+
+  let create_from_cross_product t1_set t2_set =
+    T1.Set.fold (fun t1 result ->
+        T2.Set.fold (fun t2 result ->
+            Set.add (t1, t2) result)
+          t2_set
+          result)
+      t1_set
+      Set.empty
+end

@@ -613,8 +613,8 @@ let rec emit_tail_infos is_tail lambda =
       list_emit_tail_infos false l
   | Lswitch (lam, sw, _loc) ->
       emit_tail_infos false lam;
-      list_emit_tail_infos_fun snd is_tail sw.sw_consts;
-      list_emit_tail_infos_fun snd is_tail sw.sw_blocks;
+      list_emit_tail_infos_fun0 snd is_tail sw.sw_consts;
+      list_emit_tail_infos_fun1 snd is_tail sw.sw_blocks;
       Misc.may  (emit_tail_infos is_tail) sw.sw_failaction
   | Lstringswitch (lam, sw, d, _) ->
       emit_tail_infos false lam;
@@ -656,7 +656,10 @@ let rec emit_tail_infos is_tail lambda =
       emit_tail_infos is_tail lam
   | Lifused (_, lam) ->
       emit_tail_infos is_tail lam
-and list_emit_tail_infos_fun f is_tail =
+(* CR mshinwell: Why doesn't this generalise when eta expanded? *)
+and list_emit_tail_infos_fun0 f is_tail =
+  List.iter (fun x -> emit_tail_infos is_tail (f x))
+and list_emit_tail_infos_fun1 f is_tail =
   List.iter (fun x -> emit_tail_infos is_tail (f x))
 and list_emit_tail_infos is_tail =
   List.iter (emit_tail_infos is_tail)
@@ -672,6 +675,21 @@ and list_emit_tail_infos is_tail =
 let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
   let rec aux map = function
     | Llet(Strict, k, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
+        Ident.name optparam = "*opt*" && List.mem_assoc optparam params
+          && not (List.mem_assoc optparam map)
+      ->
+        let wrapper_body, inner = aux ((optparam, id) :: map) rest in
+        Llet(Strict, k, id, def, wrapper_body), inner
+    (* CR mshinwell: The case above is for non-Flambda 2; the case below is
+       for Flambda 2. *)
+    | Llet(Strict, k, id,
+        (Lswitch(Lvar optparam,
+           {sw_numconsts = 1;
+            sw_consts = [_];
+            sw_numblocks = 1;
+            sw_blocks = [_];
+            sw_failaction = None}, _dbg)
+         as def), rest) when
         Ident.name optparam = "*opt*" && List.mem_assoc optparam params
           && not (List.mem_assoc optparam map)
       ->
