@@ -34,6 +34,23 @@ let lambda_to_clambda ~backend ~filename:_ ~prefixname:_ ~ppf_dump
   let clambda =
     Closure.intro ~backend ~size:lambda.main_module_block_size lambda.code
   in
+  (* XXX *)
+  let () =
+    match Sys.getenv "FLAMBDA2" with
+    | exception Not_found -> ()
+    | _ ->
+      let _ : Flambda2.Flambda_static.Program.t =
+        Flambda2.Flambda2_middle_end.middle_end ~ppf_dump
+          ~prefixname:"<prefixname>"
+          ~backend
+          ~size:lambda.main_module_block_size
+          ~filename:"<filename>"
+          ~module_ident:
+            (Ident.create_persistent (Compilenv.current_unit_name ()))
+          ~module_initializer:lambda.code
+      in
+      ()
+  in
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];
       module_path =

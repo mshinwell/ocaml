@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,22 +14,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
-open! Int_replace_polymorphic_compare
+(** The representation of the application of a continuation.  In the
+    zero-arity case this is just "goto". *)
 
-type t = int
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Identifiable.Make (Numbers.Int)
+type t
 
-let create_exn tag =
-  if tag < 0 || tag > 255 then
-    Misc.fatal_error (Printf.sprintf "Tag.create_exn %d" tag)
-  else
-    tag
+(** Printing, invariant checks, name manipulation, etc. *)
+include Expr_std.S with type t := t
 
-let to_int t = t
+val create
+   : ?trap_action:Trap_action.t
+  -> Continuation.t
+  -> args:Simple.t list
+  -> t
 
-let zero = 0
-let object_tag = Obj.object_tag
+val goto : Continuation.t -> t
 
-let compare : t -> t -> int = Stdlib.compare
+val continuation : t -> Continuation.t
+
+val args : t -> Simple.t list
+
+val trap_action : t -> Trap_action.t option

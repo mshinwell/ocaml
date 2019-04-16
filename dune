@@ -45,7 +45,7 @@
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   targetint load_path int_replace_polymorphic_compare
+   targetint load_path int_replace_polymorphic_compare printing_cache
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib
@@ -67,7 +67,7 @@
 
    ;; lambda/
    debuginfo lambda matching printlambda runtimedef simplif switch
-   translattribute translclass translcore translmod translobj translprim
+   translattribute translclass translcore translmod translobj translprim tag
 
    ;; bytecomp/
    meta opcodes bytesections dll symtable
@@ -116,7 +116,7 @@
 
    ;; middle_end/flambda/base_types/
    closure_element closure_id closure_origin export_id id_types mutable_variable
-   set_of_closures_id set_of_closures_origin static_exception tag
+   set_of_closures_id set_of_closures_origin static_exception
    var_within_closure
 
    ;; middle_end/flambda/
@@ -142,7 +142,7 @@
  (name ocamloptcomp)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon ocamlmiddleend)
+ (libraries stdlib ocamlcommon ocamlmiddleend flambda2)
  (modules_without_implementation x86_ast)
  (modules
    ;; asmcomp/
@@ -184,7 +184,7 @@
  (name optmain)
  (modes byte)
  (flags (:standard -principal -nostdlib))
- (libraries ocamloptcomp ocamlmiddleend ocamlcommon runtime stdlib)
+ (libraries ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
  (modules optmain))
 
 (rule

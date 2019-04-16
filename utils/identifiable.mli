@@ -112,3 +112,9 @@ module type S = sig
 end
 
 module Make (T : Thing) : S with type t := T.t
+
+module Make_pair (T1 : S) (T2 : S) : sig
+  include S with type t := T1.t * T2.t
+
+  val create_from_cross_product : T1.Set.t -> T2.Set.t -> Set.t
+end

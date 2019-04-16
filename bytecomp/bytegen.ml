@@ -18,7 +18,6 @@
 open Misc
 open Asttypes
 open Primitive
-open Types
 open Lambda
 open Switch
 open Instruct
@@ -123,66 +122,6 @@ let add_const_unit = function
 let rec push_dummies n k = match n with
 | 0 -> k
 | _ -> Kconst const_unit::Kpush::push_dummies (n-1) k
-
-
-(**** Auxiliary for compiling "let rec" ****)
-
-type rhs_kind =
-  | RHS_block of int
-  | RHS_floatblock of int
-  | RHS_nonrec
-  | RHS_function of int * int
-;;
-
-let rec check_recordwith_updates id e =
-  match e with
-  | Lsequence (Lprim ((Psetfield _ | Psetfloatfield _), [Lvar id2; _], _), cont)
-      -> id2 = id && check_recordwith_updates id cont
-  | Lvar id2 -> id2 = id
-  | _ -> false
-;;
-
-let rec size_of_lambda env = function
-  | Lvar id ->
-      begin try Ident.find_same id env with Not_found -> RHS_nonrec end
-  | Lfunction{params} as funct ->
-      RHS_function (1 + Ident.Set.cardinal(free_variables funct),
-                    List.length params)
-  | Llet (Strict, _k, id, Lprim (Pduprecord (kind, size), _, _), body)
-    when check_recordwith_updates id body ->
-      begin match kind with
-      | Record_regular | Record_inlined _ -> RHS_block size
-      | Record_unboxed _ -> assert false
-      | Record_float -> RHS_floatblock size
-      | Record_extension _ -> RHS_block (size + 1)
-      end
-  | Llet(_str, _k, id, arg, body) ->
-      size_of_lambda (Ident.add id (size_of_lambda env arg) env) body
-  | Lletrec(bindings, body) ->
-      let env = List.fold_right
-        (fun (id, e) env -> Ident.add id (size_of_lambda env e) env)
-        bindings env
-      in
-      size_of_lambda env body
-  | Lprim(Pmakeblock _, args, _) -> RHS_block (List.length args)
-  | Lprim (Pmakearray ((Paddrarray|Pintarray), _), args, _) ->
-      RHS_block (List.length args)
-  | Lprim (Pmakearray (Pfloatarray, _), args, _) ->
-      RHS_floatblock (List.length args)
-  | Lprim (Pmakearray (Pgenarray, _), _, _) ->
-     (* Pgenarray is excluded from recursive bindings by the
-        check in Translcore.check_recursive_lambda *)
-      RHS_nonrec
-  | Lprim (Pduprecord ((Record_regular | Record_inlined _), size), _, _) ->
-      RHS_block size
-  | Lprim (Pduprecord (Record_unboxed _, _), _, _) ->
-      assert false
-  | Lprim (Pduprecord (Record_extension _, size), _, _) ->
-      RHS_block (size + 1)
-  | Lprim (Pduprecord (Record_float, size), _, _) -> RHS_floatblock size
-  | Levent (lam, _) -> size_of_lambda env lam
-  | Lsequence (_lam, lam') -> size_of_lambda env lam'
-  | _ -> RHS_nonrec
 
 (**** Merging consecutive events ****)
 
@@ -555,7 +494,7 @@ let rec comp_expr env exp sz cont =
                        (add_pop ndecl cont)))
       end else begin
         let decl_size =
-          List.map (fun (id, exp) -> (id, exp, size_of_lambda Ident.empty exp))
+          List.map (fun (id, exp) -> (id, exp, size_of_lambda exp))
             decl in
         let rec comp_init new_env sz = function
           | [] -> comp_nonrec new_env sz ndecl decl_size
@@ -798,7 +737,8 @@ let rec comp_expr env exp sz cont =
       List.iter
         (fun (n, act) -> act_consts.(n) <- store.act_store () act) sw.sw_consts;
       List.iter
-        (fun (n, act) -> act_blocks.(n) <- store.act_store () act) sw.sw_blocks;
+        (fun ({ sw_tag = tag; sw_size = _; }, act) ->
+          act_blocks.(tag) <- store.act_store () act) sw.sw_blocks;
 (* Compile and label actions *)
       let acts = store.act_get () in
 (*
