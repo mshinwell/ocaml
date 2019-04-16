@@ -53,4 +53,8 @@ val compare : t -> t -> int
 
 val hash : t -> int
 
+val print_or_elide : Format.formatter -> t -> unit
+
+val print : Format.formatter -> t -> unit
+
 val print_compact : Format.formatter -> t -> unit

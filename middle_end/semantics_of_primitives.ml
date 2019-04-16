@@ -67,7 +67,8 @@ let for_primitive (prim : Clambda_primitives.primitive) =
   | Psubfloat
   | Pmulfloat
   | Pdivfloat
-  | Pfloatcomp _ -> No_effects, No_coeffects
+  | Pfloatcomp _ ->
+    No_effects, No_coeffects
   | Pstringlength | Pbyteslength
   | Parraylength _ ->
       No_effects, Has_coeffects  (* That old chestnut: [Obj.truncate]. *)
@@ -129,11 +130,17 @@ let for_primitive (prim : Clambda_primitives.primitive) =
   | Popaque -> Arbitrary_effects, Has_coeffects
   | Psequand
   | Psequor ->
-      (* Removed by [Closure_conversion] in the flambda pipeline. *)
+      (* Removed by [Closure_conversion] in the flambda pipeline and
+         [Prepare_lambda] in the Flambda 2.0 pipeline.  Still needed for
+         [Closure]. *)
       No_effects, No_coeffects
 
 type return_type =
-  | Float
+  | Boxed_float
+  | Unboxed_float
+  | Unboxed_int32
+  | Unboxed_int64
+  | Unboxed_nativeint
   | Other
 
 let return_type_of_primitive (prim:Clambda_primitives.primitive) =
@@ -147,7 +154,12 @@ let return_type_of_primitive (prim:Clambda_primitives.primitive) =
   | Pdivfloat
   | Pfloatfield _
   | Parrayrefu Pfloatarray
-  | Parrayrefs Pfloatarray ->
-      Float
-  | _ ->
+  | Parrayrefs Pfloatarray
+  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)
+  | Pccall { prim_native_repr_res = Unboxed_float } ->
+      Boxed_float
+  | Pintofbint Pint32 -> Unboxed_int32
+  | Pintofbint Pint64 -> Unboxed_int64
+  | Pintofbint Pnativeint -> Unboxed_nativeint
+  | _ ->  (* CR mshinwell: must be made exhaustive *)
       Other

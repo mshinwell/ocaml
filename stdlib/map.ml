@@ -58,6 +58,7 @@ module type S =
     val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
+    val map_sharing: ('a -> 'a) -> 'a t -> 'a t
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
     val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
@@ -311,6 +312,16 @@ module Make(Ord: OrderedType) = struct
           let d' = f v d in
           let r' = mapi f r in
           Node{l=l'; v; d=d'; r=r'; h}
+
+    let rec map_sharing f = function
+        Empty ->
+          Empty
+      | (Node {l; v; d; r; h}) as t ->
+          let l' = map_sharing f l in
+          let d' = f d in
+          let r' = map_sharing f r in
+          if l == l' && d == d' && r == r' then t
+          else Node{l=l'; v; d=d'; r=r'; h}
 
     let rec fold f m accu =
       match m with

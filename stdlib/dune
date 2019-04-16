@@ -34,3 +34,8 @@
    (with-stdout-to %{targets}
      (bash
        "sed -e \"s|%%VERSION%%|`sed -e 1q %{version} | tr -d '\r'`|\" %{p}"))))
+
+(alias
+ (name runtest)
+ (deps (package ocaml) (source_tree ..) (sandbox always))
+ (action (chdir .. (run /Users/mark/dev/dune/dune.sh build stdlib/stdlib.cmxa --display verbose))))

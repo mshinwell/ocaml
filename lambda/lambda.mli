@@ -99,6 +99,9 @@ type primitive =
   | Parraysets of array_kind
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
+  | Pflambda_isint (* CR mshinwell: remove once Prepare_lambda removed *)
+  (* Extract a block's tag *)
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -146,7 +149,9 @@ type primitive =
   (* byte swap *)
   | Pbswap16
   | Pbbswap of boxed_integer
-  (* Integer to external pointer *)
+  (* Integer to external pointer.
+     The result of this primitive must always be a valid OCaml value, even
+     if that value lives outside the heap. *)
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
@@ -161,6 +166,7 @@ and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
 
 and value_kind =
+  (* CR mshinwell: Pfloatval should be renamed to Pboxedfloatval *)
     Pgenval | Pfloatval | Pboxedintval of boxed_integer | Pintval
 
 and block_shape =
@@ -193,6 +199,8 @@ val equal_primitive : primitive -> primitive -> bool
 val equal_value_kind : value_kind -> value_kind -> bool
 
 val equal_boxed_integer : boxed_integer -> boxed_integer -> bool
+
+val primitive_can_raise : primitive -> bool
 
 type structured_constant =
     Const_base of constant
@@ -319,8 +327,16 @@ and lambda_switch =
   { sw_numconsts: int;                  (* Number of integer cases *)
     sw_consts: (int * lambda) list;     (* Integer cases *)
     sw_numblocks: int;                  (* Number of tag block cases *)
-    sw_blocks: (int * lambda) list;     (* Tag block cases *)
-    sw_failaction : lambda option}      (* Action to take if failure *)
+    sw_blocks: (lambda_switch_block_key * lambda) list;  (* Tag block cases *)
+    sw_failaction : lambda option;      (* Action to take if failure *)
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  }
+
+and lambda_switch_block_key =
+  { sw_tag : int;
+    sw_size : int;
+  }
+
 and lambda_event =
   { lev_loc: scoped_location;
     lev_kind: lambda_event_kind;
@@ -441,6 +457,14 @@ val is_guarded: lambda -> bool
 val patch_guarded : lambda -> lambda -> lambda
 
 val raise_kind: raise_kind -> string
+
+type rhs_kind =
+  | RHS_block of int
+  | RHS_floatblock of int
+  | RHS_nonrec
+  | RHS_function of int * int
+
+val size_of_lambda : lambda -> rhs_kind
 
 val merge_inline_attributes
    : inline_attribute

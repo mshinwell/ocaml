@@ -1105,10 +1105,13 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
   | Lswitch(arg, sw, dbg) ->
       let fn fail =
         let (uarg, _) = close env arg in
+        let blocks =
+          List.map (fun (key, action) -> key.sw_tag, action) sw.sw_blocks
+        in
         let const_index, const_actions, fconst =
           close_switch env sw.sw_consts sw.sw_numconsts fail
         and block_index, block_actions, fblock =
-          close_switch env sw.sw_blocks sw.sw_numblocks fail in
+          close_switch env blocks sw.sw_numblocks fail in
         let ulam =
           Uswitch
             (uarg,

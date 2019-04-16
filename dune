@@ -45,7 +45,7 @@
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   targetint load_path int_replace_polymorphic_compare
+   targetint load_path int_replace_polymorphic_compare printing_cache
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib
@@ -67,7 +67,7 @@
 
    ;; lambda/
    debuginfo lambda matching printlambda runtimedef simplif switch
-   translattribute translclass translcore translmod translobj translprim
+   translattribute translclass translcore translmod translobj translprim tag
 
    ;; bytecomp/
    meta opcodes bytesections dll symtable
@@ -116,7 +116,7 @@
 
    ;; middle_end/flambda/base_types/
    closure_element closure_id closure_origin export_id id_types mutable_variable
-   set_of_closures_id set_of_closures_origin static_exception tag
+   set_of_closures_id set_of_closures_origin static_exception
    var_within_closure
 
    ;; middle_end/flambda/
@@ -139,24 +139,36 @@
 )
 
 (library
- (name ocamloptcomp)
+ (name ocamloptcommon)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
  (libraries stdlib ocamlcommon ocamlmiddleend)
  (modules_without_implementation x86_ast)
  (modules
+   arch proc x86_ast x86_proc
+   reg reg_availability_set reg_with_debug_info
+   cmm cmmgen_state cmm_helpers printcmm
+   mach printmach
+   interval strmatch
+  )
+)
+
+(library
+ (name ocamloptcomp)
+ (wrapped false)
+ (flags (:standard -principal -nostdlib))
+ (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2)
+ (modules
    ;; asmcomp/
-   afl_instrument arch asmgen asmlibrarian asmlink asmpackager branch_relaxation
-   branch_relaxation_intf cmm_helpers cmm cmmgen cmmgen_state coloring comballoc
-   CSE CSEgen
-   deadcode domainstate emit emitaux interf interval linear linearize linscan
-   liveness mach printcmm printlinear printmach proc reg reload reloadgen
-   schedgen scheduling selectgen selection spacetime_profiling spill split
-   strmatch x86_ast x86_dsl x86_gas x86_masm x86_proc
+   afl_instrument asmgen asmlibrarian asmlink asmpackager branch_relaxation
+   branch_relaxation_intf cmmgen coloring comballoc
+   CSE CSEgen deadcode domainstate emit emitaux interf linear linearize linscan
+   liveness printlinear regtype reload reloadgen schedgen
+   scheduling selectgen selection spacetime_profiling spill split
+   x86_dsl x86_gas x86_masm
 
    ;; asmcomp/debug/
-   reg_availability_set compute_ranges_intf available_regs reg_with_debug_info
-   compute_ranges
+   compute_ranges_intf available_regs compute_ranges
 
    ;; driver/
    optcompile opterrors
@@ -177,19 +189,30 @@
 (rule
  (copy main.exe ocamlc.byte))
 
+;;;;;;;;;;;;;;;;;;;;
+;;; ilambda test ;;;
+;;;;;;;;;;;;;;;;;;;;
+
+(executable
+ (name ilambdac)
+ (modes byte)
+ (flags (:standard -principal -nostdlib))
+ (libraries ocamloptcommon ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
+ (modules ilambdac))
+
 ;;;;;;;;;;;;;;;;
 ;;; ocamlopt ;;;
 ;;;;;;;;;;;;;;;;
 
 (executable
  (name optmain)
- (modes byte)
+ (modes native)
  (flags (:standard -principal -nostdlib))
- (libraries ocamloptcomp ocamlmiddleend ocamlcommon runtime stdlib)
+ (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
  (modules optmain))
 
 (rule
- (copy optmain.exe ocamlopt.byte))
+ (copy optmain.exe ocamlopt.opt))
 
 ;;;;;;;;;;;;;;;
 ;;; aliases ;;;
@@ -200,13 +223,14 @@
 (alias
  (name world)
  (deps ocamlc.byte
-       ocamlopt.byte
+       ocamlopt.opt
 ;       debugger/ocamldebug.byte
 ;       ocamldoc/ocamldoc.byte
-       ocamltest/ocamltest.byte
+;       ocamltest/ocamltest.byte
        toplevel/ocaml.byte
        toplevel/expunge.exe
        ))
+
 
 (alias
   (name libs)
@@ -220,3 +244,10 @@
     ocamltest/ocamltest_core_and_plugin.cma
     toplevel/ocamltoplevel.cma
   ))
+
+(install
+ (section bin)
+ (package ocaml)
+ (files
+  (ocamlc.byte as ocamlc)
+  (ocamlopt.opt as ocamlopt)))

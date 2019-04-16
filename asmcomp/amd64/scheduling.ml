@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "-66"]
+
 open! Schedgen (* to create a dependency *)
 
 (* Scheduling is turned off because the processor schedules dynamically

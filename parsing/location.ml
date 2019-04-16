@@ -232,6 +232,15 @@ let print_locs ppf locs =
   Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ",@ ")
     print_loc ppf locs
 
+let print_compact ppf loc =
+  if loc.loc_start.pos_fname = "//toplevel//" then ()
+  else begin
+    let (file, line, startchar) = get_pos_info loc.loc_start in
+    let endchar = loc.loc_end.pos_cnum - loc.loc_start.pos_cnum + startchar in
+    Format.fprintf ppf "%a:%i" print_filename file line;
+    if startchar >= 0 then Format.fprintf ppf ",%i--%i" startchar endchar
+  end
+
 (******************************************************************************)
 (* An interval set structure; additionally, it stores user-provided information
    at interval boundaries.

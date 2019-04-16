@@ -4,9 +4,11 @@
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
 (*                        Nicolas Ojeda Bar, LexiFi                       *)
+(*                    Mark Shinwell, Jane Street Europe                   *)
 (*                                                                        *)
 (*   Copyright 2016 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -31,6 +33,8 @@
 
 type t
 (** The type of target integers. *)
+
+type targetint = t
 
 val zero : t
 (** The target integer 0.*)
@@ -87,6 +91,12 @@ val abs : t -> t
 
 val size : int
 (** The size in bits of a target native integer. *)
+
+type num_bits =
+  | Thirty_two
+  | Sixty_four
+
+val num_bits : num_bits
 
 val max_int : t
 (** The greatest representable target integer,
@@ -183,18 +193,9 @@ val of_string : string -> t
 val to_string : t -> string
 (** Return the string representation of its argument, in decimal. *)
 
-val compare: t -> t -> int
-(** The comparison function for target integers, with the same specification as
-    {!Stdlib.compare}.  Along with the type [t], this function [compare]
-    allows the module [Targetint] to be passed as argument to the functors
-    {!Set.Make} and {!Map.Make}. *)
-
 val unsigned_compare: t -> t -> int
 (** Same as {!compare}, except that arguments are interpreted as {e unsigned}
     integers. *)
-
-val equal: t -> t -> bool
-(** The equal function for target ints. *)
 
 type repr =
   | Int32 of int32
@@ -203,5 +204,125 @@ type repr =
 val repr : t -> repr
 (** The concrete representation of a native integer. *)
 
-val print : Format.formatter -> t -> unit
-(** Print a target integer to a formatter. *)
+val min : t -> t -> t
+(** Returns the smaller integer. *)
+
+val max : t -> t -> t
+(** Returns the larger integer. *)
+
+include Identifiable.S with type t := t
+
+module Targetint_set = Set
+
+module Pair : sig
+  type nonrec t = t * t
+
+  include Identifiable.S with type t := t
+end
+
+val cross_product : Set.t -> Set.t -> Pair.Set.t
+
+(** Extract the least significant 16 bits from the given target integer,
+    exchange the order of the two bytes extracted, then form a new target
+    integer by zero-extending those two bytes. *)
+val get_least_significant_16_bits_then_byte_swap : t -> t
+
+val swap_byte_endianness : t -> t
+
+module OCaml : sig
+  (** Operations using the semantics of the type "int" on the target
+      machine.  That is to say, 31-bit arithmetic on 32-bit targets; and
+      63-bit arithmetic on 64-bit targets. *)
+
+  type t
+
+  type targetint_ocaml = t
+
+  (* CR mshinwell: Maybe this should move somewhere else
+    let max_array_length = max_wosize ()
+    let max_string_length = word_size / 8 * max_array_length - 1
+
+  *)
+
+  val min_value : t
+  val max_value : t
+  val max_string_length : t
+
+  val minus_one : t
+  val zero : t
+  val one : t
+  val ten : t
+  val hex_ff : t
+
+  val (<=) : t -> t -> bool
+  val (<) : t -> t -> bool
+
+  val bottom_byte_to_int : t -> int
+
+  val of_char : char -> t
+  val of_int : int -> t
+
+  (** Returns [None] iff the given [int] cannot be represented as a target
+      "int"-width integer. *)
+  val of_int_option : int -> t option
+
+  val of_int32 : int32 -> t
+  val of_int64 : int64 -> t
+  val of_targetint : targetint -> t
+
+  (* CR mshinwell: this must of course match [int_of_float] on the target *)
+  val of_float : float -> t
+  val to_float : t -> float
+
+  val to_int : t -> int
+  val to_int_exn : t -> int
+  val to_int_option : t -> int option
+  val to_int32 : t -> int32
+  val to_int64 : t -> int64
+  val to_targetint : t -> targetint
+
+  val neg : t -> t
+  val get_least_significant_16_bits_then_byte_swap : t -> t
+  val swap_byte_endianness : t -> t
+
+  val add : t -> t -> t
+  val sub : t -> t -> t
+  val mul : t -> t -> t
+  val mod_ : t -> t -> t
+  val div : t -> t -> t
+
+  val and_ : t -> t -> t
+  val or_ : t -> t -> t
+  val xor : t -> t -> t
+
+  val shift_left : t -> int -> t
+  val shift_right : t -> int -> t
+  val shift_right_logical : t -> int -> t
+
+  val max : t -> t -> t
+
+  (* CR mshinwell: Add an [Array] module *)
+
+  include Identifiable.S with type t := t
+
+  val set_of_targetint_set : Targetint_set.t -> Set.t
+
+  module Pair : sig
+    type nonrec t = t * t
+
+    include Identifiable.S with type t := t
+  end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
+
+  module Or_unknown : sig
+    type nonrec t = private
+      | Ok of t
+      | Unknown
+
+    val ok : targetint_ocaml -> t
+    val unknown : unit -> t
+
+    include Identifiable.S with type t := t
+  end
+end

@@ -25,9 +25,13 @@ let [@inline always] is_block a = not (is_int a)
 external tag : t -> int = "caml_obj_tag"
 external set_tag : t -> int -> unit = "caml_obj_set_tag"
 external size : t -> int = "%obj_size"
+let size t = size (Sys.opaque_identity t)
 external reachable_words : t -> int = "caml_obj_reachable_words"
 external field : t -> int -> t = "%obj_field"
+let field t = field (Sys.opaque_identity t)
 external set_field : t -> int -> t -> unit = "%obj_set_field"
+let set_field t index new_value =
+  set_field (Sys.opaque_identity t) index new_value
 external floatarray_get : floatarray -> int -> float = "caml_floatarray_get"
 external floatarray_set :
     floatarray -> int -> float -> unit = "caml_floatarray_set"
@@ -36,7 +40,6 @@ let [@inline always] set_double_field x i v =
   floatarray_set (obj x : floatarray) i v
 external new_block : int -> int -> t = "caml_obj_block"
 external dup : t -> t = "caml_obj_dup"
-external truncate : t -> int -> unit = "caml_obj_truncate"
 external add_offset : t -> Int32.t -> t = "caml_obj_add_offset"
 external with_tag : int -> t -> t = "caml_obj_with_tag"
 

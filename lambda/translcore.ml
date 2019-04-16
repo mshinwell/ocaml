@@ -307,11 +307,12 @@ and transl_exp0 ~scopes e =
           Lconst(Const_pointer n)
       | Cstr_unboxed ->
           (match ll with [v] -> v | _ -> assert false)
-      | Cstr_block n ->
+      | Cstr_block { tag; size; } ->
+          assert (size = List.length ll);
           begin try
-            Lconst(Const_block(n, List.map extract_constant ll))
+            Lconst(Const_block(tag, List.map extract_constant ll))
           with Not_constant ->
-            Lprim(Pmakeblock(n, Immutable, Some shape), ll,
+            Lprim(Pmakeblock(tag, Immutable, Some shape), ll,
                   of_raw_location ~scopes e.exp_loc)
           end
       | Cstr_extension(path, is_const) ->

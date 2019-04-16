@@ -81,6 +81,7 @@ let convert (prim : Lambda.primitive) : Clambda_primitives.primitive =
   | Parrayrefs kind -> Parrayrefs kind
   | Parraysets kind -> Parraysets kind
   | Pisint -> Pisint
+  | Pflambda_isint -> Misc.fatal_error "Should not be here at this stage"
   | Pisout -> Pisout
   | Pcvtbint (src, dest) -> Pcvtbint (src, dest)
   | Pnegbint bi -> Pnegbint bi
@@ -147,6 +148,7 @@ let convert (prim : Lambda.primitive) : Clambda_primitives.primitive =
   | Pidentity
   | Pgetglobal _
   | Psetglobal _
+  | Pgettag
     ->
       Misc.fatal_errorf "lambda primitive %a can't be converted to \
                          clambda primitive"

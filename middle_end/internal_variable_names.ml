@@ -119,6 +119,7 @@ let pfloatcomp = "Pfloatcomp"
 let pfloatfield = "Pfloatfield"
 let pfloatofint = "Pfloatofint"
 let pgetglobal = "Pgetglobal"
+let pgettag = "Pgettag"
 let pidentity = "Pidentity"
 let pignore = "Pignore"
 let pint_as_pointer = "Pint_as_pointer"
@@ -126,6 +127,7 @@ let pintcomp = "Pintcomp"
 let pintofbint = "Pintofbint"
 let pintoffloat = "Pintoffloat"
 let pisint = "Pisint"
+let pflambda_isint = "Pflambda_isint"
 let pisout = "Pisout"
 let plslbint = "Plslbint"
 let plslint = "Plslint"
@@ -218,6 +220,7 @@ let pfloatcomp_arg = "Pfloatcomp_arg"
 let pfloatfield_arg = "Pfloatfield_arg"
 let pfloatofint_arg = "Pfloatofint_arg"
 let pgetglobal_arg = "Pgetglobal_arg"
+let pgettag_arg = "Pgettag_arg"
 let pidentity_arg = "Pidentity_arg"
 let pignore_arg = "Pignore_arg"
 let pint_as_pointer_arg = "Pint_as_pointer_arg"
@@ -225,6 +228,7 @@ let pintcomp_arg = "Pintcomp_arg"
 let pintofbint_arg = "Pintofbint_arg"
 let pintoffloat_arg = "Pintoffloat_arg"
 let pisint_arg = "Pisint_arg"
+let pflambda_isint_arg = "Pflambda_isint_arg"
 let pisout_arg = "Pisout_arg"
 let plslbint_arg = "Plslbint_arg"
 let plslint_arg = "Plslint_arg"
@@ -365,6 +369,7 @@ let of_primitive : Lambda.primitive -> string = function
   | Parraysets _ -> parraysets
   | Pctconst _ -> pctconst
   | Pisint -> pisint
+  | Pflambda_isint -> pflambda_isint
   | Pisout -> pisout
   | Pbintofint _ -> pbintofint
   | Pintofbint _ -> pintofbint
@@ -404,6 +409,7 @@ let of_primitive : Lambda.primitive -> string = function
   | Pbbswap _ -> pbbswap
   | Pint_as_pointer -> pint_as_pointer
   | Popaque -> popaque
+  | Pgettag -> pgettag
 
 let of_primitive_arg : Lambda.primitive -> string = function
   | Pidentity -> pidentity_arg
@@ -468,6 +474,7 @@ let of_primitive_arg : Lambda.primitive -> string = function
   | Parraysets _ -> parraysets_arg
   | Pctconst _ -> pctconst_arg
   | Pisint -> pisint_arg
+  | Pflambda_isint -> pflambda_isint_arg
   | Pisout -> pisout_arg
   | Pbintofint _ -> pbintofint_arg
   | Pintofbint _ -> pintofbint_arg
@@ -507,3 +514,4 @@ let of_primitive_arg : Lambda.primitive -> string = function
   | Pbbswap _ -> pbbswap_arg
   | Pint_as_pointer -> pint_as_pointer_arg
   | Popaque -> popaque_arg
+  | Pgettag -> pgettag_arg

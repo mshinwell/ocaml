@@ -91,6 +91,9 @@ type primitive =
   | Parraysets of array_kind
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
+  | Pflambda_isint
+  (* Extract a block's tag *)
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -203,6 +206,112 @@ let equal_value_kind x y =
   | Pintval, Pintval -> true
   | (Pgenval | Pfloatval | Pboxedintval _ | Pintval), _ -> false
 
+let primitive_can_raise = function
+  | Pccall _
+  | Praise _
+  | Parrayrefs _
+  | Parraysets _
+  | Pmodint _
+  | Pdivint _
+  | Pstringrefs
+  | Pbytesrefs
+  | Pbytessets
+  | Pstring_load_16 false
+  | Pstring_load_32 false
+  | Pstring_load_64 false
+  | Pbytes_load_16 false
+  | Pbytes_load_32 false
+  | Pbytes_load_64 false
+  | Pbytes_set_16 false
+  | Pbytes_set_32 false
+  | Pbytes_set_64 false
+  | Pbigstring_load_16 false
+  | Pbigstring_load_32 false
+  | Pbigstring_load_64 false
+  | Pbigstring_set_16 false
+  | Pbigstring_set_32 false
+  | Pbigstring_set_64 false
+  | Pdivbint { is_safe = Safe; _ }
+  | Pmodbint { is_safe = Safe; _ }
+    (* CR mshinwell: some more need to go here too *)
+    -> true
+  | Pidentity
+  | Pbytes_to_string
+  | Pbytes_of_string
+  | Pignore
+  | Prevapply
+  | Pdirapply
+  | Pgetglobal _
+  | Psetglobal _
+  | Pmakeblock _
+  | Pfield _
+  | Pfield_computed
+  | Psetfield _
+  | Psetfield_computed _
+  | Pfloatfield _
+  | Psetfloatfield _
+  | Pduprecord _
+  | Psequand | Psequor | Pnot
+  | Pnegint | Paddint | Psubint | Pmulint
+  | Pandint | Porint | Pxorint
+  | Plslint | Plsrint | Pasrint
+  | Pintcomp _
+  | Poffsetint _
+  | Poffsetref _
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
+  | Pfloatcomp _
+  | Pstringlength | Pstringrefu
+  | Pbyteslength | Pbytesrefu | Pbytessetu
+  | Pmakearray _
+  | Pduparray _
+  | Parraylength _
+  | Parrayrefu _
+  | Parraysetu _
+  | Pisint
+  | Pflambda_isint
+  | Pisout
+  | Pbintofint _
+  | Pintofbint _
+  | Pcvtbint _
+  | Pnegbint _
+  | Paddbint _
+  | Psubbint _
+  | Pmulbint _
+  | Pdivbint _
+  | Pmodbint _
+  | Pandbint _
+  | Porbint _
+  | Pxorbint _
+  | Plslbint _
+  | Plsrbint _
+  | Pasrbint _
+  | Pbintcomp _
+  | Pbigarrayref _
+  | Pbigarrayset _
+  | Pbigarraydim _
+  | Pstring_load_16 true
+  | Pstring_load_32 true
+  | Pstring_load_64 true
+  | Pbytes_load_16 true
+  | Pbytes_load_32 true
+  | Pbytes_load_64 true
+  | Pbytes_set_16 true
+  | Pbytes_set_32 true
+  | Pbytes_set_64 true
+  | Pbigstring_load_16 true
+  | Pbigstring_load_32 true
+  | Pbigstring_load_64 true
+  | Pbigstring_set_16 true
+  | Pbigstring_set_32 true
+  | Pbigstring_set_64 true
+  | Pctconst _
+  | Pbswap16
+  | Pbbswap _
+  | Pint_as_pointer
+  | Popaque
+  | Pgettag -> false
 
 type structured_constant =
     Const_base of constant
@@ -366,8 +475,15 @@ and lambda_switch =
   { sw_numconsts: int;
     sw_consts: (int * lambda) list;
     sw_numblocks: int;
-    sw_blocks: (int * lambda) list;
-    sw_failaction : lambda option}
+    sw_blocks: (lambda_switch_block_key * lambda) list;
+    sw_failaction : lambda option;
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  }
+
+and lambda_switch_block_key =
+  { sw_tag : int;
+    sw_size : int;
+  }
 
 and lambda_event =
   { lev_loc: scoped_location;
@@ -756,7 +872,7 @@ let subst update_env s lam =
     | Lswitch(arg, sw, loc) ->
         Lswitch(subst s arg,
                 {sw with sw_consts = List.map (subst_case s) sw.sw_consts;
-                        sw_blocks = List.map (subst_case s) sw.sw_blocks;
+                        sw_blocks = List.map (subst_case' s) sw.sw_blocks;
                         sw_failaction = subst_opt s sw.sw_failaction; },
                 loc)
     | Lstringswitch (arg,cases,default,loc) ->
@@ -792,6 +908,7 @@ let subst update_env s lam =
   and subst_list s l = List.map (subst s) l
   and subst_decl s (id, exp) = (id, subst s exp)
   and subst_case s (key, case) = (key, subst s case)
+  and subst_case' s (key, case) = (key, subst s case)
   and subst_strcase s (key, case) = (key, subst s case)
   and subst_opt s = function
     | None -> None
@@ -835,6 +952,7 @@ let shallow_map f = function
                  sw_numblocks = sw.sw_numblocks;
                  sw_blocks = List.map (fun (n, e) -> (n, f e)) sw.sw_blocks;
                  sw_failaction = Option.map f sw.sw_failaction;
+                 sw_tags_to_sizes = sw.sw_tags_to_sizes;
                },
                loc)
   | Lstringswitch (e, sw, default, loc) ->
@@ -925,6 +1043,65 @@ let raise_kind = function
   | Raise_reraise -> "reraise"
   | Raise_notrace -> "raise_notrace"
 
+(**** Auxiliary for compiling "let rec" ****)
+
+type rhs_kind =
+  | RHS_block of int
+  | RHS_floatblock of int
+  | RHS_nonrec
+  | RHS_function of int * int
+;;
+
+let rec check_recordwith_updates id e =
+  match e with
+  | Lsequence (Lprim ((Psetfield _ | Psetfloatfield _), [Lvar id2; _], _), cont)
+      -> id2 = id && check_recordwith_updates id cont
+  | Lvar id2 -> id2 = id
+  | _ -> false
+;;
+
+let rec size_of_lambda' env = function
+  | Lvar id ->
+      begin try Ident.find_same id env with Not_found -> RHS_nonrec end
+  | Lfunction{params} as funct ->
+      RHS_function (1 + Ident.Set.cardinal(free_variables funct),
+                    List.length params)
+  | Llet (Strict, _k, id, Lprim (Pduprecord (kind, size), _, _), body)
+    when check_recordwith_updates id body ->
+      begin match kind with
+      | Record_regular | Record_inlined _ -> RHS_block size
+      | Record_unboxed _ -> assert false
+      | Record_float -> RHS_floatblock size
+      | Record_extension _ -> RHS_block (size + 1)
+      end
+  | Llet(_str, _k, id, arg, body) ->
+      size_of_lambda' (Ident.add id (size_of_lambda' env arg) env) body
+  | Lletrec(bindings, body) ->
+      let env = List.fold_right
+        (fun (id, e) env -> Ident.add id (size_of_lambda' env e) env)
+        bindings env
+      in
+      size_of_lambda' env body
+  | Lprim(Pmakeblock _, args, _) -> RHS_block (List.length args)
+  | Lprim (Pmakearray ((Paddrarray|Pintarray), _), args, _) ->
+      RHS_block (List.length args)
+  | Lprim (Pmakearray (Pfloatarray, _), args, _) ->
+      RHS_floatblock (List.length args)
+  | Lprim (Pmakearray (Pgenarray, _), _, _) ->
+     (* Pgenarray is excluded from recursive bindings by the
+        check in Translcore.check_recursive_lambda *)
+      RHS_nonrec
+  | Lprim (Pduprecord ((Record_regular | Record_inlined _), size), _, _) ->
+      RHS_block size
+  | Lprim (Pduprecord (Record_unboxed _, _), _, _) ->
+      assert false
+  | Lprim (Pduprecord (Record_extension _, size), _, _) ->
+      RHS_block (size + 1)
+  | Lprim (Pduprecord (Record_float, size), _, _) -> RHS_floatblock size
+  | Levent (lam, _) -> size_of_lambda' env lam
+  | Lsequence (_lam, lam') -> size_of_lambda' env lam'
+  | _ -> RHS_nonrec
+
 let merge_inline_attributes attr1 attr2 =
   match attr1, attr2 with
   | Default_inline, _ -> Some attr2
@@ -937,6 +1114,8 @@ let function_is_curried func =
   match func.kind with
   | Curried -> true
   | Tupled -> false
+
+let size_of_lambda lam = size_of_lambda' Ident.empty lam
 
 let reset () =
   raise_count := 0

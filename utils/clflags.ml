@@ -103,12 +103,16 @@ and dump_rawlambda = ref false          (* -drawlambda *)
 and dump_lambda = ref false             (* -dlambda *)
 and dump_rawclambda = ref false         (* -drawclambda *)
 and dump_clambda = ref false            (* -dclambda *)
-and dump_rawflambda = ref false            (* -drawflambda *)
+and dump_rawflambda = ref false         (* -drawflambda *)
+and dump_rawflambda2 = ref false        (* -drawflambda2 *)
 and dump_flambda = ref false            (* -dflambda *)
 and dump_flambda_let = ref (None : int option) (* -dflambda-let=... *)
 and dump_flambda_verbose = ref false    (* -dflambda-verbose *)
 and dump_instr = ref false              (* -dinstr *)
 and keep_camlprimc_file = ref false     (* -dcamlprimc *)
+
+and dump_ilambda = ref false
+and dump_prepared_lambda = ref false
 
 let keep_asm_file = ref false           (* -S *)
 let optimize_for_speed = ref true       (* -compact *)
@@ -140,7 +144,7 @@ let force_slash = ref false             (* for ocamldep *)
 let clambda_checks = ref false          (* -clambda-checks *)
 
 let flambda_invariant_checks =
-  ref Config.with_flambda_invariants    (* -flambda-(no-)invariants *)
+  ref true                              (* -flambda-(no-)invariants *)
 
 let dont_write_files = ref false        (* set to true under ocamldoc *)
 
@@ -180,6 +184,9 @@ let afl_instrument = ref Config.afl_instrument (* -afl-instrument *)
 let afl_inst_ratio = ref 100           (* -afl-inst-ratio *)
 
 let function_sections = ref false      (* -function-sections *)
+
+let treat_invalid_code_as_unreachable = ref false
+let dump_let_cont = ref false
 
 let simplify_rounds = ref None        (* -rounds *)
 let default_simplify_rounds = ref 1        (* -rounds *)
@@ -353,6 +360,8 @@ let o3_arguments = {
   inline_threshold = Some 50.;
   inline_toplevel_threshold = Some (50 * inline_toplevel_multiplier);
 }
+
+let flambda2_unicode = ref true
 
 let all_passes = ref []
 let dumped_passes_list = ref []
