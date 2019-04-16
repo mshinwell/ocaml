@@ -131,6 +131,9 @@ val dump_lambda : bool ref
 val dump_rawclambda : bool ref
 val dump_clambda : bool ref
 val dump_rawflambda : bool ref
+val dump_rawflambda2 : bool ref
+val dump_prepared_lambda : bool ref
+val dump_ilambda : bool ref
 val dump_flambda : bool ref
 val dump_flambda_let : int option ref
 val dump_instr : bool ref
@@ -209,11 +212,16 @@ val afl_instrument : bool ref
 val afl_inst_ratio : int ref
 val function_sections : bool ref
 
+val treat_invalid_code_as_unreachable : bool ref
+val dump_let_cont : bool ref
+
 val all_passes : string list ref
 val dumped_pass : string -> bool
 val set_dumped_pass : string -> bool -> unit
 
 val dump_into_file : bool ref
+
+val flambda2_unicode : bool ref
 
 (* Support for flags that can also be set from an environment variable *)
 type 'a env_reader = {

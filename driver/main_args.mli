@@ -193,8 +193,11 @@ module type Optcommon_options = sig
   val _no_float_const_prop : unit -> unit
 
   val _clambda_checks : unit -> unit
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
+  val _drawflambda2 : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit

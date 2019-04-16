@@ -721,12 +721,25 @@ let mk_dclambda f =
   "-dclambda", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_dprepared_lambda f =
+  "-dprepared-lambda", Arg.Unit f, " Print terms after [Prepare_lambda]"
+;;
+
+let mk_dilambda f =
+  "-dilambda", Arg.Unit f, " Print Ilambda terms"
+;;
+
 let mk_dflambda f =
   "-dflambda", Arg.Unit f, " Print Flambda terms"
 ;;
 
 let mk_drawflambda f =
   "-drawflambda", Arg.Unit f, " Print Flambda terms after closure conversion"
+;;
+
+let mk_drawflambda2 f =
+  "-drawflambda2", Arg.Unit f,
+    " Print Flambda 2.0 terms after closure conversion"
 ;;
 
 let mk_dflambda_invariants f =
@@ -1054,8 +1067,11 @@ module type Optcommon_options = sig
   val _no_float_const_prop : unit -> unit
 
   val _clambda_checks : unit -> unit
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
+  val _drawflambda2 : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
@@ -1412,8 +1428,11 @@ struct
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
+    mk_dprepared_lambda F._dprepared_lambda;
+    mk_dilambda F._dilambda;
     mk_dflambda F._dflambda;
     mk_drawflambda F._drawflambda;
+    mk_drawflambda2 F._drawflambda2;
     mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_no_invariants F._dflambda_no_invariants;
     mk_dflambda_let F._dflambda_let;
@@ -1523,6 +1542,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_drawflambda F._drawflambda;
+    mk_drawflambda2 F._drawflambda2;
     mk_dflambda F._dflambda;
     mk_dcmm F._dcmm;
     mk_dsel F._dsel;
@@ -1716,6 +1736,9 @@ module Default = struct
     let _dprefer = set dump_prefer
     let _drawclambda = set dump_rawclambda
     let _drawflambda = set dump_rawflambda
+    let _drawflambda2 = set dump_rawflambda2
+    let _dprepared_lambda = set dump_prepared_lambda
+    let _dilambda = set dump_ilambda
     let _dreload = set dump_reload
     let _drunavail () = debug_runavail := true
     let _dscheduling = set dump_scheduling

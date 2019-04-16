@@ -26,25 +26,26 @@ end
 
 module type Set = sig
   module T : Set.OrderedType
-  include Set.S
-    with type elt = T.t
-     and type t = Set.Make (T).t
+  include Set.S with type elt = T.t
 
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
+  val get_singleton : t -> elt option
 end
 
 module type Map = sig
   module T : Map.OrderedType
-  include Map.S
-    with type key = T.t
-     and type 'a t = 'a Map.Make (T).t
+  include Map.S with type key = T.t
+
+  module Set : Set with module T := T
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
+
+  val get_singleton : 'a t -> (key * 'a) option
 
   val disjoint_union :
     ?eq:('a -> 'a -> bool) -> ?print:(Format.formatter -> 'a -> unit) -> 'a t ->
@@ -57,13 +58,20 @@ module type Map = sig
   val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
-  val keys : 'a t -> Set.Make(T).t
+  val keys : 'a t -> Set.t
   val data : 'a t -> 'a list
-  val of_set : (key -> 'a) -> Set.Make(T).t -> 'a t
+  val of_set : (key -> 'a) -> Set.t -> 'a t
   val transpose_keys_and_data : key t -> key t
-  val transpose_keys_and_data_set : key t -> Set.Make(T).t t
+  val transpose_keys_and_data_set : key t -> Set.t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val diff_domains : 'a t -> 'a t -> 'a t
+  val fold2_stop_on_key_mismatch
+      : (key -> 'a -> 'a -> 'b -> 'b)
+        -> 'a t
+        -> 'a t
+        -> 'b
+        -> 'b option
 end
 
 module type Tbl = sig
@@ -72,15 +80,15 @@ module type Tbl = sig
     include Map.OrderedType with type t := t
     include Hashtbl.HashedType with type t := t
   end
-  include Hashtbl.S
-    with type key = T.t
-     and type 'a t = 'a Hashtbl.Make (T).t
+  include Hashtbl.S with type key = T.t
+
+  module Map : Map with module T := T
 
   val to_list : 'a t -> (T.t * 'a) list
   val of_list : (T.t * 'a) list -> 'a t
 
-  val to_map : 'a t -> 'a Map.Make(T).t
-  val of_map : 'a Map.Make(T).t -> 'a t
+  val to_map : 'a t -> 'a Map.t
+  val of_map : 'a Map.t -> 'a t
   val memoize : 'a t -> (key -> 'a) -> key -> 'a
   val map : 'a t -> ('a -> 'b) -> 'b t
 end
@@ -99,8 +107,15 @@ module Pair (A : Thing) (B : Thing) : Thing with type t = A.t * B.t = struct
   let print ppf (a, b) = Format.fprintf ppf " (%a, @ %a)" A.print a B.print b
 end
 
-module Make_map (T : Thing) = struct
+module Make_map (T : Thing) (Set : Set with module T := T) = struct
   include Map.Make (T)
+
+  module Set = Set
+
+  let get_singleton t =
+    match bindings t with
+    | [key, datum] -> Some (key, datum)
+    | _ -> None
 
   let filter_map t ~f =
     fold (fun id v map ->
@@ -155,18 +170,22 @@ module Make_map (T : Thing) = struct
   let map_keys f m =
     of_list (List.map (fun (k, v) -> f k, v) (bindings m))
 
-  let print f ppf s =
-    let elts ppf s = iter (fun id v ->
-        Format.fprintf ppf "@ (@[%a@ %a@])" T.print id f v) s in
-    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+  let print print_datum ppf t =
+    if is_empty t then
+      Format.fprintf ppf "{}"
+    else
+      Format.fprintf ppf "@[<hov 1>{%a}@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (fun ppf (key, datum) ->
+            Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+              T.print key print_datum datum))
+        (bindings t)
 
-  module T_set = Set.Make (T)
-
-  let keys map = fold (fun k _ set -> T_set.add k set) map T_set.empty
+  let keys map = fold (fun k _ set -> Set.add k set) map Set.empty
 
   let data t = List.map snd (bindings t)
 
-  let of_set f set = T_set.fold (fun e map -> add e (f e) map) set empty
+  let of_set f set = Set.fold (fun e map -> add e (f e) map) set empty
 
   let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
   let transpose_keys_and_data_set map =
@@ -174,12 +193,35 @@ module Make_map (T : Thing) = struct
         let set =
           match find v m with
           | exception Not_found ->
-            T_set.singleton k
+            Set.singleton k
           | set ->
-            T_set.add k set
+            Set.add k set
         in
         add v set m)
       map empty
+
+  let diff_domains t1 t2 =
+    merge (fun _key datum1 datum2 ->
+        match datum1, datum2 with
+        | None, None -> None
+        | Some datum1, None -> Some datum1
+        | None, Some _datum2 -> None
+        | Some _datum1, Some _datum2 -> None)
+      t1 t2
+
+  let fold2_stop_on_key_mismatch f t1 t2 init =
+    (* CR mshinwell: Provide a proper implementation *)
+    if cardinal t1 <> cardinal t2 then None
+    else
+      let t1 = bindings t1 in
+      let t2 = bindings t2 in
+      List.fold_left2 (fun acc (key1, datum1) (key2, datum2) ->
+          match acc with
+          | None -> None
+          | Some acc ->
+             if T.compare key1 key2 <> 0 then None
+             else Some (f key1 datum1 datum2 acc))
+        (Some init) t1 t2
 end
 
 module Make_set (T : Thing) = struct
@@ -202,12 +244,17 @@ module Make_set (T : Thing) = struct
     | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
   let map f s = of_list (List.map f (elements s))
+
+  let get_singleton t =
+    match elements t with
+    | [elt] -> Some elt
+    | _ -> None
 end
 
-module Make_tbl (T : Thing) = struct
+module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
   include Hashtbl.Make (T)
 
-  module T_map = Make_map (T)
+  module Map = Map
 
   let to_list t =
     fold (fun key datum elts -> (key, datum)::elts) t []
@@ -217,11 +264,11 @@ module Make_tbl (T : Thing) = struct
     List.iter (fun (key, datum) -> add t key datum) elts;
     t
 
-  let to_map v = fold T_map.add v T_map.empty
+  let to_map v = fold Map.add v Map.empty
 
   let of_map m =
-    let t = create (T_map.cardinal m) in
-    T_map.iter (fun k v -> add t k v) m;
+    let t = create (Map.cardinal m) in
+    Map.iter (fun k v -> add t k v) m;
     t
 
   let memoize t f = fun key ->
@@ -232,7 +279,7 @@ module Make_tbl (T : Thing) = struct
       r
 
   let map t f =
-    of_map (T_map.map f (to_map t))
+    of_map (Map.map f (to_map t))
 end
 
 module type S = sig
@@ -242,8 +289,8 @@ module type S = sig
   include Thing with type t := T.t
 
   module Set : Set with module T := T
-  module Map : Map with module T := T
-  module Tbl : Tbl with module T := T
+  module Map : Map with module T := T with module Set = Set
+  module Tbl : Tbl with module T := T with module Map = Map
 end
 
 module Make (T : Thing) = struct
@@ -251,6 +298,21 @@ module Make (T : Thing) = struct
   include T
 
   module Set = Make_set (T)
-  module Map = Make_map (T)
-  module Tbl = Make_tbl (T)
+  module Map = Make_map (T) (Set)
+  module Tbl = Make_tbl (T) (Map)
+end
+
+module Make_pair (T1 : S) (T2 : S) = struct
+  module Pair = Pair (T1.T) (T2.T)
+
+  include Make (Pair)
+
+  let create_from_cross_product t1_set t2_set =
+    T1.Set.fold (fun t1 result ->
+        T2.Set.fold (fun t2 result ->
+            Set.add (t1, t2) result)
+          t2_set
+          result)
+      t1_set
+      Set.empty
 end

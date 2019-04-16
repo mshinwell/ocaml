@@ -37,8 +37,18 @@ let backend = (module Backend : Backend_intf.S)
 let usage = "Usage: ocamlopt <options> <files>\nOptions are:"
 
 module Options = Main_args.Make_optcomp_options (Main_args.Default.Optmain)
+
 let main () =
   native_code := true;
+  begin match Sys.getenv_opt "COLUMNS" with
+  | None -> ()
+  | Some i ->
+    match int_of_string i with
+    | exception _ -> ()
+    | i ->
+      Format.pp_set_margin Format.std_formatter i;
+      Format.pp_set_margin Format.err_formatter i
+  end;
   let ppf = Format.err_formatter in
   try
     readenv ppf Before_args;

@@ -170,6 +170,7 @@ module Map : sig
       val find_last_opt : f:(key -> bool) -> 'a t -> (key * 'a) option
       val map : f:('a -> 'b) -> 'a t -> 'b t
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
+      val map_sharing: ('a -> 'a) -> 'a t -> 'a t
       val to_seq : 'a t -> (key * 'a) Seq.t
       val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
       val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t

@@ -296,7 +296,8 @@ let primitive (p : Clambda_primitives.primitive) (args, approxs)
         end
     | _ ->
       match Semantics_of_primitives.return_type_of_primitive p with
-      | Float ->
+      | Boxed_float ->
         expr, A.value_any_float, C.Benefit.zero
+      | Unboxed_float | Unboxed_int32 | Unboxed_int64 | Unboxed_nativeint
       | Other ->
         expr, A.value_unknown Other, C.Benefit.zero
