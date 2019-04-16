@@ -42,6 +42,9 @@ ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
         -I lambda -I middle_end -I middle_end/closure \
         -I middle_end/flambda -I middle_end/flambda/base_types \
+        -I middle_end/flambda2.0 \
+        -I middle_end/flambda2.0/from_lambda \
+        -I middle_end/flambda2.0/language \
         -I asmcomp -I asmcomp/debug \
         -I driver -I toplevel
 
@@ -161,6 +164,7 @@ ASMCOMP=\
   asmcomp/cmmgen.cmo \
   asmcomp/interval.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo \
+  asmcomp/regtype.cmo \
   asmcomp/spacetime_profiling.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
@@ -232,6 +236,69 @@ MIDDLE_END_FLAMBDA=\
   middle_end/flambda/flambda_to_clambda.cmo \
   middle_end/flambda/flambda_middle_end.cmo
 
+MIDDLE_END_FLAMBDA2_LANGUAGE=\
+  middle_end/flambda2.0/language/allocated_const.cmo \
+  middle_end/flambda2.0/language/closure_element.cmo \
+  middle_end/flambda2.0/language/closure_id.cmo \
+  middle_end/flambda2.0/language/closure_origin.cmo \
+  middle_end/flambda2.0/language/code_id.cmo \
+  middle_end/flambda2.0/language/compilation_unit.cmo \
+  middle_end/flambda2.0/language/continuation.cmo \
+  middle_end/flambda2.0/language/discriminant.cmo \
+  middle_end/flambda2.0/language/export_id.cmo \
+  middle_end/flambda2.0/language/id_types.cmo \
+  middle_end/flambda2.0/language/immediate.cmo \
+  middle_end/flambda2.0/language/inline_attribute.cmo \
+  middle_end/flambda2.0/language/invalid_term_semantics.cmo \
+  middle_end/flambda2.0/language/kinded_parameter.cmo \
+  middle_end/flambda2.0/language/linkage_name.cmo \
+  middle_end/flambda2.0/language/num_continuation_uses.cmo \
+  middle_end/flambda2.0/language/parameter.cmo \
+  middle_end/flambda2.0/language/recursive.cmo \
+  middle_end/flambda2.0/language/scope_level.cmo \
+  middle_end/flambda2.0/language/set_of_closures_origin.cmo \
+  middle_end/flambda2.0/language/specialise_attribute.cmo \
+  middle_end/flambda2.0/language/tag.cmo \
+  middle_end/flambda2.0/language/var_within_closure.cmo \
+  middle_end/flambda2.0/language/symbol.cmo \
+  middle_end/flambda2.0/language/variable.cmo \
+  middle_end/flambda2.0/language/name.cmo \
+  middle_end/flambda2.0/language/simple.cmo \
+  middle_end/flambda2.0/language/bindable_name.cmo \
+  middle_end/flambda2.0/language/name_permutation.cmo \
+  middle_end/flambda2.0/language/name_occurrences.cmo \
+  middle_end/flambda2.0/language/name_abstraction.cmo \
+  middle_end/flambda2.0/language/continuation_counts.cmo \
+  middle_end/flambda2.0/language/number_adjuncts.cmo \
+  middle_end/flambda2.0/language/flambda_primitive.cmo \
+  middle_end/flambda2.0/language/invariant_env.cmo \
+  middle_end/flambda2.0/language/exn_continuation.cmo \
+  middle_end/flambda2.0/language/expr_std.cmo \
+  middle_end/flambda2.0/language/call_kind.cmo \
+  middle_end/flambda2.0/language/trap_action.cmo \
+  middle_end/flambda2.0/language/apply_cont_expr.cmo \
+  middle_end/flambda2.0/language/apply_expr.cmo \
+  middle_end/flambda2.0/language/switch_expr.cmo \
+  middle_end/flambda2.0/language/flambda.cmo \
+  middle_end/flambda2.0/language/flambda_static.cmo \
+  middle_end/flambda2.0/language/flambda_utils.cmo
+
+MIDDLE_END_FLAMBDA2_FROM_LAMBDA=\
+  middle_end/flambda2.0/from_lambda/prepare_lambda.cmo \
+  middle_end/flambda2.0/from_lambda/ilambda.cmo \
+  middle_end/flambda2.0/from_lambda/cps_conversion.cmo \
+  middle_end/flambda2.0/from_lambda/eliminate_mutable_vars.cmo \
+  middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives.cmo \
+  middle_end/flambda2.0/from_lambda/closure_conversion_aux.cmo \
+  middle_end/flambda2.0/from_lambda/closure_conversion.cmo
+
+MIDDLE_END_FLAMBDA2=\
+  $(MIDDLE_END_FLAMBDA2_LANGUAGE) \
+  $(MIDDLE_END_FLAMBDA2_FROM_LAMBDA) \
+  middle_end/flambda2.0/flambda2_middle_end.cmo
+
+#  middle_end/flambda2.0/language/function_decl_intf.cmo
+
 MIDDLE_END=\
   middle_end/internal_variable_names.cmo \
   middle_end/linkage_name.cmo \
@@ -271,7 +338,8 @@ MIDDLE_END=\
   middle_end/flambda/export_info_for_pack.cmo \
   middle_end/compilenv.cmo \
   $(MIDDLE_END_CLOSURE) \
-  $(MIDDLE_END_FLAMBDA)
+  $(MIDDLE_END_FLAMBDA) \
+  $(MIDDLE_END_FLAMBDA2)
 
 OPTCOMP=$(MIDDLE_END) $(ASMCOMP)
 
@@ -653,6 +721,15 @@ endif
 	    middle_end/flambda/base_types/*.cmi \
 	    "$(INSTALL_COMPLIBDIR)"
 	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/*.cmi \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/from_lambda/*.cmi \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/language/*.cmi \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
 	    asmcomp/*.cmi \
 	    "$(INSTALL_COMPLIBDIR)"
 	$(INSTALL_DATA) \
@@ -675,6 +752,21 @@ ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
 	    middle_end/flambda/base_types/*.cmt \
             middle_end/flambda/base_types/*.cmti \
 	    middle_end/flambda/base_types/*.mli \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/*.cmt \
+            middle_end/flambda2.0/*.cmti \
+	    middle_end/flambda2.0/*.mli \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/from_lambda/*.cmt \
+            middle_end/flambda2.0/from_lambda/*.cmti \
+	    middle_end/flambda2.0/from_lambda/*.mli \
+	    "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) \
+	    middle_end/flambda2.0/language/*.cmt \
+            middle_end/flambda2.0/language/*.cmti \
+	    middle_end/flambda2.0/language/*.mli \
 	    "$(INSTALL_COMPLIBDIR)"
 	$(INSTALL_DATA) \
 	    asmcomp/*.cmt asmcomp/*.cmti \
@@ -728,7 +820,13 @@ installoptopt:
            middle_end/closure/*.cmx \
            middle_end/flambda/*.cmx \
            middle_end/flambda/base_types/*.cmx \
+<<<<<<< HEAD
 	   asmcomp/debug/*.cmx \
+=======
+           middle_end/flambda2.0/*.cmx \
+	   middle_end/flambda2.0/from_lambda/*.cmx \
+	   middle_end/flambda2.0/language/*.cmx \
+>>>>>>> 9f33c8389a... Flambda 2.0 (4.10 rebase 2019-10-15)
           "$(INSTALL_COMPLIBDIR)"
 	$(INSTALL_DATA) \
            compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.$(A) \
@@ -762,8 +860,14 @@ ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
            lambda/*.ml \
 	   toplevel/*.ml middle_end/*.ml middle_end/closure/*.ml \
      middle_end/flambda/*.ml middle_end/flambda/base_types/*.ml \
+<<<<<<< HEAD
 	   asmcomp/*.ml \
 	   asmcmp/debug/*.ml \
+=======
+	   asmcomp/*.ml middle_end/flambda2.0/*.ml \
+	   middle_end/flambda2.0/from_lambda/*.ml \
+	   middle_end/flambda2.0/language/*.ml \
+>>>>>>> 9f33c8389a... Flambda 2.0 (4.10 rebase 2019-10-15)
 	   "$(INSTALL_COMPLIBDIR)"
 endif
 
@@ -1312,6 +1416,9 @@ partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end file_formats \
            lambda middle_end/closure middle_end/flambda \
            middle_end/flambda/base_types asmcomp/debug \
+           middle_end/flambda2.0 \
+	   middle_end/flambda2.0/from_lambda \
+	   middle_end/flambda2.0/language \
            driver toplevel tools; do \
 	  rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.$(S) \
 	    $$d/*.$(O) $$d/*.$(SO); \
@@ -1322,6 +1429,9 @@ depend: beforedepend
 	(for d in utils parsing typing bytecomp asmcomp middle_end \
          lambda file_formats middle_end/closure middle_end/flambda \
          middle_end/flambda/base_types asmcomp/debug \
+         middle_end/flambda2.0 \
+         middle_end/flambda2.0/from_lambda \
+         middle_end/flambda2.0/language \
          driver toplevel; \
          do $(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES) $$d/*.mli $$d/*.ml || exit; \
          done) > .depend

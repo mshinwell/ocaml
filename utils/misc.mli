@@ -24,6 +24,8 @@ val fatal_error: string -> 'a
 val fatal_errorf: ('a, Format.formatter, unit, 'b) format4 -> 'a
 exception Fatal_error
 
+val fatal_error_callstack : unit -> Printexc.raw_backtrace
+
 val try_finally :
   ?always:(unit -> unit) ->
   ?exceptionally:(unit -> unit) ->
@@ -87,6 +89,8 @@ val protect_refs : ref_and_value list -> (unit -> 'a) -> 'a
 module Stdlib : sig
   module List : sig
     type 'a t = 'a list
+
+    val is_singleton : 'a t -> bool
 
     val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** The lexicographic order supported by the provided order.
@@ -367,6 +371,7 @@ module Color : sig
     | FG of color (* foreground *)
     | BG of color (* background *)
     | Bold
+    | Underline
     | Reset
 
   val ansi_of_style_l : style list -> string
@@ -393,6 +398,19 @@ module Color : sig
 
   val set_color_tag_handling : Format.formatter -> unit
   (* adds functions to support color tags to the given formatter. *)
+
+  val fg_256 : int -> string
+  val bg_256 : int -> string
+
+  val bold_green : unit -> string
+  val bold_red : unit -> string
+  val bold_cyan : unit -> string
+  val bold_white : unit -> string
+  val bold_yellow : unit -> string
+  val bold_blue : unit -> string
+  val bold_magenta : unit -> string
+  val underline : unit -> string
+  val reset : unit -> string
 end
 
 (* See the -error-style option *)

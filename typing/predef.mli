@@ -81,7 +81,8 @@ val builtin_idents: (string * Ident.t) list
 
 (** All predefined exceptions, exposed as [Ident.t] for flambda (for
     building value approximations).
-    The [Ident.t] for division by zero is also exported explicitly
-    so flambda can generate code to raise it. *)
+    The [Ident.t]s for certain exceptions are also exported explicitly
+    so flambda can generate code to raise them. *)
+val ident_invalid_argument: Ident.t
 val ident_division_by_zero: Ident.t
 val all_predef_exns : Ident.t list
