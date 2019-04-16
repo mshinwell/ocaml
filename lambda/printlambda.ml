@@ -259,6 +259,7 @@ let primitive ppf = function
        | Backend_type -> "backend_type" in
      fprintf ppf "sys.constant_%s" const_name
   | Pisint -> fprintf ppf "isint"
+  | Pgettag _ -> fprintf ppf "gettag"
   | Pisout -> fprintf ppf "isout"
   | Pbintofint bi -> print_boxed_integer "of_int" ppf bi
   | Pintofbint bi -> print_boxed_integer "to_int" ppf bi
@@ -341,6 +342,7 @@ let primitive ppf = function
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
   | Popaque -> fprintf ppf "opaque"
+  | Pdiscriminant_of_int -> fprintf ppf "int_to_scrutinee"
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -405,6 +407,7 @@ let name_of_primitive = function
   | Parraysets _ -> "Parraysets"
   | Pctconst _ -> "Pctconst"
   | Pisint -> "Pisint"
+  | Pgettag _ -> "Pgettag"
   | Pisout -> "Pisout"
   | Pbintofint _ -> "Pbintofint"
   | Pintofbint _ -> "Pintofbint"
@@ -444,6 +447,7 @@ let name_of_primitive = function
   | Pbbswap _ -> "Pbbswap"
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
+  | Pdiscriminant_of_int -> "Pdiscriminant_of_int"
 
 let function_attribute ppf { inline; specialise; local; is_a_functor; stub } =
   if is_a_functor then
@@ -481,6 +485,11 @@ let apply_specialised_attribute ppf = function
   | Default_specialise -> ()
   | Always_specialise -> fprintf ppf " always_specialise"
   | Never_specialise -> fprintf ppf " never_specialise"
+
+let meth_kind ppf = function
+  | Self -> fprintf ppf "self"
+  | Cached -> fprintf ppf "cache"
+  | Public -> fprintf ppf "public"
 
 let rec lam ppf = function
   | Lvar id ->
@@ -549,9 +558,9 @@ let rec lam ppf = function
            fprintf ppf "@[<hv 1>case int %i:@ %a@]" n lam l)
          sw.sw_consts;
         List.iter
-          (fun (n, l) ->
+          (fun ({ sw_tag = tag; sw_size = _; }, l) ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<hv 1>case tag %i:@ %a@]" n lam l)
+            fprintf ppf "@[<hv 1>case tag %i:@ %a@]" tag lam l)
           sw.sw_blocks ;
         begin match sw.sw_failaction with
         | None  -> ()
@@ -612,9 +621,8 @@ let rec lam ppf = function
   | Lsend (k, met, obj, largs, _) ->
       let args ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
-      let kind =
-        if k = Self then "self" else if k = Cached then "cache" else "" in
-      fprintf ppf "@[<2>(send%s@ %a@ %a%a)@]" kind lam obj lam met args largs
+      fprintf ppf "@[<2>(send%a@ %a@ %a%a)@]" meth_kind k lam obj lam met
+        args largs
   | Levent(expr, ev) ->
       let kind =
        match ev.lev_kind with
