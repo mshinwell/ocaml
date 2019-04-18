@@ -175,8 +175,8 @@ end = struct
 
   let continuation_counts t =
     match descr t with
-    | Let let_expr -> Let.continuation_counts_toplevel let_expr
-    | Let_cont let_cont -> Let_cont.continuation_counts_toplevel let_cont
+    | Let let_expr -> Let.continuation_counts let_expr
+    | Let_cont let_cont -> Let_cont.continuation_counts let_cont
     | Apply apply -> Apply.continuation_counts apply
     | Apply_cont apply_cont -> Apply_cont.continuation_counts apply_cont
     | Switch switch -> Switch.continuation_counts switch
@@ -590,7 +590,6 @@ end and Let_cont : sig
   val to_continuation_map : t -> Continuation_handlers.t
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
 *)
-  val no_effects_or_coeffects : t -> bool
 end = struct
   type t =
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -687,13 +686,6 @@ end = struct
     | Recursive handlers -> Recursive (f handlers)
 *)
 
-  let no_effects_or_coeffects t =
-    match t with
-    | Non_recursive handler ->
-      Non_recursive_let_cont_handler.no_effects_or_coeffects handler
-    | Recursive handlers ->
-      Recursive_let_cont_handlers.no_effects_or_coeffects handlers
-
   let free_names t =
     match t with
     | Non_recursive handler ->
@@ -716,13 +708,15 @@ end = struct
       if handlers == handlers' then t
       else Recursive handlers'
 
-  let continuation_counts_toplevel t =
+  let continuation_counts t =
     match t with
     | Non_recursive handler ->
-      Non_recursive_let_cont_handler.continuation_counts_toplevel handler
+      Non_recursive_let_cont_handler.continuation_counts handler
     | Recursive handlers ->
-      Recursive_let_cont_handlers.continuation_counts_toplevel handlers
+      Recursive_let_cont_handlers.continuation_counts handlers
 end and Non_recursive_let_cont_handler : sig
+  type t
+
   include Expr_std.S with type t := t
 
   val create
@@ -777,9 +771,11 @@ end = struct
       continuation_and_body = continuation_and_body';
     }
 
-  let continuation_counts_toplevel _t =
+  let continuation_counts _t =
     Misc.fatal_error "Not yet implemented"
 end and Recursive_let_cont_handlers0 : sig
+  type t
+
   include Expr_std.S with type t := t
 
   val create
@@ -835,9 +831,7 @@ end and Recursive_let_cont_handlers : sig
     -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
     -> 'a
 
-  val no_effects_or_coeffects : t -> bool
-
-  val continuation_counts_toplevel : t -> Continuation_counts.t
+  val continuation_counts : t -> Continuation_counts.t
 end = struct
   include Name_abstraction.Make_list (Recursive_let_cont_handlers0)
 
@@ -858,7 +852,7 @@ end = struct
       let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
       f ~body handlers)
 
-  let continuation_counts_toplevel _t =
+  let continuation_counts _t =
     Misc.fatal_error "Not yet implemented"
 end and Params_and_handler : sig
   type t
