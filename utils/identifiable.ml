@@ -35,6 +35,7 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
+  val get_singleton : t -> elt option
 end
 
 module type Map = sig
@@ -45,6 +46,13 @@ module type Map = sig
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
+
+  (** Like [map], but the returned map will be physically equal to the input
+      map if every call [f a] made during the mapping returns a value
+      physically equal to [a]. *)
+  val map_sharing: ('a -> 'a) -> 'a t -> 'a t
+
+  val get_singleton : 'a t -> (key * 'a) option
 
   val disjoint_union :
     ?eq:('a -> 'a -> bool) -> ?print:(Format.formatter -> 'a -> unit) -> 'a t ->
@@ -102,11 +110,20 @@ end
 module Make_map (T : Thing) = struct
   include Map.Make (T)
 
+  let get_singleton t =
+    match bindings t with
+    | [key, datum] -> Some (key, datum)
+    | _ -> None
+
   let filter_map t ~f =
     fold (fun id v map ->
         match f id v with
         | None -> map
         | Some r -> add id r map) t empty
+
+  (* CR mshinwell: Implement this properly.  We should move things like
+     [get_singleton] into the stdlib at the same time. *)
+  let map_sharing = map
 
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l
@@ -202,6 +219,11 @@ module Make_set (T : Thing) = struct
     | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
   let map f s = of_list (List.map f (elements s))
+
+  let get_singleton t =
+    match elements t with
+    | elt::_ -> Some elt
+    | _ -> None
 end
 
 module Make_tbl (T : Thing) = struct

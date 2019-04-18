@@ -14,35 +14,53 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Representation of conditional control flow: the [Switch] expression.
-
-    Scrutinees of [Switch]es are [Discriminant]s of kind [Fabricated]---not
-    regular integers or similar. There are no default cases. Switches always
-    have at least two cases.
-*)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+module Make (Term_language_function_declaration : Expr_std.S) = struct
+  type t = unit
+  type flambda_type = t
 
-include Expr_std.S with type t := t
+  module Parameters = struct
+    type t = unit
 
-val create
-   : scrutinee:Name.t
-  -> arms:Continuation.t Discriminant.Map.t
-  -> t
+    let print _ppf _t = ()
 
-(** The scrutinee of the switch. *)
-val scrutinee : t -> Name.t
+    let print_with_cache ~cache:_ ppf t = print ppf t
 
-(** Call the given function [f] on each (discriminant, destination) pair
-    in the switch. *)
-val iter : t -> f:(Discriminant.t -> Continuation.t -> unit) -> unit
+    let invariant _env _t = ()
 
-(** Where the switch will jump to for each possible value of the
-    discriminant. *)
-val arms : t -> Continuation.t Discriminant.Map.t
+    let free_names _t = Name_occurrences.empty
 
-(** How many cases the switch has.  (Note that this is not the number of
-    destinations reached by the switch, which may be a smaller number.) *)
-val num_arms : t -> int
+    let apply_name_permutation t _perm = t
+
+    let continuation_counts _t = Continuation_counts.empty
+  end
+
+  module Typing_env_extension = struct
+    type t = unit
+
+    let print _ppf _t = ()
+
+    let print_with_cache ~cache:_ ppf t = print ppf t
+
+    let invariant _env _t = ()
+
+    let free_names _t = Name_occurrences.empty
+
+    let apply_name_permutation t _perm = t
+
+    let continuation_counts _t = Continuation_counts.empty
+  end
+
+  let print _ppf _t = ()
+
+  let print_with_cache ~cache:_ ppf t = print ppf t
+
+  let invariant _env _t = ()
+
+  let free_names _t = Name_occurrences.empty
+
+  let apply_name_permutation t _perm = t
+
+  let continuation_counts _t = Continuation_counts.empty
+end
