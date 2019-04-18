@@ -207,6 +207,8 @@ val dump_flambda_verbose : bool ref
 val classic_inlining : bool ref
 val afl_instrument : bool ref
 val afl_inst_ratio : int ref
+val treat_invalid_code_as_unreachable : bool ref
+val dump_let_cont : bool ref
 
 val all_passes : string list ref
 val dumped_pass : string -> bool

@@ -330,27 +330,20 @@ module Program_body = struct
 
   type t =
     | Define_symbol of definition * t
-    | Define_symbol_rec of definition * t
     | Root of Symbol.t
 
   let rec print_with_cache ~cache ppf t =
     match t with
     | Define_symbol (defn, t) ->
       Format.fprintf ppf "@[<v 2>(%sDefine_symbol%s@ %a)@]@;"
-        (Misc_color.bold_blue ())
-        (Misc_color.reset ())
-        (print_definition_with_cache ~cache) defn;
-      print_with_cache ~cache ppf t
-    | Define_symbol_rec (defn, t) ->
-      Format.fprintf ppf "@[<v 2>(%sDefine_symbol_rec%s@ %a)@]@;"
-        (Misc_color.bold_blue ())
-        (Misc_color.reset ())
+        (Misc.Color.bold_blue ())
+        (Misc.Color.reset ())
         (print_definition_with_cache ~cache) defn;
       print_with_cache ~cache ppf t
     | Root sym ->
       Format.fprintf ppf "@[(%sRoot%s %a)@]"
-        (Misc_color.bold_blue ())
-        (Misc_color.reset ())
+        (Misc.Color.bold_blue ())
+        (Misc.Color.reset ())
         Symbol.print sym
 
   let print ppf t =
@@ -360,7 +353,7 @@ module Program_body = struct
     let rec gc_roots t roots =
       match t with
       | Root _ -> roots
-      | Define_symbol (defn, t) | Define_symbol_rec (defn, t) ->
+      | Define_symbol (defn, t) ->
         let roots =
           List.fold_left (fun roots (sym, _kind, static_part) ->
               (* CR mshinwell: check [kind] against the result of
@@ -380,9 +373,6 @@ module Program_body = struct
     match t with
     | Define_symbol (defn, t) ->
       Symbol.Set.union (free_symbols_of_definition defn Non_recursive)
-        (free_symbols t)
-    | Define_symbol_rec (defn, t) ->
-      Symbol.Set.union (free_symbols_of_definition defn Recursive)
         (free_symbols t)
     | Root sym -> Symbol.Set.singleton sym
 
@@ -508,9 +498,6 @@ module Program_body = struct
     | Define_symbol (defn, t) ->
       let env = invariant_define_symbol env defn Non_recursive in
       invariant env t
-    | Define_symbol_rec (defn, t) ->
-      let env = invariant_define_symbol env defn Recursive in
-      invariant env t
     | Root sym -> E.check_symbol_is_bound env sym
 *)
 
@@ -552,8 +539,7 @@ module Program = struct
   let root_symbol t =
     let rec loop (body : Program_body.t) =
       match body with
-      | Define_symbol (_, body)
-      | Define_symbol_rec (_, body) -> loop body
+      | Define_symbol (_, body) -> loop body
       | Root root -> root
     in
     loop t.body

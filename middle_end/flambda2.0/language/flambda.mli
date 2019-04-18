@@ -37,7 +37,11 @@ module rec Expr : sig
   (** The type of alpha-equivalence classes of expressions. *)
   type t
 
-  (** Printing, invariant checks, name manipulation, etc. *)
+  (** Printing, invariant checks, name manipulation, etc.
+      Note that [continuation_counts] in this module does not descend under
+      lambdas. *)
+  (* CR mshinwell: Maybe [continuation_counts] should be renamed to
+     [continuation_counts_toplevel] everywhere? *)
   include Expr_std.S with type t := t
 
   type descr = private
@@ -124,8 +128,6 @@ module rec Expr : sig
      : bindings:(Variable.t * Flambda_kind.t * Named.t) list
     -> body:t
     -> t
-
-  val continuation_counts_toplevel : t -> Continuation_counts.t
 end and Named : sig
   (** The defining expressions of [Let] bindings. *)
   type t = private
