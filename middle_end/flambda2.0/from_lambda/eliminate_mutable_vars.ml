@@ -108,14 +108,14 @@ end = struct
       }
     in
     let current_values_of_mutables_in_scope =
-      Ident.Map.map (fun mut_var _outer_value ->
-          Ident.rename mut_var)
+      Ident.Map.mapi (fun mut_var (_outer_value, kind) ->
+          Ident.rename mut_var, kind)
         t.current_values_of_mutables_in_scope
     in
     let handler_env =
       let handler_env =
         match recursive with
-        | Nonrecursive -> env
+        | Nonrecursive -> t
         | Recursive -> body_env
       in
       { handler_env with
@@ -124,7 +124,7 @@ end = struct
     in
     let extra_params =
       List.map snd
-        (Continuation.Map.bindings current_values_of_mutables_in_scope)
+        (Continuation.Map.bindings t.current_values_of_mutables_in_scope)
     in
     { body_env;
       handler_env;
