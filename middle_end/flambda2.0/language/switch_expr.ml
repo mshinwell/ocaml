@@ -44,6 +44,8 @@ let print ppf { scrutinee; arms; } =
     Name.print scrutinee
     print_arms arms
 
+let print_with_cache ~cache:_ ppf t = print ppf t
+
 let invariant env ({ scrutinee; arms; } as t) =
   let module E = Invariant_env in
   let unbound_continuation cont reason =

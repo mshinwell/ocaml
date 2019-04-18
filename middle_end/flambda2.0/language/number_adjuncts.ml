@@ -24,12 +24,12 @@ module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
 module type Num_common = sig
-  include Hashtbl.With_map
+  include Identifiable.S
 
   module Pair : sig
     type nonrec t = t * t
 
-    include Hashtbl.With_map with type t := t
+    include Identifiable.S with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -54,7 +54,7 @@ module type Num_common = sig
 end
 
 module type Number_kind_common = sig
-  module Num : Hashtbl.With_map
+  module Num : Identifiable.S
 
   val kind : Flambda_kind.Standard_int_or_float.t
 
@@ -95,7 +95,7 @@ module type Int_number_kind = sig
 end
 
 module type Boxable = sig
-  module Num : Hashtbl.With_map
+  module Num : Identifiable.S
 
   val boxable_number_kind : Flambda_kind.Boxable_number.t
 
@@ -185,7 +185,7 @@ module For_tagged_immediates : Int_number_kind = struct
   let these_unboxed = T.these_tagged_immediates
 
   let term_unboxed imm : Flambda.Named.t =
-    Simple (Simple.const (Tagged_immediate imm))
+    Flambda.Named.create_simple (Simple.const (Tagged_immediate imm))
 end
 
 module For_floats : Boxable_number_kind = struct
@@ -229,7 +229,7 @@ module For_floats : Boxable_number_kind = struct
   let box = T.box_float
 
   let term_unboxed f : Flambda.Named.t =
-    Simple (Simple.const (Naked_float f))
+    Flambda.Named.create_simple (Simple.const (Naked_float f))
 
   let t_of_ty ty = T.of_ty_naked_number ty Naked_float
 end
@@ -286,7 +286,7 @@ module For_int32s : Boxable_int_number_kind = struct
   let box = T.box_int32
 
   let term_unboxed i : Flambda.Named.t =
-    Simple (Simple.const (Naked_int32 i))
+    Flambda.Named.create_simple (Simple.const (Naked_int32 i))
 
   let t_of_ty ty = T.of_ty_naked_number ty Naked_int32
 end
@@ -343,7 +343,7 @@ module For_int64s : Boxable_int_number_kind = struct
   let box = T.box_int64
 
   let term_unboxed i : Flambda.Named.t =
-    Simple (Simple.const (Naked_int64 i))
+    Flambda.Named.create_simple (Simple.const (Naked_int64 i))
 
   let t_of_ty ty = T.of_ty_naked_number ty Naked_int64
 end
@@ -400,7 +400,7 @@ module For_nativeints : Boxable_int_number_kind = struct
   let box = T.box_nativeint
 
   let term_unboxed i : Flambda.Named.t =
-    Simple (Simple.const (Naked_nativeint i))
+    Flambda.Named.create_simple (Simple.const (Naked_nativeint i))
 
   let t_of_ty ty = T.of_ty_naked_number ty Naked_nativeint
 end

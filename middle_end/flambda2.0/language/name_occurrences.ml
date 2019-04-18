@@ -106,6 +106,9 @@ let mem_in_debug_only t name = Bindable_name.Set.mem name t.in_debug_only
 let mem t name =
   mem_in_terms t name || mem_in_types t name || mem_in_debug_only t name
 
+let mem_var t var =
+  mem t (Bindable_name.Name (Name.var var))
+
 let everything t =
   Bindable_name.Set.union t.in_terms
     (Bindable_name.Set.union t.in_types t.in_debug_only)
@@ -123,6 +126,9 @@ let remove t name =
     in_types = Bindable_name.Set.remove name t.in_types;
     in_debug_only = Bindable_name.Set.remove name t.in_debug_only;
   }
+
+let remove_var t var =
+  remove t (Bindable_name.Name (Name.var var))
 
 (* CR mshinwell: Rename to "diff_free_and_bound" or something?
    Also double-check the semantics are correct here *)

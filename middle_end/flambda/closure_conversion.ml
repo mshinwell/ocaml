@@ -497,7 +497,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
           List.fold_left (fun set (i, _) -> I.Set.add i set) I.Set.empty cases
     in
     let blocks =
-      List.map (fun ((key : Lambda.switch_block_key), action) ->
+      List.map (fun ((key : Lambda.lambda_switch_block_key), action) ->
           key.sw_tag, action)
         sw.sw_blocks
     in
