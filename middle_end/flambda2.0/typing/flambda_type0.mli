@@ -14,35 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Representation of conditional control flow: the [Switch] expression.
-
-    Scrutinees of [Switch]es are [Discriminant]s of kind [Fabricated]---not
-    regular integers or similar. There are no default cases. Switches always
-    have at least two cases.
-*)
+(** The type system of Flambda. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
-
-include Expr_std.S with type t := t
-
-val create
-   : scrutinee:Name.t
-  -> arms:Continuation.t Discriminant.Map.t
-  -> t
-
-(** The scrutinee of the switch. *)
-val scrutinee : t -> Name.t
-
-(** Call the given function [f] on each (discriminant, destination) pair
-    in the switch. *)
-val iter : t -> f:(Discriminant.t -> Continuation.t -> unit) -> unit
-
-(** Where the switch will jump to for each possible value of the
-    discriminant. *)
-val arms : t -> Continuation.t Discriminant.Map.t
-
-(** How many cases the switch has.  (Note that this is not the number of
-    destinations reached by the switch, which may be a smaller number.) *)
-val num_arms : t -> int
+(** The type system is parameterised over the expression language. *)
+module Make (Function_declaration : Expr_std.S)
+  : Flambda_type0_intf.S
+    with type term_language_function_declaration := Function_declaration.t

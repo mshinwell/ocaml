@@ -33,6 +33,23 @@ module type S = sig
   type t
   type flambda_type = t
 
+  include Expr_std.S with type t := t
+
+  module Parameters : sig
+    type t
+
+    include Expr_std.S with type t := t
+  end
+
+  module Typing_env_extension : sig
+    type t
+
+    include Expr_std.S with type t := t
+
+    val is_empty : t -> bool
+  end
+
+(*
   type 'a ty
   type 'a unknown_or_join
 
@@ -1186,5 +1203,6 @@ module type S = sig
       -> (Typing_env_extension.t * Continuation.t) Discriminant.Map.t)
     type_accessor
 
+*)
 *)
 end

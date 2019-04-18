@@ -30,6 +30,7 @@ type switch_creation_result =
   | Nothing_deleted
 
 module rec Expr : sig
+  type t
   type descr =
     | Let of Let.t
     | Let_cont of Let_cont.t
@@ -37,28 +38,43 @@ module rec Expr : sig
     | Apply_cont of Apply_cont.t
     | Switch of Switch.t
     | Invalid of Invalid_term_semantics.t
-
   include Expr_std.S with type t := t
+  val descr : t -> descr
+  type let_creation_result =
+    | Have_deleted of Named.t
+    | Nothing_deleted
+  val create_let0
+     : Variable.t
+    -> Flambda_kind.t
+    -> Named.t
+    -> t
+    -> t * let_creation_result
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
   val create_let_cont : Let_cont.t -> t
   val create_apply : Apply.t -> t
   val create_apply_cont : Apply_cont.t -> t
-  val create_switch
+  type switch_creation_result =
+    | Have_deleted_comparison_but_not_branch
+    | Have_deleted_comparison_and_branch
+    | Nothing_deleted
+  val create_switch0
      : scrutinee:Name.t
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t * switch_creation_result
+  val create_switch
+     : scrutinee:Name.t
+    -> arms:Continuation.t Discriminant.Map.t
+    -> Expr.t
   val create_if_then_else
      : scrutinee:Name.t
     -> if_true:Continuation.t
     -> if_false:Continuation.t
     -> t
   val create_invalid : unit -> t
-  val no_effects_or_coeffects : t -> bool
   val bind
      : bindings:(Variable.t * Flambda_kind.t * Named.t) list
     -> body:t
     -> t
-  val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
   type descr =
     | Let of Let.t
@@ -80,15 +96,6 @@ end = struct
        before they are used. *)
   }
 
-  let invariant env t =
-    match t with
-    | Let let_expr -> Let.invariant env let_expr
-    | Let_cont let_cont -> Let_cont.invariant env let_cont
-    | Apply_cont apply_cont -> Apply_cont.invariant env apply_cont
-    | Apply apply -> Apply.invariant env apply
-    | Switch switch -> Switch.invariant env switch
-    | Invalid _ -> ()
-
   let apply_name_permutation t perm =
     let delayed_permutation =
       Name_permutation.compose ~second:perm ~first:t.delayed_permutation
@@ -98,7 +105,8 @@ end = struct
     }
 
   let descr t =
-    if Name_permutation.is_empty t.delayed_permutation then
+    let perm = t.delayed_permutation in
+    if Name_permutation.is_empty perm then
       t.descr
     else
       match t.descr with
@@ -124,6 +132,15 @@ end = struct
         else Switch switch'
       | Invalid _ -> t.descr
 
+  let invariant env t =
+    match descr t with
+    | Let let_expr -> Let.invariant env let_expr
+    | Let_cont let_cont -> Let_cont.invariant env let_cont
+    | Apply_cont apply_cont -> Apply_cont.invariant env apply_cont
+    | Apply apply -> Apply.invariant env apply
+    | Switch switch -> Switch.invariant env switch
+    | Invalid _ -> ()
+
   (* CR mshinwell: We might want printing functions that show the delayed
      permutation, etc. *)
 
@@ -136,9 +153,9 @@ end = struct
     | Switch switch -> Switch.print ppf switch
     | Invalid semantics ->
       fprintf ppf "@[%sInvalid %a%s@]"
-        (Misc_color.bold_cyan ())
+        (Misc.Color.bold_cyan ())
         Invalid_term_semantics.print semantics
-        (Misc_color.reset ())
+        (Misc.Color.reset ())
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -156,14 +173,14 @@ end = struct
       | Switch switch -> Switch.free_names switch
       | Invalid _ -> Name_occurrences.empty
 
-  let continuation_counts_toplevel t =
+  let continuation_counts t =
     match descr t with
     | Let let_expr -> Let.continuation_counts_toplevel let_expr
     | Let_cont let_cont -> Let_cont.continuation_counts_toplevel let_cont
     | Apply apply -> Apply.continuation_counts apply
     | Apply_cont apply_cont -> Apply_cont.continuation_counts apply_cont
     | Switch switch -> Switch.continuation_counts switch
-    | Invalid _ -> Continuation_counts.create ()
+    | Invalid _ -> Continuation_counts.empty
 
   let create descr =
     { descr;
@@ -171,7 +188,11 @@ end = struct
       free_names = Not_computed;
     }
 
-  let create_let0 bound_var kind defining_expr body : t =
+  type let_creation_result =
+    | Have_deleted of Named.t
+    | Nothing_deleted
+
+  let create_let0 bound_var kind defining_expr body : t * let_creation_result =
     begin match !Clflags.dump_flambda_let with
     | None -> ()
     | Some stamp ->
@@ -182,10 +203,10 @@ end = struct
     end;
     let free_names_of_body = free_names body in
     (* If the [Let]-binding is redundant, don't even create it. *)
-    if (not (Name_occurrences.mem free_names_of_body bound_var))
+    if (not (Name_occurrences.mem_var free_names_of_body bound_var))
       && Named.at_most_generative_effects defining_expr
     then
-      body
+      body, Have_deleted defining_expr
     else
       (* To save space, only keep free names on the outer term. *)
       let body =
@@ -193,7 +214,16 @@ end = struct
           free_names = Not_computed;
         }
       in
-      Let (Let.create ~bound_var ~kind ~defining_expr ~body)
+      let free_names : free_names =
+        Ok (Name_occurrences.remove_var free_names_of_body bound_var)
+      in
+      let t =
+        { descr = Let (Let.create ~bound_var ~kind ~defining_expr ~body);
+          delayed_permutation = Name_permutation.empty;
+          free_names;
+        }
+      in
+      t, Nothing_deleted
 
   let create_let bound_var kind defining_expr body : t =
     let expr, _ = create_let0 bound_var kind defining_expr body in
@@ -201,7 +231,7 @@ end = struct
 
   let create_let_cont let_cont = create (Let_cont let_cont)
   let create_apply apply = create (Apply apply)
-  let create_apply_cont apply_cont = create (Apply apply_cont)
+  let create_apply_cont apply_cont = create (Apply_cont apply_cont)
 
   let create_invalid () =
     if !Clflags.treat_invalid_code_as_unreachable then
@@ -209,7 +239,12 @@ end = struct
     else
       create (Invalid Halt_and_catch_fire)
 
-  let create_switch0 ~scrutinee ~arms =
+  type switch_creation_result =
+    | Have_deleted_comparison_but_not_branch
+    | Have_deleted_comparison_and_branch
+    | Nothing_deleted
+
+  let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
     if Discriminant.Map.cardinal arms < 1 then
       create_invalid (), Have_deleted_comparison_and_branch
     else
@@ -244,13 +279,6 @@ end = struct
     in
     create_switch ~scrutinee ~arms
 
-  let no_effects_or_coeffects (t : t) =
-    match t with
-    | Let let_expr -> Let.no_effects_or_coeffects let_expr
-    | Let_cont let_cont -> Let_cont.no_effects_or_coeffects let_cont
-    | Apply_cont _ | Switch _ -> true
-    | Apply _ | Invalid _ -> false
-
   (* CR mshinwell: Maybe this should assign the fresh names? *)
   let bind ~bindings ~body =
     List.fold_left (fun expr (bound_var, kind, defining_expr) ->
@@ -261,7 +289,6 @@ end and Named : sig
     | Simple of Simple.t
     | Prim of Flambda_primitive.t * Debuginfo.t
     | Set_of_closures of Set_of_closures.t
-
   include Expr_std.S with type t := t
   val create_simple : Simple.t -> t
   val create_prim : Flambda_primitive.t -> Debuginfo.t -> t
@@ -278,6 +305,11 @@ end and Named : sig
    -> Named.t * Flambda_kind.t
   val at_most_generative_effects : t -> bool
   val dummy_value : Flambda_kind.t -> t
+
+  val invariant_returning_kind
+     : Invariant_env.t
+    -> t
+    -> Flambda_primitive.result_kind
 end = struct
   include Named
 
@@ -285,9 +317,9 @@ end = struct
     match t with
     | Simple simple ->
       fprintf ppf "%s%a%s"
-        (Misc_color.bold_green ())
+        (Misc.Color.bold_green ())
         Simple.print simple
-        (Misc_color.reset ())
+        (Misc.Color.reset ())
     | Prim (prim, dbg) ->
       fprintf ppf "@[<2>(%a%a)@]"
         Flambda_primitive.print prim
@@ -299,7 +331,7 @@ end = struct
 
   (* CR mshinwell: It seems that the type [Flambda_primitive.result_kind]
      should move into [K], now it's used here. *)
-  let invariant env t : Flambda_primitive.result_kind =
+  let invariant_returning_kind env t : Flambda_primitive.result_kind =
     try
       let module E = Invariant_env in
       match t with
@@ -314,6 +346,9 @@ end = struct
         Flambda_primitive.result_kind prim
     with Misc.Fatal_error ->
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
+
+  let invariant env t =
+    ignore ((invariant_returning_kind env t) : Flambda_primitive.result_kind)
 
   let free_names t =
     match t with
@@ -396,7 +431,9 @@ end = struct
     in
     Simple simple
 end and Let : sig
-  include Contains_names.S
+  type t
+
+  include Expr_std.S with type t := t
 
   val create
      : bound_var:Variable.t
@@ -416,13 +453,8 @@ end and Let : sig
      : t
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
-
-  val continuation_counts_toplevel : t -> Continuation_counts.t
-
-  val no_effects_or_coeffects : t -> bool
 end = struct
-  module Bound_var_and_body =
-    Name_abstraction.Make (Expr_with_permutation)
+  module Bound_var_and_body = Name_abstraction.Make (Expr)
 
   type t = {
     bound_var_and_body : Bound_var_and_body.t;
@@ -434,32 +466,32 @@ end = struct
 (*
     Bound_var_and_body.pattern_match t.bound_var_and_body
       ~f:(fun bound_var body ->
-        f ~bound_var ~body:(Expr_with_permutation.expr body))
+        f ~bound_var ~body:(Expr.expr body))
 *)
 
   let print_with_cache ~cache ppf
         ({ bound_var_and_body = _; kind; defining_expr; } as t) =
     let rec let_body (expr : Expr.t) =
-      match expr with
+      match Expr.descr expr with
       | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
         pattern_match t ~f:(fun ~bound_var ~body ->
           fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
             Bindable_name.print bound_var
-            (Misc_color.bold_white ())
+            (Misc.Color.bold_white ())
             Flambda_kind.print kind
-            (Misc_color.reset ())
+            (Misc.Color.reset ())
             (Named.print_with_cache ~cache) defining_expr;
           let_body body)
       | _ -> expr
     in
     pattern_match t ~f:(fun ~bound_var ~body ->
       fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
+        (Misc.Color.bold_cyan ())
+        (Misc.Color.reset ())
         Bindable_name.print bound_var
-        (Misc_color.bold_white ())
+        (Misc.Color.bold_white ())
         Flambda_kind.print kind
-        (Misc_color.reset ())
+        (Misc.Color.reset ())
         (Named.print_with_cache ~cache) defining_expr;
       let expr = let_body body in
       fprintf ppf ")@]@ %a)@]"
@@ -469,9 +501,7 @@ end = struct
 
   let create ~bound_var ~kind ~defining_expr ~body =
     let bound_var = Bindable_name.Name (Name.var bound_var) in
-    let bound_var_and_body =
-      Bound_var_and_body.create bound_var (Expr_with_permutation.create body)
-    in
+    let bound_var_and_body = Bound_var_and_body.create bound_var body in
     { bound_var_and_body;
       kind;
       defining_expr;
@@ -481,10 +511,9 @@ end = struct
     let module E = Invariant_env in
     pattern_match t ~f:(fun ~bound_var ~body ->
       let named_kind =
-        match Named.invariant env t.defining_expr with
+        match Named.invariant_returning_kind env t.defining_expr with
         | Singleton kind -> Some kind
         | Unit -> Some (K.value ())
-        | Never_returns -> None
       in
       begin match named_kind with
       | None -> ()
@@ -539,24 +568,15 @@ end = struct
         defining_expr = defining_expr';
       }
 
-  let continuation_counts_toplevel
+  let continuation_counts
         ({ bound_var_and_body = _; kind = _; defining_expr = _; } as t) =
     pattern_match t ~f:(fun ~bound_var:_ ~body ->
-      Expr.continuation_counts_toplevel body)
-
-  let no_effects_or_coeffects
-        ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
-    Named.no_effects_or_coeffects defining_expr
-      && pattern_match t ~f:(fun ~bound_var:_ ~body ->
-           Expr.no_effects_or_coeffects body)
+      Expr.continuation_counts body)
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
     | Recursive of Recursive_let_cont_handlers.t
-  include Contains_names.S with type t := t
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val invariant : Invariant_env.t -> t -> unit
+  include Expr_std.S with type t := t
   val create_non_recursive
      : Continuation.t
     -> Continuation_handler.t
@@ -566,7 +586,6 @@ end and Let_cont : sig
      : Continuation_handlers.t
     -> body:Expr.t
     -> t
-  val continuation_counts_toplevel : t -> Continuation_counts.t
 (*
   val to_continuation_map : t -> Continuation_handlers.t
   val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
@@ -595,8 +614,8 @@ end = struct
         | _ -> ul
       in
       fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
+        (Misc.Color.bold_cyan ())
+        (Misc.Color.reset ())
         (Let_cont_handlers.print_with_cache ~cache) handlers;
       let expr = let_cont_body body in
       fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
@@ -608,7 +627,7 @@ end = struct
           Non_recursive_let_cont_handler.pattern_match handler
             ~f:(fun k ~(body : Expr.t) ->
               let let_conts, body =
-                match body with
+                match Expr.descr body with
                 | Let_cont let_cont -> gather_let_conts let_conts let_cont
                 | _ -> let_conts, body
               in
@@ -618,7 +637,7 @@ end = struct
           Recursive_let_cont_handlers.pattern_match handlers
             ~f:(fun ~(body : Expr.t) handlers ->
               let let_conts, body =
-                match body with
+                match Expr.descr body with
                 | Let_cont let_cont -> gather_let_conts let_conts let_cont
                 | _ -> let_conts, body
               in
@@ -704,7 +723,7 @@ end = struct
     | Recursive handlers ->
       Recursive_let_cont_handlers.continuation_counts_toplevel handlers
 end and Non_recursive_let_cont_handler : sig
-  include Contains_names.S
+  include Expr_std.S with type t := t
 
   val create
      : Continuation.t
@@ -718,10 +737,6 @@ end and Non_recursive_let_cont_handler : sig
     -> 'a
 
   val handler : t -> Continuation_handler.t
-
-  val no_effects_or_coeffects : t -> bool
-
-  val continuation_counts_toplevel : t -> Continuation_counts.t
 end = struct
   module Continuation_and_body = Name_abstraction.Make (Expr)
 
@@ -762,17 +777,10 @@ end = struct
       continuation_and_body = continuation_and_body';
     }
 
-  let no_effects_or_coeffects ({ continuation_and_body = _; handler; } as t) =
-    Continuation_handler.no_effects_or_coeffects handler
-      && pattern_match t ~f:(fun _k ~body -> Expr.no_effects_or_coeffects body)
-
   let continuation_counts_toplevel _t =
     Misc.fatal_error "Not yet implemented"
 end and Recursive_let_cont_handlers0 : sig
-  include Contains_names.S
-
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  include Expr_std.S with type t := t
 
   val create
      : body:Expr.t
@@ -784,7 +792,7 @@ end and Recursive_let_cont_handlers0 : sig
 end = struct
   type t = {
     handlers : Continuation_handlers.t;
-    body : Expr_with_permutation.t;
+    body : Expr.t;
   }
 
   (* CR mshinwell: Do something about these.  They are needed for the
@@ -794,22 +802,22 @@ end = struct
 
   let create ~body handlers =
     { handlers;
-      body = Expr_with_permutation.create body;
+      body;
     }
 
   let handlers t = t.handlers
-  let body t = Expr_with_permutation.expr t.body
+  let body t = t.body
 
   let free_names { handlers; body; } =
     Name_occurrences.union (Continuation_handlers.free_names handlers)
-      (Expr_with_permutation.free_names body)
+      (Expr.free_names body)
 
   let apply_name_permutation { handlers; body; } perm =
     let handlers' =
       Continuation_handlers.apply_name_permutation handlers perm
     in
     let body' =
-      Expr_with_permutation.apply_name_permutation body perm
+      Expr.apply_name_permutation body perm
     in
     { handlers = handlers';
       body = body';
@@ -850,17 +858,12 @@ end = struct
       let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
       f ~body handlers)
 
-  let no_effects_or_coeffects t =
-    pattern_match t ~f:(fun ~body handlers ->
-      Expr.no_effects_or_coeffects body
-        && Continuation_handlers.no_effects_or_coeffects handlers)
-
   let continuation_counts_toplevel _t =
     Misc.fatal_error "Not yet implemented"
 end and Params_and_handler : sig
   type t
 
-  include Contains_names.S with type t := t
+  include Expr_std.S with type t := t
 
   val create
      : Kinded_parameter.t list
@@ -879,7 +882,7 @@ end = struct
   module T0 = struct
     type t = {
       param_relations : Flambda_type.Typing_env_extension.t;
-      handler : Expr_with_permutation.t;
+      handler : Expr.t;
     }
 
     let print_with_cache ~cache ppf { param_relations; handler; } =
@@ -889,14 +892,14 @@ end = struct
           )@]"
         (Flambda_type.Typing_env_extension.print_with_cache ~cache)
         param_relations
-        (Expr_with_permutation.print_with_cache ~cache) handler
+        (Expr.print_with_cache ~cache) handler
 
     let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let free_names { param_relations; handler; } =
       Name_occurrences.union
         (Flambda_type.Typing_env_extension.free_names param_relations)
-        (Expr_with_permutation.free_names handler)
+        (Expr.free_names handler)
 
     let apply_name_permutation ({ param_relations; handler; } as t) perm =
       let param_relations' =
@@ -904,7 +907,7 @@ end = struct
           param_relations perm
       in
       let handler' =
-        Expr_with_permutation.apply_name_permutation handler perm
+        Expr.apply_name_permutation handler perm
       in
       if param_relations == param_relations' && handler == handler' then t
       else { param_relations = param_relations'; handler = handler'; }
@@ -915,7 +918,7 @@ end = struct
   let create params ~param_relations ~handler =
     let t0 : T0.t =
       { param_relations;
-        handler = Expr_with_permutation.create handler;
+        handler;
       }
     in
     let params = (* XXX *)
@@ -927,16 +930,15 @@ end = struct
   let pattern_match _t ~f:_ = assert false
 (*
     pattern_match t ~f:(fun params { param_relations; handler; } ->
-      f params ~param_relations ~handler:(Expr_with_permutation.expr handler))
+      f params ~param_relations ~handler:(Expr.expr handler))
 *)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
-  include Contains_names.S with type t := t
+  include Expr_std.S with type t := t
 
   val domain : t -> Continuation.Set.t
   val contains_exn_handler : t -> bool
-  val no_effects_or_coeffects : t -> bool
 end = struct
   include Continuation_handlers
 
@@ -963,13 +965,9 @@ end = struct
     Continuation.Map.exists (fun _cont handler ->
         Continuation_handler.is_exn_handler handler)
       t
-
-  let no_effects_or_coeffects t =
-    Continuation.Map.for_all (fun _cont handler ->
-        Continuation_handler.no_effects_or_coeffects handler)
-      t
 end and Continuation_handler : sig
-  include Contains_names.S
+  type t
+  include Expr_std.S with type t := t
 
   val print_using_where_with_cache
      : cache:Printing_cache.t
@@ -978,10 +976,7 @@ end and Continuation_handler : sig
     -> t
     -> first:bool
     -> unit
-(*
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val print : Format.formatter -> t -> unit
-*)
+
   val create
      : Kinded_parameter.t list
     -> param_relations:Flambda_type.Typing_env_extension.t
@@ -999,8 +994,6 @@ end and Continuation_handler : sig
     -> 'a
   val stub : t -> bool
   val is_exn_handler : t -> bool
-
-  val no_effects_or_coeffects : t -> bool
 end = struct
   type t = {
     params_and_handler : Params_and_handler.t;
@@ -1021,8 +1014,8 @@ end = struct
     end;
     pattern_match t ~f:(fun params ~param_relations ~handler ->
       fprintf ppf "@[<v 2>%swhere%s @[%a%s%s@[%a"
-        (Misc_color.bold_cyan ())
-        (Misc_color.reset ())
+        (Misc.Color.bold_cyan ())
+        (Misc.Color.reset ())
 (*
         (if first_and_non_recursive then "" else "and ")
 *)
@@ -1116,10 +1109,6 @@ end = struct
         stub;
         is_exn_handler;
       }
-
-  let no_effects_or_coeffects t =
-    pattern_match t ~f:(fun _params ~param_relations:_ ~handler ->
-      Expr.no_effects_or_coeffects handler)
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -1127,10 +1116,7 @@ end and Set_of_closures : sig
     closure_elements : Simple.t Var_within_closure.Map.t;
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   }
-  include Contains_names.S with type t := t
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-  val invariant : Invariant_env.t -> t -> unit
+  include Expr_std.S with type t := t
   val create
      : function_decls:Function_declarations.t
     -> set_of_closures_ty:Flambda_type.t
@@ -1176,8 +1162,8 @@ end = struct
         @[<hov 1>(closure_elements %a)@]\
         @[<hov 1>(direct_call_surrogates %a)@]@ \
         )@]"
-      (Misc_color.bold_green ())
-      (Misc_color.reset ())
+      (Misc.Color.bold_green ())
+      (Misc.Color.reset ())
       (Function_declarations.print_with_cache ~cache) function_decls
       (Flambda_type.print_with_cache ~cache) set_of_closures_ty
       (Var_within_closure.Map.print Simple.print) closure_elements
@@ -1225,9 +1211,8 @@ end = struct
         direct_call_surrogates;
       }
 end and Function_declarations : sig
-  include Contains_names.S
-  val print : Format.formatter -> t -> unit
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  type t
+  include Expr_std.S with type t := t
   val create : Function_declaration.t Closure_id.Map.t -> t
   val set_of_closures_origin : t -> Set_of_closures_origin.t
   val funs : t -> Function_declaration.t Closure_id.Map.t
@@ -1289,9 +1274,7 @@ end = struct
 end and Params_and_body : sig
   type t
 
-  include Contains_names.S with type t := t
-
-  val print : Format.formatter -> t -> unit
+  include Expr_std.S with type t := t
 
   val create
      : Kinded_parameter.t list
@@ -1312,7 +1295,7 @@ end = struct
   module T0 = struct
     type t = {
       param_relations : Flambda_type.Typing_env_extension.t;
-      body : Expr_with_permutation.t;
+      body : Expr.t;
     }
 
     let print_with_cache ~cache:_ ppf { param_relations; body; } =
@@ -1321,14 +1304,14 @@ end = struct
           @[<hov 1>(body %a)@]\
           )@]"
         Flambda_type.Typing_env_extension.print param_relations
-        Expr_with_permutation.print body
+        Expr.print body
 
     let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let free_names { param_relations; body; } =
       Name_occurrences.union
         (Flambda_type.Typing_env_extension.free_names param_relations)
-        (Expr_with_permutation.free_names body)
+        (Expr.free_names body)
 
     let apply_name_permutation ({ param_relations; body;} as t) perm =
       let param_relations' =
@@ -1336,7 +1319,7 @@ end = struct
           param_relations perm
       in
       let body' =
-        Expr_with_permutation.apply_name_permutation body perm
+        Expr.apply_name_permutation body perm
       in
       if param_relations == param_relations' && body == body' then t
       else { param_relations = param_relations'; body = body'; }
@@ -1347,7 +1330,7 @@ end = struct
   let create params ~param_relations ~body ~my_closure =
     let t0 : T0.t =
       { param_relations;
-        body = Expr_with_permutation.create body;
+        body;
       }
     in
     let params = (* XXX *)
@@ -1363,10 +1346,10 @@ end = struct
 (*
     pattern_match t ~f:(fun params_and_my_closure t0 ->
       f params ~param_relations:t0.param_relations
-        ~body:(Expr_with_permutation.expr t0.body) ~my_closure)
+        ~body:(Expr.expr t0.body) ~my_closure)
 *)
 end and Function_declaration : sig
-  include Contains_names.S
+  include Expr_std.S
   val create
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
@@ -1472,14 +1455,14 @@ end = struct
           Specialise_attribute.print specialise
           Variable.print my_closure
           Closure_origin.print closure_origin
-          (Misc_color.bold_cyan ())
-          (Misc_color.reset ())
+          (Misc.Color.bold_cyan ())
+          (Misc.Color.reset ())
           Continuation.print continuation_param
-          Continuation.print exn_continuation
+          Exn_continuation.print exn_continuation
           Kinded_parameter.List.print params
-          (Misc_color.bold_white ())
+          (Misc.Color.bold_white ())
           Flambda_arity.print result_arity
-          (Misc_color.reset ());
+          (Misc.Color.reset ());
         if not (Flambda_type.Typing_env_extension.is_empty param_relations)
         then begin
           fprintf ppf " [%a]"

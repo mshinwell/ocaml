@@ -50,7 +50,11 @@ val add_set : t -> Bindable_name.Set.t -> occurrence_kind -> t
 
 val remove : t -> Bindable_name.t -> t
 
+val remove_var : t -> Variable.t -> t
+
 val mem : t -> Bindable_name.t -> bool
+
+val mem_var : t -> Variable.t -> bool
 
 val mem_in_terms : t -> Bindable_name.t -> bool
 
