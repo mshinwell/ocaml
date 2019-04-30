@@ -16,37 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T0 = struct
-  type t =
-    | Continuation of Continuation.t
-    | Name of Name.t
+include Variable
 
-  let compare t1 t2 =
-    match t1, t2 with
-    | Continuation k1, Continuation k2 -> Continuation.compare k1 k2
-    | Name name1, Name name2 -> Name.compare name1 name2
-    | Name _, Continuation _ -> 1
-    | Continuation _, Name _ -> -1
+let print_with_cache ~cache:_ ppf t = Variable.print ppf t
 
-  let equal t1 t2 = (compare t1 t2 = 0)
+let free_names t = Name_occurrences.singleton_continuation t
 
-  let hash t =
-    match t with
-    | Continuation k -> Hashtbl.hash (0, Continuation.hash k)
-    | Name name -> Hashtbl.hash (1, Name.hash name)
+let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
 
-  let print ppf t =
-    match t with
-    | Continuation k -> Continuation.print ppf k
-    | Name name -> Name.print ppf name
+let rename _t = create ()
 
-  let output chan t =
-    print (Format.formatter_of_out_channel chan) t
-end
+let singleton_occurrence_in_terms t = Name_occurrences.singleton_continuation t
 
-include T0
-include Identifiable.Make (T0)
-
-let rename = function
-  | Continuation _ -> Continuation (Continuation.create ())
-  | Name name -> Name (Name.rename name)
+let add_occurrence_in_terms t occs = Name_occurrences.add_continuation occs t

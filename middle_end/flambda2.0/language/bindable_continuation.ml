@@ -20,13 +20,13 @@ include Continuation
 
 let print_with_cache ~cache:_ ppf t = Continuation.print ppf t
 
-let free_names t =
+let free_names t = Name_occurrences.singleton_continuation t
 
-let apply_name_permutation t perm =
+let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
 
 let rename _t = create ()
 
-let singleton_occurrence_in_terms t =
+let singleton_occurrence_in_terms t = Name_occurrences.singleton_continuation t
 
-let add_occurrence_in_terms t occs =
+let add_occurrence_in_terms t occs = Name_occurrences.add_continuation occs t
 
