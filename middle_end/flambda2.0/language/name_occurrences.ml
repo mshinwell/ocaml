@@ -68,6 +68,8 @@ end) = struct
         else Some count)
       t1 t2
 
+  let keys t = N.Map.keys t
+
 (*
   let create_from_set_in_terms in_terms =
     { in_terms;
@@ -440,3 +442,5 @@ let rec union_list ts =
   match  ts with
   | [] -> empty
   | t::ts -> union t (union_list ts)
+
+let symbols t = For_symbols.keys t.symbols
