@@ -34,8 +34,6 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
     let apply_name_permutation t _perm = t
 
     let empty = ()
-
-    let continuation_counts _t = Continuation_counts.empty
   end
 
   module Typing_env_extension = struct
@@ -50,8 +48,6 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
     let free_names _t = Name_occurrences.empty
 
     let apply_name_permutation t _perm = t
-
-    let continuation_counts _t = Continuation_counts.empty
 
     let empty = ()
 
@@ -68,8 +64,6 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
   let free_names _t = Name_occurrences.empty
 
   let apply_name_permutation t _perm = t
-
-  let continuation_counts _t = Continuation_counts.empty
 
   let any_value () = ()
 

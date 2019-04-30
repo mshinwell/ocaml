@@ -108,3 +108,9 @@ val singleton_continuation : Continuation.t -> t
 val add_continuation : t -> Continuation.t -> t
 
 val count_continuation : t -> Continuation.t -> int
+
+val singleton_variable_in_terms : Variable.t -> t
+
+val add_variable_in_terms : t -> Variable.t -> t
+
+val singleton_name_in_terms : Name.t -> t

@@ -446,7 +446,8 @@ end and Let : sig
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
 end = struct
-  module Bound_var_and_body = Name_abstraction.Make (Bindable_variable) (Expr)
+  module Bound_var_and_body =
+    Name_abstraction.Make (Bindable_variable_in_terms) (Expr)
 
   type t = {
     bound_var_and_body : Bound_var_and_body.t;
@@ -461,7 +462,7 @@ end = struct
       | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
         pattern_match t ~f:(fun ~bound_var ~body ->
           fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Bindable_variable.print bound_var
+            Variable.print bound_var
             (Misc.Color.bold_white ())
             Flambda_kind.print kind
             (Misc.Color.reset ())
@@ -473,7 +474,7 @@ end = struct
       fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
         (Misc.Color.bold_cyan ())
         (Misc.Color.reset ())
-        Bindable_variable.print bound_var
+        Variable.print bound_var
         (Misc.Color.bold_white ())
         Flambda_kind.print kind
         (Misc.Color.reset ())
@@ -485,7 +486,7 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create ~bound_var ~kind ~defining_expr ~body =
-    let bound_var = Bindable_name.Name (Name.var bound_var) in
+    let bound_var = Bindable_name_in_terms.Name (Name.var bound_var) in
     let bound_var_and_body = Bound_var_and_body.create bound_var body in
     { bound_var_and_body;
       kind;
@@ -825,7 +826,7 @@ end = struct
   let create ~body handlers =
     let bound = Continuation_handlers.domain handlers in
     let bound = (* XXX *)
-      List.map (fun k -> Bindable_name.Continuation k)
+      List.map (fun k -> Bindable_name_in_terms.Continuation k)
         (Continuation.Set.elements bound)
     in
     let handlers0 =
@@ -906,7 +907,7 @@ end = struct
       }
     in
     let params = (* XXX *)
-      List.map (fun p -> Bindable_name.Name (Kinded_parameter.name p))
+      List.map (fun p -> Bindable_name_in_terms.Name (Kinded_parameter.name p))
         params
     in
     create params t0
