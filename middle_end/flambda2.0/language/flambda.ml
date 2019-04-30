@@ -94,6 +94,7 @@ end = struct
     delayed_permutation : Name_permutation.t;
     (* [delayed_permutation] must be applied to both [descr] and [free_names]
        before they are used. *)
+    (* CR mshinwell: we should maybe try to statically enforce this *)
   }
 
   let apply_name_permutation t perm =
@@ -453,13 +454,6 @@ end = struct
     defining_expr : Named.t;
   }
 
-  let pattern_match _t ~f:_ = assert false
-(*
-    Bound_var_and_body.pattern_match t.bound_var_and_body
-      ~f:(fun bound_var body ->
-        f ~bound_var ~body:(Expr.expr body))
-*)
-
   let print_with_cache ~cache ppf
         ({ bound_var_and_body = _; kind; defining_expr; } as t) =
     let rec let_body (expr : Expr.t) =
@@ -546,9 +540,16 @@ end = struct
         kind;
         defining_expr = defining_expr';
       }
+
+  let pattern_match t ~f =
+    Bound_var_and_body.pattern_match t.bound_var_and_body
+      ~f:(fun bound_var body -> f ~bound_var ~body)
 end and Let_cont : sig
   type t = private
-    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Non_recursive of {
+        handler : Non_recursive_let_cont_handler.t;
+        num_free_occurrences : int;
+      }
     | Recursive of Recursive_let_cont_handlers.t
   include Expr_std.S with type t := t
   val create_non_recursive
@@ -1315,11 +1316,11 @@ end = struct
 
   include Name_abstraction.Make_list (T0)
 
+  let invariant _env _t = ()
+
   let print ppf t : unit = print ppf t
 
   let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
-
-  let invariant _env _t = ()
 
   let create params ~param_relations ~body ~my_closure =
     let t0 : T0.t =
@@ -1327,21 +1328,13 @@ end = struct
         body;
       }
     in
-    let params = (* XXX *)
-      List.map (fun p -> Bindable_name.Name (Kinded_parameter.name p))
-        params
-    in
-    let bound = params @ [Bindable_name.Name (Name.var my_closure)] in
-    create bound t0
+    let params = List.map (fun param -> Kinded_parameter.var param) params in
+    create (params @ [my_closure]) t0
 
-  let print ppf t : unit = print ppf t
-
-  let pattern_match _t ~f:_ = assert false
-(*
+  let pattern_match t ~f =
     pattern_match t ~f:(fun params_and_my_closure t0 ->
       f params ~param_relations:t0.param_relations
-        ~body:(Expr.expr t0.body) ~my_closure)
-*)
+        ~body:t0.body ~my_closure)
 end and Function_declaration : sig
   include Expr_std.S
   val create

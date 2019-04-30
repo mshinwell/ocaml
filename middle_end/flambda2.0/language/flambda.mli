@@ -24,12 +24,11 @@ module Apply = Apply_expr
 module Apply_cont = Apply_cont_expr
 module Switch = Switch_expr
 
-(** This language ensures that:
+(** The basic structure of the language ensures that:
     - every intermediate value (and in particular every potential constant
       that we may want to lift) has a name;
-    - there are no nested "let"s or complicated expressions as the defining
-      expression of a "let";
     - every point to which we might wish to jump has a name;
+    - there are no nested "let"s or subexpressions;
     - no re-normalisation of terms is required when substituting an
       application for an inlined body (unlike in ANF form).
 *)
@@ -37,11 +36,7 @@ module rec Expr : sig
   (** The type of alpha-equivalence classes of expressions. *)
   type t
 
-  (** Printing, invariant checks, name manipulation, etc.
-      Note that [continuation_counts] in this module does not descend under
-      lambdas. *)
-  (* CR mshinwell: Maybe [continuation_counts] should be renamed to
-     [continuation_counts_toplevel] everywhere? *)
+  (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
 
   type descr = private
