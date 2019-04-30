@@ -68,7 +68,7 @@ let equal_kinds t1 t2 =
   Flambda_kind.equal t1.kind t2.kind
 
 let free_names ({ param = _; kind = _; } as t) =
-  Name_occurrences.singleton_in_terms (Name (name t))
+  Name_occurrences.singleton_variable_in_terms (var t)
 
 let apply_name_permutation ({ param = _; kind; } as t) perm =
   match Name_permutation.apply_name perm (name t) with

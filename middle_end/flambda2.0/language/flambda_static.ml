@@ -50,8 +50,8 @@ module Of_kind_value = struct
   let free_names t =
     match t with
     | Dynamically_computed var ->
-      Name_occurrences.singleton_in_terms (Name (Name.var var))
-    | Symbol sym -> Name_occurrences.singleton_in_terms (Name (Name.symbol sym))
+      Name_occurrences.singleton_variable_in_terms var
+    | Symbol sym -> Name_occurrences.singleton_symbol (Name (Name.symbol sym))
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =

@@ -49,7 +49,7 @@ let invariant _env _t = ()
 let free_names = function
   | Push { exn_handler; }
   | Pop { exn_handler; take_backtrace = _; } ->
-    Name_occurrences.singleton_in_terms (Continuation exn_handler)
+    Name_occurrences.singleton_continuation exn_handler
 
 let apply_name_permutation t perm =
   match t with
