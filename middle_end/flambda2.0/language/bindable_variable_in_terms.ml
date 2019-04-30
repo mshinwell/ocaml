@@ -14,11 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A term language [Variable] equipped with operations that mean it can be used
-    in binding position within a [Name_abstraction] value. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Name.t
+include Variable
 
-include Bindable.S with type t := t
+let print_with_cache ~cache:_ ppf t = print ppf t
+
+let free_names t = Name_occurrences.singleton_variable_in_terms t
+
+let apply_name_permutation t perm = Name_permutation.apply_variable perm t
+
+let rename t = rename t
+
+let singleton_occurrence_in_terms t =
+  Name_occurrences.singleton_variable_in_terms t
+
+let add_occurrence_in_terms t occs =
+  Name_occurrences.add_variable_in_terms occs t
