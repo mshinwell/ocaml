@@ -23,3 +23,10 @@ let print_with_cache ~cache:_ ppf t = Continuation.print ppf t
 let free_names t =
 
 let apply_name_permutation t perm =
+
+let rename _t = create ()
+
+let singleton_occurrence_in_terms t =
+
+let add_occurrence_in_terms t occs =
+
