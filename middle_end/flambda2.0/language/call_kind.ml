@@ -138,8 +138,7 @@ let return_arity t : Flambda_arity.t =
 let free_names t =
   match t with
   | Function _ | C_call _ -> Name_occurrences.empty
-  | Method { kind = _; obj; } ->
-    Name_occurrences.singleton_in_terms (Name obj)
+  | Method { kind = _; obj; } -> Name_occurrences.singleton_name_in_terms obj
 
 let apply_name_permutation t perm =
   match t with
@@ -152,5 +151,3 @@ let apply_name_permutation t perm =
         kind;
         obj = obj';
       }
-
-let continuation_counts _t = Continuation_counts.empty

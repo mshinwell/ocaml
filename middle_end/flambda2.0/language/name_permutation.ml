@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2018--2019 OCamlPro SAS                                    *)
+(*   Copyright 2018--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -100,45 +100,63 @@ module Make (N : Identifiable.S) = struct
 end
 
 module Continuations = Make (Continuation)
-module Names = Make (Name)
+module Variables = Make (Variable)
 
-(* We don't use [Bindable_name.t]: this enables us to statically enforce that
-   different varieties of names are not permuted with each other (e.g. a
-   variable with a continuation). *)
 type t = {
   continuations : Continuations.t;
-  names : Names.t;
+  variables : Variables.t;
 }
 
 let empty =
   { continuations = Continuations.create ();
-    names = Names.create ();
+    variables = Variables.create ();
   }
 
-let print ppf { continuations; names; } =
+let print ppf { continuations; variables; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
-      @[<hov 1>(names@ %a)@])@]"
+      @[<hov 1>(variables@ %a)@])@]"
     Continuations.print continuations
-    Names.print names
+    Variables.print variables
 
-let is_empty { continuations; names }  =
+let is_empty { continuations; variables }  =
   Continuations.is_empty continuations
-    && Names.is_empty names
+    && Variables.is_empty variables
 
 let compose
       ~second:
         { continuations = continuations2;
-          names = names2;
+          variables = variables2;
         }
       ~first:
         { continuations = continuations1;
-          names = names1;
+          variables = variables1;
         } =
   { continuations =
       Continuations.compose ~second:continuations2 ~first:continuations1;
-    names = Names.compose ~second:names2 ~first:names1;
+    variables = Variables.compose ~second:variables2 ~first:variables1;
   }
+
+let add_variable t var1 var2 =
+  { t with
+    variables = Variables.post_swap t.variables var1 var2;
+  }
+
+let apply_variable t var =
+  Variables.apply t.variables var
+
+let apply_variable_set t vars =
+  Variable.Set.fold (fun var result ->
+      let var = apply_variable t var in
+      Variable.Set.add var result)
+    vars
+    Variable.Set.empty
+
+let apply_name t (name : Name.t) =
+  match name with
+  | Var var -> apply_variable t var
+  | Symbol _
+  | Logical_var _ -> name
 
 let add_continuation t k1 k2 =
   { t with
@@ -147,45 +165,3 @@ let add_continuation t k1 k2 =
 
 let apply_continuation t k =
   Continuations.apply t.continuations k
-
-let add_name t n1 n2 =
-  { t with
-    names = Names.post_swap t.names n1 n2;
-  }
-
-let add_bindable_name_exn t (bn1 : Bindable_name.t) (bn2 : Bindable_name.t) =
-  match bn1, bn2 with
-  | Continuation k1, Continuation k2 -> add_continuation t k1 k2
-  | Name n1, Name n2 -> add_name t n1 n2
-  | Continuation _, Name _
-  | Name _, Continuation _ ->
-    Misc.fatal_errorf "Cannot add bindable names of different forms to \
-        name permutation: %a and %a"
-      Bindable_name.print bn1
-      Bindable_name.print bn2
-
-let apply_name t n =
-  Names.apply t.names n
-
-let apply_name_set t names =
-  Name.Set.fold (fun name result ->
-      let name = apply_name t name in
-      Name.Set.add name result)
-    names
-    Name.Set.empty
-
-let apply_bindable_name t (bn : Bindable_name.t) : Bindable_name.t =
-  match bn with
-  | Continuation k -> Continuation (apply_continuation t k)
-  | Name name -> Name (apply_name t name)
-
-let apply_bindable_name_list t bns =
-  List.map (fun bn -> apply_bindable_name t bn) bns
-
-(* CR mshinwell: add phys-equal checks *)
-let apply_bindable_name_set t names =
-  Bindable_name.Set.fold (fun name result ->
-      let name = apply_bindable_name t name in
-      Bindable_name.Set.add name result)
-    names
-    Bindable_name.Set.empty

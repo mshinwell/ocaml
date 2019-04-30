@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2019 OCamlPro SAS                                          *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*   Copyright 2018--2019 OCamlPro SAS                                    *)
+(*   Copyright 2018--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -18,7 +18,7 @@
 
 include Continuation
 
-let print_with_cache ~cache:_ ppf t = Continuation.print ppf t
+let print_with_cache ~cache:_ ppf t = print ppf t
 
 let free_names t = Name_occurrences.singleton_continuation t
 

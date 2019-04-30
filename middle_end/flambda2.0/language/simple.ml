@@ -146,7 +146,7 @@ let map_symbol t ~f =
 
 let free_names t =
   match t with
-  | Name name -> Name_occurrences.singleton_in_terms (Name name)
+  | Name name -> Name_occurrences.singleton_name_in_terms name
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
