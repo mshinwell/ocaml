@@ -14,8 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** "Use CPS".
-    -- A. Kennedy, "Compiling with Continuations Continued", ICFP 2007.
+(* "Use CPS".
+   -- A. Kennedy, "Compiling with Continuations Continued", ICFP 2007.
 *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
