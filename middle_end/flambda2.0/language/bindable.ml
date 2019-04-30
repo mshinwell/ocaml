@@ -22,7 +22,7 @@
 module type S = sig
   type t
 
-  include Identifiable.S with type := t
+  include Identifiable.S with type t := t
   include Contains_names.S with type t := t
 
   val print : Format.formatter -> t -> unit

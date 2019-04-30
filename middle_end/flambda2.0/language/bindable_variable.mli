@@ -14,8 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A [Name] equipped with operations that mean it can be used in binding
-    position within a [Name_abstraction] value. *)
+(** A term language [Variable] equipped with operations that mean it can be used
+    in binding position within a [Name_abstraction] value. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
