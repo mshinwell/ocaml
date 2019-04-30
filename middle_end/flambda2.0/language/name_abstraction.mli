@@ -27,17 +27,12 @@ type printing_style =
   | Brackets
   | Existential
 
+val set_printing_style : printing_style -> unit
+
 module type Common = sig
   type t
-
-  val print : ?style:printing_style -> Format.formatter -> t -> unit
-
-  val print_with_cache
-     : ?style:printing_style
-    -> cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end
 
 module Make (Term : Term) : sig

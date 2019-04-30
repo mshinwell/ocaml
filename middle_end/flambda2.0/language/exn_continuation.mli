@@ -34,5 +34,5 @@ val create
 (** The exception handler itself. *)
 val exn_handler : t -> Continuation.t
 
-(** Any extra arguments. *)
-val extra_args : t -> Simple.t list
+(** Any extra arguments together with their kinds. *)
+val extra_args : t -> (Simple.t * Flambda_kind.t) list
