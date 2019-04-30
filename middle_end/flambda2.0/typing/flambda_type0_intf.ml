@@ -39,6 +39,8 @@ module type S = sig
     type t
 
     include Expr_std.S with type t := t
+
+    val empty : t
   end
 
   module Typing_env_extension : sig

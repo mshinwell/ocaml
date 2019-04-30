@@ -79,7 +79,7 @@ module Function_decls : sig
       -> kind:Lambda.function_kind
       -> params:(Ident.t * Lambda.value_kind) list
       -> continuation_param:Continuation.t
-      -> exn_continuation_param:Continuation.t
+      -> exn_continuation:Ilambda.exn_continuation
       -> body:Ilambda.t
       -> attr:Lambda.function_attribute
       -> loc:Location.t

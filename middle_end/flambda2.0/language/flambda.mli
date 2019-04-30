@@ -240,7 +240,7 @@ end and Let_cont : sig
 
   (** Create a definition of a set of possibly-recursive continuations. *)
   val create_recursive
-     : Continuation_handlers.t
+     : Continuation_handler.t Continuation.Map.t
     -> body:Expr.t
     -> t
 end and Non_recursive_let_cont_handler : sig
