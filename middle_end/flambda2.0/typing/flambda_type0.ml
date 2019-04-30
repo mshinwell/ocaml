@@ -33,6 +33,8 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
 
     let apply_name_permutation t _perm = t
 
+    let empty = ()
+
     let continuation_counts _t = Continuation_counts.empty
   end
 
@@ -50,6 +52,11 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
     let apply_name_permutation t _perm = t
 
     let continuation_counts _t = Continuation_counts.empty
+
+    let empty = ()
+
+    let is_empty t =
+      t == empty
   end
 
   let print _ppf _t = ()
@@ -63,4 +70,19 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
   let apply_name_permutation t _perm = t
 
   let continuation_counts _t = Continuation_counts.empty
+
+  let any_value () = ()
+
+  let any_fabricated () = ()
+
+  let any_tagged_immediate () = ()
+  let any_tagged_bool () = ()
+
+  let any_boxed_float () = ()
+  let any_boxed_int32 () = ()
+  let any_boxed_int64 () = ()
+  let any_boxed_nativeint () = ()
+
+  let any_naked_immediate () = ()
+  let any_naked_float () = ()
 end

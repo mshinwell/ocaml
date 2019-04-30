@@ -22,12 +22,12 @@ val flambda_type_of_lambda_value_kind : Lambda.value_kind -> Flambda_type.t
 
 val inline_attribute
    : Lambda.inline_attribute
-  -> Flambda.inline_attribute
+  -> Inline_attribute.t
 
 val specialise_attribute
    : Lambda.specialise_attribute
-  -> Flambda.specialise_attribute
+  -> Specialise_attribute.t
 
 val kind_of_primitive_native_repr : Primitive.native_repr -> Flambda_kind.t
 
-val method_kind : Lambda.method_kind -> Flambda.Call_kind.method_kind
+val method_kind : Lambda.meth_kind -> Call_kind.method_kind

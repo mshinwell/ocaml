@@ -667,7 +667,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
         };
       handler;
     }, N.(+) k_count_handler N.One;
-  | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ ->
+  | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ | Levent _ ->
     Misc.fatal_errorf "Term should have been eliminated by [Prepare_lambda]: %a"
       Printlambda.lambda lam
 

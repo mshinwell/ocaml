@@ -16,17 +16,19 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module K = Flambda_kind
+module T = Flambda_type
+
 let flambda_type_of_lambda_value_kind (value_kind : Lambda.value_kind) =
   match value_kind with
-  | Pgenval -> Flambda_type.any_value ()
-  | Pfloatval -> Flambda_type.any_boxed_float ()
-  | Pboxedintval Pint32 -> Flambda_type.any_boxed_int32 ()
-  | Pboxedintval Pint64 -> Flambda_type.any_boxed_int64 ()
-  | Pboxedintval Pnativeint -> Flambda_type.any_boxed_nativeint ()
-  | Pintval -> Flambda_type.any_tagged_immediate ()
+  | Pgenval -> T.any_value ()
+  | Pfloatval -> T.any_boxed_float ()
+  | Pboxedintval Pint32 -> T.any_boxed_int32 ()
+  | Pboxedintval Pint64 -> T.any_boxed_int64 ()
+  | Pboxedintval Pnativeint -> T.any_boxed_nativeint ()
+  | Pintval -> T.any_tagged_immediate ()
 
-let inline_attribute (attr : Lambda.inline_attribute)
-      : Flambda.inline_attribute =
+let inline_attribute (attr : Lambda.inline_attribute) : Inline_attribute.t =
   match attr with
   | Always_inline -> Always_inline
   | Never_inline -> Never_inline
@@ -34,7 +36,7 @@ let inline_attribute (attr : Lambda.inline_attribute)
   | Default_inline -> Default_inline
 
 let specialise_attribute (attr : Lambda.specialise_attribute)
-      : Flambda.specialise_attribute =
+      : Specialise_attribute.t =
   match attr with
   | Always_specialise -> Always_specialise
   | Never_specialise -> Never_specialise
@@ -49,7 +51,7 @@ let kind_of_primitive_native_repr (repr : Primitive.native_repr) =
   | Unboxed_integer Pint64 -> K.naked_int64 ()
   | Untagged_int -> K.naked_immediate ()
 
-let method_kind (kind : Lambda.method_kind) =
+let method_kind (kind : Lambda.meth_kind) : Call_kind.method_kind =
   match kind with
   | Self -> Self
   | Public -> Public
