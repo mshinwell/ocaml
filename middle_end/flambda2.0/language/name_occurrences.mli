@@ -28,6 +28,8 @@ type occurrence_kind =
 
 val empty : t
 
+(*
+
 val create_from_set_in_terms : Bindable_name.Set.t -> t
 
 val create_from_name_set_in_terms : Name.Set.t -> t
@@ -95,10 +97,14 @@ val choose_and_remove_amongst_everything : t -> (Bindable_name.t * t) option
 
 val equal : t -> t -> bool
 
+*)
+
 val print : Format.formatter -> t -> unit
 
 val apply_name_permutation : t -> Name_permutation.t -> t
 
-(* new stuff *)
+val singleton_continuation : Continuation.t -> t
+
+val add_continuation : t -> Continuation.t -> t
 
 val count_continuation : t -> Continuation.t -> int
