@@ -284,34 +284,54 @@ end) = struct
     | count -> count
 end
 
-module For_variables = For_one_variety_of_names (Bindable_variable)
-module For_continuations = For_one_variety_of_names (Bindable_continuation)
+module For_variables = For_one_variety_of_names (struct
+  include Variable
+  let apply_name_permutation t perm = Name_permutation.apply_variable perm t
+end)
+
+module For_continuations = For_one_variety_of_names (struct
+  include Continuation
+  let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
+end)
+
+module For_symbols = For_one_variety_of_names (struct
+  include Symbol
+  (* We never bind [Symbol]s using [Name_abstraction]. *)
+  let apply_name_permutation t _perm = t
+end)
+
+(* CR mshinwell: We might need an "in terms" / "in types" distinction for
+   [Symbol]s, perhaps?  Maybe for "debug only" too, e.g. phantom let. *)
 
 type t = {
   variables_in_terms : For_variables.t;
   variables_in_types : For_variables.t;
   variables_debug_only : For_variables.t;
   continuations : For_continuations.t;
+  symbols : For_symbols.t;
 }
 
 let print ppf { variables_in_terms; variables_in_types; variables_debug_only;
-      continuations; } =
+      continuations; symbols; } =
   Format.fprintf ppf "@[\
       (variables_terms %a)@ \
       (variables_types %a)@ \
       (variables_debug_only %a)@ \
       (continuations %a)\
+      (symbols %a)\
       @]"
     For_variables.print variables_in_terms
     For_variables.print variables_in_types
     For_variables.print variables_debug_only
     For_continuations.print continuations
+    For_symbols.print symbols
 
 let empty = {
   variables_in_terms = For_variables.empty;
   variables_in_types = For_variables.empty;
   variables_debug_only = For_variables.empty;
   continuations = For_continuations.empty;
+  symbols = For_symbols.empty;
 }
 
 let singleton_continuation t cont =
@@ -343,8 +363,13 @@ let singleton_name_in_terms (name : Name.t) =
   | Symbol _
   | Logical_var _ -> empty
 
+let singleton_symbol sym =
+  { empty with
+    symbols_in_terms = For_symbols.singleton sym;
+  }
+
 let apply_name_permutation { variables_in_terms; variables_in_types;
-      variables_debug_only; continuations; } perm =
+      variables_debug_only; continuations; symbols; } perm =
   let variables_in_terms =
     For_variables.apply_name_permutation variables_in_terms perm
   in
@@ -357,8 +382,12 @@ let apply_name_permutation { variables_in_terms; variables_in_types;
   let continuations =
     For_continuations.apply_name_permutation continuations perm
   in
+  let symbols =
+    For_symbols.apply_name_permutation symbols perm
+  in
   { variables_in_terms;
     variables_in_types;
     variables_debug_only;
     continuations;
+    symbols;
   }
