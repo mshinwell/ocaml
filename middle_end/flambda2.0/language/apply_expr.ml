@@ -188,30 +188,13 @@ let free_names
         inline = _;
         specialise = _;
       } =
-  let module BN = Bindable_name in
   Name_occurrences.union_list [
-    Name_occurrences.of_list_in_terms [
-      BN.Name callee;
-      BN.Continuation continuation;
-    ];
+    Name_occurrences.singleton_name_in_terms callee;
+    Name_occurrences.singleton_continuation continuation;
     Exn_continuation.free_names exn_continuation;
     Simple.List.free_names args;
     Call_kind.free_names call_kind;
   ]
-
-let continuation_counts
-      { callee = _;
-        continuation;
-        exn_continuation;
-        args = _;
-        call_kind = _;
-        dbg = _;
-        inline = _;
-        specialise = _;
-      } =
-  Continuation_counts.union
-    (Continuation_counts.create_singleton continuation)
-    (Exn_continuation.continuation_counts exn_continuation)
 
 let apply_name_permutation
       ({ callee;

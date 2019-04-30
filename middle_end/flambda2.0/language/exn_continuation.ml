@@ -50,11 +50,8 @@ let print_with_cache ~cache:_ ppf t = print ppf t
 let free_names { exn_handler; extra_args; } =
   let extra_args = List.map (fun (simple, _kind) -> simple) extra_args in
   Name_occurrences.union
-    (Name_occurrences.singleton_in_terms (Continuation exn_handler))
+    (Name_occurrences.singleton_continuation exn_handler)
     (Simple.List.free_names extra_args)
-
-let continuation_counts { exn_handler; extra_args = _; } =
-  Continuation_counts.create_singleton exn_handler
 
 let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
   let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
