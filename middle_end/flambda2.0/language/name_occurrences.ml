@@ -59,6 +59,15 @@ end) = struct
       t
       N.Map.empty
 
+  let union t1 t2 =
+    N.Map.merge (fun _name count1 count2 ->
+        let count1 = Option.value count1 ~default:0 in
+        let count2 = Option.value count2 ~default:0 in
+        let count = count1 + count2 in
+        if count < 1 then None
+        else Some count)
+      t1 t2
+
 (*
   let create_from_set_in_terms in_terms =
     { in_terms;
@@ -334,7 +343,7 @@ let empty = {
   symbols = For_symbols.empty;
 }
 
-let singleton_continuation t cont =
+let singleton_continuation cont =
   { empty with
     continuations = For_continuations.singleton cont;
   }
@@ -357,16 +366,16 @@ let add_variable_in_terms t var =
     variables_in_terms = For_variables.add t.variables_in_terms var;
   }
 
+let singleton_symbol sym =
+  { empty with
+    symbols = For_symbols.singleton sym;
+  }
+
 let singleton_name_in_terms (name : Name.t) =
   match name with
   | Var var -> singleton_variable_in_terms var
-  | Symbol _
+  | Symbol sym -> singleton_symbol sym
   | Logical_var _ -> empty
-
-let singleton_symbol sym =
-  { empty with
-    symbols_in_terms = For_symbols.singleton sym;
-  }
 
 let apply_name_permutation { variables_in_terms; variables_in_types;
       variables_debug_only; continuations; symbols; } perm =
@@ -391,3 +400,43 @@ let apply_name_permutation { variables_in_terms; variables_in_types;
     continuations;
     symbols;
   }
+
+let union
+      { variables_in_terms = variables_in_terms1;
+        variables_in_types = variables_in_types1;
+        variables_debug_only = variables_debug_only1;
+        continuations = continuations1;
+        symbols = symbols1;
+      }
+      { variables_in_terms = variables_in_terms2;
+        variables_in_types = variables_in_types2;
+        variables_debug_only = variables_debug_only2;
+        continuations = continuations2;
+        symbols = symbols2;
+      } =
+  let variables_in_terms =
+    For_variables.union variables_in_terms1 variables_in_terms2
+  in
+  let variables_in_types =
+    For_variables.union variables_in_types1 variables_in_types2
+  in
+  let variables_debug_only =
+    For_variables.union variables_debug_only1 variables_debug_only2
+  in
+  let continuations =
+    For_continuations.union continuations1 continuations2
+  in
+  let symbols =
+    For_symbols.union symbols1 symbols2
+  in
+  { variables_in_terms;
+    variables_in_types;
+    variables_debug_only;
+    continuations;
+    symbols;
+  }
+
+let rec union_list ts =
+  match  ts with
+  | [] -> empty
+  | t::ts -> union t (union_list ts)

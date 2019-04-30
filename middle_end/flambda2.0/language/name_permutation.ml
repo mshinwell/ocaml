@@ -154,7 +154,7 @@ let apply_variable_set t vars =
 
 let apply_name t (name : Name.t) =
   match name with
-  | Var var -> apply_variable t var
+  | Var var -> Name.var (apply_variable t var)
   | Symbol _
   | Logical_var _ -> name
 
