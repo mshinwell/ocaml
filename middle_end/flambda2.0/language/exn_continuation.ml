@@ -18,7 +18,7 @@
 
 type t = {
   exn_handler : Continuation.t;
-  extra_args : Simple.t list;
+  extra_args : (Simple.t * Flambda_kind.t) list;
 }
 
 let create ~exn_handler ~extra_args =
