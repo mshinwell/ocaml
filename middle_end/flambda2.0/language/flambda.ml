@@ -646,9 +646,10 @@ end = struct
       fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>"
         (Expr.print_with_cache ~cache) body;
       let first = ref true in
-      List.iter (fun (k, handler) ->
+      List.iter (fun (_k, _handler) -> (* XXX *)
+          (*
           Continuation_handler.print_using_where_with_cache ~cache
-            ppf k handler ~first:!first;
+            ppf k handler ~first:!first; *)
           first := false)
         let_conts;
       fprintf ppf "@]@])@]"
@@ -739,6 +740,12 @@ end = struct
     handler : Continuation_handler.t;
   }
 
+  let invariant _env _t = ()
+
+  let print _ppf _t = Misc.fatal_error "Not yet implemented"
+
+  let print_with_cache ~cache:_ _ppf _t = Misc.fatal_error "Not yet implemented"
+
   let create continuation ~body handler =
     let continuation_and_body =
       Continuation_and_body.create (Continuation continuation) body
@@ -791,10 +798,10 @@ end = struct
     body : Expr.t;
   }
 
-  (* CR mshinwell: Do something about these.  They are needed for the
-     name abstraction building functor below. *)
-  let print _ppf _t = Misc.fatal_error "Not used"
-  let print_with_cache ~cache:_ _ppf _t = Misc.fatal_error "Not used"
+  let invariant _env _t = ()
+
+  let print _ppf _t = Misc.fatal_error "Not yet implemented"
+  let print_with_cache ~cache:_ _ppf _t = Misc.fatal_error "Not yet implemented"
 
   let create ~body handlers =
     { handlers;
@@ -818,22 +825,26 @@ end = struct
     { handlers = handlers';
       body = body';
     }
-end and Recursive_let_cont_handlers : sig
-  include Contains_names.S
 
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
+end and Recursive_let_cont_handlers : sig
+  type t
+
+  include Expr_std.S with type t := t
   val create
      : body:Expr.t
     -> Continuation_handlers.t
     -> t
-
   val pattern_match
      : t
     -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
     -> 'a
-
   val continuation_counts : t -> Continuation_counts.t
 end = struct
   include Name_abstraction.Make_list (Recursive_let_cont_handlers0)
+
+  let invariant _env _t = ()
 
   let create ~body handlers =
     let bound = Continuation_handlers.domain handlers in
@@ -854,7 +865,7 @@ end = struct
 
   let continuation_counts _t =
     Misc.fatal_error "Not yet implemented"
-end and Params_and_handler : sig
+end and Continuation_params_and_handler : sig
   type t
 
   include Expr_std.S with type t := t
@@ -909,6 +920,12 @@ end = struct
 
   include Name_abstraction.Make_list (T0)
 
+  let invariant _env _t = ()
+
+  let print ppf t : unit = print ppf t
+
+  let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
+
   let create params ~param_relations ~handler =
     let t0 : T0.t =
       { param_relations;
@@ -926,6 +943,9 @@ end = struct
     pattern_match t ~f:(fun params { param_relations; handler; } ->
       f params ~param_relations ~handler:(Expr.expr handler))
 *)
+
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -963,6 +983,7 @@ end and Continuation_handler : sig
   type t
   include Expr_std.S with type t := t
 
+(*
   val print_using_where_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
@@ -970,60 +991,62 @@ end and Continuation_handler : sig
     -> t
     -> first:bool
     -> unit
+*)
 
   val create
-     : Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
-    -> handler:Expr.t
-    -> Flambda_type.Parameters.t
+     : params_and_handler:Continuation_params_and_handler.t
+    -> inferred_typing:Flambda_type.Parameters.t
     -> stub:bool
     -> is_exn_handler:bool
     -> t
-  val pattern_match
-     : t
-    -> f:(Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
-      -> handler:Expr.t
-      -> 'a)
-    -> 'a
+  val params_and_handler : t -> Continuation_params_and_handler.t
+  val inferred_typing : t -> Flambda_type.Parameters.t
   val stub : t -> bool
   val is_exn_handler : t -> bool
 end = struct
   type t = {
-    params_and_handler : Params_and_handler.t;
-    param_relations_lvs : Flambda_type.Parameters.t;
+    params_and_handler : Continuation_params_and_handler.t;
+    inferred_typing : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
   }
 
-  let pattern_match t ~f =
-    Params_and_handler.pattern_match t.params_and_handler ~f
+  let invariant _env _t = ()
 
+(*
   let print_using_where_with_cache ~cache ppf k
-    (* XXX Print [param_relations_lvs] *)
-        ({ params_and_handler = _; param_relations_lvs = _;
+        ({ params_and_handler; inferred_typing;
            stub; is_exn_handler; } as t) ~first =
     if not first then begin
       fprintf ppf "@ "
     end;
-    pattern_match t ~f:(fun params ~param_relations ~handler ->
-      fprintf ppf "@[<v 2>%swhere%s @[%a%s%s@[%a"
-        (Misc.Color.bold_cyan ())
-        (Misc.Color.reset ())
-(*
-        (if first_and_non_recursive then "" else "and ")
+    Continuation_params_and_handler.pattern_match t.params_and_handler
+      ~f:(fun params ~param_relations ~handler ->
+        fprintf ppf "@[<v 2>%swhere%s @[%a%s%s@[%a"
+          (Misc.Color.bold_cyan ())
+          (Misc.Color.reset ())
+  (*
+          (if first_and_non_recursive then "" else "and ")
+  *)
+          Continuation.print k
+          (if stub then " *stub*" else "")
+          (if is_exn_handler then "*exn* " else "")
+          Kinded_parameter.List.print params;
+        if not (Flambda_type.Typing_env_extension.is_empty param_relations)
+        then begin
+          fprintf ppf " [%a]"
+            Flambda_type.Typing_env_extension.print param_relations
+        end;
+        fprintf ppf "@]@] =@ %a"
+          (Expr.print_with_cache ~cache) handler)
 *)
-        Continuation.print k
-        (if stub then " *stub*" else "")
-        (if is_exn_handler then "*exn* " else "")
-        Kinded_parameter.List.print params;
-      if not (Flambda_type.Typing_env_extension.is_empty param_relations)
-      then begin
-        fprintf ppf " [%a]"
-          Flambda_type.Typing_env_extension.print param_relations
-      end;
-      fprintf ppf "@]@] =@ %a"
-        (Expr.print_with_cache ~cache) handler)
+
+  let print _ppf _t =
+    (* XXX Where do we get [k] from? *)
+    Misc.fatal_error "Not yet implemented"
+
+  let print_with_cache ~cache:_ _ppf _t =
+    Misc.fatal_error "Not yet implemented"
 
 (*
   let print_with_cache ~cache ppf (t : t) =
@@ -1055,7 +1078,7 @@ end = struct
         handlers
 
   let print_with_cache ~cache ppf { params_and_handler; stub; handler; } =
-    Params_and_handler.pattern_match params_and_handler
+    Continuation_params_and_handler.pattern_match params_and_handler
       ~f:(fun params ~handler ->
         fprintf ppf "%s%s%a@ =@ %a"
           (if stub then "*stub* " else "")
@@ -1066,43 +1089,46 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 *)
 
-  let create params ~param_relations ~handler param_relations_lvs ~stub
-        ~is_exn_handler =
-    let params_and_handler =
-      Params_and_handler.create params ~param_relations ~handler
-    in
+  let create ~params_and_handler ~inferred_typing ~stub ~is_exn_handler =
     { params_and_handler;
-      param_relations_lvs;
+      inferred_typing;
       stub;
       is_exn_handler;
     }
 
+  let params_and_handler t = t.params_and_handler
+  let inferred_typing t = t.inferred_typing
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
 
   let free_names
-        { params_and_handler; param_relations_lvs; stub = _;
-          is_exn_handler = _;
-        } =
-    Name_occurrences.union (Params_and_handler.free_names params_and_handler)
-      (Flambda_type.Parameters.free_names param_relations_lvs)
+        { params_and_handler; inferred_typing; stub = _; is_exn_handler = _; } =
+    Name_occurrences.union
+      (Continuation_params_and_handler.free_names params_and_handler)
+      (Flambda_type.Parameters.free_names inferred_typing)
 
   let apply_name_permutation
-        ({ params_and_handler; param_relations_lvs; stub;
+        ({ params_and_handler; inferred_typing; stub;
            is_exn_handler; } as t) perm =
     let params_and_handler' =
-      Params_and_handler.apply_name_permutation params_and_handler perm
+      Continuation_params_and_handler.apply_name_permutation
+        params_and_handler perm
     in
-    let param_relations_lvs =
-      Flambda_type.Parameters.apply_name_permutation param_relations_lvs perm
+    let inferred_typing' =
+      Flambda_type.Parameters.apply_name_permutation inferred_typing perm
     in
-    if params_and_handler == params_and_handler' then t
+    if params_and_handler == params_and_handler'
+      && inferred_typing == inferred_typing'
+    then t
     else
       { params_and_handler = params_and_handler';
-        param_relations_lvs;
+        inferred_typing = inferred_typing';
         stub;
         is_exn_handler;
       }
+
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -1204,6 +1230,9 @@ end = struct
         closure_elements = closure_elements';
         direct_call_surrogates;
       }
+
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
 end and Function_declarations : sig
   type t
   include Expr_std.S with type t := t
@@ -1217,6 +1246,8 @@ end = struct
     set_of_closures_origin : Set_of_closures_origin.t;
     funs : Function_declaration.t Closure_id.Map.t;
   }
+
+  let invariant _env _t = ()
 
   let create funs =
     let compilation_unit = Compilation_unit.get_current_exn () in
@@ -1265,7 +1296,10 @@ end = struct
     in
     if funs == funs' then t
     else { set_of_closures_origin; funs = funs'; }
-end and Params_and_body : sig
+
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
+end and Function_params_and_body : sig
   type t
 
   include Expr_std.S with type t := t
@@ -1321,6 +1355,12 @@ end = struct
 
   include Name_abstraction.Make_list (T0)
 
+  let print ppf t : unit = print ppf t
+
+  let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
+
+  let invariant _env _t = ()
+
   let create params ~param_relations ~body ~my_closure =
     let t0 : T0.t =
       { param_relations;
@@ -1342,13 +1382,15 @@ end = struct
       f params ~param_relations:t0.param_relations
         ~body:(Expr.expr t0.body) ~my_closure)
 *)
+  let continuation_counts _t =
+    Misc.fatal_error "Not yet implemented"
 end and Function_declaration : sig
   include Expr_std.S
   val create
      : closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
-    -> exn_continuation:Continuation.t
-    -> params_and_body:Params_and_body.t
+    -> exn_continuation:Exn_continuation.t
+    -> params_and_body:Function_params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
@@ -1364,8 +1406,8 @@ end and Function_declaration : sig
     -> unit
   val closure_origin : t -> Closure_origin.t
   val continuation_param : t -> Continuation.t
-  val exn_continuation : t -> Continuation.t
-  val params_and_body : t -> Params_and_body.t
+  val exn_continuation : t -> Exn_continuation.t
+  val params_and_body : t -> Function_params_and_body.t
   val code_id : t -> Code_id.t
   val result_arity : t -> Flambda_arity.t
   val stub : t -> bool
@@ -1373,13 +1415,13 @@ end and Function_declaration : sig
   val inline : t -> Inline_attribute.t
   val specialise : t -> Specialise_attribute.t
   val is_a_functor : t -> bool
-  val update_params_and_body : t -> Params_and_body.t -> t
+  val update_params_and_body : t -> Function_params_and_body.t -> t
 end = struct
   type t = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
     exn_continuation : Exn_continuation.t;
-    params_and_body : Params_and_body.t;
+    params_and_body : Function_params_and_body.t;
     code_id : Code_id.t;
     result_arity : Flambda_arity.t;
     stub : bool;
@@ -1388,6 +1430,8 @@ end = struct
     specialise : Specialise_attribute.t;
     is_a_functor : bool;
   }
+
+  let invariant _env _t = ()
 
   let create ~closure_origin ~continuation_param ~exn_continuation
         ~params_and_body ~result_arity ~stub ~dbg
@@ -1400,7 +1444,7 @@ end = struct
     | true, (Always_inline | Unroll _) ->
       Misc.fatal_errorf
         "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
-        Params_and_body.print params_and_body
+        Function_params_and_body.print params_and_body
     end;
     begin match stub, specialise with
     | true, (Never_specialise | Default_specialise)
@@ -1408,7 +1452,7 @@ end = struct
     | true, Always_specialise ->
       Misc.fatal_errorf
         "Stubs may not be annotated as [Always_specialise]: %a"
-        Params_and_body.print params_and_body
+        Function_params_and_body.print params_and_body
     end;
     { closure_origin;
       continuation_param;
@@ -1438,7 +1482,7 @@ end = struct
         } =
     let stub = if stub then " *stub*" else "" in
     let is_a_functor = if is_a_functor then " *functor*" else "" in
-    Params_and_body.pattern_match params_and_body
+    Function_params_and_body.pattern_match params_and_body
       ~f:(fun params ~param_relations ~body ~my_closure ->
         fprintf ppf
           "@[<2>(%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
@@ -1499,7 +1543,7 @@ end = struct
           specialise = _;
           is_a_functor = _;
         } =
-    Params_and_body.free_names params_and_body
+    Function_params_and_body.free_names params_and_body
 
   let apply_name_permutation
         ({ closure_origin;
@@ -1515,7 +1559,7 @@ end = struct
            is_a_functor;
          } as t) perm =
     let params_and_body' =
-      Params_and_body.apply_name_permutation params_and_body perm
+      Function_params_and_body.apply_name_permutation params_and_body perm
     in
     if params_and_body == params_and_body' then t
     else
@@ -1531,10 +1575,13 @@ end = struct
         specialise;
         is_a_functor;
       }
+
+  let continuation_counts _t = Misc.fatal_error "Not yet implemented"
 end and Flambda_type : Flambda_type0_intf.S
     with type term_language_function_declaration := Function_declaration.t
   = Flambda_type0.Make (Function_declaration)
 
+(* CR mshinwell: Consider counting numbers of names in Name_occurrences *)
 (* CR mshinwell: Check that apply_cont is well-formed when there is a
    trap installation or removal. *)
 (* CR-someday pchambart: for sum types, we should probably add an exhaustive

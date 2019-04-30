@@ -48,6 +48,8 @@ module type S = sig
 
     include Expr_std.S with type t := t
 
+    val empty : t
+
     val is_empty : t -> bool
   end
 
@@ -675,12 +677,16 @@ module type S = sig
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
-
+*)
   val any_value : unit -> t
+(*
   val any_value_as_ty_value : unit -> ty_value
+*)
 
   val any_fabricated : unit -> t
+(*
   val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
+*)
 
   val any_tagged_immediate : unit -> t
   val any_tagged_bool : unit -> t
@@ -693,6 +699,7 @@ module type S = sig
   val any_naked_immediate : unit -> t
   val any_naked_float : unit -> t
 
+(*
   val any_naked_float_as_ty_naked_float
     : unit
    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number

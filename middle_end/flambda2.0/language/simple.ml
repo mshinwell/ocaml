@@ -104,7 +104,7 @@ type t =
 
 let name name = Name name
 let var var = Name (Name.var var)
-let vars vars = List.map var var
+let vars vars = List.map var vars
 let symbol sym = Name (Name.symbol sym)
 let const cst = Const cst
 

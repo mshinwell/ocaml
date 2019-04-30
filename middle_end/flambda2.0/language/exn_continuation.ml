@@ -32,16 +32,23 @@ let extra_args t = t.extra_args
 
 let invariant _env _t = ()
 
+let print_simple_and_kind ppf (simple, kind) =
+  Format.fprintf ppf "@[(%a :: %a)@]"
+    Simple.print simple
+    Flambda_kind.print kind
+
 let print ppf { exn_handler; extra_args; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(exn_handler@ %a)@]@ \
-      @[<hov 1>(extra_args@ %a)@])@]"
+      @[<hov 1>(extra_args@ (%a))@])@]"
     Continuation.print exn_handler
-    Simple.List.print extra_args
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_and_kind)
+    extra_args
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
 let free_names { exn_handler; extra_args; } =
+  let extra_args = List.map (fun (simple, _kind) -> simple) extra_args in
   Name_occurrences.union
     (Name_occurrences.singleton_in_terms (Continuation exn_handler))
     (Simple.List.free_names extra_args)
@@ -51,6 +58,12 @@ let continuation_counts { exn_handler; extra_args = _; } =
 
 let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
   let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
-  let extra_args' = Simple.List.apply_name_permutation extra_args perm in
+  let extra_args' =
+    List.map (fun ((simple, kind) as extra_arg) ->
+        let simple' = Simple.apply_name_permutation simple perm in
+        if simple == simple' then extra_arg
+        else simple', kind)
+      extra_args
+  in
   if exn_handler == exn_handler' && extra_args == extra_args' then t
   else { exn_handler = exn_handler'; extra_args = extra_args'; }

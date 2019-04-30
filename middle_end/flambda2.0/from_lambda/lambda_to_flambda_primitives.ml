@@ -163,6 +163,16 @@ and simple_or_prim =
   | Simple of Simple.t
   | Prim of expr_primitive
 
+let print_simple_or_prim ppf simple_or_prim =
+  match simple_or_prim with
+  | Simple simple -> Simple.print ppf simple
+  | Prim _ -> Format.pp_print_string ppf "<prim>"
+
+let print_list_of_simple_or_prim ppf simple_or_prim_list =
+  Format.fprintf ppf "@[(%a)@]"
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_or_prim)
+    simple_or_prim_list
+
 let rec result_kind_of_expr_primitive (prim : expr_primitive) =
   let translate_result_kind (result_kind : Flambda_primitive.result_kind) =
     match result_kind with
@@ -588,7 +598,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
         Primitive %a (%a) shouldn't be here, either a bug in [Prepare_lambda] \
         or [Closure_conversion] or the wrong number of arguments"
       Printlambda.primitive prim
-      Simple.List.print args
+      print_list_of_simple_or_prim args
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
     | Pintoffloat | Pfloatofint
     | Pnegfloat | Pabsfloat | Pstringlength
@@ -608,7 +618,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
         Wrong arity for unary primitive %a (%a)"
       Printlambda.primitive prim
-      Simple.List.print args
+      print_list_of_simple_or_prim args
   | ( Paddint | Psubint | Pmulint
     | Pandint | Porint | Pxorint | Plslint | Plsrint | Pasrint
     | Pdivint _ | Pmodint _ | Psetfield _ | Pintcomp _
@@ -635,7 +645,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
         Wrong arity for binary primitive %a (%a)"
       Printlambda.primitive prim
-      Simple.List.print args
+      print_list_of_simple_or_prim args
   (* | (  ), _ -> *)
   (*   Misc.fatal_errorf "Closure_conversion.convert_primitive: \ *)
   (*                      Wrong arity for %a: %i" *)
@@ -647,7 +657,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
         Wrong arity for ternary primitive %a (%a)"
       Printlambda.primitive prim
-      Simple.List.print args
+      print_list_of_simple_or_prim args
   | ( Pidentity | Pignore | Prevapply | Pdirapply | Psequand
     | Psequor
     ), _ ->
@@ -710,4 +720,4 @@ let convert_and_bind
       (dbg : Debuginfo.t)
       (cont : Named.t -> Expr.t) : Expr.t =
   let expr = convert_lprim prim args dbg in
-  bind_rec exn_continuation expr dbg cont
+  bind_rec expr dbg exn_continuation cont

@@ -256,17 +256,3 @@ and print ppf (t : t) =
       print_trap_action trap_action
       Continuation.print i
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
-
-let invariant t =
-  match t with
-  | Let (id, kind, defining_expr, body) ->
-
-  | Let_rec (defs, body) ->
-
-  | Let_cont let_cont ->
-    if let_cont.is_exn_handler then begin
-      assert (not let_cont.administrative);
-      assert (List.length let_cont.params = 1);
-      assert (let_cont.recursive = Asttypes.Nonrecursive);
-    end
-  | ...
