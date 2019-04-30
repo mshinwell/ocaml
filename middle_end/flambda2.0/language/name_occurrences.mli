@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2019 OCamlPro SAS                                          *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,8 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A structure for keeping track of a set of bindable names together with a
-    form of modal type that describes where particular names occur. *)
+(** A structure for counting name-like entities (in particular [Name]s and
+    [Continuation]s) that occur free in terms or types. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
@@ -98,3 +98,7 @@ val equal : t -> t -> bool
 val print : Format.formatter -> t -> unit
 
 val apply_name_permutation : t -> Name_permutation.t -> t
+
+(* new stuff *)
+
+val count_continuation : t -> Continuation.t -> int

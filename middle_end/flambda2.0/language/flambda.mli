@@ -179,7 +179,8 @@ end and Let : sig
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
 
-  (** Create a [Let] expression. *)
+  (** Create a [Let] expression.  The [Let] will be elided if the bound
+      variable does not occur free in the [body]. *)
   val create
      : bound_var:Variable.t
     -> kind:Flambda_kind.t
@@ -222,13 +223,20 @@ end and Let_cont : sig
       [Non_recursive] one. *)
   (* CR mshinwell: ensure the statement about [Flambda_to_cmm] still holds. *)
   type t = private
-    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Non_recursive of {
+        handler : Non_recursive_let_cont_handler.t;
+        num_free_occurrences : int;
+        (** [num_free_occurrences] can be used, for example, to decide whether
+            to inline out a linearly-used continuation. *)
+      }
     | Recursive of Recursive_let_cont_handlers.t
 
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
 
-  (** Create a definition of a non-recursive continuation. *)
+  (** Create a definition of a non-recursive continuation.  If the continuation
+      does not occur free in the [body], then just the [body] is returned,
+      without any enclosing [Let_cont]. *)
   val create_non_recursive
      : Continuation.t
     -> Continuation_handler.t
