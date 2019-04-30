@@ -115,3 +115,5 @@ val singleton_symbol : Symbol.t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
+
+val symbols : t -> Symbol.Set.t
