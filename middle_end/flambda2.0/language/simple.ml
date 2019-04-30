@@ -102,10 +102,11 @@ type t =
   | Const of Const.t
   | Discriminant of Discriminant.t
 
-let name t = Name t
-let var t = Name (Name.var t)
-let symbol t = Name (Name.symbol t)
-let const t = Const t
+let name name = Name name
+let var var = Name (Name.var var)
+let vars vars = List.map var var
+let symbol sym = Name (Name.symbol sym)
+let const cst = Const cst
 
 let const_bool b = Const (if b then Const.const_true else Const.const_false)
 

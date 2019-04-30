@@ -428,8 +428,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       handler = k result_var;
     }
   | Lassign _ -> name_then_cps_non_tail "assign" lam k k_exn
-  | Levent (lam, event) -> Event (cps_non_tail lam k k_exn, event)
-  | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ ->
+  | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ | Levent _ ->
     Misc.fatal_errorf "Term should have been eliminated by [Prepare_lambda]: %a"
       Printlambda.lambda lam
 
@@ -624,9 +623,6 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
           } in
           I.Apply apply) k_exn) k_exn) k_exn, N.Many
   | Lassign _ -> name_then_cps_tail "assign" lam k k_exn
-  | Levent (lam, event) ->
-    let ilam, k_count = cps_tail lam k k_exn in
-    Event (ilam, event), k_count
   | Ltrywith (body, id, handler) ->
     let body_result = Ident.create_local "body_result" in
     let body_continuation = Continuation.create () in

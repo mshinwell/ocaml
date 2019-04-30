@@ -44,6 +44,8 @@ val name : Name.t -> t
 
 val var : Variable.t -> t
 
+val vars : Variable.t list -> t list
+
 val symbol : Symbol.t -> t
 
 val const : Const.t -> t
