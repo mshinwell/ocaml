@@ -104,7 +104,7 @@ module Function_decls = struct
       kind : Lambda.function_kind;
       params : (Ident.t * Lambda.value_kind) list;
       continuation_param : Continuation.t;
-      exn_continuation : Exn_continuation.t;
+      exn_continuation : Ilambda.exn_continuation;
       body : Ilambda.t;
       free_idents_of_body : Ident.Set.t;
       attr : Lambda.function_attribute;

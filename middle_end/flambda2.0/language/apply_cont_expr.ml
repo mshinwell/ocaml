@@ -157,20 +157,9 @@ let free_names { k; args; trap_action; } =
     | Some trap_action -> Trap_action.free_names trap_action
   in
   Name_occurrences.union_list [
-    Name_occurrences.singleton_in_terms (Continuation k);
+    Name_occurrences.singleton_continuation k;
     Simple.List.free_names args;
     trap_action_free_names;
-  ]
-
-let continuation_counts { k; args = _; trap_action; } =
-  let trap_action_continuation_counts =
-    match trap_action with
-    | None -> Continuation_counts.empty
-    | Some trap_action -> Trap_action.continuation_counts trap_action
-  in
-  Continuation_counts.union_list [
-    Continuation_counts.create_singleton k;
-    trap_action_continuation_counts;
   ]
 
 let apply_name_permutation ({ k; args; trap_action; } as t) perm =

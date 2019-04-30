@@ -14,17 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A structure for counting name-like entities (in particular [Name]s and
-    [Continuation]s) that occur free in terms or types. *)
+(** A structure for counting name-like entities that occur free in terms
+    or types. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
-
-type occurrence_kind =
-  | In_terms
-  | In_types
-  | Debug_only
 
 val empty : t
 
@@ -114,3 +109,9 @@ val singleton_variable_in_terms : Variable.t -> t
 val add_variable_in_terms : t -> Variable.t -> t
 
 val singleton_name_in_terms : Name.t -> t
+
+val singleton_symbol : Name.t -> t
+
+val union : t -> t -> t
+
+val union_list : t list -> t
