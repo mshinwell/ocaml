@@ -16,30 +16,38 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_one_variety_of_names (Bindable : Bindable.S) = struct
+(*
   type occurrence_kind =
     | In_terms
     | In_types
     | Debug_only
+*)
 
+module For_one_variety_of_names (Bindable : Bindable.S) = struct
+
+(*
   type t = {
-    (* The integers give the counts of free occurrences. *)
     in_terms : int Bindable.Map.t;
     in_types : int Bindable.Map.t;
     in_debug_only : int Bindable.Map.t;
   }
 
-  let print ppf t =
-    Format.fprintf ppf "@[(in_terms %a)@ (in_types %a)@ (in_debug_only %a)@]"
-      (Bindable.Map.print Format.pp_print_int) t.in_terms
-      (Bindable.Map.print Format.pp_print_int) t.in_types
-      (Bindable.Map.print Format.pp_print_int) t.in_debug_only
+*)
 
-  let empty =
-    { in_terms = Bindable.Map.empty;
-      in_types = Bindable.Map.empty;
-      in_debug_only = Bindable.Map.empty;
-    }
+  (* The integers gives the counts of free occurrences. *)
+  type t = int Bindable.Map.t
+
+  let print ppf t =
+    Bindable.Map.print Format.pp_print_int t
+
+  let empty = Bindable.Map.empty
+
+  let singleton bindable = Bindable.Map.singleton bindable
+
+  let add t bindable =
+    Bindable.Map.update bindable
+      (function None -> 1 | Some count -> count + 1)
+      t
 
 (*
   let create_from_set_in_terms in_terms =
@@ -77,9 +85,10 @@ module For_one_variety_of_names (Bindable : Bindable.S) = struct
       && Bindable.Map.is_empty in_types
       && Bindable.Map.is_empty in_debug_only
 *)
-
+(*
   let singleton_in_terms name =
     create_from_set_in_terms (Bindable.Map.singleton name)
+*)
 
 (*
   let singleton_in_types name =
@@ -87,12 +96,7 @@ module For_one_variety_of_names (Bindable : Bindable.S) = struct
 
   let of_list_in_terms names =
     create_from_set_in_terms (Bindable.Map.of_list names)
-*)
 
-  let add0 bindable map =
-    Bindable.Map.update bindable
-      (function None -> 1 | Some count -> count + 1)
-      map
 
   let add { in_terms; in_types; debug_only; } bindable kind =
     match kind with
@@ -103,7 +107,6 @@ module For_one_variety_of_names (Bindable : Bindable.S) = struct
     | Debug_only ->
       { t with in_debug_only = add0 bindable in_debug_only; }
 
-(*
   let add_set t names kind =
     Bindable.Map.fold (fun name t -> add t name kind) names t
 
@@ -280,14 +283,41 @@ module For_variables = For_one_variety_of_names (Bindable_variable)
 module For_continuations = For_one_variety_of_names (Bindable_continuation)
 
 type t = {
-  for_variables : For_variables.t;
-  for_continuations : For_continuations.t;
+  variables_in_terms : For_variables.t;
+  variables_in_types : For_variables.t;
+  variables_debug_only : For_variables.t;
+  continuations : For_continuations.t;
 }
 
-let print ppf { for_variables; for_continuations; } =
-  Format.fprintf ppf "@[(for_variables %a)@ (for_continuations %a)@]"
-    For_variables.print for_variables
-    For_continuations.print for_continuations
+let print ppf { variables_in_terms; variables_in_types; variables_debug_only;
+      continuations; } =
+  Format.fprintf ppf "@[\
+      (variables_terms %a)@ \
+      (variables_types %a)@ \
+      (variables_debug_only %a)@ \
+      (continuations %a)\
+      @]"
+    For_variables.print variables_in_terms
+    For_variables.print variables_in_types
+    For_variables.print variables_debug_only
+    For_continuations.print continuations
+
+let empty = {
+  variables_in_terms = For_variables.empty;
+  variables_in_types = For_variables.empty;
+  variables_debug_only = For_variables.empty;
+  continuations = For_continuations.empty;
+}
+
+let singleton_continuation t cont =
+  { empty with
+    continuations = For_continuations.singleton cont;
+  }
+
+let add_continuation t cont =
+  { t with
+    continuations = For_continuations.add t.continuations cont;
+  }
 
 let count_continuation t cont =
-  For_continuations.count t.for_continuations cont
+  For_continuations.count t.continuations cont
