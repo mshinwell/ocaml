@@ -39,17 +39,15 @@ let after_binding_position style =
   | Brackets -> "]"
   | Existential -> "."
 
+let printing_style = ref Brackets
+
+let set_printing_style new_style =
+  printing_style := new_style
+
 module type Common = sig
   type t
-
-  val print : ?style:printing_style -> Format.formatter -> t -> unit
-
-  val print_with_cache
-     : ?style:printing_style
-    -> cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
+  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end
 
 module Make (Term : Term) = struct
@@ -66,7 +64,8 @@ module Make (Term : Term) = struct
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
 
-  let print ?(style = Brackets) ppf t =
+  let print ppf t =
+    let style = !printing_style in
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
         (Misc.Color.bold_cyan ())
@@ -78,7 +77,8 @@ module Make (Term : Term) = struct
         (Misc.Color.reset ())
         Term.print term)
 
-  let print_with_cache ?(style = Brackets) ~cache ppf t =
+  let print_with_cache ~cache ppf t =
+    let style = !printing_style in
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
         (Misc.Color.bold_cyan ())
@@ -151,7 +151,8 @@ module Make_list (Term : Term) = struct
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_names fresh_term
 
-  let print_bindable_name_list style ppf bns =
+  let print_bindable_name_list ppf bns =
+    let style = !printing_style in
     match bns with
     | [] -> ()
     | _ ->
@@ -165,16 +166,16 @@ module Make_list (Term : Term) = struct
         (after_binding_position style)
         (Misc.Color.reset ())
 
-  let print ?(style = Brackets) ppf t =
+  let print ppf t =
     pattern_match t ~f:(fun names term ->
       Format.fprintf ppf "@[%a@,%a@]"
-        (print_bindable_name_list style) names
+        print_bindable_name_list names
         Term.print term)
 
-  let print_with_cache ?(style = Brackets) ~cache ppf t =
+  let print_with_cache ~cache ppf t =
     pattern_match t ~f:(fun names term ->
       Format.fprintf ppf "@[%a@,%a@]"
-        (print_bindable_name_list style) names
+        print_bindable_name_list names
         (Term.print_with_cache ~cache) term)
 
   let pattern_match_mapi t ~f =

@@ -735,13 +735,16 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in
-  let block_var = Variable.create "module_block" in
-  let load_fields = Continuation.create () in
+  let module_block_tag = Tag.Scannable.zero in
+  let module_block_var = Variable.create "module_block" in
+  let return_cont = Continuation.create () in
   let field_vars =
     List.init size (fun pos ->
       let pos_str = string_of_int pos in
       Variable.create ("block_field_" ^ pos_str), K.value ())
   in
+  (* For review, skip down to "let let_cont" below, read the comment then
+     come back here. *)
   let load_fields_body =
     let field_vars =
       List.init size (fun pos ->
@@ -750,7 +753,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     let body : Expr.t =
       let fields = List.map (fun (_, var) -> Simple.var var) field_vars in
-      Apply_cont (load_fields, None, fields)
+      Apply_cont (return_cont, None, fields)
     in
     List.fold_left (fun body (pos, var) ->
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
@@ -758,7 +761,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           (Prim (
             Binary (
               Block_load (Block (Value Unknown), Immutable),
-              Simple.var block_var,
+              Simple.var module_block_var,
               Simple.const (Tagged_immediate pos)),
             Debuginfo.none))
           body)
@@ -766,7 +769,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   in
   let load_fields_cont_handler =
     let param =
-      Kinded_parameter.create (Parameter.wrap block_var) (K.value ())
+      Kinded_parameter.create (Parameter.wrap module_block_var) (K.value ())
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]
@@ -778,15 +781,21 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       ~stub:true
       ~is_exn_handler:false
   in
-  let body = close t Env.empty ilam.expr in
   let let_cont =
+    (* This binds the return continuation that is free (or, at least, not bound)
+       in the incoming Ilambda code. The handler for the continuation receives a
+       tuple with fields indexed from zero to [size]. The handler extracts the
+       fields; the variables bound to such fields are returned as the
+       [computed_values], below. The compilation of the [Define_symbol]
+       constructions below then causes the actual module block to be created. *)
+    let body = close t Env.empty ilam.expr in
     Flambda.Let_cont.create_non_recursive ilam.return_continuation
       load_fields_cont_handler
       ~body
   in
   let computation : Program_body.computation =
     { expr = Flambda.Expr.create_let_cont let_cont;
-      return_cont = load_fields;
+      return_cont;
       exception_cont = ilam.exception_continuation;
       computed_values = field_vars;
     }
@@ -797,21 +806,26 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           Dynamically_computed var)
         field_vars
     in
-    Block (Tag.Scannable.zero, Immutable, field_vars)
+    Block (module_block_tag, Immutable, field_vars)
   in
   let program_body : Program_body.t =
-    Define_symbol
-      ({ computation = Some computation;
-         static_structure = [module_symbol, K.value (), static_part];
-       },
-       Root module_symbol)
+    let bound_symbols : Program_body.bound_symbols =
+      Singleton (module_symbol, K.value ())
+    in
+    let definition : Program_body.definition =
+      { computation = Some computation;
+        static_structure = [bound_symbols, static_part];
+      }
+    in
+    Define_symbol (definition, Root module_symbol)
   in
   let program_body =
     (* CR mshinwell: Share with [Simplify_program] *)
     List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
-        let static_structure =
-          [symbol, K.value (), static_part]
+        let bound_symbols : Program_body.bound_symbols =
+          Singleton (symbol, K.value ())
         in
+        let static_structure = [bound_symbols, static_part] in
         let definition : Program_body.definition =
           { computation = None;
             static_structure;

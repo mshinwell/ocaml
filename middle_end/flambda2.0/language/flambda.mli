@@ -199,9 +199,6 @@ end and Let : sig
      : t
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
-
-  (** Extract continuation counts, but do not descend under lambdas. *)
-  val continuation_counts_toplevel : t -> Continuation_counts.t
 end and Let_cont : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
       of continuations:
