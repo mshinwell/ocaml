@@ -54,7 +54,7 @@ let tupled_function_call_stub
       ~(closure_bound_var : Closure_id.t) =
   let dbg = Debuginfo.none in
   let continuation_param = Continuation.create () in
-  let exn_continuation_param =
+  let exn_continuation =
     Exn_continuation.create ~exn_handler:(Continuation.create ())
       ~extra_args:[]
   in
@@ -76,7 +76,7 @@ let tupled_function_call_stub
       Flambda.Apply.create ~callee:(Name.var unboxed_version_var)
         ~continuation:continuation_param
         ~exn_continuation
-        ~args:(Simple.vars param)
+        ~args:(Simple.vars params)
         ~call_kind
         ~dbg:Debuginfo.none
         ~inline:Default_inline
@@ -92,19 +92,20 @@ let tupled_function_call_stub
       }
     in
     Expr.create_let unboxed_version_var
-      (K.value ()) (Prim (Unary (move, Simple.var my_closure), dbg))
+      (K.value ())
+      (Named.create_prim (Unary (move, Simple.var my_closure)) dbg)
       call
   in
   let _, body =
     List.fold_left (fun (pos, body) param ->
         let defining_expr =
           let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-          Prim (
-            Binary (
+          Named.create_prim
+            (Binary (
               Block_load (Block (Value Unknown), Immutable),
               Simple.var tuple_param_var,
-              Simple.const (Tagged_immediate pos)),
-            dbg)
+              Simple.const (Tagged_immediate pos)))
+            dbg
         in
         let expr = Expr.create_let param (K.value ()) defining_expr body in
         pos + 1, expr)
@@ -123,7 +124,7 @@ let tupled_function_call_stub
   Flambda.Function_declaration.create
     ~closure_origin:(Closure_origin.create closure_bound_var)
     ~continuation_param
-    ~exn_continuation_param
+    ~exn_continuation
     ~params_and_body
     ~result_arity:[K.value ()]
     ~stub:true
@@ -146,6 +147,9 @@ let rec declare_const t (const : Lambda.structured_constant)
   match const with
   | Const_base (Const_int c) ->
     Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
+  | Const_pointer p ->
+    (* CR mshinwell: This needs to be removed. *)
+    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int p)), "const_ptr"
   | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
@@ -186,11 +190,11 @@ let rec declare_const t (const : Lambda.structured_constant)
     in
     register_const t const "const_block"
 
-let close_const t (const : Lambda.structured_constant)
-      : Named.t * string =
+let close_const t (const : Lambda.structured_constant) =
   match declare_const t const with
-  | Tagged_immediate c, name -> Simple (Simple.const (Tagged_immediate c)), name
-  | Symbol s, name -> Simple (Simple.symbol s), name
+  | Tagged_immediate c, name ->
+    Named.simple (Simple.const (Tagged_immediate c)), name
+  | Symbol s, name -> Named.simple (Simple.symbol s), name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 

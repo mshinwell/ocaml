@@ -24,23 +24,40 @@ module Of_kind_value = struct
     | Tagged_immediate of Immediate.t
     | Dynamically_computed of Variable.t
 
-  let compare (t1 : t) (t2 : t) =
-    match t1, t2 with
-    | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
-    | Tagged_immediate t1, Tagged_immediate t2 -> Immediate.compare t1 t2
-    | Dynamically_computed v1, Dynamically_computed v2 -> Variable.compare v1 v2
-    | Symbol _, Tagged_immediate _ -> -1
-    | Tagged_immediate _, Symbol _ -> 1
-    | Symbol _, Dynamically_computed _ -> -1
-    | Dynamically_computed _, Symbol _ -> 1
-    | Tagged_immediate _, Dynamically_computed _ -> -1
-    | Dynamically_computed _, Tagged_immediate _ -> 1
+  include Identifiable.Make (struct
+    type nonrec t = t
 
-  let print ppf (field : t) =
-    match field with
-    | Symbol symbol -> Symbol.print ppf symbol
-    | Tagged_immediate immediate -> Immediate.print ppf immediate
-    | Dynamically_computed var -> Variable.print ppf var
+    let compare t1 t2 =
+      match t1, t2 with
+      | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
+      | Tagged_immediate t1, Tagged_immediate t2 -> Immediate.compare t1 t2
+      | Dynamically_computed v1, Dynamically_computed v2 -> Variable.compare v1 v2
+      | Symbol _, Tagged_immediate _ -> -1
+      | Tagged_immediate _, Symbol _ -> 1
+      | Symbol _, Dynamically_computed _ -> -1
+      | Dynamically_computed _, Symbol _ -> 1
+      | Tagged_immediate _, Dynamically_computed _ -> -1
+      | Dynamically_computed _, Tagged_immediate _ -> 1
+
+    let equal t1 t2 =
+      compare t1 t2 = 0
+
+    let hash t =
+      match t with
+      | Symbol symbol -> Hashtbl.hash (0, Symbol.hash symbol)
+      | Tagged_immediate immediate ->
+        Hashtbl.hash (1, Immediate.hash immediate)
+      | Dynamically_computed var -> Hashtbl.hash (2, Variable.hash var)
+
+    let print ppf t =
+      match t with
+      | Symbol symbol -> Symbol.print ppf symbol
+      | Tagged_immediate immediate -> Immediate.print ppf immediate
+      | Dynamically_computed var -> Variable.print ppf var
+
+    let output chan t =
+      print (Format.formatter_of_out_channel chan) t
+  end)
 
   let needs_gc_root t =
     match t with
@@ -51,7 +68,7 @@ module Of_kind_value = struct
     match t with
     | Dynamically_computed var ->
       Name_occurrences.singleton_variable_in_terms var
-    | Symbol sym -> Name_occurrences.singleton_symbol (Name (Name.symbol sym))
+    | Symbol sym -> Name_occurrences.singleton_symbol sym
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =
@@ -113,17 +130,17 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
     | Fabricated_block v ->
-      Name_occurrences.singleton_in_terms (Name (Name.var v))
+      Name_occurrences.singleton_variable_in_terms v
     | Set_of_closures set -> Flambda.Set_of_closures.free_names set
     | Closure (sym, _) ->
-      Name_occurrences.singleton_in_terms (Name (Name.symbol sym))
+      Name_occurrences.singleton_symbol sym
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
     | Boxed_int64 (Var v)
     | Boxed_nativeint (Var v)
     | Mutable_string { initial_value = Var v; }
     | Immutable_string (Var v) ->
-      Name_occurrences.singleton_in_terms (Name (Name.var v))
+      Name_occurrences.singleton_variable_in_terms v
     | Boxed_float (Const _)
     | Boxed_int32 (Const _)
     | Boxed_int64 (Const _)
@@ -134,14 +151,12 @@ module Static_part = struct
     | Immutable_float_array fields ->
       List.fold_left (fun fns (field : _ or_variable) ->
           match field with
-          | Var v -> Name_occurrences.add fns (Name (Name.var v)) In_terms
+          | Var v -> Name_occurrences.add_variable_in_terms fns v
           | Const _ -> fns)
         (Name_occurrences.empty)
         fields
 
-  let free_symbols t =
-    Name.set_to_symbol_set (
-      Name_occurrences.everything_must_only_be_names (free_names t))
+  let free_symbols t = Name_occurrences.symbols (free_names t)
 
   let print_with_cache ~cache ppf (t : t) =
     let print_float_array_field ppf = function
@@ -278,10 +293,20 @@ module Program_body = struct
       comp.computed_values
 
   let free_symbols_of_computation comp =
-    Name.set_to_symbol_set (Name_occurrences.everything_must_only_be_names (
-      Flambda.Expr.free_names comp.expr))
+    Name_occurrences.symbols (Flambda.Expr.free_names comp.expr)
 
-  type static_structure = (Symbol.t * Flambda_kind.t * Static_part.t) list
+  type bound_symbols =
+    | Singleton of Symbol.t * Flambda_kind.t
+      (** A binding of a single symbol of the given kind. *)
+    | Set_of_closures of {
+        set_of_closures_symbol : Symbol.t;
+        closure_symbols : Symbol.t Closure_id.Map.t;
+      }
+      (** A binding of a single symbol to a set of closures together with
+          the binding of possibly multiple symbols to the individual closures
+          within such set of closures. *)
+
+  type static_structure = (bound_symbols * Static_part.t) list
 
   type definition = {
     computation : computation option;
@@ -295,9 +320,9 @@ module Program_body = struct
       (Misc.Stdlib.Option.print print_computation)
       defn.computation
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (sym, kind, static_part) ->
+        (fun ppf (bound_symbols, static_part) ->
           Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part@ %a))@]"
-            Symbol.print sym
+            print_bound_symbols bound_symbols
             Flambda_kind.print kind
             (Static_part.print_with_cache ~cache) static_part))
       defn.static_structure
