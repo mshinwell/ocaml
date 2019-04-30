@@ -110,7 +110,7 @@ val add_variable_in_terms : t -> Variable.t -> t
 
 val singleton_name_in_terms : Name.t -> t
 
-val singleton_symbol : Name.t -> t
+val singleton_symbol : Symbol.t -> t
 
 val union : t -> t -> t
 

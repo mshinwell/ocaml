@@ -95,12 +95,12 @@ let arms t = t.arms
 let free_names { scrutinee; arms; } =
   let free_names_in_arms =
     Discriminant.Map.fold (fun _discr k free_names ->
-        Name_occurrences.add free_names (Continuation k) In_terms)
+        Name_occurrences.add_continuation free_names k)
       arms
       (Name_occurrences.empty)
   in
   Name_occurrences.union_list [
-    Name_occurrences.singleton_in_terms (Name scrutinee);
+    Name_occurrences.singleton_name_in_terms scrutinee;
     free_names_in_arms;
   ]
 
@@ -113,6 +113,3 @@ let apply_name_permutation ({ scrutinee; arms; } as t) perm =
   in
   if scrutinee == scrutinee' && arms == arms' then t
   else { scrutinee = scrutinee'; arms = arms'; }
-
-let continuation_counts { scrutinee = _; arms; } =
-  Continuation_counts.create_list (Discriminant.Map.data arms)
