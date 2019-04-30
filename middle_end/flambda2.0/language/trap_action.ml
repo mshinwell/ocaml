@@ -62,11 +62,6 @@ let apply_name_permutation t perm =
     if exn_handler == exn_handler' then t
     else Pop { exn_handler = exn_handler'; take_backtrace; }
 
-let continuation_counts = function
-  | Push { exn_handler; }
-  | Pop { exn_handler; take_backtrace = _; } ->
-    Continuation_counts.create_singleton exn_handler
-
 module Option = struct
   type nonrec t = t option
 
