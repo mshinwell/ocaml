@@ -173,15 +173,6 @@ end = struct
       | Switch switch -> Switch.free_names switch
       | Invalid _ -> Name_occurrences.empty
 
-  let continuation_counts t =
-    match descr t with
-    | Let let_expr -> Let.continuation_counts let_expr
-    | Let_cont let_cont -> Let_cont.continuation_counts let_cont
-    | Apply apply -> Apply.continuation_counts apply
-    | Apply_cont apply_cont -> Apply_cont.continuation_counts apply_cont
-    | Switch switch -> Switch.continuation_counts switch
-    | Invalid _ -> Continuation_counts.empty
-
   let create descr =
     { descr;
       delayed_permutation = Name_permutation.empty;
@@ -454,7 +445,7 @@ end and Let : sig
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
 end = struct
-  module Bound_var_and_body = Name_abstraction.Make (Expr)
+  module Bound_var_and_body = Name_abstraction.Make (Bindable_variable) (Expr)
 
   type t = {
     bound_var_and_body : Bound_var_and_body.t;
@@ -476,7 +467,7 @@ end = struct
       | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
         pattern_match t ~f:(fun ~bound_var ~body ->
           fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
-            Bindable_name.print bound_var
+            Bindable_variable.print bound_var
             (Misc.Color.bold_white ())
             Flambda_kind.print kind
             (Misc.Color.reset ())
@@ -488,7 +479,7 @@ end = struct
       fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
         (Misc.Color.bold_cyan ())
         (Misc.Color.reset ())
-        Bindable_name.print bound_var
+        Bindable_variable.print bound_var
         (Misc.Color.bold_white ())
         Flambda_kind.print kind
         (Misc.Color.reset ())
@@ -526,12 +517,6 @@ end = struct
             print t
         end
       end;
-      (* XXX Bindable_name strikes again *)
-      let bound_var =
-        match (bound_var : Bindable_name.t) with
-        | Name (Var var) -> var
-        | _ -> assert false
-      in
       let env = E.add_variable env bound_var t.kind in
       Expr.invariant env body)
 
@@ -542,12 +527,6 @@ end = struct
     pattern_match t ~f:(fun ~bound_var ~body ->
       let from_defining_expr = Named.free_names defining_expr in
       let from_body = Expr.free_names body in
-      (* XXX Bindable_name strikes again *)
-      let bound_var =
-        match (bound_var : Bindable_name.t) with
-        | Name (Var var) -> var
-        | _ -> assert false
-      in
       Name_occurrences.union from_defining_expr
         (Name_occurrences.remove from_body (Name (Name.var bound_var))))
 
@@ -567,11 +546,6 @@ end = struct
         kind;
         defining_expr = defining_expr';
       }
-
-  let continuation_counts
-        ({ bound_var_and_body = _; kind = _; defining_expr = _; } as t) =
-    pattern_match t ~f:(fun ~bound_var:_ ~body ->
-      Expr.continuation_counts body)
 end and Let_cont : sig
   type t = private
     | Non_recursive of Non_recursive_let_cont_handler.t
@@ -592,7 +566,10 @@ end and Let_cont : sig
 *)
 end = struct
   type t =
-    | Non_recursive of Non_recursive_let_cont_handler.t
+    | Non_recursive of {
+        handler : Non_recursive_let_cont_handler.t;
+        num_free_occurrences : int;
+      }
     | Recursive of Recursive_let_cont_handlers.t
 
   (* CR mshinwell: A sketch of code for the invariant check is on cps_types. *)
@@ -622,7 +599,7 @@ end = struct
     end else begin
       let rec gather_let_conts let_conts let_cont =
         match let_cont with
-        | Non_recursive handler ->
+        | Non_recursive { handler; num_free_occurrrences = _; } ->
           Non_recursive_let_cont_handler.pattern_match handler
             ~f:(fun k ~(body : Expr.t) ->
               let let_conts, body =
@@ -659,7 +636,17 @@ end = struct
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create_non_recursive k handler ~body =
-    Non_recursive (Non_recursive_let_cont_handler.create k handler ~body)
+    let free_names = Expr.free_names body in
+    let num_free_occurrences =
+      Name_occurrences.count_continuation free_names k
+    in
+    (* We don't inline out linear uses of continuations here, as it could
+       result in quadratic behaviour.  However we can safely avoid creating
+       a completely unused continuation binding. *)
+    if num_free_occurrences < 1 then
+      body
+    else
+      Non_recursive (Non_recursive_let_cont_handler.create k handler ~body)
 
   let create_recursive handlers ~body =
     if Continuation_handlers.contains_exn_handler handlers then begin
@@ -689,14 +676,14 @@ end = struct
 
   let free_names t =
     match t with
-    | Non_recursive handler ->
+    | Non_recursive { handler; num_free_occurrences = _; } ->
       Non_recursive_let_cont_handler.free_names handler
     | Recursive handlers ->
       Recursive_let_cont_handlers.free_names handlers
 
   let apply_name_permutation t perm =
     match t with
-    | Non_recursive handler ->
+    | Non_recursive { handler; num_free_occurrences = _; } ->
       let handler' =
         Non_recursive_let_cont_handler.apply_name_permutation handler perm
       in
@@ -708,13 +695,6 @@ end = struct
       in
       if handlers == handlers' then t
       else Recursive handlers'
-
-  let continuation_counts t =
-    match t with
-    | Non_recursive handler ->
-      Non_recursive_let_cont_handler.continuation_counts handler
-    | Recursive handlers ->
-      Recursive_let_cont_handlers.continuation_counts handlers
 end and Non_recursive_let_cont_handler : sig
   type t
 
@@ -733,7 +713,8 @@ end and Non_recursive_let_cont_handler : sig
 
   val handler : t -> Continuation_handler.t
 end = struct
-  module Continuation_and_body = Name_abstraction.Make (Expr)
+  module Continuation_and_body =
+    Name_abstraction.Make (Bindable_continuation) (Expr)
 
   type t = {
     continuation_and_body : Continuation_and_body.t;
@@ -777,9 +758,6 @@ end = struct
     { handler = handler';
       continuation_and_body = continuation_and_body';
     }
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Recursive_let_cont_handlers0 : sig
   type t
 
@@ -825,9 +803,6 @@ end = struct
     { handlers = handlers';
       body = body';
     }
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Recursive_let_cont_handlers : sig
   type t
 
@@ -840,9 +815,9 @@ end and Recursive_let_cont_handlers : sig
      : t
     -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
     -> 'a
-  val continuation_counts : t -> Continuation_counts.t
 end = struct
-  include Name_abstraction.Make_list (Recursive_let_cont_handlers0)
+  include Name_abstraction.Make_list (Bindable_continuation)
+    (Recursive_let_cont_handlers0)
 
   let invariant _env _t = ()
 
@@ -862,9 +837,6 @@ end = struct
       let body = Recursive_let_cont_handlers0.body handlers0 in
       let handlers = Recursive_let_cont_handlers0.handlers handlers0 in
       f ~body handlers)
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Continuation_params_and_handler : sig
   type t
 
@@ -918,7 +890,7 @@ end = struct
       else { param_relations = param_relations'; handler = handler'; }
   end
 
-  include Name_abstraction.Make_list (T0)
+  include Name_abstraction.Make_list (Bindable_name) (T0)
 
   let invariant _env _t = ()
 
@@ -943,9 +915,6 @@ end = struct
     pattern_match t ~f:(fun params { param_relations; handler; } ->
       f params ~param_relations ~handler:(Expr.expr handler))
 *)
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -1126,9 +1095,6 @@ end = struct
         stub;
         is_exn_handler;
       }
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -1230,9 +1196,6 @@ end = struct
         closure_elements = closure_elements';
         direct_call_surrogates;
       }
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Function_declarations : sig
   type t
   include Expr_std.S with type t := t
@@ -1296,9 +1259,6 @@ end = struct
     in
     if funs == funs' then t
     else { set_of_closures_origin; funs = funs'; }
-
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Function_params_and_body : sig
   type t
 
@@ -1382,8 +1342,6 @@ end = struct
       f params ~param_relations:t0.param_relations
         ~body:(Expr.expr t0.body) ~my_closure)
 *)
-  let continuation_counts _t =
-    Misc.fatal_error "Not yet implemented"
 end and Function_declaration : sig
   include Expr_std.S
   val create
@@ -1575,8 +1533,6 @@ end = struct
         specialise;
         is_a_functor;
       }
-
-  let continuation_counts _t = Misc.fatal_error "Not yet implemented"
 end and Flambda_type : Flambda_type0_intf.S
     with type term_language_function_declaration := Function_declaration.t
   = Flambda_type0.Make (Function_declaration)

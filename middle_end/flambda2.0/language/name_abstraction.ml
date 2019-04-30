@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2018 OCamlPro SAS                                    *)
-(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -50,13 +50,13 @@ module type Common = sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end
 
-module Make (Term : Term) = struct
-  type t = Bindable_name.t * Term.t
+module Make (Bindable : Bindable.S) (Term : Term) = struct
+  type t = Bindable.t * Term.t
 
   let create name term = name, term
 
   let pattern_match (name, term) ~f =
-    let fresh_name = Bindable_name.rename name in
+    let fresh_name = Bindable.rename name in
     let perm =
       Name_permutation.add_bindable_name_exn Name_permutation.empty
         name fresh_name
@@ -71,7 +71,7 @@ module Make (Term : Term) = struct
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
         (Misc.Color.reset ())
-        Bindable_name.print name
+        Bindable.print name
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
         (Misc.Color.reset ())
@@ -84,7 +84,7 @@ module Make (Term : Term) = struct
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
         (Misc.Color.reset ())
-        Bindable_name.print name
+        Bindable.print name
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
         (Misc.Color.reset ())
@@ -99,7 +99,7 @@ module Make (Term : Term) = struct
     pattern_match_mapi t ~f:(fun _fresh_name fresh_term -> f fresh_term)
 
   let pattern_match_pair (name0, term0) (name1, term1) ~f =
-    let fresh_name = Bindable_name.rename name0 in
+    let fresh_name = Bindable.rename name0 in
     let perm0 =
       Name_permutation.add_bindable_name_exn Name_permutation.empty
         name0 fresh_name
@@ -123,23 +123,23 @@ module Make (Term : Term) = struct
     Name_occurrences.diff free_in_term in_binding_position
 end
 
-module Make_list (Term : Term) = struct
-  type t = Bindable_name.t list * Term.t
+module Make_list (Bindable : Bindable.S) (Term : Term) = struct
+  type t = Bindable.t list * Term.t
 
   let create names term =
-    let names_set = Bindable_name.Set.of_list names in
-    if List.length names <> Bindable_name.Set.cardinal names_set then begin
+    let names_set = Bindable.Set.of_list names in
+    if List.length names <> Bindable.Set.cardinal names_set then begin
       Misc.fatal_errorf "Cannot create generalised abstraction value with \
           non-disjoint names in binding position: %a"
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          Bindable_name.print) names
+          Bindable.print) names
     end;
     names, term
 
   let pattern_match (names, term) ~f =
     let fresh_names_rev, perm =
       List.fold_left (fun (fresh_names_rev, perm) stale_name ->
-          let fresh_name = Bindable_name.rename stale_name in
+          let fresh_name = Bindable.rename stale_name in
           let perm =
             Name_permutation.add_bindable_name_exn perm fresh_name stale_name
           in
@@ -161,7 +161,7 @@ module Make_list (Term : Term) = struct
         (before_binding_position style)
         (Misc.Color.reset ())
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          Bindable_name.print) bns
+          Bindable.print) bns
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
         (Misc.Color.reset ())
@@ -198,7 +198,7 @@ module Make_list (Term : Term) = struct
     let fresh_names_rev, perm0, perm1 =
       List.fold_left2
         (fun (fresh_names_rev, perm0, perm1) stale_name0 stale_name1 ->
-          let fresh_name = Bindable_name.rename stale_name0 in
+          let fresh_name = Bindable.rename stale_name0 in
           let perm0 =
             Name_permutation.add_bindable_name_exn perm0 fresh_name stale_name0
           in
