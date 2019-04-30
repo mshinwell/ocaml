@@ -686,9 +686,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
       prepare env obj (fun obj ->
         prepare_list env args (fun args ->
           k (L.Lsend (meth_kind, meth, obj, args, loc)))))
-  | Levent (body, event) ->
-    prepare env body (fun body ->
-      k (L.Levent (body, event)))
+  | Levent (body, _event) -> prepare env body k
   | Lifused _ ->
     (* [Lifused] is used to mark that this expression should be alive only if
        an identifier is.  Every use should have been removed by

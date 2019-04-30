@@ -17,7 +17,7 @@
 val convert_and_bind
    : Lambda.primitive
   -> args:Simple.t list
-  -> exception_continuation:Continuation.t
+  -> Exn_continuation.t
   -> Debuginfo.t
   -> (Flambda.Named.t -> Flambda.Expr.t)
   -> Flambda.Expr.t

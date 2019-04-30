@@ -36,7 +36,6 @@ type t =
   | Apply of apply
   | Apply_cont of Continuation.t * trap_action option * Ident.t list
   | Switch of Ident.t * switch
-  | Event of t * Lambda.lambda_event
 
 and named =
   | Var of Ident.t
@@ -257,19 +256,17 @@ and print ppf (t : t) =
       print_trap_action trap_action
       Continuation.print i
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
-  | Event (expr, ev) ->
-    let kind =
-      match ev.lev_kind with
-      | Lev_before -> "before"
-      | Lev_after _ -> "after"
-      | Lev_function -> "funct-body"
-      | Lev_pseudo -> "pseudo"
-      | Lev_module_definition _ -> "module_definition"
-    in
-    fprintf ppf "@[<2>(%s %s(%i)%s:%i-%i@ %a)@]" kind
-      ev.lev_loc.Location.loc_start.Lexing.pos_fname
-      ev.lev_loc.Location.loc_start.Lexing.pos_lnum
-      (if ev.lev_loc.Location.loc_ghost then "<ghost>" else "")
-      ev.lev_loc.Location.loc_start.Lexing.pos_cnum
-      ev.lev_loc.Location.loc_end.Lexing.pos_cnum
-      print expr
+
+let invariant t =
+  match t with
+  | Let (id, kind, defining_expr, body) ->
+
+  | Let_rec (defs, body) ->
+
+  | Let_cont let_cont ->
+    if let_cont.is_exn_handler then begin
+      assert (not let_cont.administrative);
+      assert (List.length let_cont.params = 1);
+      assert (let_cont.recursive = Asttypes.Nonrecursive);
+    end
+  | ...

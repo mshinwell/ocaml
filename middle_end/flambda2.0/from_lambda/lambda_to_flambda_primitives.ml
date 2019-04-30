@@ -188,7 +188,7 @@ let rec result_kind_of_expr_primitive (prim : expr_primitive) =
 let rec bind_rec
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
-          ~exception_continuation
+          exn_continuation
           (cont : Named.t -> Expr.t)
   : Expr.t =
   match prim with
@@ -196,26 +196,26 @@ let rec bind_rec
     let cont (arg : Simple.t) =
       cont (Named.create_prim (Unary (prim, arg)) dbg)
     in
-    bind_rec_primitive arg dbg ~exception_continuation cont
+    bind_rec_primitive arg dbg exn_continuation cont
   | Binary (prim, arg1, arg2) ->
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Named.create_prim (Binary (prim, arg1, arg2)) dbg)
       in
-      bind_rec_primitive arg1 dbg ~exception_continuation cont
+      bind_rec_primitive arg1 dbg exn_continuation cont
     in
-    bind_rec_primitive arg2 dbg ~exception_continuation cont
+    bind_rec_primitive arg2 dbg exn_continuation cont
   | Ternary (prim, arg1, arg2, arg3) ->
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg)
         in
-        bind_rec_primitive arg1 dbg ~exception_continuation cont
+        bind_rec_primitive arg1 dbg exn_continuation cont
       in
-      bind_rec_primitive arg2 dbg ~exception_continuation cont
+      bind_rec_primitive arg2 dbg exn_continuation cont
     in
-    bind_rec_primitive arg3 dbg ~exception_continuation cont
+    bind_rec_primitive arg3 dbg exn_continuation cont
   | Variadic (prim, args) ->
     let cont args =
       cont (Named.create_prim (Variadic (prim, args)) dbg)
@@ -228,7 +228,7 @@ let rec bind_rec
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive arg dbg ~exception_continuation cont
+        bind_rec_primitive arg dbg exn_continuation cont
     in
     build_cont (List.rev args) []
   | Checked _ ->
@@ -237,7 +237,7 @@ let rec bind_rec
 and bind_rec_primitive
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
-      ~exception_continuation
+      exn_continuation
       (cont : Simple.t -> Expr.t) : Expr.t =
   match prim with
   | Simple s ->
@@ -248,7 +248,7 @@ and bind_rec_primitive
     let cont named =
       Flambda.Expr.create_let var result_kind named (cont (Simple.var var))
     in
-    bind_rec p dbg ~exception_continuation cont
+    bind_rec p dbg exn_continuation cont
 
 let box_float (arg : expr_primitive) : expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
@@ -585,9 +585,10 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pccall _
     ), _ ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
-                       Primitive %a shouldn't be here"
+        Primitive %a (%a) shouldn't be here, either a bug in [Prepare_lambda] \
+        or [Closure_conversion] or the wrong number of arguments"
       Printlambda.primitive prim
-
+      Simple.List.print args
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
     | Pintoffloat | Pfloatofint
     | Pnegfloat | Pabsfloat | Pstringlength
@@ -605,8 +606,9 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
-                       Wrong arity for unary primitive %a: %i"
-      Printlambda.primitive prim (List.length args)
+        Wrong arity for unary primitive %a (%a)"
+      Printlambda.primitive prim
+      Simple.List.print args
   | ( Paddint | Psubint | Pmulint
     | Pandint | Porint | Pxorint | Plslint | Plsrint | Pasrint
     | Pdivint _ | Pmodint _ | Psetfield _ | Pintcomp _
@@ -631,8 +633,9 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     ),
     ([] | [_] | _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
-                       Wrong arity for binary primitive %a: %i"
-      Printlambda.primitive prim (List.length args)
+        Wrong arity for binary primitive %a (%a)"
+      Printlambda.primitive prim
+      Simple.List.print args
   (* | (  ), _ -> *)
   (*   Misc.fatal_errorf "Closure_conversion.convert_primitive: \ *)
   (*                      Wrong arity for %a: %i" *)
@@ -642,9 +645,9 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     ),
     ([] | [_] | [_;_] | _ :: _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
-                       Wrong arity for ternary primitive %a: %i"
-      Printlambda.primitive prim (List.length args)
-
+        Wrong arity for ternary primitive %a (%a)"
+      Printlambda.primitive prim
+      Simple.List.print args
   | ( Pidentity | Pignore | Prevapply | Pdirapply | Psequand
     | Psequor
     ), _ ->
@@ -654,7 +657,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 
   | Pgetglobal _, _ ->
     Misc.fatal_errorf "[%a] should have been handled by \
-      [Closure_conversion.close_named]"
+      [Closure_conversion.close_primitive]"
       Printlambda.primitive prim
 
   | Pctconst _, _
@@ -703,8 +706,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 let convert_and_bind
       (prim : Lambda.primitive)
       ~(args : Simple.t list)
-      ~(exception_continuation : Continuation.t)
+      exn_continuation
       (dbg : Debuginfo.t)
       (cont : Named.t -> Expr.t) : Expr.t =
   let expr = convert_lprim prim args dbg in
-  bind_rec ~exception_continuation expr dbg cont
+  bind_rec exn_continuation expr dbg cont

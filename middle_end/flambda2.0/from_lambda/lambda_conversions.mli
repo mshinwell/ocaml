@@ -14,25 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Exception continuations for function calls, etc.
-    We allow exception handlers that have not only the exception bucket
-    argument but also a sequence of "extra arguments". *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+(** Conversions of basic Lambda data types to their Flambda equivalents. *)
 
-(** Printing, invariant checks, name manipulation, etc. *)
-include Expr_std.S with type t := t
+val flambda_type_of_lambda_value_kind : Lambda.value_kind -> Flambda_type.t
 
-(** Create an exception continuation. *)
-val create
-   : exn_handler:Continuation.t
-  -> extra_args:(Simple.t * Flambda_kind.t) list
-  -> t
+val inline_attribute
+   : Lambda.inline_attribute
+  -> Flambda.inline_attribute
 
-(** The exception handler itself. *)
-val exn_handler : t -> Continuation.t
+val specialise_attribute
+   : Lambda.specialise_attribute
+  -> Flambda.specialise_attribute
 
-(** Any extra arguments. *)
-val extra_args : t -> Simple.t list
+val kind_of_primitive_native_repr : Primitive.native_repr -> Flambda_kind.t
+
+val method_kind : Lambda.method_kind -> Flambda.Call_kind.method_kind

@@ -54,7 +54,6 @@ type t =
     (** Unlike in Flambda, [Apply_cont] is not used for the raising of
         exceptions; use [Prim Praise] instead. *)
   | Switch of Ident.t * switch
-  | Event of t * Lambda.lambda_event
 
 and named =
   | Var of Ident.t
@@ -134,3 +133,4 @@ type program = {
 }
 
 val print : Format.formatter -> t -> unit
+val print_named : Format.formatter -> named -> unit
