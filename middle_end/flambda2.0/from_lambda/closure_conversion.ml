@@ -198,9 +198,8 @@ let close_const t (const : Lambda.structured_constant) =
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
-let close_c_call env ~let_bound_id ~let_bound_var
-      (prim : Primitive.description) ~(args : Simple.t list)
-      exn_continuation dbg
+let close_c_call ~let_bound_var (prim : Primitive.description)
+      ~(args : Simple.t list) exn_continuation dbg
       (k : Named.t option -> Expr.t) : Expr.t =
   (* CR pchambart: there should be a special case if body is a
      apply_cont *)
@@ -312,9 +311,8 @@ let close_exn_continuation env (exn_continuation : Ilambda.exn_continuation) =
   in
   Exn_continuation.create ~exn_handler:exn_continuation.exn_handler ~extra_args
 
-let close_primitive t env ~let_bound_id ~let_bound_var named
-      (prim : Lambda.primitive) ~args loc
-      (exn_continuation : Ilambda.exn_continuation option)
+let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
+      loc (exn_continuation : Ilambda.exn_continuation option)
       (k : Named.t option -> Expr.t) : Expr.t =
   let exn_continuation =
     match exn_continuation with
@@ -333,8 +331,7 @@ let close_primitive t env ~let_bound_id ~let_bound_var named
           Ilambda.print_named named
       | Some exn_continuation -> exn_continuation
     in
-    close_c_call env ~let_bound_id ~let_bound_var prim ~args exn_continuation
-      dbg k
+    close_c_call ~let_bound_var prim ~args exn_continuation dbg k
   | Pgetglobal id, [] ->
     let is_predef_exn = Ident.is_predef id in
     if not (is_predef_exn || not (Ident.same id t.current_unit_id))
@@ -351,8 +348,11 @@ let close_primitive t env ~let_bound_id ~let_bound_var named
           Ilambda.print_named named
       | Some exn_continuation -> exn_continuation
     in
+    let exn_handler = Exn_continuation.exn_handler exn_continuation in
+    let raise_kind = Some (LC.raise_kind raise_kind) in
+    let trap_action = Trap_action.Pop { exn_handler; raise_kind; } in
     let apply_cont =
-      Flambda.Apply_cont.create ?trap_action:None
+      Flambda.Apply_cont.create ~trap_action
         (Exn_continuation.exn_handler exn_continuation) ~args
     in
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
@@ -373,7 +373,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         let kind = LC.value_kind kind in
         Expr.create_let var kind defining_expr body
     in
-    close_named t env ~let_bound_id:id ~let_bound_var:var defining_expr cont
+    close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
     Misc.fatal_error "[Let_mutable] should have been removed by \
       [Eliminate_mutable_vars]"
@@ -450,7 +450,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
           match trap_action with
           | Push { exn_handler; } -> Push { exn_handler; }
           | Pop { exn_handler; } ->
-            Pop { exn_handler; take_backtrace = false; })
+            Pop { exn_handler; raise_kind = None; })
         trap_action
     in
     let args = Simple.vars args in
@@ -473,7 +473,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let scrutinee = Env.find_name env scrutinee in
     Expr.create_switch ~scrutinee ~arms
 
-and close_named t env ~let_bound_id ~let_bound_var (named : Ilambda.named)
+and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
   match named with
   | Var id ->
@@ -486,7 +486,7 @@ and close_named t env ~let_bound_id ~let_bound_var (named : Ilambda.named)
     let named, _name = close_const t cst in
     k (Some named)
   | Prim { prim; args; loc; exn_continuation; } ->
-    close_primitive t env ~let_bound_id ~let_bound_var named prim ~args loc
+    close_primitive t env ~let_bound_var named prim ~args loc
       exn_continuation k
   | Assign _ ->
     Misc.fatal_error "[Assign] should have been removed by \
@@ -511,7 +511,7 @@ and close_let_rec t env ~defs ~body =
         in
         let function_declaration =
           Function_decl.create ~let_rec_ident:(Some let_rec_ident)
-            ~closure_bound_var ~kind ~params ~continuation_param
+            ~closure_bound_var ~kind ~params ~return ~continuation_param
             ~exn_continuation ~body ~attr ~loc ~free_idents_of_body ~stub
         in
         function_declaration)
@@ -606,6 +606,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   let loc = Function_decl.loc decl in
   let dbg = Debuginfo.from_location loc in
   let params = Function_decl.params decl in
+  let return = Function_decl.return decl in
   let my_closure = Variable.create "my_closure" in
   let closure_bound_var = Function_decl.closure_bound_var decl in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
@@ -725,12 +726,11 @@ and close_one_function t ~external_env ~by_closure_id decl
     let exn_continuation =
       close_exn_continuation external_env (Function_decl.exn_continuation decl)
     in
-    Flambda.Function_declaration.create
-      ~closure_origin:(Closure_origin.create closure_bound_var)
+    Flambda.Function_declaration.create ~closure_origin
       ~continuation_param:(Function_decl.continuation_param decl)
       ~exn_continuation
       ~params_and_body
-      ~result_arity:[K.value ()]
+      ~result_arity:[LC.value_kind return]
       ~stub
       ~dbg
       ~inline
@@ -748,7 +748,7 @@ and close_one_function t ~external_env ~by_closure_id decl
 
 let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       (ilam : Ilambda.program) : Flambda_static.Program.t =
-  let module Backend = (val backend : Backend_intf.S) in
+  let module Backend = (val backend : Flambda2_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
     { current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
@@ -777,7 +777,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     let body : Expr.t =
       let fields = List.map (fun (_, var) -> Simple.var var) field_vars in
-      let apply_cont = Flambda.Apply_cont.create return_cont fields in
+      let apply_cont = Flambda.Apply_cont.create return_cont ~args:fields in
       Flambda.Expr.create_apply_cont apply_cont
     in
     List.fold_left (fun body (pos, var) ->
@@ -818,10 +818,16 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       load_fields_cont_handler
       ~body
   in
-  let computation : Program_body.computation =
+  begin match ilam.exn_continuation.extra_args with
+  | [] -> ()
+  | _::_ ->
+    Misc.fatal_error "Ilambda toplevel exception continuation cannot have \
+      extra arguments"
+  end;
+  let computation : Program_body.Computation.t =
     { expr;
       return_cont;
-      exception_cont = ilam.exception_continuation;
+      exception_cont = ilam.exn_continuation.exn_handler;
       computed_values = field_vars;
     }
   in
@@ -834,10 +840,10 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Block (module_block_tag, Immutable, field_vars)
   in
   let program_body : Program_body.t =
-    let bound_symbols : Program_body.bound_symbols =
+    let bound_symbols : Program_body.Bound_symbols.t =
       Singleton (module_symbol, K.value ())
     in
-    let definition : Program_body.definition =
+    let definition : Program_body.Definition.t =
       { computation = Some computation;
         static_structure = [bound_symbols, static_part];
       }
@@ -847,11 +853,11 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let program_body =
     (* CR mshinwell: Share with [Simplify_program] *)
     List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
-        let bound_symbols : Program_body.bound_symbols =
+        let bound_symbols : Program_body.Bound_symbols.t =
           Singleton (symbol, K.value ())
         in
         let static_structure = [bound_symbols, static_part] in
-        let definition : Program_body.definition =
+        let definition : Program_body.Definition.t =
           { computation = None;
             static_structure;
           }

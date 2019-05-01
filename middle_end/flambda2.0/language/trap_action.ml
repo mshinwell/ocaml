@@ -16,12 +16,23 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type raise_kind =
+  | Regular
+  | Reraise
+  | No_trace
+
 type t =
   | Push of { exn_handler : Continuation.t; }
   | Pop of {
       exn_handler : Continuation.t;
-      take_backtrace : bool;
+      raise_kind : raise_kind option;
     }
+
+let raise_kind_option_to_string = function
+  | None -> ""
+  | Some Regular -> " (raise-regular)"
+  | Some Reraise -> " (reraise)"
+  | Some No_trace -> " (notrace)"
 
 let print ppf t =
   let fprintf = Format.fprintf in
@@ -33,11 +44,11 @@ let print ppf t =
       Continuation.print exn_handler
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())
-  | Pop { exn_handler; take_backtrace; } ->
+  | Pop { exn_handler; raise_kind; } ->
     fprintf ppf "%spop%s%s %a %sthen%s "
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())
-      (if take_backtrace then " with backtrace" else "")
+      (raise_kind_option_to_string raise_kind)
       Continuation.print exn_handler
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())
@@ -48,7 +59,7 @@ let invariant _env _t = ()
 
 let free_names = function
   | Push { exn_handler; }
-  | Pop { exn_handler; take_backtrace = _; } ->
+  | Pop { exn_handler; raise_kind = _; } ->
     Name_occurrences.singleton_continuation exn_handler
 
 let apply_name_permutation t perm =
@@ -57,10 +68,10 @@ let apply_name_permutation t perm =
     let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
     if exn_handler == exn_handler' then t
     else Push { exn_handler = exn_handler'; }
-  | Pop { exn_handler; take_backtrace; } ->
+  | Pop { exn_handler; raise_kind; } ->
     let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
     if exn_handler == exn_handler' then t
-    else Pop { exn_handler = exn_handler'; take_backtrace; }
+    else Pop { exn_handler = exn_handler'; raise_kind; }
 
 module Option = struct
   type nonrec t = t option
