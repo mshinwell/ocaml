@@ -29,11 +29,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type raise_kind =
+  | Regular
+  | Reraise
+  | No_trace
+
 type t =
   | Push of { exn_handler : Continuation.t; }
   | Pop of {
       exn_handler : Continuation.t;
-      take_backtrace : bool;
+      raise_kind : raise_kind option;
     }
 
 include Expr_std.S with type t := t
