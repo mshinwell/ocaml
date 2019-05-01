@@ -57,10 +57,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let pattern_match (name, term) ~f =
     let fresh_name = Bindable.rename name in
-    let perm =
-      Name_permutation.add_bindable_name_exn Name_permutation.empty
-        name fresh_name
-    in
+    let perm = Bindable.name_permutation name fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
 
@@ -100,25 +97,19 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let pattern_match_pair (name0, term0) (name1, term1) ~f =
     let fresh_name = Bindable.rename name0 in
-    let perm0 =
-      Name_permutation.add_bindable_name_exn Name_permutation.empty
-        name0 fresh_name
-    in
-    let perm1 =
-      Name_permutation.add_bindable_name_exn Name_permutation.empty
-        name1 fresh_name
-    in
+    let perm0 = Bindable.name_permutation name0 fresh_name in
+    let perm1 = Bindable.name_permutation name1 fresh_name in
     let fresh_term0 = Term.apply_name_permutation term0 perm0 in
     let fresh_term1 = Term.apply_name_permutation term1 perm1 in
     f fresh_name fresh_term0 fresh_term1
 
   let apply_name_permutation (name, term) perm =
-    let name = Name_permutation.apply_bindable_name perm name in
+    let name = Bindable.apply_name_permutation name perm in
     let term = Term.apply_name_permutation term perm in
     name, term
 
   let free_names (name, term) =
-    let in_binding_position = Name_occurrences.singleton_in_terms name in
+    let in_binding_position = Bindable.singleton_occurrence_in_terms name in
     let free_in_term = Term.free_names term in
     Name_occurrences.diff free_in_term in_binding_position
 end
@@ -141,7 +132,7 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
       List.fold_left (fun (fresh_names_rev, perm) stale_name ->
           let fresh_name = Bindable.rename stale_name in
           let perm =
-            Name_permutation.add_bindable_name_exn perm fresh_name stale_name
+            Bindable.add_to_name_permutation fresh_name stale_name perm
           in
           fresh_name :: fresh_names_rev, perm)
         ([], Name_permutation.empty)
@@ -200,10 +191,10 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
         (fun (fresh_names_rev, perm0, perm1) stale_name0 stale_name1 ->
           let fresh_name = Bindable.rename stale_name0 in
           let perm0 =
-            Name_permutation.add_bindable_name_exn perm0 fresh_name stale_name0
+            Bindable.add_to_name_permutation fresh_name stale_name0 perm0
           in
           let perm1 =
-            Name_permutation.add_bindable_name_exn perm1 fresh_name stale_name1
+            Bindable.add_to_name_permutation fresh_name stale_name1 perm1
           in
           fresh_name :: fresh_names_rev, perm0, perm1)
         ([], Name_permutation.empty, Name_permutation.empty)
@@ -215,14 +206,16 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
     f fresh_names fresh_term0 fresh_term1
 
   let apply_name_permutation (names, term) perm =
-    let names = Name_permutation.apply_bindable_name_list perm names in
+    let names =
+      List.map (fun name -> Bindable.apply_name_permutation name perm) names
+    in
     let term = Term.apply_name_permutation term perm in
     names, term
 
   let free_names (names, term) =
     let in_binding_position =
       List.fold_left (fun in_binding_position name ->
-          Name_occurrences.add in_binding_position name In_terms)
+          Bindable.add_occurrence_in_terms name in_binding_position)
         (Name_occurrences.empty)
         names
     in

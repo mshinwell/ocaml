@@ -26,6 +26,12 @@ let apply_name_permutation t perm = Name_permutation.apply_variable perm t
 
 let rename t = rename t
 
+let add_to_name_permutation t1 t2 perm =
+  Name_permutation.add_variable perm t1 t2
+
+let name_permutation t1 t2 =
+  add_to_name_permutation t1 t2 Name_permutation.empty
+
 let singleton_occurrence_in_terms t =
   Name_occurrences.singleton_variable_in_terms t
 

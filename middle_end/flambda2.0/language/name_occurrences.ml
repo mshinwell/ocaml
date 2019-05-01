@@ -59,6 +59,15 @@ end) = struct
       t
       N.Map.empty
 
+  let diff t1 t2 =
+    N.Map.merge (fun _name count1 count2 ->
+        let count1 = Option.value count1 ~default:0 in
+        let count2 = Option.value count2 ~default:0 in
+        let count = count1 - count2 in
+        if count < 1 then None
+        else Some count)
+      t1 t2
+
   let union t1 t2 =
     N.Map.merge (fun _name count1 count2 ->
         let count1 = Option.value count1 ~default:0 in
@@ -403,7 +412,7 @@ let apply_name_permutation { variables_in_terms; variables_in_types;
     symbols;
   }
 
-let union
+let binary_op ~for_variables ~for_continuations ~for_symbols
       { variables_in_terms = variables_in_terms1;
         variables_in_types = variables_in_types1;
         variables_debug_only = variables_debug_only1;
@@ -417,19 +426,19 @@ let union
         symbols = symbols2;
       } =
   let variables_in_terms =
-    For_variables.union variables_in_terms1 variables_in_terms2
+    for_variables variables_in_terms1 variables_in_terms2
   in
   let variables_in_types =
-    For_variables.union variables_in_types1 variables_in_types2
+    for_variables variables_in_types1 variables_in_types2
   in
   let variables_debug_only =
-    For_variables.union variables_debug_only1 variables_debug_only2
+    for_variables variables_debug_only1 variables_debug_only2
   in
   let continuations =
-    For_continuations.union continuations1 continuations2
+    for_continuations continuations1 continuations2
   in
   let symbols =
-    For_symbols.union symbols1 symbols2
+    for_symbols symbols1 symbols2
   in
   { variables_in_terms;
     variables_in_types;
@@ -437,6 +446,18 @@ let union
     continuations;
     symbols;
   }
+
+let diff t1 t2 =
+  binary_op ~for_variables:For_variables.diff
+    ~for_continuations:For_continuations.diff
+    ~for_symbols:For_symbols.diff
+    t1 t2
+
+let union t1 t2 =
+  binary_op ~for_variables:For_variables.union
+    ~for_continuations:For_continuations.union
+    ~for_symbols:For_symbols.union
+    t1 t2
 
 let rec union_list ts =
   match  ts with

@@ -70,12 +70,6 @@ val everything : t -> Bindable_name.Set.t
 (* CR mshinwell: rename to [everything_must_be_a_name] *)
 val everything_must_only_be_names : t -> Name.Set.t
 
-val diff : t -> t -> t
-
-val union : t -> t -> t
-
-val union_list : t list -> t
-
 val inter : t -> t -> t
 
 val subset : t -> t -> bool
@@ -111,6 +105,8 @@ val add_variable_in_terms : t -> Variable.t -> t
 val singleton_name_in_terms : Name.t -> t
 
 val singleton_symbol : Symbol.t -> t
+
+val diff : t -> t -> t
 
 val union : t -> t -> t
 
