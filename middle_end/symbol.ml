@@ -27,6 +27,18 @@ type t =
       { compilation_unit : Compilation_unit.t;
         variable : Variable.t; }
 
+let create compilation_unit linkage_name =
+  let unit_linkage_name =
+    Linkage_name.to_string
+      (Compilation_unit.get_linkage_name compilation_unit)
+  in
+  let linkage_name =
+    Linkage_name.create
+      (unit_linkage_name ^ "__" ^ (Linkage_name.to_string linkage_name))
+  in
+  let hash = Linkage_name.hash linkage_name in
+  { compilation_unit; linkage_name; hash; }
+
 let label t =
   match t with
   | Linkage { label; _ } -> label
@@ -103,3 +115,13 @@ let print_opt ppf = function
 
 let compare_lists l1 l2 =
   Misc.Stdlib.List.compare compare l1 l2
+
+let in_compilation_unit t cu =
+  Compilation_unit.equal t.compilation_unit cu
+
+let is_predefined_exception t =
+  Compilation_unit.is_predefined_exception t.compilation_unit
+
+let rename t =
+  let linkage_name = Linkage_name.rename t.linkage_name in
+  create t.compilation_unit linkage_name
