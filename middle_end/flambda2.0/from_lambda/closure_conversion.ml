@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open Int_replace_polymorphic_compare
+open! Int_replace_polymorphic_compare
 
 module Env = Closure_conversion_aux.Env
 module Expr = Flambda.Expr
@@ -198,20 +198,20 @@ let close_const t (const : Lambda.structured_constant) =
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
-let close_c_call env ~let_bound_id (prim : Primitive.description) ~args
-      exn_continuation dbg (k : Named.t -> Expr.t) : Expr.t =
+let close_c_call env ~let_bound_id ~let_bound_var
+      (prim : Primitive.description) ~(args : Simple.t list)
+      exn_continuation dbg
+      (k : Named.t option -> Expr.t) : Expr.t =
   (* CR pchambart: there should be a special case if body is a
      apply_cont *)
   let return_continuation = Continuation.create () in
-  let exn_continuation =
-    Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
-  in
   let param_arity =
     List.map LC.kind_of_primitive_native_repr prim.prim_native_repr_args
   in
-  let return_arity =
-    [LC.kind_of_primitive_native_repr prim.prim_native_repr_res]
+  let return_kind =
+    LC.kind_of_primitive_native_repr prim.prim_native_repr_res
   in
+  let return_arity = [return_kind] in
   let call_kind =
     Call_kind.c_call ~alloc:prim.prim_alloc ~param_arity ~return_arity
   in
@@ -232,7 +232,7 @@ let close_c_call env ~let_bound_id (prim : Primitive.description) ~args
     in
     Flambda.Expr.create_apply apply
   in
-  let call =
+  let call : Flambda.Expr.t =
     List.fold_right2 (fun arg (arg_repr : Primitive.native_repr)
             (call : Simple.t list -> Expr.t) ->
         let unbox_arg : P.unary_primitive option =
@@ -254,10 +254,14 @@ let close_c_call env ~let_bound_id (prim : Primitive.description) ~args
                (LC.kind_of_primitive_native_repr arg_repr)
                (Named.create_prim (Unary (named, arg)) dbg)
                (call ((Simple.var unboxed_arg) :: args))))
-      (Env.find_simples env args)
+      args
       prim.prim_native_repr_args
       call []
   in
+  (* We always replace the original Ilambda [Let] with an Flambda
+     expression, so we call [k] with [None], to get just the closure-converted
+     body of that [Let]. *)
+  let body = k None in
   let code_after_call, handler_param =
     let box_return_value =
       match prim.prim_native_repr_res with
@@ -270,18 +274,17 @@ let close_c_call env ~let_bound_id (prim : Primitive.description) ~args
         Some (P.Num_conv { src = Naked_nativeint; dst = Tagged_immediate; })
     in
     match box_return_value with
-    | None ->
-      let body_env, handler_param = Env.add_var_like env let_bound_id in
-      let body = close t body_env body in
-      body, handler_param
+    | None -> body, let_bound_var
     | Some box_return_value ->
-      let handler_param = Variable.create (prim.prim_name ^ "_return") in
-      let body_env, boxed_var = Env.add_var_like env let_bound_id in
-      let body = close t body_env body in
-      Expr.create_let boxed_var
-        (K.value ())
-        (Prim (Unary (box_return_value, Simple.var handler_param), dbg)) body,
-        handler_param
+      let boxed_value = Variable.rename let_bound_var in
+      let body =
+        Flambda.Expr.create_let boxed_value (K.value ())
+          (Named.create_prim
+            (Unary (box_return_value, Simple.var let_bound_var))
+            dbg)
+          body
+      in
+      body, boxed_value
   in
   let after_call =
     let params =
@@ -297,34 +300,46 @@ let close_c_call env ~let_bound_id (prim : Primitive.description) ~args
       ~stub:false
       ~is_exn_handler:false
   in
-  let let_cont =
-    Flambda.Let_cont.create_non_recursive return_continuation after_call
-      ~body:call
-  in
-  Expr.create_let_cont let_cont
+  Flambda.Let_cont.create_non_recursive return_continuation after_call
+    ~body:call
 
-let close_primitive env ~let_bound_id prim ~args loc exn_continuation
-      (k : Named.t -> Expr.t) : Expr.t =
+let close_primitive t env ~let_bound_id ~let_bound_var named
+      (prim : Lambda.primitive) ~args loc
+      (exn_continuation : Ilambda.exn_continuation option)
+      (k : Named.t option -> Expr.t) : Expr.t =
   let exn_continuation =
     match exn_continuation with
     | None -> None
-    | Some { exn_continuation = exn_handler; extra_args; } ->
-      let extra_args = List.map (fun id -> Simple.var (Env.find_var env id)) in
+    | Some { exn_handler; extra_args; } ->
+      let extra_args =
+        List.map (fun (id, kind) ->
+            let simple = Simple.var (Env.find_var env id) in
+            simple, LC.value_kind kind)
+          extra_args
+      in
       Some (Exn_continuation.create ~exn_handler ~extra_args)
   in
   let args = Env.find_simples env args in
   let dbg = Debuginfo.from_location loc in
   match prim, args with
   | Pccall prim, args ->
-    close_c_call env ~let_bound_id prim ~args exn_continuation dbg k
+    let exn_continuation =
+      match exn_continuation with
+      | None ->
+        Misc.fatal_errorf "Pccall is missing exception continuation: %a"
+          Ilambda.print_named named
+      | Some exn_continuation -> exn_continuation
+    in
+    close_c_call env ~let_bound_id ~let_bound_var prim ~args exn_continuation
+      dbg k
   | Pgetglobal id, [] ->
-    let is_predef_exn = Ident.is_predef_exn id in
+    let is_predef_exn = Ident.is_predef id in
     if not (is_predef_exn || not (Ident.same id t.current_unit_id))
     then begin
       Misc.fatal_errorf "Non-predef Pgetglobal %a in the same unit"
         Ident.print id
     end;
-    k (Simple (symbol_for_ident t id))
+    k (Some (Named.create_simple (symbol_for_ident t id)))
   | Praise raise_kind, [_] ->
     let exn_continuation =
       match exn_continuation with
@@ -334,23 +349,28 @@ let close_primitive env ~let_bound_id prim ~args loc exn_continuation
       | Some exn_continuation -> exn_continuation
     in
     let apply_cont =
-      Flambda.Apply_cont.create ?trap_action:None exn_continuation ~args
+      Flambda.Apply_cont.create ?trap_action:None
+        (Exn_continuation.exn_handler exn_continuation) ~args
     in
-    k (Apply_cont apply_cont)
+    (* Since raising of an exception doesn't terminate, we don't call [k]. *)
+    Flambda.Expr.create_apply_cont apply_cont
   | prim, args ->
-    Lambda_to_flambda_primitives.convert_and_bind prim ~args
-      exn_continuation dbg k
+    Lambda_to_flambda_primitives.convert_and_bind prim ~args dbg k
 
 let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
   | Let (id, kind, defining_expr, body) ->
     let body_env, var = Env.add_var_like env id in
-    let cont (defining_expr : Named.t) =
+    let cont (defining_expr : Named.t option) =
       (* CR pchambart: Not tail ! *)
       let body = close t body_env body in
-      Expr.create_let var kind defining_expr body
+      match defining_expr with
+      | None -> body
+      | Some defining_expr ->
+        let kind = LC.value_kind kind in
+        Expr.create_let var kind defining_expr body
     in
-    close_named t env ~let_bound_id:id defining_expr cont
+    close_named t env ~let_bound_id:id ~let_bound_var:var defining_expr cont
   | Let_rec (defs, body) -> close_let_rec env ~defs ~body
   | Let_cont { name; administrative; is_exn_handler; params; recursive; body;
       handler; } ->
@@ -374,19 +394,27 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     end;
     if administrative then begin
       (* Inline out administrative redexes. *)
-      assert (recursive = Asttypes.Nonrecursive);
+      begin match recursive with
+      | Nonrecursive -> ()
+      | Recursive ->
+        Misc.fatal_errorf "[Let_cont]s marked as administrative redexes must \
+            be [Nonrecursive]: %a"
+          Ilambda.print ilam
+      end;
       let body_env =
-        Env.add_administrative_redex env name ~params:params
-          ~handler:handler
+        Env.add_administrative_redex env name ~params ~handler
       in
       close t body_env body
     end else begin
-      let handler_env, params = Env.add_vars_like env params in
+      let params_with_kinds = params in
+      let handler_env, params =
+        Env.add_vars_like env (List.map (fun (param, _kind) -> param) params)
+      in
       let params =
-        List.map (fun (param, kind) ->
-            Kinded_parameter.create (Parameter.wrap param)
-              (flambda_type_of_lambda_value_kind kind))
+        List.map2 (fun param (_, kind) ->
+            Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
           params
+          params_with_kinds
       in
       let handler = close t handler_env handler in
       let params_and_handler =
@@ -401,15 +429,12 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
           ~is_exn_handler:is_exn_handler
       in
       let body = close t env body in
-      let let_cont =
-        match recursive with
-        | Nonrecursive ->
-          Flambda.create_non_recursive name handler ~body
-        | Recursive ->
-          let handlers = Continuation.Map.singleton name handler in
-          Flambda.create_recursive handlers ~body
-      in
-      Expr.create_let_cont let_cont
+      match recursive with
+      | Nonrecursive ->
+        Flambda.Let_cont.create_non_recursive name handler ~body
+      | Recursive ->
+        let handlers = Continuation.Map.singleton name handler in
+        Flambda.Let_cont.create_recursive handlers ~body
     end
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised; } ->
@@ -465,8 +490,8 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let scrutinee = Env.find_name env scrutinee in
     Expr.create_switch ~scrutinee ~arms
 
-and close_named t env ~let_bound_id (named : Ilambda.named)
-      (k : Named.t -> Expr.t) : Expr.t =
+and close_named t env ~let_bound_id ~let_bound_var (named : Ilambda.named)
+      (k : Named.t option -> Expr.t) : Expr.t =
   match named with
   | Var id ->
     let simple =
@@ -478,7 +503,8 @@ and close_named t env ~let_bound_id (named : Ilambda.named)
     let named, _name = close_const t cst in
     k named
   | Prim { prim; args; loc; exn_continuation; } ->
-    close_primitive env ~let_bound_id prim ~args loc exn_continuation k
+    close_primitive t env ~let_bound_id ~let_bound_var named prim ~args loc
+      exn_continuation k
 
 and close_let_rec env ~defs ~body =
   let env =
