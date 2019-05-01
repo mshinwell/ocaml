@@ -50,14 +50,14 @@ module Env : sig
   val add_administrative_redex
      : t
     -> Continuation.t
-    -> params:Ident.t list
+    -> params:(Ident.t * Lambda.value_kind) list
     -> handler:Ilambda.t
     -> t
 
   val find_administrative_redex
      : t
     -> Continuation.t
-    -> (Ident.t list * Ilambda.t) option
+    -> ((Ident.t * Lambda.value_kind) list * Ilambda.t) option
 
   val add_global : t -> int -> Symbol.t -> t
   val find_global : t -> int -> Symbol.t

@@ -21,7 +21,8 @@ module Env = struct
     variables : Variable.t Ident.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
     at_toplevel : bool;
-    administrative_redexes : (Ident.t list * Ilambda.t) Continuation.Map.t;
+    administrative_redexes :
+      ((Ident.t * Lambda.value_kind) list * Ilambda.t) Continuation.Map.t;
   }
 
   let empty = {

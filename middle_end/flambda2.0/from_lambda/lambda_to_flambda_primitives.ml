@@ -198,7 +198,6 @@ let rec result_kind_of_expr_primitive (prim : expr_primitive) =
 let rec bind_rec
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
-          exn_continuation
           (cont : Named.t -> Expr.t)
   : Expr.t =
   match prim with
@@ -206,26 +205,26 @@ let rec bind_rec
     let cont (arg : Simple.t) =
       cont (Named.create_prim (Unary (prim, arg)) dbg)
     in
-    bind_rec_primitive arg dbg exn_continuation cont
+    bind_rec_primitive arg dbg cont
   | Binary (prim, arg1, arg2) ->
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Named.create_prim (Binary (prim, arg1, arg2)) dbg)
       in
-      bind_rec_primitive arg1 dbg exn_continuation cont
+      bind_rec_primitive arg1 dbg cont
     in
-    bind_rec_primitive arg2 dbg exn_continuation cont
+    bind_rec_primitive arg2 dbg cont
   | Ternary (prim, arg1, arg2, arg3) ->
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg)
         in
-        bind_rec_primitive arg1 dbg exn_continuation cont
+        bind_rec_primitive arg1 dbg cont
       in
-      bind_rec_primitive arg2 dbg exn_continuation cont
+      bind_rec_primitive arg2 dbg cont
     in
-    bind_rec_primitive arg3 dbg exn_continuation cont
+    bind_rec_primitive arg3 dbg cont
   | Variadic (prim, args) ->
     let cont args =
       cont (Named.create_prim (Variadic (prim, args)) dbg)
@@ -238,7 +237,7 @@ let rec bind_rec
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive arg dbg exn_continuation cont
+        bind_rec_primitive arg dbg cont
     in
     build_cont (List.rev args) []
   | Checked _ ->
@@ -247,7 +246,6 @@ let rec bind_rec
 and bind_rec_primitive
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
-      exn_continuation
       (cont : Simple.t -> Expr.t) : Expr.t =
   match prim with
   | Simple s ->
@@ -258,7 +256,7 @@ and bind_rec_primitive
     let cont named =
       Flambda.Expr.create_let var result_kind named (cont (Simple.var var))
     in
-    bind_rec p dbg exn_continuation cont
+    bind_rec p dbg cont
 
 let box_float (arg : expr_primitive) : expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
@@ -716,8 +714,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 let convert_and_bind
       (prim : Lambda.primitive)
       ~(args : Simple.t list)
-      exn_continuation
       (dbg : Debuginfo.t)
-      (cont : Named.t -> Expr.t) : Expr.t =
+      (cont : Named.t option -> Expr.t) : Expr.t =
   let expr = convert_lprim prim args dbg in
-  bind_rec expr dbg exn_continuation cont
+  bind_rec expr dbg (fun named -> cont (Some named))

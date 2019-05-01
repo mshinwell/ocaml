@@ -18,7 +18,7 @@
 
 (** Conversions of basic Lambda data types to their Flambda equivalents. *)
 
-val flambda_type_of_lambda_value_kind : Lambda.value_kind -> Flambda_type.t
+val value_kind : Lambda.value_kind -> Flambda_kind.t
 
 val inline_attribute
    : Lambda.inline_attribute
