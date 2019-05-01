@@ -269,92 +269,134 @@ module Static_part = struct
 end
 
 module Program_body = struct
-  type computation = {
-    expr : Flambda.Expr.t;
-    return_cont : Continuation.t;
-    exception_cont : Continuation.t;
-    computed_values : (Variable.t * Flambda_kind.t) list;
-  }
+  module Computation = struct
+    type t = {
+      expr : Flambda.Expr.t;
+      return_cont : Continuation.t;
+      exception_cont : Continuation.t;
+      computed_values : (Variable.t * Flambda_kind.t) list;
+    }
 
-  let print_computation ppf comp =
-    Format.fprintf ppf "@[<2>(\
-        @[(expr@ %a)@]@ \
-        @[(return_cont@ %a)@]@ \
-        @[(exception_cont@ %a)@]@ \
-        @[(computed_values@ @[%a@])@])@]"
-      Flambda.Expr.print comp.expr
-      Continuation.print comp.return_cont
-      Continuation.print comp.exception_cont
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (var, kind) ->
-          Format.fprintf ppf "@[(%a :: %a)@]"
-            Variable.print var
-            Flambda_kind.print kind))
-      comp.computed_values
+    let print ppf { expr; return_cont; exception_cont; computed_values; } =
+      Format.fprintf ppf "@[<2>(\
+          @[(expr@ %a)@]@ \
+          @[(return_cont@ %a)@]@ \
+          @[(exception_cont@ %a)@]@ \
+          @[(computed_values@ @[%a@])@])@]"
+        Flambda.Expr.print expr
+        Continuation.print return_cont
+        Continuation.print exception_cont
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (fun ppf (var, kind) ->
+            Format.fprintf ppf "@[(%a :: %a)@]"
+              Variable.print var
+              Flambda_kind.print kind))
+        computed_values
 
-  let free_symbols_of_computation comp =
-    Name_occurrences.symbols (Flambda.Expr.free_names comp.expr)
+    let free_symbols t =
+      Name_occurrences.symbols (Flambda.Expr.free_names t.expr)
+  end
 
-  type bound_symbols =
-    | Singleton of Symbol.t * Flambda_kind.t
-      (** A binding of a single symbol of the given kind. *)
-    | Set_of_closures of {
-        set_of_closures_symbol : Symbol.t;
-        closure_symbols : Symbol.t Closure_id.Map.t;
-      }
-      (** A binding of a single symbol to a set of closures together with
-          the binding of possibly multiple symbols to the individual closures
-          within such set of closures. *)
+  module Bound_symbols = struct
+    type t =
+      | Singleton of Symbol.t * Flambda_kind.t
+      | Set_of_closures of {
+          set_of_closures_symbol : Symbol.t;
+          closure_symbols : Symbol.t Closure_id.Map.t;
+        }
 
-  type static_structure = (bound_symbols * Static_part.t) list
+    let print ppf t =
+      match t with
+      | Singleton (sym, kind) ->
+        Format.fprintf ppf "@[(singleton@ (%a :: %a))@]"
+          Symbol.print sym
+          Flambda_kind.print kind
+      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+        Format.fprintf ppf "@[(set_of_closures@ \
+            (set_of_closures_symbol %a)@ \
+            (closure_symbol %a)\
+            )@]"
+          Symbol.print set_of_closures_symbol
+          (Closure_id.Map.print Symbol.print) closure_symbols
 
-  type definition = {
-    computation : computation option;
-    static_structure : static_structure;
-  }
+    (* CR mshinwell: This should have an [invariant] function.  One thing to
+       check is that the [closure_symbols] are all distinct (and presumably
+       different from the set of closure symbol too, even though one will
+       eventually end up the same). *)
 
-  let print_definition_with_cache ~cache ppf defn =
-    Format.fprintf ppf "@[<v 2>(\
-        @[(computation@ %a)@]@ \
-        @[(static_structure@ @[(%a)@])@])@]"
-      (Misc.Stdlib.Option.print print_computation)
-      defn.computation
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+    let being_defined t =
+      match t with
+      | Singleton (sym, _kind) -> Symbol.Set.singleton sym
+      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+        Symbol.Set.add set_of_closures_symbol
+          (Symbol.Set.of_list (Closure_id.Map.data closure_symbols))
+
+    let gc_roots t =
+      match t with
+      | Singleton (sym, _kind) -> Symbol.Set.singleton sym
+      | Set_of_closures { set_of_closures_symbol; closure_symbols = _; } ->
+        (* Since all of the closures will be within the set of closures
+           value, using [Infix_tag], the individual closure symbols do not
+           need to be registered as roots. *)
+        Symbol.Set.singleton set_of_closures_symbol
+  end
+
+  module Static_structure = struct
+    type t = (Bound_symbols.t * Static_part.t) list
+
+    let print_with_cache ~cache ppf t =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (bound_symbols, static_part) ->
-          Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part@ %a))@]"
-            print_bound_symbols bound_symbols
-            Flambda_kind.print kind
-            (Static_part.print_with_cache ~cache) static_part))
-      defn.static_structure
+          Format.fprintf ppf "@[((bound_symbols@ %a)@ (static_part@ %a))@]"
+            Bound_symbols.print bound_symbols
+            (Static_part.print_with_cache ~cache) static_part)
+        ppf t
 
-  let free_symbols_of_definition defn (recursive : Recursive.t) =
-    let free_in_computation =
-      match defn.computation with
-      | None -> Symbol.Set.empty
-      | Some computation -> free_symbols_of_computation computation
-    in
-    let being_defined =
-      Symbol.Set.of_list (List.map (fun (sym, _, _) -> sym)
-        defn.static_structure)
-    in
-    let bound_recursively =
-      match recursive with
-      | Non_recursive -> Symbol.Set.empty
-      | Recursive -> being_defined
-    in
-    let free_in_static_parts =
-      let symbols =
-        List.fold_left (fun syms (_sym, _kind, static_part) ->
-            Symbol.Set.union syms (Static_part.free_symbols static_part))
+    let being_defined t =
+      List.fold_left (fun being_defined (bound_syms, _static_part) ->
+          Symbol.Set.union (Bound_symbols.being_defined bound_syms)
+            being_defined)
+        Symbol.Set.empty
+        t
+
+    let free_symbols t =
+      let free_in_static_parts =
+        List.fold_left (fun free_in_static_parts (_bound_syms, static_part) ->
+            Symbol.Set.union (Static_part.free_symbols static_part)
+              free_in_static_parts)
           Symbol.Set.empty
-          defn.static_structure
+          t
       in
-      Symbol.Set.diff symbols bound_recursively
-    in
-    Symbol.Set.union free_in_computation free_in_static_parts
+      Symbol.Set.diff free_in_static_parts (being_defined t)
+  end
+
+  module Definition = struct
+    type t = {
+      computation : Computation.t option;
+      static_structure : Static_structure.t;
+    }
+
+    let print_with_cache ~cache ppf { computation; static_structure; } =
+      Format.fprintf ppf "@[<v 2>(\
+          @[(computation@ %a)@]@ \
+          @[(static_structure@ @[(%a)@])@])@]"
+        (Misc.Stdlib.Option.print Computation.print) computation
+        (Static_structure.print_with_cache ~cache) static_structure
+
+    let free_symbols t =
+      let free_in_computation =
+        match t.computation with
+        | None -> Symbol.Set.empty
+        | Some computation -> Computation.free_symbols computation
+      in
+      let free_in_static_structure =
+        Static_structure.free_symbols t.static_structure
+      in
+      Symbol.Set.union free_in_computation free_in_static_structure
+  end
 
   type t =
-    | Define_symbol of definition * t
+    | Define_symbol of Definition.t * t
     | Root of Symbol.t
 
   let rec print_with_cache ~cache ppf t =
@@ -363,7 +405,7 @@ module Program_body = struct
       Format.fprintf ppf "@[<v 2>(%sDefine_symbol%s@ %a)@]@;"
         (Misc.Color.bold_blue ())
         (Misc.Color.reset ())
-        (print_definition_with_cache ~cache) defn;
+        (Definition.print_with_cache ~cache) defn;
       print_with_cache ~cache ppf t
     | Root sym ->
       Format.fprintf ppf "@[(%sRoot%s %a)@]"
@@ -380,11 +422,11 @@ module Program_body = struct
       | Root _ -> roots
       | Define_symbol (defn, t) ->
         let roots =
-          List.fold_left (fun roots (sym, _kind, static_part) ->
+          List.fold_left (fun roots (bound_symbols, static_part) ->
               (* CR mshinwell: check [kind] against the result of
                  [needs_gc_root] *)
               if Static_part.needs_gc_root static_part then
-                Symbol.Set.add sym roots
+                Symbol.Set.union (Bound_symbols.gc_roots bound_symbols) roots
               else
                 roots)
             roots
@@ -397,134 +439,8 @@ module Program_body = struct
   let rec free_symbols t =
     match t with
     | Define_symbol (defn, t) ->
-      Symbol.Set.union (free_symbols_of_definition defn Non_recursive)
-        (free_symbols t)
+      Symbol.Set.union (Definition.free_symbols defn) (free_symbols t)
     | Root sym -> Symbol.Set.singleton sym
-
-(* To be re-enabled
-  let invariant_define_symbol env defn (recursive : Flambda.recursive) =
-    let module E = Invariant_env in
-    begin match defn.computation with
-    | None -> ()
-    | Some computation ->
-      (* [Flambda.Expr.invariant] will also catch unbound variables and
-         continuations, but we can give a better error message by having
-         these two specific checks.  It also gives some amount of testing
-         of [free_variables] and [free_continuations] in [Expr]. *)
-      let free_variables =
-        Name.set_to_var_set (Name_occurrences.everything (
-          Flambda.Expr.free_names computation.expr))
-      in
-      if not (Variable.Set.is_empty free_variables) then begin
-        Misc.fatal_errorf "Toplevel computation is not closed (free \
-            variable(s) %a):@ %a"
-          Variable.Set.print free_variables
-          Flambda.Expr.print computation.expr
-      end;
-      let free_conts = Flambda.Expr.free_continuations computation.expr in
-      if not (Continuation.Set.is_empty free_conts) then begin
-        let allowed =
-          Continuation.Set.of_list [
-            computation.return_cont;
-            computation.exception_cont;
-          ]
-        in
-        let remaining = Continuation.Set.diff free_conts allowed in
-        if not (Continuation.Set.is_empty remaining) then begin
-          Misc.fatal_errorf "Toplevel computation has illegal free \
-              continuation(s) %a;@ the only permitted free continuations are \
-              the return continuation, %a@ and the exception continuation, %a"
-            Continuation.Set.print free_conts
-            Continuation.print computation.return_cont
-            Continuation.print computation.exception_cont
-        end
-      end;
-      let computation_env =
-        let return_arity =
-          List.map (fun (_var, kind) -> kind) computation.computed_values
-        in
-        E.add_continuation env
-          computation.return_cont
-          return_arity
-          Normal
-          (E.Continuation_stack.var ())
-      in
-      Flambda.Expr.invariant computation_env computation.expr;
-      List.iter (fun (var, _kind) ->
-          if Invariant_env.variable_is_bound env var then begin
-            Misc.fatal_errorf "[computed_values] of a toplevel computation \
-                must contain fresh variables.@ %a is not fresh.@ \
-                Computation:@ %a"
-              Variable.print var
-              Flambda.Expr.print computation.expr;
-          end)
-        computation.computed_values
-    end;
-    (* CR mshinwell: lwhite/xclerc have some fixes on the old Flambda in this
-       area which we should port forward *)
-    let env =
-      match recursive with
-      | Non_recursive -> env
-      | Recursive ->
-        List.fold_left (fun env (sym, kind, _static_part) ->
-            E.add_symbol env sym kind)
-          env
-          defn.static_structure
-    in
-    let allowed_fns =
-      match defn.computation with
-      | None -> Name.Set.empty
-      | Some computation ->
-        Name.Set.of_list (
-          List.map (fun (var, _kind) -> Name.var var)
-            computation.computed_values)
-    in
-    let _allowed_fns = Name_occurrences.create_from_set_in_terms allowed_fns in
-    let static_part_env =
-      match defn.computation with
-      | None -> env
-      | Some computation ->
-        List.fold_left (fun static_part_env (var, kind) ->
-            E.add_variable static_part_env var kind)
-          env
-          computation.computed_values
-    in
-    List.iter (fun (_sym, _kind, static_part) ->
-        let _free_names = Static_part.free_names static_part in
-(* XXX This is broken -- isn't allowing previously-defined symbols
-        (* This will also be caught by [invariant_static_part], but will
-           give a better message; and allows some testing of
-           [Static_part.free_variables]. *)
-        if not (Name_occurrences.subset free_names allowed_fns) then begin
-          Misc.fatal_errorf "Static part is only allowed to reference \
-              the following free names: { %a }, whereas it references \
-              { %a }.  Static part:@ %a = %a"
-            Name_occurrences.print allowed_fns
-            Name_occurrences.print free_names
-            Symbol.print sym
-            Static_part.print static_part
-        end;
-*)
-        Static_part.invariant static_part_env static_part)
-      defn.static_structure;
-    List.fold_left (fun env (sym, kind, _static_part) ->
-        match recursive with
-        | Non_recursive -> E.add_symbol env sym kind
-        | Recursive ->
-          (* If we ever store data about symbols, this place needs updating
-             to do a "redefine_symbol" operation on [env]. *)
-          env)
-      env
-      defn.static_structure
-
-  let rec invariant env t =
-    let module E = Invariant_env in
-    match t with
-    | Define_symbol (defn, t) ->
-      let env = invariant_define_symbol env defn Non_recursive in
-      invariant env t
-    | Root sym -> E.check_symbol_is_bound env sym
-*)
 
   let _invariant _env _t = ()
 end
@@ -570,47 +486,4 @@ module Program = struct
     loop t.body
 
   let invariant _t = ()
-(* To be re-enabled
-    let module E = Invariant_env in
-    let every_used_function_from_current_unit_is_declared env t =
-      let current_compilation_unit = Compilation_unit.get_current_exn () in
-      let not_declared = E.closure_ids_not_declared env in
-      let not_declared_from_current_unit =
-        Closure_id.Set.filter (fun cu ->
-            Closure_id.in_compilation_unit cu current_compilation_unit)
-          not_declared
-      in
-      if not (Closure_id.Set.is_empty not_declared_from_current_unit) then begin
-        Misc.fatal_errorf "Closure ID(s) { %a } from the current compilation \
-            unit is/are referenced but not declared:@ %a"
-          Closure_id.Set.print not_declared
-          print t
-      end
-    in
-    let every_used_var_within_closure_from_current_unit_is_declared env t =
-      let current_compilation_unit = Compilation_unit.get_current_exn () in
-      let not_declared = E.var_within_closures_not_declared env in
-      let not_declared_from_current_unit =
-        Var_within_closure.Set.filter (fun cu ->
-            Var_within_closure.in_compilation_unit cu current_compilation_unit)
-          not_declared
-      in
-      if not (Var_within_closure.Set.is_empty not_declared_from_current_unit)
-      then begin
-        Misc.fatal_errorf "Closure ID(s) { %a } from the current compilation \
-            unit is/are referenced but not declared:@ %a"
-          Var_within_closure.Set.print not_declared
-          print t
-      end
-    in
-    let env =
-      Symbol.Map.fold (fun symbol kind env ->
-          E.add_symbol env symbol kind)
-        t.imported_symbols
-        (E.create ())
-    in
-    Program_body.invariant env t.body;
-    every_used_function_from_current_unit_is_declared env t;
-    every_used_var_within_closure_from_current_unit_is_declared env t
-*)
 end

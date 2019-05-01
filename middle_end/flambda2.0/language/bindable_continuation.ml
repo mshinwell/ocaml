@@ -26,7 +26,12 @@ let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
 
 let rename _t = create ()
 
+let add_to_name_permutation t1 t2 perm =
+  Name_permutation.add_continuation perm t1 t2
+
+let name_permutation t1 t2 =
+  add_to_name_permutation t1 t2 Name_permutation.empty
+
 let singleton_occurrence_in_terms t = Name_occurrences.singleton_continuation t
 
 let add_occurrence_in_terms t occs = Name_occurrences.add_continuation occs t
-
