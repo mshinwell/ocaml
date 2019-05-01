@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 (* CR mshinwell: Fix warning 60! *)
 [@@@ocaml.warning "-60"]
+[@@@ocaml.warning "-32"]
 
 module K = Flambda_kind
 
@@ -191,6 +192,11 @@ end = struct
           (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
     end;
     let free_names_of_body = free_names body in
+(*
+Format.eprintf "Let binding with body %a: free names: %a\n%!"
+  Expr.print body
+  Name_occurrences.print free_names_of_body;
+*)
     (* If the [Let]-binding is redundant, don't even create it. *)
     if (not (Name_occurrences.mem_var free_names_of_body bound_var))
       && Named.at_most_generative_effects defining_expr
@@ -203,13 +209,12 @@ end = struct
           free_names = Not_computed;
         }
       in
-      let free_names : free_names =
-        Ok (Name_occurrences.remove_var free_names_of_body bound_var)
-      in
+      let let_expr = Let.create ~bound_var ~kind ~defining_expr ~body in
+      let free_names = Let.free_names let_expr in
       let t =
         { descr = Let (Let.create ~bound_var ~kind ~defining_expr ~body);
           delayed_permutation = Name_permutation.empty;
-          free_names;
+          free_names = Ok free_names;
         }
       in
       t, Nothing_deleted
@@ -300,7 +305,14 @@ end and Named : sig
     -> t
     -> Flambda_primitive.result_kind
 end = struct
-  include Named
+  type t =
+    | Simple of Simple.t
+    | Prim of Flambda_primitive.t * Debuginfo.t
+    | Set_of_closures of Set_of_closures.t
+
+  let create_simple simple = Simple simple
+  let create_prim prim dbg = Prim (prim, dbg)
+  let create_set_of_closures set_of_closures = Set_of_closures set_of_closures
 
   let print_with_cache ~cache ppf (t : t) =
     match t with
@@ -886,7 +898,13 @@ end and Continuation_handlers : sig
   val domain : t -> Continuation.Set.t
   val contains_exn_handler : t -> bool
 end = struct
-  include Continuation_handlers
+  type t = Continuation_handler.t Continuation.Map.t
+
+  let invariant _env _t = ()
+
+  let print_with_cache ~cache:_ _ppf _t = Misc.fatal_error "Not yet implemented"
+
+  let print _ppf _t = Misc.fatal_error "Not yet implemented"
 
   let to_map t = t
 
@@ -1080,7 +1098,12 @@ end and Set_of_closures : sig
   val direct_call_surrogates : t -> Closure_id.t Closure_id.Map.t
   val has_empty_environment : t -> bool
 end = struct
-  include Set_of_closures
+  type t = {
+    function_decls : Function_declarations.t;
+    set_of_closures_ty : Flambda_type.t;
+    closure_elements : Simple.t Var_within_closure.Map.t;
+    direct_call_surrogates : Closure_id.t Closure_id.Map.t;
+  }
 
   (* CR mshinwell: A sketch of code for the invariant check is on cps_types. *)
   let invariant _env _t = ()

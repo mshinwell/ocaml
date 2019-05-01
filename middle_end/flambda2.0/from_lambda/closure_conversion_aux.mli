@@ -52,6 +52,8 @@ module Env : sig
 
   val at_toplevel : t -> bool
   val not_at_toplevel : t -> t
+
+  val add_simple_to_substitute : t -> Ident.t -> Simple.t -> t
 end
 
 (** Used to represent information about a set of function declarations

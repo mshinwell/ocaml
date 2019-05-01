@@ -31,6 +31,27 @@ let (|>>) (x, y) f = (x, f y)
 
 (** Native compilation backend for .ml files. *)
 
+(* XXX *)
+module Flambda2_backend = struct
+  let symbol_for_global' id =
+    Flambda2.Symbol.unsafe_create
+      (Flambda2.Compilation_unit.get_current_exn ())
+      (Flambda2.Linkage_name.create (Compilenv.symbol_for_global id))
+
+  let closure_symbol _ = failwith "Not yet implemented"
+
+  let really_import_approx _ = failwith "Not yet implemented"
+  let import_symbol _ = failwith "Not yet implemented"
+
+  let size_int = Arch.size_int
+  let big_endian = Arch.big_endian
+
+  let max_sensible_number_of_arguments =
+    Proc.max_arguments_for_tailcalls - 1
+end
+let flambda2_backend =
+  (module Flambda2_backend : Flambda2.Flambda2_backend_intf.S)
+
 let flambda i backend typed =
   if !Clflags.classic_inlining then begin
     Clflags.default_simplify_rounds := 1;
@@ -57,6 +78,21 @@ let flambda i backend typed =
           code;
         }
       in
+      begin
+        match Sys.getenv "FLAMBDA2" with
+        | exception Not_found -> ()
+        | _ ->
+          let _ : Flambda2.Flambda_static.Program.t =
+            Flambda2.Flambda2_middle_end.middle_end ~ppf_dump:i.ppf_dump
+              ~prefixname:"<prefixname>"
+              ~backend:flambda2_backend
+              ~size:main_module_block_size
+              ~filename:"<filename>"
+              ~module_ident
+              ~module_initializer:code
+          in
+          ()
+      end;
       Asmgen.compile_implementation
         ~backend
         ~filename:i.source_file
