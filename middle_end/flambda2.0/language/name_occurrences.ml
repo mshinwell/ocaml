@@ -464,7 +464,7 @@ let union t1 t2 =
     t1 t2
 
 let rec union_list ts =
-  match  ts with
+  match ts with
   | [] -> empty
   | t::ts -> union t (union_list ts)
 

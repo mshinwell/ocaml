@@ -360,17 +360,44 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind prim ~args dbg k
 
+let infer_let_kind (defining_expr : Named.t)
+      ~(lambda_kind : Lambda.value_kind) =
+  (* The Lambda language kinds don't wholly coincide with the Flambda kinds. We
+     pass through Lambda kinds as the Flambda equivalents when we can; these
+     will be verified by invariant checks. In other cases, we infer the Flambda
+     kind. *)
+  match defining_expr with
+  | Prim (Unary (Discriminant_of_int, _), _dbg) -> K.fabricated ()
+  | Set_of_closures _ ->
+    begin match lambda_kind with
+    | Pgenval -> K.fabricated ()
+    | _ ->
+      Misc.fatal_errorf "Wrong Lambda kind %a for binding of the following \
+          set of closures:@ %a"
+        Printlambda.value_kind' lambda_kind
+        Named.print defining_expr
+    end
+  | Simple _ | Prim _ -> LC.value_kind lambda_kind
+
 let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
   | Let (id, kind, defining_expr, body) ->
     let body_env, var = Env.add_var_like env id in
     let cont (defining_expr : Named.t option) =
+      let body_env =
+        match defining_expr with
+        | Some (Simple simple) ->
+          Env.add_simple_to_substitute body_env id simple
+        | Some _ | None -> body_env
+      in
       (* CR pchambart: Not tail ! *)
       let body = close t body_env body in
       match defining_expr with
       | None -> body
       | Some defining_expr ->
-        let kind = LC.value_kind kind in
+        let kind =
+          infer_let_kind defining_expr ~lambda_kind:kind
+        in
         Expr.create_let var kind defining_expr body
     in
     close_named t env ~let_bound_var:var defining_expr cont
@@ -444,7 +471,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     in
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
-    let args = Env.find_vars env args in
+    let args = Env.find_simples env args in
     let trap_action =
       Option.map (fun (trap_action : Ilambda.trap_action) : Trap_action.t ->
           match trap_action with
@@ -453,7 +480,6 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             Pop { exn_handler; raise_kind = None; })
         trap_action
     in
-    let args = Simple.vars args in
     let apply_cont = Flambda.Apply_cont.create ?trap_action cont ~args in
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
