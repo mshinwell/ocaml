@@ -29,43 +29,10 @@ let raw_clambda_dump_if ppf
     end;
   if !Clflags.dump_cmm then Format.fprintf ppf "@.cmm:@."
 
-module Flambda2_backend = struct
-  let symbol_for_global' _ = failwith "Not yet implemented"
-  let closure_symbol _ = failwith "Not yet implemented"
-
-  let really_import_approx _ = failwith "Not yet implemented"
-  let import_symbol _ = failwith "Not yet implemented"
-
-  let size_int = Arch.size_int
-  let big_endian = Arch.big_endian
-
-  let max_sensible_number_of_arguments =
-    Proc.max_arguments_for_tailcalls - 1
-end
-let flambda2_backend =
-  (module Flambda2_backend : Flambda2.Flambda2_backend_intf.S)
-
 let lambda_to_clambda ~backend ~filename:_ ~prefixname:_ ~ppf_dump
       (lambda : Lambda.program) =
   let clambda =
     Closure.intro ~backend ~size:lambda.main_module_block_size lambda.code
-  in
-  (* XXX *)
-  let () =
-    match Sys.getenv "FLAMBDA2" with
-    | exception Not_found -> ()
-    | _ ->
-      let _ : Flambda2.Flambda_static.Program.t =
-        Flambda2.Flambda2_middle_end.middle_end ~ppf_dump
-          ~prefixname:"<prefixname>"
-          ~backend:flambda2_backend
-          ~size:lambda.main_module_block_size
-          ~filename:"<filename>"
-          ~module_ident:
-            (Ident.create_persistent (Compilenv.current_unit_name ()))
-          ~module_initializer:lambda.code
-      in
-      ()
   in
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];

@@ -102,7 +102,8 @@ and dump_rawlambda = ref false          (* -drawlambda *)
 and dump_lambda = ref false             (* -dlambda *)
 and dump_rawclambda = ref false         (* -drawclambda *)
 and dump_clambda = ref false            (* -dclambda *)
-and dump_rawflambda = ref false            (* -drawflambda *)
+and dump_rawflambda = ref false          (* -drawflambda *)
+and dump_rawflambda2 = ref true          (* -drawflambda2 *)
 and dump_flambda = ref false            (* -dflambda *)
 and dump_flambda_let = ref (None : int option) (* -dflambda-let=... *)
 and dump_flambda_verbose = ref false    (* -dflambda-verbose *)
@@ -110,7 +111,7 @@ and dump_instr = ref false              (* -dinstr *)
 and keep_camlprimc_file = ref false     (* -dcamlprimc *)
 
 and dump_ilambda = ref true
-and dump_prepared_lambda = ref false
+and dump_prepared_lambda = ref true
 
 let keep_asm_file = ref false           (* -S *)
 let optimize_for_speed = ref true       (* -compact *)
