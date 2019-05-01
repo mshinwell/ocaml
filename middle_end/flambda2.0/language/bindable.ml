@@ -30,6 +30,14 @@ module type S = sig
 
   val rename : t -> t
 
+  val name_permutation : t -> t -> Name_permutation.t
+
+  val add_to_name_permutation
+     : t
+    -> t
+    -> Name_permutation.t
+    -> Name_permutation.t
+
   val singleton_occurrence_in_terms : t -> Name_occurrences.t
   val add_occurrence_in_terms : t -> Name_occurrences.t -> Name_occurrences.t
 end
