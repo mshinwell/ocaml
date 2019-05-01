@@ -35,7 +35,7 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
       @[<hov 1>(callee %a)@]@ \
       @[<hov 1>(continuation %a)@]@ \
       @[<hov 1>(exn_continuation %a)@]@ \
-      @[<hov 1>(args %a)@]@ \
+      @[<hov 1>(args (%a))@]@ \
       @[<hov 1>(call_kind %a)@]@ \
       @[<hov 1>(dbg %a)@]@ \
       @[<hov 1>(inline %a)@]@ \

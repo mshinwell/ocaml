@@ -23,7 +23,7 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
   module Parameters = struct
     type t = unit
 
-    let print _ppf _t = ()
+    let print ppf _t = Format.pp_print_string ppf "<none>"
 
     let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -39,7 +39,7 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
   module Typing_env_extension = struct
     type t = unit
 
-    let print _ppf _t = ()
+    let print ppf _t = Format.pp_print_string ppf "<none>"
 
     let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -55,7 +55,7 @@ module Make (Term_language_function_declaration : Expr_std.S) = struct
       t == empty
   end
 
-  let print _ppf _t = ()
+  let print ppf _t = Format.pp_print_string ppf "<none>"
 
   let print_with_cache ~cache:_ ppf t = print ppf t
 
