@@ -67,50 +67,58 @@ module Static_part : sig
 end
 
 module Program_body : sig
-  type computation = {
-    expr : Flambda.Expr.t;
-    (** The expression that is to be evaluated.  It must have no free
-        variables and call [return_cont] with its results. *)
-    return_cont : Continuation.t;
-    (** The return continuation of [expr]. *)
-    exception_cont : Continuation.t;
-    (** The uncaught exception continuation of [expr]. *)
-    computed_values : (Variable.t * Flambda_kind.t) list;
-    (** Variables, with their kinds, used to reference results of the
-        computation [expr] inside the [static_structure] (see below).  This
-        list of variables must be in bijection with the parameters of the
-        [return_cont].
-        Since we don't really do any transformations on these structures, the
-        [computed_values] variables are not treated up to alpha conversion. *)
-  }
+  module Computation : sig
+    type t = {
+      expr : Flambda.Expr.t;
+      (** The expression that is to be evaluated.  It must have no free
+          variables and call [return_cont] with its results. *)
+      return_cont : Continuation.t;
+      (** The return continuation of [expr]. *)
+      exception_cont : Continuation.t;
+      (** The uncaught exception continuation of [expr]. *)
+      computed_values : (Variable.t * Flambda_kind.t) list;
+      (** Variables, with their kinds, used to reference results of the
+          computation [expr] inside the [static_structure] (see below).  This
+          list of variables must be in bijection with the parameters of the
+          [return_cont].
+          Since we don't really do any transformations on these structures, the
+          [computed_values] variables are not treated up to alpha conversion. *)
+    }
+  end
 
-  type bound_symbols =
-    | Singleton of Symbol.t * Flambda_kind.t
-      (** A binding of a single symbol of the given kind. *)
-    | Set_of_closures of {
-        set_of_closures_symbol : Symbol.t;
-        closure_symbols : Symbol.t Closure_id.Map.t;
-      }
-      (** A binding of a single symbol to a set of closures together with
-          the binding of possibly multiple symbols to the individual closures
-          within such set of closures. *)
+  module Bound_symbols : sig
+    type t =
+      | Singleton of Symbol.t * Flambda_kind.t
+        (** A binding of a single symbol of the given kind. *)
+      | Set_of_closures of {
+          set_of_closures_symbol : Symbol.t;
+          closure_symbols : Symbol.t Closure_id.Map.t;
+        }
+        (** A binding of a single symbol to a set of closures together with
+            the binding of possibly multiple symbols to the individual closures
+            within such set of closures. *)
+  end
 
-  type static_structure = (bound_symbols * Static_part.t) list
+  module Static_structure : sig
+    type t = (Bound_symbols.t * Static_part.t) list
+  end
 
-  type definition = {
-    computation : computation option;
-    (** A computation which provides values to fill in parts of the
-        statically-declared structure of one or more symbols.
-        [computation] may not reference the symbols bound by the same
-        definition's [static_structure]. *)
-    static_structure : static_structure;
-    (** The statically-declared structure of the symbols being declared.
-        Bindings of symbols in each element of a list comprising a
-        [static_structure] are simultaneous, not ordered, or recursive. *)
-  }
+  module Definition : sig
+    type t = {
+      computation : Computation.t option;
+      (** A computation which provides values to fill in parts of the
+          statically-declared structure of one or more symbols.
+          [computation] may not reference the symbols bound by the same
+          definition's [static_structure]. *)
+      static_structure : Static_structure.t;
+      (** The statically-declared structure of the symbols being declared.
+          Bindings of symbols in each element of a list comprising a
+          [static_structure] are simultaneous, not ordered, or recursive. *)
+    }
+  end
 
   type t =
-    | Define_symbol of definition * t
+    | Define_symbol of Definition.t * t
       (** Define the given symbol(s).  No symbol defined by the
           [definition] may be referenced by the same definition, only by
           subsequent [Define_symbol] constructs. *)
