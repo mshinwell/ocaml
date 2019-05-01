@@ -17,16 +17,15 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module K = Flambda_kind
-module T = Flambda_type
 
-let flambda_type_of_lambda_value_kind (value_kind : Lambda.value_kind) =
+let value_kind (value_kind : Lambda.value_kind) =
   match value_kind with
-  | Pgenval -> T.any_value ()
-  | Pfloatval -> T.any_boxed_float ()
-  | Pboxedintval Pint32 -> T.any_boxed_int32 ()
-  | Pboxedintval Pint64 -> T.any_boxed_int64 ()
-  | Pboxedintval Pnativeint -> T.any_boxed_nativeint ()
-  | Pintval -> T.any_tagged_immediate ()
+  | Pgenval
+  | Pfloatval
+  | Pboxedintval Pint32
+  | Pboxedintval Pint64
+  | Pboxedintval Pnativeint
+  | Pintval -> K.value ()
 
 let inline_attribute (attr : Lambda.inline_attribute) : Inline_attribute.t =
   match attr with
