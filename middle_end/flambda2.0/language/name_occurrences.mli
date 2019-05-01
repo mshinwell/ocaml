@@ -51,8 +51,6 @@ val remove_var : t -> Variable.t -> t
 
 val mem : t -> Bindable_name.t -> bool
 
-val mem_var : t -> Variable.t -> bool
-
 val mem_in_terms : t -> Bindable_name.t -> bool
 
 val mem_in_types : t -> Bindable_name.t -> bool
@@ -112,4 +110,10 @@ val union : t -> t -> t
 
 val union_list : t list -> t
 
+val variables : t -> Variable.Set.t
+
 val symbols : t -> Symbol.Set.t
+
+val mem_var : t -> Variable.t -> bool
+
+val remove_var : t -> Variable.t -> t

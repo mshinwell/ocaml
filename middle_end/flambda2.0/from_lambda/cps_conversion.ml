@@ -697,7 +697,6 @@ and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
       : Ilambda.function_declaration =
   let body_cont = Continuation.create () in
   let body_exn_cont = Continuation.create () in
-  let free_idents_of_body = Lambda.free_variables body in
   let stub, body =
     match body with
     | Lprim (Pccall { prim_name; _ }, [body], _)
@@ -718,7 +717,6 @@ and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
     body;
     attr = attr;
     loc = loc;
-    free_idents_of_body;
     stub;
   }
 

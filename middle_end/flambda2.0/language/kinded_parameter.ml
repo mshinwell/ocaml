@@ -45,6 +45,8 @@ include Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
+let print_with_cache ~cache:_ ppf t = print ppf t
+
 let create param kind =
   { param;
     kind;
@@ -76,6 +78,18 @@ let apply_name_permutation ({ param = _; kind; } as t) perm =
   | _ ->
     Misc.fatal_errorf "Illegal name permutation on [Kinded_parameter]: %a"
       Name_permutation.print perm
+
+let add_to_name_permutation t1 t2 perm =
+  Name_permutation.add_variable perm (var t1) (var t2)
+
+let name_permutation t1 t2 =
+  add_to_name_permutation t1 t2 Name_permutation.empty
+
+let singleton_occurrence_in_terms t =
+  Name_occurrences.singleton_variable_in_terms (var t)
+
+let add_occurrence_in_terms t occs =
+  Name_occurrences.add_variable_in_terms occs (var t)
 
 module List = struct
   type nonrec t = t list
