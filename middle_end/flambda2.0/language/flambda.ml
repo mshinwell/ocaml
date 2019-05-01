@@ -147,7 +147,8 @@ end = struct
     match descr t with
     | Let let_expr -> Let.print_with_cache ~cache ppf let_expr
     | Let_cont let_cont -> Let_cont.print_with_cache ~cache ppf let_cont
-    | Apply apply -> Format.fprintf ppf "@[(apply@ %a)@]" Apply.print apply
+    | Apply apply ->
+      Format.fprintf ppf "@[<hov 1>(apply@ %a)@]" Apply.print apply
     | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
     | Switch switch -> Switch.print ppf switch
     | Invalid semantics ->
@@ -322,7 +323,7 @@ end = struct
         Simple.print simple
         (Misc.Color.reset ())
     | Prim (prim, dbg) ->
-      fprintf ppf "@[<2>(%a%a)@]"
+      fprintf ppf "@[<hov 1>(%a%a)@]"
         Flambda_primitive.print prim
         Debuginfo.print_or_elide dbg
     | Set_of_closures set_of_closures ->
@@ -474,7 +475,7 @@ end = struct
       match Expr.descr expr with
       | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
         pattern_match t ~f:(fun ~bound_var ~body ->
-          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
+          fprintf ppf "@ @[<hov 1>%a@[@ %s:: %a%s@]@ %a@]"
             Variable.print bound_var
             (Misc.Color.bold_white ())
             Flambda_kind.print kind
@@ -484,7 +485,7 @@ end = struct
       | _ -> expr
     in
     pattern_match t ~f:(fun ~bound_var ~body ->
-      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
+      fprintf ppf "@[<2>(%slet%s@ @[<hov 1>(@[<hov 1>%a@[@ %s:: %a%s@]@ %a@]"
         (Misc.Color.bold_cyan ())
         (Misc.Color.reset ())
         Variable.print bound_var
@@ -1131,10 +1132,10 @@ end = struct
           direct_call_surrogates;
         } =
     fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
-        @[<hov 1>(function_decls %a)@]@ \
-        @[<hov 1>(set_of_closures_ty %a)@]@ \
-        @[<hov 1>(closure_elements %a)@]\
-        @[<hov 1>(direct_call_surrogates %a)@]@ \
+        @[<hov 1>(function_decls@ %a)@]@ \
+        @[<hov 1>(set_of_closures_ty@ %a)@]@ \
+        @[<hov 1>(closure_elements@ %a)@] @\
+        @[<hov 1>(direct_call_surrogates@ %a)@]\
         )@]"
       (Misc.Color.bold_green ())
       (Misc.Color.reset ())
@@ -1227,7 +1228,8 @@ end = struct
           Function_declaration.print_with_cache ~cache ppf decl)
         t
     in
-    fprintf ppf "@[<2>(%a)(origin = %a)@]" funs t.funs
+    fprintf ppf "@[<hov 1>(funs@ %a)@ (set_of_closures_origin %a)@]"
+      funs t.funs
       Set_of_closures_origin.print t.set_of_closures_origin
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -1420,39 +1422,45 @@ end = struct
           code_id = _;
           result_arity;
           stub;
-          dbg = _;
+          dbg;
           inline;
           specialise;
           is_a_functor;
         } =
-    let stub = if stub then " *stub*" else "" in
-    let is_a_functor = if is_a_functor then " *functor*" else "" in
     Function_params_and_body.pattern_match params_and_body
       ~f:(fun params ~param_relations ~body ~my_closure ->
-        fprintf ppf
-          "@[<2>(%s%s%a%a@ (my_closure %a)@ (origin %a)@ =@ \
-            %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s"
-          stub
-          is_a_functor
-          Inline_attribute.print inline
-          Specialise_attribute.print specialise
-          Variable.print my_closure
+        fprintf ppf "@[<hov 1>(\
+            @[<hov 1>(closure_origin@ %a)@]@ \
+            @[<hov 1>(continuation_param@ %a)@]@ \
+            @[<hov 1>(exn_continuation@ %a)@]@ \
+            @[<hov 1>(stub@ %b)@]@ \
+            @[<hov 1>(dbg@ %a)@]@ \
+            @[<hov 1>(inline@ %a)@]@ \
+            @[<hov 1>(specialise@ %a)@]@ \
+            @[<hov 1>(is_a_functor@ %b)@]@ \
+            @[<hov 1>(params@ %s%a%s)@]@ \
+            @[<hov 1>(my_closure@ %s%a%s)@]@ \
+            @[<hov 1>(param_relations@ %a)@]@ \
+            @[<hov 1>(result_arity@ %a)@]@ \
+            @[<hov 1>(body@ %a)@]@ \
+            )@]"
           Closure_origin.print closure_origin
-          (Misc.Color.bold_cyan ())
-          (Misc.Color.reset ())
           Continuation.print continuation_param
           Exn_continuation.print exn_continuation
+          stub
+          Debuginfo.print_compact dbg
+          Inline_attribute.print inline
+          Specialise_attribute.print specialise
+          is_a_functor
+          (Misc.Color.bold_cyan ())
           Kinded_parameter.List.print params
-          (Misc.Color.bold_white ())
+          (Misc.Color.reset ())
+          (Misc.Color.bold_cyan ())
+          Variable.print my_closure
+          (Misc.Color.reset ())
+          (Flambda_type.Typing_env_extension.print_with_cache ~cache)
+          param_relations
           Flambda_arity.print result_arity
-          (Misc.Color.reset ());
-        if not (Flambda_type.Typing_env_extension.is_empty param_relations)
-        then begin
-          fprintf ppf " [%a]"
-            (Flambda_type.Typing_env_extension.print_with_cache ~cache)
-            param_relations
-        end;
-        fprintf ppf "@]@ ->\ @ @[<2>%a@])@]@ "
           (Expr.print_with_cache ~cache) body)
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
