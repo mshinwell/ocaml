@@ -109,9 +109,14 @@ type program = {
 
 let fprintf = Format.fprintf
 
+let print_ident_and_value_kind ppf (id, kind) =
+  fprintf ppf "@[%a :: %a@]"
+    Ident.print id
+    Printlambda.value_kind' kind
+
 let rec print_function ppf
       ({ continuation_param; kind; params; body; free_idents_of_body = _; attr;
-         exn_continuation = _; return = _; loc = _; stub = _;
+         exn_continuation; return = _; loc = _; stub = _;
        } : function_declaration) =
   let pr_params ppf params =
     match kind with
@@ -126,8 +131,17 @@ let rec print_function ppf
         params;
       fprintf ppf ")"
   in
-  fprintf ppf "@[<2>(function<%a>%a@ %a%a)@]"
-    Continuation.print continuation_param
+  fprintf ppf "@[<2>(function <%a> " Continuation.print continuation_param;
+  begin match exn_continuation.extra_args with
+  | [] -> fprintf ppf "<exn=%a>" Continuation.print exn_continuation.exn_handler
+  | extra_args ->
+    fprintf ppf "<exn=%a (%a)>"
+      Continuation.print exn_continuation.exn_handler
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        print_ident_and_value_kind)
+      extra_args
+  end;
+  fprintf ppf "%a@ %a%a)@]"
     pr_params params
     Printlambda.function_attribute attr
     print body
@@ -168,21 +182,21 @@ and print ppf (t : t) =
       | Let (id, kind, arg, body) ->
         fprintf ppf "@ @[<2>%a :: %a =@ %a@]"
           Ident.print id
-          Printlambda.value_kind kind
+          Printlambda.value_kind' kind
           print_named arg;
           let_body body
       | expr -> expr
     in
     fprintf ppf "@[<2>(let@ @[<v 1>(@[<2>%a :: %a =@ %a@]"
       Ident.print id
-      Printlambda.value_kind kind
+      Printlambda.value_kind' kind
       print_named arg;
     let expr = let_body body in
     fprintf ppf ")@]@ %a)@]" print expr
   | Let_mutable { id; initial_value; contents_kind; body; } ->
     fprintf ppf "@[<2>(let_mutable@ @[<v 1>(@[<2>%a =%a@ %a@]"
       Ident.print id
-      Printlambda.value_kind contents_kind
+      Printlambda.value_kind' contents_kind
       Ident.print initial_value;
     fprintf ppf ")@]@ %a)@]" print body
   | Let_rec (id_arg_list, body) ->
@@ -232,7 +246,7 @@ and print ppf (t : t) =
           (fun ppf (ident, kind) ->
             Format.fprintf ppf "%a::%a"
               Ident.print ident
-              Printlambda.value_kind kind)) params
+              Printlambda.value_kind' kind)) params
         (match params with [] -> "" | _ -> ")")
         print handler
     in

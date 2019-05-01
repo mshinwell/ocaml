@@ -21,12 +21,14 @@ module Env = struct
     variables : Variable.t Ident.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
     at_toplevel : bool;
+    simples_to_substitute : Simple.t Ident.Map.t;
   }
 
   let empty = {
     variables = Ident.Map.empty;
     globals = Numbers.Int.Map.empty;
     at_toplevel = true;
+    simples_to_substitute = Ident.Map.empty;
   }
 
   let clear_local_bindings env =
@@ -45,6 +47,8 @@ module Env = struct
     let vars = List.map Variable.create_with_same_name_as_ident ids in
     add_vars t ids vars, vars
 
+  (* CR mshinwell: Rethink the semantics of these re. fatal errors etc *)
+
   let find_var t id =
     try Ident.Map.find id t.variables
     with Not_found ->
@@ -58,14 +62,28 @@ module Env = struct
   let find_name t id = Name.var (find_var t id)
   let find_name_exn t id = Name.var (find_var_exn t id)
 
-  let find_simple t id = Simple.var (find_var t id)
-  let find_simple_exn t id = Simple.var (find_var_exn t id)
+  (* CR mshinwell: Avoid the double lookup *)
+  let find_simple_exn t id =
+    match find_var_exn t id with
+    | exception Not_found -> raise Not_found
+    | var ->
+      match Ident.Map.find id t.simples_to_substitute with
+      | exception Not_found -> Simple.var var
+      | simple -> simple
+
+  let find_simple t id =
+    match find_var t id with
+    | exception Not_found -> raise Not_found
+    | var ->
+      match Ident.Map.find id t.simples_to_substitute with
+      | exception Not_found -> Simple.var var
+      | simple -> simple
 
   let find_vars t ids =
     List.map (fun id -> find_var t id) ids
 
   let find_simples t ids =
-    List.map (fun id -> Simple.var (find_var t id)) ids
+    List.map (fun id -> find_simple t id) ids
 
   let add_global t pos symbol =
     { t with globals = Numbers.Int.Map.add pos symbol t.globals }
@@ -79,6 +97,15 @@ module Env = struct
   let at_toplevel t = t.at_toplevel
 
   let not_at_toplevel t = { t with at_toplevel = false; }
+
+  let add_simple_to_substitute t id simple =
+    if Ident.Map.mem id t.simples_to_substitute then begin
+      Misc.fatal_errorf "Cannot redefine [Simple] associated with %a"
+        Ident.print id
+    end;
+    { t with
+      simples_to_substitute = Ident.Map.add id simple t.simples_to_substitute;
+    }
 end
 
 module Function_decls = struct

@@ -60,6 +60,12 @@ let value_kind ppf = function
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
 
+let value_kind' ppf = function
+  | Pgenval -> fprintf ppf "[val]"
+  | Pintval -> fprintf ppf "[int]"
+  | Pfloatval -> fprintf ppf "[float]"
+  | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
+
 let return_kind ppf = function
   | Pgenval -> ()
   | Pintval -> fprintf ppf ": int@ "

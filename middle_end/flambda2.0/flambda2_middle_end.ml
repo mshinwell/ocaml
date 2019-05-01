@@ -40,7 +40,7 @@ let print_ilambda ppf (ilam : Ilambda.program) =
   end
 
 let print_rawflambda ppf program =
-  if !Clflags.dump_rawflambda then begin
+  if !Clflags.dump_rawflambda2 then begin
     Format.fprintf ppf "After closure conversion:@ %a@."
       Flambda_static.Program.print program
   end
