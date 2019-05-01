@@ -347,7 +347,10 @@ module Program_body = struct
     let print_with_cache ~cache ppf t =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (bound_symbols, static_part) ->
-          Format.fprintf ppf "@[((bound_symbols@ %a)@ (static_part@ %a))@]"
+          Format.fprintf ppf "@[<hov 1>(\
+              @[<hov 1>(bound_symbols@ %a)@]@ \
+              @[<hov 1>(static_part@ %a)@]\
+              )@]"
             Bound_symbols.print bound_symbols
             (Static_part.print_with_cache ~cache) static_part)
         ppf t
@@ -377,9 +380,9 @@ module Program_body = struct
     }
 
     let print_with_cache ~cache ppf { computation; static_structure; } =
-      Format.fprintf ppf "@[<v 2>(\
-          @[(computation@ %a)@]@ \
-          @[(static_structure@ @[(%a)@])@])@]"
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(computation@ %a)@]@ \
+          @[<hov 1>(static_structure@ @[<hov 1>(%a)@])@])@]"
         (Misc.Stdlib.Option.print Computation.print) computation
         (Static_structure.print_with_cache ~cache) static_structure
 

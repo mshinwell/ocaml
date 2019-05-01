@@ -148,7 +148,10 @@ end = struct
     | Let let_expr -> Let.print_with_cache ~cache ppf let_expr
     | Let_cont let_cont -> Let_cont.print_with_cache ~cache ppf let_cont
     | Apply apply ->
-      Format.fprintf ppf "@[<hov 1>(apply@ %a)@]" Apply.print apply
+      Format.fprintf ppf "@[<hov 1>(%sapply%s@ %a)@]"
+        (Misc.Color.bold_cyan ())
+        (Misc.Color.reset ())
+        Apply.print apply
     | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
     | Switch switch -> Switch.print ppf switch
     | Invalid semantics ->
@@ -193,11 +196,6 @@ end = struct
           (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
     end;
     let free_names_of_body = free_names body in
-(*
-Format.eprintf "Let binding with body %a: free names: %a\n%!"
-  Expr.print body
-  Name_occurrences.print free_names_of_body;
-*)
     (* If the [Let]-binding is redundant, don't even create it. *)
     if (not (Name_occurrences.mem_var free_names_of_body bound_var))
       && Named.at_most_generative_effects defining_expr
@@ -630,10 +628,9 @@ end = struct
       fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>"
         (Expr.print_with_cache ~cache) body;
       let first = ref true in
-      List.iter (fun (_k, _handler) -> (* XXX *)
-          (*
+      List.iter (fun (cont, handler) ->
           Continuation_handler.print_using_where_with_cache ~cache
-            ppf k handler ~first:!first; *)
+            ppf cont handler ~first:!first;
           first := false)
         let_conts;
       fprintf ppf "@]@])@]"
@@ -936,7 +933,6 @@ end and Continuation_handler : sig
   type t
   include Expr_std.S with type t := t
 
-(*
   val print_using_where_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
@@ -944,7 +940,6 @@ end and Continuation_handler : sig
     -> t
     -> first:bool
     -> unit
-*)
 
   val create
      : params_and_handler:Continuation_params_and_handler.t
@@ -966,9 +961,8 @@ end = struct
 
   let invariant _env _t = ()
 
-(*
   let print_using_where_with_cache ~cache ppf k
-        ({ params_and_handler; inferred_typing;
+        ({ params_and_handler = _; inferred_typing = _;
            stub; is_exn_handler; } as t) ~first =
     if not first then begin
       fprintf ppf "@ "
@@ -992,7 +986,6 @@ end = struct
         end;
         fprintf ppf "@]@] =@ %a"
           (Expr.print_with_cache ~cache) handler)
-*)
 
   let print _ppf _t =
     (* XXX Where do we get [k] from? *)
@@ -1134,7 +1127,7 @@ end = struct
     fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
         @[<hov 1>(function_decls@ %a)@]@ \
         @[<hov 1>(set_of_closures_ty@ %a)@]@ \
-        @[<hov 1>(closure_elements@ %a)@] @\
+        @[<hov 1>(closure_elements@ %a)@]@ \
         @[<hov 1>(direct_call_surrogates@ %a)@]\
         )@]"
       (Misc.Color.bold_green ())
@@ -1438,7 +1431,7 @@ end = struct
             @[<hov 1>(inline@ %a)@]@ \
             @[<hov 1>(specialise@ %a)@]@ \
             @[<hov 1>(is_a_functor@ %b)@]@ \
-            @[<hov 1>(params@ %s%a%s)@]@ \
+            @[<hov 1>(params@ %a)@]@ \
             @[<hov 1>(my_closure@ %s%a%s)@]@ \
             @[<hov 1>(param_relations@ %a)@]@ \
             @[<hov 1>(result_arity@ %a)@]@ \
@@ -1452,10 +1445,8 @@ end = struct
           Inline_attribute.print inline
           Specialise_attribute.print specialise
           is_a_functor
-          (Misc.Color.bold_cyan ())
           Kinded_parameter.List.print params
-          (Misc.Color.reset ())
-          (Misc.Color.bold_cyan ())
+          (Misc.Color.bold_magenta ())
           Variable.print my_closure
           (Misc.Color.reset ())
           (Flambda_type.Typing_env_extension.print_with_cache ~cache)
