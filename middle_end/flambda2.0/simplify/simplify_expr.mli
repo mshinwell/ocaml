@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,30 +14,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The representation of the application of a continuation.  In the
-    zero-arity case this is just "goto". *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = private {
-  k : Continuation.t;
-  args : Simple.t list;
-  trap_action : Trap_action.Option.t;
-}
-
-(** Printing, invariant checks, name manipulation, etc. *)
-include Expr_std.S with type t := t
-
-val create
-   : ?trap_action:Trap_action.t
-  -> Continuation.t
-  -> args:Simple.t list
-  -> t
-
-val goto : Continuation.t -> t
-
-val continuation : t -> Continuation.t
-
-val args : t -> Simple.t list
-
-val trap_action : t -> Trap_action.t option
+module Make (Simplify_named : Simplify_named_intf.S) : Simplify_expr_intf.S

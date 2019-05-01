@@ -650,8 +650,21 @@ end = struct
     if num_free_occurrences < 1 then
       body
     else
-      let handler = Non_recursive_let_cont_handler.create k handler ~body in
-      Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
+      match Expr.descr body with
+      | Apply_cont { k = k'; args = []; trap_action = None; }
+          when Continuation.equal k k' ->
+        Continuation_params_and_handler.pattern_match
+          (Continuation_handler.params_and_handler handler)
+          ~f:(fun params ~param_relations:_ ~handler:handler_expr ->
+            match params with
+            | [] -> handler_expr
+            | _ ->
+              Misc.fatal_errorf
+                "Continuation handler expected to have zero arity: %a"
+                Continuation_handler.print handler)
+      | _ ->
+        let handler = Non_recursive_let_cont_handler.create k handler ~body in
+        Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
 
   let create_recursive handlers ~body =
     if Continuation_handlers.contains_exn_handler handlers then begin
@@ -969,14 +982,14 @@ end = struct
     end;
     Continuation_params_and_handler.pattern_match t.params_and_handler
       ~f:(fun params ~param_relations ~handler ->
-        fprintf ppf "@[<v 2>%swhere%s @[%a%s%s@[%a"
+        fprintf ppf "@[<hov 1>%swhere%s @[<hov 1>%a%s%s@[<hov 1>%a"
           (Misc.Color.bold_cyan ())
           (Misc.Color.reset ())
   (*
           (if first_and_non_recursive then "" else "and ")
   *)
           Continuation.print k
-          (if stub then " *stub*" else "")
+          (if stub then " *stub* " else "")
           (if is_exn_handler then "*exn* " else "")
           Kinded_parameter.List.print params;
         if not (Flambda_type.Typing_env_extension.is_empty param_relations)
