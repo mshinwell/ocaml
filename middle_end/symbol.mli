@@ -28,11 +28,6 @@
 
 include Identifiable.S
 
-val create
-   : Compilation_unit.t
-  -> Linkage_name.t
-  -> t
-
 val of_variable : Variable.t -> t
 
 (* Create the symbol without prefixing with the compilation unit.
@@ -47,9 +42,3 @@ val label : t -> Linkage_name.t
 val print_opt : Format.formatter -> t option -> unit
 
 val compare_lists : t list -> t list -> int
-
-val in_compilation_unit : t -> Compilation_unit.t -> bool
-
-val is_predefined_exception : t -> bool
-
-val rename : t -> t
