@@ -147,7 +147,7 @@ end = struct
     match descr t with
     | Let let_expr -> Let.print_with_cache ~cache ppf let_expr
     | Let_cont let_cont -> Let_cont.print_with_cache ~cache ppf let_cont
-    | Apply apply -> Apply.print ppf apply
+    | Apply apply -> Format.fprintf ppf "@[(apply@ %a)@]" Apply.print apply
     | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
     | Switch switch -> Switch.print ppf switch
     | Invalid semantics ->
