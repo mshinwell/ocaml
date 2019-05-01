@@ -16,40 +16,24 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** A symbol identifies a constant provided by either:
-    - another compilation unit; or
-    - a top-level module.
-
-    * [sym_unit] is the compilation unit containing the value.
-    * [sym_label] is the linkage name of the variable.
-
-    The label must be globally unique: two compilation units linked in the
-    same program must not share labels. *)
-
 include Identifiable.S
 
-val create
-   : Compilation_unit.t
-  -> Linkage_name.t
-  -> t
+(* The [Ident.t] must be persistent.  This function raises an exception
+   if that is not the case. *)
+val create : Ident.t -> Linkage_name.t -> t
 
-val of_variable : Variable.t -> t
+val get_persistent_ident : t -> Ident.t
+val get_linkage_name : t -> Linkage_name.t
 
-(* Create the symbol without prefixing with the compilation unit.
-   Used for global symbols like predefined exceptions *)
-val of_global_linkage : Compilation_unit.t -> Linkage_name.t -> t
+val set_current : t -> unit
+val get_current : unit -> t option
+val get_current_exn : unit -> t
+val get_current_id_exn : unit -> Ident.t
 
-val import_for_pack : pack:Compilation_unit.t -> t -> t
+val string_for_printing : t -> string
 
-val compilation_unit : t -> Compilation_unit.t
-val label : t -> Linkage_name.t
-
-val print_opt : Format.formatter -> t option -> unit
-
-val compare_lists : t list -> t list -> int
-
-val in_compilation_unit : t -> Compilation_unit.t -> bool
+val predefined_exception : unit -> t
+val external_symbols : unit -> t
 
 val is_predefined_exception : t -> bool
-
-val rename : t -> t
+val is_external_symbols : t -> bool
