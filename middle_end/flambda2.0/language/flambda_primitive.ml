@@ -110,7 +110,8 @@ let print_make_block_kind ppf kind =
   | Full_of_values (tag, shape) ->
     Format.fprintf ppf "(Full_of_values (tag %a) (%a))"
       Tag.Scannable.print tag
-      (Format.pp_print_list Value_kind.print) shape
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Value_kind.print) shape
   | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
   | Generic_array generic ->
     Format.fprintf ppf "(Generic %a)"
