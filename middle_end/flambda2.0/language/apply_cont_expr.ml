@@ -125,7 +125,7 @@ let invariant env ({ k; args; trap_action; } as t) =
       let cont_stack = check_exn_handler exn_handler in
       E.Continuation_stack.push id exn_handler current_stack, cont_stack
 *)
-    | Some (Pop { exn_handler; take_backtrace = _; }) ->
+    | Some (Pop { exn_handler; raise_kind = _; }) ->
       check_exn_handler exn_handler
 
 (*

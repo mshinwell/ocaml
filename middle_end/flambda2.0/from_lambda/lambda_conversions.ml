@@ -55,3 +55,9 @@ let method_kind (kind : Lambda.meth_kind) : Call_kind.method_kind =
   | Self -> Self
   | Public -> Public
   | Cached -> Cached
+
+let raise_kind (kind : Lambda.raise_kind) : Trap_action.raise_kind =
+  match kind with
+  | Raise_regular -> Regular
+  | Raise_reraise -> Reraise
+  | Raise_notrace -> No_trace

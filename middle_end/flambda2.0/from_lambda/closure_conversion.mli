@@ -16,40 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: update comment.
-   Also add that this pass deletes known-administrative redexes to help
-   not degrade the performance of Lift_constants against what we used to have
-   (e.g. in nested-let cases). *)
-(** Generation of [Flambda] intermediate language code from [Ilambda] code
-    by performing a form of closure conversion.
+(** Introduce closures into Ilambda code, producing Flambda. *)
 
-    Function declarations (which may bind one or more variables identifying
-    functions, possibly with mutual recursion) are transformed to
-    [Set_of_closures] expressions.  [Project_closure] expressions are then
-    used to select a closure for a particular function from a [Set_of_closures]
-    expression.  The [Set_of_closures] expressions say nothing about the
-    actual runtime layout of the closures; this is handled when [Flambda] code
-    is translated to [Clambda] code.
-
-    The following transformations are also performed during closure
-    conversion:
-    - Constant blocks (by which is meant things wrapped in [Lambda.Const_block])
-      are converted to applications of the [Pmakeblock] primitive.
-    - [Event] debugging event nodes are removed and the information within
-      them attached to function, method and [raise] calls.
-    - Tuplified functions are converted to curried functions and a stub
-      function emitted to call the curried version.  For example:
-        let rec f (x, y) = f (x + 1, y + 1)
-      is transformed to:
-        let rec internal_f x y = f (x + 1,y + 1)
-        and f (x, y) = internal_f x y  (* [f] is marked as a stub function *)
-    - The [Pdirapply] and [Prevapply] application primitives are removed and
-      converted to normal [Flambda] application nodes.
-
-    The [ilambda_to_flambda] function is not re-entrant.
-*)
 val ilambda_to_flambda
-   : backend:(module Backend_intf.S)
+   : backend:(module Flambda2_backend_intf.S)
   -> module_ident:Ident.t
   -> size:int
   -> filename:string
