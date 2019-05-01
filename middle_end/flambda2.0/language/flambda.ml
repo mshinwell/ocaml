@@ -15,6 +15,8 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+(* CR mshinwell: Fix warning 60! *)
+[@@@ocaml.warning "-60"]
 
 module K = Flambda_kind
 
@@ -23,11 +25,6 @@ module Apply_cont = Apply_cont_expr
 module Switch = Switch_expr
 
 let fprintf = Format.fprintf
-
-type switch_creation_result =
-  | Have_deleted_comparison_but_not_branch
-  | Have_deleted_comparison_and_branch
-  | Nothing_deleted
 
 module rec Expr : sig
   type t
@@ -455,6 +452,10 @@ end = struct
     defining_expr : Named.t;
   }
 
+  let pattern_match t ~f =
+    Bound_var_and_body.pattern_match t.bound_var_and_body
+      ~f:(fun bound_var body -> f ~bound_var ~body)
+
   let print_with_cache ~cache ppf
         ({ bound_var_and_body = _; kind; defining_expr; } as t) =
     let rec let_body (expr : Expr.t) =
@@ -486,7 +487,6 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create ~bound_var ~kind ~defining_expr ~body =
-    let bound_var = Bindable_name_in_terms.Name (Name.var bound_var) in
     let bound_var_and_body = Bound_var_and_body.create bound_var body in
     { bound_var_and_body;
       kind;
@@ -523,7 +523,7 @@ end = struct
       let from_defining_expr = Named.free_names defining_expr in
       let from_body = Expr.free_names body in
       Name_occurrences.union from_defining_expr
-        (Name_occurrences.remove from_body (Name (Name.var bound_var))))
+        (Name_occurrences.remove_var from_body bound_var))
 
   let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
         perm =
@@ -541,10 +541,6 @@ end = struct
         kind;
         defining_expr = defining_expr';
       }
-
-  let pattern_match t ~f =
-    Bound_var_and_body.pattern_match t.bound_var_and_body
-      ~f:(fun bound_var body -> f ~bound_var ~body)
 end and Let_cont : sig
   type t = private
     | Non_recursive of {
@@ -557,15 +553,11 @@ end and Let_cont : sig
      : Continuation.t
     -> Continuation_handler.t
     -> body:Expr.t
-    -> t
+    -> Expr.t
   val create_recursive
      : Continuation_handlers.t
     -> body:Expr.t
-    -> t
-(*
-  val to_continuation_map : t -> Continuation_handlers.t
-  val map : t -> f:(Continuation_handlers.t -> Continuation_handlers.t) -> t
-*)
+    -> Expr.t
 end = struct
   type t =
     | Non_recursive of {
@@ -601,7 +593,7 @@ end = struct
     end else begin
       let rec gather_let_conts let_conts let_cont =
         match let_cont with
-        | Non_recursive { handler; num_free_occurrrences = _; } ->
+        | Non_recursive { handler; num_free_occurrences = _; } ->
           Non_recursive_let_cont_handler.pattern_match handler
             ~f:(fun k ~(body : Expr.t) ->
               let let_conts, body =
@@ -648,33 +640,15 @@ end = struct
     if num_free_occurrences < 1 then
       body
     else
-      Non_recursive (Non_recursive_let_cont_handler.create k handler ~body)
+      let handler = Non_recursive_let_cont_handler.create k handler ~body in
+      Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
 
   let create_recursive handlers ~body =
     if Continuation_handlers.contains_exn_handler handlers then begin
       Misc.fatal_error "Exception-handling continuations cannot be recursive"
     end;
-    Recursive (Recursive_let_cont_handlers.create handlers ~body)
-
-(* To be re-enabled
-
-  let to_continuation_map t =
-    match t with
-    | Non_recursive { name; handler } -> Continuation.Map.singleton name handler
-    | Recursive handlers -> handlers
-
-  let map (t : t) ~f =
-    match t with
-    | Non_recursive { name; handler } ->
-      let handlers = f (Continuation.Map.singleton name handler) in
-      begin match Continuation.Map.bindings handlers with
-      | [ name, handler ] -> Non_recursive { name; handler; }
-      | _ ->
-        Misc.fatal_errorf "Flambda.map: the provided mapping function \
-          returned more than one handler for a [Non_recursive] binding"
-      end
-    | Recursive handlers -> Recursive (f handlers)
-*)
+    Expr.create_let_cont
+      (Recursive (Recursive_let_cont_handlers.create handlers ~body))
 
   let free_names t =
     match t with
@@ -685,12 +659,12 @@ end = struct
 
   let apply_name_permutation t perm =
     match t with
-    | Non_recursive { handler; num_free_occurrences = _; } ->
+    | Non_recursive { handler; num_free_occurrences; } ->
       let handler' =
         Non_recursive_let_cont_handler.apply_name_permutation handler perm
       in
       if handler == handler' then t
-      else Non_recursive handler'
+      else Non_recursive { handler = handler'; num_free_occurrences; }
     | Recursive handlers ->
       let handlers' =
         Recursive_let_cont_handlers.apply_name_permutation handlers perm
@@ -731,17 +705,15 @@ end = struct
 
   let create continuation ~body handler =
     let continuation_and_body =
-      Continuation_and_body.create (Continuation continuation) body
+      Continuation_and_body.create continuation body
     in
     { continuation_and_body;
       handler;
     }
 
-  let pattern_match _t ~f:_ = assert false
-(*
+  let pattern_match t ~f =
     Continuation_and_body.pattern_match t.continuation_and_body
       ~f:(fun continuation body -> f continuation ~body)
-*)
 
   let handler t = t.handler
 
@@ -825,14 +797,8 @@ end = struct
 
   let create ~body handlers =
     let bound = Continuation_handlers.domain handlers in
-    let bound = (* XXX *)
-      List.map (fun k -> Bindable_name_in_terms.Continuation k)
-        (Continuation.Set.elements bound)
-    in
-    let handlers0 =
-      Recursive_let_cont_handlers0.create ~body handlers
-    in
-    create bound handlers0
+    let handlers0 = Recursive_let_cont_handlers0.create ~body handlers in
+    create (Continuation.Set.elements bound) handlers0
 
   let pattern_match t ~f =
     pattern_match t ~f:(fun _bound handlers0 ->
@@ -892,7 +858,7 @@ end = struct
       else { param_relations = param_relations'; handler = handler'; }
   end
 
-  include Name_abstraction.Make_list (Bindable_name) (T0)
+  include Name_abstraction.Make_list (Kinded_parameter) (T0)
 
   let invariant _env _t = ()
 
@@ -906,26 +872,23 @@ end = struct
         handler;
       }
     in
-    let params = (* XXX *)
-      List.map (fun p -> Bindable_name_in_terms.Name (Kinded_parameter.name p))
-        params
-    in
     create params t0
 
-  let pattern_match _t ~f:_ = assert false
-(*
+  let pattern_match t ~f =
     pattern_match t ~f:(fun params { param_relations; handler; } ->
-      f params ~param_relations ~handler:(Expr.expr handler))
-*)
+      f params ~param_relations ~handler)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
   include Expr_std.S with type t := t
 
+  val to_map : t -> Continuation_handler.t Continuation.Map.t
   val domain : t -> Continuation.Set.t
   val contains_exn_handler : t -> bool
 end = struct
   include Continuation_handlers
+
+  let to_map t = t
 
   let free_names t =
     Continuation.Map.fold (fun _k handler free_names ->
@@ -1315,7 +1278,7 @@ end = struct
       else { param_relations = param_relations'; body = body'; }
   end
 
-  include Name_abstraction.Make_list (T0)
+  include Name_abstraction.Make_list (Kinded_parameter) (T0)
 
   let invariant _env _t = ()
 
@@ -1329,13 +1292,20 @@ end = struct
         body;
       }
     in
-    let params = List.map (fun param -> Kinded_parameter.var param) params in
+    let my_closure =
+      Kinded_parameter.create (Parameter.wrap my_closure) (K.value ())
+    in
     create (params @ [my_closure]) t0
 
   let pattern_match t ~f =
     pattern_match t ~f:(fun params_and_my_closure t0 ->
-      f params ~param_relations:t0.param_relations
-        ~body:t0.body ~my_closure)
+      let params, my_closure =
+        match List.rev params_and_my_closure with
+        | my_closure::params_rev ->
+          List.rev params_rev, Kinded_parameter.var my_closure
+        | [] -> assert false  (* see [create], above. *)
+      in
+      f params ~param_relations:t0.param_relations ~body:t0.body ~my_closure)
 end and Function_declaration : sig
   include Expr_std.S
   val create

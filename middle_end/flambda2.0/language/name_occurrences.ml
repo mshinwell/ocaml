@@ -79,6 +79,10 @@ end) = struct
 
   let keys t = N.Map.keys t
 
+  let mem t name = N.Map.mem name t
+
+  let remove t name = N.Map.remove name t
+
 (*
   let create_from_set_in_terms in_terms =
     { in_terms;
@@ -464,4 +468,25 @@ let rec union_list ts =
   | [] -> empty
   | t::ts -> union t (union_list ts)
 
+let variables t =
+  let in_terms = For_variables.keys t.variables_in_terms in
+  let in_types = For_variables.keys t.variables_in_types in
+  let debug_only = For_variables.keys t.variables_debug_only in
+  Variable.Set.union in_terms (Variable.Set.union in_types debug_only)
+
 let symbols t = For_symbols.keys t.symbols
+
+let mem_var t var =
+  For_variables.mem t.variables_in_terms var
+    || For_variables.mem t.variables_in_types var
+    || For_variables.mem t.variables_debug_only var
+
+let remove_var t var =
+  let variables_in_terms = For_variables.remove t.variables_in_terms var in
+  let variables_in_types = For_variables.remove t.variables_in_types var in
+  let variables_debug_only = For_variables.remove t.variables_debug_only var in
+  { t with
+    variables_in_terms;
+    variables_in_types;
+    variables_debug_only;
+  }
