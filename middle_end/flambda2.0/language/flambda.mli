@@ -78,9 +78,6 @@ module rec Expr : sig
       whether something got deleted. *)
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
 
-  (** Create a second-class continuation binding. *)
-  val create_let_cont : Let_cont.t -> t
-
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
 
@@ -236,13 +233,13 @@ end and Let_cont : sig
      : Continuation.t
     -> Continuation_handler.t
     -> body:Expr.t
-    -> t
+    -> Expr.t
 
   (** Create a definition of a set of possibly-recursive continuations. *)
   val create_recursive
      : Continuation_handler.t Continuation.Map.t
     -> body:Expr.t
-    -> t
+    -> Expr.t
 end and Non_recursive_let_cont_handler : sig
   (** The representation of the alpha-equivalence class of the binding of a
       single non-recursive continuation handler over a body. *)
@@ -353,7 +350,7 @@ end and Continuation_handlers : sig
   type t
 
   (** Obtain the mapping from continuation to handler. *)
-  val to_map : Continuation_handler.t Continuation.Map.t
+  val to_map : t -> Continuation_handler.t Continuation.Map.t
 
   (** The domain of [to_map t]. *)
   val domain : t -> Continuation.Set.t

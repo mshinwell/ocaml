@@ -64,7 +64,6 @@ and function_declaration = {
   body : t;
   attr : Lambda.function_attribute;
   loc : Location.t;
-  free_idents_of_body : Ident.Set.t;
   stub : bool;
 }
 
@@ -110,9 +109,8 @@ let fprintf = Format.fprintf
 
 let rec print_function ppf
       ({ continuation_param; kind; params; body; attr;
-         exn_continuation = _; return = _; loc = _; free_idents_of_body = _;
-         stub = _; }
-       : function_declaration) =
+         exn_continuation = _; return = _; loc = _; stub = _;
+       } : function_declaration) =
   let pr_params ppf params =
     match kind with
     | Curried ->

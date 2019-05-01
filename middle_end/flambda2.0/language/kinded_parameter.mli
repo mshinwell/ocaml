@@ -19,7 +19,7 @@
 (** A parameter (to a function, continuation, etc.) together with its kind. *)
 type t
 
-include Contains_names.S with type t := t
+include Bindable.S with type t := t
 
 (** Create a kinded parameter. *)
 val create : Parameter.t -> Flambda_kind.t -> t
@@ -87,5 +87,3 @@ module List : sig
 
   val equal : t -> t -> bool
 end
-
-include Identifiable.S with type t := t
