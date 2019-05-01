@@ -14,30 +14,19 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The representation of the application of a continuation.  In the
-    zero-arity case this is just "goto". *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = private {
-  k : Continuation.t;
-  args : Simple.t list;
-  trap_action : Trap_action.Option.t;
-}
-
-(** Printing, invariant checks, name manipulation, etc. *)
-include Expr_std.S with type t := t
-
-val create
-   : ?trap_action:Trap_action.t
-  -> Continuation.t
-  -> args:Simple.t list
-  -> t
-
-val goto : Continuation.t -> t
-
-val continuation : t -> Continuation.t
-
-val args : t -> Simple.t list
-
-val trap_action : t -> Trap_action.t option
+module type S = sig
+  val simplify_toplevel
+     : Simplify_env_and_result.Env.t
+    -> Simplify_env_and_result.Result.t
+    -> Flambda.Expr.t
+    -> continuation:Continuation.t
+    -> continuation_params:Kinded_parameter.t list
+    -> exn_continuation:Exn_continuation.t
+    -> descr:string
+    -> scope_level_for_lifted_constants:Scope_level.t
+    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
+         * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
+             Symbol.Map.t
+end
