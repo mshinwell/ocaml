@@ -88,6 +88,7 @@ module Function_decls = struct
       closure_bound_var : Closure_id.t;
       kind : Lambda.function_kind;
       params : (Ident.t * Lambda.value_kind) list;
+      return : Lambda.value_kind;
       continuation_param : Continuation.t;
       exn_continuation : Ilambda.exn_continuation;
       body : Ilambda.t;
@@ -97,7 +98,7 @@ module Function_decls = struct
       stub : bool;
     }
 
-    let create ~let_rec_ident ~closure_bound_var ~kind ~params
+    let create ~let_rec_ident ~closure_bound_var ~kind ~params ~return
         ~continuation_param ~exn_continuation ~body ~attr
         ~loc ~free_idents_of_body ~stub =
       let let_rec_ident =
@@ -109,6 +110,7 @@ module Function_decls = struct
         closure_bound_var;
         kind;
         params;
+        return;
         continuation_param;
         exn_continuation;
         body;
@@ -122,6 +124,7 @@ module Function_decls = struct
     let closure_bound_var t = t.closure_bound_var
     let kind t = t.kind
     let params t = t.params
+    let return t = t.return
     let continuation_param t = t.continuation_param
     let exn_continuation t = t.exn_continuation
     let body t = t.body
@@ -176,17 +179,4 @@ module Function_decls = struct
   let to_list t = t.function_decls
 
   let all_free_idents t = t.all_free_idents
-
-  (* let closure_env_without_parameters external_env t = *)
-  (*   let closure_env = *)
-  (*     (\* For "let rec"-bound functions. *\) *)
-  (*     List.fold_right (fun function_decl env -> *)
-  (*         Env.add_var env (Function_decl.let_rec_ident function_decl) *)
-  (*           (Function_decl.closure_bound_var function_decl)) *)
-  (*       t.function_decls (Env.clear_local_bindings external_env) *)
-  (*   in *)
-  (*   (\* For free variables. *\) *)
-  (*   Ident.Set.fold (fun id env -> *)
-  (*       Env.add_var env id (Variable.create (Ident.name id))) *)
-  (*     t.all_free_idents closure_env *)
 end

@@ -31,3 +31,5 @@ val specialise_attribute
 val kind_of_primitive_native_repr : Primitive.native_repr -> Flambda_kind.t
 
 val method_kind : Lambda.meth_kind -> Call_kind.method_kind
+
+val raise_kind : Lambda.raise_kind -> Trap_action.raise_kind
