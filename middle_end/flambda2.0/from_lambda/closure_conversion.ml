@@ -303,6 +303,15 @@ let close_c_call env ~let_bound_id ~let_bound_var
   Flambda.Let_cont.create_non_recursive return_continuation after_call
     ~body:call
 
+let close_exn_continuation env (exn_continuation : Ilambda.exn_continuation) =
+  let extra_args =
+    List.map (fun (id, kind) ->
+        let simple = Simple.var (Env.find_var env id) in
+        simple, LC.value_kind kind)
+      exn_continuation.extra_args
+  in
+  Exn_continuation.create ~exn_handler:exn_continuation.exn_handler ~extra_args
+
 let close_primitive t env ~let_bound_id ~let_bound_var named
       (prim : Lambda.primitive) ~args loc
       (exn_continuation : Ilambda.exn_continuation option)
@@ -310,14 +319,8 @@ let close_primitive t env ~let_bound_id ~let_bound_var named
   let exn_continuation =
     match exn_continuation with
     | None -> None
-    | Some { exn_handler; extra_args; } ->
-      let extra_args =
-        List.map (fun (id, kind) ->
-            let simple = Simple.var (Env.find_var env id) in
-            simple, LC.value_kind kind)
-          extra_args
-      in
-      Some (Exn_continuation.create ~exn_handler ~extra_args)
+    | Some exn_continuation ->
+      Some (close_exn_continuation env exn_continuation)
   in
   let args = Env.find_simples env args in
   let dbg = Debuginfo.from_location loc in
@@ -371,15 +374,13 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         Expr.create_let var kind defining_expr body
     in
     close_named t env ~let_bound_id:id ~let_bound_var:var defining_expr cont
+  | Let_mutable _ ->
+    Misc.fatal_error "[Let_mutable] should have been removed by \
+      [Eliminate_mutable_vars]"
   | Let_rec (defs, body) -> close_let_rec env ~defs ~body
-  | Let_cont { name; administrative; is_exn_handler; params; recursive; body;
+  | Let_cont { name; is_exn_handler; params; recursive; body;
       handler; } ->
     if is_exn_handler then begin
-      if administrative then begin
-        Misc.fatal_errorf "[Let_cont]s marked as exception handlers cannot \
-            also be marked as administrative redexes: %a"
-          Ilambda.print ilam
-      end;
       if List.length params <> 1 then begin
         Misc.fatal_errorf "[Let_cont]s marked as exception handlers must \
             have exactly one parameter: %a"
@@ -392,49 +393,35 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             be [Nonrecursive]: %a"
           Ilambda.print ilam
     end;
-    if administrative then begin
-      (* Inline out administrative redexes. *)
-      begin match recursive with
-      | Nonrecursive -> ()
-      | Recursive ->
-        Misc.fatal_errorf "[Let_cont]s marked as administrative redexes must \
-            be [Nonrecursive]: %a"
-          Ilambda.print ilam
-      end;
-      let body_env =
-        Env.add_administrative_redex env name ~params ~handler
-      in
-      close t body_env body
-    end else begin
-      let params_with_kinds = params in
-      let handler_env, params =
-        Env.add_vars_like env (List.map (fun (param, _kind) -> param) params)
-      in
-      let params =
-        List.map2 (fun param (_, kind) ->
-            Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
-          params
-          params_with_kinds
-      in
-      let handler = close t handler_env handler in
-      let params_and_handler =
-        Flambda.Continuation_params_and_handler.create params
-          ~param_relations:T.Typing_env_extension.empty
-          ~handler
-      in
-      let handler =
-        Flambda.Continuation_handler.create ~params_and_handler
-          ~inferred_typing:T.Parameters.empty
-          ~stub:false
-          ~is_exn_handler:is_exn_handler
-      in
-      let body = close t env body in
-      match recursive with
-      | Nonrecursive ->
-        Flambda.Let_cont.create_non_recursive name handler ~body
-      | Recursive ->
-        let handlers = Continuation.Map.singleton name handler in
-        Flambda.Let_cont.create_recursive handlers ~body
+    let params_with_kinds = params in
+    let handler_env, params =
+      Env.add_vars_like env (List.map (fun (param, _kind) -> param) params)
+    in
+    let params =
+      List.map2 (fun param (_, kind) ->
+          Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
+        params
+        params_with_kinds
+    in
+    let handler = close t handler_env handler in
+    let params_and_handler =
+      Flambda.Continuation_params_and_handler.create params
+        ~param_relations:T.Typing_env_extension.empty
+        ~handler
+    in
+    let handler =
+      Flambda.Continuation_handler.create ~params_and_handler
+        ~inferred_typing:T.Parameters.empty
+        ~stub:false
+        ~is_exn_handler:is_exn_handler
+    in
+    let body = close t env body in
+    begin match recursive with
+    | Nonrecursive ->
+      Flambda.Let_cont.create_non_recursive name handler ~body
+    | Recursive ->
+      let handlers = Continuation.Map.singleton name handler in
+      Flambda.Let_cont.create_recursive handlers ~body
     end
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised; } ->
@@ -444,6 +431,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       | Method { kind; obj; } ->
         Call_kind.method_call (LC.method_kind kind) ~obj:(Env.find_name env obj)
     in
+    let exn_continuation = close_exn_continuation env exn_continuation in
     let apply =
       Flambda.Apply.create ~callee:(Env.find_name env func)
         ~continuation
@@ -457,22 +445,17 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
     let args = Env.find_vars env args in
-    begin match Env.find_administrative_redex env cont with
-    | Some (params, handler) when Option.is_none trap_action ->
-      let handler_env = Env.add_vars env params args in
-      close t handler_env handler
-    | _ ->
-      let trap_action =
-        Option.map (fun (trap_action : Ilambda.trap_action) : Trap_action.t ->
-            match trap_action with
-            | Push { exn_handler; } -> Push { exn_handler; }
-            | Pop { exn_handler; } ->
-              Pop { exn_handler; take_backtrace = false; })
-          trap_action
-      in
-      let args = Simple.vars args in
-      Apply_cont (cont, trap_action, args)
-    end
+    let trap_action =
+      Option.map (fun (trap_action : Ilambda.trap_action) : Trap_action.t ->
+          match trap_action with
+          | Push { exn_handler; } -> Push { exn_handler; }
+          | Pop { exn_handler; } ->
+            Pop { exn_handler; take_backtrace = false; })
+        trap_action
+    in
+    let args = Simple.vars args in
+    let apply_cont = Flambda.Apply_cont.create ?trap_action cont ~args in
+    Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
     let module D = Discriminant in
     let arms = List.map (fun (case, arm) -> D.of_int_exn case, arm) sw.consts in
@@ -495,16 +478,19 @@ and close_named t env ~let_bound_id ~let_bound_var (named : Ilambda.named)
   match named with
   | Var id ->
     let simple =
-      if not (Ident.is_predef_exn id) then Simple.var (Env.find_var env id)
+      if not (Ident.is_predef id) then Simple.var (Env.find_var env id)
       else symbol_for_ident t id
     in
-    k (Simple simple)
+    k (Some (Named.create_simple simple))
   | Const cst ->
     let named, _name = close_const t cst in
-    k named
+    k (Some named)
   | Prim { prim; args; loc; exn_continuation; } ->
     close_primitive t env ~let_bound_id ~let_bound_var named prim ~args loc
       exn_continuation k
+  | Assign _ ->
+    Misc.fatal_error "[Assign] should have been removed by \
+      [Eliminate_mutable_vars]"
 
 and close_let_rec env ~defs ~body =
   let env =
@@ -515,14 +501,14 @@ and close_let_rec env ~defs ~body =
   in
   let function_declarations =
     List.map (function (let_rec_ident,
-            ({ kind; continuation_param; exn_continuation_param;
-               params; body; attr; loc; stub;
+            ({ kind; continuation_param; exn_continuation;
+               params; return; body; free_idents_of_body;
+               attr; loc; stub;
              } : Ilambda.function_declaration)) ->
         let closure_bound_var =
           Closure_id.wrap
             (Variable.create_with_same_name_as_ident let_rec_ident)
         in
-        let free_idents_of_body = Lambda.free_variables body in
         let function_declaration =
           Function_decl.create ~let_rec_ident:(Some let_rec_ident)
             ~closure_bound_var ~kind ~params ~continuation_param

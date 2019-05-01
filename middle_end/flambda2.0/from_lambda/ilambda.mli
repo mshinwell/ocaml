@@ -82,6 +82,7 @@ and function_declaration = {
   params : (Ident.t * Lambda.value_kind) list;
   return : Lambda.value_kind;
   body : t;
+  free_idents_of_body : Ident.Set.t;
   attr : Lambda.function_attribute;
   loc : Location.t;
   stub : bool;
@@ -89,11 +90,8 @@ and function_declaration = {
 
 and let_cont = {
   name : Continuation.t;
-  administrative : bool;
   is_exn_handler : bool;
-  (** If the continuation is an exception handler, it must not be marked as
-      [administrative].
-      Continuations that are exception handlers must be [Non_recursive] and
+  (** Continuations that are exception handlers must be [Non_recursive] and
       have exactly one parameter. *)
   params : (Ident.t * Lambda.value_kind) list;
   recursive : Asttypes.rec_flag;

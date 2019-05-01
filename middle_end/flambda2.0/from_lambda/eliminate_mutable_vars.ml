@@ -224,9 +224,8 @@ and transform_let_mutable env
   Let (new_id, contents_kind, Var initial_value, body)
 
 and transform_let_cont env
-      ({ name; administrative; is_exn_handler; params; recursive;
-         body; handler;
-       } : Ilambda.let_cont)
+      ({ name; is_exn_handler; params; recursive; body; handler; }
+         : Ilambda.let_cont)
       : Ilambda.let_cont =
   let { Env. body_env; handler_env; extra_params } =
     Env.add_continuation env name recursive
@@ -238,7 +237,6 @@ and transform_let_cont env
       | _ -> false
   in
   { name; 
-    administrative;
     is_exn_handler;
     params = params @ extra_params;
     recursive;
@@ -272,7 +270,7 @@ and transform_apply env
 
 and transform_function_declaration _env
       ({ kind; continuation_param; exn_continuation; params; return;
-         body; attr; loc; stub;
+         body; free_idents_of_body; attr; loc; stub;
        } : Ilambda.function_declaration) : Ilambda.function_declaration =
   { kind;
     continuation_param;
@@ -280,6 +278,7 @@ and transform_function_declaration _env
     params;
     return;
     body = transform_toplevel body;
+    free_idents_of_body;
     attr;
     loc;
     stub;

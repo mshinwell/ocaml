@@ -47,18 +47,6 @@ module Env : sig
   val find_vars : t -> Ident.t list -> Variable.t list
   val find_simples : t -> Ident.t list -> Simple.t list
 
-  val add_administrative_redex
-     : t
-    -> Continuation.t
-    -> params:(Ident.t * Lambda.value_kind) list
-    -> handler:Ilambda.t
-    -> t
-
-  val find_administrative_redex
-     : t
-    -> Continuation.t
-    -> ((Ident.t * Lambda.value_kind) list * Ilambda.t) option
-
   val add_global : t -> int -> Symbol.t -> t
   val find_global : t -> int -> Symbol.t
 

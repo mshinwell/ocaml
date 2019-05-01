@@ -21,15 +21,12 @@ module Env = struct
     variables : Variable.t Ident.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
     at_toplevel : bool;
-    administrative_redexes :
-      ((Ident.t * Lambda.value_kind) list * Ilambda.t) Continuation.Map.t;
   }
 
   let empty = {
     variables = Ident.Map.empty;
     globals = Numbers.Int.Map.empty;
     at_toplevel = true;
-    administrative_redexes = Continuation.Map.empty;
   }
 
   let clear_local_bindings env =
@@ -82,19 +79,6 @@ module Env = struct
   let at_toplevel t = t.at_toplevel
 
   let not_at_toplevel t = { t with at_toplevel = false; }
-
-  let add_administrative_redex t continuation ~params ~handler =
-    assert (not (Continuation.Map.mem continuation t.administrative_redexes));
-    { t with
-      administrative_redexes =
-        Continuation.Map.add continuation (params, handler)
-          t.administrative_redexes;
-    }
-
-  let find_administrative_redex t continuation =
-    match Continuation.Map.find continuation t.administrative_redexes with
-    | exception Not_found -> None
-    | handler -> Some handler
 end
 
 module Function_decls = struct
