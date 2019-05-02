@@ -233,3 +233,6 @@ let apply_name_permutation
       inline;
       specialise;
     }
+
+let with_continuation t continuation =
+  { t with continuation; }

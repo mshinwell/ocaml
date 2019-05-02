@@ -26,6 +26,8 @@ module T = Flambda_type
 
 module Apply = Flambda.Apply
 module Apply_cont = Flambda.Apply_cont
+module Continuation_handler = Flambda.Continuation_handler
+module Continuation_params_and_handler = Flambda.Continuation_params_and_handler
 module Expr = Flambda.Expr
 module Function_declaration = Flambda.Function_declaration
 module Function_declarations = Flambda.Function_declarations
@@ -566,7 +568,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
       ~f:(fun ~continuation_param:_ _exn_continuation params ~param_relations:_
-            ~body:_ ~my_closure ->
+            ~body:_ ~my_closure:_ ->
         (* Since we're not inlining, the continuation parameters and body
            of the function declaration, etc., are irrelevant. *)
         let arity = List.length params in
@@ -663,95 +665,65 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           (Named.create_set_of_closures wrapper_taking_remaining_args)
           (Expr.create_apply_cont apply_cont)
 
-  and simplify_direct_over_application env r ~args ~arg_tys ~continuation
-        ~exn_continuation ~callee ~callee's_closure_id
+  and simplify_direct_over_application env r ~callee ~args
+        ~callee's_closure_id
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~set_of_closures ~dbg ~inline ~specialise =
-    let return_params =
-      List.mapi (fun index ty ->
-          let name = Format.sprintf "result%d" index in
-          let var = Variable.create name in
-          let param = Parameter.wrap var in
-          Flambda.Typed_parameter.create param ty)
-        function_decl.result
-    in
-    let return_arity = Flambda.Typed_parameter.List.arity return_params in
-    let continuation, r =
-      simplify_continuation_use_cannot_inline env r continuation
-        ~params:return_params
-    in
-    let arity = List.length return_arity in
-    assert (arity < List.length args);
-    assert (List.length args = List.length arg_tys);
-    let full_app_args, remaining_args = Misc.Stdlib.List.split_at arity args in
-    let full_app_types, _ = Misc.Stdlib.List.split_at arity arg_tys in
-    let func_var = Variable.create "full_apply" in
-    let func_var_kind = K.value () in
-    let func_param =
-      Flambda.Typed_parameter.create (Parameter.wrap func_var)
-        (T.unknown func_var_kind)
-    in
-    let handler : Flambda.Continuation_handler.t =
-      { stub = false;
-        is_exn_handler = false;
-        params = [func_param];
-        handler =
-          Apply {
-            continuation;
-            exn_continuation;
-            func = Name.var func_var;
-            args = remaining_args;
-            call_kind = Function Indirect_unknown_arity;
-            dbg;
-            inline = inline;
-            specialise = specialise;
-          };
-      }
-    in
-    let after_full_application = Continuation.create () in
-    let after_full_application_param =
-      let var = Variable.create "after_full_app" in
-      let param = Parameter.wrap var in
-      let ty = T.unknown func_var_kind in
-      Flambda.Typed_parameter.create param ty
-    in
-    let after_full_application_approx =
-      Continuation_approx.create ~name:after_full_application
-        ~handlers:(Non_recursive handler)
-        ~params:[after_full_application_param]
-    in
-    let full_application, r =
-      let env =
-        E.add_continuation env after_full_application
-          after_full_application_approx
-      in
-      simplify_full_application env r ~callee ~callee's_closure_id
-        ~function_decl ~set_of_closures ~args:full_app_args
-        ~arg_tys:full_app_types ~continuation:after_full_application
-        (* CR mshinwell: check [exn_continuation] is correct *)
-        ~exn_continuation ~dbg ~inline ~specialise
-    in
-    (* CR mshinwell: Maybe it would be better just to build a proper term
-       including the full application as a normal Apply node and call simplify
-       on that? *)
-    let r, after_full_application_uses =
-      R.exit_scope_of_let_cont r env after_full_application
-        ~params:handler.params
-    in
-    let r =
-      R.define_continuation r after_full_application env Non_recursive
-        after_full_application_uses after_full_application_approx
-    in
-    let expr : Expr.t =
-      Let_cont {
-        body = full_application;
-        handlers = Non_recursive {
-          name = after_full_application;
-          handler;
-        };
-      }
-    in
-    expr, r
+        ~continuation:apply_continuation_param
+        ~exn_continuation:apply_exn_continuation
+        dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
+        apply =
+    let function_decl = function_decl.term_language_function_decl in
+    Function_params_and_body.pattern_match
+      (Function_declaration.params_and_body function_decl)
+      ~f:(fun ~continuation_param:_ _exn_continuation params ~param_relations:_
+            ~body:_ ~my_closure:_ ->
+        let arity = List.length params in
+        assert (arity < List.length args);
+        let result_arity = Function_declaration.result_arity function_decl in
+        let return_params =
+          List.mapi (fun index kind ->
+              let name = Format.sprintf "result%d" index in
+              let var = Variable.create name in
+              let param = Parameter.wrap var in
+              Kinded_parameter.create (Parameter.wrap var) kind)
+            result_arity
+        in
+        let full_app_args, remaining_args =
+          Misc.Stdlib.List.split_at arity args
+        in
+        let func_var = Variable.create "full_apply" in
+        let func_var_kind = K.value () in
+        let func_param = KP.create (Parameter.wrap func_var) func_var_kind in
+        let perform_over_application =
+          Apply.create ~callee:(Name.var func_var)
+            ~continuation:apply_continuation_param
+            ~exn_continuation:apply_exn_continuation
+            ~args:remaining_args
+            ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())
+            ~dbg
+            ~inline
+            ~specialise
+        in
+        in
+        let after_full_application = Continuation.create () in
+        let after_full_application_handler =
+          let params_and_handler =
+            Continuation_params_and_handler.create return_params
+              ~param_relations:T.Typing_env_extension.empty
+              ~handler:(Expr.create_apply perform_over_application)
+          in
+          Continuation_handler.create ~params_and_handler
+            ~inferred_typing:T.Parameters.empty
+            ~stub:false
+            ~is_exn_handler:false
+        in
+        let expr =
+          Let_cont.create_non_recursive after_full_application
+            after_full_application_handler
+            ~body:(Expr.create_apply
+              (Apply.with_continuation apply after_full_application))
+        in
+        simplify env r expr)
 
   and simplify_inlinable_direct_function_call env r ~callee's_closure_id
         ~(function_decl : T.inlinable_function_declaration)
