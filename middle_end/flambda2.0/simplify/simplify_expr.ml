@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda.Import
+
 module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
@@ -24,29 +26,26 @@ module R = Simplify_env_and_result.Result
 module S = Simplify_simple
 module T = Flambda_type
 
-module Apply = Flambda.Apply
-module Apply_cont = Flambda.Apply_cont
-module Continuation_handler = Flambda.Continuation_handler
-module Continuation_params_and_handler = Flambda.Continuation_params_and_handler
-module Expr = Flambda.Expr
-module Function_declaration = Flambda.Function_declaration
-module Function_declarations = Flambda.Function_declarations
-module Function_params_and_body = Flambda.Function_params_and_body
-module Let_cont = Flambda.Let_cont
-module Named = Flambda.Named
-module Set_of_closures = Flambda.Set_of_closures
-
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
 module Make (Simplify_named : Simplify_named_intf.S) = struct
-  let environment_for_let_cont_handler ~env _cont
-        ~(handler : Flambda.Continuation_handler.t) =
-    let params = T.Parameters.params handler.params in
-    let _freshened_vars, freshening =
-      Freshening.add_variables' (E.freshening env)
-        (Typed_parameter.List.vars params)
+  (* XXX Need function to resolve continuation aliases
+     Should return Unknown _ | Unreachable | Inline _ *)
+
+  (* CR mshinwell: bad interface *)
+  let record_lifted_constants env r ~f =
+    let already_lifted_constants = R.get_lifted_constants r in
+    let result, r = f env r in
+    let lifted_constants =
+      Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
     in
-    T.Parameters.introduce handler.params freshening env
+    let env =
+      Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+          E.add_symbol_for_lifted_constant env symbol ty)
+        lifted_constants
+        env
+    in
+    env, result, r
 
   let rec simplify_let_cont_handler ~env ~r ~cont:_
         ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
@@ -247,16 +246,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         (Continuation.Map.print Flambda.Continuation_handler.print) handlers;
       raise Misc.Fatal_error
     end
-
-  and simplify_let_cont env r let_cont : Expr.t * R.t =
-    let module NR = Flambda.Non_recursive_let_cont_handler in
-    match Let_cont.should_inline_out let_cont with
-    | Some non_rec_handler ->
-      NR.pattern_match non_rec_handler ~f:(fun cont ~body ->
-        let handler = NR.handler non_rec_handler in
-        let env = E.add_continuation_to_inline env cont handler in
-        simplify_expr env r body)
-    | None ->
 
     (* In two stages we form the environment to be used for simplifying the
        [body].  If the continuations in [handlers] are recursive then
@@ -499,6 +488,65 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           | Nothing_deleted -> r
         in
         expr, r)
+
+  and simplify_non_recursive_let_cont_handler env r non_rec_handler
+        : Expr.t * R.t =
+    let already_lifted_constants = R.get_lifted_constants r in
+    Non_recursive_let_cont_handler.pattern_match non_rec_handler
+      ~f:(fun cont ~body ->
+        let body, r = simplify_expr (E.add_continuation env cont) r body in
+        let lifted_constants =
+          Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+        in
+        let env =
+          Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+              E.add_symbol_for_lifted_constant env symbol ty)
+            lifted_constants
+            env
+        in
+        let cont_handler =
+          Non_recursive_let_cont_handler.handler non_rec_handler
+        in
+        let params_and_handler =
+          Continuation_handler.params_and_handler cont_handler
+        in
+        Continuation_params_and_handler.pattern_match params_and_handler
+          ~f:(fun params ~param_relations ~handler ->
+            let env = E.add_parameters env params in
+            let handler, r = simplify_expr env r handler in
+            let params_and_handler =
+              Continuation_params_and_handler.create params ~param_relations
+                ~handler:(simplify_expr env r handler)
+            in
+            let cont_handler =
+              Continuation_handler.with_params_and_handler cont_handler
+                params_and_handler
+            in
+            Let_cont.create_non_recursive cont cont_handler ~body, r)
+
+  and simplify_recursive_let_cont_handlers env r handlers : Expr.t * R.t =
+
+
+  and simplify_let_cont env r let_cont : Expr.t * R.t =
+    let module NR = Flambda.Non_recursive_let_cont_handler in
+    match Let_cont.non_recursive_handler_behaviour let_cont with
+    | Unreachable ->
+      simplify_expr (E.add_unreachable_continuation env cont) body
+    | Alias alias_for ->
+      simplify_expr (E.add_continuation_alias env cont ~alias_for) body
+    | Unknown ->
+      match Let_cont.should_inline_out let_cont with
+      | Some non_rec_handler ->
+        NR.pattern_match non_rec_handler ~f:(fun cont ~body ->
+          let handler = NR.handler non_rec_handler in
+          let env = E.add_continuation_to_inline env cont handler in
+          simplify_expr env r body)
+      | None ->
+        match let_cont with
+        | Non_recursive { handler; _ } ->
+          simplify_non_recursive_let_cont_handler env r handler
+        | Recursive handlers ->
+          simplify_recursive_let_cont_handlers env r handlers
 
   and simplify_direct_full_application env r ~callee ~args
         ~(function_decl : Flambda_type.inlinable_function_declaration)

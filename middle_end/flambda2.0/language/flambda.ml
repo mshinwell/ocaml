@@ -1595,3 +1595,17 @@ end and Flambda_type : Flambda_type0_intf.S
 (* CR-someday mshinwell: We should make "direct applications should not have
    overapplication" be an invariant throughout.  At the moment I think this is
    only true after [Simplify] has split overapplications. *)
+
+module Import = struct
+  module Apply = Apply
+  module Apply_cont = Apply_cont
+  module Continuation_handler = Continuation_handler
+  module Continuation_params_and_handler = Continuation_params_and_handler
+  module Expr = Expr
+  module Function_declaration = Function_declaration
+  module Function_declarations = Function_declarations
+  module Function_params_and_body = Function_params_and_body
+  module Let_cont = Let_cont
+  module Named = Named
+  module Set_of_closures = Set_of_closures
+end
