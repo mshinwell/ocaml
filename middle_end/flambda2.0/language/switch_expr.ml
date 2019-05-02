@@ -113,3 +113,7 @@ let apply_name_permutation ({ scrutinee; arms; } as t) perm =
   in
   if scrutinee == scrutinee' && arms == arms' then t
   else { scrutinee = scrutinee'; arms = arms'; }
+
+let update_arms t ~arms =
+  if arms == t.arms then t
+  else { t with arms; }
