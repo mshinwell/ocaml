@@ -62,3 +62,6 @@ val inline : t -> Inline_attribute.t
 (** Instructions from the source code as to whether the callee should be
     specialised. *)
 val specialise : t -> Specialise_attribute.t
+
+(** Change the return continuation of an application. *)
+val with_continuation : t -> Continuation.t -> t
