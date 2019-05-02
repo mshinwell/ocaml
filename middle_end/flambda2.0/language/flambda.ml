@@ -20,6 +20,7 @@
 [@@@ocaml.warning "-32"]
 
 module K = Flambda_kind
+module KP = Kinded_parameter
 
 module Apply = Apply_expr
 module Apply_cont = Apply_cont_expr
@@ -196,9 +197,12 @@ end = struct
           (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
     end;
     let free_names_of_body = free_names body in
-    (* If the [Let]-binding is redundant, don't even create it. *)
+    (* If the [Let]-binding is redundant, don't even create it.
+       N.B. Don't delete closure definitions: there might be a reference
+       to them (propagated through Flambda types) that is not in scope. *)
     if (not (Name_occurrences.mem_var free_names_of_body bound_var))
       && Named.at_most_generative_effects defining_expr
+      && Named.not_set_of_closures defining_expr
     then
       body, Have_deleted defining_expr
     else
@@ -272,11 +276,47 @@ end = struct
     in
     create_switch ~scrutinee ~arms
 
-  (* CR mshinwell: Maybe this should assign the fresh names? *)
   let bind ~bindings ~body =
     List.fold_left (fun expr (bound_var, kind, defining_expr) ->
-        Expr.create_let bound_var kind defining_expr expr)
+        create_let bound_var kind defining_expr expr)
       body bindings
+
+  let link_parameters_to_simples ~bind ~target t =
+    if List.compare_lengths bind target <> 0 then begin
+      Misc.fatal_errorf "Lists of differing lengths: %a and %a"
+        KP.List.print bind
+        Simple.List.print target
+    end;
+    List.fold_left2 (fun bind target expr ->
+        let var = KP.var bind in
+        let kind = KP.kind bind in
+        create_let var kind (Named.create_simple target) expr)
+      (List.rev bind) (List.rev target)
+      t
+
+  let link_continuations ~bind ~target ~arity t =
+    let params =
+      List.map (fun kind ->
+          let param = Parameter.wrap (Variable.create "param") in
+          KP.create param kind)
+        arity
+    in
+    let params_and_handler =
+      let apply_cont_target =
+        let args = List.map (fun param -> KP.simple param) in
+        Apply_cont.create target ~args
+      in
+      Flambda.Continuation_params_and_handler.create params
+        ~param_relations:Flambda_type.Typing_env_extension.empty
+        ~handler:(create_apply_cont apply_cont_target)
+    in
+    let handler =
+      Continuation_handler.create ~params_and_handler
+        ~inferred_typing:Flambda_type.Parameters.empty
+        ~stub:true
+        ~is_exn_handler:false
+    in
+    Let_cont.create_non_recursive bind handler ~body:t
 end and Named : sig
   type t =
     | Simple of Simple.t
@@ -299,6 +339,8 @@ end and Named : sig
   val at_most_generative_effects : t -> bool
   val dummy_value : Flambda_kind.t -> t
 
+  val not_set_of_closures : t -> bool
+
   val invariant_returning_kind
      : Invariant_env.t
     -> t
@@ -312,6 +354,10 @@ end = struct
   let create_simple simple = Simple simple
   let create_prim prim dbg = Prim (prim, dbg)
   let create_set_of_closures set_of_closures = Set_of_closures set_of_closures
+
+  let not_set_of_closures = function
+    | Simple _ | Prim _ -> true
+    | Set_of_closures _ -> false
 
   let print_with_cache ~cache ppf (t : t) =
     match t with
@@ -653,6 +699,8 @@ end = struct
       match Expr.descr body with
       | Apply_cont { k = k'; args = []; trap_action = None; }
           when Continuation.equal k k' ->
+        (* CR mshinwell: This could work for the >0 arity-case too, to handle
+           continuation aliases. *)
         Continuation_params_and_handler.pattern_match
           (Continuation_handler.params_and_handler handler)
           ~f:(fun params ~param_relations:_ ~handler:handler_expr ->
@@ -694,6 +742,18 @@ end = struct
       in
       if handlers == handlers' then t
       else Recursive handlers'
+
+  let should_inline_out t =
+    match t with
+    | Non_recursive { handler = non_rec_handler; num_free_occurrences; } ->
+      let handler = Non_recursive_let_cont_handler.handler non_rec_handler in
+      let stub = Continuation_handler.stub handler in
+      let is_exn_handler = Continuation_handler.is_exn_handler handler in
+      if (stub || num_free_occurrences <= 1) && not is_exn_handler then
+        Some non_rec_handler
+      else
+        None
+    | Recursive _ -> None
 end and Non_recursive_let_cont_handler : sig
   type t
 

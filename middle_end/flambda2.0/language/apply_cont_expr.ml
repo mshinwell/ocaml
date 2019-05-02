@@ -177,3 +177,7 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
   in
   if k == k' && args == args' && trap_action == trap_action' then t
   else { k = k'; args = args'; trap_action = trap_action'; }
+
+let update_args t ~args =
+  if args == t.args then t
+  else { t with args; }

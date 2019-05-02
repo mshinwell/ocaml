@@ -36,3 +36,5 @@ val exn_handler : t -> Continuation.t
 
 (** Any extra arguments together with their kinds. *)
 val extra_args : t -> (Simple.t * Flambda_kind.t) list
+
+val arity : t -> Flambda_arity.t
