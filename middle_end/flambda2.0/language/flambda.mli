@@ -231,7 +231,8 @@ end and Let_cont : sig
         handler : Non_recursive_let_cont_handler.t;
         num_free_occurrences : int;
         (** [num_free_occurrences] can be used, for example, to decide whether
-            to inline out a linearly-used continuation. *)
+            to inline out a linearly-used continuation.  It will always be
+            strictly greater than zero. *)
       }
     | Recursive of Recursive_let_cont_handlers.t
 
@@ -256,6 +257,16 @@ end and Let_cont : sig
   (** Determine whether the continuation bound by the [Let_cont] should be
       inlined out. *)
   val should_inline_out : t -> Non_recursive_let_cont_handler.t option
+
+  type non_recursive_handler_behaviour = private
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
+
+  (** If the given continuation handler is not recursive, determine some
+      properties of its behaviour.  If the handler is recursive then
+      [Unknown] is always returned. *)
+  val non_recursive_handler_behaviour : t -> non_recursive_handler_behaviour
 end and Non_recursive_let_cont_handler : sig
   (** The representation of the alpha-equivalence class of the binding of a
       single non-recursive continuation handler over a body. *)
@@ -318,6 +329,8 @@ end and Continuation_handler : sig
   (** Whether the continuation is a compiler-generated wrapper that should
       always be inlined. *)
   val stub : t -> bool
+
+  val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
 end and Continuation_params_and_handler : sig
   (** The representation of the alpha-equivalence class of bindings of a list
       of parameters, with associated relations thereon, over the code of a
@@ -556,3 +569,17 @@ end and Function_declaration : sig
   val update_params_and_body : t -> Function_params_and_body.t -> t
 end and Flambda_type : Flambda_type0_intf.S
   with type term_language_function_declaration := Function_declaration.t
+
+module Import : sig
+  module Apply = Apply
+  module Apply_cont = Apply_cont
+  module Continuation_handler = Continuation_handler
+  module Continuation_params_and_handler = Continuation_params_and_handler
+  module Expr = Expr
+  module Function_declaration = Function_declaration
+  module Function_declarations = Function_declarations
+  module Function_params_and_body = Function_params_and_body
+  module Let_cont = Let_cont
+  module Named = Named
+  module Set_of_closures = Set_of_closures
+end
