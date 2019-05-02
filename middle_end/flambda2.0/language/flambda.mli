@@ -257,16 +257,6 @@ end and Let_cont : sig
   (** Determine whether the continuation bound by the [Let_cont] should be
       inlined out. *)
   val should_inline_out : t -> Non_recursive_let_cont_handler.t option
-
-  type non_recursive_handler_behaviour = private
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
-
-  (** If the given continuation handler is not recursive, determine some
-      properties of its behaviour.  If the handler is recursive then
-      [Unknown] is always returned. *)
-  val non_recursive_handler_behaviour : t -> non_recursive_handler_behaviour
 end and Non_recursive_let_cont_handler : sig
   (** The representation of the alpha-equivalence class of the binding of a
       single non-recursive continuation handler over a body. *)
@@ -331,6 +321,13 @@ end and Continuation_handler : sig
   val stub : t -> bool
 
   val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
+
+  type behaviour = private
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
+
+  val behaviour : t -> behaviour
 end and Continuation_params_and_handler : sig
   (** The representation of the alpha-equivalence class of bindings of a list
       of parameters, with associated relations thereon, over the code of a
