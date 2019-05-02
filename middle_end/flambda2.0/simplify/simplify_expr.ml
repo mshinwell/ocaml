@@ -259,41 +259,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             let freshened_name, freshening =
               Freshening.add_continuation freshening name
             in
-            let ty =
-              (* If it's a stub, we put the code for [handler] in the
-                 environment; this is unfreshened, but will be freshened up
-                 if we inline it.
-                 Note that stubs are not allowed to call themselves.
-                 The code for [handler] is also put in the environment if
-                 the continuation is just an [Apply_cont] acting as a
-                 continuation alias or just contains
-                 [Invalid Treat_as_unreachable].  This enables earlier [Switch]es
-                 that branch to such continuation to be simplified, in some cases
-                 removing them entirely. *)
-              let alias_or_unreachable =
-                match handler.handler with
-                | Invalid Treat_as_unreachable -> true
-                (* CR mshinwell: share somehow with [Continuation_approx].
-                   Also, think about this in the multi-argument case -- need
-                   to freshen. *)
-                (* CR mshinwell: Check instead that the continuation doesn't
-                   have any arguments and doesn't have any effects, to avoid
-                   this syntactic match
-                   ...except that we still need to know which continuation
-                   it calls, if any *)
-                | Apply_cont (_cont, None, []) -> true
-                | _ -> false
-              in
-              if handler.stub || alias_or_unreachable then begin
-                assert (not (Continuation.Set.mem name
-                  (Flambda.Expr.free_continuations handler.handler)));
-                Continuation_approx.create ~name:freshened_name
-                  ~handlers:(Non_recursive handler) ~params:handler.params
-              end else begin
-                Continuation_approx.create_unknown ~name:freshened_name
-                  ~params:handler.params
-              end
-            in
             let conts_and_types =
               Continuation.Map.add freshened_name (name, ty) conts_and_types
             in
@@ -318,49 +283,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       in
       E.increment_continuation_scope_level env
     in
-    (* CR mshinwell: Think more about this lifted constant handling.  The
-       reason code is needed here is in case lifting happens in the body
-       of a [Let_cont]; in this case, the types of the continuation's arguments
-       may involve the new symbols---so they need to be in the [default_env]
-       when dealing with the join points. *)
-    (* XXX Share code for the lifted_constants handling with above *)
-    let already_lifted_constants = R.get_lifted_constants r in
-    let body, r = simplify_expr body_env r body in
-    let lifted_constants =
-      Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
-    in
-    let env =
-      Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-          E.add_symbol_for_lifted_constant env symbol ty)
-        lifted_constants
-        env
-    in
     begin match handlers with
-    | Non_recursive { name; handler; } ->
-      let with_wrapper : Expr.with_wrapper =
-        Unchanged { handler; }
-      in
-      let simplify_one_handler env r ~name ~handler ~body
-              : Expr.t * R.t =
-        (* CR mshinwell: Consider whether we should call [exit_scope_of_let_cont]
-           for non-recursive ones before simplifying their body.  I'm not sure we
-           need to, since we already ensure such continuations aren't in the
-           environment when simplifying the [handlers].
-           ...except for stubs... *)
-        let handlers =
-          Continuation.Map.add name handler Continuation.Map.empty
-        in
-        let recursive : Flambda.recursive = Non_recursive in
-        let handlers, r =
-          simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
-        in
-        match handlers with
-        | None -> body, r
-        | Some handlers -> Let_cont { body; handlers; }, r
-      in
-      begin match with_wrapper with
-      | Unchanged _ -> simplify_one_handler env r ~name ~handler ~body
-      end
     | Recursive handlers ->
       (* The sequence is:
          1. Simplify the recursive handlers with their parameter types as
@@ -492,9 +415,31 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_non_recursive_let_cont_handler env r non_rec_handler
         : Expr.t * R.t =
     let already_lifted_constants = R.get_lifted_constants r in
+    let cont_handler =
+      Non_recursive_let_cont_handler.handler non_rec_handler
+    in
     Non_recursive_let_cont_handler.pattern_match non_rec_handler
       ~f:(fun cont ~body ->
-        let body, r = simplify_expr (E.add_continuation env cont) r body in
+        let body, r =
+          let env =
+            match Continuation_handler.behaviour cont_handler with
+            | Unreachable ->
+              E.add_unreachable_continuation env cont
+            | Alias alias_for ->
+              E.add_continuation_alias env cont ~alias_for
+            | Unknown ->
+              match Let_cont.should_inline_out let_cont with
+              | Some non_rec_handler ->
+                E.add_continuation_to_inline env cont
+                  (Non_recursive_let_cont_handler.handler non_rec_handler)
+              | None ->
+                E.add_continuation env cont
+          in
+          simplify_expr env r body
+        in
+        (* Lifted constants need to be added to the environment now, before
+           simplifying the handler, as the types of the handler's arguments
+           may involve the corresponding symbols. *)
         let lifted_constants =
           Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
         in
@@ -503,9 +448,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               E.add_symbol_for_lifted_constant env symbol ty)
             lifted_constants
             env
-        in
-        let cont_handler =
-          Non_recursive_let_cont_handler.handler non_rec_handler
         in
         let params_and_handler =
           Continuation_handler.params_and_handler cont_handler
@@ -516,7 +458,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             let handler, r = simplify_expr env r handler in
             let params_and_handler =
               Continuation_params_and_handler.create params ~param_relations
-                ~handler:(simplify_expr env r handler)
+                ~handler
             in
             let cont_handler =
               Continuation_handler.with_params_and_handler cont_handler
@@ -528,25 +470,11 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
 
 
   and simplify_let_cont env r let_cont : Expr.t * R.t =
-    let module NR = Flambda.Non_recursive_let_cont_handler in
-    match Let_cont.non_recursive_handler_behaviour let_cont with
-    | Unreachable ->
-      simplify_expr (E.add_unreachable_continuation env cont) body
-    | Alias alias_for ->
-      simplify_expr (E.add_continuation_alias env cont ~alias_for) body
-    | Unknown ->
-      match Let_cont.should_inline_out let_cont with
-      | Some non_rec_handler ->
-        NR.pattern_match non_rec_handler ~f:(fun cont ~body ->
-          let handler = NR.handler non_rec_handler in
-          let env = E.add_continuation_to_inline env cont handler in
-          simplify_expr env r body)
-      | None ->
-        match let_cont with
-        | Non_recursive { handler; _ } ->
-          simplify_non_recursive_let_cont_handler env r handler
-        | Recursive handlers ->
-          simplify_recursive_let_cont_handlers env r handlers
+    match let_cont with
+    | Non_recursive { handler; _ } ->
+      simplify_non_recursive_let_cont_handler env r handler
+    | Recursive handlers ->
+      simplify_recursive_let_cont_handlers env r handlers
 
   and simplify_direct_full_application env r ~callee ~args
         ~(function_decl : Flambda_type.inlinable_function_declaration)
