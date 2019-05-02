@@ -125,7 +125,7 @@ module rec Expr : sig
       [s_1; ...; s_n], create an expression that surrounds the given
       expression with bindings of each [p_i] to the corresponding [s_i],
       such as is typically used when performing an inlining transformation. *)
-  val link_parameters_to_simples
+  val bind_parameters_to_simples
      : bind:Kinded_parameter.t list
     -> target:Simple.t list
     -> t
@@ -385,7 +385,6 @@ end and Set_of_closures : sig
      : function_decls:Function_declarations.t
     -> set_of_closures_ty:Flambda_type.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
-    -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
 
   (** The function declarations associated with the set of closures. *)
@@ -396,14 +395,6 @@ end and Set_of_closures : sig
 
   (** The map from the closure's environment entries to their values. *)
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
-
-  (** If [direct_call_surrogates t] maps [closure_id1] to [closure_id2] then
-      direct calls to [closure_id1] should be redirected to [closure_id2].
-      This is used to reduce the overhead of transformations that introduce
-      wrapper functions (which will be inlined at direct call sites, but will
-      penalise indirect call sites).
-      N.B. [direct_call_surrogates t] might not be transitively closed. *)
-  val direct_call_surrogates : t -> Closure_id.t Closure_id.Map.t
 
   (** Returns true iff the given set of closures has an empty environment. *)
   val has_empty_environment : t -> bool
@@ -539,6 +530,8 @@ end and Function_declaration : sig
 
   (** The arity of the return continuation of the function.  This provides the
       number of results that the function produces and their kinds. *)
+  (* CR mshinwell: Be consistent everywhere as regards "result" vs "return"
+     arity. *)
   val result_arity : t -> Flambda_arity.t
 
   (** A stub function is a generated function used to prepare arguments or

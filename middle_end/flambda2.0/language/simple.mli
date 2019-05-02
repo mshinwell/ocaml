@@ -50,6 +50,8 @@ val symbol : Symbol.t -> t
 
 val const : Const.t -> t
 
+val must_be_var : t -> Variable.t option
+
 (** The constant representating the given number of type "int". *)
 val const_int : Targetint.OCaml.t -> t
 

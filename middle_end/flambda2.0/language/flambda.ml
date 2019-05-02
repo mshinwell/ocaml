@@ -197,12 +197,9 @@ end = struct
           (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
     end;
     let free_names_of_body = free_names body in
-    (* If the [Let]-binding is redundant, don't even create it.
-       N.B. Don't delete closure definitions: there might be a reference
-       to them (propagated through Flambda types) that is not in scope. *)
+    (* If the [Let]-binding is redundant, don't even create it. *)
     if (not (Name_occurrences.mem_var free_names_of_body bound_var))
       && Named.at_most_generative_effects defining_expr
-      && Named.not_set_of_closures defining_expr
     then
       body, Have_deleted defining_expr
     else
@@ -281,7 +278,7 @@ end = struct
         create_let bound_var kind defining_expr expr)
       body bindings
 
-  let link_parameters_to_simples ~bind ~target t =
+  let bind_parameters_to_simples ~bind ~target t =
     if List.compare_lengths bind target <> 0 then begin
       Misc.fatal_errorf "Lists of differing lengths: %a and %a"
         KP.List.print bind
@@ -339,8 +336,6 @@ end and Named : sig
   val at_most_generative_effects : t -> bool
   val dummy_value : Flambda_kind.t -> t
 
-  val not_set_of_closures : t -> bool
-
   val invariant_returning_kind
      : Invariant_env.t
     -> t
@@ -354,10 +349,6 @@ end = struct
   let create_simple simple = Simple simple
   let create_prim prim dbg = Prim (prim, dbg)
   let create_set_of_closures set_of_closures = Set_of_closures set_of_closures
-
-  let not_set_of_closures = function
-    | Simple _ | Prim _ -> true
-    | Set_of_closures _ -> false
 
   let print_with_cache ~cache ppf (t : t) =
     match t with
