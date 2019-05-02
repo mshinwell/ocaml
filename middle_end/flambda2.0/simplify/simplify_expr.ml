@@ -592,7 +592,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let wrapper_var = Variable.create "partial" in
         let wrapper_taking_remaining_args =
           let continuation_param = Continuation.create () in
-          let args = List.map KP.simple remaining_params in
+          let args = applied_args @ (List.map KP.simple remaining_params) in
           let call_kind =
             Call_kind.create_direct_function_call callee's_closure_id
               ~return_arity
@@ -608,8 +608,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               ~specialise:Default_specialise
           in
           let applied_args_with_closure_vars =
-            List.map
-              (fun applied_arg -> Var_within_closure.create (), applied_arg)
+            List.map (fun applied_arg ->
+                Var_within_closure.create (), applied_arg)
               applied_args
           in
           let body =
@@ -657,8 +657,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             ~closure_elements
         in
         let apply_cont =
-          Apply_cont.create apply_continuation_param
-            [Simple.var wrapper_var]
+          Apply_cont.create apply_continuation_param [Simple.var wrapper_var]
         in
         Expr.create_let wrapper_var (K.value ())
           (Named.create_set_of_closures wrapper_taking_remaining_args)
