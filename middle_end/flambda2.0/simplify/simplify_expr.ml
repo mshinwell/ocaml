@@ -32,38 +32,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   (* XXX Need function to resolve continuation aliases
      Should return Unknown _ | Unreachable | Inline _ *)
 
-  (* CR mshinwell: bad interface *)
-  let record_lifted_constants env r ~f =
-    let already_lifted_constants = R.get_lifted_constants r in
-    let result, r = f env r in
-    let lifted_constants =
-      Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
-    in
-    let env =
-      Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-          E.add_symbol_for_lifted_constant env symbol ty)
-        lifted_constants
-        env
-    in
-    env, result, r
-
-  let rec simplify_let_cont_handler ~env ~r ~cont:_
-        ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
-    let new_handler, r = simplify_expr (E.inside_branch env) r handler.handler in
-    let params =
-      List.map2 (fun param arg_ty ->
-          Flambda.Typed_parameter.with_type param arg_ty)
-        handler.params arg_tys
-    in
-    let handler : Flambda.Continuation_handler.t =
-      { params;
-        stub = handler.stub;
-        is_exn_handler = handler.is_exn_handler;
-        handler = new_handler;
-      }
-    in
-    r, handler
-
   (* CR mshinwell: We should not simplify recursive continuations with no
      entry point -- could loop forever. *)
 
@@ -415,25 +383,20 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_non_recursive_let_cont_handler env r non_rec_handler
         : Expr.t * R.t =
     let already_lifted_constants = R.get_lifted_constants r in
-    let cont_handler =
-      Non_recursive_let_cont_handler.handler non_rec_handler
-    in
+    let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
     Non_recursive_let_cont_handler.pattern_match non_rec_handler
       ~f:(fun cont ~body ->
         let body, r =
           let env =
             match Continuation_handler.behaviour cont_handler with
-            | Unreachable ->
-              E.add_unreachable_continuation env cont
-            | Alias alias_for ->
-              E.add_continuation_alias env cont ~alias_for
+            | Unreachable -> E.add_unreachable_continuation env cont
+            | Alias alias_for -> E.add_continuation_alias env cont ~alias_for
             | Unknown ->
               match Let_cont.should_inline_out let_cont with
+              | None -> E.add_continuation env cont
               | Some non_rec_handler ->
                 E.add_continuation_to_inline env cont
                   (Non_recursive_let_cont_handler.handler non_rec_handler)
-              | None ->
-                E.add_continuation env cont
           in
           simplify_expr env r body
         in
@@ -466,8 +429,11 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             in
             Let_cont.create_non_recursive cont cont_handler ~body, r)
 
-  and simplify_recursive_let_cont_handlers env r handlers : Expr.t * R.t =
+  and simplify_recursive_let_cont_handlers env r rec_handlers : Expr.t * R.t =
+    Recursive_let_cont_handlers.pattern_match rec_handlers
+      ~f:(fun ~body cont_handlers ->
 
+         )
 
   and simplify_let_cont env r let_cont : Expr.t * R.t =
     match let_cont with
