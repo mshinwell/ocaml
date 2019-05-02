@@ -64,3 +64,7 @@ let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
   in
   if exn_handler == exn_handler' && extra_args == extra_args' then t
   else { exn_handler = exn_handler'; extra_args = extra_args'; }
+
+let arity t =
+  let extra_args = List.map (fun (_simple, kind) -> kind) t.extra_args in
+  (K.value ()) :: extra_args

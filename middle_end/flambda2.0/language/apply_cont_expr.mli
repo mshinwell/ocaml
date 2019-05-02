@@ -19,11 +19,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = private {
-  k : Continuation.t;
-  args : Simple.t list;
-  trap_action : Trap_action.Option.t;
-}
+type t
 
 (** Printing, invariant checks, name manipulation, etc. *)
 include Expr_std.S with type t := t
@@ -41,3 +37,5 @@ val continuation : t -> Continuation.t
 val args : t -> Simple.t list
 
 val trap_action : t -> Trap_action.t option
+
+val update_args : t -> args:Simple.t list -> t

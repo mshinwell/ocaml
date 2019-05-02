@@ -120,6 +120,27 @@ module rec Expr : sig
      : bindings:(Variable.t * Flambda_kind.t * Named.t) list
     -> body:t
     -> t
+
+  (** Given lists of kinded parameters [p_1; ...; p_n] and simples
+      [s_1; ...; s_n], create an expression that surrounds the given
+      expression with bindings of each [p_i] to the corresponding [s_i],
+      such as is typically used when performing an inlining transformation. *)
+  val link_parameters_to_simples
+     : bind:Kinded_parameter.t list
+    -> target:Simple.t list
+    -> t
+    -> t
+
+  (** Create an expression that binds, over the given expression, the
+      continuation [bind] such that when [bind] is called control is
+      transferred to [target].  Both [bind] and [target] must have the
+      given [arity]. *)
+  val link_continuations
+     : bind:Continuation.t
+    -> target:Continuation.t
+    -> arity:Flambda_arity.t
+    -> t
+    -> t
 end and Named : sig
   (** The defining expressions of [Let] bindings. *)
   type t = private
@@ -170,15 +191,6 @@ end and Let : sig
 
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
-
-  (** Create a [Let] expression.  The [Let] will be elided if the bound
-      variable does not occur free in the [body]. *)
-  val create
-     : bound_var:Variable.t
-    -> kind:Flambda_kind.t
-    -> defining_expr:Named.t
-    -> body:Expr.t
-    -> t
 
   (** The kind of the bound variable. *)
   val kind : t -> Flambda_kind.t
@@ -240,6 +252,10 @@ end and Let_cont : sig
      : Continuation_handler.t Continuation.Map.t
     -> body:Expr.t
     -> Expr.t
+
+  (** Determine whether the continuation bound by the [Let_cont] should be
+      inlined out. *)
+  val should_inline_out : t -> Non_recursive_let_cont_handler.t option
 end and Non_recursive_let_cont_handler : sig
   (** The representation of the alpha-equivalence class of the binding of a
       single non-recursive continuation handler over a body. *)
@@ -437,7 +453,8 @@ end and Function_declarations : sig
 end and Function_params_and_body : sig
   (** A name abstraction that comprises a function's parameters (together with
       any relations between them), the code of the function, and the
-      [my_closure] variable.
+      [my_closure] variable.  It also includes the return and exception
+      continuations.
 
       From the body of the function, accesses to variables within the closure
       need to go via a [Project_var] (from [my_closure]); accesses to any other
@@ -451,7 +468,9 @@ end and Function_params_and_body : sig
   (** Create an abstraction that binds the given parameters, with associated
       relations thereon, over the given body. *)
   val create
-     : Kinded_parameter.t list
+     : continuation_param:Continuation.t
+    -> exn_continuation:Exn_continuation.t
+    -> Kinded_parameter.t list
     -> param_relations:Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
@@ -462,12 +481,23 @@ end and Function_params_and_body : sig
       scoped. *)
   val pattern_match
      : t
-    -> f:(Kinded_parameter.t list
+    -> f:(continuation_param:Continuation.t
+        (** The continuation parameter of the function, i.e. to where we must
+            jump once the result of the function has been computed. If the
+            continuation takes more than one argument then the backend will
+            compile the function so that it returns multiple values. *)
+      -> exn_continuation:Continuation.t
+        (** To where we must jump if application of the function raises an
+            exception. *)
+      -> Kinded_parameter.t list
       -> param_relations:Flambda_type.Typing_env_extension.t
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)
     -> 'a
+  val continuation_param : t -> Continuation.t
+
+  val exn_continuation : t -> Exn_continuation.t
 end and Function_declaration : sig
   type t
 
@@ -486,8 +516,6 @@ end and Function_declaration : sig
       existing [closure_origin]. *)
   val create
      : closure_origin:Closure_origin.t
-    -> continuation_param:Continuation.t
-    -> exn_continuation:Exn_continuation.t
     -> params_and_body:Function_params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
@@ -501,18 +529,8 @@ end and Function_declaration : sig
       Used as a backstop against unbounded recursion during inlining. *)
   val closure_origin : t -> Closure_origin.t
 
-  (** The continuation parameter of the function, i.e. to where we must jump
-      once the result of the function has been computed.  If the continuation
-      takes more than one argument then the backend will compile the function
-      so that it returns multiple values. *)
-  val continuation_param : t -> Continuation.t
-
-  (** To where we must jump if application of the function raises an
-      exception. *)
-  val exn_continuation : t -> Exn_continuation.t
-
-  (** The alpha-equivalence class of the function's parameters bound over
-      the code of the function. *)
+  (** The alpha-equivalence class of the function's continuations and
+      parameters bound over the code of the function. *)
   val params_and_body : t -> Function_params_and_body.t
 
   (** An identifier to provide fast (conservative) equality checking for
