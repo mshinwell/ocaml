@@ -37,4 +37,6 @@ val exn_handler : t -> Continuation.t
 (** Any extra arguments together with their kinds. *)
 val extra_args : t -> (Simple.t * Flambda_kind.t) list
 
+(** The arity of the given exception continuation, taking into account both
+    the exception bucket argument and any [extra_args]. *)
 val arity : t -> Flambda_arity.t

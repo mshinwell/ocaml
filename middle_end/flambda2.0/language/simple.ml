@@ -120,6 +120,11 @@ let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
 
+let must_be_var t =
+  match t with
+  | Name (Var var) -> Some var
+  | _ -> None
+
 let map_name t ~f =
   match t with
   | Name name ->

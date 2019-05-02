@@ -28,8 +28,13 @@ module Apply = Flambda.Apply
 module Apply_cont = Flambda.Apply_cont
 module Expr = Flambda.Expr
 module Function_declaration = Flambda.Function_declaration
+module Function_declarations = Flambda.Function_declarations
+module Function_params_and_body = Flambda.Function_params_and_body
 module Let_cont = Flambda.Let_cont
 module Named = Flambda.Named
+module Set_of_closures = Flambda.Set_of_closures
+
+(* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
 module Make (Simplify_named : Simplify_named_intf.S) = struct
   let environment_for_let_cont_handler ~env _cont
@@ -251,9 +256,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         simplify_expr env r body)
     | None ->
 
-
-
-
     (* In two stages we form the environment to be used for simplifying the
        [body].  If the continuations in [handlers] are recursive then
        that environment will also be used for simplifying the continuations
@@ -345,31 +347,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     begin match handlers with
     | Non_recursive { name; handler; } ->
       let with_wrapper : Expr.with_wrapper =
-        (* CR mshinwell: Tidy all this up somehow. *)
-        (* Unboxing of continuation parameters is done now so that in one pass
-           of [Simplify] such unboxing will go all the way down the
-           control flow. *)
-        if handler.stub || E.never_unbox_continuations env
-        then Unchanged { handler; }
-        else
-          let default_env =
-            environment_for_let_cont_handler ~env name ~handler
-          in
-          let arg_tys, new_env =
-            R.continuation_args_types r name
-              ~arity:(Flambda.Continuation_handler.param_arity handler)
-              ~freshening:(E.freshening default_env)
-              ~default_env:(E.get_typing_environment default_env)
-          in
-          let env = E.replace_typing_environment env new_env in
-          (* CR mshinwell/lwhite: We could maybe introduce the unboxed
-             parameters into the environment every time, then check if they
-             were used, and if so then add the wrapper.  This doesn't introduce
-             the "reverse environment" thing but would mitigate against
-             unnecessary unboxing for later rounds to clean up (e.g. in the
-             case where a parameter being unboxed is only used boxed). *)
-          Unbox_continuation_params.for_non_recursive_continuation ~handler
-            ~env ~arg_tys ~name
+        Unchanged { handler; }
       in
       let simplify_one_handler env r ~name ~handler ~body
               : Expr.t * R.t =
@@ -391,33 +369,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       in
       begin match with_wrapper with
       | Unchanged _ -> simplify_one_handler env r ~name ~handler ~body
-      | With_wrapper { new_cont; new_handler; wrapper_handler; } ->
-        let r =
-          R.update_continuation_parameters r name
-            ~params:wrapper_handler.params
-        in
-        let ty =
-          Continuation_approx.create_unknown ~name:new_cont
-            ~params:new_handler.params
-        in
-  Format.eprintf "WRAPPERS (orig %a new %a) at level %a\n%!"
-    Continuation.print name
-    Continuation.print new_cont
-    Scope_level.print (E.continuation_scope_level env);
-        let body, r =
-          let env = E.add_continuation env new_cont ty in
-          simplify_one_handler env r ~name ~handler:wrapper_handler ~body
-        in
-        let body, r =
-          simplify_one_handler env r ~name:new_cont ~handler:new_handler ~body
-        in
-  (*
-        let r =
-          R.update_all_continuation_use_environments r
-            ~if_present_in_env:name ~then_add_to_env:(new_cont, ty)
-        in
-  *)
-        body, r
       end
     | Recursive handlers ->
       (* The sequence is:
@@ -471,37 +422,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let handlers = original_handlers in
         let r = original_r in
         let handlers, env, update_use_env =
-          if E.never_unbox_continuations env then
             handlers, body_env, []
-          else
-            let with_wrappers =
-              let env = E.replace_typing_environment env new_env in
-              Unbox_continuation_params.for_recursive_continuations ~handlers
-                ~env ~arg_tys
-            in
-            (* CR mshinwell: move to Flambda, probably *)
-            Continuation.Map.fold (fun cont
-                    (with_wrapper : Expr.with_wrapper)
-                    (handlers, env, update_use_env) ->
-                match with_wrapper with
-                | Unchanged { handler; } ->
-                  Continuation.Map.add cont handler handlers, env,
-                    update_use_env
-                | With_wrapper { new_cont; new_handler; wrapper_handler; } ->
-                  let handlers =
-                    Continuation.Map.add new_cont new_handler
-                      (Continuation.Map.add cont wrapper_handler handlers)
-                  in
-                  let ty =
-                    Continuation_approx.create_unknown ~name:new_cont
-                      ~params:new_handler.params
-                  in
-                  let env = E.increment_continuation_scope_level env in
-                  let env = E.add_continuation env new_cont ty in
-                  let update_use_env = (cont, (new_cont, ty)) :: update_use_env in
-                  handlers, env, update_use_env)
-              with_wrappers
-              (Continuation.Map.empty, body_env, [])
         in
         let handlers, r =
           simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
@@ -577,50 +498,53 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         in
         expr, r)
 
-  and simplify_direct_full_application env r ~callee ~callee's_closure_id
+  and simplify_direct_full_application env r ~callee ~args
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~set_of_closures ~args ~arg_tys
         ~continuation:apply_continuation_param
         ~exn_continuation:apply_exn_continuation
-        ~dbg ~inline_requested ~specialise_requested =
-    let function_decl = function_decl.function_decl in
-    Flambda.Function_params_and_body.pattern_match
-      (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~continuation_param exn_continuation params ~param_relations:_
-            ~body ~my_closure ->
-        let expr =
-          Expr.link_continuations
-            ~bind:continuation_param
-            ~target:apply_continuation_param
-            ~arity:(Function_declaration.result_arity function_decl)
-            (Expr.link_continuations
-              ~bind:(Exn_continuation.exn_handler exn_continuation)
-              ~target:(Exn_continuation.exn_handler apply_exn_continuation)
-              ~arity:(Exn_continuation.arity exn_continuation)
-              (Expr.link_parameters_to_simples
-                ~bind:params
-                ~target:args
-                (Expr.create_let my_closure (K.value ())
-                  (Named.simple callee) body)))
-        in
-        let env = E.disable_function_inlining env in
-        simplify env expr)
+        dbg (inline : Inline_attribute.t) =
+    match inline with
+    | Never_inline ->
+      simplify_function_call_where_callee's_type_unavailable env r call
+        ~callee ~args dbg apply
+    | Default_inline | Unroll _ | Always_inline ->
+      let function_decl = function_decl.term_language_function_decl in
+      Function_params_and_body.pattern_match
+        (Function_declaration.params_and_body function_decl)
+        ~f:(fun ~continuation_param exn_continuation params ~param_relations:_
+              ~body ~my_closure ->
+          let expr =
+            Expr.link_continuations
+              ~bind:continuation_param
+              ~target:apply_continuation_param
+              ~arity:(Function_declaration.result_arity function_decl)
+              (Expr.link_continuations
+                ~bind:(Exn_continuation.exn_handler exn_continuation)
+                ~target:(Exn_continuation.exn_handler apply_exn_continuation)
+                ~arity:(Exn_continuation.arity exn_continuation)
+                (Expr.bind_parameters_to_simples ~bind:params ~target:args
+                  (Expr.create_let my_closure (K.value ())
+                    (Named.simple callee) body)))
+          in
+          let env =
+            E.disable_function_inlining (E.add_inlined_debuginfo env dbg)
+          in
+          simplify_expr env r expr)
 
-  and simplify_direct_partial_application env r ~callee
+  and simplify_direct_partial_application env r ~callee ~args
         ~callee's_closure_id
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~(args : Simple.t list)
-        ~continuation ~exn_continuation ~dbg ~inline_requested
-        ~specialise_requested =
-    let arity = List.length function_decl.params in
-    assert (arity > List.length args);
+        ~continuation:apply_continuation_param
+        ~exn_continuation:apply_exn_continuation
+        dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
+        apply =
     (* For simplicity, we disallow [@inline] attributes on partial
        applications.  The user may always write an explicit wrapper instead
        with such an attribute. *)
     (* CR-someday mshinwell: Pierre noted that we might like a function to be
        inlined when applied to its first set of arguments, e.g. for some kind
        of type class like thing. *)
-    begin match (inline_requested : Flambda.inline_attribute) with
+    begin match (inline : Flambda.inline_attribute) with
     | Always_inline | Never_inline ->
       Location.prerr_warning (Debuginfo.to_location dbg)
         (Warnings.Inlining_impossible "[@inlined] attributes may not be used \
@@ -631,89 +555,119 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           on partial applications")
     | Default_inline -> ()
     end;
-    begin match (specialise_requested : Flambda.specialise_attribute) with
+    begin match (specialise : Flambda.specialise_attribute) with
     | Always_specialise | Never_specialise ->
       Location.prerr_warning (Debuginfo.to_location dbg)
-        (Warnings.Inlining_impossible "[@specialised] attributes may not be used \
-          on partial applications")
+        (Warnings.Inlining_impossible "[@specialised] attributes may not be \
+          used on partial applications")
     | Default_specialise -> ()
     end;
-    let applied_args, remaining_args =
-      Misc.Stdlib.List.map2_prefix (fun arg param -> param, arg)
-        args freshened_params
-    in
-    let return_arity =
-      (* CR mshinwell: Move to [Flambda_type] *)
-      List.map (fun ty -> T.kind ty) function_decl.result
-    in
-    let wrapper_continuation_param = Continuation.create () in
-    let wrapper_taking_remaining_args =
-      let args =
-        List.map (fun (param, _ty) -> Simple.var (Parameter.var param))
-          freshened_params
-      in
-      let body : Expr.t =
-        Apply {
-          continuation = wrapper_continuation_param;
-          exn_continuation;
-          func = callee;
-          args;
-          call_kind = Function (Direct {
-            closure_id = callee's_closure_id;
-            return_arity;
-          });
-          dbg;
-          inline = Default_inline;
-          specialise = Default_specialise;
-        }
-      in
-      let closure_variable =
-        Variable.rename
-          ~append:"_partial_fun"
-          (Closure_id.unwrap callee's_closure_id)
-      in
-      let free_variable_kind var =
-        (* There are no free variables in [body], above, except the wrapper's
-           parameters. *)
-        Misc.fatal_errorf "Variable %a should not be a free variable of [body]"
-          Variable.print var
-      in
-      let params =
-        List.map (fun (param, ty) ->
-            let kind = T.kind ty in
-            Typed_parameter.create param (T.unknown kind))
-          remaining_args
-      in
-      (* XXX this all needs rewriting *)
-      (* CR mshinwell: [make_closure_declaration] is only used here and it also
-         calls [toplevel_substitution].  We should alter that function or else
-         inline it here.  Note that the boxing stuff in that function isn't
-         needed here because a partial application can only involve arguments
-         of kind [Value] *)
-      Expr.make_closure_declaration ~id:closure_variable
-        ~free_variable_kind
-        ~body
-        ~params
-        ~return_arity
-        ~stub:true
-        ~continuation_param:wrapper_continuation_param
-        ~exn_continuation_param:exn_continuation
-        ~continuation
-        ~dbg
-    in
-    let bindings =
-      List.map (fun ((param, param_ty), arg) ->
-          let param_var = Parameter.var param in
-          let param_kind = T.kind param_ty in
-          param_var, param_kind, Named.Simple arg)
-        applied_args
-    in
-    simplify_expr env r (Expr.bind ~bindings ~body:wrapper_taking_remaining_args)
+    let function_decl = function_decl.term_language_function_decl in
+    Function_params_and_body.pattern_match
+      (Function_declaration.params_and_body function_decl)
+      ~f:(fun ~continuation_param:_ _exn_continuation params ~param_relations:_
+            ~body:_ ~my_closure ->
+        (* Since we're not inlining, the continuation parameters and body
+           of the function declaration, etc., are irrelevant. *)
+        let arity = List.length params in
+        assert (arity > List.length args);
+        let applied_args, remaining_params =
+          Misc.Stdlib.List.map2_prefix (fun arg param ->
+              let kind = KP.kind param in
+              if not (K.equal kind (K.value ())) then begin
+                Misc.fatal_errorf "Non-[value] kind in partial application: %a"
+                  Apply.print apply
+              end;
+              param, arg)
+            args params
+        in
+        let return_arity = Function_declaration.result_arity function_decl in
+        begin match return_arity with
+        | [kind] when Flambda_kind.equal kind (K.value ()) -> ()
+        | _ ->
+          Misc.fatal_errorf "Partially-applied function with non-[value] \
+              return kind: %a"
+            Apply.print apply
+        end;
+        let wrapper_var = Variable.create "partial" in
+        let wrapper_taking_remaining_args =
+          let continuation_param = Continuation.create () in
+          let args = List.map KP.simple remaining_params in
+          let call_kind =
+            Call_kind.create_direct_function_call callee's_closure_id
+              ~return_arity
+          in
+          let full_application =
+            Apply.create ~callee
+              ~continuation:continuation_param
+              ~exn_continuation
+              ~args
+              ~call_kind
+              ~dbg
+              ~inline:Default_inline
+              ~specialise:Default_specialise
+          in
+          let applied_args_with_closure_vars =
+            List.map
+              (fun applied_arg -> Var_within_closure.create (), applied_arg)
+              applied_args
+          in
+          let body =
+            List.fold_left (fun expr (closure_var, applied_arg) ->
+                match Simple.must_be_var applied_arg with
+                | None -> expr
+                | Some applied_arg ->
+                  Expr.create_let applied_arg (K.value ())
+                    (Named.prim (Unary (Project_var closure_var)) dbg)
+                    expr)
+              (Expr.create_apply full_application)
+              (List.rev applied_args_with_closure_vars)
+          in
+          let params_and_body =
+            Function_params_and_body.create ~continuation_param
+              ~exn_continuation
+              remaining_params
+              ~param_relations:T.Typing_env_extension.empty
+              ~body
+              ~my_closure:(Variable.create "my_closure")
+          in
+          let closure_origin =
+            Function_declaration.closure_origin function_decl
+          in
+          let function_decl =
+            Function_declaration.create ~closure_origin
+              ~params_and_body
+              ~result_arity:return_arity
+              ~stub:true
+              ~dbg
+              ~inline:Default_inline
+              ~specialise:Default_specialise
+              ~is_a_functor:false
+          in
+          let closure_id = Closure_id.create () in
+          let function_decls =
+            Function_declarations.create
+              (Closure_id.Map.singleton closure_id function_decl)
+          in
+          let closure_elements =
+            Var_within_closure.Map.of_alist applied_args_with_closure_vars
+          in
+          Set_of_closures.create ~function_decls
+            ~set_of_closures_ty:(T.any_value ())
+            ~closure_elements
+        in
+        let apply_cont =
+          Apply_cont.create apply_continuation_param
+            [Simple.var wrapper_var]
+        in
+        Expr.create_let wrapper_var (K.value ())
+          (Named.create_set_of_closures wrapper_taking_remaining_args)
+          (Expr.create_apply_cont apply_cont)
 
   and simplify_direct_over_application env r ~args ~arg_tys ~continuation
         ~exn_continuation ~callee ~callee's_closure_id
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~set_of_closures ~dbg ~inline_requested ~specialise_requested =
+        ~set_of_closures ~dbg ~inline ~specialise =
     let return_params =
       List.mapi (fun index ty ->
           let name = Format.sprintf "result%d" index in
@@ -750,8 +704,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             args = remaining_args;
             call_kind = Function Indirect_unknown_arity;
             dbg;
-            inline = inline_requested;
-            specialise = specialise_requested;
+            inline = inline;
+            specialise = specialise;
           };
       }
     in
@@ -776,7 +730,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~function_decl ~set_of_closures ~args:full_app_args
         ~arg_tys:full_app_types ~continuation:after_full_application
         (* CR mshinwell: check [exn_continuation] is correct *)
-        ~exn_continuation ~dbg ~inline_requested ~specialise_requested
+        ~exn_continuation ~dbg ~inline ~specialise
     in
     (* CR mshinwell: Maybe it would be better just to build a proper term
        including the full application as a normal Apply node and call simplify
@@ -830,24 +784,24 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       | Direct _ -> r
     in
     let provided_num_args = List.length args in
-    let num_args = List.length function_decl.params in
-    if provided_num_args = num_args then
+    let num_params = List.length function_decl.params in
+    if provided_num_args = num_params then
       simplify_direct_full_application env r
         ~callee ~callee's_closure_id ~function_decl ~set_of_closures
         ~args ~arg_tys ~continuation ~exn_continuation ~dbg ~inline ~specialise
-    else if provided_num_args > num_args then
+    else if provided_num_args > num_params then
       simplify_direct_over_application env r ~args ~arg_tys ~continuation
         ~exn_continuation ~callee ~callee's_closure_id ~function_decl
         ~set_of_closures ~dbg ~inline ~specialise
-    else if provided_num_args > 0 && provided_num_args < num_args then
+    else if provided_num_args > 0 && provided_num_args < num_params then
       simplify_direct_partial_application env r ~callee ~callee's_closure_id
         ~function_decl ~args ~continuation ~exn_continuation ~dbg ~inline
         ~specialise
     else
-      Misc.fatal_errorf "Function with %d/%d args when simplifying \
-          application expression: %a"
+      Misc.fatal_errorf "Function with %d params when simplifying \
+          application expression with %d arguments: %a"
+        num_params
         provided_num_args
-        num_args
         Apply.print apply
 
   and simplify_function_call_where_callee's_type_unavailable env r
@@ -894,7 +848,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         : Expr.t * R.t =
     let callee, callee_ty = simplify_name env (Apply.callee apply) in
     let args = S.simplify_simples_and_drop_types env (Apply.args apply) in
-    let dbg = E.add_inlined_debuginfo env ~dbg:(Apply.dbg apply) in
     let type_unavailable () =
       simplify_function_call_where_callee's_type_unavailable env r call
         ~callee ~args dbg apply
@@ -939,7 +892,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_apply_shared env r apply =
     let callee, callee_ty = simplify_name env (Apply.callee apply) in
     let args = S.simplify_simples_and_drop_types env (Apply.args apply) in
-    let dbg = E.add_inlined_debuginfo env ~dbg:(Apply.dbg apply) in
     let apply =
       Apply.create ~callee
         ~continuation
@@ -996,7 +948,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               AC.print apply_cont
           end;
           let expr =
-            Expr.link_parameters_to_simples ~bind:params ~target:args handler
+            Expr.bind_parameters_to_simples ~bind:params ~target:args handler
           in
           try simplify_expr env r expr
           with Misc.Fatal_error -> begin
@@ -1011,17 +963,14 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           end)
 
   let simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
-    let destination_is_unreachable cont =
-      match E.find_continuation env cont with
-      | Unreachable -> true
-      | Unknown | Inline _ -> false
-    in
-    let arms =
+    let reachable_arms =
       Discriminant.Map.filter (fun _arm (_env, cont) ->
-          not (destination_is_unreachable cont))
+          match E.find_continuation env cont with
+          | Unreachable -> false
+          | Unknown | Inline _ -> true)
         arms
     in
-    Flambda.Switch.update_arms switch ~arms
+    Flambda.Switch.update_arms switch ~arms:reachable_arms
 
   and simplify_expr env r (expr : Expr.t) : Expr.t * R.t =
     match tree with
