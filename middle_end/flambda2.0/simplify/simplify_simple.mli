@@ -14,20 +14,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Basic simplification functions on [Simple.t], [Name.t], etc. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  val simplify_toplevel
-     : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Expr.t
-    -> continuation:Continuation.t
-    -> continuation_params:Kinded_parameter.t list
-    -> exn_continuation:Continuation.t
-    -> descr:string
-    -> scope_level_for_lifted_constants:Scope_level.t
-    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-         * Continuation_uses.t
-         * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-             Symbol.Map.t
-end
+val simplify_name
+   : Simplify_env_and_result.Env.t
+  -> Name.t
+  -> Simple.t * Flambda_type.t
+
+val simplify_simple_for_let
+   : Simplify_env_and_result.Env.t
+  -> Simplify_env_and_result.Result.t
+  -> Simple.t
+  -> Simple.t * Flambda_type.t * Simplify_env_and_result.Result.t
+
+val simplify_simple
+   : Simplify_env_and_result.Env.t
+  -> Simple.t
+  -> Simple.t * Flambda_type.t
+
+val simplify_simples
+   : Simplify_env_and_result.Env.t
+  -> Simple.t list
+  -> (Simple.t * Flambda_type.t) list

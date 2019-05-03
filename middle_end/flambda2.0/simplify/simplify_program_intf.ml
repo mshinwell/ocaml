@@ -17,17 +17,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  val simplify_toplevel
+  val simplify_program
      : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Expr.t
-    -> continuation:Continuation.t
-    -> continuation_params:Kinded_parameter.t list
-    -> exn_continuation:Continuation.t
-    -> descr:string
-    -> scope_level_for_lifted_constants:Scope_level.t
-    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-         * Continuation_uses.t
-         * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-             Symbol.Map.t
+    -> Flambda_static.Program.t
+    -> Flambda_static.Program.t * (Flambda_kind.t Symbol.Map.t)
 end
