@@ -24,24 +24,9 @@ module T = Flambda_type
 module Named = Flambda.Named
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
-  let freshen_continuation env cont =
-    Freshening.add_continuation (E.freshening env) cont
-
   let simplify_set_of_closures original_env r
         (set_of_closures : Flambda.Set_of_closures.t)
         : Flambda.Set_of_closures.t * T.t * R.t =
-  (* CR mshinwell for pchambart: This can be removed now, right?
-    let function_decls =
-      let module Backend = (val (E.backend original_env) : Backend_intf.S) in
-      (* CR-soon mshinwell: Does this affect
-         [reference_recursive_function_directly]?
-         mshinwell: This should be thought about as part of the wider issue of
-         references to functions via symbols or variables. *)
-      Freshening.rewrite_recursive_calls_with_symbols (E.freshening original_env)
-        set_of_closures.function_decls
-        ~make_closure_symbol:Backend.closure_symbol
-    in
-  *)
     let env = E.increase_closure_depth original_env in
     let function_decls, _set_of_closures_ty, set_of_closures_env =
       Simplify_aux.prepare_to_simplify_set_of_closures ~env
@@ -52,38 +37,26 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           (function_decl : Flambda.Function_declaration.t)
           (funs, r) =
       let closure_env = set_of_closures_env in
-      let return_cont_params =
-        T.Parameters.freshened_params function_decl.result (E.freshening env)
-      in
+      let return_cont_params = function_decl.result in
       let continuation_param, closure_env =
-        let continuation_param, freshening =
-          freshen_continuation closure_env function_decl.continuation_param
-        in
+        let continuation_param = function_decl.continuation_param in
         let cont_type =
           Continuation_approx.create_unknown ~name:continuation_param
             ~params:return_cont_params
         in
-  Format.eprintf "function return continuation is at level %a\n%!"
-    Scope_level.print (E.continuation_scope_level closure_env);
         let closure_env =
-          E.add_continuation (E.set_freshening closure_env freshening)
+          E.add_continuation closure_env
             continuation_param cont_type
         in
         continuation_param, closure_env
       in
       let exn_continuation_param, closure_env =
-        let exn_continuation_param, freshening =
-          freshen_continuation closure_env function_decl.exn_continuation_param
-        in
         let cont_type =
           Continuation_approx.create_unknown ~name:exn_continuation_param
-            (* XXX missing freshening? *)
             ~params:(Simplify_aux.params_for_exception_handler ())
         in
-        let closure_env = E.increment_continuation_scope_level closure_env in
         let closure_env =
-          E.add_continuation (E.set_freshening closure_env freshening)
-            exn_continuation_param cont_type
+          E.add_continuation closure_env exn_continuation_param cont_type
         in
         exn_continuation_param, closure_env
       in
@@ -91,10 +64,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
         Simplify_aux.prepare_to_simplify_closure ~function_decl
           ~set_of_closures_env:closure_env
       in
-      let my_closure, freshening =
-        Freshening.add_variable (E.freshening env) function_decl.my_closure
-      in
-      let closure_env = E.set_freshening closure_env freshening in
+      let my_closure = function_decl.my_closure in
       let body, r, return_continuation_uses =
         E.enter_closure closure_env ~closure_id
           ~inline_inside:
@@ -103,9 +73,6 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           ~f:(fun body_env ->
             assert (E.inside_set_of_closures_declaration
               function_decls.set_of_closures_origin body_env);
-            let body_env = E.increment_continuation_scope_level body_env in
-  Format.eprintf "function body starts at level %a\n%!"
-    Scope_level.print (E.continuation_scope_level body_env);
             (* We don't need to collect the lifted constants separately; they
                will remain in [r]. *)
             let body, r, uses, _lifted_constants =
@@ -117,23 +84,14 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
                 ~continuation_params:return_cont_params
                 ~exn_continuation:exn_continuation_param
                 ~descr
-                ~scope_level_for_lifted_constants:
-                  (E.scope_level_for_lifted_constants env)
             in
             Continuation.Tbl.add continuation_param_uses continuation_param uses;
             body, r, uses)
       in
-      let result =
-        Join_point.parameters return_continuation_uses
-          ~arity:function_decl.return_arity
-          (E.freshening set_of_closures_env)
-          ~continuation_env_of_definition:(E.get_typing_environment closure_env)
-          ~existing_continuation_params:function_decl.result
-      in
       let inline : Flambda.inline_attribute =
         match function_decl.inline with
         | Default_inline ->
-          if !Clflags.classic_inlining && not function_decl.stub then begin
+          if not function_decl.stub then begin
             (* In classic-inlining mode, the inlining decision is taken at
                definition site (here).  If the function is small enough
                (below the -inline threshold) it will always be inlined. *)
@@ -187,22 +145,13 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           ~params
           ~body
           ~result
-          ~result_env_extension
           ~stub:function_decl.stub
           ~dbg:function_decl.dbg
           ~inline
           ~specialise
           ~is_a_functor:function_decl.is_a_functor
-          ~invariant_params:(lazy Variable.Set.empty)  (* CR mshinwell: fix *)
-          ~size:(lazy None)  (* CR mshinwell: to fix *)
-          ~direct_call_surrogate:None  (* CR mshinwell: to fix *)
           ~my_closure
       in
-  (* XXX Why was this here?
-      let r =
-        R.add_or_meet_env_extension r result_env_extension
-      in
-  *)
       Closure_id.Map.add closure_id (function_decl, ty) funs, r
     in
     let funs_with_types, r =
@@ -215,13 +164,10 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
       in
       Flambda.Function_declarations.update function_decls ~funs
     in
-    let in_closure =
-      Flambda.Free_vars.map_vars set_of_closures.free_vars ~f:(fun var ->
-        (* XXX This should use a variant of [simplify_named] called
-           [simplify_var] which always returns [Variable.t], otherwise
-           we're not following aliases via types.  (And below) *)
-        Freshening.apply_variable (E.freshening env) var)
-    in
+    let in_closure = set_of_closures.free_vars in
+    (* XXX This should use a variant of [simplify_named] called
+        [simplify_var] which always returns [Variable.t], otherwise
+        we're not following aliases via types.  (And below) *)
     let set_of_closures =
       Flambda.Set_of_closures.create ~function_decls ~in_closure
         ~direct_call_surrogates:Closure_id.Map.empty
@@ -231,8 +177,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     in
     let closure_elements =
       Var_within_closure.Map.map (fun (free_var : Flambda.Free_var.t) ->
-          let var = Freshening.apply_variable (E.freshening env) free_var.var in
-          T.alias_type_of_as_ty_value (Name.var var))
+          T.alias_type_of_as_ty_value (Name.var free_var.var))
         set_of_closures.free_vars
     in
     let can_lift = Var_within_closure.Map.is_empty closure_elements in
