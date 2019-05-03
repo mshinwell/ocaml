@@ -32,298 +32,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   (* XXX Need function to resolve continuation aliases
      Should return Unknown _ | Unreachable | Inline _ *)
 
-  (* CR mshinwell: We should not simplify recursive continuations with no
-     entry point -- could loop forever. *)
-
-  and simplify_let_cont_handlers0 env r ~handlers
-        ~(recursive : Flambda.recursive) ~freshening
-        : Flambda.Let_cont_handlers.t option * R.t =
-    Continuation.Map.iter (fun cont _handler ->
-        let cont = Freshening.apply_continuation freshening cont in
-        if R.continuation_defined r cont then begin
-          Misc.fatal_errorf "Ready to simplify continuation handlers \
-              defining (at least) %a but such continuation(s) is/are already \
-              defined in [r]"
-            Continuation.print cont
-        end)
-      handlers;
-    (* If none of the handlers are used in the body, delete them all. *)
-    let all_unused =
-      Continuation.Map.for_all (fun cont _handler ->
-          let cont = Freshening.apply_continuation freshening cont in
-          R.continuation_unused r cont)
-        handlers
-    in
-    if all_unused then begin
-      (* We don't need to touch [r] since we haven't simplified any of
-         the handlers. *)
-      None, r
-    end else
-      let handlers =
-        Continuation.Map.fold (fun cont
-                  (handler : Flambda.Continuation_handler.t) handlers ->
-            let cont' = Freshening.apply_continuation freshening cont in
-            let env =
-              environment_for_let_cont_handler ~env cont ~handler
-            in
-            Format.eprintf "simplify_let_cont_handler\n%!";
-            Format.eprintf "Environment for %a:@ %a@ \nParams:@ %a\n%!"
-              Continuation.print cont
-              T.Typing_env.print (E.get_typing_environment env)
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space
-                Flambda.Typed_parameter.print) handler.params;
-            let arg_tys, new_env =
-              (* CR mshinwell: I have a suspicion that [r] may not contain the
-                 usage information for the continuation when it's come from
-                 [Unbox_continuation_params]. Check. *)
-              try
-                R.continuation_args_types r cont
-                  ~arity:(Flambda.Continuation_handler.param_arity handler)
-                  ~freshening
-                  ~default_env:(E.get_typing_environment env)
-              with Misc.Fatal_error -> begin
-                let uses = R.continuation_uses_for r cont in
-                Format.eprintf "\n%sContext is: computing join of argument \
-                    types for %a, its uses are:%s@ %a\n"
-                  (Misc_color.bold_red ())
-                  Continuation.print cont
-                  (Misc_color.reset ())
-                  Continuation_uses.print uses;
-                raise Misc.Fatal_error
-              end
-            in
-            let env = E.replace_typing_environment env new_env in
-            let r, handler =
-              let r = R.create ~resolver:(E.resolver env) in
-              simplify_let_cont_handler ~env ~r ~cont:cont' ~handler ~arg_tys
-            in
-            Continuation.Map.add cont' (handler, env, r) handlers)
-          handlers
-          Continuation.Map.empty
-      in
-      let continuation_unused cont =
-        (* For a continuation being bound in the group to be unused, it must be
-           unused within *all of the handlers* and the body. *)
-        let unused_within_all_handlers =
-          Continuation.Map.for_all (fun _cont (_handler, _env, r_from_handler) ->
-              not (R.is_used_continuation r_from_handler cont))
-            handlers
-        in
-        unused_within_all_handlers
-          && not (R.is_used_continuation r cont)
-      in
-      (* Collect uses of the continuations and delete any unused ones.
-         The usage information will subsequently be used by the continuation
-         inlining and specialisation transformations. *)
-      let r =
-        Continuation.Map.fold (fun cont
-                ((_handler : Flambda.Continuation_handler.t), env,
-                 r_from_handler) r ->
-            if continuation_unused cont then r
-            else R.union (E.get_typing_environment env) r r_from_handler)
-          handlers
-          r
-      in
-      let r, handlers =
-        Continuation.Map.fold (fun cont
-                ((handler : Flambda.Continuation_handler.t), env, _r_from_handler)
-                (r, handlers) ->
-            let r, uses =
-              R.exit_scope_of_let_cont r env cont ~params:handler.params
-            in
-            if continuation_unused cont then
-              r, handlers
-            else
-              let handlers =
-                Continuation.Map.add cont (handler, env, uses) handlers
-              in
-              r, handlers)
-          handlers
-          (r, Continuation.Map.empty)
-      in
-      Continuation.Map.iter (fun cont _handler ->
-          assert (R.continuation_unused r cont))
-        handlers;
-      if Continuation.Map.is_empty handlers then begin
-        None, r
-      end else
-        let r, handlers =
-          Continuation.Map.fold (fun cont
-                  ((handler : Flambda.Continuation_handler.t), env, uses)
-                  (r, handlers') ->
-              let ty =
-                let handlers : Continuation_approx.continuation_handlers =
-                  match recursive with
-                  | Non_recursive ->
-                    begin match Continuation.Map.bindings handlers with
-                    | [_cont, (handler, _, _)] -> Non_recursive handler
-                    | _ ->
-                      Misc.fatal_errorf "Non_recursive Let_cont may only have one \
-                          handler, but binds %a"
-                        Continuation.Set.print (Continuation.Map.keys handlers)
-                    end
-                  | Recursive ->
-                    let handlers =
-                      Continuation.Map.map (fun (handler, _env, _uses) -> handler)
-                        handlers
-                    in
-                    Recursive handlers
-                in
-                Continuation_approx.create ~name:cont ~handlers
-                  ~params:handler.params
-              in
-              let r =
-                R.define_continuation r cont env recursive uses ty
-              in
-              let handlers' = Continuation.Map.add cont handler handlers' in
-              r, handlers')
-            handlers
-            (r, Continuation.Map.empty)
-        in
-        match recursive with
-        | Non_recursive ->
-          begin match Continuation.Map.bindings handlers with
-          | [name, handler] ->
-            Some (Flambda.Let_cont_handlers.Non_recursive { name; handler; }), r
-          | _ -> assert false
-          end
-        | Recursive ->
-          let is_non_recursive =
-            if Continuation.Map.cardinal handlers > 1 then None
-            else
-              match Continuation.Map.bindings handlers with
-              | [name, (handler : Flambda.Continuation_handler.t)] ->
-                let fcs = Flambda.Expr.free_continuations handler.handler in
-                if not (Continuation.Set.mem name fcs) then
-                  Some (name, handler)
-                else
-                  None
-              | _ -> None
-          in
-          match is_non_recursive with
-          | Some (name, handler) ->
-            Some (Flambda.Let_cont_handlers.Non_recursive { name; handler; }), r
-          | None -> Some (Flambda.Let_cont_handlers.Recursive handlers), r
-
-  and simplify_let_cont_handlers env r ~handlers ~recursive ~freshening =
-    try simplify_let_cont_handlers0 env r ~handlers ~recursive ~freshening
-    with Misc.Fatal_error -> begin
-      Format.eprintf "\n%sContext is: simplify_let_cont_handlers:%s@ %a\n"
-        (Misc_color.bold_red ())
-        (Misc_color.reset ())
-        (Continuation.Map.print Flambda.Continuation_handler.print) handlers;
-      raise Misc.Fatal_error
-    end
-
-    (* In two stages we form the environment to be used for simplifying the
-       [body].  If the continuations in [handlers] are recursive then
-       that environment will also be used for simplifying the continuations
-       themselves (otherwise the environment of the [Let_cont] is used). *)
-    let conts_and_types, freshening =
-      let normal_case ~handlers =
-        Continuation.Map.fold (fun name
-                (handler : Flambda.Continuation_handler.t)
-                (conts_and_types, freshening) ->
-            let freshened_name, freshening =
-              Freshening.add_continuation freshening name
-            in
-            let conts_and_types =
-              Continuation.Map.add freshened_name (name, ty) conts_and_types
-            in
-            conts_and_types, freshening)
-          handlers
-          (Continuation.Map.empty, E.freshening env)
-      in
-      let handlers = Flambda.Let_cont_handlers.to_continuation_map handlers in
-      normal_case ~handlers
-    in
-    (* CR mshinwell: Is _unfreshened_name redundant? *)
-    let body_env =
-      let env = E.set_freshening env freshening in
-      let env =
-        Continuation.Map.fold (fun name (_unfreshened_name, cont_approx) env ->
-  Format.eprintf "ADDING %a at level %a\n%!"
-    Continuation.print name
-    Scope_level.print (E.continuation_scope_level env);
-            E.add_continuation env name cont_approx)
-          conts_and_types
-          env
-      in
-      E.increment_continuation_scope_level env
-    in
-    begin match handlers with
-    | Recursive handlers ->
-      (* The sequence is:
-         1. Simplify the recursive handlers with their parameter types as
-            pre-existing in the term.
-         2. If all of the handlers are unused, there's nothing more to do.
-         3. Extract the (hopefully more precise) Flambda types for the
-            handlers' parameters from [r].
-         4. The code from the simplification is discarded.
-         5. The continuation(s) is/are unboxed as required.
-         6. The continuation(s) are simplified once again using the
-            Flambda types deduced in step 2.
-         We could continue to a fixed point, but it doesn't seem worth the
-         complication.
-      *)
-      let original_r = r in
-      let original_handlers = handlers in
-      let recursive : Flambda.recursive = Recursive in
-      let handlers, r =
-        simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
-      in
-      begin match handlers with
-      | None -> body, r
-      | Some _handlers ->
-        let new_env =
-          ref (T.Typing_env.create ~resolver:(E.resolver env))
-        in
-        let arg_tys =
-          Continuation.Map.mapi (fun cont
-                    (handler : Flambda.Continuation_handler.t) ->
-              let cont =
-                Freshening.apply_continuation (E.freshening body_env) cont
-              in
-              (* N.B. If [cont]'s handler was deleted, the following function
-                 will produce [Value_bottom] for the arguments, rather than
-                 failing. *)
-              let arg_tys, new_env' =
-                R.defined_continuation_args_types r cont
-                  ~arity:(Flambda.Continuation_handler.param_arity handler)
-                  ~freshening:(E.freshening env)
-                  ~default_env:(E.get_typing_environment env)
-              in
-              new_env := new_env';
-  (* XXX Need to think about this
-              new_env := T.Typing_env.meet !new_env new_env';
-  *)
-              arg_tys)
-            original_handlers
-        in
-        let new_env = !new_env in
-        let handlers = original_handlers in
-        let r = original_r in
-        let handlers, env, update_use_env =
-            handlers, body_env, []
-        in
-        let handlers, r =
-          simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
-        in
-        let r =
-          List.fold_left (fun r (if_present_in_env, then_add_to_env) ->
-              R.update_all_continuation_use_environments r
-                ~if_present_in_env ~then_add_to_env)
-            r
-            update_use_env
-        in
-        begin match handlers with
-        | None -> body, r
-        | Some handlers -> Let_cont { body; handlers; }, r
-        end
-      end
-    end
-
-  and simplify_let env r (let_expr : Flambda.Let.t) : Expr.t * R.t =
+  let rec simplify_let env r (let_expr : Flambda.Let.t) : Expr.t * R.t =
     let module L = Flambda.Let in
     (* CR mshinwell: Consider if we need to resurrect a special fold
        function for lets. *)
@@ -380,9 +89,29 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         in
         expr, r)
 
+  and simplify_one_continuation_handler env r cont_handler =
+    (* CR-someday mshinwell: For when we add types to continuation
+        parameters: lifted constants need to be added to the environment now,
+        before simplifying the handler, as the types of the handler's
+        arguments may involve the corresponding symbols. *)
+    let params_and_handler =
+      Continuation_handler.params_and_handler cont_handler
+    in
+    Continuation_params_and_handler.pattern_match params_and_handler
+      ~f:(fun params ~param_relations ~handler ->
+        let env = E.add_parameters env params in
+        let handler, r = simplify_expr env r handler in
+        let params_and_handler =
+          Continuation_params_and_handler.create params ~param_relations
+            ~handler
+        in
+        Continuation_handler.with_params_and_handler cont_handler
+          params_and_handler
+        in
+        cont_handler, r)
+
   and simplify_non_recursive_let_cont_handler env r non_rec_handler
         : Expr.t * R.t =
-    let already_lifted_constants = R.get_lifted_constants r in
     let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
     Non_recursive_let_cont_handler.pattern_match non_rec_handler
       ~f:(fun cont ~body ->
@@ -400,40 +129,31 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           in
           simplify_expr env r body
         in
-        (* Lifted constants need to be added to the environment now, before
-           simplifying the handler, as the types of the handler's arguments
-           may involve the corresponding symbols. *)
-        let lifted_constants =
-          Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+        let cont_handler, r =
+          simplify_one_continuation_handler env r cont_handler
         in
-        let env =
-          Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-              E.add_symbol_for_lifted_constant env symbol ty)
-            lifted_constants
-            env
-        in
-        let params_and_handler =
-          Continuation_handler.params_and_handler cont_handler
-        in
-        Continuation_params_and_handler.pattern_match params_and_handler
-          ~f:(fun params ~param_relations ~handler ->
-            let env = E.add_parameters env params in
-            let handler, r = simplify_expr env r handler in
-            let params_and_handler =
-              Continuation_params_and_handler.create params ~param_relations
-                ~handler
-            in
-            let cont_handler =
-              Continuation_handler.with_params_and_handler cont_handler
-                params_and_handler
-            in
-            Let_cont.create_non_recursive cont cont_handler ~body, r)
+        Let_cont.create_non_recursive cont cont_handler ~body, r)
 
+  (* CR mshinwell: We should not simplify recursive continuations with no
+     entry point -- could loop forever.  (Need to think about this again.) *)
   and simplify_recursive_let_cont_handlers env r rec_handlers : Expr.t * R.t =
     Recursive_let_cont_handlers.pattern_match rec_handlers
       ~f:(fun ~body cont_handlers ->
-
-         )
+        let cont_handlers = Continuation_handlers.to_map cont_handlers in
+        let env =
+          Continuation.Map.fold (fun cont _cont_handler env ->
+              E.add_continuation env cont)
+            cont_handlers
+            env
+        in
+        let body, r = simplify_expr env r body in
+        let cont_handlers, r =
+          Continuation.Map.fold (fun cont_handler r ->
+              simplify_one_continuation_handler env r cont_handler)
+            cont_handlers
+            r
+        in
+        Let_cont.create_recursive cont_handlers, r)
 
   and simplify_let_cont env r let_cont : Expr.t * R.t =
     match let_cont with
@@ -875,7 +595,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             raise Misc.Fatal_error
           end)
 
-  let simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
+  and simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
     let reachable_arms =
       Discriminant.Map.filter (fun _arm (_env, cont) ->
           match E.find_continuation env cont with
