@@ -21,22 +21,10 @@ and 'a ty = 'a unknown_or_join or_alias
 and 'a unknown_or_join =
   | Unknown
   (** "Any value can flow to this point": the top element. *)
-  | Join of ('a * Name_permutation.t) list
-  (** - The list being empty means bottom, the least element: "no value can
-        flow to this point".
-      - The list containing a single element is the usual case where there
-        is no join between incompatible types.
-      - If the list contains more than one element:
-        A join, between incompatible types, which has been remembered
-        in case it is refined by a subsequent meet.  Joins between
-        compatible types are immediately pushed down through the top level
-        structure of the type.
-
+  | Join of ('a * Name_permutation.t) Or_bottom.t
+  (** A unary join (called "join" for future developments).
       The [Name_permutation.t] is a delayed permutation which must be
-      pushed down through the structure of the type as it is examined.
-
-      Invariant: every member of a [Join] is incompatible with the other
-      members. *)
+      pushed down through the structure of the type as it is examined. *)
 
 and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -74,11 +62,6 @@ and 'a of_kind_value_boxed_number =
     completely closed entities in terms of names. *)
 and inlinable_function_declaration = {
   function_decl : Term_language_function_declaration.t;
-  invariant_params : Variable.Set.t lazy_t;
-  size : int option lazy_t;
-  (** For functions that are very likely to be inlined, the size of the
-      function's body. *)
-  direct_call_surrogate : Closure_id.t option;
 }
 
 and function_declaration =
@@ -91,8 +74,7 @@ and closures_entry = {
       associated with the closure (call it [C]) described by a
       [closures_entry]. *)
   closure_elements : Closure_elements.t;
-  (** Relational product describing the variables within a closure and
-      equations between them. *)
+  (** Product describing the variables within a closure. *)
   set_of_closures : ty_fabricated;
   (** Link back to the type of the set of closures containing [C]. *)
 }
@@ -130,8 +112,8 @@ and of_kind_fabricated =
 
 and set_of_closures_entry = {
   by_closure_id : Types_by_closure_id.t;
-  (** Relational product, indexed by individual closure IDs, that (via
-      logical variables) describes the makeup of a set of closures. *)
+  (** Product, indexed by individual closure IDs, that describes the makeup
+      of a set of closures. *)
 }
 
 and set_of_closures = {

@@ -16,46 +16,52 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+module type S = sig
+  module Thing_without_names : Identifiable.S
 
-type open_or_closed = Open | Closed of Tag.t
+  type t
 
-(** Create a value which describes that there are exactly no blocks. *)
-val create_bottom : unit -> t
+  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-val create : field_tys:Flambda_types.t list -> open_or_closed -> t
+  (** Create a value which describes the presence of exactly no things. *)
+  val create_bottom : unit -> t
 
-(*
-val invariant : t -> unit
-*)
+  (** Create a value which describes the presence of an unknown set of
+      things. *)
+  val create_unknown : unit -> t
 
-val print_with_cache
-   : cache:Printing_cache.t
-  -> Format.formatter
-  -> t
-  -> unit
+  val create : Thing_without_names.Set.t -> t
 
-val equal
-   : Type_equality_env.t
-  -> Type_equality_result.t
-  -> t
-  -> t
-  -> Type_equality_result.t
+  val create_with_equations
+     : Typing_env_extension.t Thing_without_names.Map.t
+    -> t
 
-val meet
-   : Meet_env.t
-  -> t
-  -> t
-  -> (t * Typing_env_extension.t) Or_bottom.t
+  val equal
+     : Type_equality_env.t
+    -> Type_equality_result.t
+    -> t
+    -> t
+    -> Type_equality_result.t
 
-val join
-   : Join_env.t
-  -> t
-  -> t
-  -> t
+  val meet
+     : Meet_env.t
+    -> t
+    -> t
+    -> (t * Typing_env_extension.t) Or_bottom.t
 
-val is_empty : t -> bool
+  val join
+     : Join_env.t
+    -> t
+    -> t
+    -> t
 
-val classify : t -> unit Or_unknown_or_bottom.t
+  val all : t -> Thing_without_names.Set.t Or_unknown.t
 
-include Contains_names.S with type t := t
+  val get_singleton
+     : t
+    -> (Thing_without_names.t * Typing_env_extension.t) option
+
+  val classify : t -> unit Or_unknown_or_bottom.t
+
+  include Contains_names.S with type t := t
+end
