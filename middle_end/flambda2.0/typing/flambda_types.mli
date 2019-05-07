@@ -90,9 +90,6 @@ and closures_entry = {
   (** Information from the term language about the function declaration
       associated with the closure (call it [C]) described by a
       [closures_entry]. *)
-  ty : Function_type.t;
-  (** The type of the function associated with [C].
-      Note: function parameter types are covariant! *)
   closure_elements : Closure_elements.t;
   (** Relational product describing the variables within a closure and
       equations between them. *)

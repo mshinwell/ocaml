@@ -341,7 +341,6 @@ end and Continuation_params_and_handler : sig
       handler. *)
   val create
      : Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> t
 
@@ -351,7 +350,6 @@ end and Continuation_params_and_handler : sig
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
@@ -472,7 +470,6 @@ end and Function_params_and_body : sig
      : continuation_param:Continuation.t
     -> exn_continuation:Exn_continuation.t
     -> Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
@@ -491,7 +488,6 @@ end and Function_params_and_body : sig
         (** To where we must jump if application of the function raises an
             exception. *)
       -> Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)
