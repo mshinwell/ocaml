@@ -304,7 +304,6 @@ end = struct
         Apply_cont.create target ~args
       in
       Flambda.Continuation_params_and_handler.create params
-        ~param_relations:Flambda_type.Typing_env_extension.empty
         ~handler:(create_apply_cont apply_cont_target)
     in
     let handler =
@@ -694,7 +693,7 @@ end = struct
            continuation aliases. *)
         Continuation_params_and_handler.pattern_match
           (Continuation_handler.params_and_handler handler)
-          ~f:(fun params ~param_relations:_ ~handler:handler_expr ->
+          ~f:(fun params ~handler:handler_expr ->
             match params with
             | [] -> handler_expr
             | _ ->
@@ -886,50 +885,38 @@ end and Continuation_params_and_handler : sig
 
   val create
      : Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
     -> handler:Expr.t
     -> t
 
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
       -> handler:Expr.t
       -> 'a)
     -> 'a
 end = struct
   module T0 = struct
     type t = {
-      param_relations : Flambda_type.Typing_env_extension.t;
       handler : Expr.t;
     }
 
-    let print_with_cache ~cache ppf { param_relations; handler; } =
+    let print_with_cache ~cache ppf { handler; } =
       fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(param_relations %a)@]@ \
           @[<hov 1>(handler %a)@]\
           )@]"
-        (Flambda_type.Typing_env_extension.print_with_cache ~cache)
-        param_relations
         (Expr.print_with_cache ~cache) handler
 
     let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-    let free_names { param_relations; handler; } =
-      Name_occurrences.union
-        (Flambda_type.Typing_env_extension.free_names param_relations)
-        (Expr.free_names handler)
+    let free_names { handler; } =
+      Expr.free_names handler
 
-    let apply_name_permutation ({ param_relations; handler; } as t) perm =
-      let param_relations' =
-        Flambda_type.Typing_env_extension.apply_name_permutation
-          param_relations perm
-      in
+    let apply_name_permutation ({ handler; } as t) perm =
       let handler' =
         Expr.apply_name_permutation handler perm
       in
-      if param_relations == param_relations' && handler == handler' then t
-      else { param_relations = param_relations'; handler = handler'; }
+      if handler == handler' then t
+      else { handler = handler'; }
   end
 
   include Name_abstraction.Make_list (Kinded_parameter) (T0)
@@ -940,17 +927,16 @@ end = struct
 
   let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
 
-  let create params ~param_relations ~handler =
+  let create params ~handler =
     let t0 : T0.t =
-      { param_relations;
-        handler;
+      { handler;
       }
     in
     create params t0
 
   let pattern_match t ~f =
-    pattern_match t ~f:(fun params { param_relations; handler; } ->
-      f params ~param_relations ~handler)
+    pattern_match t ~f:(fun params { handler; } ->
+      f params ~handler)
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
 
@@ -1032,7 +1018,7 @@ end = struct
       fprintf ppf "@ "
     end;
     Continuation_params_and_handler.pattern_match t.params_and_handler
-      ~f:(fun params ~param_relations ~handler ->
+      ~f:(fun params ~handler ->
         fprintf ppf "@[<hov 1>%swhere%s @[<hov 1>%a%s%s@[<hov 1>%a"
           (Misc.Color.bold_cyan ())
           (Misc.Color.reset ())
@@ -1043,11 +1029,6 @@ end = struct
           (if stub then " *stub* " else "")
           (if is_exn_handler then "*exn* " else "")
           Kinded_parameter.List.print params;
-        if not (Flambda_type.Typing_env_extension.is_empty param_relations)
-        then begin
-          fprintf ppf " [%a]"
-            Flambda_type.Typing_env_extension.print param_relations
-        end;
         fprintf ppf "@]@] =@ %a"
           (Expr.print_with_cache ~cache) handler)
 
@@ -1313,7 +1294,6 @@ end and Function_params_and_body : sig
 
   val create
      : Kinded_parameter.t list
-    -> param_relations:Flambda_type.Typing_env_extension.t
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
@@ -1321,7 +1301,6 @@ end and Function_params_and_body : sig
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
-      -> param_relations:Flambda_type.Typing_env_extension.t
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)
@@ -1329,35 +1308,26 @@ end and Function_params_and_body : sig
 end = struct
   module T0 = struct
     type t = {
-      param_relations : Flambda_type.Typing_env_extension.t;
       body : Expr.t;
     }
 
-    let print_with_cache ~cache:_ ppf { param_relations; body; } =
+    let print_with_cache ~cache:_ ppf { body; } =
       fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(param_relations %a)@]@ \
           @[<hov 1>(body %a)@]\
           )@]"
-        Flambda_type.Typing_env_extension.print param_relations
         Expr.print body
 
     let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-    let free_names { param_relations; body; } =
-      Name_occurrences.union
-        (Flambda_type.Typing_env_extension.free_names param_relations)
-        (Expr.free_names body)
+    let free_names { body; } =
+      Expr.free_names body
 
-    let apply_name_permutation ({ param_relations; body;} as t) perm =
-      let param_relations' =
-        Flambda_type.Typing_env_extension.apply_name_permutation
-          param_relations perm
-      in
+    let apply_name_permutation ({ body;} as t) perm =
       let body' =
         Expr.apply_name_permutation body perm
       in
-      if param_relations == param_relations' && body == body' then t
-      else { param_relations = param_relations'; body = body'; }
+      if body == body' then t
+      else { body = body'; }
   end
 
   include Name_abstraction.Make_list (Kinded_parameter) (T0)
@@ -1368,10 +1338,9 @@ end = struct
 
   let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
 
-  let create params ~param_relations ~body ~my_closure =
+  let create params ~body ~my_closure =
     let t0 : T0.t =
-      { param_relations;
-        body;
+      { body;
       }
     in
     let my_closure =
@@ -1387,7 +1356,7 @@ end = struct
           List.rev params_rev, Kinded_parameter.var my_closure
         | [] -> assert false  (* see [create], above. *)
       in
-      f params ~param_relations:t0.param_relations ~body:t0.body ~my_closure)
+      f params ~body:t0.body ~my_closure)
 end and Function_declaration : sig
   include Expr_std.S
   val create
@@ -1485,7 +1454,7 @@ end = struct
           is_a_functor;
         } =
     Function_params_and_body.pattern_match params_and_body
-      ~f:(fun params ~param_relations ~body ~my_closure ->
+      ~f:(fun params ~body ~my_closure ->
         fprintf ppf "@[<hov 1>(\
             @[<hov 1>(closure_origin@ %a)@]@ \
             @[<hov 1>(continuation_param@ %a)@]@ \
@@ -1497,7 +1466,6 @@ end = struct
             @[<hov 1>(is_a_functor@ %b)@]@ \
             @[<hov 1>(params@ %a)@]@ \
             @[<hov 1>(my_closure@ %s%a%s)@]@ \
-            @[<hov 1>(param_relations@ %a)@]@ \
             @[<hov 1>(result_arity@ %a)@]@ \
             @[<hov 1>(body@ %a)@]@ \
             )@]"
@@ -1513,8 +1481,6 @@ end = struct
           (Misc.Color.bold_magenta ())
           Variable.print my_closure
           (Misc.Color.reset ())
-          (Flambda_type.Typing_env_extension.print_with_cache ~cache)
-          param_relations
           Flambda_arity.print result_arity
           (Expr.print_with_cache ~cache) body)
 
