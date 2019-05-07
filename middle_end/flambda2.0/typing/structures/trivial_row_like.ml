@@ -17,45 +17,23 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make (Thing_without_names : Identifiable.S) = struct
-  module TEE = struct
-    include Typing_env_extension
-
-    let add_or_meet_equations t env t' =
-      meet env t t'
-
-    let widen t ~to_match:_ = t
-
-    let meet env t1 t2 : _ Or_bottom.t =
-      let t = meet env t1 t2 in
-      if is_empty t then Bottom
-      else Ok (t, empty ())
-
-    let bottom () = empty ()
-  end
-
   module Thing_without_names_and_unit =
     Hashtbl.Make_with_map_pair (Thing_without_names) (Unit)
 
   module RL =
     Row_like.Make (Thing_without_names) (Unit)
-      (Thing_without_names_and_unit) (TEE)
+      (Thing_without_names_and_unit) (Unit)
 
   type t = RL.t
 
-  let create_with_equations things_with_env_extensions =
-    let things_with_env_extensions =
-      Thing_without_names.Map.fold (fun thing extension result ->
-          Thing_without_names_and_unit.Map.add (thing, ()) extension result)
+  let create things =
+    let things =
+      Thing_without_names.Set.fold (fun thing result ->
+          Thing_without_names_and_unit.Map.add (thing, ()) () result)
         things_with_env_extensions
         Thing_without_names_and_unit.Map.empty
     in
-    RL.create_exactly_multiple things_with_env_extensions
-
-  let create things =
-    let things_with_env_extensions =
-      Thing_without_names.Map.of_set (fun _thing -> TEE.empty ()) things
-    in
-    create_with_equations things_with_env_extensions
+    RL.create_exactly_multiple things
 
   let create_bottom = RL.create_bottom
   let create_unknown = RL.create_unknown
@@ -88,5 +66,5 @@ module Make (Thing_without_names : Identifiable.S) = struct
   let get_singleton t =
     match RL.get_singleton t with
     | None -> None
-    | Some ((thing, ()), env_extension) -> Some (thing, env_extension)
+    | Some ((thing, ()), ()) -> Some (thing, ())
 end
