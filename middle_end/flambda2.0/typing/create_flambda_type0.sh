@@ -56,16 +56,24 @@ for ML in $REC_BINDINGS; do
         echo "  and $MODNAME : sig" >> $OUTPUT
     fi
 
+    LINE=$(cat $MLI | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
+    echo "#file \"$MLI\"" >> $OUTPUT
+    echo "#line $(($LINE + 1))" >> $OUTPUT
+
     cat $MLI \
-        | grep -A 1000000 -m 1 "@@@ocaml.warning" \
+        | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
         | tail -n +2 \
         | sed 's/^/    /' \
         >> $OUTPUT
 
     echo "  end = struct" >> $OUTPUT
 
+    LINE=$(cat $ML | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
+    echo "#file \"$ML\"" >> $OUTPUT
+    echo "#line $(($LINE + 1))" >> $OUTPUT
+
     cat $ML \
-      | grep -A 1000000 -m 1 "@@@ocaml.warning" \
+      | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
       | tail -n +2 \
       | sed 's/^/    /' \
       >> $OUTPUT
