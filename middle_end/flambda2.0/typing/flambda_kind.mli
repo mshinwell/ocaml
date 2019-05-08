@@ -40,13 +40,13 @@ type t = private
 
 type kind = t
 
-val value : unit -> t
-val naked_immediate : unit -> t
-val naked_float : unit -> t
-val naked_int32 : unit -> t
-val naked_int64 : unit -> t
-val naked_nativeint : unit -> t
-val fabricated : unit -> t
+val value : t
+val naked_immediate : t
+val naked_float : t
+val naked_int32 : t
+val naked_int64 : t
+val naked_nativeint : t
+val fabricated : t
 
 val is_value : t -> bool
 val is_naked_float : t -> bool

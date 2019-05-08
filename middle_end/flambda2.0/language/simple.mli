@@ -89,6 +89,12 @@ module List : sig
   include Identifiable.S with type t := t
 end
 
+module Pair : sig
+  type nonrec t = t * t
+
+  include Identifiable.S with type t := t
+end
+
 module With_kind : sig
   type nonrec t = t * Flambda_kind.t
 

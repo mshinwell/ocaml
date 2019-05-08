@@ -14,19 +14,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Construction of either the meet or the join operation on Flambda types. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
-
-(*
-val invariant : t -> unit
-*)
-
-type open_or_closed = Open | Closed
-
-val create
-   : Flambda_types.set_of_closures_entry Closure_id_set.Map.t
-  -> open_or_closed
-  -> t
-
-include Type_structure_intf.S with type t := t
+module Make
+  (E : Either_meet_or_join_intf
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Typing_env_extension := Typing_env_extension) :
+sig
+  (** Perform a meet or a join operation, in the given environment, on the
+      given types. *)
+  (* CR mshinwell: Document [bound_name]. *)
+  val meet_or_join
+     : ?bound_name:Name.t
+    -> Join_env.t
+    -> Flambda_types.t
+    -> Flambda_types.t
+    -> Flambda_types.t * Typing_env_extension.t
+end
