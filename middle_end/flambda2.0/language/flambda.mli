@@ -385,15 +385,11 @@ end and Set_of_closures : sig
       closure variables. *)
   val create
      : function_decls:Function_declarations.t
-    -> set_of_closures_ty:Flambda_type.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> t
 
   (** The function declarations associated with the set of closures. *)
   val function_decls : t -> Function_declarations.t
-
-  (** The type of the whole set of closures. *)
-  val set_of_closures_ty : t -> Flambda_type.t
 
   (** The map from the closure's environment entries to their values. *)
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
@@ -439,10 +435,6 @@ end and Function_declarations : sig
 
   (** [find f t] raises [Not_found] if [f] is not in [t]. *)
   val find : t -> Closure_id.t -> Function_declaration.t
-
-  (** Create a set of function declarations based on another set of function
-      declarations. *)
-  val update : t -> funs:Function_declaration.t Closure_id.Map.t -> t
 end and Function_params_and_body : sig
   (** A name abstraction that comprises a function's parameters (together with
       any relations between them), the code of the function, and the
