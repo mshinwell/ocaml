@@ -40,22 +40,21 @@ type t =
 
 type kind = t
 
-let value () = Value
+let value = Value
 
-let unit () = Value
+let unit = Value
 
-(* CR mshinwell: can remove lambdas now *)
-let naked_immediate () = Naked_number Naked_immediate
+let naked_immediate = Naked_number Naked_immediate
 
-let naked_float () = Naked_number Naked_float
+let naked_float = Naked_number Naked_float
 
-let naked_int32 () = Naked_number Naked_int32
+let naked_int32 = Naked_number Naked_int32
 
-let naked_int64 () = Naked_number Naked_int64
+let naked_int64 = Naked_number Naked_int64
 
-let naked_nativeint () = Naked_number Naked_nativeint
+let naked_nativeint = Naked_number Naked_nativeint
 
-let fabricated () = Fabricated
+let fabricated = Fabricated
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
 

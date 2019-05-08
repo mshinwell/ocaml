@@ -1,41 +1,26 @@
-module Var_within_closure = struct
-  include Var_within_closure
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
-  let free_names _t = Name_occurrences.create ()
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-  let apply_name_permutation t _perm = t
+type t = Flambda_types.t Var_within_closure.Map.t
 
-  (* CR mshinwell: Add [Var_within_closure.rename] *)
-  let rename t =
-    Var_within_closure.wrap (Variable.rename (Var_within_closure.unwrap t))
-end
+let create closure_elements_to_tys = closure_elements_to_tys
 
-module RP =
-  Relational_product.Make (Var_within_closure)
-    (Logical_variable_component)
-
-type t = RP.t
-
-let create closure_elements_to_tys =
-  let closure_elements_to_logical_variables =
-    Var_within_closure.Map.map (fun _ty ->
-        Logical_variable.create (Flambda_kind.value ()))
-      closure_elements_to_tys
-  in
-  let env_extension =
-    Var_within_closure.Map.fold (fun var ty env_extension ->
-        let logical_var =
-          Var_within_closure.Map.find var
-            closure_elements_to_logical_variables
-        in
-        Typing_env_extension.add_equation env_extension
-          (Name.logical_var logical_var) ty)
-      closure_elements_to_tys
-      (Typing_env_extension.empty ())
-  in
-  RP.create closure_elements_to_logical_variables env_extension
-
-let create_bottom = RP.create_bottom
+let create_bottom () = Var_within_closure.Map.empty
 
 let print ~cache:_ ppf t = RP.print ppf t
 

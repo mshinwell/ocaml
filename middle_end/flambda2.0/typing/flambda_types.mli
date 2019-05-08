@@ -1,3 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 type 'a or_alias =
   | No_alias of 'a
   | Type of Export_id.t
@@ -21,10 +39,9 @@ and 'a ty = 'a unknown_or_join or_alias
 and 'a unknown_or_join =
   | Unknown
   (** "Any value can flow to this point": the top element. *)
-  | Join of ('a * Name_permutation.t) Or_bottom.t
-  (** A unary join (called "join" for future developments).
-      The [Name_permutation.t] is a delayed permutation which must be
-      pushed down through the structure of the type as it is examined. *)
+  | Join of 'a Or_bottom.t
+  (** A nullary or unary join (called "join" for future developments).
+      The nullary join means bottom. *)
 
 and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates

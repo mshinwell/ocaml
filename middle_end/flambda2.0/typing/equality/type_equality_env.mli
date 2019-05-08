@@ -41,10 +41,6 @@ val add_definition_typing_env_right
   -> Flambda_kind.t
   -> t
 
-val entering_scope_of_existentials : t -> Name.Set.t -> t
-
-val existentials : t -> Name.Set.t
-
 val perm_left : t -> Name_permutation.t
 
 val perm_right : t -> Name_permutation.t
