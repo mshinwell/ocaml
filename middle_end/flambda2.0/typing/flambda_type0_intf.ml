@@ -860,13 +860,6 @@ module type S = sig
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
      : term_language_function_declaration
-    -> invariant_params:Variable.Set.t lazy_t
-       (* CR mshinwell: [invariant_params], if not replaced by a type-based
-          means of specialisation, must reference integer indexes of
-          parameters.  (The parameters themselves are not bound over this
-          value.) *)
-    -> size:int option lazy_t
-    -> direct_call_surrogate:Closure_id.t option
     -> function_declaration
 
   (** Create a description of a function declaration whose code is unknown.
@@ -879,7 +872,7 @@ module type S = sig
   val closure
      : Closure_id.t
     -> function_declaration
-    -> Function_type.t
+    -> Function_type.t XXX
     -> ty_value Var_within_closure.Map.t
     -> set_of_closures:ty_fabricated
     -> t

@@ -46,12 +46,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       let lifted_constants =
         Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
       in
-      let env =
-        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-            E.add_symbol_for_lifted_constant env symbol ty)
-          lifted_constants
-          env
-      in
+      let env = E.add_lifted_constants env lifted_constants in
       if not (K.compatible (T.kind ty) ~if_used_at:kind) then begin
         Misc.fatal_errorf "Kind error during simplification of [Let] \
             binding (old kind %a, new kind %a):@ %a"
@@ -90,16 +85,15 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         expr, r)
 
   and simplify_one_continuation_handler env r cont_handler =
-    (* CR-someday mshinwell: For when we add types to continuation
-        parameters: lifted constants need to be added to the environment now,
-        before simplifying the handler, as the types of the handler's
-        arguments may involve the corresponding symbols. *)
     let params_and_handler =
       Continuation_handler.params_and_handler cont_handler
     in
     Continuation_params_and_handler.pattern_match params_and_handler
-      ~f:(fun params ~param_relations ~handler ->
-        let env = E.add_parameters env params in
+      ~f:(fun params ~handler ->
+        let arg_types =
+          R.continuation_args_types r cont ~arity:(List.length params)
+        in
+        let env = E.add_parameters env params ~arg_types in
         let handler, r = simplify_expr env r handler in
         let params_and_handler =
           Continuation_params_and_handler.create params ~param_relations
@@ -115,6 +109,11 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
     Non_recursive_let_cont_handler.pattern_match non_rec_handler
       ~f:(fun cont ~body ->
+        (* Lifted constants arising from simplification of the body need to
+           be collected up and put in the environment before simplifying the
+           handler, since the type of the continuation's arguments may involve
+           the associated symbols. *)
+        let already_lifted_constants = R.get_lifted_constants r in
         let body, r =
           let env =
             match Continuation_handler.behaviour cont_handler with
@@ -127,10 +126,15 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
                 E.add_continuation_to_inline env cont
                   (Non_recursive_let_cont_handler.handler non_rec_handler)
           in
+          let env = E.increment_continuation_scope_level env in
           simplify_expr env r body
         in
+        let lifted_constants =
+          Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+        in
+        let env = E.add_lifted_constants env lifted_constants in
         let cont_handler, r =
-          simplify_one_continuation_handler env r cont_handler
+          simplify_one_continuation_handler env r cont cont_handler
         in
         Let_cont.create_non_recursive cont cont_handler ~body, r)
 
@@ -175,8 +179,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       let function_decl = function_decl.term_language_function_decl in
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
-        ~f:(fun ~continuation_param exn_continuation params ~param_relations:_
-              ~body ~my_closure ->
+        ~f:(fun ~continuation_param exn_continuation params ~body ~my_closure ->
           let expr =
             Expr.link_continuations
               ~bind:continuation_param
