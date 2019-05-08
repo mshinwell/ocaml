@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,27 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Thing_without_names : Identifiable.S
+type 'a t =
+  | Unknown
+  | Ok of 'a
+  | Bottom
 
-  type t
-
-  (** Create a value which describes the presence of exactly no things. *)
-  val create_bottom : unit -> t
-
-  (** Create a value which describes the presence of an unknown set of
-      things. *)
-  val create_unknown : unit -> t
-
-  (** Create a value which describes the presence of exactly the given
-      things. *)
-  val create : Thing_without_names.Set.t -> t
-
-  val all : t -> Thing_without_names.Set.t Or_unknown.t
-
-  val get_singleton : t -> Thing_without_names.t option
-
-  val classify : t -> unit Or_unknown_or_bottom.t
-
-  include Type_structure_intf.S
-end
+let print f ppf t =
+  match t with
+  | Unknown -> Format.pp_print_string ppf "Unknown"
+  | Ok contents -> Format.fprintf ppf "@[(Ok %a)@]" f contents
+  | Bottom -> Format.pp_print_string ppf "Bottom"

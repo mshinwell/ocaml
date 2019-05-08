@@ -1,3 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 module Make
   (Tag : Hashtbl.With_map)
   (Index : Hashtbl.With_map)
@@ -5,46 +23,13 @@ module Make
     type t = Tag.t * Index.t
     include Hashtbl.With_map with type t := t
   end)
-  (Maps_to : sig
-    type t
-
-    val bottom : unit -> t
-
-    val print_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
-
-    val equal
-       : Type_equality_env.t
-      -> Type_equality_result.t
-      -> t
-      -> t
-      -> Type_equality_result.t
-
-    val add_or_meet_equations
-       : t
-      -> Meet_env.t
-      -> Typing_env_extension.t
-      -> t
-
-    val widen : t -> to_match:t -> t
-
-    val meet
-       : Meet_env.t
-      -> t
-      -> t
-      -> (t * Typing_env_extension.t) Or_bottom.t
-
-    val join
-       : Join_env.t
-      -> t
-      -> t
-      -> t
-
-    include Contains_names.S with type t := t
-  end) =
+  (Maps_to : Row_like_maps_to_intf.S
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Type_equality_env := Type_equality_env
+    with module Type_equality_result := Type_equality_result
+    with module Typing_env_extension := Typing_env_extension
+  end) :
 struct
   module Tag_and_index = struct
     include Tag_and_index
@@ -127,26 +112,6 @@ struct
       | None -> Type_equality_result.types_known_unequal ()
       | Some result -> result 
 
-    let apply_name_permutation { known; at_least; } perm =
-      let known =
-        (* CR mshinwell: Can just use [Tag_and_index.Map.map] now. *)
-        Tag_and_index.Map.fold (fun tag_and_index maps_to known ->
-            let maps_to = Maps_to.apply_name_permutation maps_to perm in
-            Tag_and_index.Map.add tag_and_index maps_to known)
-          known
-          Tag_and_index.Map.empty
-      in
-      let at_least =
-        Index.Map.fold (fun index maps_to at_least ->
-            let maps_to = Maps_to.apply_name_permutation maps_to perm in
-            Index.Map.add index maps_to at_least)
-          at_least
-          Index.Map.empty
-      in
-      { known;
-        at_least;
-      }
-
     module Meet_or_join
       (E : Either_meet_or_join_intf
         with module Join_env := Join_env
@@ -154,9 +119,6 @@ struct
         with module Typing_env_extension := Typing_env_extension) =
     struct
       let meet_or_join env t1 t2 =
-        let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-        let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-        let env = Join_env.clear_name_permutations env in
         let ({ known = known1; at_least = at_least1; } : t) = t1 in
         let ({ known = known2; at_least = at_least2; } : t) = t2 in
         let one_side_only index1 maps_to1 at_least2
@@ -214,8 +176,6 @@ struct
             end
           | None, None -> None
         in
-        (* CR mshinwell: Shouldn't we be applying name permutations to
-           these two as well? *)
         let known =
           Tag_and_index.Map.merge (fun tag_and_index maps_to1 maps_to2 ->
               let index = Tag_and_index.index tag_and_index in
@@ -253,29 +213,8 @@ struct
       if not (Index.Map.is_empty at_least) then None
       else Tag_and_index.Map.get_singleton known
 
-    let free_names t =
-      let { known; at_least; } = t in
-      let from_known =
-        Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
-            Name_occurrences.union free_names
-              (Maps_to.free_names maps_to))
-          known
-          (Name_occurrences.create ())
-      in
-      let from_at_least =
-        Index.Map.fold (fun _index maps_to free_names ->
-            Name_occurrences.union free_names
-              (Maps_to.free_names maps_to))
-          at_least
-          (Name_occurrences.create ())
-      in
-      Name_occurrences.union from_known from_at_least
-
     let join_of_all_maps_to env t =
-      (* Any name permutations have already been applied during
-         [Meet.meet_or_join], above. *)
 let maps_to =
-      let env = Join_env.clear_name_permutations (Join_env.create env) in
       List.fold_left (fun result maps_to ->
 Format.eprintf "Joining one Maps_to:@ %a\n%!"
 (Maps_to.print_with_cache ~cache:(Printing_cache.create ())) maps_to;
@@ -320,14 +259,6 @@ maps_to
     | Known _, Unknown | Unknown, Known _ ->
       Type_equality_result.types_known_unequal ()
     | Unknown, Unknown -> result
-
-  let apply_name_permutation (t : t) perm : t =
-    match t with
-    | Known t0 ->
-      let t0' = T0.apply_name_permutation t0 perm in
-      if t0 == t0' then t
-      else Known t0'
-    | Unknown -> Unknown
 
   let meet env (t1 : t) (t2 : t) : (t * Maps_to.t) Or_bottom.t =
     (* CR mshinwell: Perhaps we should subtract the "join of all maps" from

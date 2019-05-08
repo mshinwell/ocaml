@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,27 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Thing_without_names : Identifiable.S
+type 'a t =
+  | Known of 'a
+  | Unknown
 
-  type t
+let print f ppf t =
+  match t with
+  | Known contents -> Format.fprintf ppf "@[(Known %a)@]" f contents
+  | Unknown -> Format.pp_print_string ppf "Unknown"
 
-  (** Create a value which describes the presence of exactly no things. *)
-  val create_bottom : unit -> t
-
-  (** Create a value which describes the presence of an unknown set of
-      things. *)
-  val create_unknown : unit -> t
-
-  (** Create a value which describes the presence of exactly the given
-      things. *)
-  val create : Thing_without_names.Set.t -> t
-
-  val all : t -> Thing_without_names.Set.t Or_unknown.t
-
-  val get_singleton : t -> Thing_without_names.t option
-
-  val classify : t -> unit Or_unknown_or_bottom.t
-
-  include Type_structure_intf.S
-end
+let equal equal_contents t1 t2 =
+  match t1, t2 with
+  | Unknown, Unknown -> true
+  | Known contents1, Known contents2 -> equal_contents contents1 contents2
+  | Unknown, Known _
+  | Known _, Unknown -> false
