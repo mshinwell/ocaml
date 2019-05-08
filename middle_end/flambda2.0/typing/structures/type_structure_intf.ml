@@ -17,6 +17,12 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Type_equality_env : sig type t end
+  module Type_equality_result : sig type t end
+  module Typing_env_extension : sig type t end
+
   type t
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
@@ -40,5 +46,6 @@ module type S = sig
     -> t
     -> t
 
-  include Contains_names.S with type t := t
+  (** Type algebraic structures are never kept underneath object-language
+      binders at present, so we don't include [Contains_names.S]. *)
 end

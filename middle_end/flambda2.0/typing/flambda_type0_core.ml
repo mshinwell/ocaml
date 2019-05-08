@@ -751,8 +751,8 @@ module Set_of_closures_entry = struct
 
   let widen t ~to_match:_ = t  (* XXX Think about this *)
 
-  let meet = Both_meet_and_join.meet_set_of_closures_entry
-  let join = Both_meet_and_join.join_set_of_closures_entry
+  let meet = Api_meet_and_join.meet_set_of_closures_entry
+  let join = Api_meet_and_join.join_set_of_closures_entry
 
   let free_names { by_closure_id; } =
     Types_by_closure_id.free_names by_closure_id
@@ -796,8 +796,8 @@ module Closures_entry = struct
 
   let widen t ~to_match:_ = t  (* XXX Think about this *)
 
-  let meet = Both_meet_and_join.meet_closures_entry
-  let join = Both_meet_and_join.join_closures_entry
+  let meet = Api_meet_and_join.meet_closures_entry
+  let join = Api_meet_and_join.join_closures_entry
 
   let free_names
         { function_decl = _; ty; closure_elements; set_of_closures; } =
