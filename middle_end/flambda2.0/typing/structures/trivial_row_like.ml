@@ -44,8 +44,8 @@ module Make (Thing_without_names : Identifiable.S) = struct
   let meet = RL.meet
   let join = RL.join
 
-  let free_names = RL.free_names
-  let apply_name_permutation = RL.apply_name_permutation
+  let free_names _ = Name_occurrences.empty
+  let apply_name_permutation t _perm = t
 
   let all t : _ Or_unknown.t =
     match RL.at_least t, RL.known t with
