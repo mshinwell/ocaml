@@ -23,6 +23,31 @@ module Named = Flambda.Named
 module Expr = Flambda.Expr
 module K = Flambda_kind
 
+(* May be useful for compiling out bounds checks:
+type bounds_check_result =
+  | In_range
+  | Out_of_range
+
+let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
+      : bounds_check_result =
+  let index_in_bytes = Immediate.to_targetint index_in_bytes in
+  if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
+    Out_of_range
+  else
+    let result_size_in_bytes =
+      Targetint.OCaml.of_int
+        (Flambda_primitive.byte_width_of_string_accessor_width width)
+    in
+    (* We are careful here to avoid overflow for ease of reasoning. *)
+    let highest_index_allowed =
+      Targetint.OCaml.sub string_length_in_bytes result_size_in_bytes
+    in
+    if Targetint.OCaml.compare index_in_bytes highest_index_allowed >= 0 then
+      Out_of_range
+    else
+      In_range
+*)
+
 
 (* *** Please see the top of flambda_primitive.mli for details on producing
    the new Duplicate_scannable_block primitive *** *)
