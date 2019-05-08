@@ -16,52 +16,34 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val meet
-   : Meet_env.t
-  -> Flambda_types.t
-  -> Flambda_types.t
-  -> Flambda_types.t * Typing_env_extension.t
+(** Interface to be satisfied by the right-hand side of a [Row_like]
+    mapping. *)
 
-val join
-   : ?bound_name:Name.t
-  -> Join_env.t
-  -> Flambda_types.t
-  -> Flambda_types.t
-  -> Flambda_types.t
+module type S = sig
+  (* CR mshinwell: Try to remove these (ditto for Type_structure_intf) *)
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
+  module Type_equality_env : sig type t end
+  module Type_equality_result : sig type t end
+  module Typing_env_extension : sig type t end
 
-val meet_closures_entry
-   : Meet_env.t
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
-  -> (Flambda_types.closures_entry * Typing_env_extension.t) Or_bottom.t
+  type t
 
-val join_closures_entry
-   : Join_env.t
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
+  val bottom : unit -> t
 
-val meet_set_of_closures_entry
-   : Meet_env.t
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
-  -> (Flambda_types.set_of_closures_entry * Typing_env_extension.t)
-       Or_bottom.t
+  val add_or_meet_equations
+     : t
+    -> Meet_env.t
+    -> Typing_env_extension.t
+    -> t
 
-val join_set_of_closures_entry
-   : Join_env.t
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
+  val widen : t -> to_match:t -> t
 
-val as_or_more_precise
-   : Typing_env.t
-  -> Flambda_types.t
-  -> than:Flambda_types.t
-  -> bool
-
-val strictly_more_precise
-   : Typing_env.t
-  -> Flambda_types.t
-  -> than:Flambda_types.t
-  -> bool
+  include Type_structure_intf.S
+    with type t := t
+    with module Join_env := Join_env
+    with module Meet_env := Meet_env
+    with module Type_equality_env := Type_equality_env
+    with module Type_equality_result := Type_equality_result
+    with module Typing_env_extension := Typing_env_extension
+end
