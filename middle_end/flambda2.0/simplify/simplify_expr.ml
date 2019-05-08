@@ -117,13 +117,15 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let body, r =
           let env =
             match Continuation_handler.behaviour cont_handler with
-            | Unreachable -> E.add_unreachable_continuation env cont
-            | Alias alias_for -> E.add_continuation_alias env cont ~alias_for
-            | Unknown ->
+            | Unreachable { arity; } ->
+              E.add_unreachable_continuation env cont arity
+            | Alias { arity; alias_for; } ->
+              E.add_continuation_alias env cont arity ~alias_for
+            | Unknown { arity; } ->
               match Let_cont.should_inline_out let_cont with
-              | None -> E.add_continuation env cont
+              | None -> E.add_continuation env cont arity
               | Some non_rec_handler ->
-                E.add_continuation_to_inline env cont
+                E.add_continuation_to_inline env cont arity
                   (Non_recursive_let_cont_handler.handler non_rec_handler)
           in
           let env = E.increment_continuation_scope_level env in

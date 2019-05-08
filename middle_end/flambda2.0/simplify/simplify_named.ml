@@ -24,28 +24,37 @@ module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
-  let simplify_function env r closure_id function_decl =
+  let simplify_function env r closure_id function_decls function_decl =
     let params_and_body =
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
         ~f:(fun ~continuation_param ~exn_continuation params body ~my_closure ->
+          let env = E.enter_closure env closure_id in
+          let result_arity = Function_declaration.result_arity function_decl in
+          let env = E.add_continuation env continuation_param result_arity in
+          let env = E.add_exn_continuation env exn_continuation in
+          let env = E.add_parameters_with_unknown_types env var params in
+          let env = E.add_variable env my_closure (T.any_value ()) in
+          assert (E.inside_set_of_closures_declaration env
+            (Function_declarations.set_of_closures_origin function_decls));
+          let descr =
+            Format.asprintf "body of %a" Closure_id.print closure_id
+          in
+          let env = E.increment_continuation_scope_level env in
           let body, r =
-            E.enter_closure closure_env ~closure_id params ~my_closure
-              ~dbg:(Function_declaration.dbg function_decl)
-              ~f:(fun body_env ->
-                assert (E.inside_set_of_closures_declaration
-                  function_decls.set_of_closures_origin body_env);
-                let body, r, _lifted_constants =
-                  let descr =
-                    Format.asprintf "body of %a" Closure_id.print closure_id
-                  in
-                  Simplify_toplevel.simplify_toplevel body_env r body
-                    ~continuation:continuation_param
-                    ~continuation_params:...
-                    ~exn_continuation
-                    ~descr
-                in
-                body, r)
+            let continuation_params =
+              List.mapi (fun index kind ->
+                  let name = Printf.sprintf "return%d" index in
+                  let param = Parameter.wrap (Variable.create name)
+                  Kinded_parameter.create param kind)
+                result_arity
+            in
+            Simplify_toplevel.simplify_toplevel env r body
+              ~continuation:continuation_param
+              ~continuation_params
+              ~exn_continuation
+              ~descr
+              ~scope_level_for_lifted_constants:???
           in
           Function_params_and_body.create ~continuation_param
             ~exn_continuation params body ~my_closure)
@@ -59,7 +68,15 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
         if Function_declaration.stub function_decl then true
         else
           let inlining_threshold =
-            Simplify_aux.initial_inlining_threshold ~round:(E.round env)
+            let unscaled =
+              Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
+            in
+            (* CR-soon pchambart: Add a warning if this is too big
+               mshinwell: later *)
+            Can_inline_if_no_larger_than
+              (int_of_float
+                (unscaled *.
+                  (float_of_int Inlining_cost.scale_inline_threshold_by)))
           in
           Inlining_cost.can_inline body inlining_threshold ~bonus:0
     in
@@ -72,54 +89,6 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     in
     function_decl, function_decl_type
 
-    let closure_env = env in
-    let return_cont_params = Function_declaration.result in
-    let continuation_param, closure_env =
-      let continuation_param = function_decl.continuation_param in
-      let cont_type =
-        Continuation_approx.create_unknown ~name:continuation_param
-          ~params:return_cont_params
-      in
-      let closure_env =
-        E.add_continuation closure_env continuation_param cont_type
-      in
-      continuation_param, closure_env
-    in
-    let exn_continuation, closure_env =
-      let closure_env =
-        E.add_continuation closure_env exn_continuation_param cont_type
-      in
-      exn_continuation_param, closure_env
-    in
-    let closure_env =
-      Simplify_aux.prepare_to_simplify_closure ~function_decl
-        ~set_of_closures_env:closure_env
-    in
-    let my_closure = function_decl.my_closure in
-    let body, r =
-      E.enter_closure closure_env ~closure_id
-        ~inline_inside:
-          (Inlining_decision.should_inline_inside_declaration function_decl)
-        ~dbg:function_decl.dbg
-        ~f:(fun body_env ->
-          assert (E.inside_set_of_closures_declaration
-            function_decls.set_of_closures_origin body_env);
-          let body, r, _lifted_constants =
-            let descr =
-              Format.asprintf "the body of %a" Closure_id.print closure_id
-            in
-            Simplify_toplevel.simplify_toplevel body_env r function_decl.body
-              ~continuation:continuation_param
-              ~continuation_params:return_cont_params
-              ~exn_continuation
-              ~descr
-          in
-          body, r)
-    in
-
-
-
-
   let simplify_set_of_closures env r set_of_closures
         : Flambda.Set_of_closures.t * T.t * R.t =
     let env = E.entering_set_of_closures env in
@@ -128,7 +97,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     let funs, fun_types, r =
       Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
           let function_decl, ty, r =
-            simplify_function env r closure_id function_decl
+            simplify_function env r closure_id function_decls function_decl
           in
           let funs = Closure_id.Map.add closure_id function_decl in
           let fun_types = Closure_id.Map.add closure_id fun_types in

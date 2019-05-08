@@ -113,155 +113,11 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
   | Invalid -> invalid r
 *)
 
-(*
-let simplify_project_var env r prim ~closure_id ~var_within_closure
-      ~closures dbg ~result_var =
-  let closures, ty = S.simplify_simple env closures in
-  let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
-  let invalid r =
-    Reachable.invalid (), T.bottom (K.value ()),
-      R.map_benefit r (B.remove_primitive (Unary prim))
-  in
-  let proof = T.prove_closures (E.get_typing_environment env) ty in
-  match proof with
-  | Proved by_closure_id ->
-    begin match Closure_id.Map.find closure_id by_closure_id with
-    | exception Not_found -> invalid r
-    | { set_of_closures = set_ty; } ->
-      let set_ty = T.of_ty_fabricated set_ty in
-      let proof = 
-        T.prove_sets_of_closures (E.get_typing_environment env) set_ty
-      in
-      begin match proof with
-      | Proved (set_of_closures_name, set) ->
-        let r =
-          match set_of_closures_name with
-          | None -> r
-          | Some set_of_closures_name ->
-            refine_set_of_closures_type_to_identify_closure_element
-              env r ~set_of_closures_name ~result_var ~var_within_closure
-        in
-        let closure_elements = T.extensibility_contents set.closure_elements in
-        begin match
-          Var_within_closure.Map.find var_within_closure closure_elements
-        with
-        | exception Not_found -> invalid r
-        | var_within_closure_ty ->
-          let var_within_closure_ty = T.of_ty_value var_within_closure_ty in
-          Reachable.reachable (original_term ()), var_within_closure_ty, r
-        end
-      | Unknown ->
-        Reachable.reachable (original_term ()), T.any_value (), r
-      | Invalid -> invalid r
-      end
-    end
-  | Unknown ->
-    Reachable.reachable (original_term ()), T.any_value (), r
-  | Invalid -> invalid r
-*)
-
 let simplify_duplicate_block _env _r _prim _arg _dbg
       ~(kind : Flambda_primitive.duplicate_block_kind)
       ~source_mutability:_ ~destination_mutability:_ =
-  ignore kind; assert false
-(* Let's finish this later
-  let arg, ty = S.simplify_simple env arg in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let kind_of_block = K.value () in
-  let full_of_values ~template =
-    let proof = T.prove_block (E.get_typing_environment env) ty in
-    match proof with
-    | Proved blocks ->
-      let new_block_tys =
-        T.Blocks.fold blocks
-          ~init:[]
-          ~f:(fun new_block_tys block ->
-            let module B = T.Blocks.Block in
-            let tag = B.tag block in
-            if not (Tag.Scannable.equal tag new_tag) then
-              new_block_tys
-            else
-              let ty =
-                match destination_mutability with
-                | Mutable ->
-                  let field_tys = B.fields block in
-                  T.block tag (T.unknown_like_array field_tys)
-                | Immutable ->
-                  B.to_type block
-              in
-              let ty = T.meet_of_kind_value (E.get_typing_environment env) ty template in
-              ty :: new_block_tys)
-      in
-      let type_of_new_block = T.join (E.get_typing_environment env) new_block_tys in
-      Reachable.reachable (original_term ()), type_of_new_block
-    | Unknown ->
-      let type_of_new_block =
-        let ty =
-          match destination_mutability with
-          | Mutable -> T.unknown kind_of_block Other
-          | Immutable -> ty
-        in
-        T.meet_of_kind_value (E.get_typing_environment env) ty template
-      in
-      Reachable.reachable (original_term ()), type_of_new_block
-    | Invalid ->
-      Reachable.invalid (), T.bottom kind_of_block
-  in
-  let full_of_naked_floats ~template =
-    let proof = T.prove_float_array (E.get_typing_environment env) ty in
-    match proof with
-    | Proved arrays ->
-      let new_block_tys =
-        Targetint.OCaml.Set.fold (fun fields new_block_tys ->
-            let size = Array.length fields in
-            let ty =
-              match destination_mutability with
-              | Mutable -> T.mutable_float_array ~size
-              | Immutable -> T.immutable_float_array fields
-            in
-            let ty =
-              T.meet_of_kind_naked_float (E.get_typing_environment env) ty template
-            in
-            ty :: new_block_tys)
-          arrays
-          []
-      in
-      let type_of_new_block = T.join (E.get_typing_environment env) new_block_tys in
-      Reachable.reachable (original_term ()), type_of_new_block
-    | Unknown ->
-      let type_of_new_block =
-        let ty =
-          match destination_mutability with
-          | Mutable -> T.unknown kind_of_block Other
-          | Immutable -> ty
-        in
-        T.meet_of_kind_value (E.get_typing_environment env) ty template
-      in
-      Reachable.reachable (original_term ()), type_of_new_block
-    | Invalid ->
-      Reachable.invalid (), T.bottom kind_of_block
-  in
-  let term, ty =
-    match kind with
-    | Full_of_values_known_length (new_tag, new_value_kinds) ->
-      let unknown_type_of_new_block =
-        T.constraint_block new_tag new_value_kinds
-      in
-      full_of_values ~template:(Some unknown_type_of_new_block)
-    | Full_of_values_unknown_length (new_tag, new_value_kind) ->
-      full_of_values ~template:None
-    | Full_of_naked_floats { length; } ->
-      let size_constraint =
-        match length with
-        | None -> None
-        | Some size -> Some (T.constraint_float_array ~size)
-      in
-      full_of_naked_floats ~template:size_constraint
-    | Generic_array _ -> assert false
-      (* To finish later.  (Also, evict to [Simplify_generic_array].) *)
-  in
-  term, ty, r
-*)
+  ignore kind;
+  Named.prim (Unary (prim, arg)) dbg, T.any_value (), r
 
 let initial_env_extension prim ~result =
   match Flambda_primitive.With_fixed_value.create prim with
@@ -702,69 +558,16 @@ let simplify_discriminant_of_int env r prim arg dbg ~result_var:_ =
   | Invalid -> result_invalid ()
 
 let simplify_string_length env r prim arg dbg =
-  let arg, arg_ty = S.simplify_simple env arg in
-  let proof = T.prove_string (E.get_typing_environment env) arg_ty in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let result_kind = K.value () in
-  let result_invalid () =
-    Reachable.invalid (), T.bottom result_kind,
-      R.map_benefit r (B.remove_primitive (Unary prim))
-  in
-  match proof with
-  | Proved strs ->
-    assert (T.String_info.Set.cardinal strs > 0);
-    let lengths =
-      T.String_info.Set.fold (fun str lengths ->
-          let size = Immediate.int str.size in
-          Immediate.Set.add size lengths)
-        strs
-        Immediate.Set.empty
-    in
-    Reachable.reachable (original_term ()),
-      T.these_tagged_immediates lengths, r
-  | Unknown ->
-    Reachable.reachable (original_term ()), T.unknown result_kind, r
-  | Invalid -> result_invalid ()
+  Reachable.reachable (Named.prim (Unary (prim, arg)) dbg),
+    T.any_tagged_immediate (), r
 
-(* CR mshinwell: Factorize out together with [simplify_string_length] *)
-(* CR mshinwell: Is it right that [block_access_kind] is unused? *)
 let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
-  let arg, arg_ty = S.simplify_simple env arg in
-  (* CR mshinwell: this may be wrong: for 32-bit platforms, arrays of floats
-     have lengths differing from the lengths of the blocks
-     ...hmm, but in Flambda we should only be using "logical" block
-     numbering, so this may be irrelevant *)
-  let proof =
-    T.prove_lengths_of_arrays_or_blocks (E.get_typing_environment env) arg_ty
-  in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let result_kind = K.value () in
-  let result_invalid () =
-    Reachable.invalid (), T.bottom result_kind,
-      R.map_benefit r (B.remove_primitive (Unary prim))
-  in
-  match proof with
-  | Proved lengths ->
-    assert (Targetint.OCaml.Set.cardinal lengths > 0);
-    let lengths =
-      Targetint.OCaml.Set.fold (fun length lengths ->
-          let length = Immediate.int length in
-          Immediate.Set.add length lengths)
-        lengths
-        Immediate.Set.empty
-    in
-    Reachable.reachable (original_term ()),
-      T.these_tagged_immediates lengths, r
-  | Unknown ->
-    Reachable.reachable (original_term ()), T.unknown result_kind, r
-  | Invalid -> result_invalid ()
+  Reachable.reachable (Named.prim (Unary (prim, arg)) dbg),
+    T.any_tagged_immediate (), r
 
 let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
-  let bigarray, _bigarray_ty = S.simplify_simple env bigarray in
-  (* CR mshinwell: Shouldn't we check [bigarray_ty]? *)
-  let result_kind = K.value () in
-  let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
-  Reachable.reachable named, T.unknown result_kind, r
+  Reachable.reachable (Named.prim (Unary (prim, bigarray)) dbg),
+    T.any_tagged_immediate (), r
 
 (* When [Bottom] is received here from a simplifier, we should call
    [B.remove_primitive] *)
