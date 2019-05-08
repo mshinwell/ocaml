@@ -20,7 +20,6 @@
     mapping. *)
 
 module type S = sig
-  (* CR mshinwell: Try to remove these (ditto for Type_structure_intf) *)
   module Join_env : sig type t end
   module Meet_env : sig type t end
   module Type_equality_env : sig type t end
