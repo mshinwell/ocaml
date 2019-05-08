@@ -1,7 +1,22 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = {
-  (* When used for [Typing_env_extension], the [defined_names] are those
-     that are existentially bound. *)
   defined_names : Flambda_kind.t Name.Map.t;
   equations : Flambda_types.t Name.Map.t;
   cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
@@ -72,41 +87,6 @@ let equations_on_outer_env_domain t =
   Name.Set.diff (equations_domain t) (Name.Map.keys t.defined_names)
 
 let cse t = t.cse
-
-let equal env result t1 t2 =
-  let (>>=) = Type_equality_result.(>>=) in
-  let env_left =
-    Typing_env.add_opened_env_extension
-      (Type_equality_env.typing_env_left env)
-      t1
-  in
-  let env_right =
-    Typing_env.add_opened_env_extension
-      (Type_equality_env.typing_env_right env)
-      t2
-  in
-  let env =
-    Type_equality_env.replace_typing_environments env
-      ~left:env_left ~right:env_right
-  in
-  let names_to_check =
-    Name.Set.union (equations_on_outer_env_domain t1)
-      (equations_on_outer_env_domain t2)
-  in
-  result
-  >>= fun result ->
-  Name.Set.fold (fun name result ->
-      result
-      >>= fun result ->
-      let ty1, _ = Typing_env.find_exn env_left name in
-      let ty2, _ = Typing_env.find_exn env_right name in
-      Type_equality.equal_with_env ~bound_name:name env result ty1 ty2)
-    names_to_check
-    result
-  >>= fun result ->
-  if Flambda_primitive.With_fixed_value.Map.equal Simple.equal t1.cse t2.cse
-  then result
-  else Type_equality_result.types_known_unequal ()
 
 let apply_name_permutation ({ defined_names; equations; cse; } as t)
       perm =
@@ -407,44 +387,6 @@ Meet_env.print env;
     in
     tidy t
   end
-
-let join env (t1 : t) (t2 : t) : t =
-Format.eprintf "Typing_env_level.join@ %a@ and@ %a@ in env@ %a\n%!" print t1 print t2
-Join_env.print env;
-  let names_with_equations_in_join =
-    (* Analogously to above, since this is [join], we perform an
-       intersection on the domains of the levels. *)
-    Name.Set.inter (equations_on_outer_env_domain t1)
-      (equations_on_outer_env_domain t2)
-  in
-  let defined_names =
-    Name.Map.disjoint_union t1.defined_names t2.defined_names
-  in
-  let t =
-    { (empty ()) with
-      defined_names;
-    }
-  in
-  let env =
-    Join_env.add_opened_extensions env
-      ~holds_on_left:t1 ~holds_on_right:t2
-  in
-  let t =
-    Name.Set.fold (fun name t ->
-        assert (not (Name.Map.mem name t.equations));
-        let ty1 = find_exn t1 name in
-        let ty2 = find_exn t2 name in
-        let join_ty =
-          Both_meet_and_join.join ~bound_name:name env ty1 ty2
-        in
-        add_or_replace_equation t name join_ty)
-      names_with_equations_in_join
-      t
-  in
-  let t =
-    update_cse_for_meet_or_join t t1 t2 Join names_with_equations_in_join
-  in
-  tidy t
 
 let meet_equation t env name ty =
   let t' =

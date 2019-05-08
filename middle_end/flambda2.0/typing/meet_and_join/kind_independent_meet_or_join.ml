@@ -1,3 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 module Make
   (E : Either_meet_or_join_intf
     with module Join_env := Join_env
@@ -14,8 +32,8 @@ struct
 
   let _unknown_or_join_is_bottom (uj : _ Flambda_types.unknown_or_join) =
     match uj with
-    | Join [] -> true
-    | Unknown | Join _ -> false
+    | Join Bottom -> true
+    | Unknown | Join (Ok _) -> false
 
   let _unknown_or_join_is_unknown (uj : _ Flambda_types.unknown_or_join) =
     match uj with
@@ -36,73 +54,14 @@ struct
       match ou1, ou2 with
       | Unknown, ou2 -> ou2, Typing_env_extension.empty ()
       | ou1, Unknown -> ou1, Typing_env_extension.empty ()
-      | Join [], Join _ -> ou1, Typing_env_extension.empty ()
-      | Join _, Join [] -> ou2, Typing_env_extension.empty ()
-      | Join of_kind_foos1, Join of_kind_foos2 ->
-        (* We rely on the invariant in flambda_type0_intf.ml.
-           Everything in [of_kind_foos1] is mutually incompatible with each
-           other; likewise in [of_kind_foos2]. *)
-        let of_kind_foos, env_extension_from_meet =
-          List.fold_left
-            (fun (of_kind_foos, env_extension_from_meet)
-                 (of_kind_foo, perm1) ->
-              (* [of_kind_foo] can be compatible with at most one of the
-                 elements of [of_kind_foos]. *)
-              let new_env_extension_from_meet =
-                ref (Typing_env_extension.empty ())
-              in
-              let of_kind_foos =
-                Misc.Stdlib.List.filter_map (fun (of_kind_foo', perm2) ->
-                    let meet =
-                      let env =
-                        Join_env.compose_name_permutations
-                          (Join_env.create env)
-                          ~perm_left:perm1 ~perm_right:perm2
-                      in
-                      S.meet_or_join_of_kind_foo env
-                        of_kind_foo of_kind_foo'
-                    in
-                    match meet with
-                    | Ok (of_kind_foo, new_env_extension_from_meet') ->
-                      new_env_extension_from_meet :=
-                        Typing_env_extension.meet env
-                          new_env_extension_from_meet'
-                            !new_env_extension_from_meet;
-                      Some (of_kind_foo, Name_permutation.create ())
-                    | Absorbing -> None)
-                  of_kind_foos
-              in
-              let env_extension_from_meet =
-                Typing_env_extension.meet env
-                  env_extension_from_meet !new_env_extension_from_meet;
-              in
-              of_kind_foos, env_extension_from_meet)
-            (of_kind_foos2, Typing_env_extension.empty ())
-            of_kind_foos1
-        in
-        let same_as input_of_kind_foos =
-          List.compare_lengths input_of_kind_foos of_kind_foos = 0
-            && List.for_all2
-                 (fun (input_of_kind_foo, _perm1) (of_kind_foo, _perm2) ->
-                   input_of_kind_foo == of_kind_foo)
-                 input_of_kind_foos of_kind_foos
-        in
-Format.eprintf "lengths: calcd %d, first %d, second %d\n%!"
-(List.length of_kind_foos)
-(List.length of_kind_foos1)
-(List.length of_kind_foos2);
-        if same_as of_kind_foos1 then begin
-Format.eprintf "case 1\n%!";
-ou1, env_extension_from_meet
-end
-        else if same_as of_kind_foos2 then begin
-Format.eprintf "case 2\n%!";
-ou2, env_extension_from_meet
-end
-        else begin
-Format.eprintf "case 3\n%!";
-Join of_kind_foos, env_extension_from_meet
-end
+      | Join Bottom, Join _ -> ou1, Typing_env_extension.empty ()
+      | Join _, Join Bottom -> ou2, Typing_env_extension.empty ()
+      | Join of_kind_foo1, Join of_kind_foo2 ->
+        let meet = S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2 in
+        match meet with
+        | Ok (of_kind_foo, env_extension) ->
+          Join (Ok of_kind_foo), env_extension
+        | Absorbing -> Join Bottom, env_extension
 
   and meet_ty env
         (or_alias1 : S.of_kind_foo Flambda_types.ty)
@@ -217,42 +176,19 @@ Typing_env_extension.print env_extension_from_meet;
     else
       match uj1, uj2 with
       | Unknown, _ | _, Unknown -> Unknown
-      | Join [], Join _ -> uj2
-      | Join _, Join [] -> uj1
-      | Join of_kind_foos1, Join of_kind_foos2 ->
-        let of_kind_foos =
-          List.fold_left (fun of_kind_foos (of_kind_foo, perm1) ->
-              let found_one = ref false in
-              let joined =
-                List.map (fun (of_kind_foo', perm2) ->
-                    let join =
-                      (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
-                         must be a "join" operation. *)
-                      let env =
-                        Join_env.compose_name_permutations env
-                          ~perm_left:perm1 ~perm_right:perm2
-                      in
-                      S.meet_or_join_of_kind_foo env
-                        of_kind_foo of_kind_foo'
-                    in
-                    match join with
-                    | Ok (of_kind_foo, _env_extension) ->
-                      if !found_one then begin
-                        (* CR mshinwell: Add detail showing what was
-                           wrong. *)
-                        Misc.fatal_errorf "Invariant broken for [Join]"
-                      end;
-                      found_one := true;
-                      of_kind_foo, Name_permutation.create ()
-                    | Absorbing -> of_kind_foo', perm2)
-                  of_kind_foos
-              in
-              if not !found_one then (of_kind_foo, perm1) :: of_kind_foos
-              else joined)
-            of_kind_foos2
-            of_kind_foos1
+      | Join Bottom, Join _ -> uj2
+      | Join _, Join Bottom -> uj1
+      | Join (Ok of_kind_foo1), Join (Ok of_kind_foo2) ->
+        (* CR mshinwell: What happens if one of the [of_kind_foo]s is actually
+           bottom even if it says [Ok]? *)
+        (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
+           must be a "join" operation. *)
+        let join =
+          S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2
         in
-        Join of_kind_foos
+        match join with
+        | Ok (of_kind_foo, _env_extension) -> Join (Ok of_kind_foo)
+        | Absorbing -> Unknown
 
   and join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo Flambda_types.ty)
@@ -339,26 +275,5 @@ Typing_env_extension.print env_extension_from_meet;
   let meet_or_join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo Flambda_types.ty)
         (or_alias2 : S.of_kind_foo Flambda_types.ty) =
-    let meet_env = Join_env.central_environment env in
-    let or_alias1 : _ Flambda_types.ty =
-      match or_alias1 with
-      | No_alias _ | Type _ -> or_alias1
-      | Equals simple ->
-        let simple' =
-          Simple.apply_name_permutation simple (Meet_env.perm_left meet_env)
-        in
-        if simple == simple' then or_alias1
-        else Equals simple'
-    in
-    let or_alias2 : _ Flambda_types.ty =
-      match or_alias2 with
-      | No_alias _ | Type _ -> or_alias2
-      | Equals simple ->
-        let simple' =
-          Simple.apply_name_permutation simple (Meet_env.perm_left meet_env)
-        in
-        if simple == simple' then or_alias2
-        else Equals simple'
-    in
     E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
 end

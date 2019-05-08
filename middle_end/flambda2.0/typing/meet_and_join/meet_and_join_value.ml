@@ -1,3 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 module Make
   (E : Either_meet_or_join_intf
     with module Join_env := Join_env
@@ -100,7 +118,7 @@ struct
       Meet_and_join_fabricated.Make (E)
     in
     let module Meet_and_join_fabricated =
-      Make_meet_or_join.Make (E) (Meet_and_join_of_kind_fabricated)
+      Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_fabricated)
     in
     let (set_of_closures, env_extension1) =
       Meet_and_join_fabricated.meet_or_join_ty
@@ -134,15 +152,15 @@ struct
   module Meet_and_join_of_kind_naked_nativeint =
     Meet_and_join_naked_nativeint.Make (E)
   module Meet_and_join_naked_immediate =
-    Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_immediate)
+    Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_immediate)
   module Meet_and_join_naked_float =
-    Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_float)
+    Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_float)
   module Meet_and_join_naked_int32 =
-    Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int32)
+    Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int32)
   module Meet_and_join_naked_int64 =
-    Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int64)
+    Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_int64)
   module Meet_and_join_naked_nativeint =
-    Make_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_nativeint)
+    Kind_independent_meet_or_join.Make (E) (Meet_and_join_of_kind_naked_nativeint)
 
   let meet_or_join_of_kind_foo env
         (of_kind1 : Flambda_types.of_kind_value)

@@ -308,7 +308,6 @@ end = struct
     in
     let handler =
       Continuation_handler.create ~params_and_handler
-        ~inferred_typing:Flambda_type.Parameters.empty
         ~stub:true
         ~is_exn_handler:false
     in
@@ -993,18 +992,15 @@ end and Continuation_handler : sig
 
   val create
      : params_and_handler:Continuation_params_and_handler.t
-    -> inferred_typing:Flambda_type.Parameters.t
     -> stub:bool
     -> is_exn_handler:bool
     -> t
   val params_and_handler : t -> Continuation_params_and_handler.t
-  val inferred_typing : t -> Flambda_type.Parameters.t
   val stub : t -> bool
   val is_exn_handler : t -> bool
 end = struct
   type t = {
     params_and_handler : Continuation_params_and_handler.t;
-    inferred_typing : Flambda_type.Parameters.t;
     stub : bool;
     is_exn_handler : bool;
   }
@@ -1012,8 +1008,7 @@ end = struct
   let invariant _env _t = ()
 
   let print_using_where_with_cache ~cache ppf k
-        ({ params_and_handler = _; inferred_typing = _;
-           stub; is_exn_handler; } as t) ~first =
+        ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
     if not first then begin
       fprintf ppf "@ "
     end;
@@ -1080,40 +1075,30 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 *)
 
-  let create ~params_and_handler ~inferred_typing ~stub ~is_exn_handler =
+  let create ~params_and_handler ~stub ~is_exn_handler =
     { params_and_handler;
-      inferred_typing;
       stub;
       is_exn_handler;
     }
 
   let params_and_handler t = t.params_and_handler
-  let inferred_typing t = t.inferred_typing
   let stub t = t.stub
   let is_exn_handler t = t.is_exn_handler
 
   let free_names
-        { params_and_handler; inferred_typing; stub = _; is_exn_handler = _; } =
-    Name_occurrences.union
-      (Continuation_params_and_handler.free_names params_and_handler)
-      (Flambda_type.Parameters.free_names inferred_typing)
+        { params_and_handler; stub = _; is_exn_handler = _; } =
+    Continuation_params_and_handler.free_names params_and_handler
 
   let apply_name_permutation
-        ({ params_and_handler; inferred_typing; stub;
+        ({ params_and_handler; stub;
            is_exn_handler; } as t) perm =
     let params_and_handler' =
       Continuation_params_and_handler.apply_name_permutation
         params_and_handler perm
     in
-    let inferred_typing' =
-      Flambda_type.Parameters.apply_name_permutation inferred_typing perm
-    in
-    if params_and_handler == params_and_handler'
-      && inferred_typing == inferred_typing'
-    then t
+    if params_and_handler == params_and_handler' then t
     else
       { params_and_handler = params_and_handler';
-        inferred_typing = inferred_typing';
         stub;
         is_exn_handler;
       }
