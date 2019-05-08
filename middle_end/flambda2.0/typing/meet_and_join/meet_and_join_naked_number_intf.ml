@@ -14,19 +14,39 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Module signature used for abbreviating .mli files that correspond to
+    meet and join operations on naked numbers. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+module type S = sig
+  module Flambda_types : sig
+    type t
+    type 'a ty
+    type 'a of_kind_naked_number
+  end
 
-(*
-val invariant : t -> unit
-*)
+  module Join_env : sig type t end
+  module Meet_env : sig type t end
 
-type open_or_closed = Open | Closed
+  module Naked_number : sig
+    type t
+    module Set : Set.S with type elt = t
+  end
 
-val create
-   : Flambda_types.set_of_closures_entry Closure_id_set.Map.t
-  -> open_or_closed
-  -> t
+  module Typing_env_extension : sig type t end
 
-include Type_structure_intf.S with type t := t
+  module Make
+    (E : Either_meet_or_join_intf
+      with module Join_env := Join_env
+      with module Meet_env := Meet_env
+      with module Typing_env_extension := Typing_env_extension) :
+  sig
+    include Meet_and_join_spec_intf
+      with module Flambda_types := Flambda_types
+      with module Join_env := Join_env
+      with module Typing_env_extension := Typing_env_extension
+      with type of_kind_foo =
+        Naked_number.Set.t Flambda_types.of_kind_naked_number
+  end
+end

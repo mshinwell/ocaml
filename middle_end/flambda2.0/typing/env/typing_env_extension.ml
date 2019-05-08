@@ -1,3 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 module A = Name_abstraction.Make_list (Typing_env_level)
 
 (* The record is here to avoid the double vision problem.  (Otherwise
@@ -23,38 +41,6 @@ let apply_name_permutation ({ abst; } as t) perm =
   else { abst = abst'; }
 
 let fast_equal t1 t2 = (t1 == t2)
-
-let equal env result { abst = abst1; } { abst = abst2; } =
-  A.pattern_match_pair abst1 abst2 ~f:(fun existentials level1 level2 ->
-    let existentials =
-      List.fold_left (fun result (bindable_name : Bindable_name.t) ->
-          match bindable_name with
-          | Name name -> Name.Set.add name result
-          | Continuation _ ->
-            Misc.fatal_error "[Continuation] not allowed here")
-        Name.Set.empty
-        existentials
-    in
-    let (>>=) = Type_equality_result.(>>=) in
-    let env =
-      Type_equality_env.entering_scope_of_existentials env existentials
-    in
-    Typing_env_level.equal env result level1 level2
-    >>= fun result ->
-    let check_now, result =
-      Type_equality_result.leaving_scope_of_existential result
-        ~bound_names:existentials
-    in
-    result
-    >>= fun result ->
-    Name.Map.fold (fun _name uses result ->
-        result
-        >>= fun result ->
-        if Type_equality_result.Uses.more_than_one_use_and_empty uses
-        then Type_equality_result.types_known_unequal ()
-        else result)
-      check_now
-      result)
 
 let invariant { abst; } =
   A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
@@ -97,46 +83,6 @@ let restrict_names_to_those_occurring_in_types _t _env _env_allowed_names
 *)
 
 let is_bottom t = is_empty t
-
-(* CR mshinwell: We should provide a termination proof for algorithms
-   such as this. *)
-let meet (env : Meet_env.t) (t1 : t) (t2 : t) : t =
-  if Meet_env.shortcut_precondition env && fast_equal t1 t2 then t1
-  (* Care: the domains of [t1] and [t2] are treated as contravariant.
-     So if one of them is bottom, the result of meeting it with any other
-     level is that level, not bottom. *)
-  else if is_bottom t1 then t2
-  else if is_bottom t2 then t1
-  else
-    let t1 = apply_name_permutation t1 (Meet_env.perm_left env) in
-    let t2 = apply_name_permutation t2 (Meet_env.perm_right env) in
-    let env = Meet_env.clear_name_permutations env in
-    let abst =
-      A.pattern_match t1.abst ~f:(fun _ level_1 ->
-        A.pattern_match t2.abst ~f:(fun _ level_2 ->
-          let level = Typing_env_level.meet env level_1 level_2 in
-          A.create (Typing_env_level.defined_names_in_order level) level))
-    in
-    { abst; }
-
-let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
-  if Join_env.shortcut_precondition env && fast_equal t1 t2 then t1
-  else if is_bottom t1 then t1
-  else if is_bottom t2 then t2
-  else
-    let t1 = apply_name_permutation t1 (Join_env.perm_left env) in
-    let t2 = apply_name_permutation t2 (Join_env.perm_right env) in
-    let env = Join_env.clear_name_permutations env in
-    let env =
-      Join_env.add_extensions env ~holds_on_left:t1 ~holds_on_right:t2
-    in
-    let abst =
-      A.pattern_match t1.abst ~f:(fun _ level_1 ->
-        A.pattern_match t2.abst ~f:(fun _ level_2 ->
-          let level = Typing_env_level.join env level_1 level_2 in
-          A.create (Typing_env_level.defined_names_in_order level) level))
-    in
-    { abst; }
 
 let add_definition { abst; } name kind =
   let abst =

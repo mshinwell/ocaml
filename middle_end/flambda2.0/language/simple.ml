@@ -162,7 +162,7 @@ let apply_name_permutation t perm =
     else Name name'
   | Const _ | Discriminant _ -> t
 
-include Identifiable.Make (struct
+module T = Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -194,6 +194,8 @@ include Identifiable.Make (struct
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
 end)
+
+include T
 
 module List = struct
   type nonrec t = t list
@@ -235,6 +237,12 @@ module List = struct
     in
     if not !changed then t
     else result
+end
+
+module Pair = struct
+  type nonrec t = t * t
+
+  include Identifiable.Make_pair (T)
 end
 
 module With_kind = struct

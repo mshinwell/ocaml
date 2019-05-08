@@ -1,3 +1,20 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Contains_names.S
 
@@ -14,13 +31,6 @@ val invariant : t -> unit
 val empty : unit -> t
 
 val is_empty : t -> bool
-
-val equal
-   : Type_equality_env.t
-  -> Type_equality_result.t
-  -> t
-  -> t
-  -> Type_equality_result.t
 
 (*
 val restrict_to_names : t -> Name_occurrences.t -> t
@@ -42,10 +52,6 @@ val meet_equation
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
 val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
-
-val meet : Meet_env.t -> t -> t -> t
-
-val join : Join_env.t -> t -> t -> t
 
 val defined_names_set : t -> Bindable_name.Set.t
 

@@ -1,15 +1,22 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
-(* CR mshinwell: Share with closures_entry_by_closure_id.ml *)
-module Closure_id = struct
-  include Closure_id
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-  let free_names _t = Name_occurrences.create ()
-  let apply_name_permutation t _perm = t
-  let rename t = t
-end
-
-include
-  Relational_product.Make (Closure_id) (Logical_variable_component)
+type t = Flambda_types.t Closure_id.Map.t
 
 (* CR mshinwell: Any line of the following form should be removed *)
 let print = print_with_cache

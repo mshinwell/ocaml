@@ -287,7 +287,6 @@ end and Continuation_handler : sig
   (** Create the representation of a single continuation handler. *)
   val create
      : params_and_handler:Continuation_params_and_handler.t
-    -> inferred_typing:Flambda_type.Parameters.t
     -> stub:bool
     -> is_exn_handler:bool
     -> t
@@ -295,11 +294,6 @@ end and Continuation_handler : sig
   (** The alpha-equivalence class of the continuation's parameters bound over
       its code. *)
   val params_and_handler : t -> Continuation_params_and_handler.t
-
- (** Extra typing information, expressed as a relational product on logical
-     variables, inferred during simplification. The parameters of the
-     continuation are not bound over this product. *)
-  val inferred_typing : t -> Flambda_type.Parameters.t
 
   (** Whether the continuation is an exception handler.
 
