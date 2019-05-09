@@ -41,8 +41,11 @@ REC_BINDINGS="\
 
 OUTPUT=flambda_type0.ml
 
+echo "(* Generated automatically -- do not edit *)" > $OUTPUT
+echo >> $OUTPUT
+
 grep --color=never -m 1 -B 1000000 -- "$DELIMITER" $TEMPLATE \
-    | head -n -1 > $OUTPUT
+    | head -n -1 >> $OUTPUT
 
 FIRST=1
 

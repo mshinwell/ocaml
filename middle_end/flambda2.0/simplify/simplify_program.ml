@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2018 OCamlPro SAS                                    *)
-(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -34,272 +34,20 @@ module Make
   (Simplify_named : Simplify_named_intf.S)
   (Simplify_toplevel : Simplify_toplevel_intf.S) =
 struct
-  let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
-    let simplify_float_fields (mut : Flambda_primitive.mutable_or_immutable)
-          fields =
-      let or_unknown field =
-        match mut with
-        | Immutable -> Some field
-        | Mutable -> None
-      in
-      let done_something, fields_rev =
-        List.fold_left
-          (fun (done_something, fields_rev) (field : _ Static_part.or_variable) ->
-            match field with
-            | Const f -> done_something, ((field, or_unknown f) :: fields_rev)
-            | Var var ->
-              let ty = E.find_variable env var in
-              begin match
-                T.prove_naked_float (E.get_typing_environment env) ty
-              with
-              | Unknown ->
-                done_something, ((field, None) :: fields_rev)
-              | Proved fs ->
-                begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
-                | None ->
-                  done_something, ((field, None) :: fields_rev)
-                | Some f ->
-                  true, ((Static_part.Const f, or_unknown f) :: fields_rev)
-                end
-              | Invalid ->
-                (* CR mshinwell: fill in this case *)
-                Misc.fatal_error "Not yet implemented"
-              end)
-          (false, [])
-          fields
-      in
-      let static_part_fields, fields = List.split (List.rev fields_rev) in
-      done_something, static_part_fields, fields
-    in
-    match static_part with
-    | Block (tag, mut, fields) ->
-      let or_unknown ty =
-        match mut with
-        | Immutable -> ty
-        | Mutable -> T.any_value ()
-      in
-      let fields_and_types =
-        List.map (fun (field : Of_kind_value.t) ->
-            match field with
-            | Symbol sym ->
-              let ty = E.find_symbol env sym in
-              field, or_unknown ty
-            | Tagged_immediate imm ->
-              field, or_unknown (T.this_tagged_immediate imm)
-            | Dynamically_computed var ->
-              let ty = E.find_variable env var in
-              let ty, canonical_name =
-                T.Typing_env.resolve_aliases
-                  (E.get_typing_environment env, ty)
-              in
-              let canonical_var =
-                match canonical_name with
-                | Some (Var var) -> var
-                | (Some (Symbol _)) | None -> var
-              in
-              begin match canonical_name with
-              | Some (Symbol sym) ->
-                Of_kind_value.Symbol sym, or_unknown ty
-              | (Some (Var _)) | None ->
-                match
-                  T.prove_tagged_immediate (E.get_typing_environment env) ty
-                with
-                | Proved imms ->
-                  begin match Immediate.Set.get_singleton imms with
-                  | None ->
-                    Of_kind_value.Dynamically_computed canonical_var,
-                      or_unknown ty
-                  | Some imm ->
-                    Of_kind_value.Tagged_immediate imm,
-                      or_unknown (T.this_tagged_immediate imm)
-                  end
-                | Unknown | Invalid ->
-                  (* Note that [Invalid] does not propagate here: all it means
-                     is that this is something of kind [Value], but not a
-                     tagged immediate.  Such things are still legal in this
-                     context. *)
-                  Of_kind_value.Dynamically_computed var, or_unknown ty
-              end)
-          fields
-      in
-      let fields, field_types = List.split fields_and_types in
-      assert (match mut with
-        | Immutable -> true
-        | Mutable ->
-          List.for_all (fun ty ->
-              not (T.is_known (E.get_typing_environment env) ty))
-            field_types);
-      let field_types =
-        List.map (fun field_type : _ T.mutable_or_immutable ->
-            Immutable (T.force_to_kind_value field_type))
-          field_types
-      in
-      let ty = T.block_of_values tag ~fields:(Array.of_list field_types) in
-      Ok (Static_part.Block (tag, mut, fields), ty)
-    | Fabricated_block field ->
-      let field_ty : _ T.mutable_or_immutable =
-        Immutable (E.find_variable env field)
-      in
-      let ty = T.block Tag.zero ~fields:[| field_ty |] in
-      Ok (Static_part.Fabricated_block field, ty)
-    | Set_of_closures set ->
-      let r = R.create ~resolver:(E.resolver env) in
-      let set, ty, _r = Simplify_named.simplify_set_of_closures env r set in
-      Ok (Static_part.Set_of_closures set, ty)
-    | Closure _ -> assert false (* XXX to do with Pierre (sym, closure_id) ->
-      let ty = E.find_symbol env sym in
-      begin match T.prove_sets_of_closures env ty with
-      | Proved (Exactly sets) ->
-        let closure_ty =
-          T.Joined_sets_of_closures.type_for_closure_id sets closure_id
-        in
-        Ok (static_part, closure_ty)
-      | Proved Not_all_values_known ->
-        Ok (static_part, T.any_value Definitely_pointer)
-      | Invalid -> Invalid
-      end*)
-    | Boxed_float (Const f) -> Ok (static_part, T.this_boxed_float f)
-    | Mutable_string { initial_value = Const str; } ->
-      let size = Targetint.OCaml.of_int (String.length str) in
-      Ok (static_part, T.mutable_string ~size)
-    | Immutable_string (Const str) ->
-      let ty = T.this_immutable_string str in
-      Ok (static_part, ty)
-    | Boxed_float (Var var) ->
-      (* CR mshinwell: Share code between these float/int32/int64/nativeint cases.
-         [Number_adjuncts] may help *)
-      let ty = E.find_variable env var in
-      begin match T.prove_naked_float (E.get_typing_environment env) ty with
-      | Proved fs ->
-        begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
-        | None ->
-          Ok (static_part, T.any_boxed_float ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_float ())
-      | Invalid -> Invalid
-      end
-    | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n)
-    | Boxed_int32 (Var var) ->
-      let ty = E.find_variable env var in
-      begin match T.prove_naked_int32 (E.get_typing_environment env) ty with
-      | Proved fs ->
-        begin match Numbers.Int32.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f)
-        | None ->
-          Ok (static_part, T.any_boxed_int32 ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_int32 ())
-      | Invalid -> Invalid
-      end
-    | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n)
-    | Boxed_int64 (Var var) ->
-      let ty = E.find_variable env var in
-      begin match T.prove_naked_int64 (E.get_typing_environment env) ty with
-      | Proved fs ->
-        begin match Numbers.Int64.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f)
-        | None ->
-          Ok (static_part, T.any_boxed_int64 ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_int64 ())
-      | Invalid -> Invalid
-      end
-    | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n)
-    | Boxed_nativeint (Var var) ->
-      let ty = E.find_variable env var in
-      begin match T.prove_naked_nativeint (E.get_typing_environment env) ty with
-      | Proved fs ->
-        begin match Targetint.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f)
-        | None ->
-          Ok (static_part, T.any_boxed_nativeint ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
-      | Invalid -> Invalid
-      end
-    | Mutable_float_array { initial_value = fields; } ->
-      let done_something, initial_value, fields =
-        simplify_float_fields Mutable fields
-      in
-      let size = Targetint.OCaml.of_int (List.length fields) in
-      let ty = T.mutable_float_array ~size in
-      if not done_something then Ok (static_part, ty)
-      else Ok (Static_part.Mutable_float_array { initial_value; }, ty)
-    | Immutable_float_array fields ->
-      let done_something, static_part_fields, fields =
-        simplify_float_fields Immutable fields
-      in
-      let fields =
-        List.map (fun field ->
-            match field with
-            | None -> T.any_naked_float_as_ty_naked_float ()
-            | Some f -> T.this_naked_float_as_ty_naked_float f)
-          fields
-      in
-      let ty = T.immutable_float_array (Array.of_list fields) in
-      if not done_something then Ok (static_part, ty)
-      else Ok (Static_part.Immutable_float_array static_part_fields, ty)
-    | Mutable_string { initial_value = Var var; } ->
-      let ty = E.find_variable env var in
-      begin match T.prove_string (E.get_typing_environment env) ty with
-      | Proved strs ->
-        begin match T.String_info.Set.get_singleton strs with
-        | Some str ->
-          let ty = T.mutable_string ~size:str.size in
-          begin match str.contents with
-          | Unknown_or_mutable -> Ok (static_part, ty)
-          | Contents str ->
-            Ok (Static_part.Mutable_string { initial_value = Const str; }, ty)
-          end
-        | None -> Ok (static_part, T.any_value ())
-        end
-      | Unknown ->
-        Ok (static_part, T.any_value ())
-      | Invalid -> Invalid
-      end
-    | Immutable_string (Var var) ->
-      let ty = E.find_variable env var in
-      begin match T.prove_string (E.get_typing_environment env) ty with
-      | Proved strs ->
-        begin match T.String_info.Set.get_singleton strs with
-        | Some str ->
-          begin match str.contents with
-          | Contents s ->
-            let ty = T.this_immutable_string s in
-            Ok (Static_part.Immutable_string (Const s), ty)
-          | Unknown_or_mutable ->
-            let ty = T.immutable_string ~size:str.size in
-            Ok (static_part, ty)
-          end
-        | None -> Ok (static_part, T.any_value ())
-        end
-      | Unknown ->
-        Ok (static_part, T.any_value ())
-      | Invalid -> Invalid
-      end
-
   let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
     let unreachable, env, str =
       List.fold_left
         (fun ((now_unreachable, env, str) as acc) (sym, kind, static_part) ->
           if now_unreachable then
             acc
-          else
-            match simplify_static_part initial_env static_part with
-            | Ok (static_part, ty) ->
-              let env =
-                match recursive with
-                | Non_recursive -> E.add_symbol env sym ty
-                | Recursive -> E.redefine_symbol env sym ty
-              in
-              false, env, ((sym, kind, static_part) :: str)
-            | Invalid ->
-              true, env, str)
+          else (* CR mshinwell: At least check the static part *)
+            let ty = T.any_value () in
+            let env =
+              match recursive with
+              | Non_recursive -> E.add_symbol env sym ty
+              | Recursive -> E.redefine_symbol env sym ty
+            in
+            false, env, ((sym, kind, static_part) :: str))
         (false, initial_env, [])
         str
     in
@@ -319,30 +67,6 @@ struct
 
   let simplify_define_symbol env (recursive : Flambda.recursive)
         (defn : Program_body.definition) =
-    if !Clflags.flambda_invariant_checks then begin
-      let typing_env = E.get_typing_environment env in
-      let domain = T.Typing_env.domain typing_env in
-      Name.Set.iter (fun (name : Name.t) ->
-          match name with
-          | Symbol _ -> ()
-          | Var _ -> ()
-  (* XXX Parameters appearing in return types fall foul of this
-            if not (T.Typing_env.is_existential typing_env name)
-            then begin
-              Misc.fatal_errorf "No variable that is not existentially-bound@ \
-                  should be in the environment when starting to simplify a@ \
-                  define-symbol construction.  Example offender: %a.@ \
-                  Environment:@ %a"
-                Name.print name
-                E.print env
-            end
-  *)
-  )
-        (Name_occurrences.everything domain)
-    end;
-  (*
-  Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
-  *)
     let env, computation, newly_imported_symbols, lifted_constants =
       match defn.computation with
       | None -> env, defn.computation, Symbol.Map.empty, Symbol.Map.empty
@@ -364,9 +88,6 @@ struct
         in
         let expr, r, continuation_uses, lifted_constants =
           let scope_level_for_lifted_constants = E.continuation_scope_level env in
-  Format.eprintf "TOPLEVEL CONT %a at level %a\n%!"
-    Continuation.print name
-    Scope_level.print (E.continuation_scope_level env);
           let env = E.add_continuation env name return_cont_approx in
           let env =
             E.add_continuation env computation.exception_cont exn_cont_approx
@@ -395,18 +116,8 @@ struct
            need to do something else here).  Note that the linearity check
            for Unbox_returns will enable us to handle mutable returned values
            too. *)
-  (*
-  Format.eprintf "Simplify_program fetching uses for %a\n%!"
-    Continuation.print name;
-  *)
-  Format.eprintf "TOPLEVEL:@ \n%a\n"
-    Flambda.Expr.print expr;
-  Format.eprintf "env (cont %a) is@ %a\n\n%!"
-    Continuation.print name E.print env;
         let env =
           Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-  Format.eprintf "Adding lifted constant %a at level %a\n%!" Symbol.print symbol
-    Scope_level.print (E.continuation_scope_level env);
               E.add_symbol env symbol ty)
             lifted_constants
             env
@@ -424,8 +135,6 @@ struct
               return_cont_params
           in
           try
-  Format.eprintf "TOPLEVEL JOIN definition level %a\n%!"
-    Scope_level.print (Continuation_uses.definition_scope_level continuation_uses);
             Join_point.param_types_and_body_env continuation_uses
               ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
               (E.freshening env)
@@ -442,26 +151,6 @@ struct
           end
         in
         let env = E.replace_typing_environment env new_env in
-  (*
-  Format.eprintf "Args for %a: %a\n%!"
-    Continuation.print name
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
-  *)
-  (*
-  Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
-    Continuation.print name E.print env;
-  *)
-  (*
-        assert (List.for_all2 (fun (_var, kind1) ty ->
-            Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
-          computation.computed_values args_types);
-        let env =
-          List.fold_left2 (fun env (var, _kind) ty ->
-              E.add_variable env var ty)
-            env
-            computation.computed_values args_types
-        in
-  *)
         let computation =
           match expr with
           | Apply_cont (cont, None, []) ->
@@ -544,7 +233,6 @@ struct
         computation;
       }
     in
-  Format.eprintf "\n\n>> Final environment after define_symbol:@ %a\n%!" E.print env;
     definition, env, newly_imported_symbols, lifted_constants
 
   let add_lifted_constants lifted_constants (body : Program_body.t) =
@@ -575,20 +263,6 @@ struct
       in
       let body : Program_body.t =
         Define_symbol (defn, body)
-      in
-      add_lifted_constants lifted_constants body, newly_imported_symbols
-    | Define_symbol_rec (defn, body) ->
-      let defn, env, newly_imported_symbols1, lifted_constants =
-        simplify_define_symbol env Recursive defn
-      in
-      let body, newly_imported_symbols2 =
-        simplify_program_body env body
-      in
-      let newly_imported_symbols =
-        Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
-      in
-      let body : Program_body.t =
-        Define_symbol_rec (defn, body)
       in
       add_lifted_constants lifted_constants body, newly_imported_symbols
     | Root _ -> body, Symbol.Map.empty
