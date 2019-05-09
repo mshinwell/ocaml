@@ -58,7 +58,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         match defining_expr with
         | Invalid _ -> defining_expr
         | Reachable _ ->
-          if T.is_bottom (E.get_typing_environment env) ty then
+          if T.is_bottom (E.typing_env env) ty then
             Reachable.invalid ()
           else
             defining_expr
@@ -490,13 +490,13 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       simplify_function_call_where_callee's_type_unavailable env r call
         ~callee ~args dbg apply
     in
-    match T.prove_closures (E.get_typing_environment env) callee_ty with
+    match T.prove_closures (E.typing_env env) callee_ty with
     | Proved closures ->
       begin match Closure_id.Map.get_singleton closures with
       | Some (callee's_closure_id, { set_of_closures = set_ty; }) ->
         let set_ty = T.of_ty_fabricated set_ty in
         let proof =
-          T.prove_sets_of_closures (E.get_typing_environment env) set_ty
+          T.prove_sets_of_closures (E.typing_env env) set_ty
         in
         begin match proof with
         | Proved (_set_of_closures_name, set_of_closures) ->
@@ -505,7 +505,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           | exception Not_found -> Expr.invalid (), r
           | closure_ty ->
             let closure_ty = T.of_ty_fabricated closure_ty in
-            match T.prove_closure (E.get_typing_environment env) closure_ty with
+            match T.prove_closure (E.typing_env env) closure_ty with
             | Proved { function_decls = Inlinable function_decl; } ->
               simplify_inlinable_direct_function_call env r
                 ~callee's_closure_id ~function_decl ~set_of_closures
