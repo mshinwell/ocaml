@@ -21,20 +21,20 @@ module K = Flambda_kind
 type t = {
   k : Continuation.t;
   args : Simple.t list;
-  trap_action : Trap_action.Option.t;
+  trap_action : Raise_kind.Option.t;
 }
 
 let print ppf { k; args; trap_action; } =
   match args with
   | [] ->
     Format.fprintf ppf "@[<2>%a%sgoto%s@ %a@]"
-      Trap_action.Option.print trap_action
+      Raise_kind.Option.print trap_action
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())
       Continuation.print k
   | _ ->
     Format.fprintf ppf "@[<2>%a%sapply_cont%s@ %a@ %a@]"
-      Trap_action.Option.print trap_action
+      Raise_kind.Option.print trap_action
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())
       Continuation.print k
@@ -154,7 +154,7 @@ let free_names { k; args; trap_action; } =
   let trap_action_free_names =
     match trap_action with
     | None -> Name_occurrences.empty
-    | Some trap_action -> Trap_action.free_names trap_action
+    | Some trap_action -> Raise_kind.free_names trap_action
   in
   Name_occurrences.union_list [
     Name_occurrences.singleton_continuation k;
@@ -170,7 +170,7 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
     | None -> None
     | Some trap_action' ->
       let new_trap_action' =
-        Trap_action.apply_name_permutation trap_action' perm
+        Raise_kind.apply_name_permutation trap_action' perm
       in
       if new_trap_action' == trap_action' then trap_action
       else Some new_trap_action'
