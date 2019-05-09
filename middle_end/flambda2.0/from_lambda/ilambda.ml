@@ -24,17 +24,13 @@ type exn_continuation =
     extra_args : (Ident.t * Lambda.value_kind) list;
   }
 
-type trap_action =
-  | Push of { exn_handler : Continuation.t; }
-  | Pop of { exn_handler : Continuation.t; }
-
 type t =
   | Let of Ident.t * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
   | Let_rec of (Ident.t * function_declaration) list * t
   | Let_cont of let_cont
   | Apply of apply
-  | Apply_cont of Continuation.t * trap_action option * Ident.t list
+  | Apply_cont of Continuation.t * Ident.t list
   | Switch of Ident.t * switch
 
 and named =
@@ -254,18 +250,7 @@ and print ppf (t : t) =
     fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
       print body
       (Format.pp_print_list ~pp_sep print_let_cont) let_conts
-  | Apply_cont (i, trap_action, ls)  ->
-    let print_trap_action ppf trap_action =
-      match trap_action with
-      | None -> ()
-      | Some (Push { exn_handler; }) ->
-        fprintf ppf "push %a then "
-          Continuation.print exn_handler
-      | Some (Pop { exn_handler; }) ->
-        fprintf ppf "pop %a then "
-          Continuation.print exn_handler
-    in
-    fprintf ppf "@[<2>(%aapply_cont@ %a@ %a)@]"
-      print_trap_action trap_action
+  | Apply_cont (i, ls)  ->
+    fprintf ppf "@[<2>(apply_cont@ %a@ %a)@]"
       Continuation.print i
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
