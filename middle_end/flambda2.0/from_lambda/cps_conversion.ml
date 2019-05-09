@@ -45,86 +45,7 @@ let name_for_function (func : Lambda.lfunction) =
   else Format.asprintf "anon-fn[%a]" Location.print_compact func.loc
 
 (* CR-soon mshinwell: Remove mutable state. *)
-let static_exn_env = ref Numbers.Int.Map.empty
-let try_stack = ref []
-let try_stack_at_handler = ref Continuation.Map.empty
 let recursive_static_catches = ref Numbers.Int.Set.empty
-
-let _print_stack ppf stack =
-  Format.fprintf ppf "%a"
-    (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf "; ")
-      (fun ppf (_id, cont) -> Format.fprintf ppf "%a" Continuation.print cont))
-    stack
-
-(* Uses of [Lstaticfail] that jump out of try-with handlers need special care:
-   the correct number of pop trap operations must be inserted. *)
-let compile_staticfail ~(continuation : Continuation.t) ~args =
-  let try_stack_at_handler =
-    match Continuation.Map.find continuation !try_stack_at_handler with
-    | exception Not_found ->
-      Misc.fatal_errorf "No try stack recorded for handler %a"
-        Continuation.print continuation
-    | stack -> stack
-  in
-  let try_stack_now = !try_stack in
-  if List.length try_stack_at_handler > List.length try_stack_now then begin
-    Misc.fatal_errorf "Cannot jump to continuation %a: it would involve \
-        jumping into a try-with body"
-      Continuation.print continuation
-  end;
-  assert (Continuation.Set.subset
-    (Continuation.Set.of_list try_stack_at_handler)
-    (Continuation.Set.of_list try_stack_now));
-  let outer_wrapper_cont = Continuation.create () in
-  let rec add_pop_traps ~prev_cont ~body ~try_stack_now ~try_stack_at_handler =
-    let add_pop cont ~try_stack_now =
-      let wrapper_cont = Continuation.create () in
-      let trap_action : I.trap_action =
-        Pop { exn_handler = cont; }
-      in
-      let body =
-        match body with
-        | Some body -> body
-        | None -> I.Apply_cont (wrapper_cont, None, [])
-      in
-      let body =
-        I.Let_cont {
-          name = wrapper_cont;
-          is_exn_handler = false;
-          params = [];
-          recursive = Nonrecursive;
-          body;
-          handler = Apply_cont (prev_cont, Some trap_action, []);
-        }
-      in
-      add_pop_traps ~prev_cont:wrapper_cont ~body:(Some body)
-        ~try_stack_now ~try_stack_at_handler
-    in
-    match try_stack_now, try_stack_at_handler with
-    | [], [] -> body
-    | cont1 :: try_stack_now, cont2 :: _ ->
-      if Continuation.equal cont1 cont2 then body
-      else add_pop cont1 ~try_stack_now
-    | cont :: try_stack_now, [] -> add_pop cont ~try_stack_now
-    | [], _ :: _ -> assert false  (* see above *)
-  in
-  let body =
-    add_pop_traps ~prev_cont:outer_wrapper_cont
-      ~body:None
-      ~try_stack_now
-      ~try_stack_at_handler
-  in
-  match body with
-  | None -> I.Apply_cont (continuation, None, args)
-  | Some body ->
-    I.Let_cont {
-      name = outer_wrapper_cont;
-      is_exn_handler = false;
-      params = [];
-      recursive = Nonrecursive;
-      body;
-      handler = Apply_cont (continuation, None, args);
-    }
 
 let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           (k_exn : Continuation.t) : Ilambda.t =
@@ -286,13 +207,11 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       | continuation -> continuation
     in
     cps_non_tail_list args
-      (fun args -> compile_staticfail ~continuation ~args) k_exn
+      (fun args -> I.Apply_cont (continuation, None, args)) k_exn
   | Lstaticcatch (body, (static_exn, args), handler) ->
     let continuation = Continuation.create () in
     static_exn_env := Numbers.Int.Map.add static_exn continuation
       !static_exn_env;
-    try_stack_at_handler := Continuation.Map.add continuation !try_stack
-      !try_stack_at_handler;
     let after_continuation = Continuation.create () in
     let result_var = Ident.create_local "staticcatch_result" in
     let body = cps_tail body after_continuation k_exn in
@@ -318,7 +237,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           handler;
         };
       handler = k result_var;
-    };
+    }
   | Lsend (meth_kind, meth, obj, args, loc) ->
     cps_non_tail obj (fun obj ->
       cps_non_tail meth (fun meth ->
@@ -351,18 +270,11 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
             handler = after;
           }) k_exn) k_exn) k_exn
   | Ltrywith (body, id, handler) ->
-    let body_result = Ident.create_local "body_result" in
-    let result_var = Ident.create_local "try_with_result" in
-    let body_continuation = Continuation.create () in
     let handler_continuation = Continuation.create () in
-    let poptrap_continuation = Continuation.create () in
     let after_continuation = Continuation.create () in
-    let old_try_stack = !try_stack in
-    try_stack := handler_continuation :: old_try_stack;
-    let body =
-      cps_tail body poptrap_continuation handler_continuation
-    in
-    try_stack := old_try_stack;
+    let result_var = Ident.create_local "try_with_result" in
+    let exn_bucket_var = Ident.create_local "exn_bucket" in
+    let body = cps_tail body after_continuation handler_continuation in
     let handler = cps_tail handler after_continuation k_exn in
     Let_cont {
       name = after_continuation;
@@ -373,32 +285,9 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
         Let_cont {
           name = handler_continuation;
           is_exn_handler = true;
-          params = [id, Pgenval];
+          params = [exn_bucket_var, Pgenval];
           recursive = Nonrecursive;
-          body =
-            Let_cont {
-              name = poptrap_continuation;
-              is_exn_handler = false;
-              params = [body_result, Pgenval];
-              recursive = Nonrecursive;
-              body =
-                Let_cont {
-                  name = body_continuation;
-                  is_exn_handler = false;
-                  params = [];
-                  recursive = Nonrecursive;
-                  body =
-                    Apply_cont (body_continuation,
-                      Some (I.Push {
-                        exn_handler = handler_continuation;
-                      }),
-                      []);
-                  handler = body;
-                };
-              handler = Apply_cont (after_continuation,
-                Some (I.Pop { exn_handler = handler_continuation; }),
-                [body_result]);
-            };
+          body;
           handler;
         };
       handler = k result_var;
@@ -545,13 +434,11 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       | continuation -> continuation
     in
     cps_non_tail_list args
-      (fun args -> compile_staticfail ~continuation ~args) k_exn
+      (fun args -> I.Apply_cont (continuation, None, args)) k_exn
   | Lstaticcatch (body, (static_exn, args), handler) ->
     let continuation = Continuation.create () in
     static_exn_env := Numbers.Int.Map.add static_exn continuation
       !static_exn_env;
-    try_stack_at_handler := Continuation.Map.add continuation !try_stack
-      !try_stack_at_handler;
     let body = cps_tail body k k_exn in
     let handler = cps_tail handler k k_exn in
     let recursive : Asttypes.rec_flag =
@@ -591,42 +478,15 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
           I.Apply apply) k_exn) k_exn) k_exn
   | Lassign _ -> name_then_cps_tail "assign" lam k k_exn
   | Ltrywith (body, id, handler) ->
-    let body_result = Ident.create_local "body_result" in
-    let body_continuation = Continuation.create () in
     let handler_continuation = Continuation.create () in
-    let poptrap_continuation = Continuation.create () in
-    let old_try_stack = !try_stack in
-    try_stack := handler_continuation :: old_try_stack;
-    let body = cps_tail body poptrap_continuation handler_continuation in
-    try_stack := old_try_stack;
+    let body = cps_tail body handler_continuation in
     let handler = cps_tail handler k k_exn in
     Let_cont {
       name = handler_continuation;
       is_exn_handler = true;
       params = [id, Pgenval];
       recursive = Nonrecursive;
-      body =
-        Let_cont {
-          name = poptrap_continuation;
-          is_exn_handler = false;
-          params = [body_result, Pgenval];
-          recursive = Nonrecursive;
-          body =
-            Let_cont {
-              name = body_continuation;
-              is_exn_handler = false;
-              params = [];
-              recursive = Nonrecursive;
-              body =
-                Apply_cont (body_continuation,
-                  Some (I.Push { exn_handler = handler_continuation; }),
-                  []);
-              handler = body;
-            };
-          handler = Apply_cont (k, Some (
-            I.Pop { exn_handler = handler_continuation; }),
-            [body_result]);
-        };
+      body;
       handler;
     }
   | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ | Levent _ ->
@@ -737,9 +597,6 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
 
 let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
       : Ilambda.program =
-  static_exn_env := Numbers.Int.Map.empty;
-  try_stack := [];
-  try_stack_at_handler := Continuation.Map.empty;
   recursive_static_catches := recursive_static_catches';
   let the_end = Continuation.create () in
   let the_end_exn = Continuation.create () in
