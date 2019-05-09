@@ -106,38 +106,6 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       body = defining_expr;
       handler = Let_mutable let_mutable;
     }
-  (* The following specialised Llet cases help to avoid administrative
-     redexes. *)
-  (* CR mshinwell: We should assess whether these are worthwhile. *)
-  | Llet (_let_kind, value_kind, id, Lvar id', body) ->
-    Let (id, value_kind, Var id', cps_non_tail body k k_exn)
-  | Llet (_let_kind, value_kind, id, Lconst const, body) ->
-    Let (id, value_kind, Const const, cps_non_tail body k k_exn)
-  | Llet (_let_kind, value_kind, id, Lfunction func, body) ->
-    let func = cps_function func in
-    let body = cps_non_tail body k k_exn in
-    begin match value_kind with
-    | Pgenval -> ()
-    | Pfloatval | Pboxedintval _ | Pintval ->
-      Misc.fatal_errorf "Wrong kind %a for binding function to %a"
-        Printlambda.value_kind value_kind
-        Ident.print id
-    end;
-    Let_rec ([id, func], body)
-  | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
-    let body = cps_non_tail body k k_exn in
-    cps_non_tail_list args (fun args ->
-        let exn_continuation : I.exn_continuation option =
-          if L.primitive_can_raise prim then
-            Some {
-              exn_handler = k_exn;
-              extra_args = [];
-            }
-          else None
-        in
-        I.Let (id, value_kind, Prim { prim; args; loc; exn_continuation; },
-          body))
-      k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_non_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -345,38 +313,6 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       body = defining_expr;
       handler = Let_mutable let_mutable;
     }
-  (* The following specialised Llet cases help to avoid administrative
-     redexes. *)
-  | Llet (_let_kind, value_kind, id, Lvar id', body) ->
-    let body = cps_tail body k k_exn in
-    Let (id, value_kind, Var id', body)
-  | Llet (_let_kind, value_kind, id, Lconst const, body) ->
-    let body = cps_tail body k k_exn in
-    Let (id, value_kind, Const const, body)
-  | Llet (_let_kind, value_kind, id, Lfunction func, body) ->
-    let func = cps_function func in
-    begin match value_kind with
-    | Pgenval -> ()
-    | Pfloatval | Pboxedintval _ | Pintval ->
-      Misc.fatal_errorf "Wrong kind %a for binding function to %a"
-        Printlambda.value_kind value_kind
-        Ident.print id
-    end;
-    let body = cps_tail body k k_exn in
-    Let_rec ([id, func], body)
-  | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
-    let body = cps_tail body k k_exn in
-    let exn_continuation : I.exn_continuation option =
-      if L.primitive_can_raise prim then
-        Some {
-          exn_handler = k_exn;
-          extra_args = [];
-        }
-      else None
-    in
-    cps_non_tail_list args (fun args ->
-      I.Let (id, value_kind, Prim { prim; args; loc; exn_continuation; }, body))
-      k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
