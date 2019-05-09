@@ -25,7 +25,7 @@ let value_kind (value_kind : Lambda.value_kind) =
   | Pboxedintval Pint32
   | Pboxedintval Pint64
   | Pboxedintval Pnativeint
-  | Pintval -> K.value ()
+  | Pintval -> K.value
 
 let inline_attribute (attr : Lambda.inline_attribute) : Inline_attribute.t =
   match attr with
@@ -43,12 +43,12 @@ let specialise_attribute (attr : Lambda.specialise_attribute)
 
 let kind_of_primitive_native_repr (repr : Primitive.native_repr) =
   match repr with
-  | Same_as_ocaml_repr -> K.value ()
-  | Unboxed_float -> K.naked_float ()
-  | Unboxed_integer Pnativeint -> K.naked_nativeint ()
-  | Unboxed_integer Pint32 -> K.naked_int32 ()
-  | Unboxed_integer Pint64 -> K.naked_int64 ()
-  | Untagged_int -> K.naked_immediate ()
+  | Same_as_ocaml_repr -> K.value
+  | Unboxed_float -> K.naked_float
+  | Unboxed_integer Pnativeint -> K.naked_nativeint
+  | Unboxed_integer Pint32 -> K.naked_int32
+  | Unboxed_integer Pint64 -> K.naked_int64
+  | Untagged_int -> K.naked_immediate
 
 let method_kind (kind : Lambda.meth_kind) : Call_kind.method_kind =
   match kind with
@@ -56,7 +56,7 @@ let method_kind (kind : Lambda.meth_kind) : Call_kind.method_kind =
   | Public -> Public
   | Cached -> Cached
 
-let raise_kind (kind : Lambda.raise_kind) : Trap_action.raise_kind =
+let raise_kind (kind : Lambda.raise_kind) : Raise_kind.t =
   match kind with
   | Raise_regular -> Regular
   | Raise_reraise -> Reraise

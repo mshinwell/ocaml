@@ -168,9 +168,9 @@ module Block_access_kind = struct
 
   let element_kind t =
     match t with
-    | Block (Value _) | Array (Value _) -> K.value ()
-    | Block Naked_float | Array Naked_float -> K.naked_float ()
-    | Block (Fabricated _) | Array (Fabricated _) -> K.fabricated ()
+    | Block (Value _) | Array (Value _) -> K.value
+    | Block Naked_float | Array Naked_float -> K.naked_float
+    | Block (Fabricated _) | Array (Fabricated _) -> K.fabricated
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Stdlib.compare t0_1 t0_2
@@ -236,14 +236,14 @@ let writing_to_an_array_like_thing =
   (* XXX But there are no bounds checks now *)
   effects, Has_coeffects
 
-let array_like_thing_index_kind = K.value ()
+let array_like_thing_index_kind = K.value
 
 (* CR mshinwell: Improve naming *)
-let bigarray_kind = K.value ()
-let bigstring_kind = K.value ()
-let block_kind = K.value ()
-let block_element_kind = K.value ()
-let string_or_bytes_kind = K.value ()
+let bigarray_kind = K.value
+let bigstring_kind = K.value
+let block_kind = K.value
+let block_element_kind = K.value
+let string_or_bytes_kind = K.value
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
@@ -300,21 +300,21 @@ type bigarray_kind =
 
 let element_kind_of_bigarray_kind k =
   match k with
-  | Unknown -> K.value ()
+  | Unknown -> K.value
   | Float32
-  | Float64 -> K.naked_float ()
+  | Float64 -> K.naked_float
   | Sint8
   | Uint8
   | Sint16
-  | Uint16 -> K.naked_immediate ()
-  | Int32 -> K.naked_int32 ()
-  | Int64 -> K.naked_int64 ()
-  | Int_width_int -> K.naked_immediate ()
-  | Targetint_width_int -> K.naked_nativeint ()
+  | Uint16 -> K.naked_immediate
+  | Int32 -> K.naked_int32
+  | Int64 -> K.naked_int64
+  | Int_width_int -> K.naked_immediate
+  | Targetint_width_int -> K.naked_nativeint
   | Complex32
   | Complex64 ->
     (* See [copy_two_doubles] in bigarray_stubs.c. *)
-    K.value ()
+    K.value
 
 (*
 let print_bigarray_kind ppf k =
@@ -389,9 +389,9 @@ let byte_width_of_string_accessor_width width =
 
 let kind_of_string_accessor_width width =
   match width with
-  | Eight | Sixteen -> K.value ()
-  | Thirty_two -> K.naked_int32 ()
-  | Sixty_four -> K.naked_int64 ()
+  | Eight | Sixteen -> K.value
+  | Thirty_two -> K.naked_int32
+  | Sixty_four -> K.naked_int64
 
 type num_dimensions = int
 
@@ -594,50 +594,50 @@ let print_unary_primitive ppf p =
 
 let arg_kind_of_unary_primitive p =
   match p with
-  | Duplicate_block _ -> K.value ()
-  | Is_int -> K.value ()
-  | Get_tag _ -> K.value ()
-  | Discriminant_of_int -> K.value ()
-  | String_length _ -> K.value ()
-  | Int_as_pointer -> K.value ()
-  | Opaque_identity -> K.value ()
+  | Duplicate_block _ -> K.value
+  | Is_int -> K.value
+  | Get_tag _ -> K.value
+  | Discriminant_of_int -> K.value
+  | String_length _ -> K.value
+  | Int_as_pointer -> K.value
+  | Opaque_identity -> K.value
   | Int_arith (kind, _) -> K.Standard_int.to_kind kind
   | Num_conv { src; dst = _; } -> K.Standard_int_or_float.to_kind src
-  | Boolean_not -> K.value ()
-  | Float_arith _ -> K.naked_float ()
+  | Boolean_not -> K.value
+  | Float_arith _ -> K.naked_float
   | Array_length _
-  | Bigarray_length _ -> K.value ()
-  | Unbox_number _ -> K.value ()
+  | Bigarray_length _ -> K.value
+  | Unbox_number _ -> K.value
   | Box_number kind -> K.Boxable_number.to_kind kind
-  | Project_closure _ -> K.fabricated ()
+  | Project_closure _ -> K.fabricated
   | Move_within_set_of_closures _
-  | Project_var _ -> K.value ()
+  | Project_var _ -> K.value
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
-  | Duplicate_block _ -> Singleton (K.value ())
-  | Is_int -> Singleton (K.fabricated ())
-  | String_length _ -> Singleton (K.value ())
-  | Get_tag _ -> Singleton (K.fabricated ())
-  | Discriminant_of_int -> Singleton (K.fabricated ())
+  | Duplicate_block _ -> Singleton K.value
+  | Is_int -> Singleton K.fabricated
+  | String_length _ -> Singleton K.value
+  | Get_tag _ -> Singleton K.fabricated
+  | Discriminant_of_int -> Singleton K.fabricated
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
        heap). *)
-    Singleton (K.value ())
-  | Opaque_identity -> Singleton (K.value ())
+    Singleton K.value
+  | Opaque_identity -> Singleton K.value
   | Int_arith (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Num_conv { src = _; dst; } ->
     Singleton (K.Standard_int_or_float.to_kind dst)
-  | Boolean_not -> Singleton (K.value ())
-  | Float_arith _ -> Singleton (K.naked_float ())
+  | Boolean_not -> Singleton K.value
+  | Float_arith _ -> Singleton K.naked_float
   | Array_length _
-  | Bigarray_length _ -> Singleton (K.value ())
+  | Bigarray_length _ -> Singleton K.value
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
   | Project_closure _
-  | Move_within_set_of_closures _ -> Singleton (K.value ())
-  | Project_var _ -> Singleton (K.value ())
+  | Move_within_set_of_closures _ -> Singleton K.value
+  | Project_var _ -> Singleton K.value
 
 let effects_and_coeffects_of_unary_primitive p =
   match p with
@@ -810,30 +810,30 @@ let args_kind_of_binary_primitive p =
     let kind = K.Standard_int.to_kind kind in
     kind, kind
   | Int_shift (kind, _) ->
-    K.Standard_int.to_kind kind, K.naked_immediate ()
+    K.Standard_int.to_kind kind, K.naked_immediate
   | Int_comp (kind, _, _) ->
     let kind = K.Standard_int.to_kind kind in
     kind, kind
   | Float_arith _
-  | Float_comp _ -> K.naked_float (), K.naked_float ()
+  | Float_comp _ -> K.naked_float, K.naked_float
 
 let result_kind_of_binary_primitive p : result_kind =
   match p with
   | Block_load (block_access_kind, _) ->
     Singleton (Block_access_kind.element_kind block_access_kind)
   | String_or_bigstring_load (_, (Eight | Sixteen)) ->
-    Singleton (K.value ())
+    Singleton K.value
   | String_or_bigstring_load (_, Thirty_two) ->
-    Singleton (K.naked_int32 ())
+    Singleton K.naked_int32
   | String_or_bigstring_load (_, Sixty_four) ->
-    Singleton (K.naked_int64 ())
+    Singleton K.naked_int64
   | Int_arith (kind, _)
   | Int_shift (kind, _) -> Singleton (K.Standard_int.to_kind kind)
-  | Float_arith _ -> Singleton (K.naked_float ())
+  | Float_arith _ -> Singleton K.naked_float
   (* CR mshinwell: Change [Phys_equal] to return kind [Fabricated] *)
   | Phys_equal _
   | Int_comp _
-  | Float_comp _ -> Singleton (K.value ())
+  | Float_comp _ -> Singleton K.value
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
@@ -891,22 +891,22 @@ let args_kind_of_ternary_primitive p =
     block_kind, array_like_thing_index_kind, block_element_kind
   | Bytes_or_bigstring_set (Bytes, (Eight | Sixteen)) ->
     string_or_bytes_kind, array_like_thing_index_kind,
-      K.value ()
+      K.value
   | Bytes_or_bigstring_set (Bytes, Thirty_two) ->
     string_or_bytes_kind, array_like_thing_index_kind,
-      K.naked_int32 ()
+      K.naked_int32
   | Bytes_or_bigstring_set (Bytes, Sixty_four) ->
     string_or_bytes_kind, array_like_thing_index_kind,
-      K.naked_int64 ()
+      K.naked_int64
   | Bytes_or_bigstring_set (Bigstring, (Eight | Sixteen)) ->
     bigstring_kind, array_like_thing_index_kind,
-      K.value ()
+      K.value
   | Bytes_or_bigstring_set (Bigstring, Thirty_two) ->
     bigstring_kind, array_like_thing_index_kind,
-      K.naked_int32 ()
+      K.naked_int32
   | Bytes_or_bigstring_set (Bigstring, Sixty_four) ->
     bigstring_kind, array_like_thing_index_kind,
-      K.naked_int64 ()
+      K.naked_int64
 
 let result_kind_of_ternary_primitive p : result_kind =
   match p with
@@ -963,17 +963,17 @@ let print_variadic_primitive ppf p =
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
   | Make_block (Full_of_values (_tag, _shape), _) ->
-    Variadic_all_of_kind (K.value ())
+    Variadic_all_of_kind K.value
   | Make_block (Full_of_naked_floats, _) ->
-    Variadic_all_of_kind (K.naked_float ())
+    Variadic_all_of_kind K.naked_float
   | Make_block (Generic_array No_specialisation, _) ->
-    Variadic_all_of_kind (K.value ())
+    Variadic_all_of_kind K.value
   | Make_block (Generic_array Full_of_naked_floats, _) ->
-    Variadic_all_of_kind (K.naked_float ())
+    Variadic_all_of_kind K.naked_float
   | Make_block (Generic_array Full_of_immediates, _) ->
-    Variadic_all_of_kind (K.value ())
+    Variadic_all_of_kind K.value
   | Make_block (Generic_array Full_of_arbitrary_values_but_not_floats, _) ->
-    Variadic_all_of_kind (K.value ())
+    Variadic_all_of_kind K.value
   | Bigarray_set (num_dims, kind, _) ->
     let index = List.init num_dims (fun _ -> array_like_thing_index_kind) in
     let new_value = element_kind_of_bigarray_kind kind in
@@ -984,7 +984,7 @@ let args_kind_of_variadic_primitive p : arg_kinds =
 
 let result_kind_of_variadic_primitive p : result_kind =
   match p with
-  | Make_block _ -> Singleton (K.value ())
+  | Make_block _ -> Singleton K.value
   | Bigarray_set _ -> Unit
   | Bigarray_load (_, kind, _) ->
     Singleton (element_kind_of_bigarray_kind kind)
@@ -1017,18 +1017,15 @@ let invariant env t =
     E.check_simple_is_bound_and_of_kind env x0 kind0;
     begin match prim, x0 with
     | Project_closure closure_id, set_of_closures ->
-      E.check_simple_is_bound_and_of_kind env set_of_closures
-        (K.fabricated ());
+      E.check_simple_is_bound_and_of_kind env set_of_closures K.fabricated;
       E.add_use_of_closure_id env closure_id
     | Move_within_set_of_closures { move_from; move_to; }, closure ->
-      E.check_simple_is_bound_and_of_kind env closure
-        (K.value ());
+      E.check_simple_is_bound_and_of_kind env closure K.value;
       E.add_use_of_closure_id env move_from;
       E.add_use_of_closure_id env move_to
     | Project_var var, closure ->
       E.add_use_of_var_within_closure env var;
-      E.check_simple_is_bound_and_of_kind env closure
-        (K.value ())
+      E.check_simple_is_bound_and_of_kind env closure K.value
     | Duplicate_block _, _
     | Is_int, _
     | Get_tag _, _
@@ -1205,7 +1202,7 @@ let result_kind (t : t) =
 let result_kind' t =
   match result_kind t with
   | Singleton kind -> kind
-  | Unit -> K.value ()
+  | Unit -> K.value
 
 let effects_and_coeffects (t : t) =
   match t with
