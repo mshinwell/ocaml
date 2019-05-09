@@ -1,0 +1,4 @@
+(rule (
+  (target flambda_type0.ml)
+  (action (run ./create_flambda_type0.ml))
+))
