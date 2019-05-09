@@ -207,7 +207,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       | continuation -> continuation
     in
     cps_non_tail_list args
-      (fun args -> I.Apply_cont (continuation, None, args)) k_exn
+      (fun args -> I.Apply_cont (continuation, args)) k_exn
   | Lstaticcatch (body, (static_exn, args), handler) ->
     let continuation = Continuation.create () in
     static_exn_env := Numbers.Int.Map.add static_exn continuation
@@ -300,7 +300,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
 and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       : Ilambda.t =
   match lam with
-  | Lvar id -> Apply_cont (k, None, [id])
+  | Lvar id -> Apply_cont (k, [id])
   | Lconst _ -> name_then_cps_tail "const" lam k k_exn
   | Lapply apply ->
     cps_non_tail_list apply.ap_args (fun args ->
@@ -409,7 +409,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     cps_non_tail_list args (fun args ->
       I.Let (result_var, Pgenval,
         Prim { prim; args; loc; exn_continuation; },
-        Apply_cont (k, None, [result_var]))) k_exn
+        Apply_cont (k, [result_var]))) k_exn
   | Lswitch (scrutinee,
       { sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction; },
       _loc) ->
@@ -434,7 +434,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       | continuation -> continuation
     in
     cps_non_tail_list args
-      (fun args -> I.Apply_cont (continuation, None, args)) k_exn
+      (fun args -> I.Apply_cont (continuation, args)) k_exn
   | Lstaticcatch (body, (static_exn, args), handler) ->
     let continuation = Continuation.create () in
     static_exn_env := Numbers.Int.Map.add static_exn continuation
