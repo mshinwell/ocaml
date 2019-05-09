@@ -432,13 +432,10 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     in
     let handler = close t handler_env handler in
     let params_and_handler =
-      Flambda.Continuation_params_and_handler.create params
-        ~param_relations:T.Typing_env_extension.empty
-        ~handler
+      Flambda.Continuation_params_and_handler.create params ~handler
     in
     let handler =
       Flambda.Continuation_handler.create ~params_and_handler
-        ~inferred_typing:T.Parameters.empty
         ~stub:false
         ~is_exn_handler:is_exn_handler
     in
