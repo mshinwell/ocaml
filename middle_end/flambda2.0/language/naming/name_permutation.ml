@@ -155,8 +155,7 @@ let apply_variable_set t vars =
 let apply_name t (name : Name.t) =
   match name with
   | Var var -> Name.var (apply_variable t var)
-  | Symbol _
-  | Logical_var _ -> name
+  | Symbol _ -> name
 
 let add_continuation t k1 k2 =
   { t with

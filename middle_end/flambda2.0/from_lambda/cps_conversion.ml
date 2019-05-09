@@ -45,6 +45,7 @@ let name_for_function (func : Lambda.lfunction) =
   else Format.asprintf "anon-fn[%a]" Location.print_compact func.loc
 
 (* CR-soon mshinwell: Remove mutable state. *)
+let static_exn_env = ref Numbers.Int.Map.empty
 let recursive_static_catches = ref Numbers.Int.Set.empty
 
 let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
@@ -241,7 +242,6 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let handler_continuation = Continuation.create () in
     let after_continuation = Continuation.create () in
     let result_var = Ident.create_local "try_with_result" in
-    let exn_bucket_var = Ident.create_local "exn_bucket" in
     let body = cps_tail body after_continuation handler_continuation in
     let handler = cps_tail handler after_continuation k_exn in
     Let_cont {
@@ -253,7 +253,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
         Let_cont {
           name = handler_continuation;
           is_exn_handler = true;
-          params = [exn_bucket_var, Pgenval];
+          params = [id, Pgenval];
           recursive = Nonrecursive;
           body;
           handler;
@@ -415,7 +415,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Lassign _ -> name_then_cps_tail "assign" lam k k_exn
   | Ltrywith (body, id, handler) ->
     let handler_continuation = Continuation.create () in
-    let body = cps_tail body handler_continuation in
+    let body = cps_tail body k handler_continuation in
     let handler = cps_tail handler k k_exn in
     Let_cont {
       name = handler_continuation;
@@ -533,6 +533,7 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
 
 let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
       : Ilambda.program =
+  static_exn_env := Numbers.Int.Map.empty;
   recursive_static_catches := recursive_static_catches';
   let the_end = Continuation.create () in
   let the_end_exn = Continuation.create () in

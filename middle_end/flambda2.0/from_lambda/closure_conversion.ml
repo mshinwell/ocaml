@@ -70,7 +70,7 @@ let tupled_function_call_stub
   let unboxed_version_var = Variable.create "unboxed_version" in
   let call =
     let call_kind =
-      Call_kind.direct_function_call unboxed_version ~return_arity:[K.value ()]
+      Call_kind.direct_function_call unboxed_version ~return_arity:[K.value]
     in
     let apply =
       Flambda.Apply.create ~callee:(Name.var unboxed_version_var)
@@ -92,7 +92,7 @@ let tupled_function_call_stub
       }
     in
     Expr.create_let unboxed_version_var
-      (K.value ())
+      K.value
       (Named.create_prim (Unary (move, Simple.var my_closure)) dbg)
       call
   in
@@ -107,26 +107,26 @@ let tupled_function_call_stub
               Simple.const (Tagged_immediate pos)))
             dbg
         in
-        let expr = Expr.create_let param (K.value ()) defining_expr body in
+        let expr = Expr.create_let param K.value defining_expr body in
         pos + 1, expr)
       (0, body_with_closure_bound)
       params
   in
   let tuple_param =
-    Kinded_parameter.create (Parameter.wrap tuple_param_var) (K.value ())
+    Kinded_parameter.create (Parameter.wrap tuple_param_var) K.value
   in
   let params_and_body =
-    Flambda.Function_params_and_body.create [tuple_param]
-      ~param_relations:T.Typing_env_extension.empty
+    Flambda.Function_params_and_body.create
+      ~continuation_param
+      ~exn_continuation
+      [tuple_param]
       ~body
       ~my_closure
   in
   Flambda.Function_declaration.create
     ~closure_origin:(Closure_origin.create closure_bound_var)
-    ~continuation_param
-    ~exn_continuation
     ~params_and_body
-    ~result_arity:[K.value ()]
+    ~result_arity:[K.value]
     ~stub:true
     ~dbg
     ~inline:Default_inline
@@ -277,7 +277,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     | Some box_return_value ->
       let boxed_value = Variable.rename let_bound_var in
       let body =
-        Flambda.Expr.create_let boxed_value (K.value ())
+        Flambda.Expr.create_let boxed_value K.value
           (Named.create_prim
             (Unary (box_return_value, Simple.var let_bound_var))
             dbg)
@@ -568,7 +568,7 @@ and close_let_rec t env ~defs ~body =
           Unary (Project_closure closure_bound_var, set_of_closures_var)
         in
         Expr.create_let let_bound_var
-          (K.value ()) (Named.create_prim project_closure Debuginfo.none)
+          K.value (Named.create_prim project_closure Debuginfo.none)
           body)
       (close t env body)
       function_declarations
@@ -717,7 +717,7 @@ and close_one_function t ~external_env ~by_closure_id decl
               move_to = closure_id;
             }
           in
-          Expr.create_let var (K.value ())
+          Expr.create_let var K.value
             (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
             body)
       project_closure_to_bind
@@ -728,7 +728,7 @@ and close_one_function t ~external_env ~by_closure_id decl
         if not (Variable.Set.mem var free_vars_of_body) then body
         else
           Expr.create_let var
-            (K.value ())
+            K.value
             (Named.create_prim
               (Unary (Project_var var_within_closure, my_closure'))
               Debuginfo.none)
@@ -788,7 +788,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let field_vars =
     List.init size (fun pos ->
       let pos_str = string_of_int pos in
-      Variable.create ("block_field_" ^ pos_str), K.value ())
+      Variable.create ("block_field_" ^ pos_str), K.value)
   in
   (* For review, skip down to "let expr =" below, read the comment then
      come back here. *)
@@ -805,7 +805,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     List.fold_left (fun body (pos, var) ->
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-        Expr.create_let var (K.value ())
+        Expr.create_let var K.value
           (Named.create_prim
             (Binary (
               Block_load (Block (Value Unknown), Immutable),
@@ -817,7 +817,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   in
   let load_fields_cont_handler =
     let param =
-      Kinded_parameter.create (Parameter.wrap module_block_var) (K.value ())
+      Kinded_parameter.create (Parameter.wrap module_block_var) K.value
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]
@@ -864,7 +864,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   in
   let program_body : Program_body.t =
     let bound_symbols : Program_body.Bound_symbols.t =
-      Singleton (module_symbol, K.value ())
+      Singleton (module_symbol, K.value)
     in
     let definition : Program_body.Definition.t =
       { computation = Some computation;
@@ -877,7 +877,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     (* CR mshinwell: Share with [Simplify_program] *)
     List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
         let bound_symbols : Program_body.Bound_symbols.t =
-          Singleton (symbol, K.value ())
+          Singleton (symbol, K.value)
         in
         let static_structure = [bound_symbols, static_part] in
         let definition : Program_body.Definition.t =
@@ -891,7 +891,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   in
   let imported_symbols =
     Symbol.Set.fold (fun symbol imported_symbols ->
-        Symbol.Map.add symbol (K.value ()) imported_symbols)
+        Symbol.Map.add symbol K.value imported_symbols)
       t.imported_symbols
       Symbol.Map.empty
   in

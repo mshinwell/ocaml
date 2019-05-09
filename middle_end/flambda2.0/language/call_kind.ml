@@ -64,7 +64,7 @@ module Function_call = struct
     match call with
     | Direct { return_arity; _ }
     | Indirect_known_arity { return_arity; _ } -> return_arity
-    | Indirect_unknown_arity -> [Flambda_kind.value ()]
+    | Indirect_unknown_arity -> [Flambda_kind.value]
 end
 
 type method_kind = Self | Public | Cached
@@ -132,7 +132,7 @@ let c_call ~alloc ~param_arity ~return_arity =
 let return_arity t : Flambda_arity.t =
   match t with
   | Function call -> Function_call.return_arity call
-  | Method _ -> [Flambda_kind.value ()]
+  | Method _ -> [Flambda_kind.value]
   | C_call { return_arity; _ } -> return_arity
 
 let free_names t =

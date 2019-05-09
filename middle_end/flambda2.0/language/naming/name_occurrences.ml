@@ -390,7 +390,6 @@ let singleton_name_in_terms (name : Name.t) =
   match name with
   | Var var -> singleton_variable_in_terms var
   | Symbol sym -> singleton_symbol sym
-  | Logical_var _ -> empty
 
 let apply_name_permutation { variables_in_terms; variables_in_types;
       variables_debug_only; continuations; symbols; } perm =
