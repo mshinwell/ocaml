@@ -2,42 +2,42 @@
 
 set -eu -o pipefail
 
-TEMPLATE=flambda_type0_templ.ml
+TEMPLATE=flambda_type0.templ.ml
 DELIMITER="-- module rec binding here --"
 
 WARNING_DELIMITER="@@@ocaml.warning"
 
 REC_BINDINGS="\
-    flambda_types.ml \
-    flambda_type0_core.ml \
-    type_free_names.ml \
-    type_printers.ml \
-    derived_structures/blocks.ml \
-    derived_structures/closure_elements.ml \
-    derived_structures/closure_ids.ml \
-    derived_structures/closures_entry_by_closure_id.ml \
-    derived_structures/discriminants.ml \
-    derived_structures/immediates.ml \
-    derived_structures/types_by_closure_id.ml \
-    env/typing_env_extension.ml \
-    env/typing_env_level.ml \
-    env/typing_env.ml \
-    meet_and_join/api_meet_and_join.ml \
-    meet_and_join/either_meet_or_join.ml \
-    meet_and_join/join_env.ml \
-    meet_and_join/kind_independent_meet_or_join.ml \
-    meet_and_join/meet_and_join_fabricated.ml \
-    meet_and_join/meet_and_join_naked_float.ml \
-    meet_and_join/meet_and_join_naked_immediate.ml \
-    meet_and_join/meet_and_join_naked_int32.ml \
-    meet_and_join/meet_and_join_naked_int64.ml \
-    meet_and_join/meet_and_join_naked_nativeint.ml \
-    meet_and_join/meet_and_join_value.ml \
-    meet_and_join/meet_env.ml \
-    meet_and_join/meet_or_join.ml \
-    structures/product.ml \
-    structures/row_like.ml \
-    structures/trivial_row_like.ml"
+    flambda_types.rec.ml \
+    flambda_type0_core.rec.ml \
+    type_free_names.rec.ml \
+    type_printers.rec.ml \
+    derived_structures/blocks.rec.ml \
+    derived_structures/closure_elements.rec.ml \
+    derived_structures/closure_ids.rec.ml \
+    derived_structures/closures_entry_by_closure_id.rec.ml \
+    derived_structures/discriminants.rec.ml \
+    derived_structures/immediates.rec.ml \
+    derived_structures/types_by_closure_id.rec.ml \
+    env/typing_env_extension.rec.ml \
+    env/typing_env_level.rec.ml \
+    env/typing_env.rec.ml \
+    meet_and_join/api_meet_and_join.rec.ml \
+    meet_and_join/either_meet_or_join.rec.ml \
+    meet_and_join/join_env.rec.ml \
+    meet_and_join/kind_independent_meet_or_join.rec.ml \
+    meet_and_join/meet_and_join_fabricated.rec.ml \
+    meet_and_join/meet_and_join_naked_float.rec.ml \
+    meet_and_join/meet_and_join_naked_immediate.rec.ml \
+    meet_and_join/meet_and_join_naked_int32.rec.ml \
+    meet_and_join/meet_and_join_naked_int64.rec.ml \
+    meet_and_join/meet_and_join_naked_nativeint.rec.ml \
+    meet_and_join/meet_and_join_value.rec.ml \
+    meet_and_join/meet_env.rec.ml \
+    meet_and_join/meet_or_join.rec.ml \
+    structures/product.rec.ml \
+    structures/row_like.rec.ml \
+    structures/trivial_row_like.rec.ml"
 
 OUTPUT=flambda_type0.ml
 
