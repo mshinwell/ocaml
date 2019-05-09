@@ -45,7 +45,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
             let continuation_params =
               List.mapi (fun index kind ->
                   let name = Printf.sprintf "return%d" index in
-                  let param = Parameter.wrap (Variable.create name)
+                  let param = Parameter.wrap (Variable.create name) in
                   Kinded_parameter.create param kind)
                 result_arity
             in
@@ -54,7 +54,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
               ~continuation_params
               ~exn_continuation
               ~descr
-              ~scope_level_for_lifted_constants:???
+              ~scope_level_for_lifted_constants:42 (* XXX *)
           in
           Function_params_and_body.create ~continuation_param
             ~exn_continuation params body ~my_closure)
@@ -129,7 +129,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
           T.closure closure_id function_decl_type closure_element_types
-            ~set_of_closures:???)
+            ~set_of_closures:42) (* XXX *)
         fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in

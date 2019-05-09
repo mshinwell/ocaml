@@ -19,6 +19,6 @@
 type t =
   | Unknown
   | Unreachable
-  | Inline of Continuation_handler.t
+  | Inline of Flambda.Continuation_handler.t
 
 val print : Format.formatter -> t -> unit

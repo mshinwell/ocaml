@@ -257,7 +257,7 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
         Flambda_kind.print desired_kind
     end
   | Discriminant _ ->
-    let actual_kind = Flambda_kind.fabricated () in
+    let actual_kind = Flambda_kind.fabricated in
     if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
     then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
@@ -303,7 +303,7 @@ let kind_of_simple t (simple : Simple.t) =
   match simple with
   | Name name -> kind_of_name t name
   | Const const -> Simple.Const.kind const
-  | Discriminant _ -> Flambda_kind.fabricated ()
+  | Discriminant _ -> Flambda_kind.fabricated
 
 let kind_of_variable t var = kind_of_name t (Name.var var)
 
@@ -370,7 +370,7 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
   in
   let continuations =
     Continuation.Map.add exception_cont
-      ([Flambda_kind.value ()], Exn_handler (*, continuation_stack *))
+      ([Flambda_kind.value], Exn_handler (*, continuation_stack *))
       continuations
   in
   let names = Name.symbols_only_map t.names in
@@ -384,5 +384,5 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
     }
   in
   add_variables
-    (add_variable t my_closure (Flambda_kind.value ()))
+    (add_variable t my_closure Flambda_kind.value)
     parameters_with_kinds

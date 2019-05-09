@@ -99,8 +99,9 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           Continuation_params_and_handler.create params ~param_relations
             ~handler
         in
-        Continuation_handler.with_params_and_handler cont_handler
-          params_and_handler
+        let cont_handler =
+          Continuation_handler.with_params_and_handler cont_handler
+            params_and_handler
         in
         cont_handler, r)
 
@@ -330,7 +331,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         in
         Expr.create_let wrapper_var (K.value ())
           (Named.create_set_of_closures wrapper_taking_remaining_args)
-          (Expr.create_apply_cont apply_cont)
+          (Expr.create_apply_cont apply_cont))
 
   and simplify_direct_over_application env r ~callee ~args
         ~callee's_closure_id
@@ -370,7 +371,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             ~dbg
             ~inline
             ~specialise
-        in
         in
         let after_full_application = Continuation.create () in
         let after_full_application_handler =
@@ -522,7 +522,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         | Unknown -> type_unavailable ()
         | Invalid -> Expr.invalid (), r
         end
-      | None ->
+      | None -> type_unavailable ()
       end
     | Unknown -> type_unavailable ()
     | Invalid -> Expr.invalid (), r

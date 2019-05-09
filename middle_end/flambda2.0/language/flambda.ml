@@ -284,12 +284,12 @@ end = struct
         KP.List.print bind
         Simple.List.print target
     end;
-    List.fold_left2 (fun bind target expr ->
+    List.fold_left2 (fun expr bind target ->
         let var = KP.var bind in
         let kind = KP.kind bind in
         create_let var kind (Named.create_simple target) expr)
-      (List.rev bind) (List.rev target)
       t
+      (List.rev bind) (List.rev target)
 
   let link_continuations ~bind ~target ~arity t =
     let params =
@@ -300,10 +300,10 @@ end = struct
     in
     let params_and_handler =
       let apply_cont_target =
-        let args = List.map (fun param -> KP.simple param) in
+        let args = List.map (fun param -> KP.simple param) params in
         Apply_cont.create target ~args
       in
-      Flambda.Continuation_params_and_handler.create params
+      Continuation_params_and_handler.create params
         ~handler:(create_apply_cont apply_cont_target)
     in
     let handler =
@@ -374,7 +374,7 @@ end = struct
         Singleton (E.kind_of_simple env simple)
       | Set_of_closures set_of_closures ->
         Set_of_closures.invariant env set_of_closures;
-        Singleton (K.fabricated ())
+        Singleton K.fabricated
       | Prim (prim, dbg) ->
         Flambda_primitive.invariant env prim;
         ignore (dbg : Debuginfo.t);
@@ -413,13 +413,13 @@ end = struct
     | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
     | Naked_number Naked_float ->
-      Prim (Unary (Box_number Naked_float, simple), dbg), K.value ()
+      Prim (Unary (Box_number Naked_float, simple), dbg), K.value
     | Naked_number Naked_int32 ->
-      Prim (Unary (Box_number Naked_int32, simple), dbg), K.value ()
+      Prim (Unary (Box_number Naked_int32, simple), dbg), K.value
     | Naked_number Naked_int64 ->
-      Prim (Unary (Box_number Naked_int64, simple), dbg), K.value ()
+      Prim (Unary (Box_number Naked_int64, simple), dbg), K.value
     | Naked_number Naked_nativeint ->
-      Prim (Unary (Box_number Naked_nativeint, simple), dbg), K.value ()
+      Prim (Unary (Box_number Naked_nativeint, simple), dbg), K.value
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
 
@@ -430,14 +430,14 @@ end = struct
     | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
     | Naked_number Naked_float ->
-      Prim (Unary (Unbox_number Naked_float, simple), dbg), K.naked_float ()
+      Prim (Unary (Unbox_number Naked_float, simple), dbg), K.naked_float
     | Naked_number Naked_int32 ->
-      Prim (Unary (Unbox_number Naked_int32, simple), dbg), K.naked_int32 ()
+      Prim (Unary (Unbox_number Naked_int32, simple), dbg), K.naked_int32
     | Naked_number Naked_int64 ->
-      Prim (Unary (Unbox_number Naked_int64, simple), dbg), K.naked_int64 ()
+      Prim (Unary (Unbox_number Naked_int64, simple), dbg), K.naked_int64
     | Naked_number Naked_nativeint ->
       Prim (Unary (Unbox_number Naked_nativeint, simple), dbg),
-        K.naked_nativeint ()
+        K.naked_nativeint
     | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
 
@@ -545,7 +545,7 @@ end = struct
       let named_kind =
         match Named.invariant_returning_kind env t.defining_expr with
         | Singleton kind -> Some kind
-        | Unit -> Some (K.value ())
+        | Unit -> Some K.value
       in
       begin match named_kind with
       | None -> ()
@@ -686,7 +686,7 @@ end = struct
       body
     else
       match Expr.descr body with
-      | Apply_cont { k = k'; args = []; trap_action = None; }
+      | Apply_cont apply_cont ...{ cont = k'; args = []; trap_action = None; }
           when Continuation.equal k k' ->
         (* CR mshinwell: This could work for the >0 arity-case too, to handle
            continuation aliases. *)

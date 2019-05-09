@@ -77,7 +77,7 @@ module Of_kind_value = struct
     | Symbol sym -> E.check_symbol_is_bound env sym
     | Tagged_immediate _ -> ()
     | Dynamically_computed var ->
-      E.check_variable_is_bound_and_of_kind env var (Flambda_kind.value ())
+      E.check_variable_is_bound_and_of_kind env var Flambda_kind.value
 end
 
 module Static_part = struct
@@ -227,28 +227,22 @@ module Static_part = struct
       | Block (_tag, _mut, fields) ->
         List.iter (fun field -> Of_kind_value.invariant env field) fields
       | Fabricated_block field ->
-        E.check_variable_is_bound_and_of_kind env field
-          (Flambda_kind.fabricated ())
+        E.check_variable_is_bound_and_of_kind env field Flambda_kind.fabricated
       | Set_of_closures set ->
         Flambda.Set_of_closures.invariant env set
       | Closure (sym, _closure_id) ->
         E.check_symbol_is_bound env sym
       | Boxed_float (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.naked_float ())
+        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_float
       | Boxed_int32 (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.naked_int32 ())
+        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_int32
       | Boxed_int64 (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.naked_int64 ())
+        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_int64
       | Boxed_nativeint (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.naked_nativeint ())
+        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_nativeint
       | Mutable_string { initial_value = Var v; }
       | Immutable_string (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.value ())
+        E.check_variable_is_bound_and_of_kind env v Flambda_kind.value
       | Boxed_float (Const _)
       | Boxed_int32 (Const _)
       | Boxed_int64 (Const _)
@@ -261,7 +255,7 @@ module Static_part = struct
             match field with
             | Var v ->
               E.check_variable_is_bound_and_of_kind env v
-                (Flambda_kind.naked_float ())
+                Flambda_kind.naked_float
             | Const _ -> ())
           fields
     with Misc.Fatal_error ->

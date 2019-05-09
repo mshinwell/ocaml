@@ -54,7 +54,7 @@ let invariant env ({ scrutinee; arms; } as t) =
       reason
       print t
   in
-  E.check_name_is_bound_and_of_kind env scrutinee (K.fabricated ());
+  E.check_name_is_bound_and_of_kind env scrutinee K.fabricated;
   assert (Discriminant.Map.cardinal arms >= 2);
   let check discr k =
     ignore (discr : Discriminant.t);

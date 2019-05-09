@@ -19,5 +19,10 @@
 type t =
   | Unknown
   | Unreachable
-  | Inline of Continuation_handler.t
+  | Inline of Flambda.Continuation_handler.t
 
+let print ppf t =
+  match t with
+  | Unknown -> Format.pp_print_string ppf "Unknown"
+  | Unreachable -> Format.pp_print_string ppf "Unreachable"
+  | Inline _handler -> Format.pp_print_string ppf "Inline _"
