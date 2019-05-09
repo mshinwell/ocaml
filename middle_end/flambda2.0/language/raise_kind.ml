@@ -14,37 +14,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Actions affecting exception traps on the stack.  These are always
-    associated with an [Apply_cont] node; the trap action is executed before
-    the application of the continuation.
-
-    [Pop] may not appear to need the [exn_handler] value during Flambda
-    passes---but in fact it does, since it compiles to a reference to such
-    continuation, and must not be moved out of its scope.
-
-    Beware: continuations cannot be used both as an exception handler and as
-    a normal continuation (since continuations used as exception handlers
-    use a calling convention that may differ from normal).
-*)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type raise_kind =
+type t =
   | Regular
   | Reraise
   | No_trace
 
-type t =
-  | Push of { exn_handler : Continuation.t; }
-  | Pop of {
-      exn_handler : Continuation.t;
-      raise_kind : raise_kind option;
-    }
+let invariant _env _t = ()
 
-include Expr_std.S with type t := t
+let print ppf t =
+  match t with
+  | Regular -> Format.pp_print_string ppf "Regular"
+  | Reraise -> Format.pp_print_string ppf "Reraise"
+  | No_trace -> Format.pp_print_string ppf "No_trace"
 
-module Option : sig
+let print_with_cache ~cache:_ ppf t = print ppf t
+
+let free_names _t = Name_occurrences.empty
+
+let apply_name_permutation t _perm = t
+
+module Option = struct
   type nonrec t = t option
 
-  val print : Format.formatter -> t -> unit
+  let invariant _env _t = ()
+
+  let print ppf = function
+    | None -> ()
+    | Some t -> print ppf t
+
+  let free_names _t = Name_occurrences.empty
+
+  let apply_name_permutation t _perm = t
 end
