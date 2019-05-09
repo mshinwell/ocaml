@@ -88,8 +88,8 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
 let convert_integer_comparison_prim (comp : Lambda.integer_comparison)
       : P.binary_primitive =
   match comp with
-  | Ceq -> Phys_equal (K.value (), Eq)
-  | Cne -> Phys_equal (K.value (), Neq)
+  | Ceq -> Phys_equal (K.value, Eq)
+  | Cne -> Phys_equal (K.value, Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
   | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
   | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
@@ -202,7 +202,7 @@ let rec result_kind_of_expr_primitive (prim : expr_primitive) =
   let translate_result_kind (result_kind : Flambda_primitive.result_kind) =
     match result_kind with
     | Singleton kind -> kind
-    | Unit -> Flambda_kind.unit ()
+    | Unit -> Flambda_kind.unit
   in
   match prim with
   | Unary (prim, _) ->
@@ -562,7 +562,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
       validity_condition =
-        Binary (Phys_equal (K.value (), Eq), arg2,
+        Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
@@ -576,7 +576,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
       validity_condition =
-        Binary (Phys_equal (K.value (), Eq), arg2,
+        Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate

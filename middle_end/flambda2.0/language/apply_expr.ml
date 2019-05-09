@@ -72,26 +72,26 @@ let invariant env
 (*
     let stack = E.current_continuation_stack env in
 *)
-    E.check_name_is_bound_and_of_kind env callee (K.value ());
+    E.check_name_is_bound_and_of_kind env callee K.value;
     begin match call_kind with
     | Function (Direct { closure_id = _; return_arity = _; }) ->
       (* Note that [return_arity] is checked for all the cases below. *)
       E.check_simples_are_bound env args
     | Function Indirect_unknown_arity ->
-      E.check_simples_are_bound_and_of_kind env args (K.value ())
+      E.check_simples_are_bound_and_of_kind env args K.value
     | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
       ignore (param_arity : Flambda_arity.t);
       E.check_simples_are_bound env args
     | Method { kind; obj; } ->
       ignore (kind : Call_kind.method_kind);
-      E.check_name_is_bound_and_of_kind env obj (K.value ());
-      E.check_simples_are_bound_and_of_kind env args (K.value ())
+      E.check_name_is_bound_and_of_kind env obj K.value;
+      E.check_simples_are_bound_and_of_kind env args K.value
     | C_call { alloc = _; param_arity = _; return_arity = _; } ->
       (* CR mshinwell: Check exactly what Cmmgen can compile and then
          add further checks on [param_arity] and [return_arity] *)
       begin match callee with
       | Symbol _ -> ()
-      | Var _ | Logical_var _ ->
+      | Var _ ->
         (* CR-someday mshinwell: We could expose indirect C calls at the
            source language level. *)
         Misc.fatal_errorf "For [C_call] applications the callee must be \
@@ -139,7 +139,7 @@ let invariant env
           print t
       | Exn_handler -> ()
       end;
-      let expected_arity = [Flambda_kind.value ()] in
+      let expected_arity = [Flambda_kind.value] in
       if not (Flambda_arity.equal arity expected_arity) then begin
         Misc.fatal_errorf "Exception continuation %a named in this \
             [Apply] term has the wrong arity: expected %a but have %a:@ %a"

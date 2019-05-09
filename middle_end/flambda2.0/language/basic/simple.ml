@@ -89,12 +89,12 @@ module Const = struct
   let kind t =
     let module K = Flambda_kind in
     match t with
-    | Naked_immediate _ -> K.naked_immediate ()
-    | Tagged_immediate _ -> K.value ()
-    | Naked_float _ -> K.naked_float ()
-    | Naked_int32 _ -> K.naked_int32 ()
-    | Naked_int64 _ -> K.naked_int64 ()
-    | Naked_nativeint _ -> K.naked_nativeint ()
+    | Naked_immediate _ -> K.naked_immediate
+    | Tagged_immediate _ -> K.value
+    | Naked_float _ -> K.naked_float
+    | Naked_int32 _ -> K.naked_int32
+    | Naked_int64 _ -> K.naked_int64
+    | Naked_nativeint _ -> K.naked_nativeint
 end
 
 type t =
@@ -162,7 +162,7 @@ let apply_name_permutation t perm =
     else Name name'
   | Const _ | Discriminant _ -> t
 
-module T = Identifiable.Make (struct
+module T0 = Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -195,7 +195,7 @@ module T = Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
-include T
+include T0
 
 module List = struct
   type nonrec t = t list
@@ -240,9 +240,11 @@ module List = struct
 end
 
 module Pair = struct
-  type nonrec t = t * t
+  include Identifiable.Make_pair
+    (struct type nonrec t = t include T0 end)
+    (struct type nonrec t = t include T0 end)
 
-  include Identifiable.Make_pair (T)
+  type nonrec t = t * t
 end
 
 module With_kind = struct

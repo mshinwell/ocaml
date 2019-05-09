@@ -60,8 +60,7 @@ for ML in $REC_BINDINGS; do
     fi
 
     LINE=$(cat $MLI | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
-    echo "#file \"$MLI\"" >> $OUTPUT
-    echo "#line $(($LINE + 1))" >> $OUTPUT
+    echo "# $(($LINE + 1)) \"$MLI\"" >> $OUTPUT
 
     cat $MLI \
         | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
@@ -72,8 +71,7 @@ for ML in $REC_BINDINGS; do
     echo "  end = struct" >> $OUTPUT
 
     LINE=$(cat $ML | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
-    echo "#file \"$ML\"" >> $OUTPUT
-    echo "#line $(($LINE + 1))" >> $OUTPUT
+    echo "# $(($LINE + 1)) \"$ML\"" >> $OUTPUT
 
     cat $ML \
       | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \

@@ -52,7 +52,7 @@ val is_value : t -> bool
 val is_naked_float : t -> bool
 
 (** The kind of the unit value. *)
-val unit : unit -> t
+val unit : t
 
 (** [compatible t ~if_used_at] returns [true] iff a value of the kind [t] may
     be used in any context with a hole expecting a value of kind [if_used_at].

@@ -23,7 +23,7 @@ type parameter = {
 let create (name : Name.t) =
   match name with
   | Var var -> { var; }
-  | Symbol _ | Logical_var _ ->
+  | Symbol _ ->
     Misc.fatal_errorf "Can only create [Parameter]s from [Variable]s: %a"
       Name.print name
 

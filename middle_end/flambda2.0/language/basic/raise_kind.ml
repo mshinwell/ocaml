@@ -44,6 +44,8 @@ module Option = struct
     | None -> ()
     | Some t -> print ppf t
 
+  let print_with_cache ~cache:_ ppf t = print ppf t
+
   let free_names _t = Name_occurrences.empty
 
   let apply_name_permutation t _perm = t
