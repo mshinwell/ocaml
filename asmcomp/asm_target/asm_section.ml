@@ -14,18 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type dwarf_section =
-  | Debug_info
-  | Debug_abbrev
-  | Debug_aranges
-  | Debug_addr
-  | Debug_loc
-  | Debug_ranges
-  | Debug_loclists
-  | Debug_rnglists
-  | Debug_str
-  | Debug_line
-
 type t =
   | Text
   | Data
@@ -33,38 +21,15 @@ type t =
   | Eight_byte_literals
   | Sixteen_byte_literals
   | Jump_tables
-  | DWARF of dwarf_section
 
 let all_sections_in_order () =
-  let sections = [
-    Text;
+  [ Text;
     Data;
     Read_only_data;
     Eight_byte_literals;
     Sixteen_byte_literals;
     Jump_tables;
-    DWARF Debug_info;
-    DWARF Debug_abbrev;
-    DWARF Debug_aranges;
-    DWARF Debug_str;
-    DWARF Debug_line;
-  ] in
-  let dwarf_version_dependent_sections =
-    (* This will be populated in a future patch like this:
-      match !Clflags.gdwarf_version with
-      | Four ->
-        [ DWARF Debug_loc;
-          DWARF Debug_ranges;
-        ]
-      | Five ->
-        [ DWARF Debug_addr;
-          DWARF Debug_loclists;
-          DWARF Debug_rnglists;
-        ]
-    *)
-    []
-  in
-  sections @ dwarf_version_dependent_sections
+  ]
 
 let section_is_text = function
   | Text
@@ -73,9 +38,7 @@ let section_is_text = function
   | Read_only_data
   | Eight_byte_literals
   | Sixteen_byte_literals
-  | DWARF _ -> false
 
-(* Modified version of [TS.system] for easier matching in [flags], below. *)
 type derived_system =
   | Linux
   | MinGW_32
@@ -128,48 +91,6 @@ let flags t ~first_occurrence =
     match t, Target_system.architecture (), system with
     | Text, _, _ -> text ()
     | Data, _, _ -> data ()
-    | DWARF dwarf, _, MacOS_like ->
-      let name =
-        match dwarf with
-        | Debug_info -> "__debug_info"
-        | Debug_abbrev -> "__debug_abbrev"
-        | Debug_aranges -> "__debug_aranges"
-        | Debug_addr -> "__debug_addr"
-        | Debug_loc -> "__debug_loc"
-        | Debug_ranges -> "__debug_ranges"
-        | Debug_loclists -> "__debug_loclists"
-        | Debug_rnglists -> "__debug_rnglists"
-        | Debug_str -> "__debug_str"
-        | Debug_line -> "__debug_line"
-      in
-      ["__DWARF"; name], None, ["regular"; "debug"]
-    | DWARF dwarf, _, _ ->
-      let name =
-        match dwarf with
-        | Debug_info -> ".debug_info"
-        | Debug_abbrev -> ".debug_abbrev"
-        | Debug_aranges -> ".debug_aranges"
-        | Debug_addr -> ".debug_addr"
-        | Debug_loc -> ".debug_loc"
-        | Debug_ranges -> ".debug_ranges"
-        | Debug_loclists -> ".debug_loclists"
-        | Debug_rnglists -> ".debug_rnglists"
-        | Debug_str -> ".debug_str"
-        | Debug_line -> ".debug_line"
-      in
-      let flags =
-        if first_occurrence then
-          Some ""
-        else
-          None
-      in
-      let args =
-        if first_occurrence then
-          ["%progbits"]
-        else
-          []
-      in
-      [name], flags, args
     | (Eight_byte_literals | Sixteen_byte_literals), (ARM | AArch64 | Z), _
     | (Eight_byte_literals | Sixteen_byte_literals), _, Solaris ->
       rodata ()
@@ -177,32 +98,21 @@ let flags t ~first_occurrence =
       ["__TEXT"; "__literal16"], None, ["16byte_literals"]
     | Sixteen_byte_literals, _, (MinGW_64 | Cygwin) ->
       [".rdata"], Some "dr", []
-    | Sixteen_byte_literals, _, (MinGW_32 | Win32 | Win64) ->
-      data ()
-    | Sixteen_byte_literals, _, _ ->
-      [".rodata.cst8"], Some "a", ["@progbits"]
+    | Sixteen_byte_literals, _, (MinGW_32 | Win32 | Win64) -> data ()
+    | Sixteen_byte_literals, _, _ -> [".rodata.cst8"], Some "a", ["@progbits"]
     | Eight_byte_literals, _, MacOS_like ->
       ["__TEXT"; "__literal8"], None, ["8byte_literals"]
-    | Eight_byte_literals, _, (MinGW_64 | Cygwin) ->
-      [".rdata"], Some "dr", []
-    | Eight_byte_literals, _, (MinGW_32 | Win32 | Win64) ->
-      data ()
-    | Eight_byte_literals, _, _ ->
-      [".rodata.cst8"], Some "a", ["@progbits"]
-    | Jump_tables, _, (MinGW_64 | Cygwin) ->
-      [".rdata"], Some "dr", []
-    | Jump_tables, _, (MinGW_32 | Win32) ->
-      data ()
+    | Eight_byte_literals, _, (MinGW_64 | Cygwin) -> [".rdata"], Some "dr", []
+    | Eight_byte_literals, _, (MinGW_32 | Win32 | Win64) -> data ()
+    | Eight_byte_literals, _, _ -> [".rodata.cst8"], Some "a", ["@progbits"]
+    | Jump_tables, _, (MinGW_64 | Cygwin) -> [".rdata"], Some "dr", []
+    | Jump_tables, _, (MinGW_32 | Win32) -> data ()
     | Jump_tables, _, (MacOS_like | Win64) ->
       text () (* with LLVM/OS X and MASM, use the text segment *)
-    | Jump_tables, _, _ ->
-      [".rodata"], None, []
-    | Read_only_data, _, (MinGW_32 | Win32) ->
-      data ()
-    | Read_only_data, _, (MinGW_64 | Cygwin) ->
-      [".rdata"], Some "dr", []
-    | Read_only_data, _, _ ->
-      rodata ()
+    | Jump_tables, _, _ -> [".rodata"], None, []
+    | Read_only_data, _, (MinGW_32 | Win32) -> data ()
+    | Read_only_data, _, (MinGW_64 | Cygwin) -> [".rdata"], Some "dr", []
+    | Read_only_data, _, _ -> rodata ()
   in
   { names; flags; args; }
 
@@ -222,28 +132,13 @@ include Identifiable.Make (struct
       | Eight_byte_literals -> "Eight_byte_literals"
       | Sixteen_byte_literals -> "Sixteen_byte_literals"
       | Jump_tables -> "Jump_tables"
-      | DWARF Debug_info -> "(DWARF Debug_info)"
-      | DWARF Debug_abbrev -> "(DWARF Debug_abbrev)"
-      | DWARF Debug_aranges -> "(DWARF Debug_aranges)"
-      | DWARF Debug_addr -> "(DWARF Debug_addr)"
-      | DWARF Debug_loc -> "(DWARF Debug_loc)"
-      | DWARF Debug_ranges -> "(DWARF Debug_ranges)"
-      | DWARF Debug_loclists -> "(DWARF Debug_loclists)"
-      | DWARF Debug_rnglists -> "(DWARF Debug_rnglists)"
-      | DWARF Debug_str -> "(DWARF Debug_str)"
-      | DWARF Debug_line -> "(DWARF Debug_line)"
     in
     Format.pp_print_string ppf str
 
   let output chan t =
     Format.fprintf (Format.formatter_of_out_channel chan) "%a" print t
 
-  let compare t1 t2 =
-    Stdlib.compare t1 t2
-
-  let equal t1 t2 =
-    Stdlib.compare t1 t2 = 0
-
-  let hash t =
-    Hashtbl.hash t
+  let compare t1 t2 = Stdlib.compare t1 t2
+  let equal t1 t2 = Stdlib.compare t1 t2 = 0
+  let hash t = Hashtbl.hash t
 end)

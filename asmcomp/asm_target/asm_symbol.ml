@@ -27,14 +27,6 @@ type t = {
 let create backend_sym =
   let section = Asm_section.Data in
   let object_file = Object_file.current_compilation_unit in
-(* To be enabled once [Backend_sym] is merged.
-  let section : Asm_section.t =
-    match Backend_sym.kind backend_sym with
-    | Text -> Text
-    | Data -> Data
-  in
-  let object_file = Backend_sym.object_file backend_sym in
-*)
   let name = Backend_sym.name_for_asm_symbol backend_sym in
   if String.length name <= 0 then begin
     Misc.fatal_errorf "[Backend_sym] returned an empty name for %a"
@@ -63,12 +55,6 @@ let add_prefix t section object_file ~prefix =
     name = prefix ^ t.name;
     never_add_prefix = t.never_add_prefix;
   }
-
-(* To be enabled once [Backend_sym] is merged.
-let section t = t.section
-
-let object_file t = t.object_file
-*)
 
 let symbol_prefix t =
   if t.never_add_prefix then ""
@@ -137,13 +123,8 @@ let to_escaped_string ?(reloc = "") t =
   (* The prefix and relocation must not be escaped! *)
   (symbol_prefix t) ^ (escape t.name) ^ reloc
 
-let to_string ?without_prefix t =
-  let symbol_prefix =
-    match without_prefix with
-    | None -> symbol_prefix t
-    | Some () -> ""
-  in
-  symbol_prefix ^ t.name
+let to_string t =
+  (symbol_prefix t) ^ t.name
 
 let is_generic_function t =
   List.exists (fun prefix -> Misc.Stdlib.String.is_prefix t.name ~prefix)
@@ -158,46 +139,40 @@ include Identifiable.Make (struct
               { section = _section2; object_file = _object_file2;
                 name = name2; never_add_prefix = never_add_prefix2;
               } =
-(* To be enabled once [Backend_sym] is merged.
-    let c = Asm_section.compare section1 section2 in
+    let c = String.compare name1 name2 in
     if c <> 0 then c
     else
-      let c = Object_file.compare object_file1 object_file2 in
-      if c <> 0 then c
-      else
-*)
-        let c = String.compare name1 name2 in
-        if c <> 0 then c
-        else
-          Stdlib.compare never_add_prefix1 never_add_prefix2
+      Stdlib.compare never_add_prefix1 never_add_prefix2
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash { section = _; object_file = _; name; never_add_prefix; } =
-    Hashtbl.hash (
-(* To be enabled once [Backend_sym] is merged.
-      Asm_section.hash section,
-      Object_file.hash object_file,
-*)
-      name,
-      never_add_prefix)
+    Hashtbl.hash (name, never_add_prefix)
 
   let print ppf t = Format.pp_print_string ppf (to_string t)
-
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
 module Names = struct
   let runtime = Object_file.runtime_and_external_libs
+  let runtime_data name = of_external_name Data runtime name
+  let runtime_text name = of_external_name Text runtime name
 
-  let caml_young_ptr =
-    of_external_name Data runtime "caml_young_ptr"
+  let caml_young_ptr = runtime_data "caml_young_ptr"
+  let caml_young_limit = runtime_data "caml_young_limit"
+  let caml_exception_pointer = runtime_data "caml_exception_pointer"
 
-  let caml_young_limit =
-    of_external_name Data runtime "caml_young_limit"
-
-  let caml_exception_pointer =
-    of_external_name Data runtime "caml_exception_pointer"
+  let caml_call_gc = runtime_text "caml_call_gc"
+  let caml_call_gc1 = runtime_text "caml_call_gc1"
+  let caml_call_gc2 = runtime_text "caml_call_gc2"
+  let caml_call_gc3 = runtime_text "caml_call_gc3"
+  let caml_c_call = runtime_text "caml_c_call"
+  let caml_alloc1 = runtime_text "caml_alloc1"
+  let caml_alloc2 = runtime_text "caml_alloc2"
+  let caml_alloc3 = runtime_text "caml_alloc3"
+  let caml_allocN = runtime_text "caml_allocN"
+  let caml_ml_array_bound_error = runtime_text "caml_ml_array_bound_error"
+  let caml_raise_exn = runtime_text "caml_raise_exn"
 
   let caml_negf_mask =
     of_external_name Eight_byte_literals Object_file.current_compilation_unit
@@ -206,37 +181,4 @@ module Names = struct
   let caml_absf_mask =
     of_external_name Eight_byte_literals Object_file.current_compilation_unit
       "caml_absf_mask"
-
-  let caml_call_gc =
-    of_external_name Text runtime "caml_call_gc"
-
-  let caml_call_gc1 =
-    of_external_name Text runtime "caml_call_gc1"
-
-  let caml_call_gc2 =
-    of_external_name Text runtime "caml_call_gc2"
-
-  let caml_call_gc3 =
-    of_external_name Text runtime "caml_call_gc3"
-
-  let caml_c_call =
-    of_external_name Text runtime "caml_c_call"
-
-  let caml_alloc1 =
-    of_external_name Text runtime "caml_alloc1"
-
-  let caml_alloc2 =
-    of_external_name Text runtime "caml_alloc2"
-
-  let caml_alloc3 =
-    of_external_name Text runtime "caml_alloc3"
-
-  let caml_allocN =
-    of_external_name Text runtime "caml_allocN"
-
-  let caml_ml_array_bound_error =
-    of_external_name Text runtime "caml_ml_array_bound_error"
-
-  let caml_raise_exn =
-    of_external_name Text runtime "caml_raise_exn"
 end

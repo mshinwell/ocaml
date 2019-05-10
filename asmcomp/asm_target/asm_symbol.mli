@@ -53,14 +53,6 @@ val of_external_name
     change during a prefixing. *)
 val add_prefix : t -> Asm_section.t -> Object_file.t -> prefix:string -> t
 
-(* To be enabled once [Backend_sym] is merged.
-(** The section enclosing the symbol. *)
-val section : t -> Asm_section.t
-
-(** A description of the object file where the given symbol is defined. *)
-val object_file : t -> Object_file.t
-*)
-
 (** Convert a symbol to the corresponding textual form, suitable for direct
     emission into an assembly file.  This may be useful e.g. when emitting
     an instruction referencing a symbol.
@@ -72,15 +64,8 @@ val to_escaped_string : ?reloc:string -> t -> string
 (** Convert a symbol to the corresponding textual form, as required for
     passing to e.g. a C library function (such as [dlsym]) that takes symbol
     names.  This is like [encode], except that it doesn't take relocation
-    information, and does not escape the symbol.
-
-    If [without_prefix] is specified, any target-specific symbol prefix will be
-    elided. (This is required for emission into DWARF information in situations
-    where GDB may look up a symbol name via the minsyms table, whose entries
-    appear to lack the prefix, for example on macOS. In particular this happens
-    when resolving call site chains.)
-*)
-val to_string : ?without_prefix:unit -> t -> string
+    information, and does not escape the symbol. *)
+val to_string : t -> string
 
 (** Detection of functions that can be duplicated between a DLL and the main
     program (PR#4690). *)
@@ -92,8 +77,6 @@ module Names : sig
   val caml_young_ptr : t
   val caml_young_limit : t
   val caml_exception_pointer : t
-  val caml_negf_mask : t
-  val caml_absf_mask : t
 
   (** Entry points to the OCaml runtime from OCaml code. *)
   val caml_call_gc : t
@@ -107,4 +90,8 @@ module Names : sig
   val caml_alloc3 : t
   val caml_ml_array_bound_error : t
   val caml_raise_exn : t
+
+  (** Symbols defined (where necessary) in each OCaml compilation unit. *)
+  val caml_negf_mask : t
+  val caml_absf_mask : t
 end
