@@ -37,7 +37,7 @@ let name_for_asm_symbol t = t
 
 module Names = struct
   let runtime_or_external kind name =
-    of_external_name Object_file.runtime name kind
+    of_external_name Object_file.runtime_and_external_libs name kind
   let startup kind name = of_external_name Object_file.startup name kind
 
   let atan = runtime_or_external Text "atan"

@@ -37,7 +37,7 @@ let section_is_text = function
   | Data
   | Read_only_data
   | Eight_byte_literals
-  | Sixteen_byte_literals
+  | Sixteen_byte_literals -> false
 
 type derived_system =
   | Linux
@@ -82,7 +82,7 @@ type flags_for_section = {
   args : string list;
 }
 
-let flags t ~first_occurrence =
+let flags t =
   let text () = [".text"], None, [] in
   let data () = [".data"], None, [] in
   let rodata () = [".rodata"], None, [] in
@@ -117,7 +117,7 @@ let flags t ~first_occurrence =
   { names; flags; args; }
 
 let to_string t =
-  let { names; flags = _; args = _; } = flags t ~first_occurrence:true in
+  let { names; flags = _; args = _; } = flags t in
   String.concat " " names
 
 include Identifiable.Make (struct

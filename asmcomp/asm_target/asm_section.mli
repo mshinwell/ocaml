@@ -56,8 +56,5 @@ type flags_for_section = private {
   (** Target-dependent arguments for the section. *)
 }
 
-(** The necessary information for an assembler's ".section" directive.
-
-    [first_occurrence] should be [true] iff the corresponding directive will
-    be the first such in the relevant assembly file for the given section. *)
-val flags : t -> first_occurrence:bool -> flags_for_section
+(** The necessary information for an assembler's ".section" directive. *)
+val flags : t -> flags_for_section

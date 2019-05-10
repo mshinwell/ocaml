@@ -123,8 +123,13 @@ let to_escaped_string ?(reloc = "") t =
   (* The prefix and relocation must not be escaped! *)
   (symbol_prefix t) ^ (escape t.name) ^ reloc
 
-let to_string t =
-  (symbol_prefix t) ^ t.name
+let to_string ?without_prefix t =
+  let symbol_prefix =
+    match without_prefix with
+    | None -> symbol_prefix t
+    | Some () -> ""
+  in
+  symbol_prefix ^ t.name
 
 let is_generic_function t =
   List.exists (fun prefix -> Misc.Stdlib.String.is_prefix t.name ~prefix)

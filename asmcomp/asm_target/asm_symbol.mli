@@ -64,8 +64,12 @@ val to_escaped_string : ?reloc:string -> t -> string
 (** Convert a symbol to the corresponding textual form, as required for
     passing to e.g. a C library function (such as [dlsym]) that takes symbol
     names.  This is like [encode], except that it doesn't take relocation
-    information, and does not escape the symbol. *)
-val to_string : t -> string
+    information, and does not escape the symbol.
+
+    If [without_prefix] is specified, any target-specific symbol prefix will be
+    elided.
+*)
+val to_string : ?without_prefix:unit -> t -> string
 
 (** Detection of functions that can be duplicated between a DLL and the main
     program (PR#4690). *)
