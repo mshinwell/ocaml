@@ -29,6 +29,7 @@ open X86_proc
 open X86_dsl
 
 module AS = Asm_section
+module L = Asm_label
 module S = Asm_symbol
 open Asm_symbol.Names
 
@@ -40,6 +41,14 @@ open Asm_symbol.Names
 open! Branch_relaxation
 
 let _label s = D.label ~typ:QWORD s
+
+let new_label section = L.create section
+
+(* CR mshinwell: Port to Asm_section patch *)
+let section_for_float_constants =
+  if Target_system.macos_like then D.section Eight_byte_literals
+  else if Target_system.win64 then D.section Data
+  else D.section Read_only_data
 
 (* Override proc.ml *)
 
@@ -168,15 +177,9 @@ let load_symbol_addr s arg =
 
 (* Output a label *)
 
-let emit_label lbl =
-  match Target_system.architecture, Target_system.system with
-  | _, MacOS_like
-  | X86_64, Windows Native -> "L" ^ Int.to_string lbl
-  | _ -> ".L" ^ Int.to_string lbl
+let label lbl = sym (L.to_escaped_string lbl)
 
-let label s = sym (emit_label s)
-
-let def_label s = D.label (emit_label s)
+let def_label lbl = D.label (L.to_escaped_string lbl)
 
 let emit_Llabel fallthrough lbl =
   if not fallthrough && !fastcode_flag then D.align 4;
@@ -248,7 +251,7 @@ let addressing addr typ i n =
 let record_frame_label ?label live raise_ dbg =
   let lbl =
     match label with
-    | None -> new_label()
+    | None -> new_label Text
     | Some label -> label
   in
   let live_offset = ref [] in
@@ -332,14 +335,14 @@ let bound_error_call = ref 0
 
 let bound_error_label ?label dbg ~spacetime =
   if !Clflags.debug || Config.spacetime then begin
-    let lbl_bound_error = new_label() in
+    let lbl_bound_error = new_label Text in
     let lbl_frame = record_frame_label ?label Reg.Set.empty false dbg in
     bound_error_sites :=
       { bd_lbl = lbl_bound_error; bd_frame = lbl_frame;
         bd_spacetime = spacetime; } :: !bound_error_sites;
     lbl_bound_error
   end else begin
-    if !bound_error_call = 0 then bound_error_call := new_label();
+    if !bound_error_call = 0 then bound_error_call := new_label Text;
     !bound_error_call
   end
 
@@ -416,7 +419,7 @@ let emit_float_test cmp i lbl =
   *)
   match cmp with
   | CFeq ->
-      let next = new_label() in
+      let next = new_label Text in
       I.ucomisd (arg i 1) (arg i 0);
       I.jp (label next);          (* skip if unordered *)
       I.je lbl;                   (* branch taken if x=y *)
@@ -477,7 +480,7 @@ let add_float_constant cst =
   try
     List.assoc cst !float_constants
   with Not_found ->
-    let lbl = new_label() in
+    let lbl = new_label section_for_float_constants in
     float_constants := (cst, lbl) :: !float_constants;
     lbl
 
@@ -638,7 +641,7 @@ let emit_instr fallthrough i =
       end
   | Lop(Ialloc { bytes = n; label_after_call_gc; spacetime_index; }) ->
       if !fastcode_flag then begin
-        let lbl_redo = new_label() in
+        let lbl_redo = new_label Text in
         def_label lbl_redo;
         I.sub (int n) r15;
         let spacetime_node_hole_ptr_is_in_rax =
@@ -659,7 +662,7 @@ let emit_instr fallthrough i =
           end
         end else
           I.cmp (mem64_rip QWORD (emit_symbol caml_young_limit)) r15;
-        let lbl_call_gc = new_label() in
+        let lbl_call_gc = new_label Text in
         let dbg =
           if not Config.spacetime then Debuginfo.none
           else i.dbg
@@ -692,6 +695,10 @@ let emit_instr fallthrough i =
             I.mov (int n) rax;
             emit_call caml_allocN
         end;
+        let label_after_call_gc =
+          Option.map (fun label -> L.create_int Text label)
+            label_after_call_gc
+        in
         let label =
           record_frame_label ?label:label_after_call_gc i.live false
             Debuginfo.none
@@ -712,6 +719,10 @@ let emit_instr fallthrough i =
         if not Config.spacetime then None
         else Some (arg i 2, spacetime_index)
       in
+      let label_after_error =
+        Option.map (fun label -> L.create_int Text label)
+          label_after_error
+      in
       let lbl = bound_error_label ?label:label_after_error i.dbg ~spacetime in
       I.cmp (arg i 1) (arg i 0);
       I.jbe (label lbl)
@@ -719,6 +730,10 @@ let emit_instr fallthrough i =
       let spacetime =
         if not Config.spacetime then None
         else Some (arg i 1, spacetime_index)
+      in
+      let label_after_error =
+        Option.map (fun label -> L.create_int Text label)
+          label_after_error
       in
       let lbl = bound_error_label ?label:label_after_error i.dbg ~spacetime in
       I.cmp (int n) (arg i 0);
@@ -785,11 +800,11 @@ let emit_instr fallthrough i =
         I.ret ()
       end
   | Llabel lbl ->
-      emit_Llabel fallthrough lbl
+      emit_Llabel fallthrough (L.create_int Text lbl)
   | Lbranch lbl ->
-      I.jmp (label lbl)
+      I.jmp (label (L.create_int Text lbl))
   | Lcondbranch(tst, lbl) ->
-      let lbl = label lbl in
+      let lbl = label (L.create_int Text lbl) in
       begin match tst with
       | Itruetest ->
           output_test_zero i.arg.(0);
@@ -820,18 +835,18 @@ let emit_instr fallthrough i =
       I.cmp (int 1) (arg i 0);
       begin match lbl0 with
       | None -> ()
-      | Some lbl -> I.jb (label lbl)
+      | Some lbl -> I.jb (label (L.create_int Text lbl))
       end;
       begin match lbl1 with
       | None -> ()
-      | Some lbl -> I.je (label lbl)
+      | Some lbl -> I.je (label (L.create_int Text lbl))
       end;
       begin match lbl2 with
       | None -> ()
-      | Some lbl -> I.jg (label lbl)
+      | Some lbl -> I.jg (label (L.create_int Text lbl))
       end
   | Lswitch jumptbl ->
-      let lbl = emit_label (new_label()) in
+      let lbl = emit_label (new_label Text) in
       (* rax and rdx are clobbered by the Lswitch,
          meaning that no variable that is live across the Lswitch
          is assigned to rax or rdx.  However, the argument to Lswitch
@@ -848,9 +863,7 @@ let emit_instr fallthrough i =
       I.add (reg tmp2) (reg tmp1);
       I.jmp (reg tmp1);
 
-      if not (Target_system.macos_like || Target_system.win64) then begin
-        D.section Read_only_data
-      end;
+      D.section Jump_tables;  (* CR mshinwell: Port to Asm_section patch *)
       D.align 4;
       _label lbl;
       for i = 0 to Array.length jumptbl - 1 do
@@ -871,7 +884,7 @@ let emit_instr fallthrough i =
       I.sub (int 16) rsp;
       stack_offset := !stack_offset + 16;
       I.mov r14 (mem64 QWORD 0 RSP);
-      load_label_addr lbl_handler r14;
+      load_label_addr (L.create_int Text lbl_handler) r14;
       I.mov r14 (mem64 QWORD 8 RSP);
       I.mov rsp r14
   | Lpoptrap ->
@@ -1064,11 +1077,7 @@ let emit_spacetime_shapes comp_unit =
 
 let end_assembly comp_unit =
   if !float_constants <> [] then begin
-    begin
-      if Target_system.macos_like then D.section Eight_byte_literals
-      else if Target_system.win64 then D.data ()
-      else D.section Read_only_data
-    end;
+    D.section section_for_float_constants;
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
 

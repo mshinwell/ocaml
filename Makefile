@@ -158,6 +158,7 @@ ASMCOMP=\
   asmcomp/target_system.cmo \
   asmcomp/asm_target/asm_section.cmo \
   asmcomp/asm_target/asm_symbol.cmo \
+  asmcomp/asm_target/asm_label.cmo \
   $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
