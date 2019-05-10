@@ -777,7 +777,6 @@ let emit_instr fallthrough i =
           (addressing addr
              (if double then REAL8 else REAL4) i 1)
   | Lop(Ispecific(Ifloatspecial s)) ->
-      let s = S.create s in
       (* Push args on float stack if necessary *)
       for k = 0 to Array.length i.arg - 1 do
         if not (is_tos i.arg.(k)) then I.fld (reg i.arg.(k))
@@ -785,7 +784,7 @@ let emit_instr fallthrough i =
       (* Fix-up for binary instrs whose args were swapped *)
       if Array.length i.arg = 2 && is_tos i.arg.(1) then
         I.fxch st1;
-      emit_floatspecial s
+      emit_floatspecial (S.create s)
   | Lop (Iname_for_debugger _) -> ()
   | Lreloadretaddr ->
       ()

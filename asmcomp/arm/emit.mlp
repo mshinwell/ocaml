@@ -533,8 +533,7 @@ let emit_instr i =
             `	fconstd	{emit_reg i.res.(0)}, #{emit_int imm8}\n`
         end; 1
     | Lop(Iconst_symbol s) ->
-        let s = S.create s in
-        emit_load_symbol_addr i.res.(0) s
+        emit_load_symbol_addr i.res.(0) (S.create s)
     | Lop(Icall_ind { label_after; }) ->
         if !arch >= ARMv5 then begin
           `	blx	{emit_reg i.arg.(0)}\n`;
@@ -545,8 +544,7 @@ let emit_instr i =
           `{record_frame i.live false i.dbg ~label:label_after}\n`; 2
         end
     | Lop(Icall_imm { func; label_after; }) ->
-        let func = S.create func in
-        `	{emit_call func}\n`;
+        `	{emit_call (S.create func)}\n`;
         `{record_frame i.live false i.dbg ~label:label_after}\n`; 1
     | Lop(Itailcall_ind { label_after = _; }) ->
         output_epilogue begin fun () ->
@@ -566,8 +564,7 @@ let emit_instr i =
           end
         end
     | Lop(Iextcall { func; alloc = false; }) ->
-        let func = S.create func in
-        `	{emit_call func}\n`; 1
+        `	{emit_call (S.create func)}\n`; 1
     | Lop(Iextcall { func; alloc = true; label_after; }) ->
         let func = S.create func in
         let ninstr = emit_load_symbol_addr (phys_reg 7 (* r7 *)) func in

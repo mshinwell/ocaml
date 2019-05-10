@@ -510,8 +510,7 @@ module BR = Branch_relaxation.Make (struct
     | Lop(Icall_imm _) -> size 1 3 3
     | Lop(Itailcall_ind _) -> size 5 7 6
     | Lop(Itailcall_imm { func; _ }) ->
-        let func = S.create func in
-        if S.equal func (get_current_function ())
+        if S.equal (S.create func) (get_current_function ())
         then 1
         else size 4 (7 + tocload_size()) (6 + tocload_size())
     | Lop(Iextcall { alloc = true; _ }) ->

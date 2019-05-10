@@ -617,14 +617,12 @@ let emit_instr i =
           `	ldr	{emit_reg i.res.(0)}, [{emit_reg reg_tmp1}, #:lo12:{emit_label lbl}]\n`
         end
     | Lop(Iconst_symbol s) ->
-        let s = S.create s in
-        emit_load_symbol_addr i.res.(0) s
+        emit_load_symbol_addr i.res.(0) (S.create s)
     | Lop(Icall_ind { label_after; }) ->
         `	blr	{emit_reg i.arg.(0)}\n`;
         `{record_frame i.live false i.dbg ~label:label_after}\n`
     | Lop(Icall_imm { func; label_after; }) ->
-        let func = S.create func in
-        `	bl	{emit_symbol func}\n`;
+        `	bl	{emit_symbol (S.create func)}\n`;
         `{record_frame i.live false i.dbg ~label:label_after}\n`
     | Lop(Itailcall_ind { label_after = _; }) ->
         output_epilogue (fun () -> `	br	{emit_reg i.arg.(0)}\n`)
@@ -635,11 +633,9 @@ let emit_instr i =
         else
           output_epilogue (fun () -> `	b	{emit_symbol func}\n`)
     | Lop(Iextcall { func; alloc = false; label_after = _; }) ->
-        let func = S.create func in
-        `	bl	{emit_symbol func}\n`
+        `	bl	{emit_symbol (S.create func)}\n`
     | Lop(Iextcall { func; alloc = true; label_after; }) ->
-        let func = S.create func in
-        emit_load_symbol_addr reg_x15 func;
+        emit_load_symbol_addr reg_x15 (S.create func);
         `	bl	{emit_symbol caml_c_call}\n`;
         `{record_frame i.live false i.dbg ~label:label_after}\n`
     | Lop(Istackoffset n) ->
