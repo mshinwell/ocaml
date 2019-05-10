@@ -79,17 +79,8 @@ let rec select_addr exp =
    If you update this list, you may need to update [is_simple_expr] and/or
    [effects_of], below. *)
 let inline_float_ops =
-  let module N = S.Names in
-  S.Set.of_list [
-    N.atan;
-    N.atan2;
-    N.cos;
-    N.log;
-    N.log10;
-    N.sin;
-    N.sqrt;
-    N.tan;
-  ]
+  let open S.Names in
+  S.Set.of_list [atan; atan2; cos; log; log10; sin; sqrt; tan]
 
 (* Estimate number of float temporaries needed to evaluate expression
    (Ershov's algorithm) *)
