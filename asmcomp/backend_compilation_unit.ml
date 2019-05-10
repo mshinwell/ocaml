@@ -38,8 +38,7 @@ include Identifiable.Make (struct
     | Runtime_and_external_libs,
         (Compilation_unit _ | Startup | Shared_startup) -> 1
 
-  let equal t1 t2 =
-    compare t1 t2 = 0
+  let equal t1 t2 = compare t1 t2 = 0
 
   let hash t =
     match t with
@@ -52,32 +51,17 @@ include Identifiable.Make (struct
   let print ppf t =
     match t with
     | Compilation_unit comp_unit ->
-      Format.fprintf ppf "@[(Compilation_unit %a)@]"
+      Format.fprintf ppf "@[<hov 1>(Compilation_unit %a)@]"
         Compilation_unit.print comp_unit
     | Startup -> Format.pp_print_string ppf "Startup"
     | Shared_startup -> Format.pp_print_string ppf "Shared_startup"
     | Runtime_and_external_libs ->
       Format.pp_print_string ppf "Runtime_and_external_libs"
 
-  let output chan t =
-    print (Format.formatter_of_out_channel chan) t
+  let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
 let compilation_unit comp_unit = Compilation_unit comp_unit
 let startup = Startup
 let shared_startup = Shared_startup
 let runtime_and_external_libs = Runtime_and_external_libs
-
-(* To be enabled later.
-let name_for_backend_sym ~separator t =
-  match t with
-  | Compilation_unit comp_unit ->
-    let path =
-      List.map Compilation_unit.Name.to_string
-        (Compilation_unit.full_path comp_unit)
-    in
-    String.concat separator path
-  | Startup -> "_startup"
-  | Shared_startup -> "_shared_startup"
-  | Runtime_and_external_libs -> "_system"
-*)

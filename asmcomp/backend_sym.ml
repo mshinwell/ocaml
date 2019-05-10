@@ -22,165 +22,84 @@ let create ?compilation_unit ~base_name _kind =
   ignore compilation_unit;
   Compilenv.make_symbol (Some base_name)
 
-let of_external_name _object_file name _kind =
-  (* This is deliberately not exposed in the .mli.  (Add things to [Names],
-     below, instead.) *)
-  name
+(* This is deliberately not exposed in the .mli.  (Add things to [Names],
+   below, instead.) *)
+let of_external_name _object_file name _kind = name
 
-let add_suffix t new_suffix =
-  t ^ new_suffix
+let add_suffix t new_suffix = t ^ new_suffix
 
 let add_suffixes t new_suffixes =
   List.fold_left (fun t new_suffix -> add_suffix t new_suffix) t new_suffixes
 
-let add_int_suffix t new_suffix =
-  add_suffix t (string_of_int new_suffix)
+let add_int_suffix t new_suffix = add_suffix t (string_of_int new_suffix)
 
 let name_for_asm_symbol t = t
 
 module Names = struct
-  let runtime = Object_file.runtime_and_external_libs
-  let startup = Object_file.startup
+  let runtime_or_external kind name =
+    of_external_name Object_file.runtime name kind
+  let startup kind name = of_external_name Object_file.startup name kind
 
-  let atan =
-    of_external_name runtime "atan" Text
+  let atan = runtime_or_external Text "atan"
+  let atan2 = runtime_or_external Text "atan2"
+  let cos = runtime_or_external Text "cos"
+  let log = runtime_or_external Text "log"
+  let log10 = runtime_or_external Text "log10"
+  let sin = runtime_or_external Text "sin"
+  let sqrt = runtime_or_external Text "sqrt"
+  let tan = runtime_or_external Text "tan"
 
-  let atan2 =
-    of_external_name runtime "atan2" Text
+  let __aeabi_idivmod = runtime_or_external Text "__aeabi_idivmod"
+  let __aeabi_idiv = runtime_or_external Text "__aeabi_idiv"
+  let __aeabi_dadd = runtime_or_external Text "__aeabi_dadd"
+  let __aeabi_dsub = runtime_or_external Text "__aeabi_dsub"
+  let __aeabi_dmul = runtime_or_external Text "__aeabi_dmul"
+  let __aeabi_ddiv = runtime_or_external Text "__aeabi_ddiv"
+  let __aeabi_i2d = runtime_or_external Text "__aeabi_i2d"
+  let __aeabi_d2iz = runtime_or_external Text "__aeabi_d2iz"
+  let __aeabi_dcmpeq = runtime_or_external Text "__aeabi_dcmpeq"
+  let __aeabi_dcmplt = runtime_or_external Text "__aeabi_dcmplt"
+  let __aeabi_dcmple = runtime_or_external Text "__aeabi_dcmple"
+  let __aeabi_dcmpgt = runtime_or_external Text "__aeabi_dcmpgt"
+  let __aeabi_dcmpge = runtime_or_external Text "__aeabi_dcmpge"
+  let __aeabi_f2d = runtime_or_external Text "__aeabi_f2d"
+  let __aeabi_d2f = runtime_or_external Text "__aeabi_d2f"
 
-  let cos =
-    of_external_name runtime "cos" Text
+  let caml_exception_pointer = runtime_or_external Data "caml_exception_pointer"
+  let caml_backtrace_pos = runtime_or_external Data "caml_backtrace_pos"
+  let caml_exn_Division_by_zero = startup Data "caml_exn_Division_by_zero"
 
-  let log =
-    of_external_name runtime "log" Text
+  let caml_nativeint_ops = runtime_or_external Data "caml_nativeint_ops"
+  let caml_int32_ops = runtime_or_external Data "caml_int32_ops"
+  let caml_int64_ops = runtime_or_external Data "caml_int64_ops"
 
-  let log10 =
-    of_external_name runtime "log10" Text
-
-  let sin =
-    of_external_name runtime "sin" Text
-
-  let sqrt =
-    of_external_name runtime "sqrt" Text
-
-  let tan =
-    of_external_name runtime "tan" Text
-
-  let __aeabi_idivmod =
-    of_external_name runtime "__aeabi_idivmod" Text
-
-  let __aeabi_idiv =
-    of_external_name runtime "__aeabi_idiv" Text
-
-  let __aeabi_dadd =
-    of_external_name runtime "__aeabi_dadd" Text
-
-  let __aeabi_dsub =
-    of_external_name runtime "__aeabi_dsub" Text
-
-  let __aeabi_dmul =
-    of_external_name runtime "__aeabi_dmul" Text
-
-  let __aeabi_ddiv =
-    of_external_name runtime "__aeabi_ddiv" Text
-
-  let __aeabi_i2d =
-    of_external_name runtime "__aeabi_i2d" Text
-
-  let __aeabi_d2iz =
-    of_external_name runtime "__aeabi_d2iz" Text
-
-  let __aeabi_dcmpeq =
-    of_external_name runtime "__aeabi_dcmpeq" Text
-
-  let __aeabi_dcmplt =
-    of_external_name runtime "__aeabi_dcmplt" Text
-
-  let __aeabi_dcmple =
-    of_external_name runtime "__aeabi_dcmple" Text
-
-  let __aeabi_dcmpgt =
-    of_external_name runtime "__aeabi_dcmpgt" Text
-
-  let __aeabi_dcmpge =
-    of_external_name runtime "__aeabi_dcmpge" Text
-
-  let __aeabi_f2d =
-    of_external_name runtime "__aeabi_f2d" Text
-
-  let __aeabi_d2f =
-    of_external_name runtime "__aeabi_d2f" Text
-
-  let caml_exception_pointer =
-    of_external_name runtime "caml_exception_pointer" Data
-
-  let caml_backtrace_pos =
-    of_external_name runtime "caml_backtrace_pos" Data
-
-  let caml_exn_Division_by_zero =
-    of_external_name startup "caml_exn_Division_by_zero" Data
-
-  let caml_nativeint_ops =
-    of_external_name runtime "caml_nativeint_ops" Data
-
-  let caml_int32_ops =
-    of_external_name runtime "caml_int32_ops" Data
-
-  let caml_int64_ops =
-    of_external_name runtime "caml_int64_ops" Data
-
-  let caml_send n =
-    add_int_suffix (of_external_name startup "caml_send" Text) n
-
-  let caml_curry_n n =
-    add_int_suffix (of_external_name startup "caml_curry" Text) n
+  let caml_curry_n n = add_int_suffix (startup Text "caml_curry") n
 
   let caml_curry_m_to_n m n =
-    add_suffixes (of_external_name startup "caml_curry" Text)
+    add_suffixes (startup Text "caml_curry")
       [string_of_int m; "_"; string_of_int n]
 
   let caml_curry_m_to_n_app m n =
-    add_suffixes (of_external_name startup "caml_curry" Text)
+    add_suffixes (startup Text "caml_curry")
       [string_of_int m; "_"; string_of_int n; "_app"]
 
-  let caml_tuplify n =
-    add_int_suffix (of_external_name startup "caml_tuplify" Text) n
+  let caml_tuplify n = add_int_suffix (startup Text "caml_tuplify") n
+  let caml_apply n = add_int_suffix (startup Text "caml_apply") n
+  let caml_send n = add_int_suffix (startup Text "caml_send") n
 
-  let caml_apply n =
-    add_int_suffix (of_external_name startup "caml_apply" Text) n
+  let caml_ba_get n = add_int_suffix (runtime_or_external Text "caml_ba_get_") n
+  let caml_ba_set n = add_int_suffix (runtime_or_external Text "caml_ba_set_") n
 
-  let caml_ba_get n =
-    add_int_suffix (of_external_name runtime "caml_ba_get_" Text) n
-
-  let caml_ba_set n =
-    add_int_suffix (of_external_name runtime "caml_ba_set_" Text) n
-
-  let caml_call_gc =
-    of_external_name runtime "caml_call_gc" Text
-
-  let caml_modify =
-    of_external_name runtime "caml_modify" Text
-
-  let caml_initialize =
-    of_external_name runtime "caml_initialize" Text
-
-  let caml_get_public_method =
-    of_external_name runtime "caml_get_public_method" Text
-
-  let caml_alloc =
-    of_external_name runtime "caml_alloc" Text
-
+  let caml_call_gc = runtime_or_external Text "caml_call_gc"
+  let caml_modify = runtime_or_external Text "caml_modify" 
+  let caml_initialize = runtime_or_external Text "caml_initialize"
+  let caml_get_public_method = runtime_or_external Text "caml_get_public_method"
+  let caml_alloc = runtime_or_external Text "caml_alloc"
   let caml_ml_array_bound_error =
-    of_external_name runtime "caml_ml_array_bound_error" Text
-
-  let caml_raise_exn =
-    of_external_name runtime "caml_raise_exn" Text
-
-  let caml_make_array =
-    of_external_name runtime "caml_make_array" Text
-
-  let caml_bswap16_direct =
-    of_external_name runtime "caml_bswap16_direct" Text
+    runtime_or_external Text "caml_ml_array_bound_error"
+  let caml_raise_exn = runtime_or_external Text "caml_raise_exn"
+  let caml_make_array = runtime_or_external Text "caml_make_array"
+  let caml_bswap16_direct = runtime_or_external Text "caml_bswap16_direct"
 
   type bswap_arg = Int32 | Int64 | Nativeint
 
@@ -191,62 +110,30 @@ module Names = struct
       | Int64 -> "int64"
       | Nativeint -> "nativeint"
     in
-    of_external_name runtime (Printf.sprintf "caml_%s_direct_bswap" ty) Text
+    runtime_or_external Text (Printf.sprintf "caml_%s_direct_bswap" ty)
 
-  let caml_alloc_dummy =
-    of_external_name runtime "caml_alloc_dummy" Text
+  let caml_alloc_dummy = runtime_or_external Text "caml_alloc_dummy"
+  let caml_alloc_dummy_float = runtime_or_external Text "caml_alloc_dummy_float"
+  let caml_update_dummy = runtime_or_external Text "caml_update_dummy"
+  let caml_program = startup Text "caml_program"
+  let caml_startup = runtime_or_external Text "caml_startup"
+  let caml_globals_inited = runtime_or_external Data "caml_globals_inited"
+  let caml_globals = startup Data "caml_globals"
+  let caml_plugin_header = startup Data "caml_plugin_header"
+  let caml_globals_map = startup Data "caml_globals_map"
+  let caml_code_segments = startup Data "caml_code_segments"
+  let caml_data_segments = startup Data "caml_data_segments"
+  let caml_frametable = startup Data "caml_frametable"
 
-  let caml_alloc_dummy_float =
-    of_external_name runtime "caml_alloc_dummy_float" Text
+  let caml_afl_area_ptr = runtime_or_external Data "caml_afl_area_ptr"
+  let caml_afl_prev_loc = runtime_or_external Data "caml_afl_prev_loc"
+  let caml_setup_afl = runtime_or_external Text "caml_setup_afl"
 
-  let caml_update_dummy =
-    of_external_name runtime "caml_update_dummy" Text
-
-  let caml_program =
-    of_external_name startup "caml_program" Text
-
-  let caml_startup =
-    of_external_name runtime "caml_startup" Text
-
-  let caml_globals_inited =
-    of_external_name runtime "caml_globals_inited" Data
-
-  let caml_globals =
-    of_external_name startup "caml_globals" Data
-
-  let caml_plugin_header =
-    of_external_name startup "caml_plugin_header" Data
-
-  let caml_globals_map =
-    of_external_name startup "caml_globals_map" Data
-
-  let caml_code_segments =
-    of_external_name startup "caml_code_segments" Data
-
-  let caml_data_segments =
-    of_external_name startup "caml_data_segments" Data
-
-  let caml_frametable =
-    of_external_name startup "caml_frametable" Data
-
-  let caml_spacetime_shapes =
-    of_external_name startup "caml_spacetime_shapes" Data
-
-  let caml_afl_area_ptr =
-    of_external_name runtime "caml_afl_area_ptr" Data
-
-  let caml_afl_prev_loc =
-    of_external_name runtime "caml_afl_prev_loc" Data
-
-  let caml_setup_afl =
-    of_external_name runtime "caml_setup_afl" Text
-
+  let caml_spacetime_shapes = startup Data "caml_spacetime_shapes"
   let caml_spacetime_allocate_node =
-    of_external_name runtime "caml_spacetime_allocate_node" Text
-
+    runtime_or_external Text "caml_spacetime_allocate_node"
   let caml_spacetime_indirect_node_hole_ptr =
-    of_external_name runtime "caml_spacetime_indirect_node_hole_ptr" Text
-
+    runtime_or_external Text "caml_spacetime_indirect_node_hole_ptr"
   let caml_spacetime_generate_profinfo =
-    of_external_name runtime "caml_spacetime_generate_profinfo" Text
+    runtime_or_external Text "caml_spacetime_generate_profinfo"
 end

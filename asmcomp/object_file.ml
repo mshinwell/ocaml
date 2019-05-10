@@ -25,10 +25,7 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 = Stdlib.compare t1 t2
-
-  let equal t1 t2 =
-    compare t1 t2 = 0
-
+  let equal t1 t2 = compare t1 t2 = 0
   let hash t = Hashtbl.hash t
 
   let print ppf t =
@@ -42,8 +39,7 @@ include Identifiable.Make (struct
     | Runtime_and_external_libs ->
       Format.pp_print_string ppf "Runtime_and_external_libs"
 
-  let output chan t =
-    print (Format.formatter_of_out_channel chan) t
+  let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
 let current_compilation_unit = Current_compilation_unit

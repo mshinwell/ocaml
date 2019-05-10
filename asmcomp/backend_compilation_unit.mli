@@ -41,9 +41,3 @@ val shared_startup : t
 (** The backend compilation unit for code external to that produced by the
     OCaml compiler, such as the runtime, and the system C library. *)
 val runtime_and_external_libs : t
-
-(* To be enabled later.
-(** The name for [Backend_sym] to use when creating names for symbols defined
-    in the given compilation unit. *)
-val name_for_backend_sym : separator:string -> t -> string
-*)
