@@ -400,8 +400,6 @@ let name_for_specific = function
   | Imultsubf -> "fmsub"
   | _ -> Misc.fatal_error "Emit.Ispecific"
 
-(* Name of current function *)
-let function_name = ref None
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
@@ -513,13 +511,9 @@ module BR = Branch_relaxation.Make (struct
     | Lop(Itailcall_ind _) -> size 5 7 6
     | Lop(Itailcall_imm { func; _ }) ->
         let func = S.create func in
-        begin match !function_name with
-        | None -> Misc.fatal_error "[function_name] not set"
-        | Some function_name ->
-          if S.equal func function_name
-          then 1
-          else size 4 (7 + tocload_size()) (6 + tocload_size())
-        end
+        if S.equal func (get_current_function ())
+        then 1
+        else size 4 (7 + tocload_size()) (6 + tocload_size())
     | Lop(Iextcall { alloc = true; _ }) ->
       size 3 (2 + tocload_size()) (2 + tocload_size())
     | Lop(Iextcall { alloc = false; _}) -> size 1 2 2
@@ -727,35 +721,31 @@ let emit_instr i =
         `	bctr\n`
     | Lop(Itailcall_imm { func; label_after = _; }) ->
         let func = S.create func in
-        begin match !function_name with
-        | None -> Misc.fatal_error "[function_name] not set"
-        | Some function_name ->
-          if S.equal func function_name then begin
-            `	b	{emit_label !tailrec_entry_point}\n`
-          end else begin
-            begin match abi with
-            | ELF32 ->
-              ()
-            | ELF64v1 ->
-              emit_tocload emit_gpr 11 (TocSym func);
-              `	ld	0, 0(11)\n`;  (* code pointer *)
-              `	mtctr	0\n`;
-              `	ld	2, 8(11)\n`   (* TOC for callee *)
-            | ELF64v2 ->
-              emit_tocload emit_gpr 12 (TocSym func); (* addr of fn must be in r12 *)
-              `	mtctr	12\n`
-            end;
-            if !contains_calls then begin
-              `	{emit_string lg}	11, {emit_int(retaddr_offset())}(1)\n`;
-              `	mtlr	11\n`
-            end;
-            emit_free_frame();
-            begin match abi with
-            | ELF32 ->
-              `	b	{emit_symbol func}\n`
-            | ELF64v1 | ELF64v2 ->
-              `	bctr\n`
-            end
+        if S.equal func (get_current_function ()) then begin
+          `	b	{emit_label !tailrec_entry_point}\n`
+        end else begin
+          begin match abi with
+          | ELF32 ->
+            ()
+          | ELF64v1 ->
+            emit_tocload emit_gpr 11 (TocSym func);
+            `	ld	0, 0(11)\n`;  (* code pointer *)
+            `	mtctr	0\n`;
+            `	ld	2, 8(11)\n`   (* TOC for callee *)
+          | ELF64v2 ->
+            emit_tocload emit_gpr 12 (TocSym func); (* addr of fn must be in r12 *)
+            `	mtctr	12\n`
+          end;
+          if !contains_calls then begin
+            `	{emit_string lg}	11, {emit_int(retaddr_offset())}(1)\n`;
+            `	mtlr	11\n`
+          end;
+          emit_free_frame();
+          begin match abi with
+          | ELF32 ->
+            `	b	{emit_symbol func}\n`
+          | ELF64v1 | ELF64v2 ->
+            `	bctr\n`
           end
         end
     | Lop(Iextcall { func; alloc; }) ->
@@ -1053,7 +1043,7 @@ let rec emit_all i =
 
 let fundecl fundecl =
   let fun_name = S.create fundecl.fun_name in
-  function_name := Some fun_name;
+  set_current_function fun_name;
   tailrec_entry_point := fundecl.fun_tailrec_entry_point_label;
   stack_offset := 0;
   call_gc_labels := IntMap.empty;

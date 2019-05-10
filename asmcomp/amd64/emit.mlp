@@ -486,8 +486,6 @@ let emit_float_constant f lbl =
 
 (* Output the assembly code for an instruction *)
 
-(* Name of current function *)
-let function_name = ref None
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
@@ -556,16 +554,12 @@ let emit_instr fallthrough i =
       end
   | Lop(Itailcall_imm { func; label_after; }) ->
       let func = S.create func in
-      begin match !function_name with
-      | None -> Misc.fatal_error "[function_name] not set"
-      | Some function_name ->
-        if S.equal func function_name then begin
-          I.jmp (label !tailrec_entry_point)
-        end else begin
-          output_epilogue begin fun () ->
-            add_used_symbol func;
-            emit_jump func
-          end
+      if S.equal func (get_current_function ()) then begin
+        I.jmp (label !tailrec_entry_point)
+      end else begin
+        output_epilogue begin fun () ->
+          add_used_symbol func;
+          emit_jump func
         end
       end;
       if Config.spacetime then begin
@@ -915,7 +909,7 @@ let all_functions = ref []
 
 let fundecl fundecl =
   let fun_name = S.create fundecl.fun_name in
-  function_name := Some fun_name;
+  set_current_function fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := fundecl.fun_tailrec_entry_point_label;
   stack_offset := 0;

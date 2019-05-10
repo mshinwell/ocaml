@@ -285,8 +285,6 @@ let output_epilogue f =
   end else
     f ()
 
-(* Name of current function *)
-let function_name = ref None
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 (* Pending floating-point literals *)
@@ -558,17 +556,13 @@ let emit_instr i =
         end
     | Lop(Itailcall_imm { func; label_after = _; }) ->
         let func = S.create func in
-        begin match !function_name with
-        | None -> Misc.fatal_error "[function_name] not set"
-        | Some function_name ->
-          if S.equal func function_name then begin
-            `	b	{emit_label !tailrec_entry_point}\n`; 1
-          end else begin
-            output_epilogue begin fun () ->
-              if !contains_calls then
-                `	ldr	lr, [sp, #{emit_int (-4)}]\n`;
-              `	{emit_jump func}\n`; 2
-            end
+        if S.equal func (get_current_function_name ()) then begin
+          `	b	{emit_label !tailrec_entry_point}\n`; 1
+        end else begin
+          output_epilogue begin fun () ->
+            if !contains_calls then
+              `	ldr	lr, [sp, #{emit_int (-4)}]\n`;
+            `	{emit_jump func}\n`; 2
           end
         end
     | Lop(Iextcall { func; alloc = false; }) ->
@@ -956,7 +950,7 @@ let rec emit_all ninstr fallthrough i =
 
 let fundecl fundecl =
   let fun_name = S.create fundecl.fun_name in
-  function_name := Some fun_name;
+  set_current_function fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := fundecl.fun_tailrec_entry_point_label;
   float_literals := [];

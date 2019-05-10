@@ -30,6 +30,9 @@ val emit_float64_directive: string -> int64 -> unit
 val emit_float64_split_directive: string -> int64 -> unit
 val emit_float32_directive: string -> int32 -> unit
 
+val set_current_function : Asm_symbol.t -> unit
+val get_current_function : unit -> Asm_symbol.t
+
 val reset : unit -> unit
 val reset_debug_info: unit -> unit
 val emit_debug_info: Debuginfo.t -> unit

@@ -294,3 +294,13 @@ let reset () =
 
 let binary_backend_available = ref false
 let create_asm_file = ref true
+
+let current_function = ref None
+
+let set_current_function sym =
+  current_function := Some sym
+
+let get_current_function () =
+  match !current_function with
+  | Some sym -> sym
+  | None -> Misc.fatal_error "[Emitaux.set_current_function] not called"
