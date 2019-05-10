@@ -111,7 +111,7 @@ let system_and_object_file_format_and_abi
   | X86_64, _, "netbsd" -> NetBSD, ELF X86_64
   | X86_64, _, "openbsd" -> OpenBSD, ELF X86_64
   | X86_64, _, "darwin" -> MacOS_like, Mach_O
-  | X86_64, _, "mingw" -> Windows MinGW, PE
+  | X86_64, _, "mingw64" -> Windows MinGW, PE
   | AArch64, _, "linux" -> Linux, ELF AArch64
   | X86_64, _, "cygwin" -> Windows Cygwin, PE
   | X86_64, _, "win64" -> Windows Native, PE
