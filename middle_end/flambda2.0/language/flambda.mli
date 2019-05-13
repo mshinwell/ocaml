@@ -454,7 +454,7 @@ end and Function_params_and_body : sig
       relations thereon, over the given body. *)
   val create
      : continuation_param:Continuation.t
-    -> exn_continuation:Exn_continuation.t
+    -> Exn_continuation.t
     -> Kinded_parameter.t list
     -> body:Expr.t
     -> my_closure:Variable.t
@@ -470,7 +470,7 @@ end and Function_params_and_body : sig
             jump once the result of the function has been computed. If the
             continuation takes more than one argument then the backend will
             compile the function so that it returns multiple values. *)
-      -> exn_continuation:Continuation.t
+      -> Exn_continuation.t
         (** To where we must jump if application of the function raises an
             exception. *)
       -> Kinded_parameter.t list
@@ -478,9 +478,6 @@ end and Function_params_and_body : sig
       -> my_closure:Variable.t
       -> 'a)
     -> 'a
-  val continuation_param : t -> Continuation.t
-
-  val exn_continuation : t -> Exn_continuation.t
 end and Function_declaration : sig
   type t
 

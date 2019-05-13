@@ -74,6 +74,17 @@ module rec Expr : sig
      : bindings:(Variable.t * Flambda_kind.t * Named.t) list
     -> body:t
     -> t
+  val bind_parameters_to_simples
+     : bind:Kinded_parameter.t list
+    -> target:Simple.t list
+    -> t
+    -> t
+  val link_continuations
+     : bind:Continuation.t
+    -> target:Continuation.t
+    -> arity:Flambda_arity.t
+    -> t
+    -> t
 end = struct
   type descr =
     | Let of Let.t
@@ -604,6 +615,7 @@ end and Let_cont : sig
      : Continuation_handlers.t
     -> body:Expr.t
     -> Expr.t
+  val should_inline_out : t -> Non_recursive_let_cont_handler.t option
 end = struct
   type t =
     | Non_recursive of {
@@ -686,7 +698,7 @@ end = struct
       body
     else
       match Expr.descr body with
-      | Apply_cont apply_cont when Apply_cont.is_goto k ->
+      | Apply_cont apply_cont when Apply_cont.is_goto apply_cont k ->
         (* CR mshinwell: This could work for the >0 arity-case too, to handle
            continuation aliases. *)
         Continuation_params_and_handler.pattern_match
@@ -997,6 +1009,12 @@ end and Continuation_handler : sig
   val params_and_handler : t -> Continuation_params_and_handler.t
   val stub : t -> bool
   val is_exn_handler : t -> bool
+  type behaviour = private
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
+  val behaviour : t -> behaviour
+  val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
 end = struct
   type t = {
     params_and_handler : Continuation_params_and_handler.t;
@@ -1101,96 +1119,100 @@ end = struct
         stub;
         is_exn_handler;
       }
+
+  type behaviour =
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
+
+  let behaviour t : behaviour =
+    (* This could be replaced by a more sophisticated analysis, but for the
+       moment we just use a simple syntactic check. *)
+    if t.is_exn_handler then
+      Unknown
+    else
+      Continuation_params_and_handler.pattern_match t.params_and_handler
+        ~f:(fun params ~handler ->
+          match Expr.descr handler with
+          | Apply_cont apply_cont ->
+            begin match Apply_cont.trap_action apply_cont with
+            | Some _ -> Unknown
+            | None ->
+              let args = Apply_cont.args apply_cont in
+              let params = List.map KP.simple params in
+              if Misc.Stdlib.List.compare Simple.compare args params = 0 then
+                Alias_for (Apply_cont.continuation apply_cont)
+              else
+                Unknown
+            end
+          | Invalid _ -> Unreachable
+          | _ -> Unknown)
+
+  let with_params_and_handler t params_and_handler =
+    { t with params_and_handler; }
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
-    set_of_closures_ty : Flambda_type.t;
     closure_elements : Simple.t Var_within_closure.Map.t;
-    direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   }
   include Expr_std.S with type t := t
   val create
      : function_decls:Function_declarations.t
-    -> set_of_closures_ty:Flambda_type.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
-    -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
   val function_decls : t -> Function_declarations.t
-  val set_of_closures_ty : t -> Flambda_type.t
   val closure_elements : t -> Simple.t Var_within_closure.Map.t
-  val direct_call_surrogates : t -> Closure_id.t Closure_id.Map.t
   val has_empty_environment : t -> bool
 end = struct
   type t = {
     function_decls : Function_declarations.t;
-    set_of_closures_ty : Flambda_type.t;
     closure_elements : Simple.t Var_within_closure.Map.t;
-    direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   }
 
   (* CR mshinwell: A sketch of code for the invariant check is on cps_types. *)
   let invariant _env _t = ()
 
-  let create ~function_decls ~set_of_closures_ty ~closure_elements
-        ~direct_call_surrogates =
+  let create ~function_decls ~closure_elements =
     { function_decls;
-      set_of_closures_ty;
       closure_elements;
-      direct_call_surrogates;
     }
 
   let function_decls t = t.function_decls
-  let set_of_closures_ty t = t.set_of_closures_ty
   let closure_elements t = t.closure_elements
-  let direct_call_surrogates t = t.direct_call_surrogates
 
   let has_empty_environment t =
     Var_within_closure.Map.is_empty t.closure_elements
 
   let print_with_cache ~cache ppf
         { function_decls; 
-          set_of_closures_ty;
           closure_elements;
-          direct_call_surrogates;
         } =
     fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
         @[<hov 1>(function_decls@ %a)@]@ \
-        @[<hov 1>(set_of_closures_ty@ %a)@]@ \
         @[<hov 1>(closure_elements@ %a)@]@ \
-        @[<hov 1>(direct_call_surrogates@ %a)@]\
         )@]"
       (Misc.Color.bold_green ())
       (Misc.Color.reset ())
       (Function_declarations.print_with_cache ~cache) function_decls
-      (Flambda_type.print_with_cache ~cache) set_of_closures_ty
       (Var_within_closure.Map.print Simple.print) closure_elements
-      (Closure_id.Map.print Closure_id.print) direct_call_surrogates
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let free_names
         { function_decls;
-          set_of_closures_ty;
           closure_elements;
-          direct_call_surrogates = _;
         } =
     Name_occurrences.union_list [
       Function_declarations.free_names function_decls;
-      Flambda_type.free_names set_of_closures_ty;
       Simple.List.free_names (Var_within_closure.Map.data closure_elements);
     ]
 
   let apply_name_permutation
         ({ function_decls; 
-           set_of_closures_ty;
            closure_elements;
-           direct_call_surrogates;
          } as t) perm =
     let function_decls' =
       Function_declarations.apply_name_permutation function_decls perm
-    in
-    let set_of_closures_ty' =
-      Flambda_type.apply_name_permutation set_of_closures_ty perm
     in
     let closure_elements' =
       Var_within_closure.Map.map_sharing (fun simple ->
@@ -1198,14 +1220,11 @@ end = struct
         closure_elements
     in
     if function_decls == function_decls'
-      && set_of_closures_ty == set_of_closures_ty'
       && closure_elements == closure_elements'
     then t
     else
       { function_decls = function_decls';
-        set_of_closures_ty = set_of_closures_ty';
         closure_elements = closure_elements';
-        direct_call_surrogates;
       }
 end and Function_declarations : sig
   type t
@@ -1276,15 +1295,21 @@ end and Function_params_and_body : sig
 
   include Expr_std.S with type t := t
 
+  (* CR mshinwell: Rename [continuation_param] -> [return_continuation]
+     everywhere. *)
   val create
-     : Kinded_parameter.t list
+     : continuation_param:Continuation.t
+    -> Exn_continuation.t
+    -> Kinded_parameter.t list
     -> body:Expr.t
     -> my_closure:Variable.t
     -> t
 
   val pattern_match
      : t
-    -> f:(Kinded_parameter.t list
+    -> f:(continuation_param:Continuation.t
+      -> Exn_continuation.t
+      -> Kinded_parameter.t list
       -> body:Expr.t
       -> my_closure:Variable.t
       -> 'a)
@@ -1313,8 +1338,9 @@ end = struct
       if body == body' then t
       else { body = body'; }
   end
-
-  include Name_abstraction.Make_list (Kinded_parameter) (T0)
+  module T1 = Name_abstraction.Make_list (Kinded_parameter) (T0)
+  module T2 = Name_abstraction.Make (Bindable_exn_continuation) (T1)
+  include Name_abstraction.Make (Bindable_continuation) (T2)
 
   let invariant _env _t = ()
 
@@ -1322,31 +1348,34 @@ end = struct
 
   let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
 
-  let create params ~body ~my_closure =
+  let create ~continuation_param exn_continuation params ~body ~my_closure =
     let t0 : T0.t =
       { body;
       }
     in
     let my_closure =
-      Kinded_parameter.create (Parameter.wrap my_closure) (K.value ())
+      Kinded_parameter.create (Parameter.wrap my_closure) K.value
     in
-    create (params @ [my_closure]) t0
+    let t1 = T1.create (params @ [my_closure]) t0 in
+    let t2 = T2.create exn_continuation t1 in
+    create continuation_param t2
 
   let pattern_match t ~f =
-    pattern_match t ~f:(fun params_and_my_closure t0 ->
-      let params, my_closure =
-        match List.rev params_and_my_closure with
-        | my_closure::params_rev ->
-          List.rev params_rev, Kinded_parameter.var my_closure
-        | [] -> assert false  (* see [create], above. *)
-      in
-      f params ~body:t0.body ~my_closure)
+    pattern_match t ~f:(fun continuation_param t2 ->
+      T2.pattern_match t2 ~f:(fun exn_continuation t1 ->
+        T1.pattern_match t1 ~f:(fun params_and_my_closure t0 ->
+          let params, my_closure =
+            match List.rev params_and_my_closure with
+            | my_closure::params_rev ->
+              List.rev params_rev, Kinded_parameter.var my_closure
+            | [] -> assert false  (* see [create], above. *)
+          in
+          f ~continuation_param exn_continuation params ~body:t0.body
+            ~my_closure)))
 end and Function_declaration : sig
   include Expr_std.S
   val create
      : closure_origin:Closure_origin.t
-    -> continuation_param:Continuation.t
-    -> exn_continuation:Exn_continuation.t
     -> params_and_body:Function_params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
@@ -1362,8 +1391,6 @@ end and Function_declaration : sig
     -> t
     -> unit
   val closure_origin : t -> Closure_origin.t
-  val continuation_param : t -> Continuation.t
-  val exn_continuation : t -> Exn_continuation.t
   val params_and_body : t -> Function_params_and_body.t
   val code_id : t -> Code_id.t
   val result_arity : t -> Flambda_arity.t
@@ -1376,8 +1403,6 @@ end and Function_declaration : sig
 end = struct
   type t = {
     closure_origin : Closure_origin.t;
-    continuation_param : Continuation.t;
-    exn_continuation : Exn_continuation.t;
     params_and_body : Function_params_and_body.t;
     code_id : Code_id.t;
     result_arity : Flambda_arity.t;
@@ -1390,8 +1415,7 @@ end = struct
 
   let invariant _env _t = ()
 
-  let create ~closure_origin ~continuation_param ~exn_continuation
-        ~params_and_body ~result_arity ~stub ~dbg
+  let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
         ~(inline : Inline_attribute.t)
         ~(specialise : Specialise_attribute.t)
         ~is_a_functor : t =
@@ -1412,8 +1436,6 @@ end = struct
         Function_params_and_body.print params_and_body
     end;
     { closure_origin;
-      continuation_param;
-      exn_continuation;
       params_and_body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       result_arity;
@@ -1426,8 +1448,6 @@ end = struct
 
   let print_with_cache ~cache ppf
         { closure_origin;
-          continuation_param;
-          exn_continuation;
           params_and_body;
           code_id = _;
           result_arity;
@@ -1437,8 +1457,12 @@ end = struct
           specialise;
           is_a_functor;
         } =
+    (* CR mshinwell: It's a bit strange that this doesn't use
+       [Function_params_and_body.print_with_cache].  However a proper
+       function to print in a more human-readable form will probably look more
+       like this code. *)
     Function_params_and_body.pattern_match params_and_body
-      ~f:(fun params ~body ~my_closure ->
+      ~f:(fun ~continuation_param exn_continuation params ~body ~my_closure ->
         fprintf ppf "@[<hov 1>(\
             @[<hov 1>(closure_origin@ %a)@]@ \
             @[<hov 1>(continuation_param@ %a)@]@ \
@@ -1471,8 +1495,6 @@ end = struct
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let closure_origin t = t.closure_origin
-  let continuation_param t = t.continuation_param
-  let exn_continuation t = t.exn_continuation
   let params_and_body t = t.params_and_body
   let code_id t = t.code_id
   let result_arity t = t.result_arity
@@ -1490,8 +1512,6 @@ end = struct
 
   let free_names
         { closure_origin = _;
-          continuation_param = _;
-          exn_continuation = _;
           params_and_body;
           code_id = _;
           result_arity = _;
@@ -1505,8 +1525,6 @@ end = struct
 
   let apply_name_permutation
         ({ closure_origin;
-           continuation_param;
-           exn_continuation;
            params_and_body;
            code_id;
            result_arity;
@@ -1522,8 +1540,6 @@ end = struct
     if params_and_body == params_and_body' then t
     else
       { closure_origin;
-        continuation_param;
-        exn_continuation;
         params_and_body = params_and_body';
         code_id;
         result_arity;
