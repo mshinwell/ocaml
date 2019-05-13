@@ -20,29 +20,25 @@
     mapping. *)
 
 module type S = sig
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Type_equality_env : sig type t end
-  module Type_equality_result : sig type t end
-  module Typing_env_extension : sig type t end
+  type join_env
+  type meet_env
+  type type_equality_env
+  type type_equality_result
+  type typing_env_extension
 
   type t
 
   val bottom : unit -> t
 
-  val add_or_meet_equations
-     : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
-    -> t
+  val add_or_meet_equations : t -> meet_env -> typing_env_extension -> t
 
   val widen : t -> to_match:t -> t
 
   include Type_structure_intf.S
     with type t := t
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Type_equality_env := Type_equality_env
-    with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension
+    with type join_env := join_env
+    with type meet_env := meet_env
+    with type type_equality_env := type_equality_env
+    with type type_equality_result := type_equality_result
+    with type typing_env_extension := typing_env_extension
 end
