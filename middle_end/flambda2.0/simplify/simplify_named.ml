@@ -39,13 +39,12 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           assert (E.inside_set_of_closures_declaration env
             (Function_declarations.set_of_closures_origin function_decls));
           let env = E.increment_continuation_scope_level env in
-          let body, r, lifted_constants =
-            Simplify_toplevel.simplify_toplevel env body
+          let body, r =
+            Simplify_toplevel.simplify_toplevel env r body
               ~return_continuation
               exn_continuation
               ~scope_level_for_lifted_constants:Scope_level.initial (* XXX *)
           in
-          let r = R.add_lifted_constants r lifted_constants in
           let function_decl =
             Function_params_and_body.create ~return_continuation
               ~exn_continuation params body ~my_closure

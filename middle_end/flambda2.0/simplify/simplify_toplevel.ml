@@ -26,7 +26,7 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
        almost always called "r".  These results come along with rewritten
        Flambda terms.
   *)
-  let simplify_toplevel env expr ~return_continuation
+  let simplify_toplevel env r_outer expr ~return_continuation
        exn_continuation ~scope_level_for_lifted_constants =
     if not (E.mem_continuation env return_continuation) then begin
       Misc.fatal_errorf "The return continuation (%a) must be in the \
@@ -46,5 +46,6 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
     let r = R.create ~resolver:(E.resolver env) in
     let expr, r = Simplify_expr.simplify_expr env r expr in
     let lifted_constants = R.get_lifted_constants r in
-    expr, r, lifted_constants
+    let r_outer = R.new_lifted_constants r_outer lifted_constants in
+    expr, r_outer
 end
