@@ -269,11 +269,11 @@ and transform_apply env
   }
 
 and transform_function_declaration _env
-      ({ kind; continuation_param; exn_continuation; params; return;
+      ({ kind; return_continuation; exn_continuation; params; return;
          body; free_idents_of_body; attr; loc; stub;
        } : Ilambda.function_declaration) : Ilambda.function_declaration =
   { kind;
-    continuation_param;
+    return_continuation;
     exn_continuation;
     params;
     return;

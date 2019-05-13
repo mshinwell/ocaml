@@ -609,7 +609,7 @@ and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
     }
   in
   { kind = kind;
-    continuation_param = body_cont;
+    return_continuation = body_cont;
     exn_continuation;
     params = params;
     return;
