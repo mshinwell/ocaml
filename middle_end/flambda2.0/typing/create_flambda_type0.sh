@@ -51,7 +51,11 @@ FIRST=1
 
 for ML in $REC_BINDINGS; do
     MLI=${ML}i
-    MODNAME=$(echo $ML | sed 's/\.ml$//' | sed 's:^.*/::' | sed 's/^./\U\0/')
+    MODNAME=$(echo $ML | \
+      sed 's/\.ml$//' | \
+      sed 's:^.*/::' | \
+      sed 's/^./\U\0/' | \
+      sed 's/\.rec//')
 
     if [ "$FIRST" = "1" ]; then
         echo "  module rec $MODNAME : sig" >> $OUTPUT

@@ -24,13 +24,12 @@ module Make
     type t = Tag.t * Index.t
     include Hashtbl.With_map with type t := t
   end)
-  (Maps_to : Row_like_maps_to_intf.S) :
+  (Maps_to : Row_like_maps_to_intf.S
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Type_equality_env := Type_equality_env
     with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension
-  end) :
+    with module Typing_env_extension := Typing_env_extension) :
 sig
   type t
 

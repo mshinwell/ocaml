@@ -28,8 +28,7 @@ module Make
     with module Meet_env := Meet_env
     with module Type_equality_env := Type_equality_env
     with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension
-  end) :
+    with module Typing_env_extension := Typing_env_extension) =
 struct
   module Tag_and_index = struct
     include Tag_and_index
