@@ -92,7 +92,7 @@ let invariant env ({ k; args; trap_action; } as t) =
           print t
       end;
       assert (not (Continuation.equal k exn_handler));
-      let expected_arity = [K.value ()] in
+      let expected_arity = [K.value] in
       if not (Flambda_arity.equal arity expected_arity) then begin
         Misc.fatal_errorf "Exception handler continuation %a has \
             the wrong arity for the trap handler action of this \
@@ -181,3 +181,13 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
 let update_args t ~args =
   if args == t.args then t
   else { t with args; }
+
+let no_args t =
+  match args t with
+  | [] -> true
+  | _::_ -> false
+
+let is_goto t k =
+  Continuation.equal (continuation t) k
+    && no_args t
+    && Option.is_none (trap_action t)
