@@ -686,8 +686,7 @@ end = struct
       body
     else
       match Expr.descr body with
-      | Apply_cont apply_cont ...{ cont = k'; args = []; trap_action = None; }
-          when Continuation.equal k k' ->
+      | Apply_cont apply_cont when Apply_cont.is_goto k ->
         (* CR mshinwell: This could work for the >0 arity-case too, to handle
            continuation aliases. *)
         Continuation_params_and_handler.pattern_match
