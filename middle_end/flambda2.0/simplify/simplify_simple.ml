@@ -31,7 +31,7 @@ let type_for_const (const : Simple.Const.t) =
 
 let simplify_name_for_let env r name =
   let typing_env = E.typing_env env in
-  let ty, _ = TE.find_exn typing_env name in
+  let ty = TE.find_exn typing_env name in
   let ty, canonical_simple = TE.resolve_aliases typing_env ty in
   let simple =
     match canonical_simple with
@@ -48,7 +48,7 @@ let simplify_simple_for_let env r (simple : Simple.t) =
 
 let simplify_name env name =
   let typing_env = E.typing_env env in
-  let ty, _ = TE.find_exn typing_env name in
+  let ty = TE.find_exn typing_env name in
   let ty, canonical_simple = TE.resolve_aliases typing_env ty in
   match canonical_simple with
   | None -> Simple.name name, ty
@@ -60,7 +60,7 @@ let simplify_simple env (simple : Simple.t) =
   | Discriminant t -> simple, T.this_discriminant t
   | Name name ->
     let typing_env = E.typing_env env in
-    let ty, _ = TE.find_exn typing_env name in
+    let ty = TE.find_exn typing_env name in
 (* Experiment: don't reify so that we preserve relations *)
     let simple = Simple.name name in
     simple, T.alias_type_of (T.kind ty) simple
@@ -77,5 +77,11 @@ let simplify_simple env (simple : Simple.t) =
     | Invalid -> Simple.name name, T.bottom_like ty
 *)
 
+let simplify_simple_and_drop_type env simple =
+  fst (simplify_simple env simple)
+
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples
+
+let simplify_simples_and_drop_types env simples =
+  List.map (fun simple -> simplify_simple_and_drop_type env simple) simples

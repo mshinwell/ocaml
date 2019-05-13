@@ -51,20 +51,12 @@ module type Env = sig
       the given set of closures.  This is used to detect whether a given
       function call refers to a function which exists somewhere on the current
       inlining stack. *)
-  val inside_set_of_closures_declaration : Set_of_closures_origin.t -> t -> bool
+  val inside_set_of_closures_declaration : t -> Set_of_closures_origin.t -> bool
 
   val entering_set_of_closures : t -> Set_of_closures_origin.t -> t
 
-  (** Record that the inliner is about to descend into [closure_id]. If
-      [inline_inside] is [false] then the resulting environment passed will be
-      marked as "never inline". *)
-  val enter_closure
-     : t
-    -> closure_id:Closure_id.t
-    -> inline_inside:bool
-    -> dbg:Debuginfo.t
-    -> f:(t -> 'a)
-    -> 'a
+  (** Record that the simplifier is about to descend into [closure_id]. *)
+  val enter_closure : t -> Closure_id.t -> t
 
   val add_lifted_constants : t -> lifted_constants -> t
 

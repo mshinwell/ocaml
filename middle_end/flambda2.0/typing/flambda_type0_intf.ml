@@ -67,6 +67,14 @@ module type S = sig
         (An environment containing only existential bindings is not deemed
         as empty.) *)
     val is_empty : t -> bool
+
+    val resolve_aliases
+       : ?bound_name:Name.t
+      -> t
+      -> flambda_type
+      -> flambda_type * (Simple.t option)
+
+    val find_exn : t -> Name.t -> flambda_type
   end
 
   module Typing_env_extension : sig
@@ -738,19 +746,23 @@ module type S = sig
 
   (** The top type for unboxed "nativeint" numbers. *)
   val any_naked_nativeint : unit -> t
+*)
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
   val this_tagged_immediate : Immediate.t -> t
-  val these_tagged_immediates : Immediate.Set.t -> t
   val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
-  val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val this_boxed_int32 : Int32.t -> t
-  val these_boxed_int32s : Numbers.Int32.Set.t -> t
   val this_boxed_int64 : Int64.t -> t
-  val these_boxed_int64s : Numbers.Int64.Set.t -> t
   val this_boxed_nativeint : Targetint.t -> t
+
+(*
+  val these_tagged_immediates : Immediate.Set.t -> t
+  val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
+  val these_boxed_int32s : Numbers.Int32.Set.t -> t
+  val these_boxed_int64s : Numbers.Int64.Set.t -> t
   val these_boxed_nativeints : Targetint.Set.t -> t
+
   val this_immutable_string : string -> t
   val this_immutable_float_array
      : Numbers.Float_by_bit_pattern.t array
@@ -763,19 +775,23 @@ module type S = sig
      : Typing_env_extension.t Immediate.Map.t
     -> t
 
+*)
+
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
   val this_naked_immediate : Immediate.t -> t
   val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
+  val this_naked_int32 : Int32.t -> t
+  val this_naked_int64 : Int64.t -> t
+  val this_naked_nativeint : Targetint.t -> t
+
+(*
   val this_naked_float_as_ty_naked_float
      : Numbers.Float_by_bit_pattern.t
     -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
-  val this_naked_int32 : Int32.t -> t
   val these_naked_int32s : Numbers.Int32.Set.t -> t
-  val this_naked_int64 : Int64.t -> t
   val these_naked_int64s : Numbers.Int64.Set.t -> t
-  val this_naked_nativeint : Targetint.t -> t
   val these_naked_nativeints : Targetint.Set.t -> t
 
   (** Building of types corresponding to immutable values given only the
@@ -788,6 +804,7 @@ module type S = sig
   (** The type corresponding to a mutable float array holding [size]
       naked floats. *)
   val mutable_float_array : size:Targetint.OCaml.t -> t
+*)
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
@@ -795,6 +812,7 @@ module type S = sig
   (** The given discriminant. *)
   val this_discriminant : Discriminant.t -> t
 
+(*
   (** Like [this_discriminant], but returns the [ty_fabricated], rather than
       a type. *)
   val this_discriminant_as_ty_fabricated
@@ -918,11 +936,13 @@ module type S = sig
   (** The type of a set of closures containing at least one closure with
       the given closure ID. *)
   val set_of_closures_containing_at_least : Closure_id.t -> t
+*)
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
+(*
   (** Like [alias_type_of], but for types of kind [Value], and returns the
       [ty] rather than a [t]. *)
   val alias_type_of_as_ty_value : Simple.t -> ty_value
@@ -933,9 +953,12 @@ module type S = sig
   (** The type that is equal to another type, found in a .cmx file, named
       by export identifier. *)
   val alias_type : Flambda_kind.t -> Export_id.t -> t
+*)
 
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
+
+(*
 
   (** Enforce that a type is of kind [Value], returning the corresponding
       [ty]. *)
