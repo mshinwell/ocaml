@@ -16,10 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  val simplify_expr
-     : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Expr.t
-    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-end
+open! Flambda.Import
+
+type t = private
+  | Reachable of Named.t
+  | Invalid of Invalid_term_semantics.t
+
+val reachable : Named.t -> t
+val invalid : unit -> t
+
+val print : Format.formatter -> t -> unit
