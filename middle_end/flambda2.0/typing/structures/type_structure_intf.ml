@@ -26,7 +26,9 @@ module type S = sig
 
   type t
 
-  val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val print : Format.formatter -> t -> unit
 
   val equal
      : type_equality_env
