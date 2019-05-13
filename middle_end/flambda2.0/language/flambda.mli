@@ -453,7 +453,7 @@ end and Function_params_and_body : sig
   (** Create an abstraction that binds the given parameters, with associated
       relations thereon, over the given body. *)
   val create
-     : continuation_param:Continuation.t
+     : return_continuation:Continuation.t
     -> Exn_continuation.t
     -> Kinded_parameter.t list
     -> body:Expr.t
@@ -465,7 +465,7 @@ end and Function_params_and_body : sig
       scoped. *)
   val pattern_match
      : t
-    -> f:(continuation_param:Continuation.t
+    -> f:(return_continuation:Continuation.t
         (** The continuation parameter of the function, i.e. to where we must
             jump once the result of the function has been computed. If the
             continuation takes more than one argument then the backend will

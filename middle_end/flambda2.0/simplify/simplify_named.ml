@@ -25,7 +25,7 @@ module T = Flambda_type
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
   let simplify_function env r closure_id function_decls function_decl =
-    let params_and_body =
+    let params_and_body, r =
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
         ~f:(fun ~return_continuation exn_continuation params ~body
@@ -38,27 +38,19 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           let env = E.add_variable env my_closure (T.any_value ()) in
           assert (E.inside_set_of_closures_declaration env
             (Function_declarations.set_of_closures_origin function_decls));
-          let descr =
-            Format.asprintf "body of %a" Closure_id.print closure_id
-          in
           let env = E.increment_continuation_scope_level env in
-          let body, r =
-            let continuation_params =
-              List.mapi (fun index kind ->
-                  let name = Printf.sprintf "return%d" index in
-                  let param = Parameter.wrap (Variable.create name) in
-                  Kinded_parameter.create param kind)
-                result_arity
-            in
+          let body, r, lifted_constants =
             Simplify_toplevel.simplify_toplevel env body
               ~return_continuation
-              ~continuation_params
               exn_continuation
-              ~descr
               ~scope_level_for_lifted_constants:Scope_level.initial (* XXX *)
           in
-          Function_params_and_body.create ~continuation_param
-            ~exn_continuation params body ~my_closure)
+          let r = R.add_lifted_constants r lifted_constants in
+          let function_decl =
+            Function_params_and_body.create ~return_continuation
+              ~exn_continuation params body ~my_closure
+          in
+          function_decl, r)
     in
     let can_inline =
       (* At present, we follow Closure, taking inlining decisions without
@@ -88,7 +80,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
       if can_inline then T.create_inlinable_function_declaration function_decl
       else T.create_non_inlinable_function_declaration ()
     in
-    function_decl, function_decl_type
+    function_decl, function_decl_type, r
 
   let simplify_set_of_closures env r set_of_closures
         : Flambda.Set_of_closures.t * T.t * R.t =

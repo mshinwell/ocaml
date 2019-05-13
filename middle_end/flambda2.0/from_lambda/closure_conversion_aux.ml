@@ -116,7 +116,7 @@ module Function_decls = struct
       kind : Lambda.function_kind;
       params : (Ident.t * Lambda.value_kind) list;
       return : Lambda.value_kind;
-      continuation_param : Continuation.t;
+      return_continuation : Continuation.t;
       exn_continuation : Ilambda.exn_continuation;
       body : Ilambda.t;
       free_idents_of_body : Ident.Set.t;
@@ -126,7 +126,7 @@ module Function_decls = struct
     }
 
     let create ~let_rec_ident ~closure_bound_var ~kind ~params ~return
-        ~continuation_param ~exn_continuation ~body ~attr
+        ~return_continuation ~exn_continuation ~body ~attr
         ~loc ~free_idents_of_body ~stub =
       let let_rec_ident =
         match let_rec_ident with
@@ -138,7 +138,7 @@ module Function_decls = struct
         kind;
         params;
         return;
-        continuation_param;
+        return_continuation;
         exn_continuation;
         body;
         free_idents_of_body;
@@ -152,7 +152,7 @@ module Function_decls = struct
     let kind t = t.kind
     let params t = t.params
     let return t = t.return
-    let continuation_param t = t.continuation_param
+    let return_continuation t = t.return_continuation
     let exn_continuation t = t.exn_continuation
     let body t = t.body
     let free_idents t = t.free_idents_of_body

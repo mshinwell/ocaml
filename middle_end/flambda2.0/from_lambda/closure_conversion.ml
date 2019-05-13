@@ -52,7 +52,7 @@ let tupled_function_call_stub
       (unboxed_version : Closure_id.t)
       ~(closure_bound_var : Closure_id.t) =
   let dbg = Debuginfo.none in
-  let continuation_param = Continuation.create () in
+  let return_continuation = Continuation.create () in
   let exn_continuation =
     Exn_continuation.create ~exn_handler:(Continuation.create ())
       ~extra_args:[]
@@ -73,7 +73,7 @@ let tupled_function_call_stub
     in
     let apply =
       Flambda.Apply.create ~callee:(Name.var unboxed_version_var)
-        ~continuation:continuation_param
+        ~continuation:return_continuation
         ~exn_continuation
         ~args:(Simple.vars params)
         ~call_kind
@@ -116,7 +116,7 @@ let tupled_function_call_stub
   in
   let params_and_body =
     Flambda.Function_params_and_body.create
-      ~continuation_param
+      ~return_continuation
       exn_continuation
       [tuple_param]
       ~body
@@ -525,7 +525,7 @@ and close_let_rec t env ~defs ~body =
   in
   let function_declarations =
     List.map (function (let_rec_ident,
-            ({ kind; continuation_param; exn_continuation;
+            ({ kind; return_continuation; exn_continuation;
                params; return; body; free_idents_of_body;
                attr; loc; stub;
              } : Ilambda.function_declaration)) ->
@@ -535,7 +535,7 @@ and close_let_rec t env ~defs ~body =
         in
         let function_declaration =
           Function_decl.create ~let_rec_ident:(Some let_rec_ident)
-            ~closure_bound_var ~kind ~params ~return ~continuation_param
+            ~closure_bound_var ~kind ~params ~return ~return_continuation
             ~exn_continuation ~body ~attr ~loc ~free_idents_of_body ~stub
         in
         function_declaration)
@@ -742,7 +742,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     let specialise = LC.specialise_attribute (Function_decl.specialise decl) in
     let params_and_body =
       Flambda.Function_params_and_body.create
-        ~continuation_param:(Function_decl.continuation_param decl)
+        ~return_continuation:(Function_decl.return_continuation decl)
         exn_continuation params ~body ~my_closure
     in
     Flambda.Function_declaration.create ~closure_origin
