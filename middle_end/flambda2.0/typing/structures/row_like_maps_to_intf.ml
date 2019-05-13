@@ -28,10 +28,6 @@ module type S = sig
 
   type t
 
-  val bottom : unit -> t
-
-  val add_or_meet_equations : t -> meet_env -> typing_env_extension -> t
-
   val widen : t -> to_match:t -> t
 
   include Type_structure_intf.S

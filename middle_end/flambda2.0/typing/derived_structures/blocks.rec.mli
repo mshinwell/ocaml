@@ -20,14 +20,15 @@ type t
 
 type open_or_closed = Open | Closed of Tag.t
 
-(** Create a value which describes that there are exactly no blocks. *)
 val create_bottom : unit -> t
 
-val create : field_tys:Flambda_types.t list -> open_or_closed -> t
+val create
+   : field_tys:Flambda_types.t list
+  -> Flambda_kind.t
+  -> open_or_closed
+  -> t
 
-(*
 val invariant : t -> unit
-*)
 
 val is_empty : t -> bool
 
