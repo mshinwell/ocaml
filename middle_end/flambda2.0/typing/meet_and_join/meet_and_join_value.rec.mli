@@ -20,14 +20,14 @@
 
 module Make
   (E : Either_meet_or_join_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension) :
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type typing_env_extension := Typing_env_extension.t) :
 sig
   include Meet_and_join_spec_intf.S
-    with module Flambda_types := Flambda_types
-    with module Join_env := Join_env
-    with module Typing_env_extension := Typing_env_extension
+    with type flambda_types := Flambda_types.t
+    with type join_env := Join_env.t
+    with type typing_env_extension := Typing_env_extension.t
     with type of_kind_foo = Flambda_types.of_kind_value
 
   val meet_or_join_closures_entry
