@@ -35,13 +35,10 @@ and ty_fabricated = of_kind_fabricated ty
 
 and 'a ty = 'a unknown_or_join or_alias
 
-(** For each kind there is a lattice of types. *)
-and 'a unknown_or_join =
-  | Unknown
-  (** "Any value can flow to this point": the top element. *)
-  | Join of 'a Or_bottom.t
-  (** A nullary or unary join (called "join" for future developments).
-      The nullary join means bottom. *)
+(** For each kind there is a lattice of types.
+    Unknown = "Any value can flow to this point": the top element.
+*)
+and 'a unknown_or_join = 'a Or_unknown_or_bottom.t
 
 and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates

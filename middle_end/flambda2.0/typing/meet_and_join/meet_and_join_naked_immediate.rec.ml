@@ -18,9 +18,9 @@
 
 module Make
   (E : Either_meet_or_join_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension) =
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type typing_env_extension := Typing_env_extension.t) =
 struct
   type of_kind_foo = Immediate.Set.t Flambda_types.of_kind_naked_number
 

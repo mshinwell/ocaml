@@ -20,33 +20,30 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_types : sig
-    type t
-    type 'a ty
-    type 'a of_kind_naked_number
-  end
-
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
+  type flambda_type
+  type 'a ty
+  type 'a of_kind_naked_number
+  type join_env
+  type meet_env
+  type typing_env_extension
 
   module Naked_number : sig
     type t
     module Set : Set.S with type elt = t
   end
 
-  module Typing_env_extension : sig type t end
-
   module Make
     (E : Either_meet_or_join_intf.S
-      with module Join_env := Join_env
-      with module Meet_env := Meet_env
-      with module Typing_env_extension := Typing_env_extension) :
+      with type join_env := join_env
+      with type meet_env := meet_env
+      with type typing_env_extension := typing_env_extension) :
   sig
     include Meet_and_join_spec_intf.S
-      with module Flambda_types := Flambda_types
-      with module Join_env := Join_env
-      with module Typing_env_extension := Typing_env_extension
-      with type of_kind_foo =
-        Naked_number.Set.t Flambda_types.of_kind_naked_number
+      with type flambda_type := flambda_type
+      with type 'a ty := 'a ty
+      with type 'a of_kind_naked_number := 'a of_kind_naked_number
+      with type join_env := join_env
+      with type typing_env_extension := typing_env_extension
+      with type of_kind_foo = Naked_number.Set.t of_kind_naked_number
   end
 end
