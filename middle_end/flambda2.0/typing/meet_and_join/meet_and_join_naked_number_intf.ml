@@ -37,12 +37,12 @@ module type S = sig
   module Typing_env_extension : sig type t end
 
   module Make
-    (E : Either_meet_or_join_intf
+    (E : Either_meet_or_join_intf.S
       with module Join_env := Join_env
       with module Meet_env := Meet_env
       with module Typing_env_extension := Typing_env_extension) :
   sig
-    include Meet_and_join_spec_intf
+    include Meet_and_join_spec_intf.S
       with module Flambda_types := Flambda_types
       with module Join_env := Join_env
       with module Typing_env_extension := Typing_env_extension

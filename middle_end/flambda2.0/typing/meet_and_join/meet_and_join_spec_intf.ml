@@ -19,7 +19,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type Meet_and_join_spec_intf = sig
+module type S = sig
   module Flambda_types : sig
     type t
     type 'a ty

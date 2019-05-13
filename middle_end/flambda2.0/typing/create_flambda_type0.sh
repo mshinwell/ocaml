@@ -44,8 +44,13 @@ OUTPUT=flambda_type0.ml
 echo "(* Generated automatically -- do not edit *)" > $OUTPUT
 echo >> $OUTPUT
 
+echo "# 1 \"$TEMPLATE\"" >> $OUTPUT
+temp=$(mktemp)
 grep --color=never -m 1 -B 1000000 -- "$DELIMITER" $TEMPLATE \
-    | head -n -1 >> $OUTPUT
+    | head -n -1 >> $temp
+TEMPLATE_FIRST_PART_LENGTH=$(wc -l $temp | awk '{print $1}')
+cat $temp >> $OUTPUT
+rm -f $temp
 
 FIRST=1
 
@@ -89,5 +94,6 @@ for ML in $REC_BINDINGS; do
     FIRST=0
 done
 
+echo "# $(($TEMPLATE_FIRST_PART_LENGTH + 2)) \"$TEMPLATE\"" >> $OUTPUT
 grep --color=never -m 1 -A 1000000 -- "$DELIMITER" $TEMPLATE | \
     tail -n +2 >> $OUTPUT
