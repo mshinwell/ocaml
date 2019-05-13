@@ -39,19 +39,23 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     Flambda.Let.pattern_match let_expr ~f:(fun ~bound_var ~body ->
       let r = R.clear_env_extension r in
       let already_lifted_constants = R.get_lifted_constants r in
+      let original_defining_expr = L.defining_expr let_expr in
       let new_bindings, defining_expr, ty, r =
-        Simplify_named.simplify_named env r (L.defining_expr let_expr)
+        Simplify_named.simplify_named env r original_defining_expr
           ~result_var:bound_var
       in
       let lifted_constants =
-        Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+        Symbol.Map.diff_domains (R.get_lifted_constants r)
+          already_lifted_constants
       in
       let env = E.add_lifted_constants env lifted_constants in
-      if not (K.compatible (T.kind ty) ~if_used_at:kind) then begin
+      let kind = L.kind let_expr in
+      let new_kind = T.kind ty in
+      if not (K.compatible new_kind ~if_used_at:kind) then begin
         Misc.fatal_errorf "Kind error during simplification of [Let] \
             binding (old kind %a, new kind %a):@ %a"
-          K.print new_kind
           K.print kind
+          K.print new_kind
           Flambda.Let.print let_expr
       end;
       let defining_expr : Reachable.t =
@@ -63,9 +67,12 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           else
             defining_expr
       in
+      let update_benefit_when_defining_expr_removed r =
+        R.map_benefit r (B.remove_code_named original_defining_expr)
+      in
       match defining_expr with
       | Invalid _ ->
-        let r = R.map_benefit r (B.remove_code_named defining_expr) in
+        let r = update_benefit_when_defining_expr_removed r in
         Expr.create_invalid (), r
       | Reachable defining_expr ->
         let env =
@@ -79,7 +86,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let r =
           match let_creation_result with
           | Have_deleted defining_expr ->
-            R.map_benefit r (B.remove_code_named defining_expr)
+            update_benefit_when_defining_expr_removed r
           | Nothing_deleted -> r
         in
         expr, r)

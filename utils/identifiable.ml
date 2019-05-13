@@ -72,6 +72,7 @@ module type Map = sig
   val transpose_keys_and_data_set : key t -> Set.Make(T).t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val diff_domains : 'a t -> 'a t -> 'a t
 end
 
 module type Tbl = sig
@@ -197,6 +198,15 @@ module Make_map (T : Thing) = struct
         in
         add v set m)
       map empty
+
+  let diff_domains t1 t2 =
+    merge (fun _key datum1 datum2 ->
+        match datum1, datum2 with
+        | None, None -> None
+        | Some datum1, None -> Some datum1
+        | None, Some _datum2 -> None
+        | Some _datum1, Some _datum2 -> None)
+      t1 t2
 end
 
 module Make_set (T : Thing) = struct
