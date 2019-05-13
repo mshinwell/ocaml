@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Continuation
+include Exn_continuation
 
 let add_to_name_permutation t1 t2 perm =
   Name_permutation.add_continuation perm (exn_handler t1) (exn_handler t2)

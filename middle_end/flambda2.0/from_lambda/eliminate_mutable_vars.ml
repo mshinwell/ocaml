@@ -192,10 +192,10 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     let apply = transform_apply env apply in
     let exn_continuation = transform_exn_continuation env exn_continuation in
     Apply { apply with exn_continuation; }
-  | Apply_cont (cont, args) ->
+  | Apply_cont (cont, trap_action, args) ->
     let args = Env.rename_variables env args in
     let extra_args = Env.extra_args_for_continuation env cont in
-    Apply_cont (cont, args @ extra_args)
+    Apply_cont (cont, trap_action, args @ extra_args)
   | Switch (id, switch) ->
     let id = Env.rename_variable env id in
     Switch (id, switch)
