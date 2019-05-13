@@ -171,7 +171,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
 
   and simplify_direct_full_application env r ~callee ~args
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~continuation:apply_continuation_param
+        ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
         dbg (inline : Inline_attribute.t) =
     match inline with
@@ -182,11 +182,11 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       let function_decl = function_decl.term_language_function_decl in
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
-        ~f:(fun ~continuation_param exn_continuation params ~body ~my_closure ->
+        ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
           let expr =
             Expr.link_continuations
-              ~bind:continuation_param
-              ~target:apply_continuation_param
+              ~bind:return_continuation
+              ~target:apply_return_continuation
               ~arity:(Function_declaration.result_arity function_decl)
               (Expr.link_continuations
                 ~bind:(Exn_continuation.exn_handler exn_continuation)
@@ -204,7 +204,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_direct_partial_application env r ~callee ~args
         ~callee's_closure_id
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~continuation:apply_continuation_param
+        ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
         dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
         apply =
@@ -235,7 +235,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let function_decl = function_decl.term_language_function_decl in
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~continuation_param:_ _exn_continuation params ~param_relations:_
+      ~f:(fun ~return_continuation:_ _exn_continuation params ~param_relations:_
             ~body:_ ~my_closure:_ ->
         (* Since we're not inlining, the continuation parameters and body
            of the function declaration, etc., are irrelevant. *)
@@ -261,7 +261,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         end;
         let wrapper_var = Variable.create "partial" in
         let wrapper_taking_remaining_args =
-          let continuation_param = Continuation.create () in
+          let return_continuation = Continuation.create () in
           let args = applied_args @ (List.map KP.simple remaining_params) in
           let call_kind =
             Call_kind.create_direct_function_call callee's_closure_id
@@ -269,7 +269,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           in
           let full_application =
             Apply.create ~callee
-              ~continuation:continuation_param
+              ~continuation:return_continuation
               ~exn_continuation
               ~args
               ~call_kind
@@ -294,7 +294,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               (List.rev applied_args_with_closure_vars)
           in
           let params_and_body =
-            Function_params_and_body.create ~continuation_param
+            Function_params_and_body.create ~return_continuation
               ~exn_continuation
               remaining_params
               ~param_relations:T.Typing_env_extension.empty
@@ -327,7 +327,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             ~closure_elements
         in
         let apply_cont =
-          Apply_cont.create apply_continuation_param [Simple.var wrapper_var]
+          Apply_cont.create apply_return_continuation [Simple.var wrapper_var]
         in
         Expr.create_let wrapper_var (K.value ())
           (Named.create_set_of_closures wrapper_taking_remaining_args)
@@ -336,14 +336,14 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_direct_over_application env r ~callee ~args
         ~callee's_closure_id
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~continuation:apply_continuation_param
+        ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
         dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
         apply =
     let function_decl = function_decl.term_language_function_decl in
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~continuation_param:_ _exn_continuation params ~param_relations:_
+      ~f:(fun ~return_continuation:_ _exn_continuation params ~param_relations:_
             ~body:_ ~my_closure:_ ->
         let arity = List.length params in
         assert (arity < List.length args);
@@ -364,7 +364,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let func_param = KP.create (Parameter.wrap func_var) func_var_kind in
         let perform_over_application =
           Apply.create ~callee:(Name.var func_var)
-            ~continuation:apply_continuation_param
+            ~continuation:apply_return_continuation
             ~exn_continuation:apply_exn_continuation
             ~args:remaining_args
             ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())

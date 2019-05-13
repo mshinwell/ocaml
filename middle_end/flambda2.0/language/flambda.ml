@@ -1295,10 +1295,8 @@ end and Function_params_and_body : sig
 
   include Expr_std.S with type t := t
 
-  (* CR mshinwell: Rename [continuation_param] -> [return_continuation]
-     everywhere. *)
   val create
-     : continuation_param:Continuation.t
+     : return_continuation:Continuation.t
     -> Exn_continuation.t
     -> Kinded_parameter.t list
     -> body:Expr.t
@@ -1307,7 +1305,7 @@ end and Function_params_and_body : sig
 
   val pattern_match
      : t
-    -> f:(continuation_param:Continuation.t
+    -> f:(return_continuation:Continuation.t
       -> Exn_continuation.t
       -> Kinded_parameter.t list
       -> body:Expr.t
@@ -1348,7 +1346,7 @@ end = struct
 
   let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
 
-  let create ~continuation_param exn_continuation params ~body ~my_closure =
+  let create ~return_continuation exn_continuation params ~body ~my_closure =
     let t0 : T0.t =
       { body;
       }
@@ -1358,10 +1356,10 @@ end = struct
     in
     let t1 = T1.create (params @ [my_closure]) t0 in
     let t2 = T2.create exn_continuation t1 in
-    create continuation_param t2
+    create return_continuation t2
 
   let pattern_match t ~f =
-    pattern_match t ~f:(fun continuation_param t2 ->
+    pattern_match t ~f:(fun return_continuation t2 ->
       T2.pattern_match t2 ~f:(fun exn_continuation t1 ->
         T1.pattern_match t1 ~f:(fun params_and_my_closure t0 ->
           let params, my_closure =
@@ -1370,7 +1368,7 @@ end = struct
               List.rev params_rev, Kinded_parameter.var my_closure
             | [] -> assert false  (* see [create], above. *)
           in
-          f ~continuation_param exn_continuation params ~body:t0.body
+          f ~return_continuation exn_continuation params ~body:t0.body
             ~my_closure)))
 end and Function_declaration : sig
   include Expr_std.S
@@ -1462,10 +1460,10 @@ end = struct
        function to print in a more human-readable form will probably look more
        like this code. *)
     Function_params_and_body.pattern_match params_and_body
-      ~f:(fun ~continuation_param exn_continuation params ~body ~my_closure ->
+      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
         fprintf ppf "@[<hov 1>(\
             @[<hov 1>(closure_origin@ %a)@]@ \
-            @[<hov 1>(continuation_param@ %a)@]@ \
+            @[<hov 1>(return_continuation@ %a)@]@ \
             @[<hov 1>(exn_continuation@ %a)@]@ \
             @[<hov 1>(stub@ %b)@]@ \
             @[<hov 1>(dbg@ %a)@]@ \
@@ -1478,7 +1476,7 @@ end = struct
             @[<hov 1>(body@ %a)@]@ \
             )@]"
           Closure_origin.print closure_origin
-          Continuation.print continuation_param
+          Continuation.print return_continuation
           Exn_continuation.print exn_continuation
           stub
           Debuginfo.print_compact dbg

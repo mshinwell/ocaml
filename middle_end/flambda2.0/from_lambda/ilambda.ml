@@ -57,7 +57,7 @@ and let_mutable = {
 
 and function_declaration = {
   kind : Lambda.function_kind;
-  continuation_param : Continuation.t;
+  return_continuation : Continuation.t;
   exn_continuation : exn_continuation;
   params : (Ident.t * Lambda.value_kind) list;
   return : Lambda.value_kind;
@@ -115,7 +115,7 @@ let print_ident_and_value_kind ppf (id, kind) =
     Printlambda.value_kind' kind
 
 let rec print_function ppf
-      ({ continuation_param; kind; params; body; free_idents_of_body = _; attr;
+      ({ return_continuation; kind; params; body; free_idents_of_body = _; attr;
          exn_continuation; return = _; loc = _; stub = _;
        } : function_declaration) =
   let pr_params ppf params =
@@ -131,7 +131,7 @@ let rec print_function ppf
         params;
       fprintf ppf ")"
   in
-  fprintf ppf "@[<2>(function <%a> " Continuation.print continuation_param;
+  fprintf ppf "@[<2>(function <%a> " Continuation.print return_continuation;
   begin match exn_continuation.extra_args with
   | [] -> fprintf ppf "<exn=%a>" Continuation.print exn_continuation.exn_handler
   | extra_args ->
