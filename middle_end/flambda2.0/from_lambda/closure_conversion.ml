@@ -29,7 +29,6 @@ module Static_part = Flambda_static.Static_part
 module K = Flambda_kind
 module LC = Lambda_conversions
 module P = Flambda_primitive
-module T = Flambda_type
 
 type t = {
   current_unit_id : Ident.t;
@@ -118,7 +117,7 @@ let tupled_function_call_stub
   let params_and_body =
     Flambda.Function_params_and_body.create
       ~continuation_param
-      ~exn_continuation
+      exn_continuation
       [tuple_param]
       ~body
       ~my_closure
@@ -138,7 +137,11 @@ let register_const t (constant : Static_part.t) name
   let current_compilation_unit = Compilation_unit.get_current_exn () in
   (* Create a variable to ensure uniqueness of the symbol. *)
   let var = Variable.create ~current_compilation_unit name in
-  let symbol = Flambda_utils.make_variable_symbol var in
+  let symbol =
+    Symbol.create (Compilation_unit.get_current_exn ())
+      (Linkage_name.create
+         (Variable.unique_name (Variable.rename var)))
+  in
   t.declared_symbols <- (symbol, constant) :: t.declared_symbols;
   Symbol symbol, name
 
@@ -291,11 +294,9 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create params
-        ~param_relations:T.Typing_env_extension.empty
         ~handler:code_after_call
     in
     Flambda.Continuation_handler.create ~params_and_handler
-      ~inferred_typing:T.Parameters.empty
       ~stub:false
       ~is_exn_handler:false
   in
@@ -367,10 +368,10 @@ let infer_let_kind (defining_expr : Named.t)
      will be verified by invariant checks. In other cases, we infer the Flambda
      kind. *)
   match defining_expr with
-  | Prim (Unary (Discriminant_of_int, _), _dbg) -> K.fabricated ()
+  | Prim (Unary (Discriminant_of_int, _), _dbg) -> K.fabricated
   | Set_of_closures _ ->
     begin match lambda_kind with
-    | Pgenval -> K.fabricated ()
+    | Pgenval -> K.fabricated
     | _ ->
       Misc.fatal_errorf "Wrong Lambda kind %a for binding of the following \
           set of closures:@ %a"
@@ -573,8 +574,7 @@ and close_let_rec t env ~defs ~body =
       (close t env body)
       function_declarations
   in
-  Expr.create_let set_of_closures_var (K.fabricated ())
-    set_of_closures body
+  Expr.create_let set_of_closures_var K.fabricated set_of_closures body
 
 and close_functions t external_env function_declarations =
   let all_free_idents =
@@ -615,10 +615,7 @@ and close_functions t external_env function_declarations =
       Var_within_closure.Map.empty
   in
   let set_of_closures =
-    Flambda.Set_of_closures.create ~function_decls
-      ~set_of_closures_ty:(T.any_value ())
-      ~closure_elements
-      ~direct_call_surrogates:Closure_id.Map.empty
+    Flambda.Set_of_closures.create ~function_decls ~closure_elements
   in
   Named.create_set_of_closures set_of_closures
 
@@ -738,20 +735,17 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let fun_decl =
     let closure_origin = Closure_origin.create my_closure_id in
-    let inline = LC.inline_attribute (Function_decl.inline decl) in
-    let specialise = LC.specialise_attribute (Function_decl.specialise decl) in
-    let params_and_body =
-      Flambda.Function_params_and_body.create params
-        ~param_relations:T.Typing_env_extension.empty
-        ~body
-        ~my_closure
-    in
     let exn_continuation =
       close_exn_continuation external_env (Function_decl.exn_continuation decl)
     in
+    let inline = LC.inline_attribute (Function_decl.inline decl) in
+    let specialise = LC.specialise_attribute (Function_decl.specialise decl) in
+    let params_and_body =
+      Flambda.Function_params_and_body.create
+        ~continuation_param:(Function_decl.continuation_param decl)
+        exn_continuation params ~body ~my_closure
+    in
     Flambda.Function_declaration.create ~closure_origin
-      ~continuation_param:(Function_decl.continuation_param decl)
-      ~exn_continuation
       ~params_and_body
       ~result_arity:[LC.value_kind return]
       ~stub
@@ -821,11 +815,9 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]
-        ~param_relations:T.Typing_env_extension.empty
         ~handler:load_fields_body;
     in
     Flambda.Continuation_handler.create ~params_and_handler
-      ~inferred_typing:T.Parameters.empty
       ~stub:true
       ~is_exn_handler:false
   in

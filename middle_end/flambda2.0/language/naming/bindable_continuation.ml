@@ -18,8 +18,6 @@
 
 include Continuation
 
-let print_with_cache ~cache:_ ppf t = print ppf t
-
 let free_names t = Name_occurrences.singleton_continuation t
 
 let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
