@@ -39,6 +39,10 @@ type exn_continuation =
     extra_args : (Ident.t * Lambda.value_kind) list;
   }
 
+type trap_action =
+  | Push of { exn_handler : Continuation.t; }
+  | Pop of { exn_handler : Continuation.t; }
+
 type t =
   | Let of Ident.t * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
@@ -46,7 +50,7 @@ type t =
     (** Value "let rec" has already been expanded by [Prepare_lambda]. *)
   | Let_cont of let_cont
   | Apply of apply
-  | Apply_cont of Continuation.t * Ident.t list
+  | Apply_cont of Continuation.t * trap_action option * Ident.t list
     (** Unlike in Flambda, [Apply_cont] is not used for the raising of
         exceptions; use [Prim Praise] instead. *)
   | Switch of Ident.t * switch
