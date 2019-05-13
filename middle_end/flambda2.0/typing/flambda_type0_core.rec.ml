@@ -422,13 +422,14 @@ let kind (t : t) =
   | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
   | Fabricated _ -> K.fabricated
 
-let block tag ~(fields : t list) =
-  (* CR mshinwell: We should check the field kinds against the tag. *)
+let block tag ~(fields : t list) ~field_kind =
+  (* CR mshinwell: We should check the field kinds against the tag; and
+     check the kinds of the [fields] against [field_kind]. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
     Misc.fatal_error "Block too long for target"
   | Some _size ->
-    let blocks = Blocks.create ~field_tys:fields (Closed tag) in
+    let blocks = Blocks.create ~field_tys:fields field_kind (Closed tag) in
     let blocks_imms : blocks_and_tagged_immediates =
       { immediates = Immediates.create_bottom ();
         blocks;
@@ -439,8 +440,9 @@ let block tag ~(fields : t list) =
 (* CR mshinwell: bad name *)
 let block_of_values tag ~(fields : ty_value list) =
   block tag ~fields:(List.map (fun field : t -> Value field) fields)
+    ~field_kind:K.value
 
-let block_with_size_at_least ~n ~field_n_minus_one =
+let block_with_size_at_least ~n ~field_n_minus_one ~field_kind =
   let type_of_field_n_minus_one =
     alias_type_of K.value (Simple.var field_n_minus_one)
   in
@@ -449,7 +451,7 @@ let block_with_size_at_least ~n ~field_n_minus_one =
       if index = n - 1 then type_of_field_n_minus_one
       else any_value ())
   in
-  let blocks = Blocks.create ~field_tys Open in
+  let blocks = Blocks.create ~field_tys field_kind Open in
   let blocks_imms : blocks_and_tagged_immediates =
     { immediates = Immediates.create_bottom ();
       blocks;

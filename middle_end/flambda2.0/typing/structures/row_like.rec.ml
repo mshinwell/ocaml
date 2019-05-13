@@ -17,18 +17,18 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make
-  (Tag : Hashtbl.With_map)
-  (Index : Hashtbl.With_map)
+  (Tag : Identifiable.S)
+  (Index : Identifiable.S)
   (Tag_and_index : sig
     type t = Tag.t * Index.t
-    include Hashtbl.With_map with type t := t
+    include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Type_equality_env := Type_equality_env
-    with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension) =
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
+    with type type_equality_result := Type_equality_result.t
+    with type typing_env_extension := Typing_env_extension.t) =
 struct
   module Tag_and_index = struct
     include Tag_and_index
@@ -113,34 +113,25 @@ struct
 
     module Meet_or_join
       (E : Either_meet_or_join_intf.S
-        with module Join_env := Join_env
-        with module Meet_env := Meet_env
-        with module Typing_env_extension := Typing_env_extension) =
+        with type join_env := Join_env.t
+        with type meet_env := Meet_env.t
+        with type typing_env_extension := Typing_env_extension.t) =
     struct
       let meet_or_join env t1 t2 =
         let ({ known = known1; at_least = at_least1; } : t) = t1 in
         let ({ known = known2; at_least = at_least2; } : t) = t2 in
-        let one_side_only index1 maps_to1 at_least2
-              ~get_equations_to_deposit1 =
+        let one_side_only index1 maps_to1 at_least2 =
           let from_at_least2 =
             Index.Map.find_last_opt
               (fun index -> Index.compare index index1 <= 0)
               at_least2
           in
-          (* XXX This should widen the products as required rather than
-             having such code in RP0 *)
+          (* XXX This should widen the products as required *)
           begin match from_at_least2 with
           | None ->
             begin match E.op () with
             | Meet -> None
-            | Join ->
-              let maps_to1 =
-                Maps_to.add_or_meet_equations
-                  maps_to1
-                  (Join_env.central_environment env)
-                  (get_equations_to_deposit1 env)
-              in
-              Some maps_to1
+            | Join -> Some maps_to1
             end
           | Some (index2, from_at_least2) ->
             assert (Index.compare index2 index1 <= 0);
@@ -160,10 +151,8 @@ struct
           match maps_to1, maps_to2 with
           | Some maps_to1, None ->
             one_side_only index maps_to1 at_least2
-              ~get_equations_to_deposit1:Join_env.holds_on_left
           | None, Some maps_to2 ->
             one_side_only index maps_to2 at_least1
-              ~get_equations_to_deposit1:Join_env.holds_on_right
           | Some maps_to1, Some maps_to2 ->
             let maps_to =
               E.switch' Maps_to.meet Maps_to.join env
@@ -213,18 +202,17 @@ struct
       else Tag_and_index.Map.get_singleton known
 
     let join_of_all_maps_to env t =
-let maps_to =
-      List.fold_left (fun result maps_to ->
-Format.eprintf "Joining one Maps_to:@ %a\n%!"
-(Maps_to.print_with_cache ~cache:(Printing_cache.create ())) maps_to;
-          Maps_to.join env maps_to result)
-        (Maps_to.bottom ())
-        (all_maps_to t)
-in
-Format.eprintf "Join of all Maps_to:@ %a\n%!"
-(Maps_to.print_with_cache ~cache:(Printing_cache.create ())) maps_to;
-maps_to
+      match all_maps_to t with
+      | [] -> []
+      | [maps_to] -> maps_to
+      | maps_to::other_maps_to ->
+        List.fold_left (fun result maps_to ->
+            Maps_to.join env maps_to result)
+          maps_to
+          other_maps_to
   end
+
+  (* The code below lifts [T0.t] to be wrapped in an [Or_unknown.t]. *)
 
   type t = T0.t Or_unknown.t
 
@@ -298,11 +286,6 @@ maps_to
     match t with
     | Known t0 -> T0.get_singleton t0
     | Unknown -> None
-
-  let free_names (t : t) =
-    match t with
-    | Known t0 -> T0.free_names t0
-    | Unknown -> Name_occurrences.create ()
 
   let classify (t : t) : unit Or_unknown_or_bottom.t =
     match t with

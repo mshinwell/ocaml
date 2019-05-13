@@ -28,5 +28,3 @@ let meet = RP.meet
 let join = RP.join
 
 let equal = RP.equal
-let free_names = RP.free_names
-let apply_name_permutation = RP.apply_name_permutation
