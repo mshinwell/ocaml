@@ -49,12 +49,12 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
                   Kinded_parameter.create param kind)
                 result_arity
             in
-            Simplify_toplevel.simplify_toplevel env r body
-              ~continuation:continuation_param
+            Simplify_toplevel.simplify_toplevel env body
+              ~continuation_param
               ~continuation_params
-              ~exn_continuation
+              exn_continuation
               ~descr
-              ~scope_level_for_lifted_constants:42 (* XXX *)
+              ~scope_level_for_lifted_constants:Scope_level.initial (* XXX *)
           in
           Function_params_and_body.create ~continuation_param
             ~exn_continuation params body ~my_closure)
