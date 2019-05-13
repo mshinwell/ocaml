@@ -23,7 +23,7 @@ module type S = sig
     -> Flambda.Named.t
     -> result_var:Variable.t
     -> (Variable.t * Flambda_kind.t * Flambda.Named.t) list
-         * Flambda.Reachable.t
+         * Reachable.t
          * Flambda_type.t
          * Simplify_env_and_result.Result.t
 
