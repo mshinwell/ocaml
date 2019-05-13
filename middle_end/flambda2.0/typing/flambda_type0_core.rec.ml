@@ -580,7 +580,7 @@ module Set_of_closures_entry = struct
     Format.fprintf ppf
       "@[<hov 1>(@\
         @[<hov 1>(by_closure_id@ %a)@])@]"
-      (Types_by_closure_id.print ~cache) by_closure_id
+      (Types_by_closure_id.print_with_cache ~cache) by_closure_id
 
   let equal = Type_equality.equal_set_of_closures_entry
 
@@ -614,7 +614,7 @@ module Closures_entry = struct
         @[<hov 1>(set_of_closures@ %a)@])@]"
       (Type_printers.print_function_declaration_with_cache ~cache)
         function_decl
-      (Closure_elements.print ~cache) closure_elements
+      (Closure_elements.print_with_cache ~cache) closure_elements
       (Type_printers.print_ty_fabricated_with_cache ~cache) set_of_closures
 
   let add_or_meet_equations t _env _equations =

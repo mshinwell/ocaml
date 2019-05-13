@@ -129,7 +129,7 @@ let print_of_kind_value_boxed_number (type n)
       print_ty_naked_number i
 
 let rec print_of_kind_value ~cache ppf
-        ((of_kind_value : Flambda_types.of_kind_value), _) =
+        (of_kind_value : Flambda_types.of_kind_value) =
   match of_kind_value with
   | Blocks_and_tagged_immediates { blocks; immediates; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
@@ -139,12 +139,12 @@ let rec print_of_kind_value ~cache ppf
         @[<v>@[<hov 1>(blocks@ %a)@]@ \
         @[<hov 1>(immediates@ %a)@]@])"
       (Blocks.print_with_cache ~cache) blocks
-      (Immediates.print ~cache) immediates
+      (Immediates.print_with_cache ~cache) immediates
   | Boxed_number n ->
     Format.fprintf ppf "@[(Boxed_number %a)@]"
       print_of_kind_value_boxed_number n
   | Closures { by_closure_id; } ->
-    Closures_entry_by_closure_id.print ~cache ppf by_closure_id
+    Closures_entry_by_closure_id.print_with_cache ~cache ppf by_closure_id
   | String str_infos ->
     Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
@@ -153,9 +153,6 @@ and print_ty_value_with_cache ~cache ppf (ty : Flambda_types.ty_value) =
 
 and print_inlinable_function_declaration_with_cache ~cache ppf
       (({ function_decl;
-          invariant_params;
-          size;
-          direct_call_surrogate;
         } : Flambda_types.inlinable_function_declaration) as decl) =
   Printing_cache.with_cache cache ppf "inlinable_fundecl" decl
     (fun ppf () ->
@@ -163,7 +160,7 @@ and print_inlinable_function_declaration_with_cache ~cache ppf
         "@[<hov 1>(Inlinable@ \
           @[<hov 1>(function_decl@ %a)@]\
           )@]"
-        Term_language_function_declaration.print function_decl
+        Term_language_function_declaration.print function_decl)
 
 and print_function_declaration_with_cache ~cache ppf
       (decl : Flambda_types.function_declaration) =
@@ -173,13 +170,13 @@ and print_function_declaration_with_cache ~cache ppf
   | Non_inlinable -> Format.pp_print_string ppf "Non_inlinable"
 
 and print_of_kind_fabricated ~cache ppf
-      ((o : Flambda_types.of_kind_fabricated), _) =
+      (o : Flambda_types.of_kind_fabricated) =
   match o with
   | Discriminants discriminants ->
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
-      (Discriminants.print ~cache) discriminants
+      (Discriminants.print_with_cache ~cache) discriminants
   | Set_of_closures { closures; } ->
-    Closure_ids.print ~cache ppf closures
+    Closure_ids.print_with_cache ~cache ppf closures
 
 and print_ty_fabricated_with_cache ~cache ppf
       (ty : Flambda_types.ty_fabricated) =
