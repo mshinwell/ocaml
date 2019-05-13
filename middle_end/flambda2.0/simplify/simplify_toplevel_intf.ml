@@ -20,9 +20,9 @@ module type S = sig
   val simplify_toplevel
      : Simplify_env_and_result.Env.t
     -> Flambda.Expr.t
-    -> continuation:Continuation.t
+    -> continuation_param:Continuation.t
     -> continuation_params:Kinded_parameter.t list
-    -> exn_continuation:Continuation.t
+    -> Exn_continuation.t
     -> descr:string
     -> scope_level_for_lifted_constants:Scope_level.t
     -> Flambda.Expr.t * Simplify_env_and_result.Result.t
