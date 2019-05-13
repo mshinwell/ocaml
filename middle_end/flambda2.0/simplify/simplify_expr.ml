@@ -189,7 +189,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       let function_decl = function_decl.term_language_function_decl in
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
-        ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+        ~f:(fun ~return_continuation exn_continuation params ~body
+                ~my_closure ->
           let expr =
             Expr.link_continuations
               ~bind:return_continuation
@@ -587,7 +588,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     | Inline handler ->
       Flambda.Continuation_params_and_handler.pattern_match
         (Flambda.Continuation_handler.params_and_handler handler)
-        ~f:(fun params ~param_relations:_ ~handler ->
+        ~f:(fun params ~handler ->
           if List.compare_lengths params args <> 0 then begin
             Misc.fatal_errorf "Wrong arity for [Apply_cont]: %a"
               AC.print apply_cont
