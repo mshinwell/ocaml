@@ -14,20 +14,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Desired semantics of [Apply_cont] expressions in the event that they are
-    compiled to "raise". *)
+(** Actions affecting exception traps on the stack.  These are always
+    associated with an [Apply_cont] node; the trap action is executed before
+    the application of the continuation.
+
+    [Pop] may not appear to need the [exn_handler] value during Flambda
+    passes---but in fact it does, since it compiles to a reference to such
+    continuation, and must not be moved out of its scope.
+
+    Beware: continuations cannot be used both as an exception handler and as
+    a normal continuation (since continuations used as exception handlers
+    use a calling convention that may differ from normal).
+*)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t =
+type raise_kind =
   | Regular
   | Reraise
   | No_trace
+
+type t =
+  | Push of { exn_handler : Continuation.t; }
+  | Pop of {
+      exn_handler : Continuation.t;
+      raise_kind : raise_kind option;
+    }
 
 include Expr_std.S with type t := t
 
 module Option : sig
   type nonrec t = t option
 
-  include Expr_std.S with type t := t
+  val print : Format.formatter -> t -> unit
 end
