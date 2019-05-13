@@ -20,32 +20,29 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Flambda_types : sig
-    type t
-    type 'a ty
-  end
-
-  module Join_env : sig type t end
-  module Typing_env_extension : sig type t end
-
+  type flambda_type
+  type 'a ty
+  type 'a of_kind_naked_number
+  type join_env
+  type typing_env_extension
   type of_kind_foo
 
   val kind : unit -> Flambda_kind.t
 
-  val to_type : of_kind_foo Flambda_types.ty -> Flambda_types.t
+  val to_type : of_kind_foo ty -> flambda_type
 
-  val force_to_kind : Flambda_types.t -> of_kind_foo Flambda_types.ty
+  val force_to_kind : flambda_type -> of_kind_foo ty
 
   (* CR mshinwell: Rename to [print_ty_with_cache]. *)
   val print_ty
      : cache:Printing_cache.t
     -> Format.formatter
-    -> of_kind_foo Flambda_types.ty
+    -> of_kind_foo ty
     -> unit
 
   val meet_or_join_of_kind_foo
-     : Join_env.t
+     : join_env
     -> of_kind_foo
     -> of_kind_foo
-    -> (of_kind_foo * Typing_env_extension.t) Or_absorbing.t
+    -> (of_kind_foo * typing_env_extension) Or_absorbing.t
 end

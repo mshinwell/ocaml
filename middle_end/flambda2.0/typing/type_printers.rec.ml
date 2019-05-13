@@ -21,41 +21,38 @@ let print_or_alias print_descr ppf (or_alias : _ Flambda_types.or_alias) =
   | No_alias descr -> print_descr ppf descr
   | Equals simple ->
     Format.fprintf ppf "@[(%s=%s %a)@]"
-      (Misc_color.bold_red ())
-      (Misc_color.reset ())
+      (Misc.Color.bold_red ())
+      (Misc.Color.reset ())
       Simple.print simple
   | Type export_id ->
     Format.fprintf ppf "@[(%s=export_id%s %a)@]"
-      (Misc_color.bold_red ())
-      (Misc_color.reset ())
+      (Misc.Color.bold_red ())
+      (Misc.Color.reset ())
       Export_id.print export_id
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
 
 let print_unknown_or_join print_contents ppf
       (o : _ Flambda_types.unknown_or_join) =
-  let colour = Misc_color.bold_red () in
+  let colour = Misc.Color.bold_red () in
   match o with
   | Unknown ->
     if unicode then
-      Format.fprintf ppf "%s\u{22a4}%s" colour (Misc_color.reset ())
+      Format.fprintf ppf "%s\u{22a4}%s" colour (Misc.Color.reset ())
     else
-      Format.fprintf ppf "%sT%s" colour (Misc_color.reset ())
-  | Join [] ->
+      Format.fprintf ppf "%sT%s" colour (Misc.Color.reset ())
+  | Bottom ->
     if unicode then
-      Format.fprintf ppf "%s\u{22a5}%s" colour (Misc_color.reset ())
+      Format.fprintf ppf "%s\u{22a5}%s" colour (Misc.Color.reset ())
     else
-      Format.fprintf ppf "%s_|_%s" colour (Misc_color.reset ())
-  | Join [contents] -> print_contents ppf contents
-  | Join incompatibles ->
-    Format.fprintf ppf "@[(Join_incompatible@ (%a))@]"
-      (Format.pp_print_list print_contents) incompatibles
+      Format.fprintf ppf "%s_|_%s" colour (Misc.Color.reset ())
+  | Ok contents -> print_contents ppf contents
 
 let print_ty_generic print_contents ppf ty =
   (print_or_alias (print_unknown_or_join print_contents)) ppf ty
 
 let print_of_kind_naked_number (type n) ppf
-      ((n : n Flambda_types.of_kind_naked_number), _perm) =
+      (n : n Flambda_types.of_kind_naked_number) =
   match n with
   | Immediate i ->
     Format.fprintf ppf "@[(Naked_immediates@ (%a))@]"
@@ -136,7 +133,7 @@ let rec print_of_kind_value ~cache ppf
   match of_kind_value with
   | Blocks_and_tagged_immediates { blocks; immediates; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
-       they're empty.  Similarly we can elide the extensions when empty. *)
+       they're empty. *)
     Format.fprintf ppf
       "(Blocks_and_immediates@ \
         @[<v>@[<hov 1>(blocks@ %a)@]@ \
@@ -164,14 +161,9 @@ and print_inlinable_function_declaration_with_cache ~cache ppf
     (fun ppf () ->
       Format.fprintf ppf
         "@[<hov 1>(Inlinable@ \
-          @[<hov 1>(function_decl@ %a)@]@ \
-          @[<hov 1>(invariant_params@ %a)@]@ \
-          @[<hov 1>(size@ %a)@]@ \
-          @[<hov 1>(direct_call_surrogate@ %a)@])@]"
+          @[<hov 1>(function_decl@ %a)@]\
+          )@]"
         Term_language_function_declaration.print function_decl
-        Variable.Set.print (Lazy.force invariant_params)
-        (Misc.Stdlib.Option.print Format.pp_print_int) (Lazy.force size)
-        (Misc.Stdlib.Option.print Closure_id.print) direct_call_surrogate)
 
 and print_function_declaration_with_cache ~cache ppf
       (decl : Flambda_types.function_declaration) =

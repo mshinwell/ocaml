@@ -120,7 +120,7 @@ let force_to_kind_fabricated t =
 
 let ty_is_obviously_bottom (ty : _ ty) =
   match ty with
-  | No_alias (Join []) -> true
+  | No_alias Bottom -> true
   | _ -> false
 
 let is_obviously_bottom (t : t) =
@@ -181,27 +181,27 @@ let alias_type (kind : K.t) export_id : t =
     Fabricated (Type export_id)
 
 let bottom_as_ty_value () : ty_value =
-  No_alias (Join [])
+  No_alias Bottom
 
 let bottom_as_ty_fabricated () : ty_fabricated =
-  No_alias (Join [])
+  No_alias Bottom
 
 let bottom (kind : K.t) : t =
   match kind with
   | Value ->
-    Value (No_alias (Join []))
+    Value (No_alias Bottom)
   | Naked_number Naked_immediate ->
-    Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate)
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
   | Naked_number Naked_float ->
-    Naked_number (No_alias (Join []), K.Naked_number.Naked_float)
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
   | Naked_number Naked_int32 ->
-    Naked_number (No_alias (Join []), K.Naked_number.Naked_int32)
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
   | Naked_number Naked_int64 ->
-    Naked_number (No_alias (Join []), K.Naked_number.Naked_int64)
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
   | Naked_number Naked_nativeint ->
-    Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint)
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
   | Fabricated ->
-    Fabricated (No_alias (Join []))
+    Fabricated (No_alias Bottom)
 
 let any_value_as_ty_value () : ty_value =
   No_alias Unknown
@@ -216,10 +216,10 @@ let any_value () : t =
   Value (any_value_as_ty_value ())
 
 let any_tagged_immediate () : t =
-  Value (No_alias (Join [Blocks_and_tagged_immediates {
+  Value (No_alias (Ok (Blocks_and_tagged_immediates {
     immediates = Immediates.create_unknown ();
     blocks = Blocks.create_bottom ();
-  }, Name_permutation.create ()]))
+  })))
 
 let any_naked_immediate () : t =
   Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
@@ -258,28 +258,23 @@ let unknown (kind : K.t) =
 
 let these_naked_immediates (is : Immediate.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Immediate is in
-  Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
-    K.Naked_number.Naked_immediate)
+  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
 
 let these_naked_floats (is : Float.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Float is in
-  Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
-    K.Naked_number.Naked_float)
+  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
 
 let these_naked_int32s (is : Int32.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Int32 is in
-  Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
-    K.Naked_number.Naked_int32)
+  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
 
 let these_naked_int64s (is : Int64.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Int64 is in
-  Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
-    K.Naked_number.Naked_int64)
+  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
 
 let these_naked_nativeints (is : Targetint.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Nativeint is in
-  Naked_number (No_alias (Join [of_kind, Name_permutation.create ()]),
-    K.Naked_number.Naked_nativeint)
+  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
 
 let this_naked_immediate i =
   these_naked_immediates (Immediate.Set.singleton i)
@@ -290,7 +285,7 @@ let this_naked_float f =
 let this_naked_float_as_ty_naked_float f =
   let fs = Float.Set.singleton f in
   let of_kind : _ of_kind_naked_number = Float fs in
-  No_alias (Join [of_kind, Name_permutation.create ()])
+  No_alias (Ok of_kind)
 
 let this_naked_int32 i =
   these_naked_int32s (Int32.Set.singleton i)
@@ -304,9 +299,7 @@ let this_naked_nativeint i =
 let box_float (t : t) : t =
   match t with
   | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
-    Value (No_alias (Join [
-      Boxed_number (Boxed_float ty_naked_float),
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (Boxed_number (Boxed_float ty_naked_float))))
   | Value _
   | Naked_number _
   | Fabricated _ ->
@@ -316,9 +309,7 @@ let box_float (t : t) : t =
 let box_int32 (t : t) : t =
   match t with
   | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
-    Value (No_alias (Join [
-      Boxed_number (Boxed_int32 ty_naked_int32),
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (Boxed_number (Boxed_int32 ty_naked_int32))))
   | Value _
   | Naked_number _
   | Fabricated _ ->
@@ -328,9 +319,7 @@ let box_int32 (t : t) : t =
 let box_int64 (t : t) : t =
   match t with
   | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
-    Value (No_alias (Join [
-      Boxed_number (Boxed_int64 ty_naked_int64),
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (Boxed_number (Boxed_int64 ty_naked_int64))))
   | Value _
   | Naked_number _
   | Fabricated _ ->
@@ -340,9 +329,7 @@ let box_int64 (t : t) : t =
 let box_nativeint (t : t) : t =
   match t with
   | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
-    Value (No_alias (Join [
-      Boxed_number (Boxed_nativeint ty_naked_nativeint),
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (Boxed_number (Boxed_nativeint ty_naked_nativeint))))
   | Value _
   | Naked_number _
   | Fabricated _ ->
@@ -351,35 +338,16 @@ let box_nativeint (t : t) : t =
 
 let these_tagged_immediates imms : t =
   if Immediate.Set.is_empty imms then
-    bottom (K.value ())
+    bottom K.value
   else
-    let immediates =
-      Immediates.create_with_equations (
-        Immediate.Map.of_set (fun _imm ->
-            Typing_env_extension.empty ())
-          imms)
-    in
+    let immediates = Immediates.create imms in
     let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
       { immediates;
         blocks = Blocks.create_bottom ();
       }
     in
-    Value (No_alias (Join [
-      Blocks_and_tagged_immediates blocks_and_tagged_immediates,
-        Name_permutation.create ()]))
-
-let these_tagged_immediates_with_envs env_map =
-  if Immediate.Map.is_empty env_map then
-    bottom (K.value ())
-  else
-    let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-      { immediates = Immediates.create_with_equations env_map;
-        blocks = Blocks.create_bottom ();
-      }
-    in
-    Value (No_alias (Join [
-      Blocks_and_tagged_immediates blocks_and_tagged_immediates,
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (
+      Blocks_and_tagged_immediates blocks_and_tagged_immediates)))
 
 let this_tagged_immediate imm =
   these_tagged_immediates (Immediate.Set.singleton imm)
@@ -401,22 +369,18 @@ let these_boxed_int32s f = box_int32 (these_naked_int32s f)
 let these_boxed_int64s f = box_int64 (these_naked_int64s f)
 let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-let these_discriminants_as_ty_fabricated discriminants_to_env_extension
-      : ty_fabricated =
-  let discriminants =
-    Discriminants.create_with_equations discriminants_to_env_extension
-  in
-  No_alias (Join [Discriminants discriminants, Name_permutation.create ()])
+let these_discriminants_as_ty_fabricated discriminants : ty_fabricated =
+  let discriminants = Discriminants.create discriminants in
+  No_alias (Ok (Discriminants discriminants))
 
-let these_discriminants discriminants_to_env_extension : t =
-  Fabricated (
-    these_discriminants_as_ty_fabricated discriminants_to_env_extension)
+let these_discriminants discriminants : t =
+  Fabricated (these_discriminants_as_ty_fabricated discriminants)
 
-let this_discriminant_as_ty_fabricated discriminant =
+let this_discriminant_as_ty_fabricated discriminant : ty_fabricated =
   let discriminants =
     Discriminants.create (Discriminant.Set.singleton discriminant)
   in
-  No_alias (Join [Discriminants discriminants, Name_permutation.create ()])
+  No_alias (Ok (Discriminants discriminants))
 
 let this_discriminant discriminant : t =
   Fabricated (this_discriminant_as_ty_fabricated discriminant)
@@ -430,7 +394,7 @@ let this_immutable_string_as_ty_value str : ty_value =
       ~size:(Targetint.OCaml.of_int (String.length str))
   in
   let str = String_info.Set.singleton str in
-  No_alias (Join [String str, Name_permutation.create ()])
+  No_alias (Ok (String str))
 
 let this_immutable_string str : t =
   Value (this_immutable_string_as_ty_value str)
@@ -438,7 +402,7 @@ let this_immutable_string str : t =
 let immutable_string_as_ty_value ~size : ty_value =
   let str = String_info.create ~contents:Unknown_or_mutable ~size in
   let str = String_info.Set.singleton str in
-  No_alias (Join [String str, Name_permutation.create ()])
+  No_alias (Ok (String str))
 
 let immutable_string ~size : t =
   Value (immutable_string_as_ty_value ~size)
@@ -446,68 +410,17 @@ let immutable_string ~size : t =
 let mutable_string ~size : t =
   let str = String_info.create ~contents:Unknown_or_mutable ~size in
   let str = String_info.Set.singleton str in
-  Value (No_alias (Join [String str, Name_permutation.create ()]))
+  Value (No_alias (Ok (String str)))
 
 let kind (t : t) =
   match t with
-  | Value _ -> K.value ()
-  | Naked_number (_, K.Naked_number.Naked_immediate) -> K.naked_immediate ()
-  | Naked_number (_, K.Naked_number.Naked_float) -> K.naked_float ()
-  | Naked_number (_, K.Naked_number.Naked_int32) -> K.naked_int32 ()
-  | Naked_number (_, K.Naked_number.Naked_int64) -> K.naked_int64 ()
-  | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint ()
-  | Fabricated _ -> K.fabricated ()
-
-let mutable_float_array ~size : t =
-  match Targetint.OCaml.to_int_option size with
-  | None ->
-    (* CR mshinwell: Here and elsewhere, this should be a normal compilation
-       error, not a fatal error. *)
-    Misc.fatal_error "Mutable float array too long for host"
-  | Some size ->
-    let field_tys = List.init size (fun _index -> any_naked_float ()) in
-    let blocks =
-      Blocks.create ~field_tys (Closed Tag.double_array_tag)
-    in
-    let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Immediates.create_bottom ();
-        blocks;
-      }
-    in
-    Value (No_alias (Join [
-      Blocks_and_tagged_immediates blocks_imms,
-      Name_permutation.create ()]))
-
-let immutable_float_array fields : t =
-  match Targetint.OCaml.of_int_option (Array.length fields) with
-  | None ->
-    Misc.fatal_error "Immutable float array too long for target"
-  | Some _size ->
-    let field_tys =
-      Array.map (fun ty_naked_number : t ->
-          Naked_number (ty_naked_number, K.Naked_number.Naked_float))
-        fields
-    in
-    let blocks =
-      Blocks.create ~field_tys:(Array.to_list field_tys)
-        (Closed Tag.double_array_tag)
-    in
-    let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Immediates.create_bottom ();
-        blocks;
-      }
-    in
-    Value (No_alias (Join [
-      Blocks_and_tagged_immediates blocks_imms,
-      Name_permutation.create ()]))
-
-let this_immutable_float_array fields : t =
-  let make_field f : _ ty_naked_number =
-    No_alias (Join [
-      Float (Float.Set.singleton f), Name_permutation.create ()])
-  in
-  let fields = Array.map make_field fields in
-  immutable_float_array fields
+  | Value _ -> K.value
+  | Naked_number (_, K.Naked_number.Naked_immediate) -> K.naked_immediate
+  | Naked_number (_, K.Naked_number.Naked_float) -> K.naked_float
+  | Naked_number (_, K.Naked_number.Naked_int32) -> K.naked_int32
+  | Naked_number (_, K.Naked_number.Naked_int64) -> K.naked_int64
+  | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
+  | Fabricated _ -> K.fabricated
 
 let block tag ~(fields : t list) =
   (* CR mshinwell: We should check the field kinds against the tag. *)
@@ -521,26 +434,15 @@ let block tag ~(fields : t list) =
         blocks;
       }
     in
-    Value (No_alias (Join [
-      Blocks_and_tagged_immediates blocks_imms,
-        Name_permutation.create ()]))
+    Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
 
 (* CR mshinwell: bad name *)
 let block_of_values tag ~(fields : ty_value list) =
   block tag ~fields:(List.map (fun field : t -> Value field) fields)
 
-let block_of_unknown_values _tag ~size:_ = Misc.fatal_error "TBD"
-(*
-  let fields =
-    Array.init size (fun _index : _ mutable_or_immutable ->
-      Immutable (any_value_as_ty_value ()))
-  in
-  block_of_values tag ~fields
-*)
-
 let block_with_size_at_least ~n ~field_n_minus_one =
   let type_of_field_n_minus_one =
-    alias_type_of (Flambda_kind.value ()) (Simple.var field_n_minus_one)
+    alias_type_of K.value (Simple.var field_n_minus_one)
   in
   let field_tys =
     List.init n (fun index ->
@@ -553,9 +455,7 @@ let block_with_size_at_least ~n ~field_n_minus_one =
       blocks;
     }
   in
-  Value (No_alias (Join [
-    Blocks_and_tagged_immediates blocks_imms,
-      Name_permutation.create ()]))
+  Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
 
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())
@@ -573,20 +473,15 @@ let check_of_kind t (expected_kind : K.t) =
 let bottom_like t = bottom (kind t)
 let unknown_like t = unknown (kind t)
 
-let create_inlinable_function_declaration function_decl
-      ~invariant_params ~size ~direct_call_surrogate
-      : function_declaration =
+let create_inlinable_function_declaration function_decl : function_declaration =
   Inlinable {
     function_decl;
-    invariant_params;
-    size;
-    direct_call_surrogate;
   }
 
 let create_non_inlinable_function_declaration () : function_declaration =
   Non_inlinable
 
-let closure closure_id function_decl ty closure_elements ~set_of_closures =
+let closure closure_id function_decl closure_elements ~set_of_closures =
   let closure_elements' =
     let closure_elements =
       Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
@@ -596,7 +491,6 @@ let closure closure_id function_decl ty closure_elements ~set_of_closures =
   in
   let closures_entry : closures_entry =
     { function_decl;
-      ty;
       closure_elements = closure_elements';
       set_of_closures;
     }
@@ -611,7 +505,7 @@ let closure closure_id function_decl ty closure_elements ~set_of_closures =
     { by_closure_id;
     }
   in
-  Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
+  Value (No_alias (Ok (Closures closures)))
 
 let closure_containing_at_least var_within_closure =
   let ty_value = any_value_as_ty_value () in
@@ -621,7 +515,6 @@ let closure_containing_at_least var_within_closure =
   let closure_elements = Closure_elements.create closure_elements in
   let closures_entry : closures_entry =
     { function_decl = Non_inlinable;
-      ty = Function_type.create_unknown ();
       closure_elements;
       set_of_closures = any_fabricated_as_ty_fabricated ()
     }
@@ -636,10 +529,10 @@ let closure_containing_at_least var_within_closure =
     { by_closure_id;
     }
   in
-  Value (No_alias (Join [Closures closures, Name_permutation.create ()]))
+  Value (No_alias (Ok (Closures closures)))
 
 let set_of_closures ~closures =
-  if Closure_id.Map.is_empty closures then bottom (Flambda_kind.value ())
+  if Closure_id.Map.is_empty closures then bottom K.value
   else
     let all_closures = Closure_id.Map.keys closures in
     let by_closure_id = Types_by_closure_id.create closures in
@@ -651,8 +544,7 @@ let set_of_closures ~closures =
         (Closure_id_set.Map.singleton all_closures set_of_closures_entry)
         Closed
     in
-    Fabricated (No_alias (Join [Set_of_closures { closures; },
-      Name_permutation.create ()]))
+    Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
 let set_of_closures_containing_at_least closure_id =
   let by_closure_id =
@@ -666,58 +558,7 @@ let set_of_closures_containing_at_least closure_id =
       (Closure_id_set.Map.singleton closure_id set_of_closures_entry)
       Open
   in
-  Fabricated (No_alias (Join [Set_of_closures { closures; },
-    Name_permutation.create ()]))
-
-let free_names = Type_free_names.free_names
-
-let apply_name_permutation_unknown_or_join unknown_or_join perm =
-  match unknown_or_join with
-  | Unknown -> unknown_or_join
-  | Join of_kind_foos ->
-    let something_changed = ref false in
-    let of_kind_foos =
-      List.map (fun (of_kind_foo, existing_perm) ->
-          let new_perm =
-            Name_permutation.compose ~first:existing_perm ~second:perm
-          in
-          if not (new_perm == existing_perm) then begin
-            something_changed := true
-          end;
-          of_kind_foo, new_perm)
-        of_kind_foos
-    in
-    if not !something_changed then unknown_or_join
-    else Join of_kind_foos
-
-let apply_name_permutation_ty ty perm =
-  match ty with
-  | No_alias unknown_or_join ->
-    let unknown_or_join' =
-      apply_name_permutation_unknown_or_join unknown_or_join perm
-    in
-    if unknown_or_join == unknown_or_join' then ty
-    else No_alias unknown_or_join'
-  | Type _ -> ty
-  | Equals simple ->
-    let simple' = Simple.apply_name_permutation simple perm in
-    if simple == simple' then ty
-    else Equals simple'
-
-let apply_name_permutation t perm =
-  match t with
-  | Value ty_value ->
-    let ty_value' = apply_name_permutation_ty ty_value perm in
-    if ty_value == ty_value' then t
-    else Value ty_value'
-  | Naked_number (ty_naked_number, kind) ->
-    let ty_naked_number' = apply_name_permutation_ty ty_naked_number perm in
-    if ty_naked_number == ty_naked_number' then t
-    else Naked_number (ty_naked_number', kind)
-  | Fabricated ty_fabricated ->
-    let ty_fabricated' = apply_name_permutation_ty ty_fabricated perm in
-    if ty_fabricated == ty_fabricated' then t
-    else Fabricated ty_fabricated'
+  Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
 let get_alias t =
   match t with
@@ -753,15 +594,6 @@ module Set_of_closures_entry = struct
 
   let meet = Api_meet_and_join.meet_set_of_closures_entry
   let join = Api_meet_and_join.join_set_of_closures_entry
-
-  let free_names { by_closure_id; } =
-    Types_by_closure_id.free_names by_closure_id
-
-  let apply_name_permutation { by_closure_id; } perm : t =
-    let by_closure_id =
-      Types_by_closure_id.apply_name_permutation by_closure_id perm
-    in
-    { by_closure_id; }
 end
 
 module Closures_entry = struct
@@ -769,22 +601,19 @@ module Closures_entry = struct
 
   let bottom () : t =
     { function_decl = Non_inlinable;
-      ty = Function_type.create_bottom ();
       closure_elements = Closure_elements.create_bottom ();
       set_of_closures = bottom_as_ty_fabricated ();
     }
 
   let print_with_cache ~cache ppf
-        { function_decl; ty; closure_elements; set_of_closures; } =
+        { function_decl; closure_elements; set_of_closures; } =
     Format.fprintf ppf
       "@[<hov 1>(@\
         @[<hov 1>(function_decl@ %a)@]@ \
-        @[<hov 1>(ty@ %a)@]@ \
         @[<hov 1>(closure_elements@ %a)@]@ \
         @[<hov 1>(set_of_closures@ %a)@])@]"
       (Type_printers.print_function_declaration_with_cache ~cache)
         function_decl
-      (Function_type.print_with_cache ~cache) ty
       (Closure_elements.print ~cache) closure_elements
       (Type_printers.print_ty_fabricated_with_cache ~cache) set_of_closures
 
@@ -798,19 +627,4 @@ module Closures_entry = struct
 
   let meet = Api_meet_and_join.meet_closures_entry
   let join = Api_meet_and_join.join_closures_entry
-
-  let free_names
-        { function_decl = _; ty; closure_elements; set_of_closures; } =
-    Name_occurrences.union (Function_type.free_names ty)
-      (Name_occurrences.union (Closure_elements.free_names closure_elements)
-        (Type_free_names.free_names_of_ty_fabricated set_of_closures))
-
-  let apply_name_permutation
-        { function_decl; ty; closure_elements; set_of_closures; } perm : t =
-    { function_decl;
-      ty = Function_type.apply_name_permutation ty perm;
-      closure_elements =
-        Closure_elements.apply_name_permutation closure_elements perm;
-      set_of_closures = apply_name_permutation_ty set_of_closures perm;
-    }
 end

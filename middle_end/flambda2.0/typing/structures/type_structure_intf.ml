@@ -22,6 +22,7 @@ module type S = sig
   type type_equality_env
   type type_equality_result
   type typing_env_extension
+  type flambda_type
 
   type t
 
@@ -36,6 +37,8 @@ module type S = sig
 
   val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
   val join : join_env -> t -> t -> t
+
+  val map_types : t -> f:(flambda_type -> flambda_type) -> t
 
   (** Type algebraic structures are never kept underneath object-language
       binders at present, so we don't include [Contains_names.S]. *)
