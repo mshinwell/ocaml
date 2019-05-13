@@ -14,18 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Modules that are used for specialising generic meet-and-join operations
-    to either meet or join.  The content of these modules typically corresponds
-    to intersections for meets and unions for joins. *)
+(** Erase aliases to all except a given set of variables throughout types. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet : Either_meet_or_join_intf.S
-  with type join_env := Join_env.t
-  with type meet_env := Meet_env.t
-  with type typing_env_extension := Typing_env_extension.t
-
-module For_join : Either_meet_or_join_intf.S
-  with type join_env := Join_env.t
-  with type meet_env := Meet_env.t
-  with type typing_env_extension := Typing_env_extension.t
+val erase_aliases : Flambda_types.t -> allowed:Variable.Set.t -> Flambda_types.t

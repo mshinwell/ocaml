@@ -4,7 +4,7 @@
     flambda_type0.templ.ml
     flambda_types.rec.ml
     flambda_type0_core.rec.ml
-    type_free_names.rec.ml
+    type_erase_aliases.rec.ml
     type_printers.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closure_elements.rec.ml
@@ -16,6 +16,9 @@
     env/typing_env_extension.rec.ml
     env/typing_env_level.rec.ml
     env/typing_env.rec.ml
+    equality/type_equality_env.rec.ml
+    equality/type_equality_result.rec.ml
+    equality/type_equality.rec.ml
     meet_and_join/api_meet_and_join.rec.ml
     meet_and_join/either_meet_or_join.rec.ml
     meet_and_join/join_env.rec.ml
@@ -34,7 +37,7 @@
     structures/trivial_row_like.rec.ml
     flambda_types.rec.mli
     flambda_type0_core.rec.mli
-    type_free_names.rec.mli
+    type_erase_aliases.rec.mli
     type_printers.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closure_elements.rec.mli
@@ -46,6 +49,9 @@
     env/typing_env_extension.rec.mli
     env/typing_env_level.rec.mli
     env/typing_env.rec.mli
+    equality/type_equality_env.rec.mli
+    equality/type_equality_result.rec.mli
+    equality/type_equality.rec.mli
     meet_and_join/api_meet_and_join.rec.mli
     meet_and_join/either_meet_or_join.rec.mli
     meet_and_join/join_env.rec.mli

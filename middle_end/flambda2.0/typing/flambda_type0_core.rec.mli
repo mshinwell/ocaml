@@ -231,9 +231,6 @@ val unknown_like : Flambda_types.t -> Flambda_types.t
 
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t
-  -> invariant_params:Variable.Set.t lazy_t
-  -> size:int option lazy_t
-  -> direct_call_surrogate:Closure_id.t option
   -> Flambda_types.function_declaration
 
 val create_non_inlinable_function_declaration
@@ -243,7 +240,6 @@ val create_non_inlinable_function_declaration
 val closure
    : Closure_id.t
   -> Flambda_types.function_declaration
-  -> Function_type.t
   -> Flambda_types.ty_value Var_within_closure.Map.t
   -> set_of_closures:Flambda_types.ty_fabricated
   -> Flambda_types.t

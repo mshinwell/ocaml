@@ -17,19 +17,19 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make
-  (Tag : Hashtbl.With_map)
-  (Index : Hashtbl.With_map)
+  (Tag : Identifiable.S)
+  (Index : Identifiable.S)
   (Tag_and_index : sig
     (** These values will not contain any names. *)
     type t = Tag.t * Index.t
-    include Hashtbl.With_map with type t := t
+    include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Type_equality_env := Type_equality_env
-    with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension) :
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
+    with type type_equality_result := Type_equality_result.t
+    with type typing_env_extension := Typing_env_extension.t) :
 sig
   type t
 
@@ -60,9 +60,9 @@ sig
       operation has been completed. *)
   include Type_structure_intf.S
     with type t := t
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Type_equality_env := Type_equality_env
-    with module Type_equality_result := Type_equality_result
-    with module Typing_env_extension := Typing_env_extension
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
+    with type type_equality_result := Type_equality_result.t
+    with type typing_env_extension := Typing_env_extension.t
 end

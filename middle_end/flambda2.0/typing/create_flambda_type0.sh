@@ -10,7 +10,7 @@ WARNING_DELIMITER="@@@ocaml.warning"
 REC_BINDINGS="\
     flambda_types.rec.ml \
     flambda_type0_core.rec.ml \
-    type_free_names.rec.ml \
+    type_erase_aliases.rec.ml \
     type_printers.rec.ml \
     derived_structures/blocks.rec.ml \
     derived_structures/closure_elements.rec.ml \
@@ -22,6 +22,9 @@ REC_BINDINGS="\
     env/typing_env_extension.rec.ml \
     env/typing_env_level.rec.ml \
     env/typing_env.rec.ml \
+    equality/type_equality_env.rec.ml \
+    equality/type_equality_result.rec.ml \
+    equality/type_equality.rec.ml \
     meet_and_join/api_meet_and_join.rec.ml \
     meet_and_join/either_meet_or_join.rec.ml \
     meet_and_join/join_env.rec.ml \
@@ -74,7 +77,6 @@ for ML in $REC_BINDINGS; do
     cat $MLI \
         | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
         | tail -n +2 \
-        | sed 's/^/    /' \
         >> $OUTPUT
 
     echo "  end = struct" >> $OUTPUT
@@ -85,7 +87,6 @@ for ML in $REC_BINDINGS; do
     cat $ML \
       | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
       | tail -n +2 \
-      | sed 's/^/    /' \
       >> $OUTPUT
 
     echo "  end" >> $OUTPUT
