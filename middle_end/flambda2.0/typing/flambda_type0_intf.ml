@@ -43,6 +43,32 @@ module type S = sig
     val empty : t
   end
 
+  module Typing_env : sig
+    type t
+
+    (** Perform various invariant checks upon the given environment. *)
+    val invariant : t -> unit
+
+    (** Print the given typing environment to a formatter. *)
+    val print : Format.formatter -> t -> unit
+
+    (** Create an empty environment using the given [resolver] to locate the
+        definitions of export identifiers (e.g. by loading .cmx files). *)
+    val create : resolver:(Export_id.t -> flambda_type option) -> t
+
+    (** As for [create] but takes the [resolver] from an existing
+        environment. *)
+    val create_using_resolver_from : t -> t
+
+    (** The export identifier resolver from the given environment. *)
+    val resolver : t -> (Export_id.t -> flambda_type option)
+
+    (** Returns [true] iff the given environment contains no bindings.
+        (An environment containing only existential bindings is not deemed
+        as empty.) *)
+    val is_empty : t -> bool
+  end
+
   module Typing_env_extension : sig
     type t
 
