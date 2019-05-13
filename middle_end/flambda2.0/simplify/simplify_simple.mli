@@ -34,7 +34,17 @@ val simplify_simple
   -> Simple.t
   -> Simple.t * Flambda_type.t
 
+val simplify_simple_and_drop_type
+   : Simplify_env_and_result.Env.t
+  -> Simple.t
+  -> Simple.t
+
 val simplify_simples
    : Simplify_env_and_result.Env.t
   -> Simple.t list
   -> (Simple.t * Flambda_type.t) list
+
+val simplify_simples_and_drop_types
+   : Simplify_env_and_result.Env.t
+  -> Simple.t list
+  -> Simple.t list
