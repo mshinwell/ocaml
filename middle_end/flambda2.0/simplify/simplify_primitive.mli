@@ -24,4 +24,4 @@ val simplify_primitive
   -> Flambda_primitive.t
   -> Debuginfo.t
   -> result_var:Variable.t
-  -> Flambda.Reachable.t * Flambda_type.t * Simplify_env_and_result.Result.t
+  -> Reachable.t * Flambda_type.t * Simplify_env_and_result.Result.t

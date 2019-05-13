@@ -16,10 +16,21 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  val simplify_expr
-     : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Expr.t
-    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-end
+open! Flambda.Import
+
+type t =
+  | Reachable of Named.t
+  | Invalid of Invalid_term_semantics.t
+
+let reachable named = Reachable named
+
+let invalid () =
+  if !Clflags.treat_invalid_code_as_unreachable then
+    Invalid Treat_as_unreachable
+  else
+    Invalid Halt_and_catch_fire
+
+let print ppf t =
+  match t with
+  | Reachable named -> Named.print ppf named
+  | Invalid sem -> Invalid_term_semantics.print ppf sem

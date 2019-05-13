@@ -34,7 +34,7 @@ module Make
   (Simplify_named : Simplify_named_intf.S)
   (Simplify_toplevel : Simplify_toplevel_intf.S) =
 struct
-  let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
+  let simplify_static_structure initial_env (recursive : Recursive.t) str =
     let unreachable, env, str =
       List.fold_left
         (fun ((now_unreachable, env, str) as acc) (sym, kind, static_part) ->
@@ -65,7 +65,7 @@ struct
     in
     env
 
-  let simplify_define_symbol env (recursive : Flambda.recursive)
+  let simplify_define_symbol env (recursive : Recursive.t)
         (defn : Program_body.definition) =
     let env, computation, newly_imported_symbols, lifted_constants =
       match defn.computation with
