@@ -19,7 +19,7 @@
 module T = Flambda_types
 
 module Make
-  (E : Either_meet_or_join_intf
+  (E : Either_meet_or_join_intf.S
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Typing_env_extension := Typing_env_extension) =
@@ -34,13 +34,14 @@ struct
   module Of_kind_fabricated = Meet_and_join_fabricated.Make (E)
 
   (* Next lift the meet or join operations from "of_kind_..." to "ty_...". *)
-  module Value = Kind_independent_meet_or_join.Make (E) (Of_kind_value)
-  module Naked_immediate = Kind_independent_meet_or_join.Make (E) (Of_kind_naked_immediate)
-  module Naked_float = Kind_independent_meet_or_join.Make (E) (Of_kind_naked_float)
-  module Naked_int32 = Kind_independent_meet_or_join.Make (E) (Of_kind_naked_int32)
-  module Naked_int64 = Kind_independent_meet_or_join.Make (E) (Of_kind_naked_int64)
-  module Naked_nativeint = Kind_independent_meet_or_join.Make (E) (Of_kind_naked_nativeint)
-  module Fabricated = Kind_independent_meet_or_join.Make (E) (Of_kind_fabricated)
+  module KI = Kind_independent_meet_or_join
+  module Value = KI.Make (E) (Of_kind_value)
+  module Naked_immediate = KI.Make (E) (Of_kind_naked_immediate)
+  module Naked_float = KI.Make (E) (Of_kind_naked_float)
+  module Naked_int32 = KI.Make (E) (Of_kind_naked_int32)
+  module Naked_int64 = KI.Make (E) (Of_kind_naked_int64)
+  module Naked_nativeint = KI.Make (E) (Of_kind_naked_nativeint)
+  module Fabricated = KI.Make (E) (Of_kind_fabricated)
 
   (* This function then lifts the meet or join operation from "ty_..." to
      Flambda types. *)

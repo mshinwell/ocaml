@@ -25,11 +25,11 @@
 (* CR mshinwell: We should enforce that [S] must have been specialised
    using the same [E]. *)
 module Make
-  (E : Either_meet_or_join_intf
+  (E : Either_meet_or_join_intf.S
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Typing_env_extension := Typing_env_extension)
-  (S : Meet_and_join_spec_intf
+  (S : Meet_and_join_spec_intf.S
     with module Flambda_types := Flambda_types
     with module Join_env := Join_env
     with module Typing_env_extension := Typing_env_extension) :
