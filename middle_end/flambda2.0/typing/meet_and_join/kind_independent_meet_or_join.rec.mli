@@ -26,13 +26,13 @@
    using the same [E]. *)
 module Make
   (E : Either_meet_or_join_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension)
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type typing_env_extension := Typing_env_extension.t)
   (S : Meet_and_join_spec_intf.S
-    with module Flambda_types := Flambda_types
-    with module Join_env := Join_env
-    with module Typing_env_extension := Typing_env_extension) :
+    with type flambda_types := Flambda_types.t
+    with type join_env := Join_env.t
+    with type typing_env_extension := Typing_env_extension.t) :
 sig
   val meet_or_join_ty
      : ?bound_name:Name.t

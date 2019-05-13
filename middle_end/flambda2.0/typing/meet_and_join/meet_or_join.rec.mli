@@ -20,9 +20,9 @@
 
 module Make
   (E : Either_meet_or_join_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension) :
+    with type join_env := Join_env.t
+    with type meet_env := Meet_env.t
+    with type typing_env_extension := Typing_env_extension.t) :
 sig
   (** Perform a meet or a join operation, in the given environment, on the
       given types. *)

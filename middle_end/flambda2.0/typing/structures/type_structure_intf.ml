@@ -17,34 +17,25 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  module Join_env : sig type t end
-  module Meet_env : sig type t end
-  module Type_equality_env : sig type t end
-  module Type_equality_result : sig type t end
-  module Typing_env_extension : sig type t end
+  type join_env
+  type meet_env
+  type type_equality_env
+  type type_equality_result
+  type typing_env_extension
 
   type t
 
   val print : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val equal
-     : Type_equality_env.t
-    -> Type_equality_result.t
+     : type_equality_env
+    -> type_equality_result
     -> t
     -> t
-    -> Type_equality_result.t
+    -> type_equality_result
 
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
-
-  val join
-     : Join_env.t
-    -> t
-    -> t
-    -> t
+  val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
+  val join : join_env -> t -> t -> t
 
   (** Type algebraic structures are never kept underneath object-language
       binders at present, so we don't include [Contains_names.S]. *)
