@@ -201,7 +201,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
                 ~target:(Exn_continuation.exn_handler apply_exn_continuation)
                 ~arity:(Exn_continuation.arity exn_continuation)
                 (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                  (Expr.create_let my_closure (K.value ())
+                  (Expr.create_let my_closure K.value
                     (Named.simple callee) body)))
           in
           let env =
