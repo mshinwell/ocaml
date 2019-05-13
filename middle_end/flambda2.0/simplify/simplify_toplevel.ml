@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
 module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
 
@@ -28,24 +26,24 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
        almost always called "r".  These results come along with rewritten
        Flambda terms.
   *)
-  let simplify_toplevel env expr ~continuation ~continuation_params
-       ~exn_continuation ~descr ~scope_level_for_lifted_constants =
-    if not (E.mem_continuation env continuation) then begin
-      Misc.fatal_errorf "The continuation parameter (%a) must be in the \
+  let simplify_toplevel env expr ~return_continuation
+       exn_continuation ~scope_level_for_lifted_constants =
+    if not (E.mem_continuation env return_continuation) then begin
+      Misc.fatal_errorf "The return continuation (%a) must be in the \
           environment before calling [simplify_toplevel]"
-        Continuation.print continuation
+        Continuation.print return_continuation
     end;
     if not (E.mem_exn_continuation env exn_continuation) then begin
       Misc.fatal_errorf "The exception continuation parameter (%a) must be in \
           the environment before calling [simplify_toplevel]"
-        Continuation.print exn_continuation
+        Exn_continuation.print exn_continuation
     end;
     (* CR mshinwell: Clear [env] here? *)
     let env =
       E.set_scope_level_for_lifted_constants env
         scope_level_for_lifted_constants
     in
-    let r = R.create () in
+    let r = R.create ~resolver:(E.resolver env) in
     let expr, r = Simplify_expr.simplify_expr env r expr in
     let lifted_constants = R.get_lifted_constants r in
     expr, r, lifted_constants

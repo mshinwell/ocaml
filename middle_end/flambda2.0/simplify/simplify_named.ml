@@ -28,10 +28,11 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     let params_and_body =
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
-        ~f:(fun ~continuation_param exn_continuation params ~body ~my_closure ->
+        ~f:(fun ~return_continuation exn_continuation params ~body
+                ~my_closure ->
           let env = E.enter_closure env closure_id in
           let result_arity = Function_declaration.result_arity function_decl in
-          let env = E.add_continuation env continuation_param result_arity in
+          let env = E.add_continuation env return_continuation result_arity in
           let env = E.add_exn_continuation env exn_continuation in
           let env = E.add_parameters_with_unknown_types env params in
           let env = E.add_variable env my_closure (T.any_value ()) in
@@ -50,7 +51,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
                 result_arity
             in
             Simplify_toplevel.simplify_toplevel env body
-              ~continuation_param
+              ~return_continuation
               ~continuation_params
               exn_continuation
               ~descr
