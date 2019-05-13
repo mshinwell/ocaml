@@ -25,7 +25,7 @@ type t
 include Expr_std.S with type t := t
 
 val create
-   : ?raise_kind:Raise_kind.t
+   : ?trap_action:Trap_action.t
   -> Continuation.t
   -> args:Simple.t list
   -> t
@@ -36,6 +36,6 @@ val continuation : t -> Continuation.t
 
 val args : t -> Simple.t list
 
-val raise_kind : t -> Raise_kind.t option
+val trap_action : t -> Trap_action.t option
 
 val update_args : t -> args:Simple.t list -> t
