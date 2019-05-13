@@ -31,4 +31,13 @@ val create_at_least_multiple
    : Flambda_types.closures_entry Var_within_closure_set.Map.t
   -> t
 
-include Type_structure_intf.S with type t := t
+val map_types : t -> f:(Flambda_types.t -> Flambda_types.t) -> t
+
+include Type_structure_intf.S
+  with type t := t
+  with type flambda_type := Flambda_types.t
+  with type type_equality_env := Type_equality_env.t
+  with type type_equality_result := Type_equality_result.t
+  with type meet_env := Meet_env.t
+  with type join_env := Join_env.t
+  with type typing_env_extension := Typing_env_extension.t

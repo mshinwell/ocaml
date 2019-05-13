@@ -16,4 +16,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Trivial_row_like_intf.S with module Thing_without_names := Discriminant
+include Trivial_row_like_intf.S
+  with module Thing_without_names := Discriminant
+  with type flambda_type := Flambda_types.t
+  with type join_env := Join_env.t
+  with type meet_env := Meet_env.t
+  with type type_equality_env := Type_equality_env.t
+  with type type_equality_result := Type_equality_result.t
+  with type typing_env_extension := Typing_env_extension.t

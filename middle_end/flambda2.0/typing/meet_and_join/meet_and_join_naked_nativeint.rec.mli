@@ -20,8 +20,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Meet_and_join_naked_number_intf.S
-  with type flambda_types := Flambda_types.t
+  with type flambda_type := Flambda_types.t
   with type join_env := Join_env.t
   with type meet_env := Meet_env.t
-  with type naked_number := Naked_number.t
   with type typing_env_extension := Typing_env_extension.t
+  with module Naked_number := Targetint

@@ -50,7 +50,7 @@ val meet_equation
   -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
-
+(*
 val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
 
 val defined_names_set : t -> Bindable_name.Set.t
@@ -66,3 +66,4 @@ val equations_on_outer_env_domain : t -> Name.Set.t
 val equations : t -> Flambda_types.t Name.Map.t
 
 val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t
+*)
