@@ -14,30 +14,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The representation of the application of a continuation.  In the
-    zero-arity case this is just "goto". *)
+(** An [Exn_continuation] equipped with operations that mean it can be used in
+    binding position within a [Name_abstraction] value.
+
+    When this happens, only the [exn_handler] is bound, not the [extra_args].
+*)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+type t = Exn_continuation.t
 
-(** Printing, invariant checks, name manipulation, etc. *)
-include Expr_std.S with type t := t
-
-val create
-   : ?trap_action:Trap_action.t
-  -> Continuation.t
-  -> args:Simple.t list
-  -> t
-
-val goto : Continuation.t -> t
-
-val continuation : t -> Continuation.t
-
-val args : t -> Simple.t list
-
-val trap_action : t -> Trap_action.t option
-
-val update_args : t -> args:Simple.t list -> t
-
-val is_goto : t -> Continuation.t -> bool
+include Bindable.S with type t := t

@@ -14,30 +14,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The representation of the application of a continuation.  In the
-    zero-arity case this is just "goto". *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+include Continuation
 
-(** Printing, invariant checks, name manipulation, etc. *)
-include Expr_std.S with type t := t
+let add_to_name_permutation t1 t2 perm =
+  Name_permutation.add_continuation perm (exn_handler t1) (exn_handler t2)
 
-val create
-   : ?trap_action:Trap_action.t
-  -> Continuation.t
-  -> args:Simple.t list
-  -> t
+let name_permutation t1 t2 =
+  add_to_name_permutation t1 t2 Name_permutation.empty
 
-val goto : Continuation.t -> t
+let singleton_occurrence_in_terms t =
+  Name_occurrences.singleton_continuation (exn_handler t)
 
-val continuation : t -> Continuation.t
+let add_occurrence_in_terms t occs =
+  Name_occurrences.add_continuation occs (exn_handler t)
 
-val args : t -> Simple.t list
-
-val trap_action : t -> Trap_action.t option
-
-val update_args : t -> args:Simple.t list -> t
-
-val is_goto : t -> Continuation.t -> bool
+let rename t =
+  create ~exn_handler:(Continuation.create ()) ~extra_args:(extra_args t)

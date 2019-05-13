@@ -21,6 +21,34 @@ type t = {
   extra_args : (Simple.t * Flambda_kind.t) list;
 }
 
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  let print_simple_and_kind ppf (simple, kind) =
+    Format.fprintf ppf "@[(%a :: %a)@]"
+      Simple.print simple
+      Flambda_kind.print kind
+
+  let print ppf { exn_handler; extra_args; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(exn_handler@ %a)@]@ \
+        @[<hov 1>(extra_args@ (%a))@])@]"
+      Continuation.print exn_handler
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_and_kind)
+      extra_args
+
+  let compare _ _ = Misc.fatal_error "Not yet implemented"
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
+
+  let output _ _ = Misc.fatal_error "Not yet implemented"
+
+  let hash _ = Misc.fatal_error "Not yet implemented"
+end)
+
+let print_with_cache ~cache:_ ppf t = print ppf t
+
 let create ~exn_handler ~extra_args =
   { exn_handler;
     extra_args;
@@ -31,21 +59,6 @@ let exn_handler t = t.exn_handler
 let extra_args t = t.extra_args
 
 let invariant _env _t = ()
-
-let print_simple_and_kind ppf (simple, kind) =
-  Format.fprintf ppf "@[(%a :: %a)@]"
-    Simple.print simple
-    Flambda_kind.print kind
-
-let print ppf { exn_handler; extra_args; } =
-  Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(exn_handler@ %a)@]@ \
-      @[<hov 1>(extra_args@ (%a))@])@]"
-    Continuation.print exn_handler
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_and_kind)
-    extra_args
-
-let print_with_cache ~cache:_ ppf t = print ppf t
 
 let free_names { exn_handler; extra_args; } =
   let extra_args = List.map (fun (simple, _kind) -> simple) extra_args in
