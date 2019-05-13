@@ -19,10 +19,10 @@
 module type S = sig
   val simplify_toplevel
      : Simplify_env_and_result.Env.t
+    -> Simplify_env_and_result.Result.t
     -> Flambda.Expr.t
     -> return_continuation:Continuation.t
     -> Exn_continuation.t
     -> scope_level_for_lifted_constants:Scope_level.t
     -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-         * Simplify_env_and_result_intf.lifted_constants
 end

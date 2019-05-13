@@ -87,6 +87,8 @@ module type Map = sig
   val transpose_keys_and_data_set : key t -> Set.Make(T).t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+
+  val diff_domains : 'a t -> 'a t -> 'a t
 end
 
 module type Tbl = sig

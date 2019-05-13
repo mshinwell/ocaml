@@ -160,6 +160,8 @@ module type Result = sig
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
 
+  val new_lifted_constants : t -> lifted_constants -> t
+
   val get_lifted_constants : t -> lifted_constants
 
   val clear_env_extension : t -> t

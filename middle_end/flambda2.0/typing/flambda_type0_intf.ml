@@ -77,6 +77,9 @@ module type S = sig
     val find_exn : t -> Name.t -> flambda_type
   end
 
+  (* CR mshinwell: Substitute out this alias once it's finalised *)
+  type 'a type_accessor = Typing_env.t -> 'a
+
   module Typing_env_extension : sig
     type t
 
@@ -1001,8 +1004,6 @@ module type S = sig
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
 
-  type 'a type_accessor = Typing_env.t -> 'a
-
   (** For each of the kinds in an arity, create a "bottom" type. *)
   val bottom_types_from_arity : Flambda_arity.t -> t list
 
@@ -1016,11 +1017,13 @@ module type S = sig
   val unit : unit -> t
 
   val unit_bottom : unit -> t
+*)
 
   (** Whether the given type says that a term of that type can never be
       constructed (in other words, it is [Invalid]). *)
   val is_bottom : (t -> bool) type_accessor
 
+(*
   (** Determine whether the given type provides any information about an
       Flambda term of that type. *)
   val is_known : (t -> bool) type_accessor
