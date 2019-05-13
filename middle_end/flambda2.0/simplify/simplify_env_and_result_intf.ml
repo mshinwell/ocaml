@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda.Import
+
 type lifted_constants =
   (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t) Symbol.Map.t
 
@@ -127,8 +129,6 @@ module type Env = sig
       precise location information. This function sets the current
       call-site being inlined.  *)
   val set_inline_debuginfo : t -> dbg:Debuginfo.t -> t
-
-  val continuations_in_scope : t -> Continuation_approx.t Continuation.Map.t
 end
 
 module type Result = sig

@@ -33,7 +33,7 @@ module K = Flambda_kind
    types?  It would remove most of the "everything_must_only_be_names"
    stuff. *)
 
-module Make (Term_language_function_declaration : Expr_intf.S) = struct
+module Make (Term_language_function_declaration : Expr_std.S) = struct
   (* -- module rec binding here -- *)
 
   include Flambda_type0_core
