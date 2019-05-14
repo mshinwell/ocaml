@@ -1564,12 +1564,17 @@ module Import = struct
   module Apply = Apply
   module Apply_cont = Apply_cont
   module Continuation_handler = Continuation_handler
+  module Continuation_handlers = Continuation_handlers
   module Continuation_params_and_handler = Continuation_params_and_handler
   module Expr = Expr
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations
   module Function_params_and_body = Function_params_and_body
   module Let_cont = Let_cont
+  module Let = Let
   module Named = Named
+  module Non_recursive_let_cont_handler = Non_recursive_let_cont_handler
+  module Recursive_let_cont_handlers = Recursive_let_cont_handlers
   module Set_of_closures = Set_of_closures
+  module Switch = Switch
 end
