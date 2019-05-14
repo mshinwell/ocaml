@@ -68,6 +68,8 @@ module type Env = sig
 
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
+  val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
+
   val add_parameters
      : t
     -> Kinded_parameter.t list
