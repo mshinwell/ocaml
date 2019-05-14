@@ -49,8 +49,8 @@ echo >> $OUTPUT
 
 echo "# 1 \"$TEMPLATE\"" >> $OUTPUT
 temp=$(mktemp)
-grep --color=never -m 1 -B 1000000 -- "$DELIMITER" $TEMPLATE \
-    | head -n -1 >> $temp
+grep --color=never -B 1000000 -- "$DELIMITER" $TEMPLATE \
+    | sed '$d' >> $temp
 TEMPLATE_FIRST_PART_LENGTH=$(wc -l $temp | awk '{print $1}')
 cat $temp >> $OUTPUT
 rm -f $temp
@@ -62,7 +62,7 @@ for ML in $REC_BINDINGS; do
     MODNAME=$(echo $ML | \
       sed 's/\.ml$//' | \
       sed 's:^.*/::' | \
-      sed 's/^./\U\0/' | \
+      awk '{ print toupper(substr($0,1,1)) tolower(substr($0,2)) }' | \
       sed 's/\.rec//')
 
     if [ "$FIRST" = "1" ]; then
@@ -71,21 +71,21 @@ for ML in $REC_BINDINGS; do
         echo "  and $MODNAME : sig" >> $OUTPUT
     fi
 
-    LINE=$(cat $MLI | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
+    LINE=$(cat $MLI | grep -B 1000000 "$WARNING_DELIMITER" | wc -l)
     echo "# $(($LINE + 1)) \"$MLI\"" >> $OUTPUT
 
     cat $MLI \
-        | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
+        | grep -A 1000000 "$WARNING_DELIMITER" \
         | tail -n +2 \
         >> $OUTPUT
 
     echo "  end = struct" >> $OUTPUT
 
-    LINE=$(cat $ML | grep -B 1000000 -m 1 "$WARNING_DELIMITER" | wc -l)
+    LINE=$(cat $ML | grep -B 1000000 "$WARNING_DELIMITER" | wc -l)
     echo "# $(($LINE + 1)) \"$ML\"" >> $OUTPUT
 
     cat $ML \
-      | grep -A 1000000 -m 1 "$WARNING_DELIMITER" \
+      | grep -A 1000000 "$WARNING_DELIMITER" \
       | tail -n +2 \
       >> $OUTPUT
 
@@ -96,5 +96,5 @@ for ML in $REC_BINDINGS; do
 done
 
 echo "# $(($TEMPLATE_FIRST_PART_LENGTH + 2)) \"$TEMPLATE\"" >> $OUTPUT
-grep --color=never -m 1 -A 1000000 -- "$DELIMITER" $TEMPLATE | \
+grep --color=never -A 1000000 -- "$DELIMITER" $TEMPLATE | \
     tail -n +2 >> $OUTPUT

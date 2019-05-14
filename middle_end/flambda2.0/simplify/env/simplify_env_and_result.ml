@@ -29,7 +29,7 @@ end = struct
     backend : (module Backend_intf.S);
     round : int;
     typing_environment : TE.t;
-    continuations : (Scope_level.t * found_continuation) Continuation.Map.t;
+    continuations : (Scope_level.t * Continuation_in_env.t) Continuation.Map.t;
     continuation_scope_level : Scope_level.t;
     scope_level_for_lifted_constants : Scope_level.t;
     inlined_debuginfo : Debuginfo.t;
