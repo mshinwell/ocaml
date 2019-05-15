@@ -272,6 +272,9 @@ end = struct
           Symbol.Map.t;
     }
 
+(* XXX Need to ensure that newly_imported_symbols doesn't contain predef exn
+   symbols *)
+
   let create ~resolver =
     { resolver;
       used_continuations = Continuation.Map.empty;

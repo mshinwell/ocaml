@@ -62,7 +62,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     in
     function_decl, function_decl_type, r
 
-  let simplify_set_of_closures env r set_of_closures ~result_var =
+  let simplify_set_of_closures0 env r set_of_closures ~result_var =
     let function_decls = Set_of_closures.function_decls set_of_closures in
     (* CR mshinwell: Shouldn't [Function_declarations.set_of_closures_origin]
        be on [Set_of_closures]? *)
@@ -115,7 +115,20 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
         fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    Named.create_set_of_closures set_of_closures, set_of_closures_type, r
+    set_of_closures, set_of_closures_type, r
+
+  let simplify_set_of_closures env r set_of_closures ~result_var =
+    let set_of_closures, ty, r =
+      simplify_set_of_closures0 env r set_of_closures ~result_var
+    in
+    Named.create_set_of_closures set_of_closures, ty, r
+
+  let simplify_set_of_closures_and_drop_type env r set_of_closures =
+    let result_var = Variable.create "set_of_closures" in
+    let set_of_closures, _ty, r =
+      simplify_set_of_closures0 env r set_of_closures ~result_var
+    in
+    term, r
 
   let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
     match to_lift with
