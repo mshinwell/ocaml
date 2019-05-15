@@ -666,10 +666,10 @@ module type S = sig
     -> t
 
   val of_ty_fabricated : ty_fabricated -> t
-
+*)
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
-*)
+
   val any_value : unit -> t
 (*
   val any_value_as_ty_value : unit -> ty_value

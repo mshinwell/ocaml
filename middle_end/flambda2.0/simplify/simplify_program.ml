@@ -66,7 +66,7 @@ struct
           set_of_closures
       in
       Set_of_closures set_of_closures, r
-    | Closure (sym, closure) ->
+    | Closure (sym, _closure) ->
       E.check_symbol_is_bound env sym;
       static_part, r
     | Boxed_float or_var -> Boxed_float (simplify_or_variable env or_var), r
@@ -124,10 +124,11 @@ struct
                 ((bound_syms : Program_body.Bound_symbols.t), static_part) ->
           let static_part, r = simplify_static_part env r static_part in
           let str_rev = (bound_syms, static_part) :: str_rev in
-          let ty = T.any_value () in
           let next_env =
             match bound_syms with
-            | Singleton (sym, kind) -> E.add_symbol next_env sym ty
+            | Singleton (sym, kind) ->
+              let ty = T.unknown kind in
+              E.add_symbol next_env sym ty
             | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
               begin match static_part with
               | Set_of_closures _ | Fabricated_block _ -> ()
@@ -136,6 +137,7 @@ struct
                     set-of-closures symbol %a"
                   Symbol.print set_of_closures_symbol
               end;
+              let ty = T.unknown K.fabricated in
               let next_env = E.add_symbol next_env set_of_closures_symbol ty in
               Closure_id.Map.fold (fun _closure_id closure_sym next_env ->
                   E.add_symbol next_env closure_sym (T.any_value ()))

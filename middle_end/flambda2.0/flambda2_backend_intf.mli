@@ -32,7 +32,7 @@ module type S = sig
       native code backend, for example, this might consult a .cmx file. *)
   val really_import_approx : Simple_value_approx.t -> Simple_value_approx.t
 
-  val all_predefined_exception_symbols : Flambda2.Symbol.Set.t
+  val all_predefined_exception_symbols : Symbol.Set.t
 
   val import_symbol : Symbol.t -> Simple_value_approx.t
 
