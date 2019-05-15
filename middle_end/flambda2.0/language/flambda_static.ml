@@ -266,20 +266,21 @@ module Program_body = struct
   module Computation = struct
     type t = {
       expr : Flambda.Expr.t;
-      return_cont : Continuation.t;
-      exception_cont : Continuation.t;
+      return_continuation : Continuation.t;
+      exn_continuation : Continuation.t;
       computed_values : (Variable.t * Flambda_kind.t) list;
     }
 
-    let print ppf { expr; return_cont; exception_cont; computed_values; } =
+    let print ppf { expr; return_continuation; exn_continuation;
+                    computed_values; } =
       Format.fprintf ppf "@[<2>(\
           @[(expr@ %a)@]@ \
-          @[(return_cont@ %a)@]@ \
-          @[(exception_cont@ %a)@]@ \
+          @[(return_continuation@ %a)@]@ \
+          @[(exn_continuation@ %a)@]@ \
           @[(computed_values@ @[%a@])@])@]"
         Flambda.Expr.print expr
-        Continuation.print return_cont
-        Continuation.print exception_cont
+        Continuation.print return_continuation
+        Exn_continuation.print exn_continuation
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           (fun ppf (var, kind) ->
             Format.fprintf ppf "@[(%a :: %a)@]"
