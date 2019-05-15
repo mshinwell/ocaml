@@ -88,6 +88,8 @@ module type S = sig
     val empty : t
 
     val is_empty : t -> bool
+
+    val add_equation : t -> Name.t -> flambda_type -> t
   end
 
   type 'a ty

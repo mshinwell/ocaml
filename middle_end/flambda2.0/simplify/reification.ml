@@ -34,10 +34,10 @@ let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
   match term with
   | Invalid _ -> 
     let ty = T.bottom_like ty in
-    let env = E.replace_variable env bound_to ty in
+    let env = E.add_equation_on_variable env bound_to ty in
     term, env, ty, r
   | Reachable _ ->
-    match T.reify env ty ~allow_free_variables:true with
+    match T.reify (E.typing_env env) ty ~allow_free_variables:true with
     | Term (simple, ty) ->
       let term = Named.create_simple simple in
       Reachable.reachable term, env, ty, r
@@ -49,13 +49,14 @@ let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
           let static_part = create_static_part to_lift in
           R.new_lifted_constant r ~name ty static_part
         in
+        let env = E.add_symbol env symbol ty in
         let symbol = Simple.symbol symbol in
         let term = Named.create_simple symbol in
         let ty = T.alias_type_of (T.kind ty) symbol in
-        let env = E.replace_variable env bound_to ty in
-        Reachable.reachable term, ty, r
+        let env = E.add_equation_on_variable env bound_to ty in
+        Reachable.reachable term, env, ty, r
     | Cannot_reify -> term, env, ty, r
     | Invalid ->
       let ty = T.bottom_like ty in
-      let env = E.replace_variable env bound_to ty in
+      let env = E.add_equation_on_variable env bound_to ty in
       Reachable.invalid (), env, ty, r
