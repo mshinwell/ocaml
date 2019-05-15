@@ -22,7 +22,7 @@ val inline
    : Simplify_env_and_result.Env.t
   -> callee:Simple.t
   -> args:Simple.t list
-  -> Flambda_type.function_declaration
+  -> Flambda.Function_declaration.t
   -> apply_return_continuation:Continuation.t
   -> apply_exn_continuation:Exn_continuation.t
   -> Debuginfo.t
