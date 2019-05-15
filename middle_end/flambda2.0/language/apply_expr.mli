@@ -28,12 +28,11 @@ include Expr_std.S with type t := t
 val create
    : callee:Name.t
   -> continuation:Continuation.t
-  -> exn_continuation:Exn_continuation.t
+  -> Exn_continuation.t
   -> args:Simple.t list
   -> call_kind:Call_kind.t
-  -> dbg:Debuginfo.t
+  -> Debuginfo.t
   -> inline:Inline_attribute.t
-  -> specialise:Specialise_attribute.t
   -> t
 
 (** The function or method being applied. *)
@@ -58,10 +57,6 @@ val dbg : t -> Debuginfo.t
 (** Instructions from the source code as to whether the callee should be
     inlined. *)
 val inline : t -> Inline_attribute.t
-
-(** Instructions from the source code as to whether the callee should be
-    specialised. *)
-val specialise : t -> Specialise_attribute.t
 
 (** Change the return continuation of an application. *)
 val with_continuation : t -> Continuation.t -> t

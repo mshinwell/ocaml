@@ -161,8 +161,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
   and simplify_direct_partial_application env r ~callee ~args
         ~callee's_closure_id function_decl
         ~continuation:apply_return_continuation
-        ~exn_continuation:apply_exn_continuation
-        dbg (inline : Inline_attribute.t) _specialise apply =
+        ~exn_continuation:apply_exn_continuation dbg apply
+        (inline : Inline_attribute.t) =
     (* For simplicity, we disallow [@inline] attributes on partial
        applications.  The user may always write an explicit wrapper instead
        with such an attribute. *)
@@ -195,7 +195,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
                 Misc.fatal_errorf "Non-[value] kind in partial application: %a"
                   Apply.print apply
               end;
-              param, arg)
+              arg)
             args params
         in
         let return_arity = Function_declaration.result_arity function_decl in
@@ -211,42 +211,42 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           let return_continuation = Continuation.create () in
           let args = applied_args @ (List.map KP.simple remaining_params) in
           let call_kind =
-            Call_kind.create_direct_function_call callee's_closure_id
-              ~return_arity
+            Call_kind.direct_function_call callee's_closure_id ~return_arity
           in
           let full_application =
             Apply.create ~callee
               ~continuation:return_continuation
-              ~exn_continuation
+              apply_exn_continuation
               ~args
               ~call_kind
-              ~dbg
+              dbg
               ~inline:Default_inline
-              ~specialise:Default_specialise
           in
           let applied_args_with_closure_vars =
             List.map (fun applied_arg ->
-                Var_within_closure.create (), applied_arg)
+                Var_within_closure.wrap (Variable.create "arg"), applied_arg)
               applied_args
           in
+          let my_closure = Variable.create "my_closure" in
           let body =
             List.fold_left (fun expr (closure_var, applied_arg) ->
                 match Simple.must_be_var applied_arg with
                 | None -> expr
                 | Some applied_arg ->
-                  Expr.create_let applied_arg (K.value ())
-                    (Named.prim (Unary (Project_var closure_var)) dbg)
+                  Expr.create_let applied_arg K.value
+                    (Named.create_prim
+                      (Unary (Project_var closure_var, Simple.var my_closure))
+                      dbg)
                     expr)
               (Expr.create_apply full_application)
               (List.rev applied_args_with_closure_vars)
           in
           let params_and_body =
             Function_params_and_body.create ~return_continuation
-              ~exn_continuation
+              apply_exn_continuation
               remaining_params
-              ~param_relations:T.Typing_env_extension.empty
               ~body
-              ~my_closure:(Variable.create "my_closure")
+              ~my_closure
           in
           let closure_origin =
             Function_declaration.closure_origin function_decl
@@ -258,25 +258,23 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               ~stub:true
               ~dbg
               ~inline:Default_inline
-              ~specialise:Default_specialise
               ~is_a_functor:false
           in
-          let closure_id = Closure_id.create () in
+          let closure_id = Closure_id.wrap (Variable.create "closure") in
           let function_decls =
             Function_declarations.create
               (Closure_id.Map.singleton closure_id function_decl)
           in
           let closure_elements =
-            Var_within_closure.Map.of_alist applied_args_with_closure_vars
+            Var_within_closure.Map.of_list applied_args_with_closure_vars
           in
-          Set_of_closures.create ~function_decls
-            ~set_of_closures_ty:(T.any_value ())
-            ~closure_elements
+          Set_of_closures.create ~function_decls ~closure_elements
         in
         let apply_cont =
-          Apply_cont.create apply_return_continuation [Simple.var wrapper_var]
+          Apply_cont.create apply_return_continuation
+            ~args:[Simple.var wrapper_var]
         in
-        Expr.create_let wrapper_var (K.value ())
+        Expr.create_let wrapper_var K.value
           (Named.create_set_of_closures wrapper_taking_remaining_args)
           (Expr.create_apply_cont apply_cont))
 
@@ -284,13 +282,12 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~callee's_closure_id function_decl
         ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
-        dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
+        dbg (inline : Inline_attribute.t)
         apply =
-    let function_decl = function_decl.term_language_function_decl in
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~return_continuation:_ _exn_continuation params ~param_relations:_
-            ~body:_ ~my_closure:_ ->
+      ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
+              ~my_closure:_ ->
         let arity = List.length params in
         assert (arity < List.length args);
         let result_arity = Function_declaration.result_arity function_decl in
@@ -306,27 +303,24 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           Misc.Stdlib.List.split_at arity args
         in
         let func_var = Variable.create "full_apply" in
-        let func_var_kind = K.value () in
+        let func_var_kind = K.value in
         let func_param = KP.create (Parameter.wrap func_var) func_var_kind in
         let perform_over_application =
           Apply.create ~callee:(Name.var func_var)
             ~continuation:apply_return_continuation
-            ~exn_continuation:apply_exn_continuation
+            apply_exn_continuation
             ~args:remaining_args
             ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())
-            ~dbg
+            dbg
             ~inline
-            ~specialise
         in
         let after_full_application = Continuation.create () in
         let after_full_application_handler =
           let params_and_handler =
             Continuation_params_and_handler.create return_params
-              ~param_relations:T.Typing_env_extension.empty
               ~handler:(Expr.create_apply perform_over_application)
           in
           Continuation_handler.create ~params_and_handler
-            ~inferred_typing:T.Parameters.empty
             ~stub:false
             ~is_exn_handler:false
         in
@@ -336,13 +330,13 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             ~body:(Expr.create_apply
               (Apply.with_continuation apply after_full_application))
         in
-        simplify env r expr)
+        simplify_expr env r expr)
 
   and simplify_inlinable_direct_function_call env r ~callee's_closure_id
-        function_decl ~(set_of_closures : T.set_of_closures)
-        call ~callee ~args dbg apply =
-    let arity_of_application = Call_kind.return_arity apply.call_kind in
-    let result_arity = List.map T.kind function_decl.result in
+        function_decl ~set_of_closures call ~callee ~args dbg apply =
+    let call_kind = Apply.call_kind apply in
+    let arity_of_application = Call_kind.return_arity call_kind in
+    let result_arity = Function_declaration.result_arity function_decl in
     let arity_mismatch =
       not (Flambda_arity.equal arity_of_application result_arity)
     in
@@ -367,11 +361,10 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     else if provided_num_args > num_params then
       simplify_direct_over_application env r ~args ~arg_tys ~continuation
         ~exn_continuation ~callee ~callee's_closure_id function_decl
-        ~set_of_closures ~dbg ~inline ~specialise
+        ~set_of_closures ~dbg ~inline
     else if provided_num_args > 0 && provided_num_args < num_params then
       simplify_direct_partial_application env r ~callee ~callee's_closure_id
         function_decl ~args ~continuation ~exn_continuation ~dbg ~inline
-        ~specialise
     else
       Misc.fatal_errorf "Function with %d params when simplifying \
           application expression with %d arguments: %a"
@@ -407,7 +400,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~call_kind
         ~dbg
         ~inline:(Apply.inline apply)
-        ~specialise:(Apply.specialise apply)
     in
     Expr.create_apply apply, r
 
@@ -478,7 +470,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~call_kind:(Apply.call_kind apply)
         ~dbg
         ~inline:(Apply.inline apply)
-        ~specialise:(Apply.specialise apply)
     in
     callee_ty, apply, r
 

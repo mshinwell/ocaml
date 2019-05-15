@@ -74,12 +74,11 @@ let tupled_function_call_stub
     let apply =
       Flambda.Apply.create ~callee:(Name.var unboxed_version_var)
         ~continuation:return_continuation
-        ~exn_continuation
+        exn_continuation
         ~args:(Simple.vars params)
         ~call_kind
-        ~dbg:Debuginfo.none
+        Debuginfo.none
         ~inline:Default_inline
-        ~specialise:Default_specialise
     in
     Expr.create_apply apply
   in
@@ -129,7 +128,6 @@ let tupled_function_call_stub
     ~stub:true
     ~dbg
     ~inline:Default_inline
-    ~specialise:Default_specialise
     ~is_a_functor:false
 
 let register_const t (constant : Static_part.t) name
@@ -225,12 +223,11 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     let apply =
       Flambda.Apply.create ~callee:(Name.symbol call_symbol)
         ~continuation:return_continuation
-        ~exn_continuation
+        exn_continuation
         ~args
         ~call_kind
-        ~dbg
+        dbg
         ~inline:Default_inline
-        ~specialise:Default_specialise
     in
     Flambda.Expr.create_apply apply
   in
@@ -449,7 +446,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       Flambda.Let_cont.create_recursive handlers ~body
     end
   | Apply { kind; func; args; continuation; exn_continuation;
-      loc; should_be_tailcall = _; inlined; specialised; } ->
+      loc; should_be_tailcall = _; inlined; specialised = _; } ->
     let call_kind =
       match kind with
       | Function -> Call_kind.indirect_function_call_unknown_arity ()
@@ -460,12 +457,11 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let apply =
       Flambda.Apply.create ~callee:(Env.find_name env func)
         ~continuation
-        ~exn_continuation
+        exn_continuation
         ~args:(Env.find_simples env args)
         ~call_kind
-        ~dbg:(Debuginfo.from_location loc)
+        (Debuginfo.from_location loc)
         ~inline:(LC.inline_attribute inlined)
-        ~specialise:(LC.specialise_attribute specialised)
     in
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
@@ -739,7 +735,6 @@ and close_one_function t ~external_env ~by_closure_id decl
       close_exn_continuation external_env (Function_decl.exn_continuation decl)
     in
     let inline = LC.inline_attribute (Function_decl.inline decl) in
-    let specialise = LC.specialise_attribute (Function_decl.specialise decl) in
     let params_and_body =
       Flambda.Function_params_and_body.create
         ~return_continuation:(Function_decl.return_continuation decl)
@@ -751,7 +746,6 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~stub
       ~dbg
       ~inline
-      ~specialise
       ~is_a_functor:(Function_decl.is_a_functor decl)
   in
   match Function_decl.kind decl with

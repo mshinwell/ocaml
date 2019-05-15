@@ -26,11 +26,10 @@ type t = {
   call_kind : Call_kind.t;
   dbg : Debuginfo.t;
   inline : Inline_attribute.t;
-  specialise : Specialise_attribute.t;
 }
 
 let print ppf { callee; continuation; exn_continuation; args; call_kind;
-      dbg; inline; specialise; } =
+      dbg; inline; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(callee %a)@]@ \
       @[<hov 1>(continuation %a)@]@ \
@@ -38,8 +37,7 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
       @[<hov 1>(args (%a))@]@ \
       @[<hov 1>(call_kind %a)@]@ \
       @[<hov 1>(dbg %a)@]@ \
-      @[<hov 1>(inline %a)@]@ \
-      @[<hov 1>(specialise %a)@])@]"
+      @[<hov 1>(inline %a)@])@]"
     Name.print callee
     Continuation.print continuation
     Exn_continuation.print exn_continuation
@@ -47,7 +45,6 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
     Call_kind.print call_kind
     Debuginfo.print_compact dbg
     Inline_attribute.print inline
-    Specialise_attribute.print specialise
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -59,7 +56,6 @@ let invariant env
         call_kind;
         dbg;
         inline;
-        specialise;
       } as t) =
     let unbound_continuation cont reason =
       Misc.fatal_errorf "Unbound continuation %a in %s: %a"
@@ -151,11 +147,9 @@ let invariant env
       E.Continuation_stack.unify exn_continuation stack cont_stack *)
     end;
     ignore (dbg : Debuginfo.t);
-    ignore (inline : Inline_attribute.t);
-    ignore (specialise : Specialise_attribute.t)
+    ignore (inline : Inline_attribute.t)
 
-let create ~callee ~continuation ~exn_continuation ~args ~call_kind ~dbg
-      ~inline ~specialise =
+let create ~callee ~continuation exn_continuation ~args ~call_kind dbg ~inline =
   (* CR mshinwell: We should still be able to check some of the invariant
      properties now.  (We can't do them all as we don't have the
      environment.) *)
@@ -166,7 +160,6 @@ let create ~callee ~continuation ~exn_continuation ~args ~call_kind ~dbg
     call_kind;
     dbg;
     inline;
-    specialise;
   }
 
 let callee t = t.callee
@@ -176,7 +169,6 @@ let args t = t.args
 let call_kind t = t.call_kind
 let dbg t = t.dbg
 let inline t = t.inline
-let specialise t = t.specialise
 
 let free_names
       { callee;
@@ -186,7 +178,6 @@ let free_names
         call_kind;
         dbg = _;
         inline = _;
-        specialise = _;
       } =
   Name_occurrences.union_list [
     Name_occurrences.singleton_name_in_terms callee;
@@ -204,7 +195,6 @@ let apply_name_permutation
          call_kind;
          dbg;
          inline;
-         specialise;
       } as t)
       perm =
   let continuation' =
@@ -231,7 +221,6 @@ let apply_name_permutation
       call_kind = call_kind';
       dbg;
       inline;
-      specialise;
     }
 
 let with_continuation t continuation =
