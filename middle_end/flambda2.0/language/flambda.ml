@@ -1400,6 +1400,7 @@ end and Function_declaration : sig
   val params_and_body : t -> Function_params_and_body.t
   val code_id : t -> Code_id.t
   val result_arity : t -> Flambda_arity.t
+  val num_params : t -> int
   val stub : t -> bool
   val dbg : t -> Debuginfo.t
   val inline : t -> Inline_attribute.t
@@ -1536,6 +1537,12 @@ end = struct
         inline;
         is_a_functor;
       }
+
+  let num_params t =
+    Function_params_and_body.pattern_match t.params_and_body
+      ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
+              ~my_closure:_ ->
+        List.length params)
 end and Flambda_type : Flambda_type0_intf.S
     with type term_language_function_declaration := Function_declaration.t
   = Flambda_type0.Make (Function_declaration)

@@ -518,6 +518,8 @@ end and Function_declaration : sig
       function bodies. *)
   val code_id : t -> Code_id.t
 
+  val num_params : t -> int
+
   (** The arity of the return continuation of the function.  This provides the
       number of results that the function produces and their kinds. *)
   (* CR mshinwell: Be consistent everywhere as regards "result" vs "return"
