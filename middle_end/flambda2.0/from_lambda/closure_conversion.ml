@@ -839,10 +839,14 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Misc.fatal_error "Ilambda toplevel exception continuation cannot have \
       extra arguments"
   end;
+  let exn_continuation =
+    Exn_continuation.create ~exn_handler:ilam.exn_continuation.exn_handler
+      ~extra_args:[]
+  in
   let computation : Program_body.Computation.t =
     { expr;
-      return_cont;
-      exception_cont = ilam.exn_continuation.exn_handler;
+      return_continuation = return_cont;
+      exn_continuation;
       computed_values = field_vars;
     }
   in

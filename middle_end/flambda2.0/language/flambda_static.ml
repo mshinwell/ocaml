@@ -96,8 +96,6 @@ module Static_part = struct
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
     | Boxed_nativeint of Targetint.t or_variable
-    | Mutable_float_array of
-        { initial_value : Numbers.Float_by_bit_pattern.t or_variable list; }
     | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
     | Mutable_string of { initial_value : string or_variable; }
     | Immutable_string of string or_variable
@@ -117,7 +115,6 @@ module Static_part = struct
     | Boxed_int32 _
     | Boxed_int64 _
     | Boxed_nativeint _
-    | Mutable_float_array _
     | Immutable_float_array _
     | Mutable_string _
     | Immutable_string _ -> false
@@ -147,7 +144,6 @@ module Static_part = struct
     | Boxed_nativeint (Const _)
     | Mutable_string { initial_value = Const _; }
     | Immutable_string (Const _) -> Name_occurrences.empty
-    | Mutable_float_array { initial_value = fields; }
     | Immutable_float_array fields ->
       List.fold_left (fun fns (field : _ or_variable) ->
           match field with
@@ -196,12 +192,6 @@ module Static_part = struct
       fprintf ppf "@[(Boxed_nativeint %a)@]" Targetint.print n
     | Boxed_nativeint (Var v) ->
       fprintf ppf "@[(Boxed_nativeint %a)@]" Variable.print v
-    | Mutable_float_array { initial_value; } ->
-      fprintf ppf "@[(Mutable_float_array@ @[[| %a |]@])@]"
-        (Format.pp_print_list
-           ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@[; @]")
-           print_float_array_field)
-        initial_value
     | Immutable_float_array fields ->
       fprintf ppf "@[(Immutable_float_array@ @[[| %a |]@])@]"
         (Format.pp_print_list
@@ -249,7 +239,6 @@ module Static_part = struct
       | Boxed_nativeint (Const _)
       | Mutable_string { initial_value = Const _; }
       | Immutable_string (Const _) -> ()
-      | Mutable_float_array { initial_value = fields; }
       | Immutable_float_array fields ->
         List.iter (fun (field : _ or_variable) ->
             match field with
@@ -267,7 +256,7 @@ module Program_body = struct
     type t = {
       expr : Flambda.Expr.t;
       return_continuation : Continuation.t;
-      exn_continuation : Continuation.t;
+      exn_continuation : Exn_continuation.t;
       computed_values : (Variable.t * Flambda_kind.t) list;
     }
 
