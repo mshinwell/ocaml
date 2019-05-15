@@ -61,6 +61,8 @@ module type Env = sig
 
   val increment_continuation_scope_level : t -> t
 
+  val continuation_scope_level : t -> Scope_level.t
+
   val set_scope_level_for_lifted_constants : t -> Scope_level.t -> t
 
   val typing_env : t -> Flambda_type.Typing_env.t
@@ -107,6 +109,10 @@ module type Env = sig
 
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
 
+  val check_variable_is_bound : t -> Variable.t -> unit
+
+  val check_symbol_is_bound : t -> Symbol.t -> unit
+
   (** Appends the locations of inlined call-sites to the given debuginfo
       and sets the resulting debuginfo as the current one in the
       environment. *)
@@ -123,6 +129,8 @@ module type Env = sig
   val round : t -> int
 
   val disable_function_inlining : t -> t
+
+  val add_lifted_constants_from_r : t -> result -> previous_r:result -> t
 end
 
 module type Result = sig
