@@ -26,11 +26,4 @@ module type S = sig
          * Reachable.t
          * Flambda_type.t
          * Simplify_env_and_result.Result.t
-
-  val simplify_set_of_closures
-     : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Set_of_closures.t
-    -> Flambda.Set_of_closures.t * Flambda_type.t
-         * Simplify_env_and_result.Result.t
 end
