@@ -327,3 +327,5 @@ module Benefit = struct
     b - (remove_code_named lam zero)
 *)
 end
+
+let scale_inline_threshold_by = 8

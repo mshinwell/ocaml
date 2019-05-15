@@ -14,34 +14,34 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Basic simplification functions on [Simple.t], [Name.t], etc. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: Rename "simplify_simple" -> "simplify" *)
+open! Flambda.Import
 
-val simplify_simple_for_let
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Simple.t
-  -> Simple.t * Flambda_type.t * Simplify_env_and_result.Result.t
+module E = Simplify_env_and_result.Env
 
-val simplify_simple
-   : Simplify_env_and_result.Env.t
-  -> Simple.t
-  -> Simple.t * Flambda_type.t
-
-val simplify_simple_and_drop_type
-   : Simplify_env_and_result.Env.t
-  -> Simple.t
-  -> Simple.t
-
-val simplify_simples
-   : Simplify_env_and_result.Env.t
-  -> Simple.t list
-  -> (Simple.t * Flambda_type.t) list
-
-val simplify_simples_and_drop_types
-   : Simplify_env_and_result.Env.t
-  -> Simple.t list
-  -> Simple.t list
+let can_inline env function_decl =
+  (* At present, we follow Closure, taking inlining decisions without
+     first examining call sites. *)
+  match Function_declaration.inline function_decl with
+  | Never_inline -> false
+  | Always_inline | Default_inline | Unroll _ ->
+    if Function_declaration.stub function_decl then true
+    else
+      Function_params_and_body.pattern_match
+        (Function_declaration.params_and_body function_decl)
+        ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
+                ~my_closure:_ ->
+          let inlining_threshold : Inlining_cost.Threshold.t =
+            let round = E.round env in
+            let unscaled =
+              Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
+            in
+            (* CR-soon pchambart: Add a warning if this is too big
+               mshinwell: later *)
+            Can_inline_if_no_larger_than
+              (int_of_float
+                (unscaled *.
+                  (float_of_int Inlining_cost.scale_inline_threshold_by)))
+          in
+          Inlining_cost.can_inline body inlining_threshold ~bonus:0)

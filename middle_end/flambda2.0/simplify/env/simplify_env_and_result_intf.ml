@@ -123,6 +123,8 @@ module type Env = sig
       precise location information. This function sets the current
       call-site being inlined.  *)
   val set_inline_debuginfo : t -> dbg:Debuginfo.t -> t
+
+  val round : t -> int
 end
 
 module type Result = sig
