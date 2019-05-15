@@ -15,11 +15,10 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
-
-open! Flambda.Import
+(* CR mshinwell: Fix warning 60 *)
+[@@@ocaml.warning "-60"]
 
 module E = Simplify_env_and_result.Env
-module R = Simplify_env_and_result.Result
 
 module Outer_namespace = struct
   module Simplify_expr = Simplify_expr

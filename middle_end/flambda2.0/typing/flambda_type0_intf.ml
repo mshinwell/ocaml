@@ -813,12 +813,15 @@ module type S = sig
   val immutable_float_array
      : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
+*)
 
   (** The type of a block with a known tag, size and field types. *)
   val block
      : Tag.t
     -> fields:t list
     -> t
+
+(*
 
   (** Like [block], except that the field types are statically known to be
       of kind [Value]). *)
