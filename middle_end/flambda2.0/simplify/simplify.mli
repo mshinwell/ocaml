@@ -23,7 +23,7 @@
     [Inlining_decision] module first.
 *)
 val run
-   : backend:(module Backend_intf.S)
+   : backend:(module Flambda2_backend_intf.S)
   -> round:int
   -> Flambda_static.Program.t
   -> Flambda_static.Program.t

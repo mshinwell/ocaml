@@ -36,13 +36,13 @@ module type Env = sig
   (** Create a new environment. *)
   val create
      : round:int
-    -> backend:(module Backend_intf.S)
+    -> backend:(module Flambda2_backend_intf.S)
     -> scope_level_for_lifted_constants:Scope_level.t
     -> t
 
   (** Obtain the first-class module that gives information about the
       compiler backend being used for compilation. *)
-  val backend : t -> (module Backend_intf.S)
+  val backend : t -> (module Flambda2_backend_intf.S)
 
   val resolver : t -> (Export_id.t -> Flambda_type.t option)
 
@@ -175,4 +175,6 @@ module type Result = sig
   val get_lifted_constants : t -> lifted_constants
 
   val clear_env_extension : t -> t
+
+  val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

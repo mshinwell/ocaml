@@ -181,8 +181,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~exn_continuation:apply_exn_continuation dbg inline =
     let inlined =
       Inlining_transforms.inline env ~callee ~args
-        ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~apply_return_continuation ~apply_exn_continuation
+        ~function_decl ~apply_return_continuation ~apply_exn_continuation
         dbg (inline : Inline_attribute.t)
     in
     match inlined with
