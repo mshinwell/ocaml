@@ -145,7 +145,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       simplify_recursive_let_cont_handlers env r handlers
 
   and simplify_direct_full_application env r call ~callee ~args
-        ~function_decl ~continuation:apply_return_continuation
+        function_decl ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation dbg apply inline =
     let inlined =
       Inlining_transforms.inline env ~callee ~args
@@ -156,22 +156,20 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     | None ->
       simplify_function_call_where_callee's_type_unavailable env r call
         ~callee ~args dbg apply
-    | Some inlined -> simplify_expr env r expr
+    | Some (env, inlined) -> simplify_expr env r inlined
 
   and simplify_direct_partial_application env r ~callee ~args
-        ~callee's_closure_id
-        ~(function_decl : Flambda_type.inlinable_function_declaration)
+        ~callee's_closure_id function_decl
         ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
-        dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
-        apply =
+        dbg (inline : Inline_attribute.t) _specialise apply =
     (* For simplicity, we disallow [@inline] attributes on partial
        applications.  The user may always write an explicit wrapper instead
        with such an attribute. *)
     (* CR-someday mshinwell: Pierre noted that we might like a function to be
        inlined when applied to its first set of arguments, e.g. for some kind
        of type class like thing. *)
-    begin match (inline : Flambda.inline_attribute) with
+    begin match inline with
     | Always_inline | Never_inline ->
       Location.prerr_warning (Debuginfo.to_location dbg)
         (Warnings.Inlining_impossible "[@inlined] attributes may not be used \
@@ -182,18 +180,10 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           on partial applications")
     | Default_inline -> ()
     end;
-    begin match (specialise : Flambda.specialise_attribute) with
-    | Always_specialise | Never_specialise ->
-      Location.prerr_warning (Debuginfo.to_location dbg)
-        (Warnings.Inlining_impossible "[@specialised] attributes may not be \
-          used on partial applications")
-    | Default_specialise -> ()
-    end;
-    let function_decl = function_decl.term_language_function_decl in
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~return_continuation:_ _exn_continuation params ~param_relations:_
-            ~body:_ ~my_closure:_ ->
+      ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
+              ~my_closure:_ ->
         (* Since we're not inlining, the continuation parameters and body
            of the function declaration, etc., are irrelevant. *)
         let arity = List.length params in
@@ -201,7 +191,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let applied_args, remaining_params =
           Misc.Stdlib.List.map2_prefix (fun arg param ->
               let kind = KP.kind param in
-              if not (K.equal kind (K.value ())) then begin
+              if not (K.equal kind K.value) then begin
                 Misc.fatal_errorf "Non-[value] kind in partial application: %a"
                   Apply.print apply
               end;
@@ -210,7 +200,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         in
         let return_arity = Function_declaration.result_arity function_decl in
         begin match return_arity with
-        | [kind] when Flambda_kind.equal kind (K.value ()) -> ()
+        | [kind] when Flambda_kind.equal kind K.value -> ()
         | _ ->
           Misc.fatal_errorf "Partially-applied function with non-[value] \
               return kind: %a"
@@ -291,8 +281,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           (Expr.create_apply_cont apply_cont))
 
   and simplify_direct_over_application env r ~callee ~args
-        ~callee's_closure_id
-        ~(function_decl : Flambda_type.inlinable_function_declaration)
+        ~callee's_closure_id function_decl
         ~continuation:apply_return_continuation
         ~exn_continuation:apply_exn_continuation
         dbg (inline : Inline_attribute.t) (specialise : Specialise_attribute.t)
@@ -350,8 +339,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         simplify env r expr)
 
   and simplify_inlinable_direct_function_call env r ~callee's_closure_id
-        ~(function_decl : T.inlinable_function_declaration)
-        ~(set_of_closures : T.set_of_closures)
+        function_decl ~(set_of_closures : T.set_of_closures)
         call ~callee ~args dbg apply =
     let arity_of_application = Call_kind.return_arity apply.call_kind in
     let result_arity = List.map T.kind function_decl.result in
@@ -374,15 +362,15 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let num_params = List.length function_decl.params in
     if provided_num_args = num_params then
       simplify_direct_full_application env r call
-        ~callee ~callee's_closure_id ~function_decl ~set_of_closures
+        ~callee ~callee's_closure_id function_decl ~set_of_closures
         ~args ~arg_tys ~continuation ~exn_continuation dbg apply inline
     else if provided_num_args > num_params then
       simplify_direct_over_application env r ~args ~arg_tys ~continuation
-        ~exn_continuation ~callee ~callee's_closure_id ~function_decl
+        ~exn_continuation ~callee ~callee's_closure_id function_decl
         ~set_of_closures ~dbg ~inline ~specialise
     else if provided_num_args > 0 && provided_num_args < num_params then
       simplify_direct_partial_application env r ~callee ~callee's_closure_id
-        ~function_decl ~args ~continuation ~exn_continuation ~dbg ~inline
+        function_decl ~args ~continuation ~exn_continuation ~dbg ~inline
         ~specialise
     else
       Misc.fatal_errorf "Function with %d params when simplifying \
@@ -456,8 +444,11 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             let closure_ty = T.of_ty_fabricated closure_ty in
             match T.prove_closure (E.typing_env env) closure_ty with
             | Proved { function_decls = Inlinable function_decl; } ->
+              let function_decl =
+                T.term_language_function_declaration function_decl
+              in
               simplify_inlinable_direct_function_call env r
-                ~callee's_closure_id ~function_decl ~set_of_closures
+                ~callee's_closure_id function_decl ~set_of_closures
                 call ~callee ~args dbg apply
             | Proved { function_decls = Non_inlinable None; } ->
               type_unavailable ()
