@@ -18,7 +18,6 @@
 
 open! Flambda.Import
 
-module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
@@ -130,69 +129,48 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     in
     set_of_closures, r
 
-  let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
-    match to_lift with
-    | Boxed_float f -> Boxed_float (Const f)
-    | Boxed_int32 i -> Boxed_int32 (Const i)
-    | Boxed_int64 i -> Boxed_int64 (Const i)
-    | Boxed_nativeint i -> Boxed_nativeint (Const i)
-
-  let try_to_reify env r ty ~(term : Reachable.t) ~result_var ~remove_term
-        ~cannot_lift =
-    match term with
-    | Invalid _ -> 
-      let ty = T.bottom_like ty in
-      [], term, ty, remove_term r
-    | Reachable _ ->
-      match T.reify env ty ~allow_free_variables:true with
-      | Term (simple, ty) ->
-        let term = Named.create_simple simple in
-        [], Reachable.reachable term, ty, remove_term r
-      | Lift to_lift ->
-        if cannot_lift then [], term, ty, r
-        else
-          let symbol, r =
-            let name = Variable.unique_name result_var in
-            let static_part = create_static_part to_lift in
-            R.new_lifted_constant r ~name ty static_part
-          in
-          let symbol = Simple.symbol symbol in
-          let ty = T.alias_type_of (T.kind ty) symbol in
-          let term = Named.create_simple symbol in
-          [], Reachable.reachable term, ty, r
-      | Cannot_reify -> [], term, ty, r
-      | Invalid ->
-        let ty = T.bottom_like ty in
-        [], Reachable.invalid (), ty, remove_term r
-
-  let simplify_named env r (tree : Named.t) ~result_var =
-    (* CR mshinwell: Think about how the lifted constants collected in [r]
-       are propagated. *)
+  let simplify_named0 env r (named : Named.t) ~result_var =
     let typing_env = E.typing_env env in
-    match tree with
+    match named with
     | Simple simple ->
       let simple, ty, r =
         Simplify_simple.simplify_simple_for_let env r simple
       in
-      [], Reachable.reachable (Named.create_simple simple), ty, r
+      let env = E.add_simple env simple ty in
+      Reachable.reachable (Named.create_simple simple), env, ty, r
     | Prim (prim, dbg) ->
-      let term, ty, r =
+      let term, env_extension, r =
         Simplify_primitive.simplify_primitive env r prim dbg ~result_var
       in
-      let remove_primitive r =
-        R.map_benefit r (B.remove_primitive_application prim)
-      in
+      let env = E.extend_typing_environment env env_extension in
       let effects_and_coeffects_ok =
         Flambda_primitive.With_fixed_value.eligible prim
       in
-      try_to_reify typing_env r ty ~term ~result_var
-        ~remove_term:remove_primitive
-        ~cannot_lift:(not effects_and_coeffects_ok)
+      Reification.try_to_reify typing_env r ty term
+        ~bound_to:result_var ~cannot_lift:(not effects_and_coeffects_ok)
     | Set_of_closures set_of_closures ->
       let term, ty, r =
         simplify_set_of_closures env r set_of_closures ~result_var
       in
-      try_to_reify typing_env r ty ~term:(Reachable.reachable term) ~result_var
-        ~remove_term:(fun r -> r)
-        ~cannot_lift:false
+      Reification.try_to_reify typing_env r ty (Reachable.reachable term)
+        ~bound_to:result_var ~cannot_lift:false
+
+  let simplify_named env r named ~result_var =
+    let r = R.get_lifted_constants r in
+    let named, env, ty, r =
+      Simplify_named.simplify_named0 env r named ~result_var
+    in
+    let lifted_constants =
+      Symbol.Map.diff_domains (R.get_lifted_constants r)
+        already_lifted_constants
+    in
+    let env = E.add_lifted_constants env lifted_constants in
+    let named : Reachable.t =
+      match named with
+      | Invalid _ -> named
+      | Reachable _ ->
+        if T.is_bottom (E.typing_env env) ty then Reachable.invalid ()
+        else named
+    in
+    env, r, ty, named
 end

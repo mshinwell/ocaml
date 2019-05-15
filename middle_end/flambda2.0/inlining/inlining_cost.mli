@@ -66,13 +66,6 @@ module Benefit : sig
   val direct_call_of_indirect_unknown_arity : t -> t
   val direct_call_of_indirect_known_arity : t -> t
   val requested_inline : t -> size_of:Expr.t -> t
-(*
-  val remove_code : Expr.t -> t -> t
-  val remove_code_named : Named.t -> t -> t
-
-  val add_code : Expr.t -> t -> t
-  val add_code_named : Named.t -> t -> t
-*)
 
   val print : Format.formatter -> t -> unit
 end

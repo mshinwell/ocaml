@@ -18,7 +18,6 @@
 
 open! Flambda.Import
 
-module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module KP = Kinded_parameter
@@ -36,59 +35,25 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let module L = Flambda.Let in
     (* CR mshinwell: Consider if we need to resurrect a special fold
        function for lets. *)
-    Flambda.Let.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-      let r = R.clear_env_extension r in
-      let already_lifted_constants = R.get_lifted_constants r in
-      let original_defining_expr = L.defining_expr let_expr in
-      let new_bindings, defining_expr, ty, r =
-        Simplify_named.simplify_named env r original_defining_expr
+    L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
+      let defining_expr, env, ty, r =
+        Simplify_named.simplify_named env r (L.defining_expr let_expr)
           ~result_var:bound_var
       in
-      let lifted_constants =
-        Symbol.Map.diff_domains (R.get_lifted_constants r)
-          already_lifted_constants
-      in
-      let env = E.add_lifted_constants env lifted_constants in
       let kind = L.kind let_expr in
       let new_kind = T.kind ty in
-      if not (K.compatible new_kind ~if_used_at:kind) then begin
+      if not (K.equal new_kind kind) then begin
         Misc.fatal_errorf "Kind error during simplification of [Let] \
             binding (old kind %a, new kind %a):@ %a"
           K.print kind
           K.print new_kind
-          Flambda.Let.print let_expr
+          L.print let_expr
       end;
-      let defining_expr : Reachable.t =
-        match defining_expr with
-        | Invalid _ -> defining_expr
-        | Reachable _ ->
-          if T.is_bottom (E.typing_env env) ty then
-            Reachable.invalid ()
-          else
-            defining_expr
-      in
-      let update_benefit_when_defining_expr_removed r =
-        R.map_benefit r (B.remove_code_named original_defining_expr)
-      in
       match defining_expr with
-      | Invalid _ ->
-        let r = update_benefit_when_defining_expr_removed r in
-        Expr.create_invalid (), r
+      | Invalid _ -> Expr.create_invalid (), r
       | Reachable defining_expr ->
-        let env =
-          E.extend_typing_environment (E.add_variable env bound_var ty)
-            ~env_extension:new_env_extension
-        in
-        let expr, let_creation_result =
-          Expr.create_let0 bound_var kind defining_expr
-            (simplify_expr env r body)
-        in
-        let r =
-          match let_creation_result with
-          | Have_deleted defining_expr ->
-            update_benefit_when_defining_expr_removed r
-          | Nothing_deleted -> r
-        in
+        let body, r = simplify_expr env r body in
+        let expr = Expr.create_let bound_var kind defining_expr body in
         expr, r)
 
   and simplify_one_continuation_handler env r cont_handler =
@@ -119,8 +84,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       ~f:(fun cont ~body ->
         (* Lifted constants arising from simplification of the body need to
            be collected up and put in the environment before simplifying the
-           handler, since the type of the continuation's arguments may involve
-           the associated symbols. *)
+           handler, since the type(s) of the continuation's parameter(s) may
+           involve the associated symbols. *)
         let already_lifted_constants = R.get_lifted_constants r in
         let body, r =
           let env =
@@ -400,16 +365,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         Flambda_arity.print arity_of_application
         T.print_inlinable_function_declaration function_decl
     end;
-    let r =
-      match call with
-      | Indirect_unknown_arity ->
-        R.map_benefit r B.direct_call_of_indirect_unknown_arity
-      | Indirect_known_arity _ ->
-        (* CR mshinwell: This should check that the [param_arity] inside
-           the call kind is compatible with the kinds of [args]. *)
-        R.map_benefit r B.direct_call_of_indirect_known_arity
-      | Direct _ -> r
-    in
+    (* CR mshinwell: We should check that the [param_arity] inside
+       the call kind is compatible with the kinds of [args]. *)
     let provided_num_args = List.length args in
     let num_params = List.length function_decl.params in
     if provided_num_args = num_params then
