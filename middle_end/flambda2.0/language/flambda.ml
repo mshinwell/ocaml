@@ -1010,10 +1010,11 @@ end and Continuation_handler : sig
   val stub : t -> bool
   val is_exn_handler : t -> bool
   type behaviour = private
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
   val behaviour : t -> behaviour
+  val arity : t -> Flambda_arity.t
   val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
 end = struct
   type t = {
@@ -1121,32 +1122,40 @@ end = struct
       }
 
   type behaviour =
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
 
   let behaviour t : behaviour =
     (* This could be replaced by a more sophisticated analysis, but for the
        moment we just use a simple syntactic check. *)
-    if t.is_exn_handler then
-      Unknown
-    else
-      Continuation_params_and_handler.pattern_match t.params_and_handler
-        ~f:(fun params ~handler ->
+    Continuation_params_and_handler.pattern_match t.params_and_handler
+      ~f:(fun params ~handler ->
+        let arity = Kinded_parameter.List.arity params in
+        if t.is_exn_handler then
+          Unknown { arity; }
+        else
           match Expr.descr handler with
           | Apply_cont apply_cont ->
             begin match Apply_cont.trap_action apply_cont with
-            | Some _ -> Unknown
+            | Some _ -> Unknown { arity; }
             | None ->
               let args = Apply_cont.args apply_cont in
               let params = List.map KP.simple params in
               if Misc.Stdlib.List.compare Simple.compare args params = 0 then
-                Alias_for (Apply_cont.continuation apply_cont)
+                Alias_for {
+                  arity;
+                  alias_for = Apply_cont.continuation apply_cont;
+                }
               else
-                Unknown
+                Unknown { arity; }
             end
-          | Invalid _ -> Unreachable
-          | _ -> Unknown)
+          | Invalid _ -> Unreachable { arity; }
+          | _ -> Unknown { arity; })
+
+  let arity t =
+    Continuation_params_and_handler.pattern_match t.params_and_handler
+      ~f:(fun params ~handler:_ -> Kinded_parameter.List.arity params)
 
   let with_params_and_handler t params_and_handler =
     { t with params_and_handler; }
