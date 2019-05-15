@@ -30,6 +30,9 @@ module Make
   (Simplify_named : Simplify_named_intf.S)
   (Simplify_toplevel : Simplify_toplevel_intf.S) =
 struct
+  (* CR-someday mshinwell: Add improved simplification using types (we have
+     prototype code to do this). *)
+
   let simplify_of_kind_value env (of_kind_value : Of_kind_value.t) =
     begin match of_kind_value with
     | Symbol sym -> E.check_symbol_is_bound env sym
@@ -55,7 +58,8 @@ struct
       in
       Block (tag, is_mutable, fields), r
     | Fabricated_block var ->
-      Fabricated_block (simplify_or_variable env var), r
+      E.check_variable_is_bound env var;
+      static_part, r
     | Set_of_closures set_of_closures ->
       let set_of_closures, r =
         Simplify_named.simplify_set_of_closures_and_drop_type env r
@@ -65,15 +69,25 @@ struct
     | Closure (sym, closure) ->
       E.check_symbol_is_bound env sym;
       static_part, r
-    | Boxed_float or_var -> Boxed_float (simplify_or_variable env var), r
-    | Boxed_int32 or_var -> Boxed_int32 (simplify_or_variable env var), r
-    | Boxed_int64 or_var -> Boxed_int64 (simplify_or_variable env var), r
+    | Boxed_float or_var -> Boxed_float (simplify_or_variable env or_var), r
+    | Boxed_int32 or_var -> Boxed_int32 (simplify_or_variable env or_var), r
+    | Boxed_int64 or_var -> Boxed_int64 (simplify_or_variable env or_var), r
     | Boxed_nativeint or_var ->
-      Boxed_nativeint (simplify_or_variable env var), r
+      Boxed_nativeint (simplify_or_variable env or_var), r
+    | Immutable_float_array fields ->
+      let fields =
+        List.map (fun field -> simplify_or_variable env field) fields
+      in
+      Immutable_float_array fields, r
+    | Mutable_string { initial_value; } ->
+      Mutable_string {
+        initial_value = simplify_or_variable env initial_value;
+      }, r
     | Immutable_string or_var ->
-      Immutable_string (simplify_or_variable env var), r
+      Immutable_string (simplify_or_variable env or_var), r
 
-  let simplify_computation env r (computation : Program_body.Computation.t) =
+  let simplify_computation env r
+        (computation : Program_body.Computation.t option) =
     match computation with
     | None -> env, r, None
     | Some computation ->
@@ -89,7 +103,7 @@ struct
       let previous_r = r in
       let expr, r =
         Simplify_toplevel.simplify_toplevel env r computation.expr
-          ~continuation:computation.return_computation
+          ~return_continuation:computation.return_continuation
           computation.exn_continuation
           ~scope_level_for_lifted_constants
       in
@@ -108,8 +122,9 @@ struct
     let str_rev, next_env, result =
       List.fold_left (fun (str_rev, next_env, r)
                 ((bound_syms : Program_body.Bound_symbols.t), static_part) ->
-          let static_part, ty, r = simplify_static_part env r static_part in
+          let static_part, r = simplify_static_part env r static_part in
           let str_rev = (bound_syms, static_part) :: str_rev in
+          let ty = T.any_value () in
           let next_env =
             match bound_syms with
             | Singleton (sym, kind) -> E.add_symbol next_env sym ty
@@ -128,10 +143,10 @@ struct
                 next_env
           in
           str_rev, next_env, r)
-        str
         ([], env, r)
+        str
     in
-    List.rev str_rev, next_result
+    next_env, result, List.rev str_rev
 
   let simplify_definition env r (defn : Program_body.Definition.t) =
     let env, r, computation = simplify_computation env r defn.computation in
@@ -144,23 +159,6 @@ struct
       }
     in
     definition, env, r
-
-  let add_lifted_constants lifted_constants (body : Program_body.t) =
-    (* CR mshinwell: Dependencies between lifted constants?  Need to get the
-       ordering correct. *)
-    Symbol.Map.fold (fun symbol (_ty, kind, static_part) body 
-              : Program_body.t ->
-        let bound_symbols : Program_body.Bound_symbols.t =
-          Singleton (symbol, kind)
-        in
-        let definition : Program_body.Definition.t =
-          { computation = None;
-            static_structure = [bound_symbols, static_part];
-          }
-        in
-        Define_symbol (definition, body))
-      (Symbol.Map.bindings lifted_constants)
-      body
 
   let rec simplify_program_body env r (body : Program_body.t)
         : Program_body.t * R.t =
@@ -178,19 +176,36 @@ struct
       Symbol.Set.inter (Symbol.Map.keys imported_symbols)
         (Symbol.Map.keys predef_exn_symbols)
     in
-    if not (Symbol.Map.empty wrong_symbols) then begin
+    if not (Symbol.Set.is_empty wrong_symbols) then begin
       Misc.fatal_errorf "Program's [imported_symbols] (%s) must not contain \
           predefined exception symbols"
         descr
     end
 
+  let define_lifted_constants lifted_constants (body : Program_body.t) =
+    (* CR mshinwell: Dependencies between lifted constants?  Need to get the
+       ordering correct. *)
+    Symbol.Map.fold (fun symbol (_ty, kind, static_part) body 
+              : Program_body.t ->
+        let bound_symbols : Program_body.Bound_symbols.t =
+          Singleton (symbol, kind)
+        in
+        let definition : Program_body.Definition.t =
+          { computation = None;
+            static_structure = [bound_symbols, static_part];
+          }
+        in
+        Define_symbol (definition, body))
+      lifted_constants
+      body
+
   let simplify_program env (program : Program.t) : Program.t =
     let backend = E.backend env in
-    let module Backend = (val backend : Backend_intf.S) in
+    let module Backend = (val backend : Flambda2_backend_intf.S) in
     let predef_exn_symbols =
       Symbol.Set.fold (fun symbol predef_exn_symbols ->
           Symbol.Map.add symbol K.value predef_exn_symbols)
-        (Backend.all_predefined_exception_symbols ())
+        Backend.all_predefined_exception_symbols
         Symbol.Map.empty
     in
     let env =
@@ -204,6 +219,7 @@ struct
       ~descr:"before simplification";
     let r = R.create ~resolver:(E.resolver env) in
     let body, r = simplify_program_body env r program.body in
+    let body = define_lifted_constants (R.get_lifted_constants r) body in
     let imported_symbols = R.imported_symbols r in
     check_imported_symbols_don't_overlap_predef_exns
       ~imported_symbols:imported_symbols ~predef_exn_symbols

@@ -51,6 +51,8 @@ module Static_part : sig
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
     | Boxed_nativeint of Targetint.t or_variable
+    | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
+    | Mutable_string of { initial_value : string or_variable; }
     | Immutable_string of string or_variable
 
   (** Print a static structure definition to a formatter. *)

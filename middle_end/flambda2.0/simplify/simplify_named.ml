@@ -128,7 +128,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     let set_of_closures, _ty, r =
       simplify_set_of_closures0 env r set_of_closures ~result_var
     in
-    term, r
+    set_of_closures, r
 
   let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
     match to_lift with
