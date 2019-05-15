@@ -18,8 +18,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
 module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
