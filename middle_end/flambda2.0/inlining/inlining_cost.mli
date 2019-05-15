@@ -76,3 +76,5 @@ module Benefit : sig
 
   val print : Format.formatter -> t -> unit
 end
+
+val scale_inline_threshold_by : int

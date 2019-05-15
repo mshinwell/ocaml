@@ -90,7 +90,6 @@ module type S = sig
     val is_empty : t -> bool
   end
 
-(*
   type 'a ty
   type 'a unknown_or_join
 
@@ -100,36 +99,8 @@ module type S = sig
 
   type function_declaration
 
-  module rec Function_type : sig
-    (** Dependent function types.
-
-        Logical variables introduced by the parameter types may be used in the
-        result types.
-    *)
-
-    type t 
-
-    (** Perform invariant checks upon the given function type. *)
-    val invariant : t -> unit
-
-    val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-    (** Create a function type from parameter and result types. *)
-    val create
-       : parameters:flambda_type list
-      -> results:flambda_type list
-      -> t
-
-    (** The function type all of whose parameters and result types and arities
-        are unknown. *)
-    val create_unknown : unit -> t
-
-    val create_bottom : unit -> t
-
-    (** Add or meet the definitions and equations from the given function type
-        into the given typing environment. *)
-    val introduce : t -> Typing_env.t -> Typing_env.t
-  end and Join_env : sig
+(*
+  module rec Join_env : sig
     type t
 
     (** Perform various invariant checks upon the given join environment. *)
@@ -173,22 +144,6 @@ module type S = sig
       -> perm_left:Name_permutation.t
       -> perm_right:Name_permutation.t
       -> t
-  end and Parameters : sig
-    include Contains_names.S
-
-    val print : Format.formatter -> t -> unit
-
-    val invariant : t -> unit
-
-    val create_bottom : unit -> t
-
-    val create : flambda_type list -> t
-
-    (** Greatest lower bound. *)
-    val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
-
-    (** Least upper bound. *)
-    val join : Join_env.t -> t -> t -> t
   end and Typing_env : sig
 
 (*
@@ -897,13 +852,14 @@ module type S = sig
   (** The bottom type for kind [Fabricated] expressed as a type whose kind is
       statically known. *)
   val bottom_as_ty_fabricated : unit -> ty_fabricated
+*)
 
   (** Create an "bottom" type with the same kind as the given type. *)
   val bottom_like : t -> t
 
   (** Create an "unknown" type with the same kind as the given type. *)
   val unknown_like : t -> t
-
+  
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
      : term_language_function_declaration
@@ -915,20 +871,25 @@ module type S = sig
      : unit
     -> function_declaration
 
+  val term_language_function_declaration
+     : function_declaration
+    -> term_language_function_declaration option
+
   (** Create a closure type given full information about the closure. *)
   val closure
      : Closure_id.t
     -> function_declaration
-    -> Function_type.t XXX
     -> ty_value Var_within_closure.Map.t
     -> set_of_closures:ty_fabricated
     -> t
 
+(*
   (** The type of a closure (of kind [Value]) containing at least one
       closure that holds the given closure variable with the given type. *)
   val closure_containing_at_least
      : Var_within_closure.t
     -> t
+*)
 
   (** The type of a set of closures containing exactly those closure IDs
       with the given types. *)
@@ -936,6 +897,7 @@ module type S = sig
      : closures:t Closure_id.Map.t
     -> t
 
+(*
   (** The type of a set of closures containing at least one closure with
       the given closure ID. *)
   val set_of_closures_containing_at_least : Closure_id.t -> t
@@ -949,10 +911,12 @@ module type S = sig
   (** Like [alias_type_of], but for types of kind [Value], and returns the
       [ty] rather than a [t]. *)
   val alias_type_of_as_ty_value : Simple.t -> ty_value
+*)
 
   (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
   val alias_type_of_as_ty_fabricated : Simple.t -> ty_fabricated
 
+(*
   (** The type that is equal to another type, found in a .cmx file, named
       by export identifier. *)
   val alias_type : Flambda_kind.t -> Export_id.t -> t
@@ -961,12 +925,12 @@ module type S = sig
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
 
-(*
 
   (** Enforce that a type is of kind [Value], returning the corresponding
       [ty]. *)
   val force_to_kind_value : t -> ty_value
 
+(*
   (** Enforce that a type is of a naked number kind, returning the
       corresponding [ty]. *)
   val force_to_kind_naked_number
@@ -1034,6 +998,7 @@ module type S = sig
 
   (** Whether all types in the given list do *not* satisfy [useful]. *)
   val all_not_useful : (t list -> bool) type_accessor
+*)
 
 (*
   (** Whether values of the given two types will always be physically equal
@@ -1080,6 +1045,7 @@ module type S = sig
     -> t
     -> reification_result) type_accessor
 
+(*
   type 'a proof = private
     | Proved of 'a
     | Unknown

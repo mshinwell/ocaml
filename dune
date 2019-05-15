@@ -112,7 +112,7 @@
    symbol variable
 
    ;; middle_end/closure/
-   closure
+   closure closure_middle_end
 
    ;; middle_end/flambda/base_types/
    closure_element closure_id closure_origin export_id id_types mutable_variable

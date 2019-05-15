@@ -46,14 +46,6 @@ let simplify_simple_for_let env r (simple : Simple.t) =
   | Discriminant t -> simple, T.this_discriminant t, r
   | Name name -> simplify_name_for_let env r name
 
-let simplify_name env name =
-  let typing_env = E.typing_env env in
-  let ty = TE.find_exn typing_env name in
-  let ty, canonical_simple = TE.resolve_aliases typing_env ty in
-  match canonical_simple with
-  | None -> Simple.name name, ty
-  | Some canonical_simple -> canonical_simple, ty
-
 let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c

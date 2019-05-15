@@ -47,88 +47,85 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           in
           let function_decl =
             Function_params_and_body.create ~return_continuation
-              ~exn_continuation params body ~my_closure
+              exn_continuation params ~body ~my_closure
           in
           function_decl, r)
-    in
-    let can_inline =
-      (* At present, we follow Closure, taking inlining decisions without
-         first examining call sites. *)
-      match Function_declaration.inline function_decl with
-      | Never_inline -> false
-      | Always_inline | Default_inline | Unroll _ ->
-        if Function_declaration.stub function_decl then true
-        else
-          let inlining_threshold =
-            let unscaled =
-              Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
-            in
-            (* CR-soon pchambart: Add a warning if this is too big
-               mshinwell: later *)
-            Can_inline_if_no_larger_than
-              (int_of_float
-                (unscaled *.
-                  (float_of_int Inlining_cost.scale_inline_threshold_by)))
-          in
-          Inlining_cost.can_inline body inlining_threshold ~bonus:0
     in
     let function_decl =
       Function_declaration.update_params_and_body function_decl params_and_body
     in
     let function_decl_type =
-      if can_inline then T.create_inlinable_function_declaration function_decl
-      else T.create_non_inlinable_function_declaration ()
+      if Inlining_decision.can_inline env function_decl then
+        T.create_inlinable_function_declaration function_decl
+      else
+        T.create_non_inlinable_function_declaration ()
     in
     function_decl, function_decl_type, r
 
-  let simplify_set_of_closures env r set_of_closures
-        : Flambda.Set_of_closures.t * T.t * R.t =
-    let env = E.entering_set_of_closures env in
+  let simplify_set_of_closures env r set_of_closures ~result_var =
     let function_decls = Set_of_closures.function_decls set_of_closures in
+    (* CR mshinwell: Shouldn't [Function_declarations.set_of_closures_origin]
+       be on [Set_of_closures]? *)
+    let set_of_closures_origin =
+      Function_declarations.set_of_closures_origin function_decls
+    in
+    let env = E.entering_set_of_closures env set_of_closures_origin in
     let funs = Function_declarations.funs function_decls in
     let funs, fun_types, r =
       Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
           let function_decl, ty, r =
             simplify_function env r closure_id function_decls function_decl
           in
-          let funs = Closure_id.Map.add closure_id function_decl in
-          let fun_types = Closure_id.Map.add closure_id fun_types in
+          let funs = Closure_id.Map.add closure_id function_decl funs in
+          let fun_types = Closure_id.Map.add closure_id ty fun_types in
           funs, fun_types, r)
         funs
-        (Closure_id.Map.empty, r)
+        (Closure_id.Map.empty, Closure_id.Map.empty, r)
     in
     let function_decls = Function_declarations.create funs in
     let closure_elements, closure_element_types, r =
       Var_within_closure.Map.fold
         (fun var_within_closure simple
              (closure_elements, closure_element_types, r) ->
-          let simple, ty, r = Simplify_simple.simplify env r simple in
+          let simple, ty = Simplify_simple.simplify_simple env simple in
           let closure_elements =
             Var_within_closure.Map.add var_within_closure simple
               closure_elements
           in
+          let ty_value = T.force_to_kind_value ty in
           let closure_element_types =
-            Var_within_closure.Map.add var_within_closure ty
+            Var_within_closure.Map.add var_within_closure ty_value
               closure_element_types
           in
-          closure_elements, closure_element_types r)
+          closure_elements, closure_element_types, r)
         (Set_of_closures.closure_elements set_of_closures)
         (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
     in
     let set_of_closures =
       Set_of_closures.create ~function_decls ~closure_elements
     in
+    (* The resulting set-of-closures and closures types are recursive. *)
+    let set_of_closures_ty_fabricated =
+      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
+    in
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
           T.closure closure_id function_decl_type closure_element_types
-            ~set_of_closures:42) (* XXX *)
+            ~set_of_closures:set_of_closures_ty_fabricated)
         fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    Named.set_of_closures set_of_closures, set_of_closures_type, r
+    Named.create_set_of_closures set_of_closures, set_of_closures_type, r
 
-  let try_to_reify env r ty ~(term : Reachable.t) ~result_var
-        ~remove_term ~cannot_lift =
+  let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
+    match to_lift with
+    | Boxed_float f -> Boxed_float (Const f)
+    | Boxed_int32 i -> Boxed_int32 (Const i)
+    | Boxed_int64 i -> Boxed_int64 (Const i)
+    | Boxed_nativeint i -> Boxed_nativeint (Const i)
+
+  let try_to_reify env r ty ~(term : Reachable.t) ~result_var ~remove_term
+        ~cannot_lift =
     match term with
     | Invalid _ -> 
       let ty = T.bottom_like ty in
@@ -136,17 +133,19 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     | Reachable _ ->
       match T.reify env ty ~allow_free_variables:true with
       | Term (simple, ty) ->
-        let term : Named.t = Simple simple in
+        let term = Named.create_simple simple in
         [], Reachable.reachable term, ty, remove_term r
-      | Lift static_part ->
+      | Lift to_lift ->
         if cannot_lift then [], term, ty, r
         else
           let symbol, r =
             let name = Variable.unique_name result_var in
+            let static_part = create_static_part to_lift in
             R.new_lifted_constant r ~name ty static_part
           in
-          let ty = T.alias_type_of (T.kind ty) (Name.symbol symbol) in
-          let term = Named.simple (Simple.name name) in
+          let symbol = Simple.symbol symbol in
+          let ty = T.alias_type_of (T.kind ty) symbol in
+          let term = Named.create_simple symbol in
           [], Reachable.reachable term, ty, r
       | Cannot_reify -> [], term, ty, r
       | Invalid ->
@@ -156,13 +155,13 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
   let simplify_named env r (tree : Named.t) ~result_var =
     (* CR mshinwell: Think about how the lifted constants collected in [r]
        are propagated. *)
-    let typing_env = E.get_typing_environment env in
+    let typing_env = E.typing_env env in
     match tree with
     | Simple simple ->
       let simple, ty, r =
         Simplify_simple.simplify_simple_for_let env r simple
       in
-      [], Reachable.reachable (Named.simple simple), ty, r
+      [], Reachable.reachable (Named.create_simple simple), ty, r
     | Prim (prim, dbg) ->
       let term, ty, r =
         Simplify_primitive.simplify_primitive env r prim dbg ~result_var
@@ -177,7 +176,9 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
         ~remove_term:remove_primitive
         ~cannot_lift:(not effects_and_coeffects_ok)
     | Set_of_closures set_of_closures ->
-      let term, ty, r = simplify_set_of_closures env r set_of_closures in
+      let term, ty, r =
+        simplify_set_of_closures env r set_of_closures ~result_var
+      in
       try_to_reify typing_env r ty ~term:(Reachable.reachable term) ~result_var
         ~remove_term:(fun r -> r)
         ~cannot_lift:false
