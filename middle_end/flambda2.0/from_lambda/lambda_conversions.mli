@@ -24,10 +24,6 @@ val inline_attribute
    : Lambda.inline_attribute
   -> Inline_attribute.t
 
-val specialise_attribute
-   : Lambda.specialise_attribute
-  -> Specialise_attribute.t
-
 val kind_of_primitive_native_repr : Primitive.native_repr -> Flambda_kind.t
 
 val method_kind : Lambda.meth_kind -> Call_kind.method_kind
