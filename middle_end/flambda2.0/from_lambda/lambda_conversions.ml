@@ -34,13 +34,6 @@ let inline_attribute (attr : Lambda.inline_attribute) : Inline_attribute.t =
   | Unroll i -> Unroll i
   | Default_inline -> Default_inline
 
-let specialise_attribute (attr : Lambda.specialise_attribute)
-      : Specialise_attribute.t =
-  match attr with
-  | Always_specialise -> Always_specialise
-  | Never_specialise -> Never_specialise
-  | Default_specialise -> Default_specialise
-
 let kind_of_primitive_native_repr (repr : Primitive.native_repr) =
   match repr with
   | Same_as_ocaml_repr -> K.value
