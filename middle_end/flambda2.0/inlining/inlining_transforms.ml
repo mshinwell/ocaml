@@ -19,6 +19,7 @@
 open! Flambda.Import
 
 module E = Simplify_env_and_result.Env
+module K = Flambda_kind
 module T = Flambda_type
 
 let inline env ~callee ~args function_decl_type
@@ -47,7 +48,7 @@ let inline env ~callee ~args function_decl_type
                 ~target:(Exn_continuation.exn_handler apply_exn_continuation)
                 ~arity:(Exn_continuation.arity exn_continuation)
                 (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                  (Expr.create_let my_closure K.value (Named.simple callee)
-                    body)))
+                  (Expr.create_let my_closure K.value
+                    (Named.create_simple callee) body)))
           in
           Some (env, expr))
