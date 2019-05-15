@@ -293,16 +293,13 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           List.mapi (fun index kind ->
               let name = Format.sprintf "result%d" index in
               let var = Variable.create name in
-              let param = Parameter.wrap var in
               Kinded_parameter.create (Parameter.wrap var) kind)
             result_arity
         in
-        let full_app_args, remaining_args =
+        let _full_app_args, remaining_args =
           Misc.Stdlib.List.split_at arity args
         in
         let func_var = Variable.create "full_apply" in
-        let func_var_kind = K.value in
-        let func_param = KP.create (Parameter.wrap func_var) func_var_kind in
         let perform_over_application =
           Apply.create ~callee:(Name.var func_var)
             ~continuation:(Apply.continuation apply)
@@ -332,7 +329,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
 
   and simplify_inlinable_direct_function_call env r apply call
         ~callee's_closure_id function_decl =
-    let callee = Simple.name (Apply.callee apply) in
     let call_kind = Apply.call_kind apply in
     let arity_of_application = Call_kind.return_arity call_kind in
     let result_arity = Function_declaration.result_arity function_decl in
@@ -386,67 +382,56 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
 
   and simplify_function_call env r apply ~callee_ty
         (call : Call_kind.Function_call.t) : Expr.t * R.t =
-    let type_unavailable () =
-      simplify_function_call_where_callee's_type_unavailable env r apply call
-    in
-    match T.prove_closures (E.typing_env env) callee_ty with
-    | Proved closures ->
-      begin match Closure_id.Map.get_singleton closures with
-      | Some (callee's_closure_id, { set_of_closures = set_ty; }) ->
-        let set_ty = T.of_ty_fabricated set_ty in
-        let proof = T.prove_sets_of_closures (E.typing_env env) set_ty in
-        begin match proof with
-        | Proved (_set_of_closures_name, set_of_closures) ->
-          let closures = T.extensibility_contents set_of_closures.closures in
-          begin match Closure_id.Map.find callee's_closure_id closures with
-          | exception Not_found -> Expr.invalid (), r
-          | closure_ty ->
-            let closure_ty = T.of_ty_fabricated closure_ty in
-            match T.prove_closure (E.typing_env env) closure_ty with
-            | Proved { function_decls = Inlinable function_decl; } ->
-              let function_decl =
-                T.term_language_function_declaration function_decl
-              in
-              simplify_inlinable_direct_function_call env r apply call
-                ~callee's_closure_id function_decl
-            | Proved { function_decls = Non_inlinable None; } ->
-              type_unavailable ()
-            | Proved { function_decls =
-                Non_inlinable (Some function_decls); } ->
-              type_unavailable ()
-            | Unknown -> type_unavailable ()
-            | Invalid -> Expr.invalid (), r
+    match T.prove_single_closures_entry (E.typing_env env) callee_ty with
+    | Proved (callee's_closure_id, func_decl_type) ->
+      (* CR mshinwell: We should check that the [set_of_closures] in the
+         [closures_entry] structure in the type does indeed contain the
+         closure in question. *)
+      begin match T.term_language_function_declaration func_decl_type with
+      | Some function_decl ->
+        begin match call with
+        | Direct { closure_id; _ } ->
+          if not (Closure_id.equal closure_id callee's_closure_id) then begin
+            Misc.fatal_errorf "Closure ID %a in application doesn't match \
+                closure ID %a discovered via typing.@ Application:@ %a"
+              Closure_id.print closure_id
+              Closure_id.print callee's_closure_id
+              Apply.print apply
           end
-        | Unknown -> type_unavailable ()
-        | Invalid -> Expr.invalid (), r
-        end
-      | None -> type_unavailable ()
+        | Indirect_unknown_arity
+        | Indirect_known_arity _ -> ()
+        end;
+        simplify_inlinable_direct_function_call env r apply call
+          ~callee's_closure_id function_decl
+      | None ->
+        simplify_function_call_where_callee's_type_unavailable env r apply call
       end
-    | Unknown -> type_unavailable ()
-    | Invalid -> Expr.invalid (), r
+    | Unknown ->
+      simplify_function_call_where_callee's_type_unavailable env r apply call
+    | Invalid -> Expr.create_invalid (), r
 
   and simplify_apply_shared env r apply =
     let callee, callee_ty = S.simplify_name env (Apply.callee apply) in
     let args = S.simplify_simples_and_drop_types env (Apply.args apply) in
     callee_ty, Apply.with_callee_and_args apply ~callee ~args, r
 
-  and simplify_method_call env r apply ~callee_ty ~kind ~obj =
+  and simplify_method_call _env r apply ~callee_ty ~kind:_ ~obj:_ =
     let callee_kind = T.kind callee_ty in
     if not (K.is_value callee_kind) then begin
       Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
         K.print callee_kind
         T.print callee_ty
     end;
-    Flambda.create_apply (Apply.method_call kind ~obj), r
+    Expr.create_apply apply, r
 
-  and simplify_c_call env r apply ~callee_ty =
+  and simplify_c_call _env r apply ~callee_ty =
     let callee_kind = T.kind callee_ty in
     if not (K.is_value callee_kind) then begin
       Misc.fatal_errorf "C call with callee of wrong kind %a: %a"
         K.print callee_kind
         T.print callee_ty
     end;
-    Flambda.create_apply apply, r
+    Expr.create_apply apply, r
 
   and simplify_apply env r apply : Expr.t * R.t =
     let callee_ty, apply, r = simplify_apply_shared env r apply in
@@ -462,8 +447,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let cont = AC.continuation apply_cont in
     let args = S.simplify_simples_and_drop_types env (AC.args apply_cont) in
     match E.find_continuation env cont with
-    | Unknown -> Apply_cont (AC.update_args apply_cont ~args), r
-    | Unreachable -> Expr.invalid ()
+    | Unknown -> Expr.create_apply_cont (AC.update_args apply_cont ~args), r
+    | Unreachable -> Expr.create_invalid (), r
     | Inline handler ->
       Flambda.Continuation_params_and_handler.pattern_match
         (Flambda.Continuation_handler.params_and_handler handler)
@@ -477,32 +462,36 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           in
           try simplify_expr env r expr
           with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is: inlining [Apply_cont] %a.@ \
+            Format.eprintf "\n%sContext is:%s inlining [Apply_cont] %a.@ \
                 The inlined body was:@ %a@ in environment:@ %a\n"
-              (Misc_color.bold_red ())
-              (Misc_color.reset ())
+              (Misc.Color.bold_red ())
+              (Misc.Color.reset ())
               AC.print apply_cont
-              Expr.print body
+              Expr.print expr
               E.print env;
             raise Misc.Fatal_error
           end)
 
   and simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
     let reachable_arms =
-      Discriminant.Map.filter (fun _arm (_env, cont) ->
+      Discriminant.Map.filter (fun _arm cont ->
           match E.find_continuation env cont with
           | Unreachable -> false
           | Unknown | Inline _ -> true)
-        arms
+        (Switch.arms switch)
     in
-    Flambda.Switch.update_arms switch ~arms:reachable_arms
+    let expr =
+      Expr.create_switch ~scrutinee:(Switch.scrutinee switch)
+        ~arms:reachable_arms
+    in
+    expr, r
 
-  and simplify_expr env r (expr : Expr.t) : Expr.t * R.t =
-    match tree with
+  and simplify_expr env r expr : Expr.t * R.t =
+    match Expr.descr expr with
     | Let let_expr -> simplify_let env r let_expr
     | Let_cont let_cont -> simplify_let_cont env r let_cont
     | Apply apply -> simplify_apply env r apply
     | Apply_cont apply_cont -> simplify_apply_cont env r apply_cont
     | Switch switch -> simplify_switch env r switch
-    | Invalid _ -> tree, r
+    | Invalid _ -> expr, r
 end

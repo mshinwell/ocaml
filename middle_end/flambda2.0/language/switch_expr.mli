@@ -46,5 +46,3 @@ val arms : t -> Continuation.t Discriminant.Map.t
 (** How many cases the switch has.  (Note that this is not the number of
     destinations reached by the switch, which may be a smaller number.) *)
 val num_arms : t -> int
-
-val update_arms : t -> arms:Continuation.t Discriminant.Map.t -> t
