@@ -19,8 +19,10 @@
 open! Flambda.Import
 
 module S = Simplify_simple
+module T = Flambda_type
+module TEE = T.Typing_env_extension
 
-let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var:_ =
+let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
   let named =
     match prim with
     | Unary (prim, arg) ->
@@ -39,4 +41,6 @@ let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var:_ =
       let args = S.simplify_simples_and_drop_types env args in
       Named.create_prim (Variadic (prim, args)) dbg
   in
-  Reachable.reachable named, Flambda_type.any_value (), r
+  let ty = T.any_value () in
+  let env_extension = TEE.add_equation TEE.empty (Name.var result_var) ty in
+  Reachable.reachable named, env_extension, r

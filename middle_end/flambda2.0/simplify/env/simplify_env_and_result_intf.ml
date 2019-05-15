@@ -69,7 +69,9 @@ module type Env = sig
 
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
-  val add_simple : t -> Simple.t -> Flambda_type.t -> t
+  val add_equation_on_variable : t -> Variable.t -> Flambda_type.t -> t
+
+  val find_variable : t -> Variable.t -> Flambda_type.t
 
   val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
 
@@ -105,7 +107,7 @@ module type Env = sig
 
   val add_exn_continuation : t -> Exn_continuation.t -> t
 
-  val extend_typing_environment : t -> Typing_env_extension.t -> t
+  val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
   val mem_continuation : t -> Continuation.t -> bool
 
