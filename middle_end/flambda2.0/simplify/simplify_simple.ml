@@ -46,16 +46,11 @@ let simplify_simple_for_let env r (simple : Simple.t) =
   | Discriminant t -> simple, T.this_discriminant t, r
   | Name name -> simplify_name_for_let env r name
 
-let simplify_simple env (simple : Simple.t) =
-  match simple with
-  | Const c -> simple, type_for_const c
-  | Discriminant t -> simple, T.this_discriminant t
-  | Name name ->
-    let typing_env = E.typing_env env in
-    let ty = TE.find_exn typing_env name in
+let simplify_name env (name : Name.t) =
+  let typing_env = E.typing_env env in
+  let ty = TE.find_exn typing_env name in
 (* Experiment: don't reify so that we preserve relations *)
-    let simple = Simple.name name in
-    simple, T.alias_type_of (T.kind ty) simple
+  name, T.alias_type_of (T.kind ty) (Simple.name name)
 (* The following works.  Maybe we could do this only for names which were
    syntactically bound to constants.
     let reified =
@@ -68,6 +63,14 @@ let simplify_simple env (simple : Simple.t) =
     | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
 *)
+
+let simplify_simple env (simple : Simple.t) =
+  match simple with
+  | Const c -> simple, type_for_const c
+  | Discriminant t -> simple, T.this_discriminant t
+  | Name name ->
+    let name, ty = simplify_name env name in
+    Simple.name name, ty
 
 let simplify_simple_and_drop_type env simple =
   fst (simplify_simple env simple)
