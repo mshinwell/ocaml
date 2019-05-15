@@ -36,7 +36,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     (* CR mshinwell: Consider if we need to resurrect a special fold
        function for lets. *)
     L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-      let defining_expr, env, ty, r =
+      let env, r, ty, (defining_expr : Reachable.t) =
         Simplify_named.simplify_named env r (L.defining_expr let_expr)
           ~result_var:bound_var
       in
@@ -56,20 +56,18 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let expr = Expr.create_let bound_var kind defining_expr body in
         expr, r)
 
-  and simplify_one_continuation_handler env r cont_handler =
+  and simplify_one_continuation_handler env r cont cont_handler =
     let params_and_handler =
       Continuation_handler.params_and_handler cont_handler
     in
     Continuation_params_and_handler.pattern_match params_and_handler
       ~f:(fun params ~handler ->
-        let arg_types =
-          R.continuation_args_types r cont ~arity:(List.length params)
-        in
+        let arity = KP.List.arity params in
+        let arg_types = R.continuation_arg_types r cont ~arity in
         let env = E.add_parameters env params ~arg_types in
         let handler, r = simplify_expr env r handler in
         let params_and_handler =
-          Continuation_params_and_handler.create params ~param_relations
-            ~handler
+          Continuation_params_and_handler.create params ~handler
         in
         let cont_handler =
           Continuation_handler.with_params_and_handler cont_handler
@@ -77,7 +75,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         in
         cont_handler, r)
 
-  and simplify_non_recursive_let_cont_handler env r non_rec_handler
+  and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
         : Expr.t * R.t =
     let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
     Non_recursive_let_cont_handler.pattern_match non_rec_handler
@@ -92,7 +90,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             match Continuation_handler.behaviour cont_handler with
             | Unreachable { arity; } ->
               E.add_unreachable_continuation env cont arity
-            | Alias { arity; alias_for; } ->
+            | Alias_for { arity; alias_for; } ->
               E.add_continuation_alias env cont arity ~alias_for
             | Unknown { arity; } ->
               match Let_cont.should_inline_out let_cont with
@@ -105,7 +103,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           simplify_expr env r body
         in
         let lifted_constants =
-          Symbol.Map.diff (R.get_lifted_constants r) already_lifted_constants
+          Symbol.Map.diff_domains (R.get_lifted_constants r)
+            already_lifted_constants
         in
         let env = E.add_lifted_constants env lifted_constants in
         let cont_handler, r =
@@ -120,34 +119,38 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       ~f:(fun ~body cont_handlers ->
         let cont_handlers = Continuation_handlers.to_map cont_handlers in
         let env =
-          Continuation.Map.fold (fun cont _cont_handler env ->
-              E.add_continuation env cont)
+          Continuation.Map.fold (fun cont cont_handler env ->
+              let arity = Continuation_handler.arity cont_handler in
+              E.add_continuation env cont arity)
             cont_handlers
             env
         in
         let body, r = simplify_expr env r body in
         let cont_handlers, r =
-          Continuation.Map.fold (fun cont_handler r ->
-              simplify_one_continuation_handler env r cont_handler)
+          Continuation.Map.fold (fun cont cont_handler (cont_handlers, r) ->
+              let cont_handler, r =
+                simplify_one_continuation_handler env r cont cont_handler
+              in
+              Continuation.Map.add cont cont_handler cont_handlers, r)
             cont_handlers
-            r
+            (Continuation.Map.empty, r)
         in
-        Let_cont.create_recursive cont_handlers, r)
+        Let_cont.create_recursive cont_handlers ~body, r)
 
-  and simplify_let_cont env r let_cont : Expr.t * R.t =
+  and simplify_let_cont env r (let_cont : Let_cont.t) : Expr.t * R.t =
     match let_cont with
     | Non_recursive { handler; _ } ->
-      simplify_non_recursive_let_cont_handler env r handler
+      simplify_non_recursive_let_cont_handler env r let_cont handler
     | Recursive handlers ->
       simplify_recursive_let_cont_handlers env r handlers
 
-  and simplify_direct_full_application env r ~callee ~args
+  and simplify_direct_full_application env r call ~callee ~args
         ~function_decl ~continuation:apply_return_continuation
-        ~exn_continuation:apply_exn_continuation dbg inline =
+        ~exn_continuation:apply_exn_continuation dbg apply inline =
     let inlined =
       Inlining_transforms.inline env ~callee ~args
-        ~function_decl ~apply_return_continuation ~apply_exn_continuation
-        dbg (inline : Inline_attribute.t)
+        function_decl ~apply_return_continuation ~apply_exn_continuation
+        dbg inline
     in
     match inlined with
     | None ->
@@ -370,9 +373,9 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let provided_num_args = List.length args in
     let num_params = List.length function_decl.params in
     if provided_num_args = num_params then
-      simplify_direct_full_application env r
+      simplify_direct_full_application env r call
         ~callee ~callee's_closure_id ~function_decl ~set_of_closures
-        ~args ~arg_tys ~continuation ~exn_continuation ~dbg ~inline ~specialise
+        ~args ~arg_tys ~continuation ~exn_continuation dbg apply inline
     else if provided_num_args > num_params then
       simplify_direct_over_application env r ~args ~arg_tys ~continuation
         ~exn_continuation ~callee ~callee's_closure_id ~function_decl
