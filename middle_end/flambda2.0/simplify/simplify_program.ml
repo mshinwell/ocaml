@@ -26,253 +26,170 @@ module Program = Flambda_static.Program
 module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
 
-type 'a or_invalid =
-  | Ok of 'a
-  | Invalid
-
 module Make
   (Simplify_named : Simplify_named_intf.S)
   (Simplify_toplevel : Simplify_toplevel_intf.S) =
 struct
-  let simplify_static_structure initial_env (recursive : Recursive.t) str =
-    let unreachable, env, str =
-      List.fold_left
-        (fun ((now_unreachable, env, str) as acc) (sym, kind, static_part) ->
-          if now_unreachable then
-            acc
-          else (* CR mshinwell: At least check the static part *)
-            let ty = T.any_value () in
-            let env =
-              match recursive with
-              | Non_recursive -> E.add_symbol env sym ty
-              | Recursive -> E.redefine_symbol env sym ty
-            in
-            false, env, ((sym, kind, static_part) :: str))
-        (false, initial_env, [])
+  let simplify_of_kind_value env (of_kind_value : Of_kind_value.t) =
+    begin match of_kind_value with
+    | Symbol sym -> E.check_symbol_is_bound env sym
+    | Tagged_immediate _ -> ()
+    | Dynamically_computed var -> E.check_variable_is_bound env var
+    end;
+    of_kind_value
+
+  let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
+    match or_variable with
+    | Const _ -> or_variable
+    | Var var ->
+      E.check_variable_is_bound env var;
+      or_variable
+
+  let simplify_static_part env r (static_part : Static_part.t)
+        : Static_part.t * R.t =
+    match static_part with
+    | Block (tag, is_mutable, fields) ->
+      let fields =
+        List.map (fun of_kind_value -> simplify_of_kind_value env of_kind_value)
+          fields
+      in
+      Block (tag, is_mutable, fields), r
+    | Fabricated_block var ->
+      Fabricated_block (simplify_or_variable env var), r
+    | Set_of_closures set_of_closures ->
+      let set_of_closures, r =
+        Simplify_named.simplify_set_of_closures_and_drop_type env r
+          set_of_closures
+      in
+      Set_of_closures set_of_closures, r
+    | Closure (sym, closure) ->
+      E.check_symbol_is_bound env sym;
+      static_part, r
+    | Boxed_float or_var -> Boxed_float (simplify_or_variable env var), r
+    | Boxed_int32 or_var -> Boxed_int32 (simplify_or_variable env var), r
+    | Boxed_int64 or_var -> Boxed_int64 (simplify_or_variable env var), r
+    | Boxed_nativeint or_var ->
+      Boxed_nativeint (simplify_or_variable env var), r
+    | Immutable_string or_var ->
+      Immutable_string (simplify_or_variable env var), r
+
+  let simplify_computation env r (computation : Program_body.Computation.t) =
+    match computation with
+    | None -> env, r, None
+    | Some computation ->
+      let scope_level_for_lifted_constants = E.continuation_scope_level env in
+      let return_cont_arity =
+        List.map (fun (_var, kind) -> kind) computation.computed_values
+      in
+      let env =
+        E.add_continuation env computation.return_continuation return_cont_arity
+      in
+      let env = E.add_exn_continuation env computation.exn_continuation in
+      let env = E.increment_continuation_scope_level env in
+      let previous_r = r in
+      let expr, r =
+        Simplify_toplevel.simplify_toplevel env r computation.expr
+          ~continuation:computation.return_computation
+          computation.exn_continuation
+          ~scope_level_for_lifted_constants
+      in
+      let env = E.add_lifted_constants_from_r env r ~previous_r in
+      let computation : Program_body.Computation.t option =
+        Some ({
+          expr;
+          return_continuation = computation.return_continuation;
+          exn_continuation = computation.exn_continuation;
+          computed_values = computation.computed_values;
+        })
+      in
+      env, r, computation
+
+  let simplify_static_structure env r (str : Program_body.Static_structure.t) =
+    let str_rev, next_env, result =
+      List.fold_left (fun (str_rev, next_env, r)
+                ((bound_syms : Program_body.Bound_symbols.t), static_part) ->
+          let static_part, ty, r = simplify_static_part env r static_part in
+          let str_rev = (bound_syms, static_part) :: str_rev in
+          let next_env =
+            match bound_syms with
+            | Singleton (sym, kind) -> E.add_symbol next_env sym ty
+            | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+              begin match static_part with
+              | Set_of_closures _ | Fabricated_block _ -> ()
+              | _ ->
+                Misc.fatal_errorf "Illegal static part binding to \
+                    set-of-closures symbol %a"
+                  Symbol.print set_of_closures_symbol
+              end;
+              let next_env = E.add_symbol next_env set_of_closures_symbol ty in
+              Closure_id.Map.fold (fun _closure_id closure_sym next_env ->
+                  E.add_symbol next_env closure_sym (T.any_value ()))
+                closure_symbols
+                next_env
+          in
+          str_rev, next_env, r)
         str
+        ([], env, r)
     in
-    unreachable, env, List.rev str
+    List.rev str_rev, next_result
 
-  let initial_environment_for_recursive_symbols env
-        (defn : Program_body.definition) =
-    let env =
-      List.fold_left (fun env (symbol, kind, _static_part) ->
-          E.add_symbol env symbol (T.unknown kind))
-        env defn.static_structure
+  let simplify_definition env r (defn : Program_body.Definition.t) =
+    let env, r, computation = simplify_computation env r defn.computation in
+    let env, r, static_structure =
+      simplify_static_structure env r defn.static_structure
     in
-    let _unreachable, env, _str =
-      simplify_static_structure env Recursive defn.static_structure
-    in
-    env
-
-  let simplify_define_symbol env (recursive : Recursive.t)
-        (defn : Program_body.definition) =
-    let env, computation, newly_imported_symbols, lifted_constants =
-      match defn.computation with
-      | None -> env, defn.computation, Symbol.Map.empty, Symbol.Map.empty
-      | Some computation ->
-        let name = computation.return_cont in
-        let return_cont_params =
-          List.map (fun (var, kind) ->
-              let param = Parameter.wrap var in
-              let ty = T.unknown kind in
-              Flambda.Typed_parameter.create param ty)
-            computation.computed_values
-        in
-        let return_cont_approx =
-          Continuation_approx.create_unknown ~name ~params:return_cont_params
-        in
-        let exn_cont_approx =
-          Continuation_approx.create_unknown ~name:computation.exception_cont
-            ~params:(Simplify_aux.params_for_exception_handler ())
-        in
-        let expr, r, continuation_uses, lifted_constants =
-          let scope_level_for_lifted_constants = E.continuation_scope_level env in
-          let env = E.add_continuation env name return_cont_approx in
-          let env =
-            E.add_continuation env computation.exception_cont exn_cont_approx
-          in
-          let env = E.increment_continuation_scope_level env in
-          let r = R.create ~resolver:(E.resolver env) in
-          let descr =
-            let symbol_names =
-              List.map (fun (sym, _, _) ->
-                  Format.asprintf "%a" Symbol.print sym)
-                defn.static_structure
-            in
-            Printf.sprintf "Toplevel binding(s) of: %s"
-              (String.concat "+" symbol_names)
-          in
-          Simplify_toplevel.simplify_toplevel env r computation.expr
-            ~continuation:name
-            ~continuation_params:return_cont_params
-            ~exn_continuation:computation.exception_cont
-            ~descr
-            ~scope_level_for_lifted_constants
-        in
-        (* CR mshinwell: Add unboxing of the continuation here.  This will look
-           like half of Unbox_returns (same analysis and the same thing to
-           happen to [expr]; but instead of generating a function wrapper, we
-           need to do something else here).  Note that the linearity check
-           for Unbox_returns will enable us to handle mutable returned values
-           too. *)
-        let env =
-          Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-              E.add_symbol env symbol ty)
-            lifted_constants
-            env
-        in
-        let _args_types, new_env, _env_extension =
-          (* CR mshinwell: move to auxiliary function; share with
-             [Simplify_named]? *)
-          let default_env =
-            List.fold_left (fun env param ->
-                let var = Flambda.Typed_parameter.var param in
-                let scope_level = Scope_level.initial in
-                let ty = Flambda.Typed_parameter.ty param in
-                T.Typing_env.add env (Name.var var) scope_level (Definition ty))
-              (E.get_typing_environment env)
-              return_cont_params
-          in
-          try
-            Join_point.param_types_and_body_env continuation_uses
-              ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
-              (E.freshening env)
-              ~default_env
-          with Misc.Fatal_error as exn -> begin
-            Format.eprintf "\n%sContext: Term resulting from \
-                [simplify_toplevel]:%s@ %a@ \
-                Default environment:@ %a\n%!"
-              (Misc_color.bold_red ())
-              (Misc_color.reset ())
-              Flambda.Expr.print expr
-              E.print env;
-            raise exn
-          end
-        in
-        let env = E.replace_typing_environment env new_env in
-        let computation =
-          match expr with
-          | Apply_cont (cont, None, []) ->
-            assert (Continuation.equal cont computation.return_cont);
-            None
-          | _ ->
-            Some ({
-              expr;
-              return_cont = computation.return_cont;
-              exception_cont = computation.exception_cont;
-              computed_values = computation.computed_values;
-            } : Program_body.computation)
-        in
-        env, computation, R.newly_imported_symbols r, lifted_constants
-    in
-    let env =
-      match recursive with
-      | Non_recursive -> env
-      | Recursive -> initial_environment_for_recursive_symbols env defn
-    in
-    let unreachable, env, static_structure =
-      simplify_static_structure env recursive defn.static_structure
-    in
-    (* CR mshinwell: [unreachable] should also be set to [true] if
-       [computation] is [Some (Invalid _)]. *)
-    let computation, static_structure =
-      (* CR-someday mshinwell: We could imagine propagating an "unreachable"
-         (if that's what [invalid ()] turns into, rather than a trap) back to
-         previous [Define_symbol]s. *)
-      if not unreachable then
-        computation, static_structure
-      else
-        match computation with
-        | None ->
-          let computation : Program_body.computation =
-            { expr = Flambda.Expr.invalid ();
-              return_cont = Continuation.create ();
-              exception_cont = Continuation.create ();
-              computed_values = [];
-            }
-          in
-          Some computation, []
-        | Some computation ->
-          let params =
-            List.map (fun (var, kind) ->
-                let param = Parameter.wrap var in
-                Flambda.Typed_parameter.create param (T.unknown kind))
-              computation.computed_values
-          in
-          let expr : Flambda.Expr.t =
-            Let_cont {
-              body = computation.expr;
-              handlers = Non_recursive {
-                name = computation.return_cont;
-                handler = {
-                  params;
-                  stub = false;
-                  is_exn_handler = false;
-                  handler = Flambda.Expr.invalid ();
-                };
-              };
-            }
-          in
-          let new_return_cont =
-            (* This continuation will never be called. *)
-            Continuation.create ()
-          in
-          let computation : Program_body.computation =
-            { expr;
-              return_cont = new_return_cont;
-              (* CR mshinwell: Think more about exception continuations here *)
-              exception_cont = computation.exception_cont;
-              computed_values = [];
-            }
-          in
-          Some computation, []
-    in
-    let definition : Program_body.definition =
+    let definition : Program_body.Definition.t =
       { static_structure;
         computation;
       }
     in
-    definition, env, newly_imported_symbols, lifted_constants
+    definition, env, r
 
   let add_lifted_constants lifted_constants (body : Program_body.t) =
     (* CR mshinwell: Dependencies between lifted constants?  Need to get the
        ordering correct. *)
-    List.fold_left (fun body (symbol, (_ty, kind, constant)) : Program_body.t ->
-        let definition : Program_body.definition =
+    Symbol.Map.fold (fun symbol (_ty, kind, static_part) body 
+              : Program_body.t ->
+        let bound_symbols : Program_body.Bound_symbols.t =
+          Singleton (symbol, kind)
+        in
+        let definition : Program_body.Definition.t =
           { computation = None;
-            static_structure = [symbol, kind, constant];
+            static_structure = [bound_symbols, static_part];
           }
         in
         Define_symbol (definition, body))
-      body
       (Symbol.Map.bindings lifted_constants)
+      body
 
-  let rec simplify_program_body env (body : Program_body.t)
-        : Program_body.t * (K.t Symbol.Map.t) =
+  let rec simplify_program_body env r (body : Program_body.t)
+        : Program_body.t * R.t =
     match body with
     | Define_symbol (defn, body) ->
-      let defn, env, newly_imported_symbols1, lifted_constants =
-        simplify_define_symbol env Non_recursive defn
-      in
-      let body, newly_imported_symbols2 =
-        simplify_program_body env body
-      in
-      let newly_imported_symbols =
-        Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
-      in
-      let body : Program_body.t =
-        Define_symbol (defn, body)
-      in
-      add_lifted_constants lifted_constants body, newly_imported_symbols
-    | Root _ -> body, Symbol.Map.empty
+      let defn, env, r = simplify_definition env r defn in
+      let body, r = simplify_program_body env r body in
+      let body : Program_body.t = Define_symbol (defn, body) in
+      body, r
+    | Root _ -> body, r
 
-  let simplify_program env (program : Program.t) =
+  let check_imported_symbols_don't_overlap_predef_exns
+        ~imported_symbols ~predef_exn_symbols ~descr =
+    let wrong_symbols =
+      Symbol.Set.inter (Symbol.Map.keys imported_symbols)
+        (Symbol.Map.keys predef_exn_symbols)
+    in
+    if not (Symbol.Map.empty wrong_symbols) then begin
+      Misc.fatal_errorf "Program's [imported_symbols] (%s) must not contain \
+          predefined exception symbols"
+        descr
+    end
+
+  let simplify_program env (program : Program.t) : Program.t =
     let backend = E.backend env in
     let module Backend = (val backend : Backend_intf.S) in
     let predef_exn_symbols =
       Symbol.Set.fold (fun symbol predef_exn_symbols ->
-          Symbol.Map.add symbol (K.value ()) predef_exn_symbols)
+          Symbol.Map.add symbol K.value predef_exn_symbols)
         (Backend.all_predefined_exception_symbols ())
         Symbol.Map.empty
     in
@@ -282,6 +199,16 @@ struct
         (Symbol.Map.disjoint_union program.imported_symbols predef_exn_symbols)
         env
     in
-    let body, newly_imported_symbols = simplify_program_body env program.body in
-    { program with body; }, newly_imported_symbols
+    check_imported_symbols_don't_overlap_predef_exns
+      ~imported_symbols:program.imported_symbols ~predef_exn_symbols
+      ~descr:"before simplification";
+    let r = R.create ~resolver:(E.resolver env) in
+    let body, r = simplify_program_body env r program.body in
+    let imported_symbols = R.imported_symbols r in
+    check_imported_symbols_don't_overlap_predef_exns
+      ~imported_symbols:imported_symbols ~predef_exn_symbols
+      ~descr:"after simplification";
+    { imported_symbols;
+      body;
+    }
 end

@@ -35,8 +35,7 @@ module type Env = sig
 
   (** Create a new environment. *)
   val create
-     : never_inline:bool
-    -> round:int
+     : round:int
     -> backend:(module Backend_intf.S)
     -> scope_level_for_lifted_constants:Scope_level.t
     -> t

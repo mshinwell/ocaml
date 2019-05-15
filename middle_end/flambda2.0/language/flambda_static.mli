@@ -51,11 +51,6 @@ module Static_part : sig
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
     | Boxed_nativeint of Targetint.t or_variable
-    (* CR mshinwell: Unify arrays and blocks, as in the type language? *)
-    | Mutable_float_array of
-        { initial_value : Numbers.Float_by_bit_pattern.t or_variable list; }
-    | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
-    | Mutable_string of { initial_value : string or_variable; }
     | Immutable_string of string or_variable
 
   (** Print a static structure definition to a formatter. *)
@@ -72,9 +67,9 @@ module Program_body : sig
       expr : Flambda.Expr.t;
       (** The expression that is to be evaluated.  It must have no free
           variables and call [return_cont] with its results. *)
-      return_cont : Continuation.t;
+      return_continuation : Continuation.t;
       (** The return continuation of [expr]. *)
-      exception_cont : Continuation.t;
+      exn_continuation : Exn_continuation.t;
       (** The uncaught exception continuation of [expr]. *)
       computed_values : (Variable.t * Flambda_kind.t) list;
       (** Variables, with their kinds, used to reference results of the
