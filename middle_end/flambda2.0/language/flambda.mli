@@ -314,12 +314,14 @@ end and Continuation_handler : sig
       always be inlined. *)
   val stub : t -> bool
 
+  val arity : t -> Flambda_arity.t
+
   val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
 
   type behaviour = private
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
 
   val behaviour : t -> behaviour
 end and Continuation_params_and_handler : sig
