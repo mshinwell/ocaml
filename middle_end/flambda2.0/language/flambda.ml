@@ -1388,7 +1388,6 @@ end and Function_declaration : sig
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
-    -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
     -> t
   val print : Format.formatter -> t -> unit
@@ -1404,7 +1403,6 @@ end and Function_declaration : sig
   val stub : t -> bool
   val dbg : t -> Debuginfo.t
   val inline : t -> Inline_attribute.t
-  val specialise : t -> Specialise_attribute.t
   val is_a_functor : t -> bool
   val update_params_and_body : t -> Function_params_and_body.t -> t
 end = struct
@@ -1416,7 +1414,6 @@ end = struct
     stub : bool;
     dbg : Debuginfo.t;
     inline : Inline_attribute.t;
-    specialise : Specialise_attribute.t;
     is_a_functor : bool;
   }
 
@@ -1424,7 +1421,6 @@ end = struct
 
   let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
         ~(inline : Inline_attribute.t)
-        ~(specialise : Specialise_attribute.t)
         ~is_a_functor : t =
     begin match stub, inline with
     | true, (Never_inline | Default_inline)
@@ -1434,14 +1430,6 @@ end = struct
         "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
         Function_params_and_body.print params_and_body
     end;
-    begin match stub, specialise with
-    | true, (Never_specialise | Default_specialise)
-    | false, (Never_specialise | Default_specialise | Always_specialise) -> ()
-    | true, Always_specialise ->
-      Misc.fatal_errorf
-        "Stubs may not be annotated as [Always_specialise]: %a"
-        Function_params_and_body.print params_and_body
-    end;
     { closure_origin;
       params_and_body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
@@ -1449,7 +1437,6 @@ end = struct
       stub;
       dbg;
       inline;
-      specialise;
       is_a_functor;
     }
 
@@ -1461,7 +1448,6 @@ end = struct
           stub;
           dbg;
           inline;
-          specialise;
           is_a_functor;
         } =
     (* CR mshinwell: It's a bit strange that this doesn't use
@@ -1477,7 +1463,6 @@ end = struct
             @[<hov 1>(stub@ %b)@]@ \
             @[<hov 1>(dbg@ %a)@]@ \
             @[<hov 1>(inline@ %a)@]@ \
-            @[<hov 1>(specialise@ %a)@]@ \
             @[<hov 1>(is_a_functor@ %b)@]@ \
             @[<hov 1>(params@ %a)@]@ \
             @[<hov 1>(my_closure@ %s%a%s)@]@ \
@@ -1490,7 +1475,6 @@ end = struct
           stub
           Debuginfo.print_compact dbg
           Inline_attribute.print inline
-          Specialise_attribute.print specialise
           is_a_functor
           Kinded_parameter.List.print params
           (Misc.Color.bold_magenta ())
@@ -1508,7 +1492,6 @@ end = struct
   let stub t = t.stub
   let dbg t = t.dbg
   let inline t = t.inline
-  let specialise t = t.specialise
   let is_a_functor t = t.is_a_functor
 
   let update_params_and_body t params_and_body =
@@ -1525,7 +1508,6 @@ end = struct
           stub = _;
           dbg = _;
           inline = _;
-          specialise = _;
           is_a_functor = _;
         } =
     Function_params_and_body.free_names params_and_body
@@ -1538,7 +1520,6 @@ end = struct
            stub;
            dbg;
            inline;
-           specialise;
            is_a_functor;
          } as t) perm =
     let params_and_body' =
@@ -1553,7 +1534,6 @@ end = struct
         stub;
         dbg;
         inline;
-        specialise;
         is_a_functor;
       }
 end and Flambda_type : Flambda_type0_intf.S

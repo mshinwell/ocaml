@@ -503,7 +503,6 @@ end and Function_declaration : sig
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
-    -> specialise:Specialise_attribute.t
     -> is_a_functor:bool
     -> t
 
@@ -536,9 +535,6 @@ end and Function_declaration : sig
 
   (** Inlining requirements from the source code. *)
   val inline : t -> Inline_attribute.t
-
-  (** Specialising requirements from the source code. *)
-  val specialise : t -> Specialise_attribute.t
 
   (** Whether the function is known definitively to be a functor. *)
   val is_a_functor : t -> bool
