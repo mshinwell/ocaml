@@ -69,6 +69,8 @@ module type Env = sig
 
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
+  val add_simple : t -> Simple.t -> Flambda_type.t -> t
+
   val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
 
   val add_parameters
@@ -102,6 +104,8 @@ module type Env = sig
     -> t
 
   val add_exn_continuation : t -> Exn_continuation.t -> t
+
+  val extend_typing_environment : t -> Typing_env_extension.t -> t
 
   val mem_continuation : t -> Continuation.t -> bool
 
@@ -173,8 +177,6 @@ module type Result = sig
   val new_lifted_constants : t -> lifted_constants -> t
 
   val get_lifted_constants : t -> lifted_constants
-
-  val clear_env_extension : t -> t
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

@@ -239,39 +239,6 @@ module Benefit = struct
   let requested_inline t ~size_of =
     let size = size size_of in
     { t with requested_inline = t.requested_inline + size; }
-(*
-  let remove_code_helper b expr =
-    match Expr.descr expr with
-    | Switch _ | Apply_cont _ | Apply _ -> b := remove_call !b
-    | Let _ | Let_cont _ | Invalid _ -> ()
-
-  let remove_code_helper_named _b (named : Named.t) =
-    match named with
-    | Set_of_closures _
-(* CR mshinwell: To fix
-    | Prim ((Pmakearray _ | Pmakeblock _ | Pduprecord _ | Pbox_float), _, _) ->
-      b := remove_alloc !b
-      (* CR pchambart: should we consider that boxed integer and float
-         operations are allocations ?
-         mshinwell: CR-soon -> CR *)
-    | Prim _ | Project_closure _ | Project_var _
-    | Move_within_set_of_closures _
-    | Read_symbol_field _ -> b := remove_prim !b
-*)
-    | Simple _ | Prim _ -> ()
-
-  let remove_code lam b =
-    let b = ref b in
-    Flambda.Expr.Iterators.Toplevel_only.iter (remove_code_helper b)
-      (remove_code_helper_named b) lam;
-    !b
-
-  let remove_code_named lam b =
-    let b = ref b in
-    Flambda.Named.Iterators.iter (remove_code_helper b)
-      (remove_code_helper_named b) lam;
-    !b
-*)
 
   let print ppf b =
     Format.fprintf ppf "@[remove_call: %i@ remove_alloc: %i@ \
@@ -313,12 +280,14 @@ module Benefit = struct
     direct_call_of_indirect =
       t1.direct_call_of_indirect - t2.direct_call_of_indirect;
     requested_inline = t1.requested_inline - t2.requested_inline;
-  }*)
+  }
+*)
 
   let max ~round t1 t2 =
     let c1 = evaluate ~round t1 in
     let c2 = evaluate ~round t2 in
     if c1 > c2 then t1 else t2
+
 (*
   let add_code lam b =
     b - (remove_code lam zero)
