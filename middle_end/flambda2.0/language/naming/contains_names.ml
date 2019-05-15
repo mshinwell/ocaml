@@ -19,6 +19,10 @@
 module type S = sig
   type t
 
+  (** Compute the free names of a term.  Such computation covers all kinds
+      of bindable names (variables, continuations, ...) *)
   val free_names : t -> Name_occurrences.t
+ 
+  (** Permute various names throughout a term. *)
   val apply_name_permutation : t -> Name_permutation.t -> t
 end
