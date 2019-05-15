@@ -14,34 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Basic simplification functions on [Simple.t], [Name.t], etc. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: Rename "simplify_simple" -> "simplify" *)
+open! Flambda.Import
 
-val simplify_simple_for_let
+val can_inline
    : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Simple.t
-  -> Simple.t * Flambda_type.t * Simplify_env_and_result.Result.t
-
-val simplify_simple
-   : Simplify_env_and_result.Env.t
-  -> Simple.t
-  -> Simple.t * Flambda_type.t
-
-val simplify_simple_and_drop_type
-   : Simplify_env_and_result.Env.t
-  -> Simple.t
-  -> Simple.t
-
-val simplify_simples
-   : Simplify_env_and_result.Env.t
-  -> Simple.t list
-  -> (Simple.t * Flambda_type.t) list
-
-val simplify_simples_and_drop_types
-   : Simplify_env_and_result.Env.t
-  -> Simple.t list
-  -> Simple.t list
+  -> Function_declaration.t
+  -> bool

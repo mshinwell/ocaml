@@ -177,37 +177,19 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       simplify_recursive_let_cont_handlers env r handlers
 
   and simplify_direct_full_application env r ~callee ~args
+        ~function_decl ~continuation:apply_return_continuation
+        ~exn_continuation:apply_exn_continuation dbg inline =
+    let inlined =
+      Inlining_transforms.inline env ~callee ~args
         ~(function_decl : Flambda_type.inlinable_function_declaration)
-        ~continuation:apply_return_continuation
-        ~exn_continuation:apply_exn_continuation
-        dbg (inline : Inline_attribute.t) =
-    match inline with
-    | Never_inline ->
+        ~apply_return_continuation ~apply_exn_continuation
+        dbg (inline : Inline_attribute.t)
+    in
+    match inlined with
+    | None ->
       simplify_function_call_where_callee's_type_unavailable env r call
         ~callee ~args dbg apply
-    | Default_inline | Unroll _ | Always_inline ->
-      let function_decl = function_decl.term_language_function_decl in
-      Function_params_and_body.pattern_match
-        (Function_declaration.params_and_body function_decl)
-        ~f:(fun ~return_continuation exn_continuation params ~body
-                ~my_closure ->
-          let expr =
-            Expr.link_continuations
-              ~bind:return_continuation
-              ~target:apply_return_continuation
-              ~arity:(Function_declaration.result_arity function_decl)
-              (Expr.link_continuations
-                ~bind:(Exn_continuation.exn_handler exn_continuation)
-                ~target:(Exn_continuation.exn_handler apply_exn_continuation)
-                ~arity:(Exn_continuation.arity exn_continuation)
-                (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                  (Expr.create_let my_closure K.value
-                    (Named.simple callee) body)))
-          in
-          let env =
-            E.disable_function_inlining (E.add_inlined_debuginfo env dbg)
-          in
-          simplify_expr env r expr)
+    | Some inlined -> simplify_expr env r expr
 
   and simplify_direct_partial_application env r ~callee ~args
         ~callee's_closure_id
