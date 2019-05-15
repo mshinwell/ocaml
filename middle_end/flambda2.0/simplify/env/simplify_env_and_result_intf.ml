@@ -108,8 +108,10 @@ module type Env = sig
 
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
 
-  (** Appends the locations of inlined call-sites to the [~dbg] argument *)
-  val add_inlined_debuginfo : t -> dbg:Debuginfo.t -> Debuginfo.t
+  (** Appends the locations of inlined call-sites to the given debuginfo
+      and sets the resulting debuginfo as the current one in the
+      environment. *)
+  val add_inlined_debuginfo : t -> Debuginfo.t -> t
 
    (** If collecting inlining statistics, record an inlining decision for the
        call at the top of the closure stack stored inside the given
@@ -119,12 +121,9 @@ module type Env = sig
     -> Inlining_stats_types.Decision.t
     -> unit
 
-  (** The environment stores the call-site being inlined to produce
-      precise location information. This function sets the current
-      call-site being inlined.  *)
-  val set_inline_debuginfo : t -> dbg:Debuginfo.t -> t
-
   val round : t -> int
+
+  val disable_function_inlining : t -> t
 end
 
 module type Result = sig
