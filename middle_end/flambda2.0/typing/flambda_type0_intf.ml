@@ -1050,12 +1050,12 @@ module type S = sig
     -> t
     -> reification_result) type_accessor
 
-(*
   type 'a proof = private
     | Proved of 'a
     | Unknown
     | Invalid
 
+(*
 (*
   val unknown_proof : unit -> _ proof
 *)
@@ -1186,12 +1186,21 @@ module type S = sig
      : t
     -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
 
-(*
-  val prove_closures : (t -> closures proof) type_accessor
+*)
+*)
 
+  (** Prove that the given type, of kind [Value], is a closures type
+      describing exactly one closure.  The function declaration corresponding
+      to such closure is returned together with its closure ID. *)
+  val prove_single_closures_entry
+     : Typing_env.t
+    -> t
+    -> (Closure_id.t * function_declaration) proof
+
+(*
+(*
   val prove_sets_of_closures
      : (t -> (Name.t option * set_of_closures) proof) type_accessor
-*)
 
   (*
   val prove_closure : (t -> closure proof) type_accessor
