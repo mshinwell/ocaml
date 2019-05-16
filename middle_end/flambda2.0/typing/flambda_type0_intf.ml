@@ -37,6 +37,8 @@ module type S = sig
 
   val arity_of_list : t list -> Flambda_arity.t
 
+  val erase_aliases : t -> allowed:Variable.Set.t -> t
+
   module Parameters : sig
     type t
 
@@ -77,7 +79,14 @@ module type S = sig
       -> flambda_type * (Simple.t option)
 
     val find_exn : t -> Name.t -> flambda_type
+
+    val defined_variables
+       : t
+      -> at_or_previous_to:Scope_level.t
+      -> Variable.Set.t
   end
+
+  val join : Typing_env.t -> t -> t -> t
 
   (* CR mshinwell: Substitute out this alias once it's finalised *)
   type 'a type_accessor = Typing_env.t -> 'a

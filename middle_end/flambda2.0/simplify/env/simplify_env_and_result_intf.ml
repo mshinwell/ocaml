@@ -150,11 +150,11 @@ module type Result = sig
 
   val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
-  val add_continuation : t -> E.t -> Continuation.t -> t
+  val add_continuation : t -> Env.t -> Continuation.t -> t
 
   val record_continuation_use
      : t
-    -> E.t
+    -> Env.t
     -> Continuation.t
     -> arg_types:Flambda_type.t list
     -> t
@@ -163,7 +163,7 @@ module type Result = sig
 
   val continuation_arg_types
      : t
-    -> E.t
+    -> Env.t
     -> Continuation.t
     -> Flambda_type.t list
 
