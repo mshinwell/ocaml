@@ -26,8 +26,6 @@ module S = Simplify_simple
 module T = Flambda_type
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
-(* CR mshinwell: Need function to resolve continuation aliases.
-   Should return Unknown _ | Unreachable | Inline _ *)
 
 module Make (Simplify_named : Simplify_named_intf.S) = struct
   let rec simplify_let env r (let_expr : Flambda.Let.t) : Expr.t * R.t =
@@ -85,17 +83,20 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         let already_lifted_constants = R.get_lifted_constants r in
         let body, r =
           let env =
-            match Continuation_handler.behaviour cont_handler with
-            | Unreachable { arity; } ->
-              E.add_unreachable_continuation env cont arity
-            | Alias_for { arity; alias_for; } ->
-              E.add_continuation_alias env cont arity ~alias_for
-            | Unknown { arity; } ->
-              match Let_cont.should_inline_out let_cont with
-              | None -> E.add_continuation env cont arity
-              | Some non_rec_handler ->
-                E.add_continuation_to_inline env cont arity
-                  (Non_recursive_let_cont_handler.handler non_rec_handler)
+            if Continuation_handler.is_exn_handler then
+              E.add_continuation env cont arity
+            else
+              match Continuation_handler.behaviour cont_handler with
+              | Unreachable { arity; } ->
+                E.add_unreachable_continuation env cont arity
+              | Alias_for { arity; alias_for; } ->
+                E.add_continuation_alias env cont arity ~alias_for
+              | Unknown { arity; } ->
+                match Let_cont.should_inline_out let_cont with
+                | None -> E.add_continuation env cont arity
+                | Some non_rec_handler ->
+                  E.add_continuation_to_inline env cont arity
+                    (Non_recursive_let_cont_handler.handler non_rec_handler)
           in
           let env = E.increment_continuation_scope_level env in
           simplify_expr env r body
@@ -328,23 +329,35 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         simplify_expr env r expr)
 
   and simplify_inlinable_direct_function_call env r apply call
-        ~callee's_closure_id function_decl =
-    let call_kind = Apply.call_kind apply in
-    let arity_of_application = Call_kind.return_arity call_kind in
-    let result_arity = Function_declaration.result_arity function_decl in
-    let arity_mismatch =
-      not (Flambda_arity.equal arity_of_application result_arity)
-    in
-    if arity_mismatch then begin
-      Misc.fatal_errorf "Wrong arity for application (expected %a):@ %a"
-        Flambda_arity.print result_arity
+        ~callee's_closure_id function_decl ~arg_types =
+    let params_arity = Function_declaration.params_arity function_decl in
+    let args_arity = T.arity_of_list arg_types in
+    if not (Flambda_arity.equal params_arity args_arity) then begin
+      Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
+          (expected %a, found %a):@ %a"
+        Flambda_arity.print params_arity
+        Flambda_arity.print args_arity
         Apply.print apply
     end;
+    let call_kind = Apply.call_kind apply in
+    let result_arity_of_application = Call_kind.return_arity call_kind in
+    let result_arity = Function_declaration.result_arity function_decl in
+    let result_arity_mismatch =
+    if not (Flambda_arity.equal result_arity_of_application result_arity)
+    then begin
+      Misc.fatal_errorf "Wrong return arity for direct OCaml function call \
+          (expected %a, found %a):@ %a"
+        Flambda_arity.print result_arity
+        Flambda_arity.print result_arity_of_application
+        Apply.print apply
+    end;
+    let r =
+      R.record_continuation_use r cont
+        ~arg_types:(T.unknown_types_from_arity result_arity)
+    in
     let args = Apply.args apply in
-    (* CR mshinwell: We should check that the [param_arity] inside
-       the call kind is compatible with the kinds of [args]. *)
     let provided_num_args = List.length args in
-    let num_params = Function_declaration.num_params function_decl in
+    let num_params = List.length params_arity in
     if provided_num_args = num_params then
       simplify_direct_full_application env r apply call function_decl
     else if provided_num_args > num_params then
@@ -354,34 +367,61 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         ~callee's_closure_id function_decl
     else
       Misc.fatal_errorf "Function with %d params when simplifying \
-          application expression with %d arguments: %a"
+          direct OCaml function call with %d arguments: %a"
         num_params
         provided_num_args
         Apply.print apply
 
   and simplify_function_call_where_callee's_type_unavailable env r apply
-        (call : Call_kind.Function_call.t) =
+        (call : Call_kind.Function_call.t) ~arg_types =
+    let cont = Apply.continuation apply in
+    let check_return_arity_and_record_return_cont_use ~return_arity =
+      let cont_arity = E.continuation_arity env cont in
+      if not (Flambda_arity.equal return_arity cont_arity) then begin
+        Misc.fatal_errorf "Return arity (%a) on application's continuation@ \
+            doesn't match return arity (%a) specified in [Call_kind]:@ %a"
+          Flambda_arity.print cont_arity
+          Flambda_arity.print return_arity
+          Apply.print apply
+      end;
+      R.record_continuation_use r cont
+        ~arg_types:(T.unknown_types_from_arity return_arity)
+    in
     let call_kind =
       match call with
       | Indirect_unknown_arity ->
+        R.record_continuation_use r (Apply.continuation apply)
+          ~arg_types:[T.any_value ()];
         Call_kind.indirect_function_call_unknown_arity ()
       | Indirect_known_arity { param_arity; return_arity; } ->
+        if not (Flambda_arity.equal param_arity args_arity) then begin
+          Misc.fatal_errorf "Argument arity on indirect-known-arity \
+              application doesn't match [Call_kind] (expected %a, \
+              found %a):@ %a"
+            Flambda_arity.print params_arity
+            Flambda_arity.print args_arity
+            Apply.print apply
+        end;
+        check_return_arity_and_record_return_cont_use ~return_arity;
+        let args_arity = T.arity_of_list arg_types in
         Call_kind.indirect_function_call_known_arity ~param_arity ~return_arity
       | Direct { return_arity; _ } ->
         let param_arity =
           (* Some types have regressed in precision.  Since this used to be a
-             direct call, we know how many arguments the function takes. *)
+             direct call, however, we know the function's arity even though we
+             don't know which function it is. *)
           List.map (fun arg ->
               let _arg, ty = S.simplify_simple env arg in
               T.kind ty)
             (Apply.args apply)
         in
+        check_return_arity_and_record_return_cont_use ~return_arity;
         Call_kind.indirect_function_call_known_arity ~param_arity ~return_arity
     in
     Expr.create_apply (Apply.with_call_kind apply call_kind), r
 
   and simplify_function_call env r apply ~callee_ty
-        (call : Call_kind.Function_call.t) : Expr.t * R.t =
+        (call : Call_kind.Function_call.t) ~arg_types : Expr.t * R.t =
     match T.prove_single_closures_entry (E.typing_env env) callee_ty with
     | Proved (callee's_closure_id, func_decl_type) ->
       (* CR mshinwell: We should check that the [set_of_closures] in the
@@ -402,82 +442,160 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
         | Indirect_known_arity _ -> ()
         end;
         simplify_inlinable_direct_function_call env r apply call
-          ~callee's_closure_id function_decl
+          ~callee's_closure_id function_decl ~arg_types
       | None ->
         simplify_function_call_where_callee's_type_unavailable env r apply call
+          ~arg_types
       end
     | Unknown ->
       simplify_function_call_where_callee's_type_unavailable env r apply call
     | Invalid -> Expr.create_invalid (), r
 
   and simplify_apply_shared env r apply =
+    let cont = E.resolve_continuation_aliases env (Apply.continuation apply) in
+    E.check_exn_continuation_is_bound env (Apply.exn_continuation apply);
     let callee, callee_ty = S.simplify_name env (Apply.callee apply) in
-    let args = S.simplify_simples_and_drop_types env (Apply.args apply) in
-    callee_ty, Apply.with_callee_and_args apply ~callee ~args, r
+    let args_with_types = S.simplify_simples env (Apply.args apply) in
+    let args, arg_types = List.split args_with_types in
+    let apply =
+      Apply.with_continuation_callee_and_args apply cont ~callee ~args
+    in
+    callee_ty, apply, arg_types, r
 
-  and simplify_method_call _env r apply ~callee_ty ~kind:_ ~obj:_ =
+  and simplify_method_call _env r apply ~callee_ty ~kind:_ ~obj:_ ~arg_types =
     let callee_kind = T.kind callee_ty in
     if not (K.is_value callee_kind) then begin
       Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
         K.print callee_kind
         T.print callee_ty
     end;
+    let expected_arity = List.map (fun _ -> K.value) arg_types in
+    let args_arity = T.arity_of_list arg_types in
+    if not (Flambda_arity.equal expected_arity args_arity) then begin
+      Misc.fatal_errorf "All arguments to a method call must be of kind \
+          [value]:@ %a"
+        Apply.print apply
+    end;
+    let r =
+      R.record_continuation_use r (Apply.continuation apply)
+        ~arg_types:[T.any_value ()]
+    in
     Expr.create_apply apply, r
 
-  and simplify_c_call _env r apply ~callee_ty =
+  and simplify_c_call _env r apply ~callee_ty ~param_arity ~return_arity
+        ~arg_types =
     let callee_kind = T.kind callee_ty in
     if not (K.is_value callee_kind) then begin
-      Misc.fatal_errorf "C call with callee of wrong kind %a: %a"
+      Misc.fatal_errorf "C callees must be of kind [value], not %a: %a"
         K.print callee_kind
         T.print callee_ty
     end;
+    let args_arity = T.arity_of_list arg_types in
+    if not (Flambda_arity.equal args_arity param_arity) then begin
+      Misc.fatal_error "Arity %a of [Apply] arguments doesn't match \
+          parameter arity %a of C callee:@ %a"
+        Flambda_arity.print args_arity
+        Flambda_arity.print param_arity
+        Apply.print apply
+    end;
+    let cont = Apply.continuation apply in
+    let cont_arity = E.continuation_arity env cont in
+    if not (Flambda_arity.equal cont_arity return_arity) then begin
+      Misc.fatal_error "Arity %a of [Apply] continuation doesn't match \
+          return arity %a of C callee:@ %a"
+        Flambda_arity.print cont_arity
+        Flambda_arity.print return_arity
+        Apply.print apply
+    end;
+    let r =
+      R.record_continuation_use r (Apply.continuation apply)
+        ~arg_types:(T.unknown_types_from_arity return_arity)
+    in
     Expr.create_apply apply, r
 
   and simplify_apply env r apply : Expr.t * R.t =
-    let callee_ty, apply, r = simplify_apply_shared env r apply in
+    let callee_ty, apply, arg_types, r = simplify_apply_shared env r apply in
     match Apply.call_kind apply with
-    | Function call -> simplify_function_call env r apply ~callee_ty call
+    | Function call ->
+      simplify_function_call env r apply ~callee_ty call ~arg_types
     | Method { kind; obj; } ->
-      simplify_method_call env r apply ~callee_ty ~kind ~obj
-    | C_call { alloc = _; param_arity = _; return_arity = _; } ->
-      simplify_c_call env r apply ~callee_ty
+      simplify_method_call env r apply ~callee_ty ~kind ~obj ~arg_types
+    | C_call { alloc = _; param_arity; return_arity; } ->
+      simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
+        ~arg_types
 
   and simplify_apply_cont env r apply_cont : Expr.t * R.t =
     let module AC = Apply_cont in
-    let cont = AC.continuation apply_cont in
-    let args = S.simplify_simples_and_drop_types env (AC.args apply_cont) in
+    let cont =
+      E.resolve_continuation_aliases env (AC.continuation apply_cont)
+    in
+    (* CR mshinwell: Consider changing interface of [simplify_simples] *)
+    let args_with_types = S.simplify_simples env (AC.args apply_cont) in
+    let args, arg_types = List.split args_with_types in
+    let args_arity = T.arity_of_list arg_types in
+    let r = R.record_continuation_use cont ~arg_types in
+    let check_arity_against_args ~arity =
+      if not (Flambda_arity.equal args_arity arity) <> 0 then begin
+        Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+            match continuation's arity from the environment (%a):@ %a"
+          Flambda_arity.print arity
+          AC.print apply_cont
+      end
+    in
+    let normal_case () =
+      Expr.create_apply_cont
+        (AC.update_continuation_and_args apply_cont cont ~args), r
+    in
     match E.find_continuation env cont with
-    | Unknown -> Expr.create_apply_cont (AC.update_args apply_cont ~args), r
-    | Unreachable -> Expr.create_invalid (), r
-    | Inline handler ->
-      Flambda.Continuation_params_and_handler.pattern_match
-        (Flambda.Continuation_handler.params_and_handler handler)
-        ~f:(fun params ~handler ->
-          if List.compare_lengths params args <> 0 then begin
-            Misc.fatal_errorf "Wrong arity for [Apply_cont]: %a"
-              AC.print apply_cont
-          end;
-          let expr =
-            Expr.bind_parameters_to_simples ~bind:params ~target:args handler
-          in
-          try simplify_expr env r expr
-          with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is:%s inlining [Apply_cont] %a.@ \
-                The inlined body was:@ %a@ in environment:@ %a\n"
-              (Misc.Color.bold_red ())
-              (Misc.Color.reset ())
-              AC.print apply_cont
-              Expr.print expr
-              E.print env;
-            raise Misc.Fatal_error
-          end)
+    | Unknown { arity; } ->
+      check_arity_against_args ~arity;
+      normal_case ()
+    | Unreachable { arity; } ->
+      check_arity_against_args ~arity;
+      (* N.B. We allow this transformation even if there is a trap action,
+         on the basis that there wouldn't be any opportunity to collect any
+         backtrace, even if the [Apply_cont] were compiled as "raise". *)
+      Expr.create_invalid (), r
+    | Inline { arity; handler; } ->
+      check_arity_against_args ~arity;
+      match AC.trap_action apply_cont with
+      | Some _ ->
+        (* Until such time as we can manually add to the backtrace buffer,
+           never substitute a "raise" for the body of an exception handler. *)
+        normal_case ()
+      | None ->
+        Flambda.Continuation_params_and_handler.pattern_match
+          (Flambda.Continuation_handler.params_and_handler handler)
+          ~f:(fun params ~handler ->
+            let params_arity = KP.List.arity params in
+            if not (Flambda_arity.equal params_arity args_arity) then begin
+              Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+                  match number of parameters (%d) on handler:@ %a"
+                params_arity
+                AC.print apply_cont
+            end;
+            let expr =
+              Expr.bind_parameters_to_simples ~bind:params ~target:args handler
+            in
+            try simplify_expr env r expr
+            with Misc.Fatal_error -> begin
+              Format.eprintf "\n%sContext is:%s inlining [Apply_cont] %a.@ \
+                  The inlined body was:@ %a@ in environment:@ %a\n"
+                (Misc.Color.bold_red ())
+                (Misc.Color.reset ())
+                AC.print apply_cont
+                Expr.print expr
+                E.print env;
+              raise Misc.Fatal_error
+            end)
 
   and simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
     let reachable_arms =
-      Discriminant.Map.filter (fun _arm cont ->
+      Discriminant.Map.filter_map (fun _arm cont ->
+          let cont = E.resolve_continuation_aliases env cont in
           match E.find_continuation env cont with
-          | Unreachable -> false
-          | Unknown | Inline _ -> true)
+          | Unreachable -> None
+          | Unknown | Inline _ -> Some cont)
         (Switch.arms switch)
     in
     let expr =

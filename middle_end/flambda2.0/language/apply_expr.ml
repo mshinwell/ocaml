@@ -229,8 +229,9 @@ let with_continuation t continuation =
 let with_call_kind t call_kind =
   { t with call_kind; }
 
-let with_callee_and_args t ~callee ~args =
+let with_continuation_callee_and_args t continuation ~callee ~args =
   { t with
+    continuation;
     callee;
     args;
   }

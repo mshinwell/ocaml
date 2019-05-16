@@ -16,8 +16,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+
+type lifted_constants =
+  (Symbol.t * (Flambda_type.t * Flambda_static.Static_part.t)) list
 
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
@@ -28,228 +32,221 @@ end = struct
   type t = {
     backend : (module Backend_intf.S);
     round : int;
-    typing_environment : TE.t;
+    typing_env : TE.t;
     continuations : (Scope_level.t * Continuation_in_env.t) Continuation.Map.t;
+    exn_continuations : Scope_level.t Exn_continuation.Map.t;
     continuation_scope_level : Scope_level.t;
     scope_level_for_lifted_constants : Scope_level.t;
     inlined_debuginfo : Debuginfo.t;
-    never_inline : bool;
+    can_inline : bool;
   }
 
   let invariant _t = ()
 
-  let create ~never_inline ~round ~backend ~scope_level_for_lifted_constants =
-    (* XXX [resolver] should come from [backend] *)
+  let create ~round ~backend ~scope_level_for_lifted_constants =
+    (* CR mshinwell: [resolver] should come from [backend] *)
     let resolver _export_id = None in
     { backend;
       round;
-      typing_environment = TE.create ~resolver;
+      typing_env = TE.create ~resolver;
       continuations = Continuation.Map.empty;
+      exn_continuations = Exn_continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
       scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
-      never_inline;
+      can_inline = false;
     }
 
-  let print ppf { backend = _; round; typing_environment; continuations;
+  let print ppf { backend = _; round; typing_env; continuations;
                   continuation_scope_level; scope_level_for_lifted_constants;
-                  inlined_debuginfo; never_inline; } =
-    Format.fprintf ppf "@[(\
-        @[(round@ %d)@]@ \
-        @[(typing_environment@ %a)@]@ \
-        @[(continuations@ %a)@]@ \
-        @[(continuation_scope_level@ %a)@]@ \
-        @[(scope_level_for_lifted_constants@ %a)@]@ \
-        @[(inlined_debuginfo@ %a)@]\
-        @[(never_inline@ %b)@]@ \
+                  inlined_debuginfo; can_inline;
+                } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(round@ %d)@]@ \
+        @[<hov 1>(typing_env@ %a)@]@ \
+        @[<hov 1>(continuations@ %a)@]@ \
+        @[<hov 1>(continuation_scope_level@ %a)@]@ \
+        @[<hov 1>(scope_level_for_lifted_constants@ %a)@]@ \
+        @[<hov 1>(inlined_debuginfo@ %a)@]@ \
+        @[<hov 1>(can_inline@ %b)@]\
         )@]"
-      t.round
-      TE.print t.typing_environment
-      (Continuation.Map.print Continuation_in_env.print) t.continuations
-      Scope_level.print t.continuation_scope_level
-      Scope_level.print t.scope_level_for_lifted_constants
-      Debuginfo.print t.inlined_debuginfo
-      t.never_inline
+      round
+      TE.print typing_env
+      (Continuation.Map.print Continuation_in_env.print) continuations
+      Scope_level.print continuation_scope_level
+      Scope_level.print scope_level_for_lifted_constants
+      Debuginfo.print inlined_debuginfo
+      can_inline
 
-  let resolver t = TE.resolver t.typing_environment
+  let resolver t = TE.resolver t.typing_env
   let backend t = t.backend
+  let typing_env t = t.typing_env
   let round t = t.round
   let continuation_scope_level t = t.continuation_scope_level
+  let can_inline t = t.can_inline
 
   let increment_continuation_scope_level t =
     { t with
       continuation_scope_level = Scope_level.next t.continuation_scope_level;
     }
 
-  let get_typing_environment t = t.typing_environment
-
-  let local env =
-    { env with
-      typing_environment = TE.restrict_to_symbols env.typing_environment;
+  let enter_closure { backend = _; round; typing_env; continuations;
+                      continuation_scope_level;
+                      scope_level_for_lifted_constants; inlined_debuginfo;
+                    } =
+    { backend;
+      round;
+      typing_env = TE.restrict_to_symbols env.typing_env;
       continuations = Continuation.Map.empty;
-(*      projections = Projection.Map.empty; *)
-      freshening = Freshening.empty_preserving_activation_state env.freshening;
-      inlined_debuginfo = Debuginfo.none;
+      exn_continuations = Exn_continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
+      scope_level_for_lifted_constants;
+      inlined_debuginfo = Debuginfo.none;
     }
 
-  let find_variable0 typing_environment var =
-    let ty, binding_type = TE.find_exn typing_environment (Name.var var) in
-    match binding_type with
-    | Normal -> ty
-    | Was_existential ->
-      Misc.fatal_errorf "Variable %a was existentially bound"
-        Variable.print var
-
-  let find_variable t var =
-    find_variable0 t.typing_environment var
-
-  let find_variable_opt t var =
-    match TE.find_opt t.typing_environment (Name.var var) with
-    | None -> None
-    | Some (ty, binding_type) ->
-      match binding_type with
-      | Normal -> Some ty
-      | Was_existential ->
-        Misc.fatal_errorf "Variable %a was existentially bound"
-          Variable.print var
-
-  let scope_level_of_name t name =
-    Scope_level.With_sublevel.level (
-      TE.scope_level_exn t.typing_environment name)
-
-  let mem_variable t var =
-    match find_variable_opt t var with
-    | None -> false
-    | Some _ -> true
-
   let add_variable t var ty =
-    let typing_environment =
-      TE.add t.typing_environment (Name.var var)
+    let typing_env =
+      TE.add t.typing_env (Name.var var)
         t.continuation_scope_level (Definition ty)
     in
-    { t with typing_environment; }
+    { t with typing_env; }
 
-  (* CR mshinwell: Use this code as a basis for the find-by-variable/symbol
-     functions, above *)
-  let find_name0 typing_environment name =
-    let ty, binding_type =
-      match TE.find_exn typing_environment name with
-      | exception Not_found ->
-        Misc.fatal_errorf "Unbound name %a@ in@ %a"
-          Name.print name
-          TE.print typing_environment
-      | result -> result
+  let add_equation_on_variable t var ty =
+    let typing_env =
+      TE.add t.typing_env (Name.var var)
+        t.continuation_scope_level (Equation ty)
     in
-    match binding_type with
-    | Normal -> ty
-    | Was_existential ->
-      Misc.fatal_errorf "Name %a is existentially bound"
-        Name.print name
+    { t with typing_env; }
 
   let find_name t name =
-    find_name0 t.typing_environment name
+    match TE.find_exn t.typing_env name with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound name %a in environment:@ %a"
+        Name.print name
+        print t
 
-  let mem_symbol t sym =
-    match find_symbol_opt t sym with
-    | None -> false
-    | Some _ -> true
+  let find_variable t var = find_name t (Name.var var)
 
-  let mem_name t (name : Name.t) =
-    match name with
-    | Var var -> mem_variable t var
-    | Symbol sym -> mem_symbol t sym
+  let add_symbol t sym ty =
+    let typing_env =
+      TE.add t.typing_env (Name.symbol sym)
+        t.scope_level_for_lifted_constants (Definition ty)
+    in
+    { t with typing_env; }
 
-  let mem_simple t (simple : Simple.t) =
-    match simple with
-    | Name name -> mem_name t name
-    | Const _ | Discriminant _ -> true
-
-  (* CR mshinwell: Rename this function---it takes a meet, not redefines *)
-  let redefine_symbol t sym ty =
+  let add_symbol_if_not_defined t sym ty =
     let name = Name.symbol sym in
-    if not (TE.mem t.typing_environment name) then
-      Misc.fatal_errorf "Symbol %a cannot be redefined when it is not \
-          already defined"
-        Symbol.print sym
-    else
-      add_equation_symbol t sym ty
+    if TE.mem t.typing_env name then t
+    else add_symbol t sym ty
 
-  let add_continuation t cont ty =
+  let add_parameters t params ~arg_types =
+    List.fold_left2 (fun t param arg_type ->
+        add_variable (KP.var param) arg_type)
+      t
+      params
+
+  let add_parameters_with_unknown_types t params =
+    let arg_types =
+      List.map (fun param -> T.unknown (KP.kind param)) params
+    in
+    add_parameters t params ~arg_types
+
+  let add_continuation0 t cont cont_in_env =
     let continuations =
-      Continuation.Map.add cont (t.continuation_scope_level, ty)
+      Continuation.Map.add cont (t.continuation_scope_level, cont_in_env)
         t.continuations
     in
     { t with
       continuations;
     }
 
-  let find_continuation t cont =
-    match Continuation.Map.find cont t.continuations with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | (_scope_level, ty) -> ty
+  let add_continuation t cont arity =
+    add_continuation0 t cont (Unknown { arity; })
 
-  let scope_level_of_continuation t cont =
-    match Continuation.Map.find cont t.continuations with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | (scope_level, _ty) -> scope_level
+  let add_unreachable_continuation t cont arity =
+    add_continuation0 t cont (Unreachable { arity; })
 
-  let mem_continuation t cont =
-    Continuation.Map.mem cont t.continuations
+  let add_continuation_alias t cont arity ~alias_for =
+      check_arity_against_args ~arity;
+      let alias_for_arity = E.continuation_arity env alias_for in
+      if not (Flambda_arity.equal arity alias_for_arity) then begin
+        Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
+            since the two continuations differ in arity"
+          Continuation.print cont
+          Flambda_arity.print arity
+          Continuation.print alias_for
+          Flambda_arity.print alias_for_arity
+      end;
+      (* Remove [cont] from the environment to ensure that any loop of aliases
+         produces an error. *)
+      let env = 
+      simplify_apply_cont env r (AC.update_continuation apply_cont alias_for)
 
-  (* CR-someday mshinwell: consider changing name to remove "declaration".
-     Also, isn't this the inlining stack?  Maybe we can use that instead. *)
-  let enter_set_of_closures_declaration t origin =
-  (*
-  Format.eprintf "Entering decl: have %a, adding %a, result %a\n%!"
-  Set_of_closures_origin.Set.print t.current_functions
-  Set_of_closures_origin.print origin
-  Set_of_closures_origin.Set.print
-    (Set_of_closures_origin.Set.add origin t.current_functions);
-  *)
-    { t with
-      current_functions =
-        Set_of_closures_origin.Set.add origin t.current_functions; }
+    add_continuation0 t cont (Alias_for { arity; alias_for; })
 
-  let inside_set_of_closures_declaration origin t =
-    Set_of_closures_origin.Set.mem origin t.current_functions
+  let add_continuation_to_inline t cont arity handler =
+    add_continuation0 t cont (Inline { arity; handler; })
 
-  let set_never_inline t =
-    if t.never_inline then t
-    else { t with never_inline = true }
-
-  let never_inline t = t.never_inline
-
-  let note_entering_closure t ~closure_id ~dbg =
-    if t.never_inline then t
-    else
-      { t with
-        inlining_stats_closure_stack =
-          Inlining_stats.Closure_stack.note_entering_closure
-            t.inlining_stats_closure_stack ~closure_id ~dbg;
-      }
-
-  let enter_closure t ~closure_id ~inline_inside ~dbg ~f =
-    let t =
-      if inline_inside && not t.never_inline_inside_closures then t
-      else set_never_inline t
+  let add_exn_continuation t exn_cont =
+    let exn_continuations =
+      Exn_continuation.Map.add exn_cont t.continuation_scope_level
+        t.exn_continuations
     in
-    let t = unset_never_inline_outside_closures t in
-    f (note_entering_closure t ~closure_id ~dbg)
+    { t with
+      exn_continuations;
+    }
 
-  let add_inlined_debuginfo t ~dbg =
-    Debuginfo.concat t.inlined_debuginfo dbg
+  let find_continuation t cont : Continuation_in_env.t =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+        Continuation.print cont
+        print t
+    | (_scope_level, cont_in_env) -> cont_in_env
 
-  let scope_level_for_lifted_constants t = t.scope_level_for_lifted_constants
+  let extend_typing_environment t env_extension =
+    let typing_env = TE.add_env_extension t.typing_env env_extension in
+    { t with
+      typing_env;
+    }
+
+  let check_variable_is_bound t var =
+    if not (TE.mem t.typing_env (Name.var var)) then begin
+      Misc.fatal_errorf "Unbound variable %a in environment:@ %a"
+        Variable.print var
+        print t
+    end
+
+  let check_symbol_is_bound t sym =
+    if not (TE.mem t.typing_env (Name.symbol sym)) then begin
+      Misc.fatal_errorf "Unbound symbol %a in environment:@ %a"
+        Symbol.print sym
+        print t
+    end
+
+  let add_inlined_debuginfo t dbg =
+    { t with
+      inlined_debuginfo = Debuginfo.concat t.inlined_debuginfo dbg;
+    }
+
+  let disable_function_inlining t =
+    { t with
+      can_inline = false;
+    }
+
+  let add_lifted_constants t lifted =
+    Symbol.Map.fold (fun sym (ty, _static_part) ->
+        add_symbol_if_not_defined t sym ty)
+      t
+
+  (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
+  let add_lifted_constants_from_r t r =
+    add_lifted_constants t (Result.get_lifted_constants r)
 
   let set_scope_level_for_lifted_constants t scope_level =
-    { t with scope_level_for_lifted_constants = scope_level; }
+    { t with
+      scope_level_for_lifted_constants;
+    }
 end and Result : sig
   include Simplify_env_and_result_intf.Result with type env = Env.t
 end = struct
@@ -304,7 +301,7 @@ end = struct
       | uses -> uses
     in
     let uses =
-      Continuation_uses.add_use uses (Env.get_typing_environment env) kind
+      Continuation_uses.add_use uses (Env.typing_env env) kind
     in
     { t with
       used_continuations =
