@@ -37,6 +37,7 @@ struct
     match of_kind1, of_kind2 with
     | Immediate fs1, Immediate fs2 ->
       let fs = E.Immediate.Set.union_or_inter fs1 fs2 in
+      (* XXX This is wrong -- should be Bottom *)
       if Immediate.Set.is_empty fs then Absorbing
       else Ok (Immediate fs, Typing_env_extension.empty ())
     | _, _ -> Absorbing
