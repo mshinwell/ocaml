@@ -25,7 +25,7 @@ module Use = struct
   let create typs = typs
 
   let print ppf t =
-    Format.fprintf ppf "@[<hov 1>(%s)@]"
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Flambda_type.print)
       t
 
@@ -41,14 +41,14 @@ type t = {
 let create arity ~definition_scope_level =
   { definition_scope_level;
     arity;
-    uses;
+    uses = [];
   }
 
 let print ppf { definition_scope_level; arity; uses; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(definition_scope_level %a)@]@ \"
-      @[<hov 1>(arity %a)@]@ \"
-      @[<hov 1>(uses %a)@]\"
+      @[<hov 1>(definition_scope_level %a)@]@ \
+      @[<hov 1>(arity %a)@]@ \
+      @[<hov 1>(uses %a)@]\
       )@]"
     Scope_level.print definition_scope_level
     Flambda_arity.print arity
@@ -79,7 +79,8 @@ let arg_types t typing_env =
   | use::uses ->
     List.fold_left (fun arg_types use ->
         let arg_types' = Use.arg_types use in
-        List.map2 (fun arg_type arg_type' -> T.join env arg_type arg_type')
+        List.map2 (fun arg_type arg_type' ->
+            T.join typing_env arg_type arg_type')
           arg_types arg_types')
       (Use.arg_types use)
       uses
