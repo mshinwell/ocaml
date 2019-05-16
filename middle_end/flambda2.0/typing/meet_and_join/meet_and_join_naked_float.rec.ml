@@ -39,5 +39,5 @@ struct
       let fs = E.Float.Set.union_or_inter fs1 fs2 in
       if Float.Set.is_empty fs then Absorbing
       else Ok (Float fs, Typing_env_extension.empty ())
-    | _, _ -> Absorbing
+    | _, _ -> Absorbing (* XXX *)
 end
