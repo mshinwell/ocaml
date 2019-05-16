@@ -339,7 +339,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let call_kind = Apply.call_kind apply in
     let result_arity_of_application = Call_kind.return_arity call_kind in
     let result_arity = Function_declaration.result_arity function_decl in
-    let result_arity_mismatch =
     if not (Flambda_arity.equal result_arity_of_application result_arity)
     then begin
       Misc.fatal_errorf "Wrong return arity for direct OCaml function call \
@@ -489,7 +488,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     end;
     let args_arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal args_arity param_arity) then begin
-      Misc.fatal_error "Arity %a of [Apply] arguments doesn't match \
+      Misc.fatal_errorf "Arity %a of [Apply] arguments doesn't match \
           parameter arity %a of C callee:@ %a"
         Flambda_arity.print args_arity
         Flambda_arity.print param_arity
@@ -498,7 +497,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let cont = Apply.continuation apply in
     let cont_arity = E.continuation_arity env cont in
     if not (Flambda_arity.equal cont_arity return_arity) then begin
-      Misc.fatal_error "Arity %a of [Apply] continuation doesn't match \
+      Misc.fatal_errorf "Arity %a of [Apply] continuation doesn't match \
           return arity %a of C callee:@ %a"
         Flambda_arity.print cont_arity
         Flambda_arity.print return_arity
@@ -532,7 +531,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     let args_arity = T.arity_of_list arg_types in
     let r = R.record_continuation_use cont ~arg_types in
     let check_arity_against_args ~arity =
-      if not (Flambda_arity.equal args_arity arity) <> 0 then begin
+      if not (Flambda_arity.equal args_arity arity) then begin
         Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
             match continuation's arity from the environment (%a):@ %a"
           Flambda_arity.print arity

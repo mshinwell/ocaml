@@ -29,10 +29,10 @@ let print ppf t =
   match t with
   | Unknown { arity = _; } -> Format.pp_print_string ppf "Unknown"
   | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
-  | Inline { arity = _;_handler = _; } -> Format.pp_print_string ppf "Inline _"
+  | Inline { arity = _; handler = _; } -> Format.pp_print_string ppf "Inline _"
 
 let arity t =
   match t with
   | Unknown { arity; }
   | Unreachable { arity; }
-  | Inline { arity;_handler = _; } -> arity
+  | Inline { arity; handler = _; } -> arity
