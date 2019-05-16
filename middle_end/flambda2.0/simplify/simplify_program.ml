@@ -91,7 +91,9 @@ struct
     match computation with
     | None -> env, r, None
     | Some computation ->
-      let scope_level_for_lifted_constants = E.continuation_scope_level env in
+      let scope_level_for_lifted_constants =
+        E.get_continuation_scope_level env
+      in
       let return_cont_arity =
         List.map (fun (_var, kind) -> kind) computation.computed_values
       in
