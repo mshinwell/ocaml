@@ -986,10 +986,11 @@ module type S = sig
 
   (** For each of the kinds in an arity, create a "bottom" type. *)
   val bottom_types_from_arity : Flambda_arity.t -> t list
-
+*)
   (** For each of the kinds in an arity, create an "unknown" type. *)
   val unknown_types_from_arity : Flambda_arity.t -> t list
 
+(*
   (** Like [unknown_like] but for a array of types. *)
   val unknown_like_array : t array -> t array
 
