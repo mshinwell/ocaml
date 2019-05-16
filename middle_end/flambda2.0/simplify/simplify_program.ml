@@ -100,14 +100,13 @@ struct
       in
       let env = E.add_exn_continuation env computation.exn_continuation in
       let env = E.increment_continuation_scope_level env in
-      let previous_r = r in
       let expr, r =
         Simplify_toplevel.simplify_toplevel env r computation.expr
           ~return_continuation:computation.return_continuation
           computation.exn_continuation
           ~scope_level_for_lifted_constants
       in
-      let env = E.add_lifted_constants_from_r env r ~previous_r in
+      let env = E.add_lifted_constants_from_r env r in
       let computation : Program_body.Computation.t option =
         Some ({
           expr;
@@ -185,12 +184,10 @@ struct
     end
 
   let define_lifted_constants lifted_constants (body : Program_body.t) =
-    (* CR mshinwell: Dependencies between lifted constants?  Need to get the
-       ordering correct. *)
-    Symbol.Map.fold (fun symbol (_ty, kind, static_part) body 
+    List.fold_left (fun body (symbol, (ty, static_part))
               : Program_body.t ->
         let bound_symbols : Program_body.Bound_symbols.t =
-          Singleton (symbol, kind)
+          Singleton (symbol, T.kind ty)
         in
         let definition : Program_body.Definition.t =
           { computation = None;
@@ -198,8 +195,8 @@ struct
           }
         in
         Define_symbol (definition, body))
-      lifted_constants
       body
+      lifted_constants
 
   let simplify_program env (program : Program.t) : Program.t =
     let backend = E.backend env in

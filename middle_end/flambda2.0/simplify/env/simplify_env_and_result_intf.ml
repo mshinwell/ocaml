@@ -110,6 +110,10 @@ module type Env = sig
 
   val check_symbol_is_bound : t -> Symbol.t -> unit
 
+  val check_name_is_bound : t -> Name.t -> unit
+
+  val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
+
   (** Appends the locations of inlined call-sites to the given debuginfo
       and sets the resulting debuginfo as the current one in the
       environment. *)
@@ -150,11 +154,11 @@ module type Result = sig
 
   val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
-  val add_continuation : t -> Env.t -> Continuation.t -> t
+  val add_continuation : t -> env -> Continuation.t -> t
 
   val record_continuation_use
      : t
-    -> Env.t
+    -> env
     -> Continuation.t
     -> arg_types:Flambda_type.t list
     -> t
@@ -163,7 +167,7 @@ module type Result = sig
 
   val continuation_arg_types
      : t
-    -> Env.t
+    -> env
     -> Continuation.t
     -> Flambda_type.t list
 

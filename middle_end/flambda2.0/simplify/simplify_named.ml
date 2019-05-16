@@ -22,7 +22,7 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
-  let simplify_function env r closure_id function_decls function_decl =
+  let simplify_function env r function_decl =
     let params_and_body, r =
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
@@ -34,8 +34,6 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
           let env = E.add_exn_continuation env exn_continuation in
           let env = E.add_parameters_with_unknown_types env params in
           let env = E.add_variable env my_closure (T.any_value ()) in
-          assert (E.inside_set_of_closures_declaration env
-            (Function_declarations.set_of_closures_origin function_decls));
           let env = E.increment_continuation_scope_level env in
           let body, r =
             Simplify_toplevel.simplify_toplevel env r body
@@ -62,17 +60,10 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
 
   let simplify_set_of_closures0 env r set_of_closures ~result_var =
     let function_decls = Set_of_closures.function_decls set_of_closures in
-    (* CR mshinwell: Shouldn't [Function_declarations.set_of_closures_origin]
-       be on [Set_of_closures]? *)
-    let set_of_closures_origin =
-      Function_declarations.set_of_closures_origin function_decls
-    in
     let funs = Function_declarations.funs function_decls in
     let funs, fun_types, r =
       Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-          let function_decl, ty, r =
-            simplify_function env r closure_id function_decls function_decl
-          in
+          let function_decl, ty, r = simplify_function env r function_decl in
           let funs = Closure_id.Map.add closure_id function_decl funs in
           let fun_types = Closure_id.Map.add closure_id ty fun_types in
           funs, fun_types, r)

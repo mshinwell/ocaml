@@ -18,10 +18,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module rec Env : sig
-  include Simplify_env_and_result_intf.Env
-    with type result = Result.t
-end and Result : sig
-  include Simplify_env_and_result_intf.Result
-    with type env = Env.t
-end
+module rec Env : (Simplify_env_and_result_intf.Env
+  with type result := Result.t)
+and Result : (Simplify_env_and_result_intf.Result
+  with type env := Env.t)
