@@ -25,12 +25,10 @@ type lifted_constants =
 
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
-    with type result = Result.t
+    with type result := Result.t
 
   val continuation_scope_level : t -> Continuation.t -> Scope_level.t
 end = struct
-  type result = Result.t
-
   type t = {
     backend : (module Backend_intf.S);
     round : int;
@@ -201,9 +199,9 @@ end = struct
 
   let continuation_arity t cont =
     match find_continuation t cont with
-    | Unknown of { arity; }
-    | Unreachable of { arity; }
-    | Inline of { arity; _ } -> arity
+    | Unknown { arity; }
+    | Unreachable { arity; }
+    | Inline { arity; _ } -> arity
 
   let add_continuation t cont arity =
     add_continuation0 t cont (Unknown { arity; })
@@ -291,10 +289,9 @@ end = struct
       scope_level_for_lifted_constants;
     }
 end and Result : sig
-  include Simplify_env_and_result_intf.Result with type env = Env.t
+  include Simplify_env_and_result_intf.Result
+    with type env := Env.t
 end = struct
-  type env = Env.t
-
   type t =
     { resolver : (Export_id.t -> Flambda_type.t option);
       continuations : Continuation_uses.t Continuation.Map.t;
