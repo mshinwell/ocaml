@@ -26,6 +26,8 @@ type lifted_constants =
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
     with type result = Result.t
+
+  val continuation_scope_level : t -> Continuation.t -> Scope_level.t
 end = struct
   type result = Result.t
 
@@ -184,6 +186,14 @@ end = struct
         print t
     | (_scope_level, cont_in_env) -> cont_in_env
 
+  let continuation_scope_level t cont : Continuation_in_env.t =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+        Continuation.print cont
+        print t
+    | (scope_level, _cont_in_env) -> scope_level
+
   let resolve_continuation_aliases t cont =
     match Continuation.Map.find cont t.continuation_aliases with
     | exception Not_found -> cont
@@ -285,74 +295,62 @@ end and Result : sig
 end = struct
   type env = Env.t
 
-  module Defined_continuation = struct
-    type t = {
-      arity : Flambda_arity.t;
-      uses : Flambda_type.t list list;
-    }
-
-    let print ppf t =
-      Format.fprintf ppf ...
-  end
-
   type t =
     { resolver : (Export_id.t -> Flambda_type.t option);
-      continuations : Defined_continuation.t Continuation.Map.t;
+      continuations : Continuation_uses.t Continuation.Map.t;
       imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants : lifted_constants;
     }
 
   let create ~resolver =
     { resolver;
-      used_continuations = Continuation.Map.empty;
-      defined_continuations = Continuation.Map.empty;
-      inlining_threshold = None;
-      benefit = Inlining_cost.Benefit.zero;
-      num_direct_applications = 0;
-      env_extension = T.Typing_env_extension.empty;
-      newly_imported_symbols = Symbol.Map.empty;
+      continuations = Continuation.Map.empty;
+      imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
     }
 
-  let use_continuation t env cont ~params kind =
-    let args = Continuation_uses.Use.Kind.args kind in
-    if not (List.for_all (fun arg -> Env.mem_simple env arg) args) then begin
-      Misc.fatal_errorf "use_continuation %a: argument(s) (%a) not in \
-          environment:@ %a"
+  let add_continuation t env cont =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      (* CR mshinwell: Avoid repeated lookups. *)
+      let arity = Env.continuation_arity env cont in
+      let definition_scope_level =
+        Env.continuation_scope_level env scope_level
+      in
+      let uses =
+        Continuation_uses.create ~arity ~definition_scope_level
+      in
+      { t with
+        continuations = Continuation.Map.add cont uses t.continuations;
+      }
+    | _uses ->
+      Misc.fatal_errorf "Cannot redefine continuation %a that is already \
+          present in [r]"
         Continuation.print cont
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args
-        Env.print env
-    end;
-    let uses =
-      match Continuation.Map.find cont t.used_continuations with
-      | exception Not_found ->
-        Continuation_uses.create ~continuation:cont ~params
-          ~definition_scope_level:(Env.scope_level_of_continuation env cont)
-      | uses -> uses
-    in
-    let uses =
-      Continuation_uses.add_use uses (Env.typing_env env) kind
-    in
-    { t with
-      used_continuations =
-        Continuation.Map.add cont uses t.used_continuations;
-    }
 
-  let map_benefit t f =
-    { t with benefit = f t.benefit }
+  let record_continuation_use t env cont ~arg_types =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Continuation %a not present in [r]"
+        Continuation.print cont
+    | uses ->
+      let uses =
+        Continuation_uses.add_use uses (Env.typing_env env) arg_types
+      in
+      { t with
+        continuations = Continuation.Map.add cont uses t.continuations;
+      }
 
-  let clear_env_extension t =
-    { t with
-      env_extension = T.Typing_env_extension.empty;
-    }
+  let continuation_arg_types t env cont =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Continuation %a not present in [r]"
+        Continuation.print cont
+    | uses -> Continuation_uses.arg_types uses (Env.typing_env env)
 
-  (* CR mshinwell: There should be a function here which records the new
-     imports in [newly_imported_symbols]. *)
-
-  let newly_imported_symbols t = t.newly_imported_symbols
+  let imported_symbols t = t.imported_symbols
 
   let new_lifted_constant t ~name ty static_part =
-    let kind = T.kind ty in
     let symbol =
       Symbol.create (Compilation_unit.get_current_exn ())
         (Linkage_name.create name)
@@ -360,7 +358,7 @@ end = struct
     let t =
       { t with
         lifted_constants =
-          Symbol.Map.add symbol (ty, kind, static_part) t.lifted_constants;
+          Symbol.Map.add symbol (ty, static_part) t.lifted_constants;
       }
     in
     symbol, t
