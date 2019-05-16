@@ -19,7 +19,7 @@
 open! Flambda.Import
 
 type lifted_constants =
-  (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t) Symbol.Map.t
+  (Symbol.t * (Flambda_type.t * Flambda_static.Static_part.t)) list
 
 module type Env = sig
   (** Environments, following the lexical scope of the program, used during
@@ -46,24 +46,11 @@ module type Env = sig
 
   val resolver : t -> (Export_id.t -> Flambda_type.t option)
 
-  (** Determine whether the inliner is currently inside a function body from
-      the given set of closures.  This is used to detect whether a given
-      function call refers to a function which exists somewhere on the current
-      inlining stack. *)
-  val inside_set_of_closures_declaration : t -> Set_of_closures_origin.t -> bool
-
-  val entering_set_of_closures : t -> Set_of_closures_origin.t -> t
-
-  (** Record that the simplifier is about to descend into [closure_id]. *)
-  val enter_closure : t -> Closure_id.t -> t
-
-  val add_lifted_constants : t -> lifted_constants -> t
+  val enter_closure : t -> t
 
   val increment_continuation_scope_level : t -> t
 
   val continuation_scope_level : t -> Scope_level.t
-
-  val set_scope_level_for_lifted_constants : t -> Scope_level.t -> t
 
   val typing_env : t -> Flambda_type.Typing_env.t
 
@@ -107,13 +94,17 @@ module type Env = sig
 
   val add_exn_continuation : t -> Exn_continuation.t -> t
 
-  val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
-
   val mem_continuation : t -> Continuation.t -> bool
 
   val mem_exn_continuation : t -> Exn_continuation.t -> bool
 
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
+
+  val resolve_continuation_aliases : t -> Continuation.t -> Continuation.t
+
+  val continuation_arity : t -> Continuation.t -> Flambda_arity.t
+
+  val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
   val check_variable_is_bound : t -> Variable.t -> unit
 
@@ -134,9 +125,20 @@ module type Env = sig
 
   val round : t -> int
 
+  (** Prevent function inlining from occurring in the given environment. *)
   val disable_function_inlining : t -> t
 
-  val add_lifted_constants_from_r : t -> result -> previous_r:result -> t
+  (** Add the given lifted constants to the environment.  Symbols that are
+      already defined in the environment are ignored. *)
+  val add_lifted_constants : t -> lifted_constants -> t
+
+  (** Like [add_lifted_constants], but takes the constants from the given
+      result structure. *)
+  val add_lifted_constants_from_r : t -> result -> t
+
+  val set_scope_level_for_lifted_constants : t -> Scope_level.t -> t
+
+  val can_inline : t -> bool
 end
 
 module type Result = sig
@@ -155,6 +157,8 @@ module type Result = sig
     -> Continuation.t
     -> arg_types:Flambda_type.t list
     -> t
+
+  (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
   val continuation_arg_types
      : t

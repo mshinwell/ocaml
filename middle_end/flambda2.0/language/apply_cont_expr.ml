@@ -178,9 +178,16 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
   if k == k' && args == args' && trap_action == trap_action' then t
   else { k = k'; args = args'; trap_action = trap_action'; }
 
-let update_args t ~args =
-  if args == t.args then t
-  else { t with args; }
+let update_continuation t continuation =
+  { t with continuation; }
+
+let update_continuation_and_args t cont ~args =
+  if Continuation.equal t.continuation cont && args == t.args then t
+  else
+    { t with
+      continuation = cont;
+      args;
+    }
 
 let no_args t =
   match args t with

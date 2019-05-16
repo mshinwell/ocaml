@@ -35,6 +35,8 @@ module type S = sig
 
   include Expr_std.S with type t := t
 
+  val arity_of_list : t list -> Flambda_arity.t
+
   module Parameters : sig
     type t
 

@@ -64,9 +64,10 @@ val with_continuation : t -> Continuation.t -> t
 (** Change the call kind of an application. *)
 val with_call_kind : t -> Call_kind.t -> t
 
-(** Change the callee and arguments of an application. *)
-val with_callee_and_args
+(** Change the continuation, callee and arguments of an application. *)
+val with_continuation_callee_and_args
    : t
+  -> Continuation.t
   -> callee:Name.t
   -> args:Simple.t list
   -> t
