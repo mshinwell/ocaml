@@ -179,13 +179,13 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
   else { k = k'; args = args'; trap_action = trap_action'; }
 
 let update_continuation t continuation =
-  { t with continuation; }
+  { t with k = continuation; }
 
 let update_continuation_and_args t cont ~args =
-  if Continuation.equal t.continuation cont && args == t.args then t
+  if Continuation.equal t.k cont && args == t.args then t
   else
     { t with
-      continuation = cont;
+      k = cont;
       args;
     }
 

@@ -40,6 +40,10 @@ val trap_action : t -> Trap_action.t option
 
 val update_continuation : t -> Continuation.t -> t
 
-val update_continuation_and_args : t -> args:Simple.t list -> t
+val update_continuation_and_args
+   : t
+  -> Continuation.t
+  -> args:Simple.t list
+  -> t
 
 val is_goto : t -> Continuation.t -> bool
