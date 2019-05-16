@@ -28,7 +28,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
         (Function_declaration.params_and_body function_decl)
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ->
-          let env = E.enter_closure env closure_id in
+          let env = E.enter_closure env in
           let result_arity = Function_declaration.result_arity function_decl in
           let env = E.add_continuation env return_continuation result_arity in
           let env = E.add_exn_continuation env exn_continuation in
@@ -67,7 +67,6 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
     let set_of_closures_origin =
       Function_declarations.set_of_closures_origin function_decls
     in
-    let env = E.entering_set_of_closures env set_of_closures_origin in
     let funs = Function_declarations.funs function_decls in
     let funs, fun_types, r =
       Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->

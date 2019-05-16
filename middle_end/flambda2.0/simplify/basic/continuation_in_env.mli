@@ -17,8 +17,13 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Unknown
-  | Unreachable
-  | Inline of Flambda.Continuation_handler.t
+  | Unknown of { arity : Flambda_arity.t; }
+  | Unreachable of { arity : Flambda_arity.t; }
+  | Inline of {
+      arity : Flambda_arity.t;
+      handler : Flambda.Continuation_handler.t;
+    }
 
 val print : Format.formatter -> t -> unit
+
+val arity : t -> Flambda_arity.t
