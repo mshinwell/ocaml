@@ -17,12 +17,22 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Unknown
-  | Unreachable
-  | Inline of Flambda.Continuation_handler.t
+  | Unknown of { arity : Flambda_arity.t; }
+  | Unreachable of { arity : Flambda_arity.t; }
+  | Inline of {
+      arity : Flambda_arity.t;
+      handler : Flambda.Continuation_handler.t;
+    }
 
+(* CR mshinwell: Write a proper printer *)
 let print ppf t =
   match t with
-  | Unknown -> Format.pp_print_string ppf "Unknown"
-  | Unreachable -> Format.pp_print_string ppf "Unreachable"
-  | Inline _handler -> Format.pp_print_string ppf "Inline _"
+  | Unknown { arity = _; } -> Format.pp_print_string ppf "Unknown"
+  | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
+  | Inline { arity = _;_handler = _; } -> Format.pp_print_string ppf "Inline _"
+
+let arity t =
+  match t with
+  | Unknown { arity; }
+  | Unreachable { arity; }
+  | Inline { arity;_handler = _; } -> arity

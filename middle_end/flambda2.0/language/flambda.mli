@@ -312,6 +312,8 @@ end and Continuation_handler : sig
 
   (** Whether the continuation is a compiler-generated wrapper that should
       always be inlined. *)
+  (* CR mshinwell: Remove the notion of "stub" and enhance continuation and
+     function declarations to hold one or more wrappers themselves. *)
   val stub : t -> bool
 
   val arity : t -> Flambda_arity.t
@@ -518,7 +520,8 @@ end and Function_declaration : sig
       function bodies. *)
   val code_id : t -> Code_id.t
 
-  val num_params : t -> int
+  (* CR mshinwell: Be consistent: "param_arity" or "params_arity" throughout. *)
+  val params_arity : t -> Flambda_arity.t
 
   (** The arity of the return continuation of the function.  This provides the
       number of results that the function produces and their kinds. *)
