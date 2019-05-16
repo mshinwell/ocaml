@@ -39,9 +39,8 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
       let kind = L.kind let_expr in
       let new_kind = T.kind ty in
       if not (K.equal new_kind kind) then begin
-        Misc.fatal_errorf "Kind error during simplification of [Let] \
-            binding (old kind %a, new kind %a):@ %a"
-          K.print kind
+        Misc.fatal_errorf "Kind changed during simplification of [Let] \
+            binding (new kind %a):@ %a"
           K.print new_kind
           L.print let_expr
       end;
@@ -297,9 +296,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
               Kinded_parameter.create (Parameter.wrap var) kind)
             result_arity
         in
-        let _full_app_args, remaining_args =
-          Misc.Stdlib.List.split_at arity args
-        in
+        let _, remaining_args = Misc.Stdlib.List.split_at arity args in
         let func_var = Variable.create "full_apply" in
         let perform_over_application =
           Apply.create ~callee:(Name.var func_var)
@@ -394,6 +391,7 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
           ~arg_types:[T.any_value ()];
         Call_kind.indirect_function_call_unknown_arity ()
       | Indirect_known_arity { param_arity; return_arity; } ->
+        let args_arity = T.arity_of_list arg_types in
         if not (Flambda_arity.equal param_arity args_arity) then begin
           Misc.fatal_errorf "Argument arity on indirect-known-arity \
               application doesn't match [Call_kind] (expected %a, \
@@ -403,7 +401,6 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
             Apply.print apply
         end;
         check_return_arity_and_record_return_cont_use ~return_arity;
-        let args_arity = T.arity_of_list arg_types in
         Call_kind.indirect_function_call_known_arity ~param_arity ~return_arity
       | Direct { return_arity; _ } ->
         let param_arity =
