@@ -50,7 +50,7 @@ module type Env = sig
 
   val increment_continuation_scope_level : t -> t
 
-  val continuation_scope_level : t -> Scope_level.t
+  val get_continuation_scope_level : t -> Scope_level.t
 
   val typing_env : t -> Flambda_type.Typing_env.t
 
@@ -94,10 +94,6 @@ module type Env = sig
 
   val add_exn_continuation : t -> Exn_continuation.t -> t
 
-  val mem_continuation : t -> Continuation.t -> bool
-
-  val mem_exn_continuation : t -> Exn_continuation.t -> bool
-
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
 
   val resolve_continuation_aliases : t -> Continuation.t -> Continuation.t
@@ -112,20 +108,14 @@ module type Env = sig
 
   val check_name_is_bound : t -> Name.t -> unit
 
+  val check_continuation_is_bound : t -> Continuation.t -> unit
+
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
 
   (** Appends the locations of inlined call-sites to the given debuginfo
       and sets the resulting debuginfo as the current one in the
       environment. *)
   val add_inlined_debuginfo : t -> Debuginfo.t -> t
-
-   (** If collecting inlining statistics, record an inlining decision for the
-       call at the top of the closure stack stored inside the given
-       environment. *)
-  val record_decision
-     : t
-    -> Inlining_stats_types.Decision.t
-    -> unit
 
   val round : t -> int
 
@@ -178,6 +168,10 @@ module type Result = sig
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
 
+  val add_lifted_constants : t -> from:t -> t
+
+  (** Retrieve constants lifted to toplevel.  The constants must be defined
+      in the order returned (first element of the list defined first). *)
   val get_lifted_constants : t -> lifted_constants
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
