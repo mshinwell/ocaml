@@ -35,6 +35,7 @@ end = struct
     typing_env : TE.t;
     continuations : (Scope_level.t * Continuation_in_env.t) Continuation.Map.t;
     exn_continuations : Scope_level.t Exn_continuation.Map.t;
+    continuation_aliases : Continuation.t Continuation.Map.t;
     continuation_scope_level : Scope_level.t;
     scope_level_for_lifted_constants : Scope_level.t;
     inlined_debuginfo : Debuginfo.t;
@@ -51,11 +52,20 @@ end = struct
       typing_env = TE.create ~resolver;
       continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
+      continuation_aliases = Continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
       scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
       can_inline = false;
     }
+
+  let print_scope_level_and_continuation_in_env ppf (scope_level, cont_in_env) =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(scope_level %a)@]@ \
+        @[<hov 1>(cont_in_env %a)@]\
+        )@]"
+      Scope_level.print scope_level
+      Continuation_in_env.print cont_in_env
 
   let print ppf { backend = _; round; typing_env; continuations;
                   continuation_scope_level; scope_level_for_lifted_constants;
@@ -65,14 +75,19 @@ end = struct
         @[<hov 1>(round@ %d)@]@ \
         @[<hov 1>(typing_env@ %a)@]@ \
         @[<hov 1>(continuations@ %a)@]@ \
+        @[<hov 1>(exn_continuations@ %a)@]@ \
         @[<hov 1>(continuation_scope_level@ %a)@]@ \
+        @[<hov 1>(continuation_aliases@ %a)@]@ \
         @[<hov 1>(scope_level_for_lifted_constants@ %a)@]@ \
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]\
         )@]"
       round
       TE.print typing_env
-      (Continuation.Map.print Continuation_in_env.print) continuations
+      (Continuation.Map.print print_scope_level_and_continuation_in_env)
+      continuations
+      (Exn_continuation.Map.print Scope_level.print) continuations
+      (Continuation.Map.print Continuation.print) continuation_aliases
       Scope_level.print continuation_scope_level
       Scope_level.print scope_level_for_lifted_constants
       Debuginfo.print inlined_debuginfo
@@ -99,6 +114,7 @@ end = struct
       typing_env = TE.restrict_to_symbols env.typing_env;
       continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
+      continuation_aliases = Continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
       scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
@@ -160,6 +176,25 @@ end = struct
       continuations;
     }
 
+  let find_continuation t cont : Continuation_in_env.t =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+        Continuation.print cont
+        print t
+    | (_scope_level, cont_in_env) -> cont_in_env
+
+  let resolve_continuation_aliases t cont =
+    match Continuation.Map.find cont t.continuation_aliases with
+    | exception Not_found -> cont
+    | alias_for -> alias_for
+
+  let continuation_arity t cont =
+    match find_continuation t cont with
+    | Unknown of { arity; }
+    | Unreachable of { arity; }
+    | Inline of { arity; _ } -> arity
+
   let add_continuation t cont arity =
     add_continuation0 t cont (Unknown { arity; })
 
@@ -167,22 +202,28 @@ end = struct
     add_continuation0 t cont (Unreachable { arity; })
 
   let add_continuation_alias t cont arity ~alias_for =
-      check_arity_against_args ~arity;
-      let alias_for_arity = E.continuation_arity env alias_for in
-      if not (Flambda_arity.equal arity alias_for_arity) then begin
-        Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
-            since the two continuations differ in arity"
-          Continuation.print cont
-          Flambda_arity.print arity
-          Continuation.print alias_for
-          Flambda_arity.print alias_for_arity
-      end;
-      (* Remove [cont] from the environment to ensure that any loop of aliases
-         produces an error. *)
-      let env = 
-      simplify_apply_cont env r (AC.update_continuation apply_cont alias_for)
-
-    add_continuation0 t cont (Alias_for { arity; alias_for; })
+    let alias_for_arity = continuation_arity t alias_for in
+    if not (Flambda_arity.equal arity alias_for_arity) then begin
+      Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
+          since the two continuations differ in arity"
+        Continuation.print cont
+        Flambda_arity.print arity
+        Continuation.print alias_for
+        Flambda_arity.print alias_for_arity
+    end;
+    if Continuation.Map.mem cont t.continuation_aliases then begin
+      Misc.fatal_errorf "Cannot add continuation alias %a (as alias for %a); \
+          the continuation is already deemed to be an alias"
+        Continuation.print cont
+        Continuation.print alias_for
+    end;
+    let alias_for = resolve_continuation_aliases t alias_for in
+    let continuation_aliases =
+      Continuation.Map.add cont alias_for t.continuation_aliases
+    in
+    { t with
+      continuation_aliases;
+    }
 
   let add_continuation_to_inline t cont arity handler =
     add_continuation0 t cont (Inline { arity; handler; })
@@ -195,14 +236,6 @@ end = struct
     { t with
       exn_continuations;
     }
-
-  let find_continuation t cont : Continuation_in_env.t =
-    match Continuation.Map.find cont t.continuations with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | (_scope_level, cont_in_env) -> cont_in_env
 
   let extend_typing_environment t env_extension =
     let typing_env = TE.add_env_extension t.typing_env env_extension in
@@ -252,25 +285,22 @@ end and Result : sig
 end = struct
   type env = Env.t
 
-  type t =
-    { resolver : (Export_id.t -> Flambda_type.t option);
-      (* CR mshinwell: What about combining these next two? *)
-      used_continuations : Continuation_uses.t Continuation.Map.t;
-      defined_continuations :
-        (Continuation_uses.t * Continuation_approx.t * Env.t
-            * Flambda.recursive)
-          Continuation.Map.t;
-      inlining_threshold : Inlining_cost.Threshold.t option;
-      benefit : Inlining_cost.Benefit.t;
-      env_extension : T.Typing_env_extension.t;
-      newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
-      lifted_constants :
-        (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
-          Symbol.Map.t;
+  module Defined_continuation = struct
+    type t = {
+      arity : Flambda_arity.t;
+      uses : Flambda_type.t list list;
     }
 
-(* XXX Need to ensure that newly_imported_symbols doesn't contain predef exn
-   symbols *)
+    let print ppf t =
+      Format.fprintf ppf ...
+  end
+
+  type t =
+    { resolver : (Export_id.t -> Flambda_type.t option);
+      continuations : Defined_continuation.t Continuation.Map.t;
+      imported_symbols : Flambda_kind.t Symbol.Map.t;
+      lifted_constants : lifted_constants;
+    }
 
   let create ~resolver =
     { resolver;

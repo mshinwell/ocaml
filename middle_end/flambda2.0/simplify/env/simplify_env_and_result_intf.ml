@@ -160,18 +160,7 @@ module type Result = sig
 
   (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
-  val continuation_arg_types
-     : t
-    -> Continuation.t
-    -> arity:Flambda_arity.t
-    -> Flambda_type.t list
-
-  (** Apply a transformation to the inlining benefit stored within the
-      given result structure. *)
-  val map_benefit
-    : t
-    -> (Inlining_cost.Benefit.t -> Inlining_cost.Benefit.t)
-    -> t
+  val continuation_arg_types : t -> Continuation.t -> Flambda_type.t list
 
   val new_lifted_constant
      : t
@@ -179,8 +168,6 @@ module type Result = sig
     -> Flambda_type.t
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
-
-  val new_lifted_constants : t -> lifted_constants -> t
 
   val get_lifted_constants : t -> lifted_constants
 
