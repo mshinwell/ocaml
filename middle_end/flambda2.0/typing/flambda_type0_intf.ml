@@ -47,6 +47,18 @@ module type S = sig
     val empty : t
   end
 
+  module Typing_env_extension : sig
+    type t
+
+    include Expr_std.S with type t := t
+
+    val empty : t
+
+    val is_empty : t -> bool
+
+    val add_equation : t -> Name.t -> flambda_type -> t
+  end
+
   module Typing_env : sig
     type t
 
@@ -84,24 +96,28 @@ module type S = sig
        : t
       -> at_or_previous_to:Scope_level.t
       -> Variable.Set.t
+
+    (** Adjust the domain of the given typing environment so that it only
+        mentions names which are symbols, not variables. *)
+    val restrict_to_symbols : t -> t
+
+    val add_definition : t -> Name.t -> Scope_level.t -> flambda_type -> t
+
+    val add_equation : t -> Name.t -> Scope_level.t -> flambda_type -> t
+
+    val mem : t -> Name.t -> bool
+
+    (** Add the given environment extension into the given typing environment.
+        During the process, if an attempt is made to add a name which is
+        already bound, the given name's type will be determined using a meet
+        operation. *)
+    val add_env_extension : t -> Typing_env_extension.t -> t
   end
 
   val join : Typing_env.t -> t -> t -> t
 
   (* CR mshinwell: Substitute out this alias once it's finalised *)
   type 'a type_accessor = Typing_env.t -> 'a
-
-  module Typing_env_extension : sig
-    type t
-
-    include Expr_std.S with type t := t
-
-    val empty : t
-
-    val is_empty : t -> bool
-
-    val add_equation : t -> Name.t -> flambda_type -> t
-  end
 
   type 'a ty
   type 'a unknown_or_join
@@ -302,10 +318,6 @@ module type S = sig
         -> typing_env_entry0
         -> unit)
       -> unit
-
-    (** Adjust the domain of the given typing environment so that it only
-        mentions names which are symbols, not variables. *)
-    val restrict_to_symbols : t -> t
 
 (*
     (** Like [restrict_to_names] except using a traditional filtering

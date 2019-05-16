@@ -28,16 +28,8 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
   *)
   let simplify_toplevel env r_outer expr ~return_continuation
        exn_continuation ~scope_level_for_lifted_constants =
-    if not (E.mem_continuation env return_continuation) then begin
-      Misc.fatal_errorf "The return continuation (%a) must be in the \
-          environment before calling [simplify_toplevel]"
-        Continuation.print return_continuation
-    end;
-    if not (E.mem_exn_continuation env exn_continuation) then begin
-      Misc.fatal_errorf "The exception continuation parameter (%a) must be in \
-          the environment before calling [simplify_toplevel]"
-        Exn_continuation.print exn_continuation
-    end;
+    E.check_continuation_is_bound env return_continuation;
+    E.check_exn_continuation_is_bound env exn_continuation;
     (* CR mshinwell: Clear [env] here? *)
     let env =
       E.set_scope_level_for_lifted_constants env
@@ -45,7 +37,6 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
     in
     let r = R.create ~resolver:(E.resolver env) in
     let expr, r = Simplify_expr.simplify_expr env r expr in
-    let lifted_constants = R.get_lifted_constants r in
-    let r_outer = R.new_lifted_constants r_outer lifted_constants in
+    let r_outer = R.add_lifted_constants r_outer ~from:r in
     expr, r_outer
 end
