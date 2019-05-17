@@ -46,6 +46,11 @@ and of_kind_value =
   | Closures of closures
   | String of String_info.Set.t
 
+(* CR mshinwell: Document why e.g. Blocks_and_immediates has Or_unknown yet
+   the Discriminants constructor does not.  Also how Unknown and Bottom are
+   always bubbled up to the top (although this isn't required for
+   correctness). *)
+
 (* CR mshinwell: Add invariant checks that these are not both bottom and not
    both Unknown. *)
 and blocks_and_tagged_immediates = {
