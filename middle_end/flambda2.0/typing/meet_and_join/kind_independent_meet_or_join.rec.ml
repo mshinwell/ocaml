@@ -274,6 +274,10 @@ Typing_env_extension.print env_extension_from_meet;
 
   let meet_or_join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo Flambda_types.ty)
-        (or_alias2 : S.of_kind_foo Flambda_types.ty) =
-    E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
+        (or_alias2 : S.of_kind_foo Flambda_types.ty) : _ Or_bottom.t =
+    let ty, env_extension =
+      E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
+    in
+    if Flambda_type0_core.ty_is_bottom env ty then Bottom
+    else Ok (ty, env_extension)
 end
