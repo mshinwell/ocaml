@@ -19,15 +19,20 @@
 module Meet = Meet_and_join.Make (Either_meet_or_join.For_meet)
 module Join = Meet_and_join.Make (Either_meet_or_join.For_join)
 
+module Meet_value = Meet_and_join_value.Make (Either_meet_or_join.For_meet)
+module Join_value = Meet_and_join_value.Make (Either_meet_or_join.For_join)
+
+module Meet_fabricated =
+  Meet_and_join_fabricated.Make (Either_meet_or_join.For_meet)
+module Join_fabricated =
+  Meet_and_join_fabricated.Make (Either_meet_or_join.For_join)
+
 let meet env t1 t2 =
   Meet.meet_or_join (Join_env.create env) t1 t2
 
 let join ?bound_name env t1 t2 =
   let join_ty, _env_extension = Join.meet_or_join ?bound_name env t1 t2 in
   join_ty
-
-module Meet_value = Meet_and_join_value.Make (Either_meet_or_join.For_meet)
-module Join_value = Meet_and_join_value.Make (Either_meet_or_join.For_join)
 
 let meet_closures_entry env entry1 entry2 : _ Or_bottom.t =
   let env = Join_env.create env in
@@ -42,18 +47,13 @@ let join_closures_entry env entry1 entry2 =
   | Ok (entry, _env_extension) -> entry
   | Absorbing -> assert false
 
-module Meet_fabricated =
-  Meet_and_join_fabricated.Make (Either_meet_or_join.For_meet)
-module Join_fabricated =
-  Meet_and_join_fabricated.Make (Either_meet_or_join.For_join)
-
 let meet_set_of_closures_entry env entry1 entry2 : _ Or_bottom.t =
   let env = Join_env.create env in
   match
     Meet_fabricated.meet_or_join_set_of_closures_entry env entry1 entry2
   with
   | Ok (entry, env_extension) -> Ok (entry, env_extension)
-  | Absorbing -> Bottom
+  | Absorbing | Bottom -> Bottom
 
 let join_set_of_closures_entry env entry1 entry2 =
   match
