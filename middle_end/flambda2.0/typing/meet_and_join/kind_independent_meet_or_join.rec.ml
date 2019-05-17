@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make
-  (E : Either_meet_or_join_intf.S
+  (E : Lattice_ops_intf.S
     with module Join_env := Join_env
     with module Meet_env := Meet_env
     with module Typing_env_extension := Typing_env_extension)
