@@ -46,11 +46,13 @@ and of_kind_value =
   | Closures of closures
   | String of String_info.Set.t
 
+(* CR mshinwell: Add invariant checks that these are not both bottom and not
+   both Unknown. *)
 and blocks_and_tagged_immediates = {
-  immediates : Immediates.t;
+  immediates : Immediates.t Or_unknown.t;
   (** Cases for constant constructors (in the case of variants) and
       arbitrary tagged immediates. *)
-  blocks : Blocks.t;
+  blocks : Blocks.t Or_unknown.t;
   (** Cases for non-constant constructors (in the case of variants) and
       normal blocks. *)
 }
