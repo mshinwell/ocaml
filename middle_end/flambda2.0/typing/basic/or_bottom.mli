@@ -27,3 +27,5 @@ val print
   -> unit
 
 val both : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t
+
+val map : 'a t -> f:('a -> 'b) -> 'b t
