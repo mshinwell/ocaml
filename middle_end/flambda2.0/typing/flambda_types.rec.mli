@@ -49,7 +49,9 @@ and of_kind_value =
 (* CR mshinwell: Document why e.g. Blocks_and_immediates has Or_unknown yet
    the Discriminants constructor does not.  Also how Unknown and Bottom are
    always bubbled up to the top (although this isn't required for
-   correctness). *)
+   correctness).
+   Are we losing useful information by not having e.g. Discriminants Unknown?
+*)
 
 (* CR mshinwell: Add invariant checks that these are not both bottom and not
    both Unknown. *)
