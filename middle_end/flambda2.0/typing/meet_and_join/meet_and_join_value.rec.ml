@@ -47,21 +47,26 @@ struct
   let force_to_kind = Flambda_type0_core.force_to_kind_value
   let print_ty = Type_printers.print_ty_value_with_cache
 
+  (* CR mshinwell: These next two could go in a separate file. *)
   let meet_unknown env meet_contents
-      (or_unknown1 : Or_unknown.t) (or_unknown2 : Or_unknown.t) =
+      (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
+      : _ Or_unknown.t =
     match or_unknown1, or_unknown2 with
     | Unknown, Unknown -> Unknown
     | _, Unknown -> or_unknown1
     | Unknown, _ -> or_unknown2
-    | contents1, contents2 -> meet_contents env contents1 contents2
+    | Ok contents1, Ok contents2 ->
+      let contents, env_extension = meet_contents env contents1 contents2 in
+      Ok contents, env_extension
 
   let join_unknown env join_contents
-      (or_unknown1 : Or_unknown.t) (or_unknown2 : Or_unknown.t) =
+      (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
+      : _ Or_unknown.t =
     match or_unknown1, or_unknown2 with
     | Unknown, Unknown
     | _, Unknown
     | Unknown, _ -> Unknown
-    | contents1, contents2 -> join_contents env contents1 contents2
+    | Ok contents1, Ok contents2 -> Ok (join_contents env contents1 contents2)
 
   let meet_or_join_blocks_and_tagged_immediates env
         ({ blocks = blocks1; immediates = imms1; }
