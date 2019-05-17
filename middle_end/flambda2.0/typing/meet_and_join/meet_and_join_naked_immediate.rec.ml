@@ -33,12 +33,10 @@ struct
         (of_kind1 : Immediate.Set.t Flambda_types.of_kind_naked_number)
         (of_kind2 : Immediate.Set.t Flambda_types.of_kind_naked_number)
         : (Immediate.Set.t Flambda_types.of_kind_naked_number
-            * Typing_env_extension.t) Or_absorbing.t =
+            * Typing_env_extension.t) Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
     | Immediate fs1, Immediate fs2 ->
       let fs = E.Immediate.Set.union_or_inter fs1 fs2 in
-      (* XXX This is wrong -- should be Bottom *)
-      if Immediate.Set.is_empty fs then Absorbing
-      else Ok (Immediate fs, Typing_env_extension.empty ())
-    | _, _ -> Absorbing
+      if Immediate.Set.is_empty fs then Bottom
+      else Ok (Immediate fs, Typing_env_extension.empty)
 end

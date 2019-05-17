@@ -59,32 +59,27 @@ struct
         (of_kind1 : Flambda_types.of_kind_fabricated)
         (of_kind2 : Flambda_types.of_kind_fabricated)
         : (Flambda_types.of_kind_fabricated * Typing_env_extension.t)
-            Or_absorbing.t =
-    if Join_env.shortcut_precondition env
-      && of_kind1 == of_kind2
-    then
-      Ok (of_kind1, Typing_env_extension.empty ())
-    else
-      match of_kind1, of_kind2 with
-      | Discriminants discriminants1, Discriminants discriminants2 ->
-        let discriminants =
-          E.switch Discriminants.meet Discriminants.join env
-            discriminants1 discriminants2
-        in
-        begin match discriminants with
-        | Bottom -> Absorbing
-        | Ok (discriminants, env_extension) ->
-          Ok (Discriminants discriminants, env_extension)
-        end
-      | Set_of_closures { closures = closures1 },
-          Set_of_closures { closures = closures2 } ->
-        let closures =
-          E.switch Closure_ids.meet Closure_ids.join env closures1 closures2
-        in
-        begin match closures with
-        | Bottom -> Absorbing
-        | Ok (closures, env_extension) ->
-          Ok (Set_of_closures { closures; }, env_extension)
-        end
-      | (Discriminants _ | Set_of_closures _), _ -> Absorbing
+            Or_bottom_or_absorbing.t =
+    match of_kind1, of_kind2 with
+    | Discriminants discriminants1, Discriminants discriminants2 ->
+      let discriminants =
+        E.switch Discriminants.meet Discriminants.join env
+          discriminants1 discriminants2
+      in
+      begin match discriminants with
+      | Bottom -> Absorbing
+      | Ok (discriminants, env_extension) ->
+        Ok (Discriminants discriminants, env_extension)
+      end
+    | Set_of_closures { closures = closures1 },
+        Set_of_closures { closures = closures2 } ->
+      let closures =
+        E.switch Closure_ids.meet Closure_ids.join env closures1 closures2
+      in
+      begin match closures with
+      | Bottom -> Absorbing
+      | Ok (closures, env_extension) ->
+        Ok (Set_of_closures { closures; }, env_extension)
+      end
+    | (Discriminants _ | Set_of_closures _), _ -> Absorbing
 end

@@ -33,11 +33,10 @@ struct
         (of_kind1 : Targetint.Set.t Flambda_types.of_kind_naked_number)
         (of_kind2 : Targetint.Set.t Flambda_types.of_kind_naked_number)
         : (Targetint.Set.t Flambda_types.of_kind_naked_number
-            * Typing_env_extension.t) Or_absorbing.t =
+            * Typing_env_extension.t) Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
     | Nativeint fs1, Nativeint fs2 ->
       let fs = E.Targetint.Set.union_or_inter fs1 fs2 in
-      if Targetint.Set.is_empty fs then Absorbing
-      else Ok (Nativeint fs, Typing_env_extension.empty ())
-    | _, _ -> Absorbing
+      if Targetint.Set.is_empty fs then Bottom
+      else Ok (Nativeint fs, Typing_env_extension.empty)
 end
