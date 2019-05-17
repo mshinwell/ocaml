@@ -69,40 +69,11 @@ let equal_or_alias ?bound_name equal_unknown_or_join env result
     | None -> all_aliases2
     | Some bound_name -> Name.Set.remove bound_name all_aliases2
   in
-  let all_aliases1_minus_existentials =
-    Name.Set.diff all_aliases1 (Type_equality_env.existentials env)
-  in
-  let all_aliases2_minus_existentials =
-    Name.Set.diff all_aliases2 (Type_equality_env.existentials env)
-  in
   if not (Name.Set.equal all_aliases1_minus_existentials
     all_aliases2_minus_existentials)
   then
     Type_equality_result.types_known_unequal ()
   else
-    let result =
-      let all_aliases1_that_are_existentials =
-        Name.Set.inter all_aliases1
-          (Type_equality_env.existentials env)
-      in
-      let all_aliases2_that_are_existentials =
-        Name.Set.inter all_aliases2
-          (Type_equality_env.existentials env)
-      in
-      let delay_existentials result names ~must_equal_one_of =
-        Name.Set.fold (fun name result ->
-            Type_equality_result.delay_existential result name
-              ~must_equal_one_of)
-          names
-          result
-      in
-      let result =
-        delay_existentials result all_aliases1_that_are_existentials
-          ~must_equal_one_of:all_aliases2_that_are_existentials
-      in
-      delay_existentials result all_aliases2_that_are_existentials
-        ~must_equal_one_of:all_aliases1_that_are_existentials
-    in
     equal_unknown_or_join env result unknown_or_join1 unknown_or_join2
 
 let equal_unknown_or_join equal_of_kind_foo env result
@@ -211,12 +182,8 @@ and equal_ty_fabricated ?bound_name env result ~force_to_kind ~print_ty
     ~force_to_kind ~print_ty ty_fabricated1 ty_fabricated2
 
 and equal_of_kind_value env result
-      ((v1 : Flambda_types.of_kind_value), perm1)
-      ((v2 : Flambda_types.of_kind_value), perm2) =
-  let env =
-    Type_equality_env.compose_name_permutations env
-      ~perm_left:perm1 ~perm_right:perm2
-  in
+      (v1 : Flambda_types.of_kind_value)
+      (v2 : Flambda_types.of_kind_value) =
   match v1, v2 with
   | Blocks_and_tagged_immediates blocks1,
       Blocks_and_tagged_immediates blocks2 ->
@@ -315,12 +282,8 @@ fun _env result (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
   | Nativeint _, _ -> Type_equality_result.types_known_unequal ()
 
 and equal_of_kind_fabricated env result
-      ((of_kind_fabricated1 : Flambda_types.of_kind_fabricated), perm1)
-      ((of_kind_fabricated2 : Flambda_types.of_kind_fabricated), perm2) =
-  let env =
-    Type_equality_env.compose_name_permutations env
-      ~perm_left:perm1 ~perm_right:perm2
-  in
+      (of_kind_fabricated1 : Flambda_types.of_kind_fabricated))
+      (of_kind_fabricated2 : Flambda_types.of_kind_fabricated)) =
   match of_kind_fabricated1, of_kind_fabricated2 with
   | Discriminants discrs1, Discriminants discrs2 ->
     Discriminants.equal env result discrs1 discrs2
@@ -332,18 +295,14 @@ and equal_of_kind_fabricated env result
 
 and equal_closures_entry env result
       ({ function_decl = function_decl1;
-         ty = ty1;
          closure_elements = closure_elements1;
          set_of_closures = set_of_closures1;
        } : Flambda_types.closures_entry)
       ({ function_decl = function_decl2;
-         ty = ty2;
          closure_elements = closure_elements2;
          set_of_closures = set_of_closures2;
        } : Flambda_types.closures_entry) =
   equal_function_declaration env result function_decl1 function_decl2
-  >>= fun result ->
-  Function_type.equal env result ty1 ty2
   >>= fun result ->
   Closure_elements.equal env result closure_elements1 closure_elements2
   >>= fun result ->
@@ -361,14 +320,7 @@ and equal_set_of_closures_entry env result
 
 let equal ~(bound_name : Name.t option)
       typing_env_left typing_env_right t1 t2 =
-Format.eprintf "Equality check: %a@ and@ %a\n%!"
-Type_printers.print t1
-Type_printers.print t2;
   let env = Type_equality_env.empty ~typing_env_left ~typing_env_right in
   let result = Type_equality_result.create () in
   let result = equal_with_env ?bound_name env result t1 t2 in
-let b =
-  Type_equality_result.are_types_known_equal result
-in
-Format.eprintf "Equality check result: %b\n%!" b;
   Type_equality_result.are_types_known_equal result
