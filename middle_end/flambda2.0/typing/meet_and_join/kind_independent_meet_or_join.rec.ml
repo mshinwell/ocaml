@@ -95,98 +95,47 @@ struct
       in
       Equals simple, env_extension
 
+  let all_aliases_of env simple_opt =
+    match simple_opt with
+    | None -> Name.Set.empty
+    | Some simple -> Typing_env.aliases_of_simple env simple
+
   let rec join_on_unknown_or_join env
         (uj1 : S.of_kind_foo T.unknown_or_join)
         (uj2 : S.of_kind_foo T.unknown_or_join)
         : S.of_kind_foo T.unknown_or_join =
     match uj1, uj2 with
+    | Bottom, _ -> uj2
+    | _, Bottom -> uj1
     | Unknown, _ | _, Unknown -> Unknown
-    | Join Bottom, Join _ -> uj2
-    | Join _, Join Bottom -> uj1
-    | Join (Ok of_kind_foo1), Join (Ok of_kind_foo2) ->
-      (* CR mshinwell: What happens if one of the [of_kind_foo]s is actually
-         bottom even if it says [Ok]? *)
-      (* N.B. If we are here, [S.meet_or_join_of_kind_foo]
-         must be a "join" operation. *)
-      let join =
-        S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2
-      in
-      match join with
-      | Ok (of_kind_foo, _env_extension) -> Join (Ok of_kind_foo)
+    | Ok of_kind_foo1, Ok of_kind_foo2 ->
+      match S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2 with
+      | Ok (of_kind_foo, _env_extension) -> Ok of_kind_foo
+      | Bottom -> Bottom
       | Absorbing -> Unknown
 
   and join_ty ?bound_name env
-        (or_alias1 : S.of_kind_foo T.ty)
-        (or_alias2 : S.of_kind_foo T.ty)
+        (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty =
     let unknown_or_join1, canonical_simple1 =
-      Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-        (Join_env.environment_on_left env)
-        ~force_to_kind:S.force_to_kind
-        ~print_ty
-        ?bound_name
-        or_alias1
+      Typing_env.resolve_aliases_on_ty env
+        ~force_to_kind:S.force_to_kind ~print_ty ?bound_name or_alias1
     in
     let unknown_or_join2, canonical_simple2 =
-      Typing_env.resolve_aliases_and_squash_unresolved_names_on_ty'
-        (Join_env.environment_on_right env)
-        ~force_to_kind:S.force_to_kind
-        ~print_ty
-        ?bound_name
-        or_alias2
+      Typing_env.resolve_aliases_on_ty env
+        ~force_to_kind:S.force_to_kind ~print_ty ?bound_name or_alias2
     in
-    let all_aliases1 =
-      match canonical_simple1 with
-      | None -> Name.Set.empty
-      | Some canonical_simple ->
-        Typing_env.aliases_of_simple (Join_env.environment_on_left env)
-          canonical_simple
+    (* CR mshinwell: Think further about this "bound name" stuff. *)
+    let shared_aliases_not_aliasing_bound_name =
+      Name.Set.diff
+        (Name.Set.inter (all_aliases_of env canonical_simple1)
+          (all_aliases_of env all_all_aliases2))
+        (all_aliases_of env (Option.map Simple.name bound_name))
     in
-    let all_aliases2 =
-      match canonical_simple2 with
-      | None -> Name.Set.empty
-      | Some canonical_simple ->
-        Typing_env.aliases_of_simple (Join_env.environment_on_right env)
-          canonical_simple
-    in
-    let all_aliases = Name.Set.inter all_aliases1 all_aliases2 in
-    let all_aliases =
-      match bound_name with
-      | None -> all_aliases
-      | Some bound_name ->
-        let all_aliases_of_bound_name =
-          Typing_env.aliases_of_simple
-            (Join_env.central_typing_environment env)
-            (Simple.name bound_name)
-        in
-        Name.Set.diff all_aliases all_aliases_of_bound_name
-    in
-    let alias_both_sides = Name.Set.choose_opt all_aliases in
-    match alias_both_sides with
+    match Name.Set.choose_opt shared_aliases_not_aliasing_bound_name with
     | Some name -> Equals (Simple.name name)
     | None ->
-      let alias1 = Name.Set.choose_opt all_aliases1 in
-      let alias2 = Name.Set.choose_opt all_aliases2 in
-      match alias1, alias2 with
-      | None, None ->
-        let unknown_or_join =
-          join_on_unknown_or_join env
-            unknown_or_join1 unknown_or_join2
-        in
-        if unknown_or_join == unknown_or_join1 then begin
-          assert (match or_alias1 with No_alias _ -> true | _ -> false);
-          or_alias1
-        end else if unknown_or_join == unknown_or_join2 then begin
-          assert (match or_alias2 with No_alias _ -> true | _ -> false);
-          or_alias2
-        end else begin
-          No_alias unknown_or_join
-        end
-      | _, _ ->
-        let unknown_or_join =
-          join_on_unknown_or_join env unknown_or_join1 unknown_or_join2
-        in
-        No_alias unknown_or_join
+      No_alias (join_on_unknown_or_join env unknown_or_join1 unknown_or_join2)
 
   let meet_or_join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo T.ty)
