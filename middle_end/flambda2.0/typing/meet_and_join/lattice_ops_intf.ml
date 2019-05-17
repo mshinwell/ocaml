@@ -23,10 +23,9 @@ module type S = sig
   type join_env
   type meet_env
   type typing_env_extension
+  type meet_or_join
 
   val name : unit -> string
-
-  type meet_or_join = private Meet | Join
 
   val op : unit -> meet_or_join
 
@@ -174,42 +173,24 @@ module type S = sig
   end
 
   val switch_no_bottom
-     : (meet_env
-      -> 'a
-      -> 'a
-      -> 'a * typing_env_extension)
-    -> (join_env
-      -> 'a
-      -> 'a
-      -> 'a)
+     : (meet_env -> 'a -> 'a -> 'a * typing_env_extension)
+    -> (join_env -> 'a -> 'a -> 'a)
     -> join_env
     -> 'a
     -> 'a
     -> 'a * typing_env_extension
 
   val switch
-     : (meet_env
-      -> 'a
-      -> 'a
-      -> ('a * typing_env_extension) Or_bottom.t)
-    -> (join_env
-      -> 'a
-      -> 'a
-      -> 'a)
+     : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
+    -> (join_env -> 'a -> 'a -> 'a)
     -> join_env
     -> 'a
     -> 'a
     -> ('a * typing_env_extension) Or_bottom.t
 
   val switch'
-     : (meet_env
-      -> 'a
-      -> 'a
-      -> ('a * typing_env_extension) Or_bottom.t)
-    -> (join_env
-      -> 'a
-      -> 'a
-      -> 'a)
+     : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
+    -> (join_env -> 'a -> 'a -> 'a)
     -> join_env
     -> 'a
     -> 'a
