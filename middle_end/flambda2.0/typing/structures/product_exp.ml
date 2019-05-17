@@ -86,8 +86,6 @@ struct
     let components_by_index_in_result, env =
       Index.Set.fold (fun index (components_by_index_in_result, env) ->
           let component = Component.create kind in
-Format.eprintf "Made fresh component %a for RP meet/join\n%!"
-Component.print component;
           let components_by_index_in_result =
             Index.Map.add index component components_by_index_in_result
           in
