@@ -26,7 +26,7 @@ REC_BINDINGS="\
     equality/type_equality_result.rec.ml \
     equality/type_equality.rec.ml \
     meet_and_join/api_meet_and_join.rec.ml \
-    meet_and_join/either_meet_or_join.rec.ml \
+    meet_and_join/lattice_ops.rec.ml \
     meet_and_join/join_env.rec.ml \
     meet_and_join/kind_independent_meet_or_join.rec.ml \
     meet_and_join/meet_and_join_fabricated.rec.ml \
