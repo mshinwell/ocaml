@@ -25,3 +25,5 @@ val print
   -> Format.formatter
   -> 'a t
   -> unit
+
+val both : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t

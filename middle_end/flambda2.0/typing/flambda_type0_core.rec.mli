@@ -98,6 +98,8 @@ val get_alias : Flambda_types.t -> Simple.t option
 
 val is_obviously_bottom : Flambda_types.t -> bool
 
+val ty_is_bottom : Typing_env.t -> _ Flambda_types.ty -> bool
+
 val of_ty_value : Flambda_types.ty_value -> Flambda_types.t
 
 val of_ty_naked_number
