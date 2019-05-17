@@ -14,45 +14,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The external interface of the meet_and_join/ directory, providing meet
-    and join functions on Flambda types, and some derived operations. *)
+(** The external interface of the meet_and_join/ directory. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(** Greatest lower bound of two types. *)
 val meet
    : Meet_env.t
   -> Flambda_types.t
   -> Flambda_types.t
   -> Flambda_types.t * Typing_env_extension.t
 
+(** Least upper bound of two types. *)
 val join
    : ?bound_name:Name.t
   -> Join_env.t
   -> Flambda_types.t
   -> Flambda_types.t
   -> Flambda_types.t
-
-val meet_closures_entry
-   : Meet_env.t
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
-  -> (Flambda_types.closures_entry * Typing_env_extension.t) Or_bottom.t
-
-val join_closures_entry
-   : Join_env.t
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
-  -> Flambda_types.closures_entry
-
-val meet_set_of_closures_entry
-   : Meet_env.t
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
-  -> (Flambda_types.set_of_closures_entry * Typing_env_extension.t)
-       Or_bottom.t
-
-val join_set_of_closures_entry
-   : Join_env.t
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
