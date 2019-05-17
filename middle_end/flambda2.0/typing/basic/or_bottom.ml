@@ -24,3 +24,8 @@ let print f ppf t =
   match t with
   | Ok contents -> Format.fprintf ppf "@[(Ok %a)@]" f contents
   | Bottom -> Format.pp_print_string ppf "Bottom"
+
+let both t1 t2 ~f =
+  match t1, t2 with
+  | Ok contents1, Ok contents2 -> Ok (f contents1 contents2)
+  | Bottom, _ | _, Bottom -> Bottom
