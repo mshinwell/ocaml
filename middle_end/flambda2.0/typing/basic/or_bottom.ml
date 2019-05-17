@@ -29,3 +29,8 @@ let both t1 t2 ~f =
   match t1, t2 with
   | Ok contents1, Ok contents2 -> Ok (f contents1 contents2)
   | Bottom, _ | _, Bottom -> Bottom
+
+let map t ~f =
+  match t with
+  | Ok contents -> Ok (f contents)
+  | Bottom -> Bottom

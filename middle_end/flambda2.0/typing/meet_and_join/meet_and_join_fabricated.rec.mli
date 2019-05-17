@@ -35,5 +35,5 @@ sig
     -> Flambda_types.set_of_closures_entry
     -> Flambda_types.set_of_closures_entry
     -> (Flambda_types.set_of_closures_entry * Typing_env_extension.t)
-         Or_absorbing.t
+         Or_bottom.t
 end
