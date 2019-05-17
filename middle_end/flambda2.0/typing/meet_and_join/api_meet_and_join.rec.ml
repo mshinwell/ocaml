@@ -61,35 +61,3 @@ let join_set_of_closures_entry env entry1 entry2 =
   with
   | Ok (entry, _env_extension) -> entry
   | Absorbing -> assert false
-
-(* XXX These may be wrong, check.  The version in the adding env
-   extension function is correct *)
-let as_or_more_precise env t1 ~than:t2 =
-  if Type_equality.fast_equal env env t1 t2 then true
-  else if Flambda_type0_core.is_obviously_bottom t1 then true
-  else
-    let meet_env =
-      Meet_env.create env
-        ~perm_left:(Name_permutation.create ())
-        ~perm_right:(Name_permutation.create ())
-    in
-    let meet_t, env_extension = meet meet_env t1 t2 in
-    let env = Typing_env.add_env_extension env env_extension in
-    Type_equality.equal ~bound_name:None env env meet_t t1
-
-let strictly_more_precise env t1 ~than:t2 =
-  if Type_equality.fast_equal env env t1 t2 then false
-  else if
-    Flambda_type0_core.is_obviously_bottom t1
-      && not (Flambda_type0_core.is_obviously_bottom t2)
-  then true
-  else
-    let meet_env =
-      Meet_env.create env
-        ~perm_left:(Name_permutation.create ())
-        ~perm_right:(Name_permutation.create ())
-    in
-    let meet_t, env_extension = meet meet_env t1 t2 in
-    let env = Typing_env.add_env_extension env env_extension in
-    Type_equality.equal ~bound_name:None env env meet_t t1
-      && not (Type_equality.equal ~bound_name:None env env meet_t t2)
