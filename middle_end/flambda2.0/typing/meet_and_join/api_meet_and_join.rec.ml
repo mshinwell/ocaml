@@ -16,16 +16,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Meet = Meet_and_join.Make (Either_meet_or_join.For_meet)
-module Join = Meet_and_join.Make (Either_meet_or_join.For_join)
+module Meet = Meet_and_join.Make (Lattice_ops.For_meet)
+module Join = Meet_and_join.Make (Lattice_ops.For_join)
 
-module Meet_value = Meet_and_join_value.Make (Either_meet_or_join.For_meet)
-module Join_value = Meet_and_join_value.Make (Either_meet_or_join.For_join)
+module Meet_value = Meet_and_join_value.Make (Lattice_ops.For_meet)
+module Join_value = Meet_and_join_value.Make (Lattice_ops.For_join)
 
 module Meet_fabricated =
-  Meet_and_join_fabricated.Make (Either_meet_or_join.For_meet)
+  Meet_and_join_fabricated.Make (Lattice_ops.For_meet)
 module Join_fabricated =
-  Meet_and_join_fabricated.Make (Either_meet_or_join.For_join)
+  Meet_and_join_fabricated.Make (Lattice_ops.For_join)
 
 let meet env t1 t2 =
   Meet.meet_or_join (Join_env.create env) t1 t2

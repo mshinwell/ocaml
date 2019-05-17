@@ -25,7 +25,7 @@
 (* CR mshinwell: We should enforce that [S] must have been specialised
    using the same [E]. *)
 module Make
-  (E : Either_meet_or_join_intf.S
+  (E : Lattice_ops_intf.S
     with type join_env := Join_env.t
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t)
