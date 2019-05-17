@@ -20,12 +20,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type meet_or_join = private Meet | Join
+
 module For_meet : Either_meet_or_join_intf.S
   with type join_env := Join_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
+  with type meet_or_join := meet_or_join
 
 module For_join : Either_meet_or_join_intf.S
   with type join_env := Join_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
+  with type meet_or_join := meet_or_join
