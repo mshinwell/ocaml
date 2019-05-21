@@ -20,16 +20,11 @@
 
 include Contains_names.S with type t := Flambda_types.t
 
+(* CR mshinwell: Why aren't these in separate units? *)
 module Closures_entry : sig
   type t = Flambda_types.closures_entry
 
   val bottom : unit -> t
-
-  val print_with_cache
-     : cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
 
   val add_or_meet_equations
      : t
@@ -37,23 +32,15 @@ module Closures_entry : sig
     -> Typing_env_extension.t
     -> t
 
-  val equal
-     : Type_equality_env.t
-    -> t
-    -> t
-    -> bool
-
   val widen : t -> to_match:t -> t
 
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
-
-  val join : Typing_env.t -> t -> t -> t
-
-  include Contains_names.S with type t := t
+  include Type_structure_intf.S
+    with type t := t
+    with type flambda_type := Flambda_types.t
+    with type typing_env := Typing_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
+    with type typing_env_extension := Typing_env_extension.t
 end
 
 module Set_of_closures_entry : sig
@@ -61,35 +48,21 @@ module Set_of_closures_entry : sig
 
   val bottom : unit -> t
 
-  val print_with_cache
-     : cache:Printing_cache.t
-    -> Format.formatter
-    -> t
-    -> unit
-
   val add_or_meet_equations
      : t
     -> Meet_env.t
     -> Typing_env_extension.t
     -> t
 
-  val equal
-     : Type_equality_env.t
-    -> t
-    -> t
-    -> bool
-
   val widen : t -> to_match:t -> t
 
-  val meet
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom.t
-
-  val join : Typing_env.t -> t -> t -> t
-
-  include Contains_names.S with type t := t
+  include Type_structure_intf.S
+    with type t := t
+    with type flambda_type := Flambda_types.t
+    with type typing_env := Typing_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
+    with type typing_env_extension := Typing_env_extension.t
 end
 
 val get_alias : Flambda_types.t -> Simple.t option

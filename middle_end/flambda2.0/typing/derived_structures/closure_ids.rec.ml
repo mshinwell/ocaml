@@ -16,8 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Unit_and_closure_id_set =
-  Hashtbl.Make_with_map_pair (Unit) (Closure_id_set)
+module Unit_and_closure_id_set = struct
+  type t = unit * Closure_id.Set.t
+  include Identifiable.Make_pair (Unit) (Closure_id_set)
+end
 
 module RL =
   Row_like.Make (Unit) (Closure_id_set) (Unit_and_closure_id_set)
@@ -42,15 +44,12 @@ let create closure_ids_map open_or_closed : t =
     RL.create_exactly_multiple closure_ids_map
 
 let print = RL.print
-let _invariant _t = ()  (* CR mshinwell: RL.invariant *)
-
-let meet env t1 t2 : _ Or_bottom.t =
-  match RL.meet env t1 t2 with
-  | Bottom -> Bottom
-  | Ok (t, _set_of_closures_entry) -> Ok (t, Typing_env_extension.empty ())
-
-let join = RL.join
+let invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
 let equal = RL.equal
-let free_names = RL.free_names
-let apply_name_permutation = RL.apply_name_permutation
+
+let meet env t1 t2 : _ Or_bottom.t =
+  Or_bottom.map (RL.meet env t1 t2)
+    ~f:(fun (t, _set_of_closures_entry) -> t, Typing_env_extension.empty)
+
+let join = RL.join
