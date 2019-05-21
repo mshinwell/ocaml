@@ -58,9 +58,17 @@ and erase_aliases_of_kind_value ~allowed (of_kind : Flambda_types.of_kind_value)
       : Flambda_types.of_kind_value =
   match of_kind with
   | Blocks_and_tagged_immediates { blocks; immediates; } ->
+    let blocks =
+      Or_unknown.map blocks ~f:(fun blocks ->
+        Blocks.map_types blocks ~f:(erase_aliases ~allowed))
+    in
+    let immediates =
+      Or_unknown.map immediates ~f:(fun immediates ->
+        Immediates.map_types immediates ~f:(erase_aliases ~allowed));
+    in
     Blocks_and_tagged_immediates {
-      blocks = Blocks.map_types ~f:(erase_aliases ~allowed) blocks;
-      immediates = Immediates.map_types ~f:(erase_aliases ~allowed) immediates;
+      blocks;
+      immediates;
     }
   | Boxed_number (Boxed_float ty) ->
     Boxed_number (Boxed_float (
