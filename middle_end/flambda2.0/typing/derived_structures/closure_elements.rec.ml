@@ -16,15 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Flambda_types.t Var_within_closure.Map.t
-
-let create closure_elements_to_tys = closure_elements_to_tys
-
-let create_bottom () = Var_within_closure.Map.empty
-
-let print ~cache:_ ppf t = RP.print ppf t
-
-let meet = RP.meet
-let join = RP.join
-
-let equal = RP.equal
+include Product.Make (Var_within_closure)
