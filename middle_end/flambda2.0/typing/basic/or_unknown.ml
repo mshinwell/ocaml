@@ -31,3 +31,8 @@ let equal equal_contents t1 t2 =
   | Known contents1, Known contents2 -> equal_contents contents1 contents2
   | Unknown, Known _
   | Known _, Unknown -> false
+
+let map t ~f =
+  match t with
+  | Known contents -> Known (f contents)
+  | Unknown -> Unknown

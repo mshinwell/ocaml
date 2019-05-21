@@ -25,6 +25,7 @@ module Make
     include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
+    with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type type_equality_env := Type_equality_env.t
@@ -59,6 +60,7 @@ sig
       operation has been completed. *)
   include Type_structure_intf.S
     with type t := t
+    with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type type_equality_env := Type_equality_env.t

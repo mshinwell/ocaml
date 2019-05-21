@@ -578,7 +578,7 @@ module Set_of_closures_entry = struct
   type t = set_of_closures_entry
 
   let bottom () : t =
-    { by_closure_id = Types_by_closure_id.create_bottom ();
+    { by_closure_id = Types_by_closure_id.bottom;
     }
 
   let print_with_cache ~cache ppf { by_closure_id; } =
@@ -587,13 +587,9 @@ module Set_of_closures_entry = struct
         @[<hov 1>(by_closure_id@ %a)@])@]"
       (Types_by_closure_id.print_with_cache ~cache) by_closure_id
 
-  let equal = Type_equality.equal_set_of_closures_entry
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let add_or_meet_equations { by_closure_id; } env equations =
-    let by_closure_id =
-      Types_by_closure_id.add_or_meet_equations by_closure_id env equations
-    in
-    { by_closure_id; }
+  let equal = Type_equality.equal_set_of_closures_entry
 
   let widen t ~to_match:_ = t  (* XXX Think about this *)
 (*
@@ -623,9 +619,7 @@ module Closures_entry = struct
       (Closure_elements.print_with_cache ~cache) closure_elements
       (Type_printers.print_ty_fabricated_with_cache ~cache) set_of_closures
 
-  let add_or_meet_equations t _env _equations =
-    (* CR mshinwell: Think about what should happen here. *)
-    t
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let equal = Type_equality.equal_closures_entry
 

@@ -20,6 +20,7 @@
     mapping. *)
 
 module type S = sig
+  type flambda_type
   type typing_env
   type meet_env
   type type_equality_env
@@ -31,6 +32,7 @@ module type S = sig
 
   include Type_structure_intf.S
     with type t := t
+    with type flambda_type := flambda_type
     with type typing_env := typing_env
     with type meet_env := meet_env
     with type type_equality_env := type_equality_env
