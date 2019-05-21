@@ -30,12 +30,7 @@ val print_with_cache
   -> t
   -> unit
 
-val equal
-   : Type_equality_env.t
-  -> Type_equality_result.t
-  -> t
-  -> t
-  -> Type_equality_result.t
+val equal : Type_equality_env.t -> t -> t -> bool
 
 val fast_equal : t -> t -> bool
 

@@ -17,7 +17,7 @@
 module K = Flambda_kind
 module T = Flambda_types
 
-module Make (Index : Name_like_intf.S) = struct
+module Make (Index : Identifiable.S) = struct
   type t = {
     components_by_index : T.t Index.Map.t;
   }

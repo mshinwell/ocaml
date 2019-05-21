@@ -17,3 +17,5 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Product.Make (Var_within_closure)
+
+let bottom = create ~field_tys:[]
