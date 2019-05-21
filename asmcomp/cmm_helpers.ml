@@ -523,7 +523,8 @@ let test_bool dbg cmm =
 
 (* Float *)
 
-let box_float dbg c = Cop(Calloc, [alloc_float_header dbg; c], dbg)
+let box_float dbg c =
+  Cop(Calloc [| Int; Float |], [alloc_float_header dbg; c], dbg)
 
 let map_ccatch f rec_flag handlers body =
   let handlers = List.map
@@ -533,7 +534,8 @@ let map_ccatch f rec_flag handlers body =
 
 let rec unbox_float dbg cmm =
   match cmm with
-  | Cop(Calloc, [Cblockheader (header, _); c], _) when header = float_header ->
+  | Cop(Calloc [| Int; Float|],
+        [Cblockheader (header, _); c], _) when header = float_header ->
       c
   | Clet(id, exp, body) -> Clet(id, exp, unbox_float dbg body)
   | Cifthenelse(cond, ifso_dbg, e1, ifnot_dbg, e2, dbg) ->
@@ -554,7 +556,8 @@ let rec unbox_float dbg cmm =
 (* Complex *)
 
 let box_complex dbg c_re c_im =
-  Cop(Calloc, [alloc_floatarray_header 2 dbg; c_re; c_im], dbg)
+  Cop(Calloc [| Int; Float; Float |],
+      [alloc_floatarray_header 2 dbg; c_re; c_im], dbg)
 
 let complex_re c dbg = Cop(Cload (Double_u, Immutable), [c], dbg)
 let complex_im c dbg = Cop(Cload (Double_u, Immutable),
@@ -769,9 +772,10 @@ let call_cached_method obj tag cache pos args dbg =
 
 (* Allocation *)
 
-let make_alloc_generic set_fn dbg tag wordsize args =
+let make_alloc_generic set_fn dbg tag ty wordsize args =
   if wordsize <= Config.max_young_wosize then
-    Cop(Calloc, Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
+    Cop(Calloc (Array.append [| Int |] ty),
+        Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
   else begin
     let id = V.create_local "*alloc*" in
     let rec fill_fields idx = function
@@ -789,11 +793,15 @@ let make_alloc dbg tag args =
     Cop(Cextcall("caml_initialize", typ_void, false, None),
         [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
   in
-  make_alloc_generic addr_array_init dbg tag (List.length args) args
+  let n = List.length args in
+  let ty = Array.make n Val in
+  make_alloc_generic addr_array_init dbg tag ty n args
 
 let make_float_alloc dbg tag args =
-  make_alloc_generic float_array_set dbg tag
-                     (List.length args * size_float / size_addr) args
+  let n= List.length args in
+  let wordsize = (n * size_float / size_addr) in
+  let ty = Array.make n Float in
+  make_alloc_generic float_array_set dbg tag ty wordsize args
 
 (* Bounds checking *)
 
@@ -967,9 +975,14 @@ let box_int_gen dbg (bi : Primitive.boxed_integer) arg =
     then Cop(Clsl, [arg; Cconst_int (32, dbg)], dbg)
     else arg
   in
-  Cop(Calloc, [alloc_header_boxed_int bi dbg;
-               Cconst_symbol(operations_boxed_int bi, dbg);
-               arg'], dbg)
+  let ty =
+    if bi = Primitive.Pint64 && size_int = 4
+    then [| Int; Val; Int; Int |]
+    else [| Int; Val; Int |]
+  in
+  Cop(Calloc ty, [alloc_header_boxed_int bi dbg;
+                 Cconst_symbol(operations_boxed_int bi, dbg);
+                 arg'], dbg)
 
 let split_int64_for_32bit_target arg dbg =
   bind "split_int64" arg (fun arg ->
@@ -993,7 +1006,7 @@ let alloc_matches_boxed_int bi ~hdr ~ops =
 
 let rec unbox_int bi arg dbg =
   match arg with
-    Cop(Calloc, [hdr; ops; Cop(Clsl, [contents; Cconst_int (32, _)], dbg')],
+    Cop(Calloc _, [hdr; ops; Cop(Clsl, [contents; Cconst_int (32, _)], dbg')],
       _dbg)
     when bi = Primitive.Pint32 && size_int = 8 && big_endian
       && alloc_matches_boxed_int bi ~hdr ~ops ->
@@ -1001,14 +1014,14 @@ let rec unbox_int bi arg dbg =
       Cop(Casr, [Cop(Clsl, [contents; Cconst_int (32, dbg)], dbg');
         Cconst_int (32, dbg)],
         dbg)
-  | Cop(Calloc, [hdr; ops; contents], _dbg)
+  | Cop(Calloc _, [hdr; ops; contents], _dbg)
     when bi = Primitive.Pint32 && size_int = 8 && not big_endian
       && alloc_matches_boxed_int bi ~hdr ~ops ->
       (* Force sign-extension of low 32 bits *)
       Cop(Casr, [Cop(Clsl, [contents; Cconst_int (32, dbg)], dbg);
         Cconst_int (32, dbg)],
         dbg)
-  | Cop(Calloc, [hdr; ops; contents], _dbg)
+  | Cop(Calloc _, [hdr; ops; contents], _dbg)
     when alloc_matches_boxed_int bi ~hdr ~ops ->
       contents
   | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body dbg)
@@ -1936,7 +1949,7 @@ let rec intermediate_curry_functions arity num =
       fun_args = [VP.create arg, typ_val; VP.create clos, typ_val];
       fun_body =
          if arity - num > 2 && arity <= max_arity_optimized then
-           Cop(Calloc,
+           Cop(Calloc [| Int; Val; Val; Val; Val; Val |],
                [alloc_closure_header 5 (dbg ());
                 Cconst_symbol(name1 ^ "_" ^ Int.to_string (num+1), dbg ());
                 int_const (dbg ()) (arity - num - 1);
@@ -1945,7 +1958,7 @@ let rec intermediate_curry_functions arity num =
                 Cvar arg; Cvar clos],
                dbg ())
          else
-           Cop(Calloc,
+           Cop(Calloc [| Int; Val; Val; Val; Val |],
                 [alloc_closure_header 4 (dbg ());
                  Cconst_symbol(name1 ^ "_" ^ Int.to_string (num+1), dbg ());
                  int_const (dbg ()) 1; Cvar arg; Cvar clos],

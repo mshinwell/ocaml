@@ -29,7 +29,7 @@ let reg ppf r =
   else
     fprintf ppf "%s"
       (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
-  fprintf ppf "/%i" r.stamp;
+  fprintf ppf "/%i(%a)" r.stamp Printcmm.machtype_component r.typ;
   begin match r.loc with
   | Unknown -> ()
   | Reg r ->
