@@ -62,7 +62,7 @@ let oper_result_type = function
       | Single | Double | Double_u -> typ_float
       | _ -> typ_int
       end
-  | Calloc -> typ_val
+  | Calloc _ -> typ_val
   | Cstore (_c, _) -> typ_void
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi |
     Cand | Cor | Cxor | Clsl | Clsr | Casr |
@@ -75,23 +75,33 @@ let oper_result_type = function
   | Craise _ -> typ_void
   | Ccheckbound -> typ_void
 
-(* Infer the size in bytes of the result of an expression whose evaluation
-   may be deferred (cf. [emit_parts]). *)
+(* Infer the size in number of registers of the result of an
+   expression whose evaluation may be deferred (cf. [emit_parts]). *)
+
+let size_component = function
+  | Val | Addr -> Arch.size_addr
+  | Int -> Arch.size_int
+  | Float -> Arch.size_float
+
+let size_machtype mty =
+  let size = ref 0 in
+  for i = 0 to Array.length mty - 1 do
+    size := !size + size_component mty.(i)
+  done;
+  !size
 
 let size_expr (env:environment) exp =
   let rec size localenv = function
-      Cconst_int _ | Cconst_natint _ -> Arch.size_int
-    | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _ ->
-        Arch.size_addr
-    | Cconst_float _ -> Arch.size_float
-    | Cblockheader _ -> Arch.size_int
+      Cconst_int _ | Cconst_natint _
+    | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _
+    | Cconst_float _ | Cblockheader _ -> 1
     | Cvar id ->
         begin try
           V.Map.find id localenv
         with Not_found ->
         try
           let regs = env_find id env in
-          size_machtype (Array.map (fun r -> r.typ) regs)
+          Array.length regs
         with Not_found ->
           Misc.fatal_error("Selection.size_expr: unbound var " ^
                            V.unique_name id)
@@ -99,7 +109,7 @@ let size_expr (env:environment) exp =
     | Ctuple el ->
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _, _) ->
-        size_machtype(oper_result_type op)
+        Array.length (oper_result_type op)
     | Clet(id, arg, body) ->
         size (V.Map.add (VP.var id) (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
@@ -147,22 +157,10 @@ let join env opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.anonymous r1.(i)
-          && Cmm.ge_component r1.(i).typ r2.(i).typ
-        then begin
-          r.(i) <- r1.(i);
-          seq2#insert_move env r2.(i) r1.(i)
-        end else if Reg.anonymous r2.(i)
-          && Cmm.ge_component r2.(i).typ r1.(i).typ
-        then begin
-          r.(i) <- r2.(i);
-          seq1#insert_move env r1.(i) r2.(i)
-        end else begin
-          let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
-          r.(i) <- Reg.create typ;
-          seq1#insert_move env r1.(i) r.(i);
-          seq2#insert_move env r2.(i) r.(i)
-        end
+        let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
+        r.(i) <- Reg.create typ;
+        seq1#insert_move env r1.(i) r.(i);
+        seq2#insert_move env r2.(i) r.(i)
       done;
       Some r
 
@@ -302,7 +300,7 @@ method is_simple_expr = function
   | Cop(op, args, _) ->
       begin match op with
         (* The following may have side effects *)
-      | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ -> false
+      | Capply _ | Cextcall _ | Calloc _ | Cstore _ | Craise _ -> false
         (* The remaining operations are simple if their args are *)
       | Cload _ | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor
       | Cxor | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf
@@ -343,7 +341,7 @@ method effects_of exp =
     let from_op =
       match op with
       | Capply _ | Cextcall _ -> EC.arbitrary
-      | Calloc -> EC.none
+      | Calloc _ -> EC.none
       | Cstore _ -> EC.effect_only Effect.Arbitrary
       | Craise _ | Ccheckbound -> EC.effect_only Effect.Raise
       | Cload (_, Asttypes.Immutable) -> EC.none
@@ -445,7 +443,6 @@ method select_operation op args _dbg =
         (Istore(chunk, addr, is_assign), [arg2; eloc])
         (* Inversion addr/datum in Istore *)
       end
-  | (Calloc, _) -> (self#select_allocation 0), args
   | (Caddi, _) -> self#select_arith_comm Iadd args
   | (Csubi, _) -> self#select_arith Isub args
   | (Cmuli, _) -> self#select_arith_comm Imul args
@@ -582,24 +579,6 @@ method insert_moves env src dst =
     self#insert_move env src.(i) dst.(i)
   done
 
-(* Adjust the types of destination pseudoregs for a [Cassign] assignment.
-   The type inferred at [let] binding might be [Int] while we assign
-   something of type [Val] (PR#6501). *)
-
-method adjust_type src dst =
-  let ts = src.typ and td = dst.typ in
-  if ts <> td then
-    match ts, td with
-    | Val, Int -> dst.typ <- Val
-    | Int, Val -> ()
-    | _, _ -> Misc.fatal_error("Selection.adjust_type: bad assignment to "
-                               ^ Reg.name dst)
-
-method adjust_types src dst =
-  for i = 0 to min (Array.length src) (Array.length dst) - 1 do
-    self#adjust_type src.(i) dst.(i)
-  done
-
 (* Insert moves and stack offsets for function arguments and results *)
 
 method insert_move_args env arg loc stacksize =
@@ -685,8 +664,7 @@ method emit_expr (env:environment) exp =
           Misc.fatal_error ("Selection.emit_expr: unbound var " ^ V.name v) in
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 ->
-          self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
+      | Some r1 -> self#insert_moves env r1 rv; Some [||]
       end
   | Ctuple [] ->
       Some [||]
@@ -710,7 +688,18 @@ method emit_expr (env:environment) exp =
         (Cifthenelse (exp,
           dbg, Cconst_int (1, dbg),
           dbg, Cconst_int (0, dbg),
-          dbg))
+                      dbg))
+  | Cop(Calloc ty, args, dbg) ->
+      begin match self#emit_parts_list env args with
+        None -> None
+      | Some(simple_args, env) ->
+          let op = self#select_allocation (size_machtype ty) in
+          let rd = self#regs_for typ_val in
+          let alloc_args = self#select_allocation_args env in
+          self#insert_debug env (Iop op) dbg alloc_args rd;
+          self#emit_stores env ty simple_args rd;
+          Some rd
+      end
   | Cop(op, args, dbg) ->
       begin match self#emit_parts_list env args with
         None -> None
@@ -757,16 +746,6 @@ method emit_expr (env:environment) exp =
                 self#insert_op_debug env new_op dbg
                   loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results env loc_res rd stack_ofs;
-              Some rd
-          | Ialloc { bytes = _; spacetime_index; label_after_call_gc; } ->
-              let rd = self#regs_for typ_val in
-              let bytes = size_expr env (Ctuple new_args) in
-              let op =
-                Ialloc { bytes; spacetime_index; label_after_call_gc; }
-              in
-              let args = self#select_allocation_args env in
-              self#insert_debug env (Iop op) dbg args rd;
-              self#emit_stores env new_args rd;
               Some rd
           | op ->
               let r1 = self#emit_tuple env new_args in
@@ -1008,7 +987,8 @@ method emit_extcall_args env args =
   self#insert_move_args env args arg_hard_regs stack_ofs;
   arg_hard_regs, stack_ofs
 
-method emit_stores env data regs_addr =
+method emit_stores env ty data regs_addr =
+  let j = ref 0 in
   let a =
     ref (Arch.offset_addressing Arch.identity_addressing (-Arch.size_int)) in
   List.iter
@@ -1021,16 +1001,25 @@ method emit_stores env data regs_addr =
             Istore(_, _, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind = if r.typ = Float then Double_u else Word_val in
+                let kind = match ty.(!j) with
+                  | Float -> Double_u
+                  | Val -> Word_val
+                  | Int -> Word_int
+                  | Addr -> assert false
+                in
                 self#insert env
                             (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
-                a := Arch.offset_addressing !a (size_component r.typ)
+                a := Arch.offset_addressing !a (size_component ty.(!j));
+                j := !j + 1
               done
           | _ ->
               self#insert env (Iop op) (Array.append regs regs_addr) [||];
-              a := Arch.offset_addressing !a (size_expr env e))
-    data
+              let n = size_expr env e in
+              a := Arch.offset_addressing !a (size_machtype (Array.sub ty !j n));
+              j := !j + n
+    ) data;
+  assert (!j = Array.length ty)
 
 (* Same, but in tail position *)
 

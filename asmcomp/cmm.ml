@@ -27,20 +27,15 @@ let typ_addr = [|Addr|]
 let typ_int = [|Int|]
 let typ_float = [|Float|]
 
-let size_component = function
-  | Val | Addr -> Arch.size_addr
-  | Int -> Arch.size_int
-  | Float -> Arch.size_float
-
 (** [machtype_component]s are partially ordered as follows:
 
-      Addr     Float
+      Addr
        ^
        |
       Val
        ^
        |
-      Int
+      Int    Float
 
   In particular, [Addr] must be above [Val], to ensure that if there is
   a join point between a code path yielding [Addr] and one yielding [Val]
@@ -81,13 +76,6 @@ let ge_component comp1 comp2 =
   | (Int | Addr | Val), Float
   | Float, (Int | Addr | Val) ->
     assert false
-
-let size_machtype mty =
-  let size = ref 0 in
-  for i = 0 to Array.length mty - 1 do
-    size := !size + size_component mty.(i)
-  done;
-  !size
 
 type integer_comparison = Lambda.integer_comparison =
   | Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -144,7 +132,7 @@ and operation =
     (** If specified, the given label will be placed immediately after the
         call (at the same place as any frame descriptor would reference). *)
   | Cload of memory_chunk * Asttypes.mutable_flag
-  | Calloc
+  | Calloc of machtype
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr

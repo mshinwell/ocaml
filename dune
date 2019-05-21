@@ -163,7 +163,7 @@
    afl_instrument asmgen asmlibrarian asmlink asmpackager branch_relaxation
    branch_relaxation_intf cmmgen coloring comballoc
    CSE CSEgen deadcode emit emitaux interf linearize linscan liveness
-   printlinear reload reloadgen schedgen
+   printlinear regtype reload reloadgen schedgen
    scheduling selectgen selection spacetime_profiling spill split
    x86_dsl x86_gas x86_masm
 

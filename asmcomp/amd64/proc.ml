@@ -168,7 +168,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
     match arg.(i).typ with
     | Val | Int | Addr as ty ->
         if !int <= last_int then begin
-          loc.(i) <- phys_reg !int;
+          loc.(i) <- Reg.at_location Int (Reg !int);
           incr int
         end else begin
           loc.(i) <- stack_slot (make_stack !ofs) ty;
@@ -177,7 +177,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
         assert (not (Reg.Set.mem loc.(i) destroyed_by_plt_stub_set))
     | Float ->
         if !float <= last_float then begin
-          loc.(i) <- phys_reg !float;
+          loc.(i) <- Reg.at_location Float (Reg !float);
           incr float
         end else begin
           loc.(i) <- stack_slot (make_stack !ofs) Float;
@@ -237,7 +237,7 @@ let win64_loc_external_arguments arg =
     match arg.(i).typ with
     | Val | Int | Addr as ty ->
         if !reg < 4 then begin
-          loc.(i) <- phys_reg win64_int_external_arguments.(!reg);
+          loc.(i) <- Reg.at_location Int (Reg win64_int_external_arguments.(!reg));
           incr reg
         end else begin
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
@@ -245,7 +245,7 @@ let win64_loc_external_arguments arg =
         end
     | Float ->
         if !reg < 4 then begin
-          loc.(i) <- phys_reg win64_float_external_arguments.(!reg);
+          loc.(i) <- Reg.at_location Float (Reg win64_float_external_arguments.(!reg));
           incr reg
         end else begin
           loc.(i) <- stack_slot (Outgoing !ofs) Float;
