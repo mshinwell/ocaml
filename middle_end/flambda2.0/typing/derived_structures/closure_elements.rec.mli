@@ -20,4 +20,6 @@ type t
 
 val create : Flambda_types.t Var_within_closure.Map.t -> t
 
+val bottom : t
+
 include Type_structure_intf.S with type t := t

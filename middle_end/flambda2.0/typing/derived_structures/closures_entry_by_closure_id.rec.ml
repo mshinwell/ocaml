@@ -31,13 +31,11 @@ let create_at_least_multiple vars_within_closure_map =
 
 let print ~cache ppf t = RL.print ~cache ppf t
 
+let equal = RL.equal
+
 let meet env t1 t2 : _ Or_bottom.t =
   match RL.meet env t1 t2 with
   | Bottom -> Bottom
-  | Ok (t, _closures_entry) -> Ok (t, Typing_env_extension.empty ())
+  | Ok (t, _closures_entry) -> Ok (t, Typing_env_extension.empty)
 
 let join = RL.join
-
-let equal = RL.equal
-let free_names = RL.free_names
-let apply_name_permutation = RL.apply_name_permutation

@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module JE = Join_env
+module JE = Typing_env
 module TEE = Typing_env_extension
 
 type meet_or_join = Meet | Join

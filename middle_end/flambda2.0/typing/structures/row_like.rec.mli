@@ -25,10 +25,9 @@ module Make
     include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
-    with type join_env := Join_env.t
+    with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type type_equality_env := Type_equality_env.t
-    with type type_equality_result := Type_equality_result.t
     with type typing_env_extension := Typing_env_extension.t) :
 sig
   type t
@@ -60,9 +59,8 @@ sig
       operation has been completed. *)
   include Type_structure_intf.S
     with type t := t
-    with type join_env := Join_env.t
+    with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type type_equality_env := Type_equality_env.t
-    with type type_equality_result := Type_equality_result.t
     with type typing_env_extension := Typing_env_extension.t
 end

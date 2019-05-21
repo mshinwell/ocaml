@@ -17,10 +17,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  type join_env
+  type typing_env
   type meet_env
   type type_equality_env
-  type type_equality_result
   type typing_env_extension
   type flambda_type
 
@@ -30,19 +29,14 @@ module type S = sig
 
   val print : Format.formatter -> t -> unit
 
-  val equal
-     : type_equality_env
-    -> type_equality_result
-    -> t
-    -> t
-    -> type_equality_result
+  val equal : type_equality_env -> t -> t -> bool
 
   val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
 
   (* CR mshinwell: The signature of [join] implies that each [t] must have
      a bottom element in itself.  How do we reconcile that against the fact
      that we're trying to propagate bottom upwards? *)
-  val join : join_env -> t -> t -> t
+  val join : typing_env -> t -> t -> t
 
   val map_types : t -> f:(flambda_type -> flambda_type) -> t
 

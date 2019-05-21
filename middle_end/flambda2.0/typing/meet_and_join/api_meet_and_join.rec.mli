@@ -28,7 +28,7 @@ val meet
 (** Least upper bound of two types. *)
 val join
    : ?bound_name:Name.t
-  -> Join_env.t
+  -> Typing_env.t
   -> Flambda_types.t
   -> Flambda_types.t
   -> Flambda_types.t
