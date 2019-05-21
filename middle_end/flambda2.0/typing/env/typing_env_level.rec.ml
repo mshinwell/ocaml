@@ -19,11 +19,10 @@
 type t = {
   defined_names : Flambda_kind.t Name.Map.t;
   equations : Flambda_types.t Name.Map.t;
-  cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
 }
 
 let print_with_cache ~cache ppf
-      ({ defined_names; equations; cse; } : t) =
+      ({ defined_names; equations; } : t) =
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -34,26 +33,25 @@ let print_with_cache ~cache ppf
         (fun ppf (name, ty) ->
           Format.fprintf ppf
             "@[<hov 1>%s%a%s :@ %a@]"
-            (Misc_color.bold_green ())
+            (Misc.Color.bold_green ())
             Name.print name
-            (Misc_color.reset ())
+            (Misc.Color.reset ())
             (Type_printers.print_with_cache ~cache) ty)
         ppf equations;
       Format.pp_print_string ppf ")"
   in
   if Name.Map.is_empty defined_names then
     Format.fprintf ppf
-      "@[<v 1>(\
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
-          @[<hov 1>(cse@ %a)@])@]"
+      "@[<hov 1>(\
+        @[<hov 1>(equations@ @[<v 1>%a@])@])\
+        @]"
       print_equations equations
-      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
   else
     Format.fprintf ppf
       "@[<v 1>(\
           @[<hov 1>(defined_names@ @[<v 1>%a@])@]@;\
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@;\
-          @[<hov 1>(cse@ %a)@])@]"
+          @[<hov 1>(equations@ @[<v 1>%a@])@]\
+          )@]"
       (* CR mshinwell: Fix this.  The problem is that Logical_variable prints
          the types *)
       Name.Set.print (Name.Map.keys defined_names)
@@ -61,7 +59,6 @@ let print_with_cache ~cache ppf
       (Name.Map.print Flambda_kind.print) defined_names
 *)
       print_equations equations
-      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -71,13 +68,11 @@ let invariant _t = ()
 let empty () =
   { defined_names = Name.Map.empty;
     equations = Name.Map.empty;
-    cse = Flambda_primitive.With_fixed_value.Map.empty;
   }
 
-let is_empty { defined_names; equations; cse; } =
+let is_empty { defined_names; equations; } =
   Name.Map.is_empty defined_names
     && Name.Map.is_empty equations
-    && Flambda_primitive.With_fixed_value.Map.is_empty cse
 
 let equations t = t.equations
 
@@ -86,96 +81,7 @@ let equations_domain t = Name.Map.keys t.equations
 let equations_on_outer_env_domain t =
   Name.Set.diff (equations_domain t) (Name.Map.keys t.defined_names)
 
-let cse t = t.cse
-
-let apply_name_permutation ({ defined_names; equations; cse; } as t)
-      perm =
-  let defined_names_changed = ref false in
-  let defined_names' =
-    Name.Map.fold (fun name kind defined_names ->
-        let name' = Name_permutation.apply_name perm name in
-        if not (name == name') then begin
-          defined_names_changed := true
-        end;
-        Name.Map.add name' kind defined_names)
-      defined_names
-      Name.Map.empty
-  in
-  let equations_changed = ref false in
-  let equations' =
-    Name.Map.fold (fun name ty equations ->
-        let name' = Name_permutation.apply_name perm name in
-        let ty' =
-          Flambda_type0_core.apply_name_permutation ty perm
-        in
-        if not (name == name' && ty == ty') then begin
-          equations_changed := true
-        end;
-        Name.Map.add name' ty' equations)
-      equations
-      Name.Map.empty
-  in
-  let cse_changed = ref false in
-  let cse' =
-    Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
-        let simple' = Simple.apply_name_permutation simple perm in
-        let prim' =
-          Flambda_primitive.With_fixed_value.apply_name_permutation prim
-            perm
-        in
-        if (not (simple == simple')) || (not (prim == prim')) then begin
-          cse_changed := true
-        end;
-        Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
-      cse
-      Flambda_primitive.With_fixed_value.Map.empty
-  in
-  if (not !defined_names_changed)
-    && (not !equations_changed)
-    && (not !cse_changed)
-  then t
-  else 
-    { defined_names = defined_names';
-      equations = equations';
-      cse = cse';
-    }
-
-let free_names_in_defined_names t =
-  Name_occurrences.create_from_name_set_in_types
-    (Name.Map.keys t.defined_names)
-
-let free_names_in_equations_and_cse
-      { defined_names = _; equations; cse; } =
-  let free_names_equations =
-    Name.Map.fold (fun name ty free_names ->
-        let free_names' = 
-          Name_occurrences.add (Type_free_names.free_names ty)
-            (Bindable_name.Name name) In_types
-        in
-        Name_occurrences.union free_names free_names')
-      equations
-      (Name_occurrences.create ())
-  in
-  Flambda_primitive.With_fixed_value.Map.fold
-    (fun prim (simple : Simple.t) acc ->
-      match simple with
-      | Const _ | Discriminant _ -> acc
-      | Name name ->
-        Name_occurrences.add
-          (Flambda_primitive.With_fixed_value.free_names prim)
-          (Bindable_name.Name name) In_types)
-    cse
-    free_names_equations
-
-let free_names t =
-  Name_occurrences.union (free_names_in_defined_names t)
-    (free_names_in_equations_and_cse t)
-
-let free_names_minus_defined_names t =
-  Name_occurrences.diff (free_names_in_equations_and_cse t)
-    (free_names_in_defined_names t)
-
-let restrict_to_names { defined_names; equations; cse; } allowed_names =
+let restrict_to_names { defined_names; equations; } allowed_names =
   let allowed_names =
     Name_occurrences.everything_must_only_be_names allowed_names
   in
@@ -187,18 +93,9 @@ let restrict_to_names { defined_names; equations; cse; } allowed_names =
     Name.Map.filter (fun name _ty -> Name.Set.mem name allowed_names)
       equations
   in
-  let cse =
-    Flambda_primitive.With_fixed_value.Map.filter
-      (fun _prim (simple : Simple.t) ->
-        match simple with
-        | Name name -> Name.Set.mem name allowed_names
-        | Const _ | Discriminant _ -> true)
-      cse
-  in
   let t =
     { defined_names;
       equations;
-      cse;
     }
   in
   invariant t;
@@ -303,67 +200,6 @@ let add_or_replace_equation t name ty =
     equations = Name.Map.add name ty t.equations;
   }
 
-let add_cse t name prim =
-  let cse =
-    match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
-    | exception Not_found ->
-      Flambda_primitive.With_fixed_value.Map.add prim name t.cse
-    | _name -> t.cse
-  in
-  { t with cse; }
-
-type cse_meet_or_join = Meet | Join
-let _ : cse_meet_or_join = Meet
-
-let update_cse_for_meet_or_join t _t1 _t2 (_meet_or_join : cse_meet_or_join)
-      _names =
-  t
-
-(* XXX Uncomment once the rest is working again
-  (* XXX This should follow aliases to the canonical name. *)
-  let preserved_cse_equations t =
-    (* CR-someday mshinwell: This could be improved to preserve some of
-       those CSE equations that talk about existentially-bound names. *)
-    Flambda_primitive.With_fixed_value.Map.filter
-      (fun prim (bound_to_or_value : Simple.t) ->
-        match bound_to_or_value with
-        | Name name when not (Name.Set.mem name names) ->
-          false
-        | Name _ | Const _ | Discriminant _ ->
-          let free_names_prim =
-            Name_occurrences.everything_must_only_be_names
-              (Flambda_primitive.With_fixed_value.free_names prim)
-          in
-          Name.Set.subset free_names_prim names)
-      t.cse
-  in
-  let cse =
-    (* XXX This should be intersection for join and union for meet *)
-    Flambda_primitive.With_fixed_value.Map.merge
-      (fun _prim
-          (simple1 : Simple.t option) (simple2 : Simple.t option) ->
-        match simple1, simple2 with
-        | None, None -> None
-        | Some _, None -> simple1
-        | None, Some _ -> simple2
-        | Some simple1, Some simple2 ->
-          (* For the moment just keep this very straightforward. *)
-          (* CR-soon mshinwell: Make this take account of alias sets
-             properly. *)
-          if Simple.equal simple1 simple2 then Some simple1
-          else None)
-      (preserved_cse_equations t1)
-      (preserved_cse_equations t2)
-  in
-  let t =
-    { t with
-      cse;
-    }
-  in
-  invariant t;
-  t
-*)
-
 let meet env (t1 : t) (t2 : t) : t =
   (* Care: as per comment in [Typing_env_extension.meet]. *)
   if is_empty t1 then begin
@@ -394,11 +230,7 @@ let meet_equation t env name ty =
       equations = Name.Map.singleton name ty;
     }
   in
-  let env =
-    Meet_env.create env
-      ~perm_left:(Name_permutation.create ())
-      ~perm_right:(Name_permutation.create ())
-  in
+  let env = Meet_env.create env in
   meet env t t'
 
 let defined_names t = t.defined_names
