@@ -23,7 +23,6 @@ REC_BINDINGS="\
     env/typing_env_level.rec.ml \
     env/typing_env.rec.ml \
     equality/type_equality_env.rec.ml \
-    equality/type_equality_result.rec.ml \
     equality/type_equality.rec.ml \
     meet_and_join/api_meet_and_join.rec.ml \
     meet_and_join/lattice_ops.rec.ml \
