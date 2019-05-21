@@ -16,9 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Flambda_types.t Closure_id.Map.t
+include Product.Make (Closure_id)
 
-(* CR mshinwell: Any line of the following form should be removed *)
-let print = print_with_cache
-
-let create closure_ids_to_tys = closure_ids_to_tys
+let bottom = create Closure_id.Map.empty

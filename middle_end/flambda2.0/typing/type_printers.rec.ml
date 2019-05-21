@@ -138,8 +138,8 @@ let rec print_of_kind_value ~cache ppf
       "(Blocks_and_immediates@ \
         @[<v>@[<hov 1>(blocks@ %a)@]@ \
         @[<hov 1>(immediates@ %a)@]@])"
-      (Blocks.print_with_cache ~cache) blocks
-      (Immediates.print_with_cache ~cache) immediates
+      (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
+      (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
   | Boxed_number n ->
     Format.fprintf ppf "@[(Boxed_number %a)@]"
       print_of_kind_value_boxed_number n
