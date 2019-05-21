@@ -20,7 +20,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type S = sig
-  type join_env
+  type typing_env
   type meet_env
   type typing_env_extension
   type meet_or_join
@@ -174,24 +174,24 @@ module type S = sig
 
   val switch_no_bottom
      : (meet_env -> 'a -> 'a -> 'a * typing_env_extension)
-    -> (join_env -> 'a -> 'a -> 'a)
-    -> join_env
+    -> (typing_env -> 'a -> 'a -> 'a)
+    -> typing_env
     -> 'a
     -> 'a
     -> 'a * typing_env_extension
 
   val switch
      : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
-    -> (join_env -> 'a -> 'a -> 'a)
-    -> join_env
+    -> (typing_env -> 'a -> 'a -> 'a)
+    -> typing_env
     -> 'a
     -> 'a
     -> ('a * typing_env_extension) Or_bottom.t
 
   val switch'
      : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
-    -> (join_env -> 'a -> 'a -> 'a)
-    -> join_env
+    -> (typing_env -> 'a -> 'a -> 'a)
+    -> typing_env
     -> 'a
     -> 'a
     -> 'a Or_bottom.t

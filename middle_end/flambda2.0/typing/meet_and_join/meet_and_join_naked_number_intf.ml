@@ -23,7 +23,7 @@ module type S = sig
   type flambda_type
   type 'a ty
   type 'a of_kind_naked_number
-  type join_env
+  type typing_env
   type meet_env
   type typing_env_extension
 
@@ -34,7 +34,7 @@ module type S = sig
 
   module Make
     (E : Lattice_ops_intf.S
-      with type join_env := join_env
+      with type typing_env := typing_env
       with type meet_env := meet_env
       with type typing_env_extension := typing_env_extension) :
   sig
@@ -42,7 +42,7 @@ module type S = sig
       with type flambda_type := flambda_type
       with type 'a ty := 'a ty
       with type 'a of_kind_naked_number := 'a of_kind_naked_number
-      with type join_env := join_env
+      with type typing_env := typing_env
       with type typing_env_extension := typing_env_extension
       with type of_kind_foo = Naked_number.Set.t of_kind_naked_number
   end

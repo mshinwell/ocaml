@@ -23,13 +23,13 @@
 type meet_or_join = private Meet | Join
 
 module For_meet : Lattice_ops_intf.S
-  with type join_env := Join_env.t
+  with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type meet_or_join := meet_or_join
 
 module For_join : Lattice_ops_intf.S
-  with type join_env := Join_env.t
+  with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type meet_or_join := meet_or_join

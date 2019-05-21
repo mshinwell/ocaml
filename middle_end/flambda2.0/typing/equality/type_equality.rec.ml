@@ -282,8 +282,8 @@ fun _env result (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
   | Nativeint _, _ -> Type_equality_result.types_known_unequal ()
 
 and equal_of_kind_fabricated env result
-      (of_kind_fabricated1 : Flambda_types.of_kind_fabricated))
-      (of_kind_fabricated2 : Flambda_types.of_kind_fabricated)) =
+      (of_kind_fabricated1 : Flambda_types.of_kind_fabricated)
+      (of_kind_fabricated2 : Flambda_types.of_kind_fabricated) =
   match of_kind_fabricated1, of_kind_fabricated2 with
   | Discriminants discrs1, Discriminants discrs2 ->
     Discriminants.equal env result discrs1 discrs2

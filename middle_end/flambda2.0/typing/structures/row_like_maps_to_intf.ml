@@ -20,10 +20,9 @@
     mapping. *)
 
 module type S = sig
-  type join_env
+  type typing_env
   type meet_env
   type type_equality_env
-  type type_equality_result
   type typing_env_extension
 
   type t
@@ -32,9 +31,8 @@ module type S = sig
 
   include Type_structure_intf.S
     with type t := t
-    with type join_env := join_env
+    with type typing_env := typing_env
     with type meet_env := meet_env
     with type type_equality_env := type_equality_env
-    with type type_equality_result := type_equality_result
     with type typing_env_extension := typing_env_extension
 end

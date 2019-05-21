@@ -39,10 +39,9 @@ module Closures_entry : sig
 
   val equal
      : Type_equality_env.t
-    -> Type_equality_result.t
     -> t
     -> t
-    -> Type_equality_result.t
+    -> bool
 
   val widen : t -> to_match:t -> t
 
@@ -52,7 +51,7 @@ module Closures_entry : sig
     -> t
     -> (t * Typing_env_extension.t) Or_bottom.t
 
-  val join : Join_env.t -> t -> t -> t
+  val join : Typing_env.t -> t -> t -> t
 
   include Contains_names.S with type t := t
 end
@@ -76,10 +75,9 @@ module Set_of_closures_entry : sig
 
   val equal
      : Type_equality_env.t
-    -> Type_equality_result.t
     -> t
     -> t
-    -> Type_equality_result.t
+    -> bool
 
   val widen : t -> to_match:t -> t
 
@@ -89,7 +87,7 @@ module Set_of_closures_entry : sig
     -> t
     -> (t * Typing_env_extension.t) Or_bottom.t
 
-  val join : Join_env.t -> t -> t -> t
+  val join : Typing_env.t -> t -> t -> t
 
   include Contains_names.S with type t := t
 end
