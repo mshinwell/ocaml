@@ -21,15 +21,16 @@ module Tag_and_targetint_ocaml = struct
   include Identifiable.Make_pair (Tag) (Targetint.OCaml)
 end
 
-module RL =
-  Row_like.Make (Tag) (Targetint.OCaml) (Tag_and_targetint_ocaml) (Product)
+module Int_indexed_product = Product.Make (Int)
 
-include RL
+include Row_like.Make (Tag) (Targetint.OCaml) (Tag_and_targetint_ocaml)
+  (Int_indexed_product)
 
 type open_or_closed = Open | Closed of Tag.t
 
-let create ~field_tys kind open_or_closed : t =
-  let product = Product.create field_tys kind in
+let create ~field_tys (open_or_closed : open_or_closed) =
+  let fields = List.mapi (fun index ty -> index, ty) field_tys in
+  let product = Product.create (Int.Map.of_list fields) in
   let size = Targetint.OCaml.of_int (List.length field_tys) in
   match open_or_closed with
   | Open -> create_at_least size product

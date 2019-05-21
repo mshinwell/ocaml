@@ -20,19 +20,11 @@ type t
 
 type open_or_closed = Open | Closed of Tag.t
 
-val create_bottom : unit -> t
-
-val create
-   : field_tys:Flambda_types.t list
-  -> Flambda_kind.t
-  -> open_or_closed
-  -> t
+val create : field_tys:Flambda_types.t list -> open_or_closed -> t
 
 val invariant : t -> unit
 
 val is_empty : t -> bool
-
-val classify : t -> unit Or_unknown_or_bottom.t
 
 val map_types : t -> f:(Flambda_types.t -> Flambda_types.t) -> t
 
