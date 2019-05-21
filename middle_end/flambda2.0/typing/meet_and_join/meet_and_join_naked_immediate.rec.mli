@@ -21,7 +21,7 @@
 
 include Meet_and_join_naked_number_intf.S
   with type flambda_type := Flambda_types.t
-  with type join_env := Join_env.t
+  with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
   with module Naked_number := Immediate

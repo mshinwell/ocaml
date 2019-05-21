@@ -217,8 +217,10 @@ let any_value () : t =
 
 let any_tagged_immediate () : t =
   Value (No_alias (Ok (Blocks_and_tagged_immediates {
-    immediates = Immediates.create_unknown ();
-    blocks = Blocks.create_bottom ();
+    immediates = Unknown;
+    (* CR mshinwell: Again, here, should this allow [Bottom] as well as
+       [Unknown]? *)
+    blocks = Known (Blocks.create_bottom ());
   })))
 
 let any_naked_immediate () : t =
@@ -342,8 +344,8 @@ let these_tagged_immediates imms : t =
   else
     let immediates = Immediates.create imms in
     let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-      { immediates;
-        blocks = Blocks.create_bottom ();
+      { immediates = Known immediates;
+        blocks = Known (Blocks.create_bottom ());
       }
     in
     Value (No_alias (Ok (
@@ -422,17 +424,17 @@ let kind (t : t) =
   | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
   | Fabricated _ -> K.fabricated
 
-let block tag ~(fields : t list) ~field_kind =
+let block tag ~(fields : t list) ~field_kind:_ =
   (* CR mshinwell: We should check the field kinds against the tag; and
      check the kinds of the [fields] against [field_kind]. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
     Misc.fatal_error "Block too long for target"
   | Some _size ->
-    let blocks = Blocks.create ~field_tys:fields field_kind (Closed tag) in
+    let blocks = Blocks.create ~field_tys:fields (Closed tag) in
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Immediates.create_bottom ();
-        blocks;
+      { immediates = Known (Immediates.create_bottom ());
+        blocks = Known blocks;
       }
     in
     Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
@@ -442,7 +444,8 @@ let block_of_values tag ~(fields : ty_value list) =
   block tag ~fields:(List.map (fun field : t -> Value field) fields)
     ~field_kind:K.value
 
-let block_with_size_at_least ~n ~field_n_minus_one ~field_kind =
+(* CR mshinwell: Decide what to do about [field_kind] *)
+let block_with_size_at_least ~n ~field_n_minus_one ~field_kind:_ =
   let type_of_field_n_minus_one =
     alias_type_of K.value (Simple.var field_n_minus_one)
   in
@@ -451,10 +454,10 @@ let block_with_size_at_least ~n ~field_n_minus_one ~field_kind =
       if index = n - 1 then type_of_field_n_minus_one
       else any_value ())
   in
-  let blocks = Blocks.create ~field_tys field_kind Open in
+  let blocks = Blocks.create ~field_tys Open in
   let blocks_imms : blocks_and_tagged_immediates =
-    { immediates = Immediates.create_bottom ();
-      blocks;
+    { immediates = Known (Immediates.create_bottom ());
+      blocks = Known blocks;
     }
   in
   Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
@@ -593,9 +596,10 @@ module Set_of_closures_entry = struct
     { by_closure_id; }
 
   let widen t ~to_match:_ = t  (* XXX Think about this *)
-
+(*
   let meet = Api_meet_and_join.meet_set_of_closures_entry
   let join = Api_meet_and_join.join_set_of_closures_entry
+*)
 end
 
 module Closures_entry = struct
@@ -603,7 +607,7 @@ module Closures_entry = struct
 
   let bottom () : t =
     { function_decl = Non_inlinable;
-      closure_elements = Closure_elements.create_bottom ();
+      closure_elements = Closure_elements.bottom;
       set_of_closures = bottom_as_ty_fabricated ();
     }
 
@@ -627,6 +631,8 @@ module Closures_entry = struct
 
   let widen t ~to_match:_ = t  (* XXX Think about this *)
 
+(*
   let meet = Api_meet_and_join.meet_closures_entry
   let join = Api_meet_and_join.join_closures_entry
+*)
 end

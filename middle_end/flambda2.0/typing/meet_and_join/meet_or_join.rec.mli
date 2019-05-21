@@ -20,7 +20,7 @@
 
 module Make
   (E : Lattice_ops_intf.S
-    with type join_env := Join_env.t
+    with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t) :
 sig
@@ -29,7 +29,7 @@ sig
   (* CR mshinwell: Document [bound_name]. *)
   val meet_or_join
      : ?bound_name:Name.t
-    -> Join_env.t
+    -> Typing_env.t
     -> Flambda_types.t
     -> Flambda_types.t
     -> Flambda_types.t * Typing_env_extension.t

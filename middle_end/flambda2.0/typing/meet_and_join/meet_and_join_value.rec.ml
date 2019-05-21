@@ -89,7 +89,7 @@ struct
       { blocks = Blocks.create_bottom; immediates; }, env_extension
     | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
       { blocks; immediates; },
-        E.switch TEE.meet TEE.join env env_extension1 env_extension2)
+        E.switch TEE.meet TEE.join env env_extension1 env_extension2
 
   let meet_or_join_closures_entry env
         ({ function_decl = function_decl1;
@@ -126,7 +126,7 @@ struct
         set_of_closures1 set_of_closures2
     in
     Or_bottom.both closure_elements set_of_closures
-      ~f:(fun (closure_elements, env_extension1),
+      ~f:(fun (closure_elements, env_extension1)
               (set_of_closures, env_extension2) ->
         let closures_entry : T.closures_entry =
           { function_decl;
