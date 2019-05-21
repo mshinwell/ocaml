@@ -38,6 +38,10 @@ module type S = sig
     -> type_equality_result
 
   val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
+
+  (* CR mshinwell: The signature of [join] implies that each [t] must have
+     a bottom element in itself.  How do we reconcile that against the fact
+     that we're trying to propagate bottom upwards? *)
   val join : join_env -> t -> t -> t
 
   val map_types : t -> f:(flambda_type -> flambda_type) -> t
