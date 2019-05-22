@@ -16,41 +16,63 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type cached = {
-  names_to_types : Flambda_types.t Name.Map.t;
-  aliases : Aliases.t;
-}
+module Cached = struct
+  type t = {
+    names_to_types : Flambda_types.t Name.Map.t;
+    aliases : Aliases.t;
+  }
 
-type one_level = {
-  level : Typing_env_level.t;
-  just_after_level : cached;
-}
+  let print_with_cache ~cache ppf { names_to_types; aliases; } =
+    Format.fprintf ppf
+      "@[<hov 1>(\
+        @[<hov 1>(names_to_types@ %a)@]@ \
+        @[<hov 1>(aliases@ %a)@]\
+        )@]"
+      (Name.Map.print (Type_printers.print_with_cache ~cache)) names_to_types
+      Aliases.print aliases
+
+  let empty =
+    { names_to_types = Name.Map.empty;
+      aliases = Simple.Map.empty;
+    }
+end
+
+module One_level = struct
+  type t = {
+    scope : Scope.t;
+    level : Typing_env_level.t;
+    just_after_level : Cached.t;
+  }
+
+  let print_with_cache ~cache:_ ppf
+        { scope = _; level; just_after_level = _; } =
+    Typing_env_level.print ppf level
+
+  let create scope level ~just_after_level =
+    { scope;
+      level;
+      just_after_level;
+    }
+
+  let scope t = t.scope
+  let level t = t.level
+  let just_after_level t = t.just_after_level
+
+  let empty_one_level =
+    { level = Typing_env_level.empty;
+      just_after_level = Cached.empty;
+    }
+
+  let is_empty t = Typing_env_level.is_empty t.level
+
+  let next_scope t = Scope.next t.scope
+end
 
 type t = {
   resolver : (Export_id.t -> Flambda_types.t option);
-  prev_levels : one_level Scope_level.Map.t;
-  (* CR mshinwell: Rename [Scope_level] to [Scope] and remove this
-     pair. *)
-  current_level : Scope_level.t * one_level;
+  prev_levels : One_level.t Scope.Map.t;
+  current_level : One_level.t;
 }
-
-let is_empty t =
-  Typing_env_level.is_empty ((snd t.current_level).level)
-    && Scope_level.Map.for_all (fun _level (one_level : one_level) ->
-           Typing_env_level.is_empty one_level.level)
-         t.prev_levels
-
-let print_with_cache ~cache ppf { names_to_types; aliases; } =
-  Format.fprintf ppf
-    "@[<hov 1>(\
-      @[<hov 1>(names_to_types@ %a)@]@ \
-      @[<hov 1>(aliases@ %a)@]\
-      )@]"
-    (Name.Map.print (Type_printers.print_with_cache ~cache)) names_to_types
-    Aliases.print aliases
-
-let print_one_level ~cache:_ ppf { level; just_after_level = _; } =
-  Typing_env_level.print ppf level
 
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; } as t) =
@@ -61,87 +83,104 @@ let print_with_cache ~cache ppf
       Format.fprintf ppf
         "@[<hov 1>(\
             @[<hov 1>(prev_levels@ %a)@]@ \
-            @[<hov 1>(current_level@ (%a@ %a))@])@]"
-        (Scope_level.Map.print (print_one_level ~cache)) prev_levels
-        Scope_level.print (fst current_level)
-        (print_one_level ~cache) (snd current_level))
+            @[<hov 1>(current_level@ %a)@]\
+            )@]"
+        (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
+        (One_level.print_with_cache ~cache) current_level)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let empty_one_level =
-  let just_after_level =
-    { names_to_types = Name.Map.empty;
-      aliases = Simple.Map.empty;
-    }
+let invariant t =
+  let no_empty_prev_levels =
+    Scope.Map.for_all (fun level -> not (One_level.is_empty level))
+      t.prev_levels
   in
-  { level = Typing_env_level.empty;
-    just_after_level;
-  }
+  if not no_empty_prev_levels then begin
+    Misc.fatal_errorf "Typing environment contains [prev_levels] that are \
+        empty:@ %a"
+      print t
+  end;
+  let current_scope = One_level.scope t.current_level in
+  let max_prev_scope =
+    Scope.Map.fold (fun one_level _ max_prev_scope ->
+        Scope_level.max (One_level.scope one_level) max_prev_scope)
+      t.prev_levels
+      Scope_level.initial
+  in
+  if Scope_level.(<=) current_scope max_prev_scope then begin
+    Misc.fatal_errorf "Typing environment contains a [current_level] with a \
+        scope that is not strictly greater than all scopes in \
+        [prev_levels]:@ %a"
+      print t
+  end
+
+let is_empty t =
+  One_level.is_empty t.current_level
+    && Scope.Map.is_empty t.prev_levels
 
 let create ~resolver =
   { resolver;
-    prev_levels = Scope_level.Map.empty;
-    current_level = (Scope_level.initial, empty_one_level ());
+    prev_levels = Scope.Map.empty;
+    current_level = One_level.empty;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
 
 let resolver t = t.resolver
 
-let increment_scope_level_to t level =
-  if Scope_level.(<=) level (fst t.current_level) then begin
-    Misc.fatal_errorf "Invalid new level %a:@ %a"
-      Scope_level.print level
+let current_scope t = One_level.scope t.current_level
+
+let names_to_types t =
+  Cached.names_to_types (One_level.just_after_level t.current_level)
+
+let aliases t =
+  Cached.aliases (One_level.just_after_level t.current_level)
+
+let increment_scope_level_to t scope =
+  let current_scope = current_scope t in
+  if Scope.(<=) scope current_scope then begin
+    Misc.fatal_errorf "New level %a must exceed %a:@ %a"
+      Scope.print level
+      Scope.print current_scope
       print t
   end;
-  let one_level =
-    { level = Typing_env_level.empty ();
-      just_after_level = (snd t.current_level).just_after_level;
-    }
-  in
-  let current_level = Scope_level.next (fst t.current_level) in
   let prev_levels =
-    Scope_level.Map.add current_level (snd t.current_level) t.prev_levels
+    Scope.Map.add current_scope t.current_level t.prev_levels
+  in
+  let current_level =
+    One_level.create scope Typing_env_level.empty
+      ~just_after_level:(One_level.just_after_level t.current_level)
   in
   { t with
     prev_levels;
-    current_level = (level, one_level);
+    current_level;
   }
 
 let increment_scope_level t =
-  increment_scope_level_to t (Scope_level.next (fst t.current_level))
+  increment_scope_level_to t (One_level.next_scope t.current_level)
 
 let fast_equal t1 t2 =
   t1 == t2
 
 let domain t =
-  let names =
-    Name.Set.fold (fun name bindable_names ->
-        Bindable_name.Set.add (Name name) bindable_names)
-      (Name.Map.keys (snd t.current_level).just_after_level.names_to_types)
-      Bindable_name.Set.empty
-  in
-  Name_occurrences.create_from_set_in_terms names
+  Name_occurrences.create_from_set_in_terms
+    (Cached.domain (One_level.just_after_level t.current_level))
 
-let find_exn t name : Flambda_types.t * binding_type =
-  (* CR mshinwell: Maybe this should cause a fatal error and we shouldn't
-     rely on catching the exception *)
-  Name.Map.find name (snd t.current_level).just_after_level.names_to_types
-
-let invariant _t = ()
+let find t name =
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found ->
+    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+      print t
+  | ty -> ty
 
 let mem t name =
-  Name.Map.mem name (snd t.current_level).just_after_level.names_to_types
+  Name.Map.mem name (names_to_types t)
 
-let find_opt t name =
-  match find_exn t name with
-  | exception Not_found -> None
-  | ty, binding_type -> Some (ty, binding_type)
-
-type sense =
-  | New_equation_must_be_more_precise
-  | Existing_equation_must_be_more_precise
+let with_current_level t ~current_level =
+  let t = { t with current_level; } in
+  invariant t;
+  t
 
 let add_definition t name kind =
   if mem t name then begin
@@ -150,29 +189,22 @@ let add_definition t name kind =
       print t
   end;
   let level =
-    Typing_env_level.add_definition (snd t.current_level).level name kind
-  in
-  let names_to_types =
-    Name.Map.add name (Flambda_type0_core.unknown kind)
-      (snd t.current_level).just_after_level.names_to_types
+    Typing_env_level.add_definition (One_level.level t.current_level) name kind
   in
   let just_after_level =
-    { (snd t.current_level).just_after_level with
-      names_to_types;
-    }
+    let names_to_types =
+      Name.Map.add name (Flambda_type0_core.unknown kind) (names_to_types t)
+    in
+    Cached.with_names_to_types (One_level.just_after_level t.current_level)
+      ~names_to_types
   in
   let current_level =
-    { level;
-      just_after_level;
-    }
+    One_level.create (current_scope t) level ~just_after_level
   in
-  let t =
-    { t with
-      current_level = (fst t.current_level, current_level);
-    }
-  in
-  invariant t;
-  t
+  with_current_level t ~current_level
+
+(* CR mshinwell: This should check that precision is increasing. *)
+let invariant_for_new_equation _t _name _ty = ()
 
 let add_equation t name ty =
   if not (mem t name) then begin
@@ -182,43 +214,29 @@ let add_equation t name ty =
       print t
   end;
   invariant_for_new_equation t name ty;
-  let alias = Flambda_type0_core.get_alias ty in
-  let equation_with_reverse_alias_already_present =
-    match alias with
+  let alias_already_known =
+    match Flambda_type0_core.get_alias ty with
     | None | Some (Const _ | Discriminant _) -> false
     | Some (Name alias) ->
-      Name.Set.mem alias (Aliases.aliases_of_simple t (Simple.name name))
+      Aliases.already_known (aliases t) (Simple.name name) alias
   in
-  if equation_with_reverse_alias_already_present then
-    t
+  if alias_already_known then t
   else
     let level =
-      Typing_env_level.add_or_replace_equation (snd t.current_level).level
-        name ty
-    in
-    let names_to_types =
-      Name.Map.add name ty
-        (snd t.current_level).just_after_level.names_to_types
+      Typing_env_level.add_or_replace_equation
+        (One_level.level t.current_level) name ty
     in
     let just_after_level =
-      { (snd t.current_level).just_after_level with
-        names_to_types;
-      }
+      let names_to_types = Name.Map.add name ty (names_to_types t) in
+      Cached.with_names_to_types (One_level.just_after_level t.current_level)
+        ~names_to_types
     in
     let current_level =
-      { level;
-        just_after_level;
-      }
+      One_level.create (current_scope t) level ~just_after_level
     in
-    let t =
-      { t with
-        current_level = (fst t.current_level, current_level);
-      }
-    in
-    invariant t;
-    t
+    with_current_level t ~current_level
 
-let rec add_opened_env_extension t level : t =
+let rec add_env_extension t level : t =
   let t_before_equations =
     Name.Map.fold (fun name kind t ->
         add_definition t name kind)
@@ -245,39 +263,32 @@ let rec add_opened_env_extension t level : t =
     (Typing_env_level.equations level)
     t_before_equations
 
-and add_env_extension t env_extension : t =
-  Typing_env_extension.pattern_match env_extension
-    ~f:(fun level -> add_opened_env_extension t level)
-
-let current_level t = fst (t.current_level)
-let current_level_data t = snd (t.current_level)
-
-let cut0 t ~unknown_if_defined_at_or_later_than:min_level =
-  if Scope_level.(>) min_level (current_level t) then
+let cut t ~unknown_if_defined_at_or_later_than:min_level =
+  if Scope.(>) min_level (current_level t) then
     Typing_env_level.empty
   else
     let all_levels =
-      Scope_level.Map.add (current_level t) (current_level_data t)
+      Scope.Map.add (current_level t) (current_level_data t)
         t.prev_levels
     in
     let strictly_less, at_min_level, strictly_greater =
-      Scope_level.Map.split min_level all_levels
+      Scope.Map.split min_level all_levels
     in
     let at_or_after_cut =
       match at_min_level with
       | None -> strictly_greater
       | Some typing_env_level ->
-        Scope_level.Map.add min_level typing_env_level strictly_greater
+        Scope.Map.add min_level typing_env_level strictly_greater
     in
     let t =
-      if Scope_level.Map.is_empty strictly_less then
+      if Scope.Map.is_empty strictly_less then
         create ~resolver:t.resolver
       else
         let current_level, current_level_data =
-          Scope_level.Map.max_binding strictly_less
+          Scope.Map.max_binding strictly_less
         in
         let prev_levels =
-          Scope_level.Map.remove current_level strictly_less
+          Scope.Map.remove current_level strictly_less
         in
         { resolver = t.resolver;
           prev_levels;
@@ -286,11 +297,8 @@ let cut0 t ~unknown_if_defined_at_or_later_than:min_level =
     in
     invariant t;
     let meet_env = Meet_env.create t in
-    Scope_level.Map.fold (fun _level one_level result ->
+    Scope.Map.fold (fun _level one_level result ->
         Typing_env_level.meet meet_env one_level.level result)
       at_or_after_cut
       Typing_env_level.empty
-
-let cut t ~unknown_if_defined_at_or_later_than =
-  let level = cut0 t ~unknown_if_defined_at_or_later_than in
-  Typing_env_extension.create level
+    (* XXX And then need to erase aliases to Unknown *)
