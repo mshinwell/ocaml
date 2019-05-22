@@ -91,7 +91,9 @@ module D = struct
   let global s =
     directive (Global s);
     if not !Clflags.dlcode then begin
-      directive (Hidden s)
+      match system with
+      | S_macosx -> directive (Private_extern s)
+      | _ -> directive (Hidden s)
     end
   let indirect_symbol s = directive (Indirect_symbol s)
   let label ?(typ = NONE) s = directive (NewLabel (s, typ))
