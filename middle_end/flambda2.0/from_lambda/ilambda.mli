@@ -123,6 +123,9 @@ and switch = {
   failaction : Continuation.t option;
 }
 
+(* CR mshinwell: Add a flag to indicate if we need to run
+   [Eliminate_mutable_variables], since we often might not need to. *)
+
 type program = {
   expr : t;
   return_continuation : Continuation.t;
