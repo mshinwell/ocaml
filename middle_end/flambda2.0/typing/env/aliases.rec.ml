@@ -57,6 +57,11 @@ let invariant t =
     ()
   end
 
+let empty = {
+  canonical_names = Name.Map.empty;
+  aliases_of_canonical_names = Name.Map.empty;
+}
+
 let canonical_names t = Name.Map.keys t.canonical_names
 
 type canonical =
@@ -137,13 +142,20 @@ let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2 =
       to_be_demoted = canonical_name1;
     }
 
-let add_alias t simple1 ~alias_of:simple2 =
+let add_alias t simple1 simple2 =
   match simple1, simple2 with
   | Name name1, Name name2 ->
     begin match canonical t name1, canonical t name2 with
-    | Not_seen_before name, Not_seen_before canonical_name ->
-      assert (not (Name.Map.mem name t.aliases_of_canonical_names));
-      assert (not (Name.Map.mem canonical_name t.aliases_of_canonical_names));
+    | Not_seen_before name1, Not_seen_before canonical_name2 ->
+      (* CR mshinwell: Does this case actually happen? *)
+      assert (not (Name.Map.mem name1 t.aliases_of_canonical_names));
+      assert (not (Name.Map.mem name2 t.aliases_of_canonical_names));
+      let canonical_name, name =
+        if Simple.compare (Simple.name name1) (Simple.name name2) < 0 then
+          name1, name2
+        else
+          name2, name1
+      in
       let canonical_names =
         t.canonical_names
         |> Name.Map.add name canonical_name
@@ -221,8 +233,8 @@ let add_alias t simple1 ~alias_of:simple2 =
     end
   | _, _ -> t
 
-let add_alias t simple1 ~alias_of =
-  let t = add_alias t simple1 ~alias_of in
+let add_alias t simple1 simple2 =
+  let t = add_alias t simple1 simple2 in
   invariant t;
   t
 
