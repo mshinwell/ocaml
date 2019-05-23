@@ -203,7 +203,7 @@ let add_definition t name kind =
   in
   with_current_level t ~current_level
 
-(* CR mshinwell: This should check that precision is increasing. *)
+(* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation _t _name _ty = ()
 
 let add_equation t name ty =
@@ -214,11 +214,12 @@ let add_equation t name ty =
       print t
   end;
   invariant_for_new_equation t name ty;
+  let aliases = aliases t in
   let alias_already_known =
-    match Flambda_type0_core.get_alias ty with
+    match Aliases.get_canonical_simple aliases ty with
     | None | Some (Const _ | Discriminant _) -> false
     | Some (Name alias) ->
-      Aliases.already_known (aliases t) (Simple.name name) alias
+      Aliases.already_known aliases (Simple.name name) alias
   in
   if alias_already_known then t
   else
