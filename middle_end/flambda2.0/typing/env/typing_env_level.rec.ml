@@ -127,6 +127,7 @@ let tidy t =
   let free_names_minus_defined_names' =
     free_names_minus_defined_names t
   in
+  (* XXX *)
   let defined_names = free_names_in_defined_names t in
   let equations =
     Name.Map.map_sharing (fun ty ->
@@ -215,7 +216,7 @@ let meet env (t1 : t) (t2 : t) : t =
     let env = Typing_env.add_opened_env_extension env t2 in
     let level = Typing_env.current_level env in
     let t =
-      Typing_env.cut0 env ~existential_if_defined_at_or_later_than:level
+      Typing_env.cut0 env ~unknown_if_defined_at_or_later_than:level
     in
     tidy t
   end

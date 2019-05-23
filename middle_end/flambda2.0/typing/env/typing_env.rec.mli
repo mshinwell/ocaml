@@ -18,10 +18,6 @@
 
 type t
 
-type binding_type = private
-  | Normal
-  | Was_existential
-
 val invariant : t -> unit
 
 val print : Format.formatter -> t -> unit
@@ -40,21 +36,13 @@ val increment_scope_level : t -> t
 
 val increment_scope_level_to : t -> Scope_level.t -> t
 
-val fast_equal : t -> t -> bool
-
 val domain : t -> Name_occurrences.t
 
 val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
 val add_equation : t -> Name.t -> Flambda_types.t -> t
 
-val add_cse : t -> Simple.t -> Flambda_primitive.With_fixed_value.t -> t
-
-val find_exn : t -> Name.t -> Flambda_types.t * binding_type
-
-val find_opt : t -> Name.t -> (Flambda_types.t * binding_type) option
-
-val find_cse : t -> Flambda_primitive.t -> Simple.t option
+val find : t -> Name.t -> Flambda_types.t
 
 val mem : t -> Name.t -> bool
 
@@ -68,9 +56,14 @@ val add_opened_env_extension
   -> Typing_env_level.t
   -> t
 
-val canonical_name : t -> Name.t -> Name.t
+val get_canonical_name : t -> Name.t -> Name.t
 
 val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+val cut
+   : t
+  -> unknown_if_defined_at_or_later_than:Scope_level.t
+  -> Typing_env_extension.t
 
 val resolve_any_toplevel_alias_on_ty0
    : t
@@ -90,15 +83,3 @@ val resolve_any_toplevel_alias
    : t
   -> Flambda_types.t
   -> Flambda_types.t * (Simple.t option)
-
-val cut0
-   : t
-  -> existential_if_defined_at_or_later_than:Scope_level.t
-  -> Typing_env_level.t
-
-val cut
-   : t
-  -> existential_if_defined_at_or_later_than:Scope_level.t
-  -> Typing_env_extension.t
-
-val was_existential_exn : t -> Name.t -> bool
