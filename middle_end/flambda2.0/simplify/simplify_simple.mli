@@ -20,12 +20,6 @@
 
 (* CR mshinwell: Rename "simplify_simple" -> "simplify" *)
 
-val simplify_simple_for_let
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Simple.t
-  -> Simple.t * Flambda_type.t * Simplify_env_and_result.Result.t
-
 val simplify_name
    : Simplify_env_and_result.Env.t
   -> Name.t

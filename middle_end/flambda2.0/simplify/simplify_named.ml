@@ -22,6 +22,20 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
+  let simplify_name_for_rhs_of_let env r name =
+    let typing_env = E.typing_env env in
+    let name = TE.canonical_name typing_env name in
+    let simple = Simple.name name in
+    (* We don't resolve [name] right back to a type and return that, for
+       such a procedure would cause loss of alias information. *)
+    simple, T.alias_type_of (T.kind ty) simple, r
+
+  let simplify_simple_for_rhs_of_let env r (simple : Simple.t) =
+    match simple with
+    | Const c -> simple, T.type_for_const c, r
+    | Discriminant t -> simple, T.this_discriminant t, r
+    | Name name -> simplify_name_for_rhs_of_let env r name
+
   let simplify_function env r function_decl =
     let params_and_body, r =
       Function_params_and_body.pattern_match
@@ -121,9 +135,7 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
   let simplify_named0 env r (named : Named.t) ~result_var =
     match named with
     | Simple simple ->
-      let simple, ty, r =
-        Simplify_simple.simplify_simple_for_let env r simple
-      in
+      let simple, ty, r = simplify_simple_for_rhs_of_let env r simple in
       let env = E.add_variable env result_var ty in
       Reachable.reachable (Named.create_simple simple), env, ty, r
     | Prim (prim, dbg) ->
