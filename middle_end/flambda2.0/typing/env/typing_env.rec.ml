@@ -56,6 +56,8 @@ module Cached = struct
     { names_to_types;
       aliases;
     }
+
+  let defined_names t = Name.Map.keys t.names_to_types
 end
 
 module One_level = struct
@@ -87,6 +89,8 @@ module One_level = struct
   let is_empty t = Typing_env_level.is_empty t.level
 
   let next_scope t = Scope.next t.scope
+
+  let defined_names t = Cached.defined_names t.just_after_level
 end
 
 type t = {
@@ -202,6 +206,11 @@ let find t name =
       print t
   | ty -> ty
 
+let find_opt t name =
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found -> None
+  | ty -> Some ty
+
 let mem t name =
   Name.Map.mem name (names_to_types t)
 
@@ -261,17 +270,16 @@ let add_equation t name ty =
   in
   with_current_level t ~current_level
 
-let rec add_env_extension t level : t =
-  let t_before_equations =
-    Name.Map.fold (fun name kind t ->
-        add_definition t name kind)
-      (Typing_env_level.defined_names level)
-      t
-  in
+let rec add_env_extension starting_t level : t =
+  if not (Name.Map.is_empty (Typing_env_level.defined_names level)) then begin
+    (* The full type system will remove this restriction. *)
+    Misc.fatal_errorf "Typing environment extensions cannot define names:@ %a"
+      Typing_env_level.print level
+  end;
   Name.Map.fold (fun name ty t ->
       match find_opt t name with
       | None -> add_equation t name ty
-      | Some (existing_ty, _binding_type) ->
+      | Some existing_ty ->
         let meet_ty, meet_env_extension =
           let meet_env = Meet_env.create t in
           Api_meet_and_join.meet meet_env ty existing_ty
@@ -279,14 +287,14 @@ let rec add_env_extension t level : t =
         let t = add_env_extension t meet_env_extension in
         let as_or_strictly_less_precise =
           Type_equality.equal ~bound_name:(Some name)
-            t_before_equations t_before_equations
+            starting_t starting_t
             meet_ty existing_ty
         in
         let strictly_more_precise = not as_or_strictly_less_precise in
         if strictly_more_precise then add_equation t name meet_ty
         else t)
     (Typing_env_level.equations level)
-    t_before_equations
+    starting_t
 
 let cut t ~unknown_if_defined_at_or_later_than:min_level =
   if Scope.(>) min_level (current_level t) then
@@ -322,11 +330,21 @@ let cut t ~unknown_if_defined_at_or_later_than:min_level =
     in
     invariant t;
     let meet_env = Meet_env.create t in
-    Scope.Map.fold (fun _level one_level result ->
-        Typing_env_level.meet meet_env one_level.level result)
+    let vars_in_scope_at_cut =
+      match Scope.Map.max_binding_opt strictly_less with
+      | None -> Name.Set.empty
+      | Some level -> Name.set_to_var_set (One_level.defined_names level)
+    in
+    Scope.Map.fold (fun _scope level result ->
+        let level =
+          (* Since environment extensions are not allowed to define names at
+             the moment, any [Equals] aliases to names not in scope at the cut
+             point have to be squashed to "Unknown". *)
+          Typing_env_level.erase_aliases level ~allowed:vars_in_scope_at_cut
+        in
+        Typing_env_level.meet meet_env level result)
       at_or_after_cut
       Typing_env_level.empty
-    (* XXX And then need to erase aliases to Unknown *)
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~force_to_kind ~print_ty (ty : a Flambda_types.ty)
