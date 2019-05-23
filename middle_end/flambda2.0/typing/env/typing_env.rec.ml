@@ -31,6 +31,22 @@ module Cached = struct
       (Name.Map.print (Type_printers.print_with_cache ~cache)) names_to_types
       Aliases.print aliases
 
+  let invariant t =
+    let canonical_names = Aliases.canonical_names t.aliases in
+    Name.Set.iter (fun name ->
+        match Name.Map.find name t.names_to_types with
+        | exception Not_found ->
+          Misc.fatal_errorf "Canonical name %a not in [names_to_types]"
+            Name.print name
+        | ty ->
+          match Flambda_type0_core.get_alias ty with
+          | None -> ()
+          | Some alias_of ->
+            Misc.fatal_errorf "Canonical name %a has an alias type: =%a"
+              Name.print name
+              Name.print alias_of)
+      canonical_names
+
   let empty =
     { names_to_types = Name.Map.empty;
       aliases = Simple.Map.empty;
@@ -96,28 +112,31 @@ let print_with_cache ~cache ppf
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let invariant t =
-  let no_empty_prev_levels =
-    Scope.Map.for_all (fun level -> not (One_level.is_empty level))
-      t.prev_levels
-  in
-  if not no_empty_prev_levels then begin
-    Misc.fatal_errorf "Typing environment contains [prev_levels] that are \
-        empty:@ %a"
-      print t
-  end;
-  let current_scope = One_level.scope t.current_level in
-  let max_prev_scope =
-    Scope.Map.fold (fun one_level _ max_prev_scope ->
-        Scope_level.max (One_level.scope one_level) max_prev_scope)
-      t.prev_levels
-      Scope_level.initial
-  in
-  if Scope_level.(<=) current_scope max_prev_scope then begin
-    Misc.fatal_errorf "Typing environment contains a [current_level] with a \
-        scope that is not strictly greater than all scopes in \
-        [prev_levels]:@ %a"
-      print t
+let invariant ?force t =
+  if !Clflags.flambda_invariants || Option.is_some (force : unit option)
+  then begin
+    let no_empty_prev_levels =
+      Scope.Map.for_all (fun level -> not (One_level.is_empty level))
+        t.prev_levels
+    in
+    if not no_empty_prev_levels then begin
+      Misc.fatal_errorf "Typing environment contains [prev_levels] that are \
+          empty:@ %a"
+        print t
+    end;
+    let current_scope = One_level.scope t.current_level in
+    let max_prev_scope =
+      Scope.Map.fold (fun one_level _ max_prev_scope ->
+          Scope_level.max (One_level.scope one_level) max_prev_scope)
+        t.prev_levels
+        Scope_level.initial
+    in
+    if Scope_level.(<=) current_scope max_prev_scope then begin
+      Misc.fatal_errorf "Typing environment contains a [current_level] with a \
+          scope that is not strictly greater than all scopes in \
+          [prev_levels]:@ %a"
+        print t
+    end
   end
 
 let is_empty t =
@@ -304,3 +323,45 @@ let cut t ~unknown_if_defined_at_or_later_than:min_level =
       at_or_after_cut
       Typing_env_level.empty
     (* XXX And then need to erase aliases to Unknown *)
+
+let unknown_or_join_and_canonical_simple_from_ty (type a) t
+      ~force_to_kind ~print_ty (ty : a Flambda_types.ty)
+      : (a Flambda_types.unknown_or_join) * (Simple.t option) =
+  let force_to_unknown_or_join typ =
+    match force_to_kind typ with
+    | No_alias unknown_or_join -> unknown_or_join
+    | Type _ | Alias _ ->
+      Misc.fatal_errorf "Expected [No_alias]:@ %a" Type_printers.print typ
+  in
+  match ty with
+  | No_alias unknown_or_join -> unknown_or_join, None
+  | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+  | Equals ((Const const) as simple) ->
+    let const_type =
+      match const with
+      | Naked_immediate imm -> Flambda_type0_core.this_naked_immediate imm
+      | Tagged_immediate imm -> Flambda_type0_core.this_tagged_immediate imm
+      | Naked_float f -> Flambda_type0_core.this_naked_float imm
+      | Naked_int32 i -> Flambda_type0_core.this_naked_int32 i
+      | Naked_int64 i -> Flambda_type0_core.this_naked_int64 i
+      | Naked_nativeint i -> Flambda_type0_core.this_naked_nativeint i
+    in
+    let ty = force_to_unknown_or_join const_type in
+    ty, Some simple
+  | Equals ((Discriminant discriminant) as simple) ->
+    let ty =
+      force_to_unknown_or_join
+        (Flambda_type0_core.this_discriminant discriminant)
+    in
+    ty, Some simple
+  | Equals (Name name) ->
+    let name = Aliases.get_canonical_name (aliases t) name in
+    let ty = force_to_kind (find t name) in
+    match ty with
+    | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
+    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+    | Equals _ ->
+      (* This invariant check should fail: canonical names should always map
+         to non-[Alias] types. *)
+      invariant ~force:() t;
+      Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
