@@ -20,6 +20,7 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 module TE = T.Typing_env
 
+(* CR mshinwell: Share with [Typing_env] *)
 let type_for_const (const : Simple.Const.t) =
   match const with
   | Naked_immediate i -> T.this_naked_immediate i

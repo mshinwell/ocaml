@@ -68,15 +68,13 @@ val add_opened_env_extension
   -> Typing_env_level.t
   -> t
 
-val resolve_aliases
-   : ?bound_name:Name.t
-  -> t
+val resolve_aliases_and_get_canonical_simple
+   : t
   -> Flambda_types.t
   -> Flambda_types.t * (Simple.t option)
 
-val resolve_aliases_and_squash_unresolved_names_on_ty'
+val unknown_or_join_and_alias_from_ty
    : t
-  -> ?bound_name:Name.t
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
   -> 'a Flambda_types.ty
