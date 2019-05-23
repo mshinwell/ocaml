@@ -155,3 +155,11 @@ let in_compilation_unit t =
   match t with
   | Var var -> Variable.in_compilation_unit var
   | Symbol sym -> Symbol.in_compilation_unit sym
+
+module Pair = struct
+  include Identifiable.Make_pair
+    (struct type nonrec t = t include T end)
+    (struct type nonrec t = t include T end)
+
+  type nonrec t = t * t
+end
