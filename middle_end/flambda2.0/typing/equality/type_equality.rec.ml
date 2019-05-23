@@ -69,10 +69,8 @@ let equal_or_alias ?bound_name equal_unknown_or_join env result
     | None -> all_aliases2
     | Some bound_name -> Name.Set.remove bound_name all_aliases2
   in
-  if not (Name.Set.equal all_aliases1_minus_existentials
-    all_aliases2_minus_existentials)
-  then
-    Type_equality_result.types_known_unequal ()
+  if not (Name.Set.equal all_aliases1 all_aliases2) then
+    Type_equality_result.types_known_unequal
   else
     equal_unknown_or_join env result unknown_or_join1 unknown_or_join2
 
@@ -88,7 +86,7 @@ let equal_unknown_or_join equal_of_kind_foo env result
       else
         match join1, join2 with
         | [], _::_ | _::_, [] ->
-          Type_equality_result.types_known_unequal ()
+          Type_equality_result.types_known_unequal
         | [], [] -> result
         | of_kind_foo1::join1, of_kind_foo2::join2 ->
           let result =
@@ -98,7 +96,7 @@ let equal_unknown_or_join equal_of_kind_foo env result
     in
     loop join1 join2 result
   | Unknown, _
-  | Join _, _ -> Type_equality_result.types_known_unequal ()
+  | Join _, _ -> Type_equality_result.types_known_unequal
 
 let equal_ty ?bound_name equal_of_kind_foo env result ~force_to_kind
       ~print_ty ty1 ty2 =
@@ -148,9 +146,9 @@ let rec equal_with_env ?bound_name env result
       ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
       ~print_ty:Type_printers.print_ty_fabricated
       ty_fabricated1 ty_fabricated2
-  | Value _, _ -> Type_equality_result.types_known_unequal ()
-  | Naked_number _, _ -> Type_equality_result.types_known_unequal ()
-  | Fabricated _, _ -> Type_equality_result.types_known_unequal ()
+  | Value _, _ -> Type_equality_result.types_known_unequal
+  | Naked_number _, _ -> Type_equality_result.types_known_unequal
+  | Fabricated _, _ -> Type_equality_result.types_known_unequal
 
 and equal_ty_value ?bound_name env result ~force_to_kind ~print_ty
       ty_value1 ty_value2 =
@@ -218,10 +216,10 @@ and equal_of_kind_value env result
       by_closure_id1 by_closure_id2
   | String string_set1, String string_set2 ->
     if String_info.Set.equal string_set1 string_set2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | (Blocks_and_tagged_immediates _ | Boxed_number _
       | Closures _ | String _), _ ->
-    Type_equality_result.types_known_unequal ()
+    Type_equality_result.types_known_unequal
 
 and equal_blocks_and_tagged_immediates env result
       ({ immediates = immediates1; blocks = blocks1; }
@@ -245,41 +243,41 @@ and equal_function_declaration _env result
       Term_language_function_declaration.code_id decl2.function_decl
     in
     if Code_id.equal code_id1 code_id2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | Non_inlinable, Non_inlinable -> result
   | Inlinable _, Non_inlinable
   | Non_inlinable, Inlinable _ ->
-    Type_equality_result.types_known_unequal ()
+    Type_equality_result.types_known_unequal
 
 and equal_of_kind_naked_number
    : type a b.
      Type_equality_env.t
   -> Type_equality_result.t
-  -> (a Flambda_types.of_kind_naked_number * Name_permutation.t)
-  -> (b Flambda_types.of_kind_naked_number * Name_permutation.t)
+  -> (a Flambda_types.of_kind_naked_number)
+  -> (b Flambda_types.of_kind_naked_number)
   -> Type_equality_result.t =
 fun _env result (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
   match of_kind_naked_number1, of_kind_naked_number2 with
   | Immediate imms1, Immediate imms2 ->
     if Immediate.Set.equal imms1 imms2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | Float floats1, Float floats2 ->
     if Float.Set.equal floats1 floats2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | Int32 ints1, Int32 ints2 ->
     if Int32.Set.equal ints1 ints2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | Int64 ints1, Int64 ints2 ->
     if Int64.Set.equal ints1 ints2 then result
-    else Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
   | Nativeint ints1, Nativeint ints2 ->
     if Targetint.Set.equal ints1 ints2 then result
-    else Type_equality_result.types_known_unequal ()
-  | Immediate _, _ -> Type_equality_result.types_known_unequal ()
-  | Float _, _ -> Type_equality_result.types_known_unequal ()
-  | Int32 _, _ -> Type_equality_result.types_known_unequal ()
-  | Int64 _, _ -> Type_equality_result.types_known_unequal ()
-  | Nativeint _, _ -> Type_equality_result.types_known_unequal ()
+    else Type_equality_result.types_known_unequal
+  | Immediate _, _ -> Type_equality_result.types_known_unequal
+  | Float _, _ -> Type_equality_result.types_known_unequal
+  | Int32 _, _ -> Type_equality_result.types_known_unequal
+  | Int64 _, _ -> Type_equality_result.types_known_unequal
+  | Nativeint _, _ -> Type_equality_result.types_known_unequal
 
 and equal_of_kind_fabricated env result
       (of_kind_fabricated1 : Flambda_types.of_kind_fabricated)
@@ -291,7 +289,7 @@ and equal_of_kind_fabricated env result
       Set_of_closures { closures = closures2; } ->
     Closure_ids.equal env result closures1 closures2
   | (Discriminants _ | Set_of_closures _), _ ->
-    Type_equality_result.types_known_unequal ()
+    Type_equality_result.types_known_unequal
 
 and equal_closures_entry env result
       ({ function_decl = function_decl1;
