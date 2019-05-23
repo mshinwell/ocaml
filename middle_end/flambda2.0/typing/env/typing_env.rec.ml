@@ -139,6 +139,10 @@ let invariant ?force t =
     end
   end
 
+let invariant_should_fail t =
+  invariant ~force:() t;
+  Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
+
 let is_empty t =
   One_level.is_empty t.current_level
     && Scope.Map.is_empty t.prev_levels
@@ -324,7 +328,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_level =
       Typing_env_level.empty
     (* XXX And then need to erase aliases to Unknown *)
 
-let unknown_or_join_and_canonical_simple_from_ty (type a) t
+let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~force_to_kind ~print_ty (ty : a Flambda_types.ty)
       : (a Flambda_types.unknown_or_join) * (Simple.t option) =
   let force_to_unknown_or_join typ =
@@ -337,15 +341,7 @@ let unknown_or_join_and_canonical_simple_from_ty (type a) t
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals ((Const const) as simple) ->
-    let const_type =
-      match const with
-      | Naked_immediate imm -> Flambda_type0_core.this_naked_immediate imm
-      | Tagged_immediate imm -> Flambda_type0_core.this_tagged_immediate imm
-      | Naked_float f -> Flambda_type0_core.this_naked_float imm
-      | Naked_int32 i -> Flambda_type0_core.this_naked_int32 i
-      | Naked_int64 i -> Flambda_type0_core.this_naked_int64 i
-      | Naked_nativeint i -> Flambda_type0_core.this_naked_nativeint i
-    in
+    let const_type = Flambda_type0_core.type_for_const const in
     let ty = force_to_unknown_or_join const_type in
     ty, Some simple
   | Equals ((Discriminant discriminant) as simple) ->
@@ -360,8 +356,47 @@ let unknown_or_join_and_canonical_simple_from_ty (type a) t
     match ty with
     | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-    | Equals _ ->
-      (* This invariant check should fail: canonical names should always map
-         to non-[Alias] types. *)
-      invariant ~force:() t;
-      Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
+    | Equals _ -> invariant_should_fail t
+
+let resolve_any_toplevel_alias_on_ty (type a) t ~force_to_kind ~print_ty
+      (ty : a Flambda_types.ty)
+      : (a Flambda_types.ty) * (Simple.t option) =
+  match ty with
+  | No_alias _ -> ty, None
+  | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+  | Equals ((Const _ | Discriminant _) as simple) -> ty, Some simple
+  | Equals (Name name) ->
+    let name = Aliases.get_canonical_name (aliases t) name in
+    let ty = force_to_kind (find t name) in
+    match ty with
+    | No_alias _ -> ty, Some (Simple.name name)
+    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+    | Equals _ -> invariant_should_fail t
+
+let resolve_any_toplevel_alias t (ty : Flambda_types.t)
+      : Flambda_types.t * (Simple.t option) =
+  match ty with
+  | Value ty_value ->
+    let ty_value, canonical_simple =
+      resolve_aliases_on_ty t env
+        ~force_to_kind:Flambda_type0_core.force_to_kind_value
+        ~print_ty:Type_printers.print_ty_value
+        ty_value
+    in
+    Value ty_value, canonical_simple
+  | Naked_number (ty_naked_number, kind) ->
+    let ty_naked_number, canonical_simple =
+      resolve_aliases_on_ty t env
+        ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
+        ~print_ty:Type_printers.print_ty_naked_number
+        ty_naked_number
+    in
+    Naked_number (ty_naked_number, kind), canonical_simple
+  | Fabricated ty_fabricated ->
+    let ty_fabricated, canonical_simple =
+      resolve_aliases_on_ty t env
+        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+        ~print_ty:Type_printers.print_ty_fabricated
+        ty_fabricated
+    in
+    Fabricated ty_fabricated, canonical_simple

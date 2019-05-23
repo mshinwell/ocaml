@@ -68,19 +68,28 @@ val add_opened_env_extension
   -> Typing_env_level.t
   -> t
 
-val resolve_aliases_and_get_canonical_simple
-   : t
-  -> Flambda_types.t
-  -> Flambda_types.t * (Simple.t option)
+val canonical_name : t -> Name.t -> Name.t
 
-val unknown_or_join_and_alias_from_ty
+val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+val resolve_any_toplevel_alias_on_ty0
    : t
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
-val aliases_of_simple : t -> Simple.t -> Name.Set.t
+val resolve_any_toplevel_alias_on_ty
+   : t
+  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
+  -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+  -> 'a Flambda_types.ty
+  -> 'a Flambda_types.ty * (Simple.t option)
+
+val resolve_any_toplevel_alias
+   : t
+  -> Flambda_types.t
+  -> Flambda_types.t * (Simple.t option)
 
 val cut0
    : t
