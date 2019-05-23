@@ -35,6 +35,11 @@ module Cached = struct
     { names_to_types = Name.Map.empty;
       aliases = Simple.Map.empty;
     }
+
+  let create ~names_to_types aliases =
+    { names_to_types;
+      aliases;
+    }
 end
 
 module One_level = struct
@@ -214,28 +219,24 @@ let add_equation t name ty =
       print t
   end;
   invariant_for_new_equation t name ty;
-  let aliases = aliases t in
-  let alias_already_known =
-    match Aliases.get_canonical_simple aliases ty with
-    | None | Some (Const _ | Discriminant _) -> false
-    | Some (Name alias) ->
-      Aliases.already_known aliases (Simple.name name) alias
+  let level =
+    Typing_env_level.add_or_replace_equation
+      (One_level.level t.current_level) name ty
   in
-  if alias_already_known then t
-  else
-    let level =
-      Typing_env_level.add_or_replace_equation
-        (One_level.level t.current_level) name ty
+  let just_after_level =
+    let aliases =
+      let aliases = aliases t in
+      match Flambda_type0_core.get_alias ty with
+      | None -> aliases
+      | Some alias_of -> Aliases.add aliases name ~alias_of
     in
-    let just_after_level =
-      let names_to_types = Name.Map.add name ty (names_to_types t) in
-      Cached.with_names_to_types (One_level.just_after_level t.current_level)
-        ~names_to_types
-    in
-    let current_level =
-      One_level.create (current_scope t) level ~just_after_level
-    in
-    with_current_level t ~current_level
+    let names_to_types = Name.Map.add name ty (names_to_types t) in
+    Cached.create ~names_to_types aliases
+  in
+  let current_level =
+    One_level.create (current_scope t) level ~just_after_level
+  in
+  with_current_level t ~current_level
 
 let rec add_env_extension t level : t =
   let t_before_equations =
