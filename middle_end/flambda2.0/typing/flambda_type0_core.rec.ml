@@ -565,6 +565,15 @@ let set_of_closures_containing_at_least closure_id =
   in
   Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
+let type_for_const (const : Simple.Const.t) =
+  match const with
+  | Naked_immediate i -> this_naked_immediate i
+  | Tagged_immediate i -> this_tagged_immediate i
+  | Naked_float f -> this_naked_float f
+  | Naked_int32 n -> this_naked_int32 n
+  | Naked_int64 n -> this_naked_int64 n
+  | Naked_nativeint n -> this_naked_nativeint n
+
 let get_alias t =
   match t with
   | Value (Equals simple) -> Some simple
