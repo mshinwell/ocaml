@@ -63,11 +63,10 @@ let add_use t typing_env ~arg_types =
       Flambda_arity.print t.arity
   end;
   let cut_point = Scope.next t.definition_scope_level in
-  let allowed = TE.defined_variables typing_env ~at_or_previous_to:cut_point in
-  let arg_types =
-    List.map (fun typ -> T.erase_aliases typ ~allowed) arg_types
+  let env_extension =
+    TE.cut typing_env ~unknown_if_defined_at_or_later_than:cut_point
   in
-  let use = Use.create arg_types in
+  let use = Use.create env_extension ~arg_types in
   { t with
     uses = use :: t.uses;
   }
