@@ -29,7 +29,7 @@ type t =
 and flambda_type = t
 
 and ty_value = of_kind_value ty
-and 'a ty_naked_number = 'a of_kind_naked_number
+and 'a ty_naked_number = 'a of_kind_naked_number ty
 and ty_fabricated = of_kind_fabricated ty
 
 and 'a ty = 'a unknown_or_join or_alias

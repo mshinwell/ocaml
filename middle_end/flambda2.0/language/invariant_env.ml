@@ -237,7 +237,7 @@ let check_name_is_bound_and_of_kind t name desired_kind =
   | exception Not_found ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | kind ->
-    if not (Flambda_kind.compatible kind ~if_used_at:desired_kind) then begin
+    if not (Flambda_kind.equal kind desired_kind) then begin
       Misc.fatal_errorf "Name %a of kind %a cannot be used at kind %a"
         Name.print name
         Flambda_kind.print kind
@@ -249,7 +249,7 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
   | Name name -> check_name_is_bound_and_of_kind t name desired_kind
   | Const const ->
     let actual_kind = Simple.Const.kind const in
-    if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
+    if not (Flambda_kind.equal actual_kind desired_kind)
     then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
         Simple.print simple
@@ -258,7 +258,7 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
     end
   | Discriminant _ ->
     let actual_kind = Flambda_kind.fabricated in
-    if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
+    if not (Flambda_kind.equal actual_kind desired_kind)
     then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
         Simple.print simple
