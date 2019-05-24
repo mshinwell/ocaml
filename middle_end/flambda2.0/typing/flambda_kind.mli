@@ -34,50 +34,43 @@ type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
 type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
 type fabricated = private Fabricated
 
-(** Witnesses for the naked number kinds, for use when matching on the structure
-    of types, to introduce constraints. *)
 module Naked_number_kind : sig
-  type _ t =
-    | Naked_immediate : naked_immediate t
-    | Naked_float : naked_float t
-    | Naked_int32 : naked_int32 t
-    | Naked_int64 : naked_int64 t
-    | Naked_nativeint : naked_nativeint t
+  type t =
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
 
   val print : Format.formatter -> t -> unit
 end
 
 (** The kinds themselves. *)
-type _ t = private
-  | Value : value t
+type t = private
+  | Value
     (** OCaml values that may exist at source level. *)
-  | Naked_number : 'k Naked_number_kind.t -> 'k t
+  | Naked_number of Naked_number_kind.t
     (** The kind of unboxed numbers and untagged immediates. *)
-  | Fabricated : fabricated t
+  | Fabricated
     (** Values which have been introduced by Flambda and are never accessible
         at the source language level (for example sets of closures). *)
 
-type 'k kind = 'k t
+type kind = t
 
 (** Constructors for the various kinds. *)
-val value : value t
-val naked_immediate : naked_immediate t
-val naked_float : naked_float t
-val naked_int32 : naked_int32 t
-val naked_int64 : naked_int64 t
-val naked_nativeint : naked_nativeint t
-val fabricated : fabricated t
+val value : t
+val naked_immediate : t
+val naked_float : t
+val naked_int32 : t
+val naked_int64 : t
+val naked_nativeint : t
+val fabricated : t
 
-val is_value : _ t -> bool
-val is_naked_float : _ t -> bool
+val is_value : t -> bool
+val is_naked_float : t -> bool
 
 (** The kind of the unit value. *)
-val unit : empty_value t
-
-(** [compatible t ~if_used_at] returns [true] iff a value of the kind [t] may
-    be used in any context with a hole expecting a value of kind [if_used_at].
-*)
-val compatible : t -> if_used_at:t -> bool
+val unit : t
 
 include Identifiable.S with type t := t
 
@@ -133,4 +126,17 @@ module Boxable_number : sig
   val print_lowercase : Format.formatter -> t -> unit
 
   include Identifiable.S with type t := t
+end
+
+(** Witnesses for the naked number kinds, for use when matching on the structure
+    of types, to introduce constraints. *)
+module Naked_number : sig
+  type _ t =
+    | Naked_immediate : naked_immediate t
+    | Naked_float : naked_float t
+    | Naked_int32 : naked_int32 t
+    | Naked_int64 : naked_int64 t
+    | Naked_nativeint : naked_nativeint t
+
+  val print : Format.formatter -> _ t -> unit
 end
