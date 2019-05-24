@@ -86,16 +86,16 @@ module type S = sig
 
     val defined_variables
        : t
-      -> at_or_previous_to:Scope_level.t
+      -> at_or_previous_to:Scope.t
       -> Variable.Set.t
 
     (** Adjust the domain of the given typing environment so that it only
         mentions names which are symbols, not variables. *)
     val restrict_to_symbols : t -> t
 
-    val add_definition : t -> Name.t -> Scope_level.t -> flambda_type -> t
+    val add_definition : t -> Name.t -> Scope.t -> flambda_type -> t
 
-    val add_equation : t -> Name.t -> Scope_level.t -> flambda_type -> t
+    val add_equation : t -> Name.t -> Scope.t -> flambda_type -> t
 
     val mem : t -> Name.t -> bool
 

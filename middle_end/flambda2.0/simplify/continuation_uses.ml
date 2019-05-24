@@ -33,7 +33,7 @@ module Use = struct
 end
 
 type t = {
-  definition_scope_level : Scope_level.t;
+  definition_scope_level : Scope.t;
   arity : Flambda_arity.t;
   uses : Use.t list;
 }
@@ -50,7 +50,7 @@ let print ppf { definition_scope_level; arity; uses; } =
       @[<hov 1>(arity %a)@]@ \
       @[<hov 1>(uses %a)@]\
       )@]"
-    Scope_level.print definition_scope_level
+    Scope.print definition_scope_level
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
@@ -66,7 +66,7 @@ let add_use t typing_env ~arg_types =
      variables defined prior to the cut point?  Maybe we should do the cutting
      as for the full type system, delete any definitions, then rewrite the
      RHS of any remaining equations to only involve the [allowed] set. *)
-  let cut_point = Scope_level.next t.definition_scope_level in
+  let cut_point = Scope.next t.definition_scope_level in
   let allowed = TE.defined_variables typing_env ~at_or_previous_to:cut_point in
   let arg_types =
     List.map (fun typ -> T.erase_aliases typ ~allowed) arg_types

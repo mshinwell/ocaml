@@ -218,7 +218,7 @@ let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) =
     end
   | _, _ -> t
 
-let add_alias t simple1 simple2 =
+let add t simple1 simple2 =
   let t = add_alias t simple1 simple2 in
   invariant t;
   t

@@ -14,48 +14,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Numbering of the nesting depth of continuations and bindings. *)
+(** Numbering of the nesting depth of continuations. *)
 
-(* CR mshinwell: To avoid confusion amongst variables called "level", maybe
-   this module should just be [Scope], not [Scope_level]? *)
+type t
 
-module type S = sig
-  type t
+include Identifiable.S with type t := t
 
-  include Identifiable.S with type t := t
+val initial : t
 
-  val initial : t
+val prev : t -> t
+val next : t -> t
 
-  val prev : t -> t
-  val next : t -> t
+val (<=): t -> t -> bool
+val (<): t -> t -> bool
+val (>): t -> t -> bool
+val (>=): t -> t -> bool
 
-  val (<=): t -> t -> bool
-  val (<): t -> t -> bool
-  val (>): t -> t -> bool
-  val (>=): t -> t -> bool
+val max : t -> t -> t
 
-  val to_int : t -> int
-end
+val to_int : t -> int
 
-include S
-
-val half_prev : t -> t
-val half_next : t -> t
 val for_symbols : t
-
-module Sublevel : S
-
-module With_sublevel : sig
-  type with_sublevel
-
-  val create : t -> Sublevel.t -> with_sublevel
-
-  val level : with_sublevel -> t
-  val sublevel : with_sublevel -> Sublevel.t
-
-  type t = with_sublevel
-
-  val (>): t -> t -> bool
-
-  include Identifiable.S with type t := t
-end
