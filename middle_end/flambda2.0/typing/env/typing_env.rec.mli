@@ -83,3 +83,5 @@ val resolve_any_toplevel_alias
    : t
   -> Flambda_types.t
   -> Flambda_types.t * (Simple.t option)
+
+val restrict_to_symbols : t -> t
