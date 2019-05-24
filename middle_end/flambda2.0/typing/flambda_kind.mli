@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017--2018 OCamlPro SAS                                    *)
-(*   Copyright 2017--2018 Jane Street Group LLC                           *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -18,41 +18,61 @@
 
 (** Kinds of Flambda types. *)
 
+(** Empty and known-distinct types. *)
+type empty_naked_immediate = private Naked_immediate
+type empty_naked_float = private Naked_float
+type empty_naked_int32 = private Naked_int32
+type empty_naked_int64 = private Naked_int64
+type empty_naked_nativeint = private Naked_nativeint
+
+(** GADT indexes. *)
+type value = private Value
+type naked_immediate = empty_naked_immediate * Immediate.Set.t
+type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
+type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
+type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
+type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
+type fabricated = private Fabricated
+
+(** Witnesses for the naked number kinds, for use when matching on the structure
+    of types, to introduce constraints. *)
 module Naked_number_kind : sig
-  type t =
-    | Naked_immediate
-    | Naked_float
-    | Naked_int32
-    | Naked_int64
-    | Naked_nativeint
+  type _ t =
+    | Naked_immediate : naked_immediate t
+    | Naked_float : naked_float t
+    | Naked_int32 : naked_int32 t
+    | Naked_int64 : naked_int64 t
+    | Naked_nativeint : naked_nativeint t
 
   val print : Format.formatter -> t -> unit
 end
 
-(* CR mshinwell: Once disambiguation works on GADTs, consider turning [t]
-   into a GADT. *)
-type t = private
-  | Value
-  | Naked_number of Naked_number_kind.t
-  | Fabricated
+(** The kinds themselves. *)
+type _ t = private
+  | Value : value t
+    (** OCaml values that may exist at source level. *)
+  | Naked_number : 'k Naked_number_kind.t -> 'k t
+    (** The kind of unboxed numbers and untagged immediates. *)
+  | Fabricated : fabricated t
     (** Values which have been introduced by Flambda and are never accessible
         at the source language level (for example sets of closures). *)
 
-type kind = t
+type 'k kind = 'k t
 
-val value : t
-val naked_immediate : t
-val naked_float : t
-val naked_int32 : t
-val naked_int64 : t
-val naked_nativeint : t
-val fabricated : t
+(** Constructors for the various kinds. *)
+val value : value t
+val naked_immediate : naked_immediate t
+val naked_float : naked_float t
+val naked_int32 : naked_int32 t
+val naked_int64 : naked_int64 t
+val naked_nativeint : naked_nativeint t
+val fabricated : fabricated t
 
-val is_value : t -> bool
-val is_naked_float : t -> bool
+val is_value : _ t -> bool
+val is_naked_float : _ t -> bool
 
 (** The kind of the unit value. *)
-val unit : t
+val unit : empty_value t
 
 (** [compatible t ~if_used_at] returns [true] iff a value of the kind [t] may
     be used in any context with a hole expecting a value of kind [if_used_at].
@@ -113,15 +133,4 @@ module Boxable_number : sig
   val print_lowercase : Format.formatter -> t -> unit
 
   include Identifiable.S with type t := t
-end
-
-module Naked_number : sig
-  type 'values t =
-    | Naked_immediate : Immediate.Set.t t
-    | Naked_float : Numbers.Float_by_bit_pattern.Set.t t
-    | Naked_int32 : Numbers.Int32.Set.t t
-    | Naked_int64 : Numbers.Int64.Set.t t
-    | Naked_nativeint : Targetint.Set.t t
-
-  val print : Format.formatter -> _ t -> unit
 end

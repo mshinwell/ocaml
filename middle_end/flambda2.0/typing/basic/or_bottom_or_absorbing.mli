@@ -27,4 +27,5 @@ val print
   -> 'a t
   -> unit
 
-val of_or_bottom : 'a Or_bottom.t -> f:('a -> 'a) -> 'a t
+(* CR mshinwell: Misleading name, given the presence of [f]. *)
+val of_or_bottom : 'a Or_bottom.t -> f:('a -> 'b) -> 'b t

@@ -27,6 +27,8 @@ module type S = sig
   type meet_env
   type typing_env_extension
 
+  type naked_number_kind
+
   module Naked_number : sig
     type t
     module Set : Set.S with type elt = t
@@ -41,9 +43,8 @@ module type S = sig
     include Meet_and_join_spec_intf.S
       with type flambda_type := flambda_type
       with type 'a ty := 'a ty
-      with type 'a of_kind_naked_number := 'a of_kind_naked_number
       with type meet_env := meet_env
       with type typing_env_extension := typing_env_extension
-      with type of_kind_foo = Naked_number.Set.t of_kind_naked_number
+      with type of_kind_foo = naked_number_kind of_kind_naked_number
   end
 end

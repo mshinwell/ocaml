@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017--2018 OCamlPro SAS                                    *)
-(*   Copyright 2017--2018 Jane Street Group LLC                           *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,15 +16,29 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Naked_number_kind = struct
-  type t =
-    | Naked_immediate
-    | Naked_float
-    | Naked_int32
-    | Naked_int64
-    | Naked_nativeint
+type value = private Value
+type empty_naked_immediate = private Naked_immediate
+type empty_naked_float = private Naked_float
+type empty_naked_int32 = private Naked_int32
+type empty_naked_int64 = private Naked_int64
+type empty_naked_nativeint = private Naked_nativeint
+type fabricated = private Fabricated
 
-  let print ppf t =
+type naked_immediate = empty_naked_immediate * Immediate.Set.t
+type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
+type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
+type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
+type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
+
+module Naked_number_kind = struct
+  type 'k t =
+    | Naked_immediate : naked_immediate t
+    | Naked_float : naked_float t
+    | Naked_int32 : naked_int32 t
+    | Naked_int64 : naked_int64 t
+    | Naked_nativeint : naked_nativeint t
+
+  let print (type a) ppf (t : a t) =
     match t with
     | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
@@ -33,28 +47,22 @@ module Naked_number_kind = struct
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end
 
-type t =
-  | Value
-  | Naked_number of Naked_number_kind.t
-  | Fabricated
+type _ t = private
+  | Value : value t
+  | Naked_number : 'k Naked_number_kind.t -> 'k t
+  | Fabricated : fabricated t
 
-type kind = t
+type 'k kind = 'k t
 
 let value = Value
+let naked_immediate = Naked_number Naked_immediate
+let naked_float = Naked_number Naked_float
+let naked_int32 = Naked_number Naked_int32
+let naked_int64 = Naked_number Naked_int64
+let naked_nativeint = Naked_number Naked_nativeint
+let fabricated = Fabricated
 
 let unit = Value
-
-let naked_immediate = Naked_number Naked_immediate
-
-let naked_float = Naked_number Naked_float
-
-let naked_int32 = Naked_number Naked_int32
-
-let naked_int64 = Naked_number Naked_int64
-
-let naked_nativeint = Naked_number Naked_nativeint
-
-let fabricated = Fabricated
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
 
@@ -247,21 +255,4 @@ module Boxable_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
-end
-
-module Naked_number = struct
-  type 'values t =
-    | Naked_immediate : Immediate.Set.t t
-    | Naked_float : Numbers.Float_by_bit_pattern.Set.t t
-    | Naked_int32 : Numbers.Int32.Set.t t
-    | Naked_int64 : Numbers.Int64.Set.t t
-    | Naked_nativeint : Targetint.Set.t t
-
-  let print (type a) ppf (t : a t) =
-    match t with
-    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
-    | Naked_float -> Format.pp_print_string ppf "Naked_float"
-    | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
-    | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
-    | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end
