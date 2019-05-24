@@ -20,13 +20,13 @@ module T = Flambda_types
 
 module Make
   (E : Lattice_ops_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension) =
+    with type meet_env := Meet_env.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t) =
 struct
   type of_kind_foo = T.of_kind_fabricated
 
-  let kind () = K.fabricated ()
+  let kind = K.fabricated
   let to_type ty : T.t = Fabricated ty
   let force_to_kind = Flambda_type0_core.force_to_kind_fabricated
   let print_ty = Type_printers.print_ty_fabricated_with_cache
