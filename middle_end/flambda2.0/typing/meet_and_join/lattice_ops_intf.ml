@@ -23,11 +23,10 @@ module type S = sig
   type typing_env
   type meet_env
   type typing_env_extension
-  type meet_or_join
 
   val name : unit -> string
 
-  val op : unit -> meet_or_join
+  val op : unit -> Meet_or_join_op.t
 
   val unknown_is_identity : unit -> bool
   val unknown_is_absorbing : unit -> bool

@@ -19,11 +19,9 @@
 module JE = Typing_env
 module TEE = Typing_env_extension
 
-type meet_or_join = Meet | Join
-
 module For_meet = struct
   let name () = "meet"
-  let op () : meet_or_join = Meet
+  let op () : Meet_or_join_op.t = Meet
   let unknown_is_identity () = true
   let unknown_is_absorbing () = false
 
@@ -68,7 +66,7 @@ end
 
 module For_join = struct
   let name () = "join"
-  let op () : meet_or_join = Join
+  let op () : Meet_or_join_op.t = Join
   let unknown_is_identity () = false
   let unknown_is_absorbing () = true
 
