@@ -39,6 +39,17 @@ let print_ilambda ppf (ilam : Ilambda.program) =
       Ilambda.print ilam.expr
   end
 
+let print_ilambda_after_mutable_variable_elimination ppf
+      (ilam : Ilambda.program) =
+  if !Clflags.dump_ilambda then begin
+    Format.fprintf ppf
+      "After mutable variable elimination (return continuation %a) \
+       (exception continuation %a):@ %a@."
+      Continuation.print ilam.return_continuation
+      Continuation.print ilam.exn_continuation.exn_handler
+      Ilambda.print ilam.expr
+  end
+
 let print_rawflambda ppf program =
   if !Clflags.dump_rawflambda2 then begin
     Format.fprintf ppf "After closure conversion:@ %a@."
@@ -59,6 +70,15 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
           ~recursive_static_catches)
     in
     print_ilambda ppf ilambda;
+    let ilambda =
+      if ilambda.uses_mutable_variables then begin
+        let ilambda = Eliminate_mutable_variables.run ilambda in
+        print_ilambda_after_mutable_variable_elimination ppf ilambda;
+        ilambda
+      end else begin
+        ilambda
+      end
+    in
     let flambda =
       Profile.record_call ~accumulate:true "closure_conversion" (fun () ->
         Closure_conversion.ilambda_to_flambda ~backend ~module_ident
