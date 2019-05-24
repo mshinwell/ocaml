@@ -105,6 +105,7 @@ type program = {
   expr : t;
   return_continuation : Continuation.t;
   exn_continuation : exn_continuation;
+  uses_mutable_variables : bool;
 }
 
 let fprintf = Format.fprintf

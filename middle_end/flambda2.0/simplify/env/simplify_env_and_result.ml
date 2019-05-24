@@ -139,7 +139,7 @@ end = struct
     { t with typing_env; }
 
   let find_name t name =
-    match TE.find_exn t.typing_env name with
+    match TE.find t.typing_env name with
     | exception Not_found ->
       Misc.fatal_errorf "Unbound name %a in environment:@ %a"
         Name.print name
