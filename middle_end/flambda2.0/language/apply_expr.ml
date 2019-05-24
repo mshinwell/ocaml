@@ -108,7 +108,7 @@ let invariant env
           print t
       end;
       let expected_arity = Call_kind.return_arity call_kind in
-      if not (Flambda_arity.compatible arity ~if_used_at:expected_arity)
+      if not (Flambda_arity.equal arity expected_arity)
       then begin
         Misc.fatal_errorf "Continuation %a called with wrong arity in \
             this [Apply] term: expected %a but used at %a:@ %a"

@@ -245,26 +245,24 @@ val force_to_kind_naked_number
 
 val force_to_kind_naked_float
    : Flambda_types.t
-  -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_float Flambda_types.ty_naked_number
 
 val force_to_kind_naked_int32
    : Flambda_types.t
-  -> Numbers.Int32.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_int32 Flambda_types.ty_naked_number
 
 val force_to_kind_naked_int64
    : Flambda_types.t
-  -> Numbers.Int64.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_int64 Flambda_types.ty_naked_number
 
 val force_to_kind_naked_nativeint
    : Flambda_types.t
-  -> Targetint.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_nativeint Flambda_types.ty_naked_number
 
 val force_to_kind_naked_immediate
    : Flambda_types.t
-  -> Immediate.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_immediate Flambda_types.ty_naked_number
 
-val force_to_kind_fabricated
-   : Flambda_types.t
-  -> Flambda_types.of_kind_fabricated Flambda_types.ty
+val force_to_kind_fabricated : Flambda_types.t -> Flambda_types.ty_fabricated
 
 val check_of_kind : Flambda_types.t -> Flambda_kind.t -> unit
