@@ -20,15 +20,18 @@ open! Flambda.Import
 
 module E = Simplify_env_and_result.Env
 module T = Flambda_type
+module TE = T.Typing_env
 
 module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
   let simplify_name_for_rhs_of_let env r name =
     let typing_env = E.typing_env env in
-    let name = TE.canonical_name typing_env name in
+    let name = TE.get_canonical_name typing_env name in
+    (* CR mshinwell: Avoid double lookup here *)
+    let kind = T.kind (TE.find typing_env name) in
     let simple = Simple.name name in
     (* We don't resolve [name] right back to a type and return that, for
        such a procedure would cause loss of alias information. *)
-    simple, T.alias_type_of (T.kind ty) simple, r
+    simple, T.alias_type_of kind simple, r
 
   let simplify_simple_for_rhs_of_let env r (simple : Simple.t) =
     match simple with

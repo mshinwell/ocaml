@@ -158,8 +158,8 @@ let in_compilation_unit t =
 
 module Pair = struct
   include Identifiable.Make_pair
-    (struct type nonrec t = t include T end)
-    (struct type nonrec t = t include T end)
+    (struct type nonrec t = t include With_map end)
+    (struct type nonrec t = t include With_map end)
 
   type nonrec t = t * t
 end

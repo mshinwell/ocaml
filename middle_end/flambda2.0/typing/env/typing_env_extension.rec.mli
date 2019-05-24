@@ -16,4 +16,37 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include module type of struct include Typing_env_level end
+type t = Typing_env_level.t
+
+include Contains_names.S with type t := t
+
+val print_with_cache
+   : cache:Printing_cache.t
+  -> Format.formatter
+  -> t
+  -> unit
+
+val print : Format.formatter -> t -> unit
+
+val invariant : t -> unit
+
+val empty : unit -> t
+
+val is_empty : t -> bool
+
+val find_opt : t -> Name.t -> Flambda_types.t option
+
+val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+val add_equation : t -> Name.t -> Flambda_types.t -> t
+
+val meet_equation
+   : t
+  -> Typing_env.t
+  -> Name.t
+  -> Flambda_types.t
+  -> t
+
+val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
+
+val erase_aliases : t -> allowed:Variable.Set.t -> t
