@@ -27,11 +27,11 @@ let print ppf { canonical_names; aliases_of_canonical_names; } =
       @[<hov 1>(canonical_names@ %a)@]@ \
       @[<hov 1>(aliases_of_canonical_names@ %a)@]\
       )@]"
-    Name.Map.print Name.print canonical_names
-    Name.Map.print Name.Set.print aliases_of_canonical_names
+    (Name.Map.print Name.print) canonical_names
+    (Name.Map.print Name.Set.print) aliases_of_canonical_names
 
 let invariant t =
-  if !Clflags.flambda_invariants then begin
+  if !Clflags.flambda_invariant_checks then begin
     let canonical_names1 = Name.Map.keys t.canonical_names in
     let canonical_names2 = Name.Map.keys t.aliases_of_canonical_names in
     if not (Name.Set.equal canonical_names1 canonical_names2) then begin
@@ -40,7 +40,7 @@ let invariant t =
         print t
     end;
     let _all_aliases : Name.Set.t =
-      Name.Map.fold (fun _canonical_name aliases all_aliases ->
+      Name.Map.fold (fun canonical_name aliases all_aliases ->
           if Name.Set.mem canonical_name aliases then begin
             Misc.fatal_errorf "Canonical name %a occurs in alias set:@ %a"
               Name.print canonical_name
@@ -51,7 +51,7 @@ let invariant t =
             Misc.fatal_errorf "Overlapping alias sets:@ %a" print t
           end;
           Name.Set.union aliases all_aliases)
-        t.aliases_of_canonical_names;
+        t.aliases_of_canonical_names
         Name.Set.empty
     in
     ()
@@ -76,7 +76,7 @@ let canonical t name : canonical =
     if Name.equal name canonical_name then Is_canonical name
     else Alias_of_canonical { name; canonical_name; }
 
-let aliases_of_canonical_name t ~canonical_name =
+let get_aliases_of_canonical_name t ~canonical_name =
   match Name.Map.find canonical_name t.aliases_of_canonical_names with
   | exception Not_found ->
     Misc.fatal_errorf "No alias map entry for canonical name %a"
@@ -84,7 +84,14 @@ let aliases_of_canonical_name t ~canonical_name =
   | aliases -> aliases
 
 let add_alias_of_canonical_name t name ~canonical_name =
-  Name.Set.add name (aliases_of_canonical_name t ~canonical_name)
+  let existing_aliases = get_aliases_of_canonical_name t ~canonical_name in
+  let aliases_of_canonical_names =
+    Name.Map.add canonical_name (Name.Set.add name existing_aliases)
+      t.aliases_of_canonical_names
+  in
+  { t with
+    aliases_of_canonical_names;
+  }
 
 let add_alias_between_canonical_names t ~canonical_name ~to_be_demoted =
   assert (Name.Map.mem canonical_name t.aliases_of_canonical_names);
@@ -100,11 +107,11 @@ let add_alias_between_canonical_names t ~canonical_name ~to_be_demoted =
       |> Name.Map.add to_be_demoted canonical_name
     in
     let aliases_of_canonical_name =
-      aliases_of_canonical_name t ~canonical_name
+      get_aliases_of_canonical_name t ~canonical_name
     in
     assert (not (Name.Set.mem to_be_demoted aliases_of_canonical_name));
     let aliases_of_to_be_demoted =
-      aliases_of_canonical_name t ~canonical_name:to_be_demoted
+      get_aliases_of_canonical_name t ~canonical_name:to_be_demoted
     in
     assert (not (Name.Set.mem canonical_name aliases_of_to_be_demoted));
     assert (Name.Set.is_empty (Name.Set.inter
@@ -142,11 +149,11 @@ let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2 =
       to_be_demoted = canonical_name1;
     }
 
-let add_alias t simple1 simple2 =
+let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) =
   match simple1, simple2 with
   | Name name1, Name name2 ->
     begin match canonical t name1, canonical t name2 with
-    | Not_seen_before name1, Not_seen_before canonical_name2 ->
+    | Not_seen_before name1, Not_seen_before name2 ->
       (* CR mshinwell: Does this case actually happen? *)
       assert (not (Name.Map.mem name1 t.aliases_of_canonical_names));
       assert (not (Name.Map.mem name2 t.aliases_of_canonical_names));
@@ -171,17 +178,13 @@ let add_alias t simple1 simple2 =
     | Not_seen_before name, Is_canonical canonical_name
     | Is_canonical canonical_name, Not_seen_before name ->
       assert (not (Name.Map.mem name t.aliases_of_canonical_names));
-      assert (Name.Map.mem canonical_name t.aliases_of_canonical_names));
+      assert (Name.Map.mem canonical_name t.aliases_of_canonical_names);
       let canonical_names =
         t.canonical_names
         |> Name.Map.add (* replace *) name canonical_name
       in
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t name ~canonical_name
-      in
-      { canonical_names;
-        aliases_of_canonical_names;
-      }
+      add_alias_of_canonical_name { t with canonical_names; }
+        name ~canonical_name
     | Is_canonical canonical_name, Is_canonical to_be_demoted ->
       add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
     | Alias_of_canonical { name; canonical_name = canonical_name1; },
@@ -194,12 +197,7 @@ let add_alias t simple1 simple2 =
       let t =
         add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
       in
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t name ~canonical_name
-      in
-      { t with
-        aliases_of_canonical_names;
-      }
+      add_alias_of_canonical_name t name ~canonical_name
     | Alias_of_canonical { name = name1; canonical_name = canonical_name1; },
         Alias_of_canonical { name = name2; canonical_name = canonical_name2; }
         ->
@@ -207,29 +205,16 @@ let add_alias t simple1 simple2 =
         choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
       in
       let t =
-        add_alias_between_canonical_names t ~canonical_name:canonical_name1
-          ~to_be_demoted:canonical_name2
+        add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
       in
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t name ~canonical_name:canonical_name1
-      in
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t name ~canonical_name:canonical_name2
-      in
-      { t with
-        aliases_of_canonical_names;
-      }
+      add_alias_of_canonical_name
+        (add_alias_of_canonical_name t name2 ~canonical_name)
+        name1 ~canonical_name
     | Alias_of_canonical { name; canonical_name; }, Not_seen_before not_seen
     | Not_seen_before not_seen, Alias_of_canonical { name; canonical_name; } ->
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t name ~canonical_name
-      in
-      let aliases_of_canonical_names =
-        add_alias_of_canonical_name t not_seen ~canonical_name
-      in
-      { t with
-        aliases_of_canonical_names;
-      }
+      add_alias_of_canonical_name
+        (add_alias_of_canonical_name t name ~canonical_name)
+        not_seen ~canonical_name
     end
   | _, _ -> t
 
@@ -249,10 +234,10 @@ let aliases_of_simple t (simple : Simple.t) =
   | Name name ->
     match canonical t name with
     | Is_canonical canonical_name ->
-      aliases_of_canonical_name t ~canonical_name
+      get_aliases_of_canonical_name t ~canonical_name
     | Alias_of_canonical { name = _; canonical_name; } ->
       assert (not (Name.equal name canonical_name));
-      let aliases = aliases_of_canonical_name t ~canonical_name in
+      let aliases = get_aliases_of_canonical_name t ~canonical_name in
       assert (Name.Set.mem name aliases);
       Name.Set.add canonical_name aliases
-    | Not_seen_before -> Name.Set.empty
+    | Not_seen_before _ -> Name.Set.empty
