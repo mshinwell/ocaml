@@ -428,3 +428,5 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
         ty_fabricated
     in
     Fabricated ty_fabricated, canonical_simple
+
+let restrict_to_symbols t =

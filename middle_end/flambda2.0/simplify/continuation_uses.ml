@@ -62,10 +62,6 @@ let add_use t typing_env ~arg_types =
       Flambda_arity.print arity
       Flambda_arity.print t.arity
   end;
-  (* XXX Think about this some more.  Should we be propagating equations on
-     variables defined prior to the cut point?  Maybe we should do the cutting
-     as for the full type system, delete any definitions, then rewrite the
-     RHS of any remaining equations to only involve the [allowed] set. *)
   let cut_point = Scope.next t.definition_scope_level in
   let allowed = TE.defined_variables typing_env ~at_or_previous_to:cut_point in
   let arg_types =

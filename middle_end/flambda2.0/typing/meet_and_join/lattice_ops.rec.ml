@@ -30,13 +30,6 @@ module For_meet = struct
       type t = I.Set.t
       let union_or_inter = I.Set.inter
     end
-
-    module Map = struct
-      type 'a t = 'a I.Map.t
-      let union_or_inter = I.Map.inter
-      let union_or_inter_both ~in_left_only:_ ~in_right_only:_ ~in_both t1 t2 =
-        I.Map.inter in_both t1 t2
-    end
   end
 
   module String_info = Make (String_info)
@@ -53,14 +46,14 @@ module For_meet = struct
   module Tag = Make (Tag)
   module Discriminant = Make (Discriminant)
 
-  let switch_no_bottom meet _join join_env thing1 thing2 =
-    meet (JE.central_environment join_env) thing1 thing2
+  let switch_no_bottom meet _join typing_env thing1 thing2 =
+    meet typing_env thing1 thing2
 
-  let switch meet _join join_env thing1 thing2 =
-    meet (JE.central_environment join_env) thing1 thing2
+  let switch meet _join typing_env thing1 thing2 =
+    meet typing_env thing1 thing2
 
-  let switch' meet _join join_env thing1 thing2 : _ Or_bottom.t =
-    Or_bottom.map (meet (JE.central_environment join_env) thing1 thing2)
+  let switch' meet _join typing_env thing1 thing2 : _ Or_bottom.t =
+    Or_bottom.map (meet typing_env thing1 thing2)
       ~f:(fun (thing, _) -> thing)
 end
 
@@ -75,13 +68,6 @@ module For_join = struct
       type t = I.Set.t
       let union_or_inter = I.Set.union
     end
-
-    module Map = struct
-      type 'a t = 'a I.Map.t
-      let union_or_inter = I.Map.union
-      let union_or_inter_both = I.Map.union_both
-      let union_or_inter_and_left = I.Map.union  (* CR mshinwell: check *)
-    end
   end
 
   module String_info = Make (String_info)
@@ -98,12 +84,12 @@ module For_join = struct
   module Tag = Make (Tag)
   module Discriminant = Make (Discriminant)
 
-  let switch_no_bottom _meet join join_env thing1 thing2 =
-    join join_env thing1 thing2, TEE.empty
+  let switch_no_bottom _meet join typing_env thing1 thing2 =
+    join typing_env thing1 thing2, TEE.empty
 
-  let switch _meet join join_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join join_env thing1 thing2, TEE.empty)
+  let switch _meet join typing_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join typing_env thing1 thing2, TEE.empty)
 
-  let switch' _meet join join_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join join_env thing1 thing2)
+  let switch' _meet join typing_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join typing_env thing1 thing2)
 end

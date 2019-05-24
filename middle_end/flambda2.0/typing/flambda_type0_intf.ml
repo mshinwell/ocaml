@@ -39,73 +39,91 @@ module type S = sig
 
   val erase_aliases : t -> allowed:Variable.Set.t -> t
 
+  type typing_env
+  type typing_env_extension
+
   module Typing_env_extension : sig
-    type t
+    type t = typing_env_extension
 
-    include Expr_std.S with type t := t
+    include Contains_names.S with type t := t
 
-    val empty : t
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val invariant : t -> unit
+
+    val empty : unit -> t
 
     val is_empty : t -> bool
 
+    val find_opt : t -> Name.t -> flambda_type option
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
     val add_equation : t -> Name.t -> flambda_type -> t
+
+    val meet_equation
+       : t
+      -> typing_env
+      -> Name.t
+      -> flambda_type
+      -> t
+
+    val add_or_replace_equation : t -> Name.t -> flambda_type -> t
   end
 
   module Typing_env : sig
-    type t
+    type t = typing_env
 
-    (** Perform various invariant checks upon the given environment. *)
     val invariant : t -> unit
 
-    (** Print the given typing environment to a formatter. *)
     val print : Format.formatter -> t -> unit
 
-    (** Create an empty environment using the given [resolver] to locate the
-        definitions of export identifiers (e.g. by loading .cmx files). *)
     val create : resolver:(Export_id.t -> flambda_type option) -> t
 
-    (** As for [create] but takes the [resolver] from an existing
-        environment. *)
     val create_using_resolver_from : t -> t
 
-    (** The export identifier resolver from the given environment. *)
     val resolver : t -> (Export_id.t -> flambda_type option)
 
-    (** Returns [true] iff the given environment contains no bindings.
-        (An environment containing only existential bindings is not deemed
-        as empty.) *)
     val is_empty : t -> bool
 
-    val resolve_aliases
-       : ?bound_name:Name.t
-      -> t
-      -> flambda_type
-      -> flambda_type * (Simple.t option)
+    val current_level : t -> Scope.t
+
+    val domain : t -> Name_occurrences.t
+
+    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+
+    val add_equation : t -> Name.t -> flambda_type -> t
 
     val find : t -> Name.t -> flambda_type
 
-    val defined_variables
-       : t
-      -> at_or_previous_to:Scope.t
-      -> Variable.Set.t
-
-    (** Adjust the domain of the given typing environment so that it only
-        mentions names which are symbols, not variables. *)
-    val restrict_to_symbols : t -> t
-
-    val add_definition : t -> Name.t -> Scope.t -> flambda_type -> t
-
-    val add_equation : t -> Name.t -> Scope.t -> flambda_type -> t
-
     val mem : t -> Name.t -> bool
 
-    (** Add the given environment extension into the given typing environment.
-        During the process, if an attempt is made to add a name which is
-        already bound, the given name's type will be determined using a meet
-        operation. *)
-    val add_env_extension : t -> Typing_env_extension.t -> t
+    val add_env_extension
+       : t
+      -> Typing_env_extension.t
+      -> t
 
     val get_canonical_name : t -> Name.t -> Name.t
+
+    val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+    val cut
+       : t
+      -> unknown_if_defined_at_or_later_than:Scope.t
+      -> Typing_env_extension.t
+
+    val resolve_any_toplevel_alias
+       : t
+      -> flambda_type
+      -> flambda_type * (Simple.t option)
+ 
+    val restrict_to_symbols : t -> t
   end
 
   val join : Typing_env.t -> t -> t -> t
@@ -173,7 +191,7 @@ module type S = sig
 
   (** Create an "unknown" type with the same kind as the given type. *)
   val unknown_like : t -> t
-  
+
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
      : term_language_function_declaration

@@ -25,13 +25,13 @@ module TEE = Typing_env_extension
 
 module Make
   (E : Lattice_ops_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension)
+    with type meet_env := Meet_env.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t)
   (S : Meet_and_join_spec_intf.S
-    with module Flambda_types := Flambda_types
-    with module Join_env := Join_env
-    with module Typing_env_extension := Typing_env_extension) =
+    with type flambda_type := Flambda_types.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t) =
 struct
   let print_ty ppf ty =
     S.print_ty ~cache:(Printing_cache.create ()) ppf ty
