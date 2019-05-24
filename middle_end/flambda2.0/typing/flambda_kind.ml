@@ -31,14 +31,14 @@ type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
 type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
 
 module Naked_number_kind = struct
-  type 'k t =
-    | Naked_immediate : naked_immediate t
-    | Naked_float : naked_float t
-    | Naked_int32 : naked_int32 t
-    | Naked_int64 : naked_int64 t
-    | Naked_nativeint : naked_nativeint t
+  type t =
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
 
-  let print (type a) ppf (t : a t) =
+  let print ppf t =
     match t with
     | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
@@ -47,12 +47,12 @@ module Naked_number_kind = struct
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end
 
-type _ t = private
-  | Value : value t
-  | Naked_number : 'k Naked_number_kind.t -> 'k t
-  | Fabricated : fabricated t
+type t =
+  | Value
+  | Naked_number of Naked_number_kind.t
+  | Fabricated
 
-type 'k kind = 'k t
+type kind = t
 
 let value = Value
 let naked_immediate = Naked_number Naked_immediate
@@ -116,9 +116,6 @@ include Identifiable.Make (struct
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
 end)
-
-let compatible t ~if_used_at =
-  equal t if_used_at
 
 let is_value t =
   match t with
@@ -255,4 +252,21 @@ module Boxable_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
+end
+
+module Naked_number = struct
+  type 'k t =
+    | Naked_immediate : naked_immediate t
+    | Naked_float : naked_float t
+    | Naked_int32 : naked_int32 t
+    | Naked_int64 : naked_int64 t
+    | Naked_nativeint : naked_nativeint t
+
+  let print (type a) ppf (t : a t) =
+    match t with
+    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
+    | Naked_float -> Format.pp_print_string ppf "Naked_float"
+    | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
+    | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
+    | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end

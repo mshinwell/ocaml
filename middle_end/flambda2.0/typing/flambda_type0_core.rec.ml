@@ -160,12 +160,20 @@ let alias_type_of_as_ty_value name : ty_value = Equals name
 
 let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
 
-let alias_type (type k) (kind : k K.t) export_id : t =
+let alias_type (kind : K.t) export_id : t =
   match kind with
   | Value ->
     Value (Type export_id)
-  | Naked_number naked_number_witness ->
-    Naked_number (Type export_id, naked_number_witness)
+  | Naked_number Naked_immediate ->
+    Naked_number (Type export_id, K.Naked_number.Naked_immediate)
+  | Naked_number Naked_float ->
+    Naked_number (Type export_id, K.Naked_number.Naked_float)
+  | Naked_number Naked_int32 ->
+    Naked_number (Type export_id, K.Naked_number.Naked_int32)
+  | Naked_number Naked_int64 ->
+    Naked_number (Type export_id, K.Naked_number.Naked_int64)
+  | Naked_number Naked_nativeint ->
+    Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
   | Fabricated ->
     Fabricated (Type export_id)
 
@@ -175,12 +183,20 @@ let bottom_as_ty_value () : ty_value =
 let bottom_as_ty_fabricated () : ty_fabricated =
   No_alias Bottom
 
-let bottom (type k) (kind : k K.t) : t =
+let bottom (kind : K.t) : t =
   match kind with
   | Value ->
     Value (No_alias Bottom)
-  | Naked_number naked_number_witness ->
-    Naked_number (No_alias Bottom, naked_number_witness)
+  | Naked_number Naked_immediate ->
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
+  | Naked_number Naked_float ->
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
+  | Naked_number Naked_int32 ->
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
+  | Naked_number Naked_int64 ->
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
+  | Naked_number Naked_nativeint ->
+    Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
   | Fabricated ->
     Fabricated (No_alias Bottom)
 

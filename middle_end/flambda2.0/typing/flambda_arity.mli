@@ -19,6 +19,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* CR mshinwell: This should be made abstract. *)
+
 type t = Flambda_kind.t list
 
 val length : t -> int
@@ -26,7 +28,5 @@ val length : t -> int
 val is_all_values : t -> bool
 
 val is_all_naked_floats : t -> bool
-
-val compatible : t -> if_used_at:t -> bool
 
 include Identifiable.S with type t := t
