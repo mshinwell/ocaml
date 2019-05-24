@@ -91,9 +91,6 @@ struct
     match computation with
     | None -> env, r, None
     | Some computation ->
-      let scope_level_for_lifted_constants =
-        E.get_continuation_scope_level env
-      in
       let return_cont_arity =
         List.map (fun (_var, kind) -> kind) computation.computed_values
       in
@@ -106,7 +103,6 @@ struct
         Simplify_toplevel.simplify_toplevel env r computation.expr
           ~return_continuation:computation.return_continuation
           computation.exn_continuation
-          ~scope_level_for_lifted_constants
       in
       let env = E.add_lifted_constants_from_r env r in
       let computation : Program_body.Computation.t option =

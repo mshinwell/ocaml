@@ -30,7 +30,7 @@ val print : Format.formatter -> t -> unit
 
 val invariant : t -> unit
 
-val empty : unit -> t
+val empty : t
 
 val is_empty : t -> bool
 

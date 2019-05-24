@@ -37,7 +37,6 @@ module type Env = sig
   val create
      : round:int
     -> backend:(module Flambda2_backend_intf.S)
-    -> scope_level_for_lifted_constants:Scope.t
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -102,6 +101,8 @@ module type Env = sig
 
   val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
+  val with_typing_environment : t -> Flambda_type.Typing_env.t -> t
+
   val check_variable_is_bound : t -> Variable.t -> unit
 
   val check_symbol_is_bound : t -> Symbol.t -> unit
@@ -130,8 +131,6 @@ module type Env = sig
       result structure. *)
   val add_lifted_constants_from_r : t -> result -> t
 
-  val set_scope_level_for_lifted_constants : t -> Scope.t -> t
-
   val can_inline : t -> bool
 end
 
@@ -155,11 +154,11 @@ module type Result = sig
 
   (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
-  val continuation_arg_types
+  val continuation_env_and_arg_types
      : t
     -> env
     -> Continuation.t
-    -> Flambda_type.t list
+    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 
   val new_lifted_constant
      : t

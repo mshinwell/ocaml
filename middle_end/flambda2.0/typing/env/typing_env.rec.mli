@@ -26,6 +26,8 @@ val create : resolver:(Export_id.t -> Flambda_types.t option) -> t
 
 val create_using_resolver_from : t -> t
 
+val create_using_resolver_and_symbol_bindings_from : t -> t
+
 val resolver : t -> (Export_id.t -> Flambda_types.t option)
 
 val is_empty : t -> bool
@@ -83,5 +85,3 @@ val resolve_any_toplevel_alias
    : t
   -> Flambda_types.t
   -> Flambda_types.t * (Simple.t option)
-
-val restrict_to_symbols : t -> t
