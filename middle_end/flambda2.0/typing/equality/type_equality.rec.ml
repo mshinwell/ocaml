@@ -20,24 +20,24 @@ module Float = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
+(* CR mshinwell: Remind ourselves why [bound_name] is needed *)
+
 let equal_or_alias ?bound_name equal_unknown_or_join env
       ~force_to_kind ~print_ty
       (or_alias1 : _ Flambda_types.or_alias)
       (or_alias2 : _ Flambda_types.or_alias) =
   let unknown_or_join1, canonical_simple1 =
-    Typing_env.resolve_any_toplevel_alias_on_ty
+    Typing_env.resolve_any_toplevel_alias_on_ty0
       (Type_equality_env.typing_env_left env)
       ~force_to_kind
       ~print_ty
-      ?bound_name
       or_alias1
   in
   let unknown_or_join2, canonical_simple2 =
-    Typing_env.resolve_any_toplevel_alias_on_ty
+    Typing_env.resolve_any_toplevel_alias_on_ty0
       (Type_equality_env.typing_env_right env)
       ~force_to_kind
       ~print_ty
-      ?bound_name
       or_alias2
   in
   let all_aliases1 =
@@ -72,15 +72,10 @@ let equal_or_alias ?bound_name equal_unknown_or_join env
 let equal_unknown_or_join equal_of_kind_foo env
       (uj1 : _ Flambda_types.unknown_or_join)
       (uj2 : _ Flambda_types.unknown_or_join) =
-  match uj1, uj2 with
-  | Unknown, Unknown
-  | Bottom, Bottom -> true
-  | Ok of_kind_foo1, Ok of_kind_foo2 ->
-    equal_of_kind_foo env of_kind_foo1 of_kind_foo2
-  | (Unknown | Bottom | Ok _), _ -> false
+  Or_unknown_or_bottom.equal (equal_of_kind_foo env) uj1 uj2
 
 let equal_ty ?bound_name equal_of_kind_foo env ~force_to_kind
-      ~print_ty ty1 ty2 =
+      ~print_ty (ty1 : _ Flambda_types.ty) (ty2 : _ Flambda_types.ty) =
   equal_or_alias ?bound_name (equal_unknown_or_join equal_of_kind_foo)
     env ~force_to_kind ~print_ty ty1 ty2
 
@@ -140,7 +135,6 @@ and equal_ty_naked_number
    : type a.
      ?bound_name:Name.t
   -> Type_equality_env.t
-  -> bool
   -> force_to_kind:(Flambda_types.t -> a Flambda_types.ty_naked_number)
   -> print_ty:(Format.formatter -> a Flambda_types.ty_naked_number -> unit)
   -> a Flambda_types.ty_naked_number
@@ -196,8 +190,7 @@ and equal_of_kind_value env
     Closures_entry_by_closure_id.equal env
       by_closure_id1 by_closure_id2
   | String string_set1, String string_set2 ->
-    if String_info.Set.equal string_set1 string_set2 then result
-    else false
+    String_info.Set.equal string_set1 string_set2
   | (Blocks_and_tagged_immediates _ | Boxed_number _
       | Closures _ | String _), _ ->
     false
@@ -207,21 +200,17 @@ and equal_blocks_and_tagged_immediates env
         : Flambda_types.blocks_and_tagged_immediates)
       ({ immediates = immediates2; blocks = blocks2; }
         : Flambda_types.blocks_and_tagged_immediates) =
-  Immediates.equal env immediates1 immediates2
-    && Blocks.equal env blocks1 blocks2
+  Or_unknown.equal (Immediates.equal env) immediates1 immediates2
+    && Or_unknown.equal (Blocks.equal env) blocks1 blocks2
 
 and equal_function_declaration _env
       (decl1 : Flambda_types.function_declaration)
       (decl2 : Flambda_types.function_declaration) =
   match decl1, decl2 with
   | Inlinable decl1, Inlinable decl2 ->
-    (* CR mshinwell: Add assertions like in the meet/join code? *)
-    let code_id1 =
-      Term_language_function_declaration.code_id decl1.function_decl
-    in
-    let code_id2 =
-      Term_language_function_declaration.code_id decl2.function_decl
-    in
+    let module TFD = Term_language_function_declaration in
+    let code_id1 = TFD.code_id decl1.function_decl in
+    let code_id2 = TFD.code_id decl2.function_decl in
     Code_id.equal code_id1 code_id2
   | Non_inlinable, Non_inlinable -> true
   | Inlinable _, Non_inlinable
@@ -233,7 +222,7 @@ and equal_of_kind_naked_number
   -> (a Flambda_types.of_kind_naked_number)
   -> (b Flambda_types.of_kind_naked_number)
   -> bool =
-fun _env (of_kind_naked_number1, _) (of_kind_naked_number2, _) ->
+fun _env of_kind_naked_number1 of_kind_naked_number2 ->
   match of_kind_naked_number1, of_kind_naked_number2 with
   | Immediate imms1, Immediate imms2 -> Immediate.Set.equal imms1 imms2
   | Float floats1, Float floats2 -> Float.Set.equal floats1 floats2
@@ -283,5 +272,5 @@ and equal_set_of_closures_entry env
 
 let equal ~(bound_name : Name.t option)
       typing_env_left typing_env_right t1 t2 =
-  let env = Type_equality_env.empty ~typing_env_left ~typing_env_right in
+  let env = Type_equality_env.create ~typing_env_left ~typing_env_right in
   equal_with_env ?bound_name env t1 t2
