@@ -37,8 +37,5 @@ and Simplify_toplevel : Simplify_toplevel_intf.S =
   Outer_namespace.Simplify_toplevel.Make (Simplify_expr)
 
 let run ~backend ~round program =
-  let env =
-    E.create ~round ~backend
-      ~scope_level_for_lifted_constants:Scope.initial
-  in
+  let env = E.create ~round ~backend in
   Simplify_program.simplify_program env program

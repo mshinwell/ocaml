@@ -37,14 +37,13 @@ end = struct
     exn_continuations : Scope.t Exn_continuation.Map.t;
     continuation_aliases : Continuation.t Continuation.Map.t;
     continuation_scope_level : Scope.t;
-    scope_level_for_lifted_constants : Scope.t;
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
   }
 
   let invariant _t = ()
 
-  let create ~round ~backend ~scope_level_for_lifted_constants =
+  let create ~round ~backend =
     (* CR mshinwell: [resolver] should come from [backend] *)
     let resolver _export_id = None in
     { backend;
@@ -54,7 +53,6 @@ end = struct
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
       continuation_scope_level = Scope.initial;
-      scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
       can_inline = false;
     }
@@ -69,8 +67,7 @@ end = struct
 
   let print ppf { backend = _; round; typing_env; continuations;
                   exn_continuations; continuation_aliases;
-                  continuation_scope_level; scope_level_for_lifted_constants;
-                  inlined_debuginfo; can_inline;
+                  continuation_scope_level; inlined_debuginfo; can_inline;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -79,7 +76,6 @@ end = struct
         @[<hov 1>(exn_continuations@ %a)@]@ \
         @[<hov 1>(continuation_scope_level@ %a)@]@ \
         @[<hov 1>(continuation_aliases@ %a)@]@ \
-        @[<hov 1>(scope_level_for_lifted_constants@ %a)@]@ \
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]\
         )@]"
@@ -90,7 +86,6 @@ end = struct
       (Exn_continuation.Map.print Scope.print) exn_continuations
       (Continuation.Map.print Continuation.print) continuation_aliases
       Scope.print continuation_scope_level
-      Scope.print scope_level_for_lifted_constants
       Debuginfo.print inlined_debuginfo
       can_inline
 
@@ -101,41 +96,44 @@ end = struct
   let get_continuation_scope_level t = t.continuation_scope_level
   let can_inline t = t.can_inline
 
+  (* CR mshinwell: remove "_level" *)
   let increment_continuation_scope_level t =
+    let continuation_scope_level = Scope.next t.continuation_scope_level in
+    let typing_env =
+      TE.increment_scope_level_to t.typing_env continuation_scope_level
+    in
     { t with
+      typing_env;
       continuation_scope_level = Scope.next t.continuation_scope_level;
     }
 
   let enter_closure { backend; round; typing_env; continuations = _;
                       exn_continuations = _; continuation_scope_level = _;
-                      continuation_aliases = _;
-                      scope_level_for_lifted_constants; inlined_debuginfo = _;
+                      continuation_aliases = _; inlined_debuginfo = _;
                       can_inline;
                     } =
     { backend;
       round;
-      typing_env = TE.restrict_to_symbols typing_env;
+      typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
       continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
       continuation_scope_level = Scope.initial;
-      scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
     }
 
   let add_variable t var ty =
     let typing_env =
-      TE.add_definition t.typing_env (Name.var var)
-        t.continuation_scope_level ty
+      let var = Name.var var in
+      TE.add_equation
+        (TE.add_definition t.typing_env var (T.kind ty))
+        var ty
     in
     { t with typing_env; }
 
   let add_equation_on_variable t var ty =
-    let typing_env =
-      TE.add_equation t.typing_env (Name.var var)
-        t.continuation_scope_level ty
-    in
+    let typing_env = TE.add_equation t.typing_env (Name.var var) ty in
     { t with typing_env; }
 
   let find_name t name =
@@ -150,8 +148,10 @@ end = struct
 
   let add_symbol t sym ty =
     let typing_env =
-      TE.add_definition t.typing_env (Name.symbol sym)
-        t.scope_level_for_lifted_constants ty
+      let sym = Name.symbol sym in
+      TE.add_equation
+        (TE.add_definition t.typing_env sym (T.kind ty))
+        sym ty
     in
     { t with typing_env; }
 
@@ -256,6 +256,11 @@ end = struct
       typing_env;
     }
 
+  let with_typing_environment t typing_env =
+    { t with
+      typing_env;
+    }
+
   let check_variable_is_bound t var =
     if not (TE.mem t.typing_env (Name.var var)) then begin
       Misc.fatal_errorf "Unbound variable %a in environment:@ %a"
@@ -310,11 +315,6 @@ end = struct
   (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
   let add_lifted_constants_from_r t r =
     add_lifted_constants t (Result.get_lifted_constants r)
-
-  let set_scope_level_for_lifted_constants t scope_level =
-    { t with
-      scope_level_for_lifted_constants = scope_level;
-    }
 end and Result : sig
   include Simplify_env_and_result_intf.Result
     with type env := Env.t
@@ -365,12 +365,12 @@ end = struct
         continuations = Continuation.Map.add cont uses t.continuations;
       }
 
-  let continuation_arg_types t env cont =
+  let continuation_env_and_arg_types t env cont =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
       Misc.fatal_errorf "Continuation %a not present in [r]"
         Continuation.print cont
-    | uses -> Continuation_uses.arg_types uses (Env.typing_env env)
+    | uses -> Continuation_uses.env_and_arg_types uses (Env.typing_env env)
 
   let imported_symbols t = t.imported_symbols
 
