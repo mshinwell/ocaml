@@ -26,3 +26,10 @@ let print f ppf t =
   | Unknown -> Format.pp_print_string ppf "Unknown"
   | Ok contents -> Format.fprintf ppf "@[(Ok %a)@]" f contents
   | Bottom -> Format.pp_print_string ppf "Bottom"
+
+let equal eq_contents t1 t2 =
+  match t1, t2 with
+  | Unknown, Unknown -> true
+  | Ok contents1, Ok contents2 -> eq_contents contents1 contents2
+  | Bottom, Bottom -> true
+  | (Unknown | Ok _ | Bottom), _ -> false

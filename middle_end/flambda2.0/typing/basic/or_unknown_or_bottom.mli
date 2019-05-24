@@ -26,3 +26,5 @@ val print
   -> Format.formatter
   -> 'a t
   -> unit
+
+val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
