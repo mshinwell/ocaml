@@ -431,18 +431,17 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
 
 let create_using_resolver_and_symbol_bindings_from t =
   let names_to_types =
-    Name.Map.filter_map (fun (name : Name.t) typ ->
-        match name with
-        | Var _ -> None
-        | Symbol sym ->
-          let typ =
-            Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
-          in
-          Some typ)
-      (names_to_types t)
+    Name.Map.filter_map (names_to_types t) ~f:(fun (name : Name.t) typ ->
+      match name with
+      | Var _ -> None
+      | Symbol sym ->
+        let typ =
+          Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
+        in
+        Some typ)
   in
   Name.Map.fold (fun name typ t ->
-      let t = add_definition t name (T.kind typ) in
+      let t = add_definition t name (Flambda_type0_core.kind typ) in
       add_equation t name typ)
     names_to_types
     (create_using_resolver_from t)

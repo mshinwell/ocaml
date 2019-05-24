@@ -82,7 +82,7 @@ module type S = sig
   val switch_no_bottom
      : (meet_env -> 'a -> 'a -> 'a * typing_env_extension)
     -> (typing_env -> 'a -> 'a -> 'a)
-    -> typing_env
+    -> meet_env
     -> 'a
     -> 'a
     -> 'a * typing_env_extension
@@ -90,7 +90,7 @@ module type S = sig
   val switch
      : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
     -> (typing_env -> 'a -> 'a -> 'a)
-    -> typing_env
+    -> meet_env
     -> 'a
     -> 'a
     -> ('a * typing_env_extension) Or_bottom.t
@@ -98,7 +98,7 @@ module type S = sig
   val switch'
      : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
     -> (typing_env -> 'a -> 'a -> 'a)
-    -> typing_env
+    -> meet_env
     -> 'a
     -> 'a
     -> 'a Or_bottom.t
