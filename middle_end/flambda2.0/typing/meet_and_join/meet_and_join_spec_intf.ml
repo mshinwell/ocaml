@@ -22,7 +22,6 @@
 module type S = sig
   type flambda_type
   type 'a ty
-  type 'a of_kind_naked_number
   type meet_env
   type typing_env_extension
   type of_kind_foo

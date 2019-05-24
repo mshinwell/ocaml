@@ -26,8 +26,7 @@ let force_to_kind_value t =
     Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
       Type_printers.print t
 
-let force_to_kind_naked_immediate (t : t)
-      : Immediate.Set.t ty_naked_number =
+let force_to_kind_naked_immediate (t : t) : K.naked_immediate ty_naked_number =
   match t with
   | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
     ty_naked_number
@@ -38,8 +37,7 @@ let force_to_kind_naked_immediate (t : t)
       "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
       Type_printers.print t
 
-let force_to_kind_naked_float (t : t)
-      : Float.Set.t ty_naked_number =
+let force_to_kind_naked_float (t : t) : K.naked_float ty_naked_number =
   match t with
   | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
     ty_naked_number
@@ -50,7 +48,7 @@ let force_to_kind_naked_float (t : t)
       "Type has wrong kind (expected [Naked_number Float]):@ %a"
       Type_printers.print t
 
-let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
+let force_to_kind_naked_int32 (t : t) : K.naked_int32 ty_naked_number =
   match t with
   | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
     ty_naked_number
@@ -61,7 +59,7 @@ let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
       "Type has wrong kind (expected [Naked_number Int32]):@ %a"
       Type_printers.print t
 
-let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
+let force_to_kind_naked_int64 (t : t) : K.naked_int64 ty_naked_number =
   match t with
   | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
     ty_naked_number
@@ -72,8 +70,7 @@ let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
       "Type has wrong kind (expected [Naked_number Int64]):@ %a"
       Type_printers.print t
 
-let force_to_kind_naked_nativeint (t : t)
-      : Targetint.Set.t ty_naked_number =
+let force_to_kind_naked_nativeint (t : t) : K.naked_nativeint ty_naked_number =
   match t with
   | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
     ty_naked_number
@@ -163,20 +160,12 @@ let alias_type_of_as_ty_value name : ty_value = Equals name
 
 let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
 
-let alias_type (kind : K.t) export_id : t =
+let alias_type (type k) (kind : k K.t) export_id : t =
   match kind with
   | Value ->
     Value (Type export_id)
-  | Naked_number Naked_immediate ->
-    Naked_number (Type export_id, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (Type export_id, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (Type export_id, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (Type export_id, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
+  | Naked_number naked_number_witness ->
+    Naked_number (Type export_id, naked_number_witness)
   | Fabricated ->
     Fabricated (Type export_id)
 
@@ -186,20 +175,12 @@ let bottom_as_ty_value () : ty_value =
 let bottom_as_ty_fabricated () : ty_fabricated =
   No_alias Bottom
 
-let bottom (kind : K.t) : t =
+let bottom (type k) (kind : k K.t) : t =
   match kind with
   | Value ->
     Value (No_alias Bottom)
-  | Naked_number Naked_immediate ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
+  | Naked_number naked_number_witness ->
+    Naked_number (No_alias Bottom, naked_number_witness)
   | Fabricated ->
     Fabricated (No_alias Bottom)
 

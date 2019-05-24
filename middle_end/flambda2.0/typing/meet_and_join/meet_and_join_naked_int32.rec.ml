@@ -16,27 +16,29 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module TEE = Typing_env_extension
+
 module Make
   (E : Lattice_ops_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module Typing_env_extension := Typing_env_extension) =
+    with type meet_env := Meet_env.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t) =
 struct
   type of_kind_foo = Int32.Set.t Flambda_types.of_kind_naked_number
 
-  let kind () = K.naked_int32 ()
+  let kind = K.naked_int32
   let to_type ty : Flambda_types.t = Naked_number (ty, Naked_int32)
   let force_to_kind = Flambda_type0_core.force_to_kind_naked_int32
   let print_ty = Type_printers.print_ty_naked_int32_with_cache
 
   let meet_or_join_of_kind_foo _meet_or_join_env
-        (of_kind1 : Int32.Set.t Flambda_types.of_kind_naked_number)
-        (of_kind2 : Int32.Set.t Flambda_types.of_kind_naked_number)
-        : (Int32.Set.t Flambda_types.of_kind_naked_number
-            * Typing_env_extension.t) Or_bottom.t =
+        (of_kind1 : (K.naked_int32, _) Flambda_types.of_kind_naked_number)
+        (of_kind2 : (K.naked_int32, _) Flambda_types.of_kind_naked_number)
+        : ((K.naked_int32, _) Flambda_types.of_kind_naked_number * TEE.t)
+            Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
     | Int32 fs1, Int32 fs2 ->
       let fs = E.Int32.Set.union_or_inter fs1 fs2 in
       if Int32.Set.is_empty fs then Bottom
-      else Ok (Int32 fs, Typing_env_extension.empty)
+      else Ok (Int32 fs, TEE.empty)
 end
