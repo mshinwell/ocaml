@@ -25,3 +25,4 @@ include Meet_and_join_naked_number_intf.S
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
   with module Naked_number := Immediate
+  with type naked_number_kind := Flambda_kind.naked_immediate
