@@ -18,18 +18,30 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
-  type t = T.t list
+  type t = {
+    env_extension : TEE.t;
+    arg_types : T.t list;
+  }
 
-  let create typs = typs
+  let create env_extension ~arg_types =
+    { env_extension;
+      arg_types;
+    }
 
-  let print ppf t =
-    Format.fprintf ppf "@[<hov 1>(%a)@]"
+  let print ppf { env_extension; arg_types; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(env_extension@ %a)@]@ \
+        @[<hov 1>(arg_types@ %a)@]@ \
+        )@]"
+      TEE.print env_extension
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Flambda_type.print)
-      t
+      arg_types
 
-  let arg_types t = t
+  let env_extension t = t.env_extension
+  let arg_types t = t.arg_types
 end
 
 type t = {
@@ -71,15 +83,23 @@ let add_use t typing_env ~arg_types =
     uses = use :: t.uses;
   }
 
-let arg_types t typing_env =
+let env_and_arg_types t env =
   match t.uses with
-  | [] -> List.map (fun kind -> T.unknown kind) t.arity
-  | [use] -> Use.arg_types use
+  | [] -> env, List.map (fun kind -> T.unknown kind) t.arity
+  | [use] ->
+    let env_extension = Use.env_extension use in
+    let arg_types = Use.arg_types use in
+    let env = TE.add_env_extension env env_extension in
+    env, arg_types
   | use::uses ->
-    List.fold_left (fun arg_types use ->
-        let arg_types' = Use.arg_types use in
-        List.map2 (fun arg_type arg_type' ->
-            T.join typing_env arg_type arg_type')
-          arg_types arg_types')
-      (Use.arg_types use)
+    List.fold_left (fun (env, arg_types) use ->
+        let arg_types =
+          List.map2 (fun arg_type arg_type' ->
+              (* CR mshinwell: Which environment should be used here? *)
+              T.join env arg_type arg_type')
+            arg_types (Use.arg_types use)
+        in
+        let env = TE.add_env_extension env (Use.env_extension use) in
+        env, arg_types)
+      (TE.add_env_extension env (Use.env_extension use), Use.arg_types use)
       uses

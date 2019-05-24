@@ -57,8 +57,13 @@ module Make (Simplify_named : Simplify_named_intf.S) = struct
     in
     Continuation_params_and_handler.pattern_match params_and_handler
       ~f:(fun params ~handler ->
-        let arg_types = R.continuation_arg_types r env cont in
-        let env = E.add_parameters env params ~arg_types in
+        let typing_env, arg_types =
+          R.continuation_env_and_arg_types r env cont
+        in
+        let env =
+          E.add_parameters (E.with_typing_environment env typing_env)
+            params ~arg_types
+        in
         let handler, r = simplify_expr env r handler in
         let params_and_handler =
           Continuation_params_and_handler.create params ~handler
