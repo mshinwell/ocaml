@@ -32,3 +32,5 @@ val add_alias : t -> Simple.t -> Simple.t -> t
 val get_canonical_name : t -> Name.t -> Name.t
 
 val aliases_of_simple : t -> Simple.t -> Name.Set.t
+
+val canonical_names : t -> Name.Set.t
