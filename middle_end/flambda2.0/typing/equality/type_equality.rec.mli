@@ -16,13 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val fast_equal
-   : Typing_env.t
-  -> Typing_env.t
-  -> Flambda_types.t
-  -> Flambda_types.t
-  -> bool
-
 val equal
    : bound_name:Name.t option
   -> Typing_env.t
