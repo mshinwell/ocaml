@@ -46,20 +46,18 @@ struct
 
   let meet_or_join_of_kind_foo env
         (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =
-    let or_bottom =
-      match of_kind1, of_kind2 with
-      | Discriminants discrs1, Discriminants discrs2 ->
-        Or_bottom.map
-          (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
-          ~f:(fun (discrs, env_extension) ->
-            Discriminants discrs, env_extension)
-      | Set_of_closures { closures = closures1; },
-          Set_of_closures { closures = closures2; } ->
-        Or_bottom.map
-          (E.switch Closure_ids.meet Closure_ids.join env closures1 closures2)
-          ~f:(fun (closures, env_extension) ->
-            Set_of_closures { closures; }, env_extension)
-      | (Discriminants _ | Set_of_closures _), _ -> Absorbing
-    in
-    Or_absorbing_or_bottom.of_or_bottom or_bottom
+    match of_kind1, of_kind2 with
+    | Discriminants discrs1, Discriminants discrs2 ->
+      Or_bottom_or_absorbing.of_or_bottom
+        (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
+        ~f:(fun (discrs, env_extension) : (T.of_kind_fabricated * _) ->
+          Discriminants discrs, env_extension)
+    | Set_of_closures { closures = closures1; },
+        Set_of_closures { closures = closures2; } ->
+      Or_bottom_or_absorbing.of_or_bottom
+        (E.switch Closure_ids.meet Closure_ids.join env closures1 closures2)
+        ~f:(fun (closures, env_extension) : (T.of_kind_fabricated * _) ->
+          Set_of_closures { closures; }, env_extension)
+    | (Discriminants _ | Set_of_closures _), _ ->
+      Or_bottom_or_absorbing.Absorbing
 end
