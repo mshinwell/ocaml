@@ -23,11 +23,11 @@ module type S = sig
   type flambda_type
   type 'a ty
   type 'a of_kind_naked_number
-  type typing_env
+  type meet_env
   type typing_env_extension
   type of_kind_foo
 
-  val kind : unit -> Flambda_kind.t
+  val kind : Flambda_kind.t
 
   val to_type : of_kind_foo ty -> flambda_type
 
@@ -41,7 +41,7 @@ module type S = sig
     -> unit
 
   val meet_or_join_of_kind_foo
-     : typing_env
+     : meet_env
     -> of_kind_foo
     -> of_kind_foo
     -> (of_kind_foo * typing_env_extension) Or_bottom_or_absorbing.t
