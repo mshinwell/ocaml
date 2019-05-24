@@ -30,11 +30,11 @@ val resolver : t -> (Export_id.t -> Flambda_types.t option)
 
 val is_empty : t -> bool
 
-val current_level : t -> Scope_level.t
+val current_level : t -> Scope.t
 
 val increment_scope_level : t -> t
 
-val increment_scope_level_to : t -> Scope_level.t -> t
+val increment_scope_level_to : t -> Scope.t -> t
 
 val domain : t -> Name_occurrences.t
 
@@ -62,7 +62,7 @@ val aliases_of_simple : t -> Simple.t -> Name.Set.t
 
 val cut
    : t
-  -> unknown_if_defined_at_or_later_than:Scope_level.t
+  -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t
 
 val resolve_any_toplevel_alias_on_ty0

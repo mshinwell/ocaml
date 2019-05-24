@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,23 +14,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Union-find-like structure for keeping track of equivalence classes of
-    names related by [Equals] types. *)
+include Numbers.Int
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+let for_symbols = 0
 
-type t
+let initial = for_symbols + 1
 
-val print : Format.formatter -> t -> unit
+let next t =
+  t + 1
 
-val invariant : t -> unit
+let prev t =
+  if t <= initial then begin
+    Misc.fatal_error "Cannot decrement continuation level past the \
+      initial level"
+  end;
+  t - 1
 
-val empty : t
+let (<=) (t1 : t) t2 = t1 <= t2
+let (<) (t1 : t) t2 = t1 < t2
+let (>) (t1 : t) t2 = t1 > t2
+let (>=) (t1 : t) t2 = t1 >= t2
 
-val add : t -> Simple.t -> Simple.t -> t
+let to_int t = t
 
-val get_canonical_name : t -> Name.t -> Name.t
-
-val aliases_of_simple : t -> Simple.t -> Name.Set.t
-
-val canonical_names : t -> Name.Set.t
+let max t1 t2 = max t1 t2
