@@ -14,18 +14,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Modules that are used for specialising generic meet-and-join operations
-    to either meet or join.  The content of these modules typically corresponds
-    to intersections for meets and unions for joins. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module For_meet : Lattice_ops_intf.S
-  with type typing_env := Typing_env.t
-  with type meet_env := Meet_env.t
-  with type typing_env_extension := Typing_env_extension.t
-
-module For_join : Lattice_ops_intf.S
-  with type typing_env := Typing_env.t
-  with type meet_env := Meet_env.t
-  with type typing_env_extension := Typing_env_extension.t
+type t = Meet | Join

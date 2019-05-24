@@ -18,8 +18,8 @@
 
 module TEE = Typing_env_extension
 
-module Meet = Meet_and_join.Make (Lattice_ops.For_meet)
-module Join = Meet_and_join.Make (Lattice_ops.For_join)
+module Meet = Meet_or_join.Make (Lattice_ops.For_meet)
+module Join = Meet_or_join.Make (Lattice_ops.For_join)
 
 let meet env t1 t2 = Meet.meet_or_join env t1 t2
 
