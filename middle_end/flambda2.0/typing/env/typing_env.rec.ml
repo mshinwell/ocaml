@@ -195,9 +195,11 @@ let increment_scope_level t =
 let fast_equal t1 t2 =
   t1 == t2
 
+let domain0 t =
+  Cached.domain (One_level.just_after_level t.current_level)
+
 let domain t =
-  Name_occurrences.create_from_set_in_terms
-    (Cached.domain (One_level.just_after_level t.current_level))
+  Name_occurrences.create_from_set_in_terms (domain0 t)
 
 let find t name =
   match Name.Map.find name (names_to_types t) with
@@ -296,45 +298,41 @@ let rec add_env_extension starting_t level : t =
     (Typing_env_level.equations level)
     starting_t
 
-let cut t ~unknown_if_defined_at_or_later_than:min_level =
-  if Scope.(>) min_level (current_level t) then
+let cut t ~unknown_if_defined_at_or_later_than:min_scope =
+  let current_scope = current_scope t in
+  if Scope.(>) min_scope current_scope then
     Typing_env_level.empty
   else
     let all_levels =
-      Scope.Map.add (current_level t) (current_level_data t)
-        t.prev_levels
+      Scope.Map.add current_scope t.current_level t.prev_levels
     in
-    let strictly_less, at_min_level, strictly_greater =
-      Scope.Map.split min_level all_levels
+    let strictly_less, at_min_scope, strictly_greater =
+      Scope.Map.split min_scope all_levels
     in
     let at_or_after_cut =
-      match at_min_level with
+      match at_min_scope with
       | None -> strictly_greater
       | Some typing_env_level ->
-        Scope.Map.add min_level typing_env_level strictly_greater
+        Scope.Map.add min_scope typing_env_level strictly_greater
     in
     let t =
       if Scope.Map.is_empty strictly_less then
         create ~resolver:t.resolver
       else
-        let current_level, current_level_data =
+        let current_scope, current_level =
           Scope.Map.max_binding strictly_less
         in
         let prev_levels =
-          Scope.Map.remove current_level strictly_less
+          Scope.Map.remove current_scope strictly_less
         in
         { resolver = t.resolver;
           prev_levels;
-          current_level = (current_level, current_level_data);
+          current_level;
         }
     in
     invariant t;
     let meet_env = Meet_env.create t in
-    let vars_in_scope_at_cut =
-      match Scope.Map.max_binding_opt strictly_less with
-      | None -> Name.Set.empty
-      | Some level -> Name.set_to_var_set (One_level.defined_names level)
-    in
+    let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     Scope.Map.fold (fun _scope level result ->
         let level =
           (* Since environment extensions are not allowed to define names at

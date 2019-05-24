@@ -49,6 +49,7 @@ let static_exn_env = ref Numbers.Int.Map.empty
 let try_stack = ref []
 let try_stack_at_handler = ref Continuation.Map.empty
 let recursive_static_catches = ref Numbers.Int.Set.empty
+let seen_let_mutable = ref false
 
 let _print_stack ppf stack =
   Format.fprintf ppf "%a"
@@ -166,6 +167,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
   | Lfunction func ->
     name_then_cps_non_tail (name_for_function func) lam k k_exn
   | Llet (Variable, value_kind, id, defining_expr, body) ->
+    seen_let_mutable := true;
     let temp_id = Ident.create_local "let_mutable" in
     let body = cps_non_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -403,6 +405,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
         I.Apply apply) k_exn) k_exn
   | Lfunction func -> name_then_cps_tail (name_for_function func) lam k k_exn
   | Llet (Variable, value_kind, id, defining_expr, body) ->
+    seen_let_mutable := true;
     let temp_id = Ident.create_local "let_mutable" in
     let body = cps_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -677,6 +680,7 @@ let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
   try_stack := [];
   try_stack_at_handler := Continuation.Map.empty;
   recursive_static_catches := recursive_static_catches';
+  seen_let_mutable := false;
   let the_end = Continuation.create () in
   let the_end_exn = Continuation.create () in
   let ilam = cps_tail lam the_end the_end_exn in
@@ -688,4 +692,5 @@ let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
   { expr = ilam;
     return_continuation = the_end;
     exn_continuation;
+    uses_mutable_variables = !seen_let_mutable;
   }
