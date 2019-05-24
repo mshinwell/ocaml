@@ -202,6 +202,8 @@ val bottom_like : Flambda_types.t -> Flambda_types.t
 
 val unknown_like : Flambda_types.t -> Flambda_types.t
 
+val type_for_const : Simple.Const.t -> Flambda_types.t
+
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t
   -> Flambda_types.function_declaration

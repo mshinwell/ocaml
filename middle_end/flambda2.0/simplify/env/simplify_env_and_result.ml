@@ -27,17 +27,17 @@ module rec Env : sig
   include Simplify_env_and_result_intf.Env
     with type result := Result.t
 
-  val continuation_scope_level : t -> Continuation.t -> Scope_level.t
+  val continuation_scope_level : t -> Continuation.t -> Scope.t
 end = struct
   type t = {
     backend : (module Flambda2_backend_intf.S);
     round : int;
     typing_env : TE.t;
-    continuations : (Scope_level.t * Continuation_in_env.t) Continuation.Map.t;
-    exn_continuations : Scope_level.t Exn_continuation.Map.t;
+    continuations : (Scope.t * Continuation_in_env.t) Continuation.Map.t;
+    exn_continuations : Scope.t Exn_continuation.Map.t;
     continuation_aliases : Continuation.t Continuation.Map.t;
-    continuation_scope_level : Scope_level.t;
-    scope_level_for_lifted_constants : Scope_level.t;
+    continuation_scope_level : Scope.t;
+    scope_level_for_lifted_constants : Scope.t;
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
   }
@@ -53,7 +53,7 @@ end = struct
       continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
-      continuation_scope_level = Scope_level.initial;
+      continuation_scope_level = Scope.initial;
       scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
       can_inline = false;
@@ -64,7 +64,7 @@ end = struct
         @[<hov 1>(scope_level %a)@]@ \
         @[<hov 1>(cont_in_env %a)@]\
         )@]"
-      Scope_level.print scope_level
+      Scope.print scope_level
       Continuation_in_env.print cont_in_env
 
   let print ppf { backend = _; round; typing_env; continuations;
@@ -87,10 +87,10 @@ end = struct
       TE.print typing_env
       (Continuation.Map.print print_scope_level_and_continuation_in_env)
       continuations
-      (Exn_continuation.Map.print Scope_level.print) exn_continuations
+      (Exn_continuation.Map.print Scope.print) exn_continuations
       (Continuation.Map.print Continuation.print) continuation_aliases
-      Scope_level.print continuation_scope_level
-      Scope_level.print scope_level_for_lifted_constants
+      Scope.print continuation_scope_level
+      Scope.print scope_level_for_lifted_constants
       Debuginfo.print inlined_debuginfo
       can_inline
 
@@ -103,7 +103,7 @@ end = struct
 
   let increment_continuation_scope_level t =
     { t with
-      continuation_scope_level = Scope_level.next t.continuation_scope_level;
+      continuation_scope_level = Scope.next t.continuation_scope_level;
     }
 
   let enter_closure { backend; round; typing_env; continuations = _;
@@ -118,7 +118,7 @@ end = struct
       continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
-      continuation_scope_level = Scope_level.initial;
+      continuation_scope_level = Scope.initial;
       scope_level_for_lifted_constants;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
