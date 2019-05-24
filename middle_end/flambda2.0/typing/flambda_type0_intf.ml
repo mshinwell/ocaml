@@ -57,7 +57,7 @@ module type S = sig
 
     val invariant : t -> unit
 
-    val empty : unit -> t
+    val empty : t
 
     val is_empty : t -> bool
 
@@ -88,11 +88,15 @@ module type S = sig
 
     val create_using_resolver_from : t -> t
 
+    val create_using_resolver_and_symbol_bindings_from : t -> t
+
     val resolver : t -> (Export_id.t -> flambda_type option)
 
     val is_empty : t -> bool
 
     val current_level : t -> Scope.t
+
+    val increment_scope_level_to : t -> Scope.t -> t
 
     val domain : t -> Name_occurrences.t
 

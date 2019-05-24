@@ -56,7 +56,6 @@ module Make (Simplify_toplevel : Simplify_toplevel_intf.S) = struct
             Simplify_toplevel.simplify_toplevel env r body
               ~return_continuation
               exn_continuation
-              ~scope_level_for_lifted_constants:Scope.initial (* XXX *)
           in
           let function_decl =
             Function_params_and_body.create ~return_continuation

@@ -162,14 +162,6 @@ let invariant_should_fail t =
   invariant ~force:() t;
   Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
 
-let create ~resolver =
-  { resolver;
-    prev_levels = Scope.Map.empty;
-    current_level = One_level.create_empty Scope.initial;
-  }
-
-let create_using_resolver_from t = create ~resolver:t.resolver
-
 let resolver t = t.resolver
 
 let current_scope t = One_level.scope t.current_level
@@ -179,6 +171,14 @@ let names_to_types t =
 
 let aliases t =
   Cached.aliases (One_level.just_after_level t.current_level)
+
+let create ~resolver =
+  { resolver;
+    prev_levels = Scope.Map.empty;
+    current_level = One_level.create_empty Scope.initial;
+  }
+
+let create_using_resolver_from t = create ~resolver:t.resolver
 
 let increment_scope_level_to t scope =
   let current_scope = current_scope t in
@@ -429,4 +429,20 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
     in
     Fabricated ty_fabricated, canonical_simple
 
-let restrict_to_symbols t =
+let create_using_resolver_and_symbol_bindings_from t =
+  let names_to_types =
+    Name.Map.filter_map (fun (name : Name.t) typ ->
+        match name with
+        | Var _ -> None
+        | Symbol sym ->
+          let typ =
+            Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
+          in
+          Some typ)
+      (names_to_types t)
+  in
+  Name.Map.fold (fun name typ t ->
+      let t = add_definition t name (T.kind typ) in
+      add_equation t name typ)
+    names_to_types
+    (create_using_resolver_from t)

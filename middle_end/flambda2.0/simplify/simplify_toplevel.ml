@@ -27,14 +27,9 @@ module Make (Simplify_expr : Simplify_expr_intf.S) = struct
        Flambda terms.
   *)
   let simplify_toplevel env r_outer expr ~return_continuation
-       exn_continuation ~scope_level_for_lifted_constants =
+       exn_continuation =
     E.check_continuation_is_bound env return_continuation;
     E.check_exn_continuation_is_bound env exn_continuation;
-    (* CR mshinwell: Clear [env] here? *)
-    let env =
-      E.set_scope_level_for_lifted_constants env
-        scope_level_for_lifted_constants
-    in
     let r = R.create ~resolver:(E.resolver env) in
     let expr, r = Simplify_expr.simplify_expr env r expr in
     let r_outer = R.add_lifted_constants r_outer ~from:r in

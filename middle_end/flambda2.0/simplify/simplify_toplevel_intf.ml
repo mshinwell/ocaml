@@ -23,6 +23,5 @@ module type S = sig
     -> Flambda.Expr.t
     -> return_continuation:Continuation.t
     -> Exn_continuation.t
-    -> scope_level_for_lifted_constants:Scope.t
     -> Flambda.Expr.t * Simplify_env_and_result.Result.t
 end
