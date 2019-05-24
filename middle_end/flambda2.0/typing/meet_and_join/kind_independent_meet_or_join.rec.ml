@@ -30,7 +30,9 @@ module Make
     with type typing_env_extension := Typing_env_extension.t)
   (S : Meet_and_join_spec_intf.S
     with type flambda_type := Flambda_types.t
-    with type typing_env := Typing_env.t
+    with type 'a ty := 'a Flambda_types.ty
+    with type 'a of_kind_naked_number := 'a Flambda_types.of_kind_naked_number
+    with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
   let print_ty ppf ty =
@@ -68,6 +70,7 @@ struct
     | _, Bottom -> uj1
     | Unknown, _ | _, Unknown -> Unknown
     | Ok of_kind_foo1, Ok of_kind_foo2 ->
+      let env = Meet_env.create env in
       match S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2 with
       | Ok (of_kind_foo, _env_extension) -> Ok of_kind_foo
       | Bottom -> Bottom
@@ -77,11 +80,11 @@ struct
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty * TEE.t =
     let unknown_or_join1, alias1 =
-      Typing_env.unknown_or_join_and_canonical_simple_from_ty (Meet_env.env env)
+      Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
         ~force_to_kind:S.force_to_kind ~print_ty or_alias1
     in
     let unknown_or_join2, alias2 =
-      Typing_env.unknown_or_join_and_canonical_simple_from_ty (Meet_env.env env)
+      Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
         ~force_to_kind:S.force_to_kind ~print_ty or_alias2
     in
     match alias1, alias2 with
@@ -119,7 +122,8 @@ struct
         meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
       in
       let env_extension =
-        add_equation simple (S.to_type (No_alias unknown_or_join)) env_extension
+        env_extension
+        |> add_equation env simple (S.to_type (No_alias unknown_or_join))
       in
       Equals simple, env_extension
 
@@ -127,18 +131,18 @@ struct
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty =
     let unknown_or_join1, canonical_simple1 =
-      Typing_env.unknown_or_join_and_canonical_simple_from_ty env
+      Typing_env.resolve_any_toplevel_alias_on_ty0 env
         ~force_to_kind:S.force_to_kind ~print_ty or_alias1
     in
     let unknown_or_join2, canonical_simple2 =
-      Typing_env.unknown_or_join_and_canonical_simple_from_ty env
+      Typing_env.resolve_any_toplevel_alias_on_ty0 env
         ~force_to_kind:S.force_to_kind ~print_ty or_alias2
     in
     (* CR mshinwell: Think further about this "bound name" stuff. *)
     let shared_aliases_not_aliasing_bound_name =
       Name.Set.diff
         (Name.Set.inter (all_aliases_of env canonical_simple1)
-          (all_aliases_of env all_all_aliases2))
+          (all_aliases_of env canonical_simple2))
         (all_aliases_of env (Option.map Simple.name bound_name))
     in
     match Name.Set.choose_opt shared_aliases_not_aliasing_bound_name with
@@ -152,6 +156,6 @@ struct
     let ty, env_extension =
       E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
     in
-    if Flambda_type0_core.ty_is_bottom env ty then Bottom
+    if Flambda_type0_core.ty_is_bottom (Meet_env.env env) ty then Bottom
     else Ok (ty, env_extension)
 end
