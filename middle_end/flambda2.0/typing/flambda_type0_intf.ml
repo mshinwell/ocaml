@@ -82,7 +82,7 @@ module type S = sig
       -> flambda_type
       -> flambda_type * (Simple.t option)
 
-    val find_exn : t -> Name.t -> flambda_type
+    val find : t -> Name.t -> flambda_type
 
     val defined_variables
        : t
@@ -104,6 +104,8 @@ module type S = sig
         already bound, the given name's type will be determined using a meet
         operation. *)
     val add_env_extension : t -> Typing_env_extension.t -> t
+
+    val get_canonical_name : t -> Name.t -> Name.t
   end
 
   val join : Typing_env.t -> t -> t -> t
@@ -221,6 +223,8 @@ module type S = sig
   (** Whether the given type says that a term of that type can never be
       constructed (in other words, it is [Invalid]). *)
   val is_bottom : (t -> bool) type_accessor
+
+  val type_for_const : Simple.Const.t -> t
 
   type to_lift = private
     | Boxed_float of Float.t

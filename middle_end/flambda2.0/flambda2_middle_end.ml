@@ -72,7 +72,7 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
     print_ilambda ppf ilambda;
     let ilambda =
       if ilambda.uses_mutable_variables then begin
-        let ilambda = Eliminate_mutable_variables.run ilambda in
+        let ilambda = Eliminate_mutable_vars.run ilambda in
         print_ilambda_after_mutable_variable_elimination ppf ilambda;
         ilambda
       end else begin
