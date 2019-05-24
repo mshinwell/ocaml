@@ -24,7 +24,7 @@ type t
 
 val create
    : Flambda_arity.t
-  -> definition_scope_level:Scope_level.t
+  -> definition_scope_level:Scope.t
   -> t
 
 val print : Format.formatter -> t -> unit

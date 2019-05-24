@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Add signatures to these submodules. *)
 module Cached = struct
   type t = {
     names_to_types : Flambda_types.t Name.Map.t;
@@ -44,12 +45,12 @@ module Cached = struct
           | Some alias_of ->
             Misc.fatal_errorf "Canonical name %a has an alias type: =%a"
               Name.print name
-              Name.print alias_of)
+              Simple.print alias_of)
       canonical_names
 
   let empty =
     { names_to_types = Name.Map.empty;
-      aliases = Simple.Map.empty;
+      aliases = Aliases.empty;
     }
 
   let create ~names_to_types aliases =
@@ -57,7 +58,15 @@ module Cached = struct
       aliases;
     }
 
-  let defined_names t = Name.Map.keys t.names_to_types
+  let with_names_to_types t ~names_to_types =
+    { names_to_types;
+      aliases = t.aliases;
+    }
+
+  let names_to_types t = t.names_to_types
+  let aliases t = t.aliases
+
+  let domain t = Name.Map.keys t.names_to_types
 end
 
 module One_level = struct
@@ -77,20 +86,22 @@ module One_level = struct
       just_after_level;
     }
 
+  let create_empty scope =
+    { scope;
+      level = Typing_env_level.empty;
+      just_after_level = Cached.empty;
+    }
+
   let scope t = t.scope
   let level t = t.level
   let just_after_level t = t.just_after_level
-
-  let empty_one_level =
-    { level = Typing_env_level.empty;
-      just_after_level = Cached.empty;
-    }
 
   let is_empty t = Typing_env_level.is_empty t.level
 
   let next_scope t = Scope.next t.scope
 
-  let defined_names t = Cached.defined_names t.just_after_level
+  (* CR mshinwell: Rename to [domain]? *)
+  let defined_names t = Cached.domain t.just_after_level
 end
 
 type t = {
@@ -98,6 +109,10 @@ type t = {
   prev_levels : One_level.t Scope.Map.t;
   current_level : One_level.t;
 }
+
+let is_empty t =
+  One_level.is_empty t.current_level
+    && Scope.Map.is_empty t.prev_levels
 
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; } as t) =
@@ -117,10 +132,10 @@ let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let invariant ?force t =
-  if !Clflags.flambda_invariants || Option.is_some (force : unit option)
+  if !Clflags.flambda_invariant_checks || Option.is_some (force : unit option)
   then begin
     let no_empty_prev_levels =
-      Scope.Map.for_all (fun level -> not (One_level.is_empty level))
+      Scope.Map.for_all (fun _scope level -> not (One_level.is_empty level))
         t.prev_levels
     in
     if not no_empty_prev_levels then begin
@@ -130,12 +145,12 @@ let invariant ?force t =
     end;
     let current_scope = One_level.scope t.current_level in
     let max_prev_scope =
-      Scope.Map.fold (fun one_level _ max_prev_scope ->
-          Scope_level.max (One_level.scope one_level) max_prev_scope)
+      Scope.Map.fold (fun scope _level max_prev_scope ->
+          Scope.max scope max_prev_scope)
         t.prev_levels
-        Scope_level.initial
+        Scope.initial
     in
-    if Scope_level.(<=) current_scope max_prev_scope then begin
+    if Scope.(<=) current_scope max_prev_scope then begin
       Misc.fatal_errorf "Typing environment contains a [current_level] with a \
           scope that is not strictly greater than all scopes in \
           [prev_levels]:@ %a"
@@ -147,14 +162,10 @@ let invariant_should_fail t =
   invariant ~force:() t;
   Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
 
-let is_empty t =
-  One_level.is_empty t.current_level
-    && Scope.Map.is_empty t.prev_levels
-
 let create ~resolver =
   { resolver;
     prev_levels = Scope.Map.empty;
-    current_level = One_level.empty;
+    current_level = One_level.create_empty Scope.initial;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
@@ -173,7 +184,7 @@ let increment_scope_level_to t scope =
   let current_scope = current_scope t in
   if Scope.(<=) scope current_scope then begin
     Misc.fatal_errorf "New level %a must exceed %a:@ %a"
-      Scope.print level
+      Scope.print scope
       Scope.print current_scope
       print t
   end;
@@ -198,13 +209,11 @@ let fast_equal t1 t2 =
 let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
 
-let domain t =
-  Name_occurrences.create_from_set_in_terms (domain0 t)
-
 let find t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
     Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+      Name.print name
       print t
   | ty -> ty
 
@@ -262,7 +271,7 @@ let add_equation t name ty =
       let aliases = aliases t in
       match Flambda_type0_core.get_alias ty with
       | None -> aliases
-      | Some alias_of -> Aliases.add aliases name ~alias_of
+      | Some alias_of -> Aliases.add aliases (Simple.name name) alias_of
     in
     let names_to_types = Name.Map.add name ty (names_to_types t) in
     Cached.create ~names_to_types aliases
@@ -333,24 +342,26 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
     invariant t;
     let meet_env = Meet_env.create t in
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
-    Scope.Map.fold (fun _scope level result ->
+    Scope.Map.fold (fun _scope one_level result ->
         let level =
           (* Since environment extensions are not allowed to define names at
              the moment, any [Equals] aliases to names not in scope at the cut
              point have to be squashed to "Unknown". *)
-          Typing_env_level.erase_aliases level ~allowed:vars_in_scope_at_cut
+          One_level.level one_level
+          |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
         in
         Typing_env_level.meet meet_env level result)
       at_or_after_cut
       Typing_env_level.empty
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
-      ~force_to_kind ~print_ty (ty : a Flambda_types.ty)
+      ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
+      ~print_ty (ty : a Flambda_types.ty)
       : (a Flambda_types.unknown_or_join) * (Simple.t option) =
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
     | No_alias unknown_or_join -> unknown_or_join
-    | Type _ | Alias _ ->
+    | Type _ | Equals _ ->
       Misc.fatal_errorf "Expected [No_alias]:@ %a" Type_printers.print typ
   in
   match ty with
@@ -374,8 +385,9 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals _ -> invariant_should_fail t
 
-let resolve_any_toplevel_alias_on_ty (type a) t ~force_to_kind ~print_ty
-      (ty : a Flambda_types.ty)
+let resolve_any_toplevel_alias_on_ty (type a) t
+      ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
+      ~print_ty (ty : a Flambda_types.ty)
       : (a Flambda_types.ty) * (Simple.t option) =
   match ty with
   | No_alias _ -> ty, None
@@ -394,7 +406,7 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
   match ty with
   | Value ty_value ->
     let ty_value, canonical_simple =
-      resolve_aliases_on_ty t env
+      resolve_any_toplevel_alias_on_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
@@ -402,7 +414,7 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
     Value ty_value, canonical_simple
   | Naked_number (ty_naked_number, kind) ->
     let ty_naked_number, canonical_simple =
-      resolve_aliases_on_ty t env
+      resolve_any_toplevel_alias_on_ty t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ty_naked_number
@@ -410,7 +422,7 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
     Naked_number (ty_naked_number, kind), canonical_simple
   | Fabricated ty_fabricated ->
     let ty_fabricated, canonical_simple =
-      resolve_aliases_on_ty t env
+      resolve_any_toplevel_alias_on_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ty_fabricated

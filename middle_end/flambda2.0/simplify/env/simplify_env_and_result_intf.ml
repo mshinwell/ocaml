@@ -37,7 +37,7 @@ module type Env = sig
   val create
      : round:int
     -> backend:(module Flambda2_backend_intf.S)
-    -> scope_level_for_lifted_constants:Scope_level.t
+    -> scope_level_for_lifted_constants:Scope.t
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -50,7 +50,7 @@ module type Env = sig
 
   val increment_continuation_scope_level : t -> t
 
-  val get_continuation_scope_level : t -> Scope_level.t
+  val get_continuation_scope_level : t -> Scope.t
 
   val typing_env : t -> Flambda_type.Typing_env.t
 
@@ -130,7 +130,7 @@ module type Env = sig
       result structure. *)
   val add_lifted_constants_from_r : t -> result -> t
 
-  val set_scope_level_for_lifted_constants : t -> Scope_level.t -> t
+  val set_scope_level_for_lifted_constants : t -> Scope.t -> t
 
   val can_inline : t -> bool
 end

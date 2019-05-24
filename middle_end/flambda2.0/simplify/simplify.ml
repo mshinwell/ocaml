@@ -39,6 +39,6 @@ and Simplify_toplevel : Simplify_toplevel_intf.S =
 let run ~backend ~round program =
   let env =
     E.create ~round ~backend
-      ~scope_level_for_lifted_constants:Scope_level.initial
+      ~scope_level_for_lifted_constants:Scope.initial
   in
   Simplify_program.simplify_program env program
