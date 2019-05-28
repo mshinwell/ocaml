@@ -583,7 +583,7 @@ let get_alias t =
 module Set_of_closures_entry = struct
   type t = set_of_closures_entry
 
-  let bottom () : t =
+  let create_bottom () : t =
     { by_closure_id = Types_by_closure_id.bottom;
     }
 
@@ -607,7 +607,7 @@ end
 module Closures_entry = struct
   type t = closures_entry
 
-  let bottom () : t =
+  let create_bottom () : t =
     { function_decl = Non_inlinable;
       closure_elements = Closure_elements.bottom;
       set_of_closures = bottom_as_ty_fabricated ();
