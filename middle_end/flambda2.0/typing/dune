@@ -1,6 +1,7 @@
 (rule
   (targets flambda_type0.ml)
   (deps
+    rec_modules
     flambda_type0.templ.ml
     flambda_types.rec.ml
     flambda_type0_core.rec.ml
@@ -65,5 +66,8 @@
     structures/row_like.rec.mli
     structures/trivial_row_like.rec.mli
   )
-  (action (run ./create_flambda_type0.sh))
+  (action (run ../scripts/assemble_rec_modules.sh
+               flambda_type0.templ.ml
+               rec_modules
+               flambda_type0.ml))
 )
