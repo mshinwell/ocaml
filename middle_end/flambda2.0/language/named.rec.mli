@@ -61,3 +61,8 @@ val unbox_value
 val dummy_value : Flambda_kind.t -> t
 
 val at_most_generative_effects : t -> bool
+
+val invariant_returning_kind
+   : Invariant_env.t
+  -> t
+  -> Flambda_primitive.result_kind

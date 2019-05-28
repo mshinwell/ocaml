@@ -28,3 +28,5 @@ val domain : t -> Continuation.Set.t
 
 (** Whether any of the continuations are exception handlers. *)
 val contains_exn_handler : t -> bool
+
+include Contains_names.S with type t := t
