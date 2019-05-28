@@ -33,3 +33,9 @@ val pattern_match
 (** Obtain the continuation itself (rather than the body over which it
     is scoped). *)
 val handler : t -> Continuation_handler.t
+
+val create
+   : Continuation.t
+  -> body:Expr.t
+  -> Continuation_handler.t
+  -> t

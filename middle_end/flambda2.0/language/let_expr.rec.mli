@@ -34,3 +34,10 @@ val pattern_match
    : t
   -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
   -> 'a
+
+val create
+   : bound_var:Variable.t
+  -> kind:Flambda_kind.t
+  -> defining_expr:Named.t
+  -> body:Expr.t
+  -> t
