@@ -95,7 +95,7 @@ let find_equation t name =
       print t
   | ty -> ty
 
-let meet env (t1 : t) (t2 : t) : t =
+let meet env (t1 : t) (t2 : t) =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
      As such, since this is [meet], we perform unions on the domains.
      So if one of them is bottom, the result of meeting it with any other

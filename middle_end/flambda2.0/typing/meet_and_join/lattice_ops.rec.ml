@@ -49,6 +49,9 @@ module For_meet = struct
   let switch_no_bottom meet _join typing_env thing1 thing2 =
     meet typing_env thing1 thing2
 
+  let switch0 meet _join typing_env thing1 thing2 =
+    meet typing_env thing1 thing2
+
   let switch meet _join typing_env thing1 thing2 =
     meet typing_env thing1 thing2
 
@@ -86,6 +89,9 @@ module For_join = struct
 
   let switch_no_bottom _meet join typing_env thing1 thing2 =
     join typing_env thing1 thing2, TEE.empty
+
+  let switch0 _meet join typing_env thing1 thing2 =
+    join typing_env thing1 thing2
 
   let switch _meet join typing_env thing1 thing2 : _ Or_bottom.t =
     Ok (join typing_env thing1 thing2, TEE.empty)
