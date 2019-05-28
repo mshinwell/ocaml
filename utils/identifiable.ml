@@ -73,6 +73,12 @@ module type Map = sig
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   val diff_domains : 'a t -> 'a t -> 'a t
+  val fold2_stop_on_key_mismatch
+      : (key -> 'a -> 'a -> 'b -> 'b)
+        -> 'a t
+        -> 'a t
+        -> 'b
+        -> 'b option
 end
 
 module type Tbl = sig
@@ -207,6 +213,20 @@ module Make_map (T : Thing) = struct
         | None, Some _datum2 -> None
         | Some _datum1, Some _datum2 -> None)
       t1 t2
+
+  let fold2_stop_on_key_mismatch f t1 t2 init =
+    (* CR mshinwell: Provide a proper implementation *)
+    if cardinal t1 <> cardinal t2 then None
+    else
+      let t1 = bindings t1 in
+      let t2 = bindings t2 in
+      List.fold_left2 (fun acc (key1, datum1) (key2, datum2) ->
+          match acc with
+          | None -> None
+          | Some acc ->
+             if T.compare key1 key2 <> 0 then None
+             else Some (f key1 datum1 datum2 acc))
+        (Some init) t1 t2
 end
 
 module Make_set (T : Thing) = struct
