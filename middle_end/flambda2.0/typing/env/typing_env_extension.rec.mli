@@ -47,6 +47,10 @@ val meet_equation
   -> Flambda_types.t
   -> t
 
+val meet : Meet_env.t -> t -> t -> t
+
+val join : Typing_env.t -> t -> t -> t
+
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
 val erase_aliases : t -> allowed:Variable.Set.t -> t

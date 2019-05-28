@@ -21,6 +21,10 @@
 
 include Meet_and_join_naked_number_intf.S
   with type flambda_type := Flambda_types.t
+  with type 'a ty := 'a Flambda_types.ty
+  with type 'a of_kind_naked_number := 'a Flambda_types.of_kind_naked_number
   with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t
+  with type naked_number_kind := Flambda_kind.naked_float
+  with module Naked_number := Numbers.Float_by_bit_pattern

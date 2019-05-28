@@ -59,7 +59,7 @@ let print ppf t =
 
 let invariant _t = ()
 
-let empty () =
+let empty =
   { defined_names = Name.Map.empty;
     equations = Name.Map.empty;
   }
@@ -87,6 +87,14 @@ let add_or_replace_equation t name ty =
     equations = Name.Map.add name ty t.equations;
   }
 
+let find_equation t name =
+  match Name.Map.find name t.equations with
+  | exception Not_found ->
+    Misc.fatal_errorf "Name %a not bound in typing environment level:@ %a"
+      Name.print name
+      print t
+  | ty -> ty
+
 let meet env (t1 : t) (t2 : t) : t =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
      As such, since this is [meet], we perform unions on the domains.
@@ -105,6 +113,28 @@ let meet env (t1 : t) (t2 : t) : t =
     let level = Typing_env.current_level env in
     Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
   end
+
+let join env (t1 : t) (t2 : t) : t =
+  (* This restriction will be relaxed in the full type system. *)
+  if not
+    (Name.Map.is_empty t1.defined_names && Name.Map.is_empty t2.defined_names)
+  then begin
+    Misc.fatal_errorf "Cannot join environment levels that define names:@ \
+        %a@ and@ %a"
+      print t1
+      print t2
+  end;
+  let names_with_equations_in_join =
+    Name.Set.inter (Name.Map.keys t1.equations) (Name.Map.keys t2.equations)
+  in
+  Name.Set.fold (fun name t ->
+      assert (not (Name.Map.mem name t.equations));
+      let ty1 = find_equation t1 name in
+      let ty2 = find_equation t2 name in
+      let join_ty = Api_meet_and_join.join ~bound_name:name env ty1 ty2 in
+      add_or_replace_equation t name join_ty)
+    names_with_equations_in_join
+    empty
 
 let erase_aliases t ~allowed =
   let equations =
