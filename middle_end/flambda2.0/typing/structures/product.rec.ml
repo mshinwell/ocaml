@@ -16,6 +16,7 @@
 
 module K = Flambda_kind
 module T = Flambda_types
+module TEE = Typing_env_extension
 
 module Make (Index : Identifiable.S) = struct
   type t = {
@@ -40,7 +41,9 @@ module Make (Index : Identifiable.S) = struct
     let equal =
       Index.Map.fold2_stop_on_key_mismatch
         (fun _index component1 component2 equal ->
-          equal && Type_equality.equal env env component1 component2)
+          equal &&
+            (* CR mshinwell: Why is this [bound_name] needed? *)
+            Type_equality.equal ~bound_name:None env env component1 component2)
         components_by_index1 components_by_index2
         true
     in
@@ -54,31 +57,35 @@ module Make (Index : Identifiable.S) = struct
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } : _ Or_bottom.t =
     let all_bottom = ref true in
+    let env_extension = ref TEE.empty in
     let components_by_index =
-      Index.Map.merge (fun ty1_opt ty2_opt ->
+      Index.Map.merge (fun _index ty1_opt ty2_opt ->
           match ty1_opt, ty2_opt with
           | None, None | Some _, None | None, Some _ -> None
           | Some ty1, Some ty2 ->
-            match T.meet env ty1 ty2 with
-            | Ok ty ->
+            let ty, env_extension' = Api_meet_and_join.meet env ty1 ty2 in
+            if Flambda_type0_core.is_obviously_bottom ty then begin
+              Some (Flambda_type0_core.bottom K.value)
+            end else begin
               all_bottom := false;
+              env_extension := TEE.meet env !env_extension env_extension';
               Some ty
-            | Bottom -> Some (T.bottom K.value))
+            end)
         components_by_index1
         components_by_index2
     in
     if !all_bottom then Bottom
-    else Ok { components_by_index; }
+    else Ok ({ components_by_index; }, !env_extension)
 
   let join env
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } =
     let components_by_index =
-      Index.Map.merge (fun ty1_opt ty2_opt ->
+      Index.Map.merge (fun _index ty1_opt ty2_opt ->
           match ty1_opt, ty2_opt with
           | None, None -> None
           | Some ty, None | None, Some ty -> Some ty
-          | Some ty1, Some ty2 -> Some (T.join env ty1 ty2))
+          | Some ty1, Some ty2 -> Some (Api_meet_and_join.join env ty1 ty2))
         components_by_index1
         components_by_index2
     in
@@ -88,9 +95,10 @@ module Make (Index : Identifiable.S) = struct
     let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
     let components_by_index =
       Index.Set.fold (fun index components_by_index ->
-          Index.Map.add index (T.any_value ()) components_by_index)
+          Index.Map.add index (Flambda_type0_core.any_value ())
+            components_by_index)
         missing_indexes
         t.components_by_index
     in
-    { t with components_by_index; }
+    { components_by_index; }
 end
