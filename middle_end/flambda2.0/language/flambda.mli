@@ -16,8 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Work out how to auto-generate this file. *)
+
 (** The terms of the intermediate language used for tree-based analysis and
-    optimization.
+    optimisation.
 *)
 
 module Apply = Apply_expr
@@ -40,11 +42,11 @@ module rec Expr : sig
   include Expr_std.S with type t := t
 
   type descr = private
-    | Let of Let.t
+    | Let of Let_expr.t
     (** Bind a variable.  There can be no effect on control flow (save for
         asynchronous operations such as the invocation of finalisers or
         signal handlers as a result of reaching a safe point). *)
-    | Let_cont of Let_cont.t
+    | Let_cont of Let_cont_expr.t
     (** Define one or more continuations. *)
     | Apply of Apply.t
     (** Call an OCaml function, external function or method. *)
@@ -185,7 +187,7 @@ end and Named : sig
   (** Return a defining expression for a [Let] which is kind-correct, but not
       necessarily type-correct, at the given kind. *)
   val dummy_value : Flambda_kind.t -> t
-end and Let : sig
+end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables. *)
   type t
 
@@ -204,7 +206,7 @@ end and Let : sig
      : t
     -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
     -> 'a
-end and Let_cont : sig
+end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
       of continuations:
         let_cont [name] [args] = [handler] in [body]
@@ -549,6 +551,11 @@ end and Function_declaration : sig
 end and Flambda_type : Flambda_type0_intf.S
   with type term_language_function_declaration := Function_declaration.t
 
+module Let = Let_expr
+module Let_cont = Let_cont_expr
+
+(** The idea is that you should typically do "open! Flambda" at the top of
+    files, thus bringing in the following standard set of module aliases. *)
 module Import : sig
   module Apply = Apply
   module Apply_cont = Apply_cont
