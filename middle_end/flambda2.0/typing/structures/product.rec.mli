@@ -20,6 +20,9 @@ module Make (Index : Identifiable.S) : sig
   (** Create a product value given the indexes with associated components. *)
   val create : Flambda_types.t Index.Map.t -> t
 
+  (* CR mshinwell: Change all of these to just [bottom : t]? *)
+  val create_bottom : unit -> t
+
   (** Widen the product by adding as many fields, after any existing fields,
       so that the product has the same number of fields as [to_match].  If the
       supplied product already has at least that many fields then it is

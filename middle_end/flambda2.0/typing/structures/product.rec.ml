@@ -51,6 +51,10 @@ module Make (Index : Identifiable.S) = struct
     | None | Some false -> false
     | Some true -> true
 
+  let create_bottom () =
+    { components_by_index = Index.Map.empty;
+    }
+
   let indexes t = Index.Map.keys t.components_by_index
 
   let meet env
