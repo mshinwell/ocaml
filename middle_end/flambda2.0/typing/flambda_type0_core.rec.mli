@@ -18,8 +18,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Contains_names.S with type t := Flambda_types.t
-
 (* CR mshinwell: Why aren't these in separate units? *)
 module Closures_entry : sig
   type t = Flambda_types.closures_entry
