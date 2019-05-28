@@ -26,6 +26,7 @@ module Make
 sig
   include Meet_and_join_spec_intf.S
     with type flambda_type := Flambda_types.t
+    with type 'a ty := 'a Flambda_types.ty
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t
     with type of_kind_foo = Flambda_types.of_kind_value

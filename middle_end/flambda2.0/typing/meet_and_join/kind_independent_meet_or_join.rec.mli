@@ -40,5 +40,5 @@ sig
     -> Meet_env.t
     -> S.of_kind_foo Flambda_types.ty
     -> S.of_kind_foo Flambda_types.ty
-    -> S.of_kind_foo Flambda_types.ty Or_bottom.t * Typing_env_extension.t
+    -> (S.of_kind_foo Flambda_types.ty * Typing_env_extension.t) Or_bottom.t
 end

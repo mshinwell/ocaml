@@ -106,7 +106,7 @@ struct
         }
       in
       let env_extension =
-        E.switch TEE.meet TEE.join env env_extension1 env_extension2
+        E.switch0 TEE.meet TEE.join env env_extension1 env_extension2
       in
       Ok (blocks_and_imms, env_extension)
 
@@ -123,7 +123,7 @@ struct
       match function_decl1, function_decl2 with
       | Non_inlinable, (Non_inlinable | Inlinable _)
       | Inlinable _, Non_inlinable -> Non_inlinable
-      | Inlinable { function_decl =_decl1; },
+      | Inlinable { function_decl = decl1; },
           Inlinable { function_decl = decl2; } ->
         let module TFD = Term_language_function_declaration in
         match E.op () with
@@ -141,8 +141,7 @@ struct
         closure_elements1 closure_elements2
     in
     let set_of_closures =
-      Meet_and_join_fabricated.meet_or_join_ty env
-        set_of_closures1 set_of_closures2
+      Fabricated.meet_or_join_ty env set_of_closures1 set_of_closures2
     in
     Or_bottom.both closure_elements set_of_closures
       ~f:(fun (closure_elements, env_extension1)
@@ -154,13 +153,13 @@ struct
           }
         in
         let env_extension =
-          E.switch TEE.meet TEE.join env env_extension1 env_extension2
+          E.switch0 TEE.meet TEE.join env env_extension1 env_extension2
         in
         closures_entry, env_extension)
 
   let meet_or_join_naked_number env n1 n2 meet_or_join_ty box =
     Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
-      ~f:(fun (n, env_extension) -> Ok (Boxed_number (box n), env_extension))
+      ~f:(fun (n, env_extension) -> T.Boxed_number (box n), env_extension)
 
   let meet_or_join_of_kind_foo env
         (of_kind1 : T.of_kind_value) (of_kind2 : T.of_kind_value)
@@ -168,34 +167,39 @@ struct
     match of_kind1, of_kind2 with
     | Blocks_and_tagged_immediates blocks_imms1,
         Blocks_and_tagged_immediates blocks_imms2 ->
-      Or_bottom_or_absorbing.of_or_bottom blocks_imms
+      Or_bottom_or_absorbing.of_or_bottom
         (meet_or_join_blocks_and_tagged_immediates env
           blocks_imms1 blocks_imms2)
         ~f:(fun (blocks_imms, env_extension) ->
-          Ok (Blocks_and_tagged_immediates blocks_imms, env_extension))
+          T.Blocks_and_tagged_immediates blocks_imms, env_extension)
     | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
-      meet_or_join_naked_number env n1 n2 Naked_float.meet_or_join_ty
-        (fun n : _ T.of_kind_value_boxed_number -> Boxed_float n)
+      meet_or_join_naked_number env n1 n2
+        (* CR mshinwell: Sort out this [bound_name] stuff *)
+        (Naked_float.meet_or_join_ty ?bound_name:None)
+        (fun n -> T.Boxed_float n)
     | Boxed_number (Boxed_int32 n1), Boxed_number (Boxed_int32 n2) ->
-      meet_or_join_naked_number env n1 n2 Naked_int32.meet_or_join_ty
-        (fun n : _ T.of_kind_value_boxed_number -> Boxed_int32 n)
+      meet_or_join_naked_number env n1 n2
+        (Naked_int32.meet_or_join_ty ?bound_name:None)
+        (fun n -> T.Boxed_int32 n)
     | Boxed_number (Boxed_int64 n1), Boxed_number (Boxed_int64 n2) ->
-      meet_or_join_naked_number env n1 n2 Naked_int64.meet_or_join_ty
-        (fun n : _ T.of_kind_value_boxed_number -> Boxed_int64 n)
+      meet_or_join_naked_number env n1 n2
+        (Naked_int64.meet_or_join_ty ?bound_name:None)
+        (fun n -> T.Boxed_int64 n)
     | Boxed_number (Boxed_nativeint n1), Boxed_number (Boxed_nativeint n2) ->
-      meet_or_join_naked_number env n1 n2 Naked_nativeint.meet_or_join_ty
-        (fun n : _ T.of_kind_value_boxed_number -> Boxed_nativeint n)
+      meet_or_join_naked_number env n1 n2
+        (Naked_nativeint.meet_or_join_ty ?bound_name:None)
+        (fun n -> T.Boxed_nativeint n)
     | Closures { by_closure_id = by_closure_id1; },
         Closures { by_closure_id = by_closure_id2; } ->
       let module C = Closures_entry_by_closure_id in
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch C.meet C.join env by_closure_id1 by_closure_id2)
         ~f:(fun (by_closure_id, env_extension) ->
-          Closures { by_closure_id; }, env_extension)
+          T.Closures { by_closure_id; }, env_extension)
     | String strs1, String strs2 ->
       let strs = E.String_info.Set.union_or_inter strs1 strs2 in
       if String_info.Set.is_empty strs then Bottom
-      else Ok (String strs, TEE.empty)
+      else Or_bottom_or_absorbing.Ok (String strs, TEE.empty)
     | (Blocks_and_tagged_immediates _
         | Boxed_number _
         | Closures _
