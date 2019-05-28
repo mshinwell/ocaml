@@ -22,9 +22,9 @@ module TEE = Typing_env_extension
 
 module Make
   (E : Lattice_ops_intf.S
-    with module Join_env := Join_env
-    with module Meet_env := Meet_env
-    with module TEE := TEE) =
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
 struct
   module Of_kind_naked_immediate = Meet_and_join_naked_immediate.Make (E)
   module Of_kind_naked_float = Meet_and_join_naked_float.Make (E)
@@ -42,31 +42,33 @@ struct
 
   type of_kind_foo = T.of_kind_value
 
-  let kind () = K.value ()
+  let kind = K.value
   let to_type ty : T.t = Value ty
   let force_to_kind = Flambda_type0_core.force_to_kind_value
   let print_ty = Type_printers.print_ty_value_with_cache
 
   (* CR mshinwell: These next two could go in a separate file. *)
-  let meet_unknown env meet_contents
+  let meet_unknown meet_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
-      : _ Or_unknown.t =
+      : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
     match or_unknown1, or_unknown2 with
-    | Unknown, Unknown -> Unknown
-    | _, Unknown -> or_unknown1
-    | Unknown, _ -> or_unknown2
-    | Ok contents1, Ok contents2 ->
-      let contents, env_extension = meet_contents env contents1 contents2 in
-      Ok contents, env_extension
+    | Unknown, Unknown -> Ok (Unknown, TEE.empty)
+    | _, Unknown -> Ok (or_unknown1, TEE.empty)
+    | Unknown, _ -> Ok (or_unknown2, TEE.empty)
+    | Known contents1, Known contents2 ->
+      Or_bottom.map (meet_contents env contents1 contents2)
+        ~f:(fun (contents, env_extension) ->
+          Or_unknown.Known contents, env_extension)
 
-  let join_unknown env join_contents
+  let join_unknown join_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
       : _ Or_unknown.t =
     match or_unknown1, or_unknown2 with
     | Unknown, Unknown
     | _, Unknown
     | Unknown, _ -> Unknown
-    | Ok contents1, Ok contents2 -> Ok (join_contents env contents1 contents2)
+    | Known contents1, Known contents2 ->
+      Known (join_contents env contents1 contents2)
 
   let meet_or_join_blocks_and_tagged_immediates env
         ({ blocks = blocks1; immediates = imms1; }
@@ -84,12 +86,29 @@ struct
     match blocks, imms with
     | Bottom, Bottom -> Bottom
     | Ok (blocks, env_extension), Bottom ->
-      { blocks; immediates = Immediates.create_bottom (); }, env_extension
+      let blocks_and_imms : T.blocks_and_tagged_immediates =
+        { blocks;
+          immediates = Known (Immediates.create_bottom ());
+        }
+      in
+      Ok (blocks_and_imms, env_extension)
     | Bottom, Ok (immediates, env_extension) ->
-      { blocks = Blocks.create_bottom; immediates; }, env_extension
+      let blocks_and_imms : T.blocks_and_tagged_immediates =
+        { blocks = Known (Blocks.create_bottom ());
+          immediates;
+        }
+      in
+      Ok (blocks_and_imms, env_extension)
     | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
-      { blocks; immediates; },
+      let blocks_and_imms : T.blocks_and_tagged_immediates =
+        { blocks;
+          immediates;
+        }
+      in
+      let env_extension =
         E.switch TEE.meet TEE.join env env_extension1 env_extension2
+      in
+      Ok (blocks_and_imms, env_extension)
 
   let meet_or_join_closures_entry env
         ({ function_decl = function_decl1;
@@ -134,8 +153,10 @@ struct
             set_of_closures;
           }
         in
-        closures_entry,
-          E.switch TEE.meet TEE.join env env_extension1 env_extension2)
+        let env_extension =
+          E.switch TEE.meet TEE.join env env_extension1 env_extension2
+        in
+        closures_entry, env_extension)
 
   let meet_or_join_naked_number env n1 n2 meet_or_join_ty box =
     Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
