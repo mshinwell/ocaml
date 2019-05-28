@@ -30,3 +30,8 @@ val pattern_match
    : t
   -> f:(body:Expr.t -> Continuation_handlers.t -> 'a)
   -> 'a
+
+val create
+   : body:Expr.t
+  -> Continuation_handlers.t
+  -> t

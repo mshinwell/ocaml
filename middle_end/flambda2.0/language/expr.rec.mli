@@ -124,3 +124,5 @@ val link_continuations
   -> arity:Flambda_arity.t
   -> t
   -> t
+
+val create_let_cont : Let_cont_expr.t -> t

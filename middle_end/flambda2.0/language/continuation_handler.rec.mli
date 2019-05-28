@@ -66,3 +66,11 @@ type behaviour = private
   | Unknown of { arity : Flambda_arity.t; }
 
 val behaviour : t -> behaviour
+
+val print_using_where_with_cache
+   : cache:Printing_cache.t
+  -> Format.formatter
+  -> Continuation.t
+  -> t
+  -> first:bool
+  -> unit
