@@ -24,7 +24,7 @@ include Contains_names.S with type t := Flambda_types.t
 module Closures_entry : sig
   type t = Flambda_types.closures_entry
 
-  val bottom : unit -> t
+  val create_bottom : unit -> t
 
   val add_or_meet_equations
      : t
@@ -46,7 +46,7 @@ end
 module Set_of_closures_entry : sig
   type t = Flambda_types.set_of_closures_entry
 
-  val bottom : unit -> t
+  val create_bottom : unit -> t
 
   val add_or_meet_equations
      : t

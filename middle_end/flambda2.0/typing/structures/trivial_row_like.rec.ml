@@ -16,55 +16,53 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (Thing_without_names : Identifiable.S) = struct
-  module Thing_without_names_and_unit =
-    Hashtbl.Make_with_map_pair (Thing_without_names) (Unit)
+module TEE = Typing_env_extension
 
-  module RL =
-    Row_like.Make (Thing_without_names) (Unit)
-      (Thing_without_names_and_unit) (Unit)
+module Make (Thing : Identifiable.S) = struct
+  module Thing_and_unit = struct
+    type t = Thing.t * unit
+    include Identifiable.Make_pair (Thing) (Unit)
+  end
 
-  type t = RL.t
+  module Unit_maps_to = struct
+    include Unit
+
+    let print_with_cache ~cache:_ ppf () = print ppf ()
+    let meet _env () () = Or_bottom.Ok ((), TEE.empty)
+    let join _env () () = ()
+    let equal _env () () = true
+    let map_types () ~f:_ = ()
+    let create_bottom () = ()
+    let widen () ~to_match:() = ()
+  end
+
+  include Row_like.Make (Thing) (Unit) (Thing_and_unit) (Unit_maps_to)
 
   let create things =
     let things =
-      Thing_without_names.Set.fold (fun thing result ->
-          Thing_without_names_and_unit.Map.add (thing, ()) () result)
-        things_with_env_extensions
-        Thing_without_names_and_unit.Map.empty
+      Thing.Set.fold (fun thing result ->
+          Thing_and_unit.Map.add (thing, ()) () result)
+        things
+        Thing_and_unit.Map.empty
     in
-    RL.create_exactly_multiple things
-
-  let create_bottom = RL.create_bottom
-  let create_unknown = RL.create_unknown
-
-  let print = RL.print
-  let equal = RL.equal
-
-  let meet = RL.meet
-  let join = RL.join
-
-  let free_names _ = Name_occurrences.empty
-  let apply_name_permutation t _perm = t
+    create_exactly_multiple things
 
   let all t : _ Or_unknown.t =
-    match RL.at_least t, RL.known t with
+    match at_least t, known t with
     | Unknown, _ | _, Unknown -> Unknown
     | Known indexes, Known known ->
       if not (Unit.Map.is_empty indexes) then Unknown
       else
         let things =
-          Thing_without_names_and_unit.Set.fold (fun (thing, ()) things ->
-              Thing_without_names.Set.add thing things)
-            (Thing_without_names_and_unit.Map.keys known)
-            Thing_without_names.Set.empty
+          Thing_and_unit.Set.fold (fun (thing, ()) things ->
+              Thing.Set.add thing things)
+            (Thing_and_unit.Map.keys known)
+            Thing.Set.empty
         in
         Known things
 
-  let classify = RL.classify
-
   let get_singleton t =
-    match RL.get_singleton t with
+    match get_singleton t with
     | None -> None
     | Some ((thing, ()), ()) -> Some (thing, ())
 end

@@ -43,6 +43,8 @@ let create closure_ids_map open_or_closed : t =
     in
     RL.create_exactly_multiple closure_ids_map
 
+let create_bottom = RL.create_bottom
+
 let print = RL.print
 let invariant _t = ()  (* CR mshinwell: RL.invariant *)
 
