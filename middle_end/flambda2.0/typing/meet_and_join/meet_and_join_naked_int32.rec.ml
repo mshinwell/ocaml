@@ -32,9 +32,9 @@ struct
   let print_ty = Type_printers.print_ty_naked_int32_with_cache
 
   let meet_or_join_of_kind_foo _meet_or_join_env
-        (of_kind1 : (K.naked_int32, _) Flambda_types.of_kind_naked_number)
-        (of_kind2 : (K.naked_int32, _) Flambda_types.of_kind_naked_number)
-        : ((K.naked_int32, _) Flambda_types.of_kind_naked_number * TEE.t)
+        (of_kind1 : K.naked_int32 Flambda_types.of_kind_naked_number)
+        (of_kind2 : K.naked_int32 Flambda_types.of_kind_naked_number)
+        : (K.naked_int32 Flambda_types.of_kind_naked_number * TEE.t)
             Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
     | Int32 fs1, Int32 fs2 ->
