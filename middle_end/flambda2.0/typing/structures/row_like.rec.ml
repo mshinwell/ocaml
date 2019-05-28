@@ -24,10 +24,8 @@ module Make
     include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
-    with type join_env := Join_env.t
     with type meet_env := Meet_env.t
-    with type type_equality_env := Type_equality_env.t
-    with type type_equality_result := Type_equality_result.t
+    with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
   module Tag_and_index = struct
@@ -79,40 +77,26 @@ struct
   let equal env result
         { known = known1; at_least = at_least1; }
         { known = known2; at_least = at_least2; } =
-    let (>>=) = Type_equality_result.(>>=) in
-    result
-    >>= fun result ->
-    let result =
+    match
       Tag_and_index.Map.fold2_stop_on_key_mismatch
         (fun _index maps_to1 maps_to2 result ->
-          result
-          >>= fun result ->
-          Maps_to.equal env result maps_to1 maps_to2)
-        known1 known2 result
-    in
-    (* CR mshinwell: factor out *)
-    let result =
-      match result with
-      | None -> Type_equality_result.types_known_unequal ()
-      | Some result -> result
-    in
-    result
-    >>= fun result ->
-    let result =
-      Index.Map.fold2_stop_on_key_mismatch
-        (fun _index maps_to1 maps_to2 result ->
-          result
-          >>= fun result ->
-          Maps_to.equal env result maps_to1 maps_to2)
-        at_least1 at_least2 result
-    in
-    match result with
-    | None -> Type_equality_result.types_known_unequal ()
-    | Some result -> result 
+          result && Maps_to.equal env maps_to1 maps_to2)
+        known1 known2 true
+    with
+    | None | Some false -> false
+    | Some true ->
+      match
+        Index.Map.fold2_stop_on_key_mismatch
+          (fun _index maps_to1 maps_to2 result ->
+            result && Maps_to.equal env maps_to1 maps_to2)
+          at_least1 at_least2 true
+      with
+      | None | Some false -> false
+      | Some true -> true
 
   module Meet_or_join
-    (E : Either_meet_or_join_intf.S
-      with type join_env := Join_env.t
+    (E : Lattice_ops_intf.S
+      with type typing_env := Typing_env.t
       with type meet_env := Meet_env.t
       with type typing_env_extension := Typing_env_extension.t) =
   struct
@@ -184,8 +168,8 @@ struct
   let all_maps_to { known; at_least; } =
     (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
 
-  module Meet = Meet_or_join (Either_meet_or_join.For_meet)
-  module Join = Meet_or_join (Either_meet_or_join.For_join)
+  module Meet = Meet_or_join (Lattice_ops.For_meet)
+  module Join = Meet_or_join (Lattice_ops.For_join)
 
   let meet = Meet.meet_or_join
   let join = Join.meet_or_join
@@ -202,7 +186,7 @@ struct
 
   let join_of_all_maps_to env t =
     match all_maps_to t with
-    | [] -> []
+    | [] -> Maps_to.create_bottom ()
     | [maps_to] -> maps_to
     | maps_to::other_maps_to ->
       List.fold_left (fun result maps_to ->
