@@ -63,6 +63,7 @@ let print_with_cache ~cache ppf t =
       | Recursive handlers ->
         Recursive_let_cont_handlers.pattern_match handlers
           ~f:(fun ~(body : Expr.t) handlers ->
+            let handlers = Continuation_handlers.to_map handlers in
             let let_conts, body =
               match Expr.descr body with
               | Let_cont let_cont -> gather_let_conts let_conts let_cont
