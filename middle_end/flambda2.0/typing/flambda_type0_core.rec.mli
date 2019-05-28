@@ -239,7 +239,7 @@ val kind : Flambda_types.t -> Flambda_kind.t
 val force_to_kind_value : Flambda_types.t -> Flambda_types.ty_value
 
 val force_to_kind_naked_number
-   : 'kind
+   : 'kind Flambda_kind.Naked_number.t
   -> Flambda_types.t
   -> 'kind Flambda_types.ty_naked_number
 
