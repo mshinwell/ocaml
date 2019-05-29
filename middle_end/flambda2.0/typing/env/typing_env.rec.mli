@@ -69,13 +69,6 @@ val resolve_any_toplevel_alias_on_ty0
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
-val resolve_any_toplevel_alias_on_ty
-   : t
-  -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
-  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
-  -> 'a Flambda_types.ty
-  -> 'a Flambda_types.ty * (Simple.t option)
-
 (* CR mshinwell: Maybe this should be deleted *)
 val resolve_any_toplevel_alias
    : t

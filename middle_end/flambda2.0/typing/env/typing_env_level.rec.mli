@@ -32,8 +32,6 @@ val empty : t
 
 val is_empty : t -> bool
 
-val find_equation : t -> Name.t -> Flambda_types.t
-
 val defined_names : t -> Flambda_kind.t Name.Map.t
 
 val equations : t -> Flambda_types.t Name.Map.t

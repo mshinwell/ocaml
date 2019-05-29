@@ -48,7 +48,7 @@ struct
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let invariant _t = ()
+  let _invariant _t = ()
 
   let create_bottom () =
     { known = Tag_and_index.Map.empty;
@@ -168,9 +168,6 @@ struct
         Ok ({ known; at_least; }, !env_extension)
   end
 
-  let all_maps_to { known; at_least; } =
-    (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
-
   module Meet = Row_like_meet_or_join (Lattice_ops.For_meet)
   module Join = Row_like_meet_or_join (Lattice_ops.For_join)
 
@@ -181,7 +178,7 @@ struct
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
 
-  let is_bottom { known; at_least; } =
+  let _is_bottom { known; at_least; } =
     Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
 
   let known t = t.known
@@ -190,16 +187,6 @@ struct
   let get_singleton { known; at_least; } =
     if not (Index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
-
-  let join_of_all_maps_to env t =
-    match all_maps_to t with
-    | [] -> Maps_to.create_bottom ()
-    | [maps_to] -> maps_to
-    | maps_to::other_maps_to ->
-      List.fold_left (fun result maps_to ->
-          Maps_to.join env maps_to result)
-        maps_to
-        other_maps_to
 
   let erase_aliases { known; at_least; } ~allowed =
     let known =
