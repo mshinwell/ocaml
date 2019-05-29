@@ -324,38 +324,39 @@ module For_symbols = For_one_variety_of_names (struct
   let apply_name_permutation t _perm = t
 end)
 
-(* CR mshinwell: We might need an "in terms" / "in types" distinction for
-   [Symbol]s, perhaps?  Maybe for "debug only" too, e.g. phantom let. *)
-
 type t = {
   variables_in_terms : For_variables.t;
   variables_in_types : For_variables.t;
   variables_debug_only : For_variables.t;
   continuations : For_continuations.t;
-  symbols : For_symbols.t;
+  symbols_in_terms : For_symbols.t;
+  symbols_in_types : For_symbols.t;
 }
 
 let print ppf { variables_in_terms; variables_in_types; variables_debug_only;
-      continuations; symbols; } =
+      continuations; symbols_in_terms; symbols_in_types; } =
   Format.fprintf ppf "@[\
-      (variables_terms %a)@ \
-      (variables_types %a)@ \
+      (variables_in_terms %a)@ \
+      (variables_in_types %a)@ \
       (variables_debug_only %a)@ \
       (continuations %a)\
-      (symbols %a)\
+      (symbols_in_terms %a)\
+      (symbols_in_types %a)\
       @]"
     For_variables.print variables_in_terms
     For_variables.print variables_in_types
     For_variables.print variables_debug_only
     For_continuations.print continuations
-    For_symbols.print symbols
+    For_symbols.print symbols_in_terms
+    For_symbols.print symbols_in_types
 
 let empty = {
   variables_in_terms = For_variables.empty;
   variables_in_types = For_variables.empty;
   variables_debug_only = For_variables.empty;
   continuations = For_continuations.empty;
-  symbols = For_symbols.empty;
+  symbols_in_terms = For_symbols.empty;
+  symbols_in_types = For_symbols.empty;
 }
 
 let singleton_continuation cont =
@@ -381,18 +382,37 @@ let add_variable_in_terms t var =
     variables_in_terms = For_variables.add t.variables_in_terms var;
   }
 
-let singleton_symbol sym =
+let add_variable_in_types t var =
+  { t with
+    variables_in_types = For_variables.add t.variables_in_types var;
+  }
+
+let add_symbol_in_types t var =
+  { t with
+    symbols_in_types = For_symbols.add t.symbols_in_types var;
+  }
+
+let singleton_symbol_in_terms sym =
   { empty with
-    symbols = For_symbols.singleton sym;
+    symbols_in_terms = For_symbols.singleton sym;
   }
 
 let singleton_name_in_terms (name : Name.t) =
   match name with
   | Var var -> singleton_variable_in_terms var
-  | Symbol sym -> singleton_symbol sym
+  | Symbol sym -> singleton_symbol_in_terms sym
+
+let create_names_in_types names =
+  Name.Set.fold (fun (name : Name.t) t ->
+      match name with
+      | Var var -> add_variable_in_types t var
+      | Symbol sym -> add_symbol_in_types t sym)
+    names
+    empty
 
 let apply_name_permutation { variables_in_terms; variables_in_types;
-      variables_debug_only; continuations; symbols; } perm =
+      variables_debug_only; continuations; symbols_in_terms;
+      symbols_in_types; } perm =
   let variables_in_terms =
     For_variables.apply_name_permutation variables_in_terms perm
   in
@@ -405,14 +425,18 @@ let apply_name_permutation { variables_in_terms; variables_in_types;
   let continuations =
     For_continuations.apply_name_permutation continuations perm
   in
-  let symbols =
-    For_symbols.apply_name_permutation symbols perm
+  let symbols_in_terms =
+    For_symbols.apply_name_permutation symbols_in_terms perm
+  in
+  let symbols_in_types =
+    For_symbols.apply_name_permutation symbols_in_types perm
   in
   { variables_in_terms;
     variables_in_types;
     variables_debug_only;
     continuations;
-    symbols;
+    symbols_in_terms;
+    symbols_in_types;
   }
 
 let binary_op ~for_variables ~for_continuations ~for_symbols
@@ -420,13 +444,15 @@ let binary_op ~for_variables ~for_continuations ~for_symbols
         variables_in_types = variables_in_types1;
         variables_debug_only = variables_debug_only1;
         continuations = continuations1;
-        symbols = symbols1;
+        symbols_in_terms = symbols_in_terms1;
+        symbols_in_types = symbols_in_types1;
       }
       { variables_in_terms = variables_in_terms2;
         variables_in_types = variables_in_types2;
         variables_debug_only = variables_debug_only2;
         continuations = continuations2;
-        symbols = symbols2;
+        symbols_in_terms = symbols_in_terms2;
+        symbols_in_types = symbols_in_types2;
       } =
   let variables_in_terms =
     for_variables variables_in_terms1 variables_in_terms2
@@ -440,14 +466,18 @@ let binary_op ~for_variables ~for_continuations ~for_symbols
   let continuations =
     for_continuations continuations1 continuations2
   in
-  let symbols =
-    for_symbols symbols1 symbols2
+  let symbols_in_terms =
+    for_symbols symbols_in_terms1 symbols_in_terms2
+  in
+  let symbols_in_types =
+    for_symbols symbols_in_types1 symbols_in_types2
   in
   { variables_in_terms;
     variables_in_types;
     variables_debug_only;
     continuations;
-    symbols;
+    symbols_in_terms;
+    symbols_in_types;
   }
 
 let diff t1 t2 =
@@ -473,7 +503,10 @@ let variables t =
   let debug_only = For_variables.keys t.variables_debug_only in
   Variable.Set.union in_terms (Variable.Set.union in_types debug_only)
 
-let symbols t = For_symbols.keys t.symbols
+let symbols t =
+  let in_terms = For_symbols.keys t.symbols_in_terms in
+  let in_types = For_symbols.keys t.symbols_in_types in
+  Symbol.Set.union in_terms in_types
 
 let mem_var t var =
   For_variables.mem t.variables_in_terms var

@@ -68,7 +68,7 @@ module Of_kind_value = struct
     match t with
     | Dynamically_computed var ->
       Name_occurrences.singleton_variable_in_terms var
-    | Symbol sym -> Name_occurrences.singleton_symbol sym
+    | Symbol sym -> Name_occurrences.singleton_symbol_in_terms sym
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =
@@ -130,7 +130,7 @@ module Static_part = struct
       Name_occurrences.singleton_variable_in_terms v
     | Set_of_closures set -> Flambda.Set_of_closures.free_names set
     | Closure (sym, _) ->
-      Name_occurrences.singleton_symbol sym
+      Name_occurrences.singleton_symbol_in_terms sym
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
     | Boxed_int64 (Var v)

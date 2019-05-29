@@ -209,6 +209,9 @@ let fast_equal t1 t2 =
 let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
 
+let domain t =
+  Name_occurrences.
+
 let find t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
