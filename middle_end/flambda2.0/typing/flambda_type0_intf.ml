@@ -228,13 +228,13 @@ module type S = sig
 
   val type_for_const : Simple.Const.t -> t
 
-  type to_lift = private
+  type to_lift = (* private *)  (* CR mshinwell: make private once used *)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
     | Boxed_nativeint of Targetint.t
 
-  type reification_result = private
+  type reification_result = (*private*)
     | Term of Simple.t * t
     | Lift of to_lift
     | Cannot_reify

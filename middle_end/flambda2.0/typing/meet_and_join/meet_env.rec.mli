@@ -24,8 +24,6 @@ val create
    : Typing_env.t
   -> t
 
-val print : Format.formatter -> t -> unit
-
 val env : t -> Typing_env.t
 
 (** Note that we are now in the process of meeting the given two
@@ -36,5 +34,3 @@ val now_meeting : t -> Simple.t -> Simple.t -> t
     [Simple]s.  The arguments do not have to be provided in the same order
     as when [now_meeting] was called. *)
 val already_meeting : t -> Simple.t -> Simple.t -> bool
-
-val with_env : t -> (Typing_env.t -> Typing_env.t) -> t

@@ -25,8 +25,6 @@ val create
   -> open_or_closed
   -> t
 
-val create_bottom : unit -> t
-
 include Type_structure_intf.S
   with type t := t
   with type flambda_type := Flambda_types.t

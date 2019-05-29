@@ -32,22 +32,10 @@ val empty : t
 
 val is_empty : t -> bool
 
-val find_equation : t -> Name.t -> Flambda_types.t
-
-val defined_names : t -> Flambda_kind.t Name.Map.t
-
-val equations : t -> Flambda_types.t Name.Map.t
-
 val one_equation : Name.t -> Flambda_types.t -> t
-
-val add_definition : t -> Name.t -> Flambda_kind.t -> t
-
-val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
 val meet_equation : t -> Meet_env.t -> Name.t -> Flambda_types.t -> t
 
 val meet : Meet_env.t -> t -> t -> t
 
 val join : Typing_env.t -> t -> t -> t
-
-val erase_aliases : t -> allowed:Variable.Set.t -> t

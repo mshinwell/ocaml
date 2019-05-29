@@ -23,26 +23,6 @@ val create
   -> typing_env_right:Typing_env.t
   -> t
 
-val print : Format.formatter -> t -> unit
-
 val typing_env_left : t -> Typing_env.t
 
 val typing_env_right : t -> Typing_env.t
-
-val replace_typing_environments
-   : t
-  -> left:Typing_env.t
-  -> right:Typing_env.t
-  -> t
-
-val add_definition_typing_env_left
-   : t
-  -> Name.t
-  -> Flambda_kind.t
-  -> t
-
-val add_definition_typing_env_right
-   : t
-  -> Name.t
-  -> Flambda_kind.t
-  -> t
