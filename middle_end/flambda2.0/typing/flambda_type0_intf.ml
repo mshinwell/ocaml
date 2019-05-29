@@ -45,8 +45,6 @@ module type S = sig
   module Typing_env_extension : sig
     type t = typing_env_extension
 
-    include Contains_names.S with type t := t
-
     val print_with_cache
        : cache:Printing_cache.t
       -> Format.formatter
@@ -57,24 +55,7 @@ module type S = sig
 
     val invariant : t -> unit
 
-    val empty : t
-
-    val is_empty : t -> bool
-
-    val find_opt : t -> Name.t -> flambda_type option
-
-    val add_definition : t -> Name.t -> Flambda_kind.t -> t
-
-    val add_equation : t -> Name.t -> flambda_type -> t
-
-    val meet_equation
-       : t
-      -> typing_env
-      -> Name.t
-      -> flambda_type
-      -> t
-
-    val add_or_replace_equation : t -> Name.t -> flambda_type -> t
+    val one_equation : Name.t -> flambda_type -> t
   end
 
   module Typing_env : sig
@@ -94,9 +75,11 @@ module type S = sig
 
     val is_empty : t -> bool
 
-    val current_level : t -> Scope.t
+    val current_scope : t -> Scope.t
 
-    val increment_scope_level_to : t -> Scope.t -> t
+    val increment_scope : t -> t
+
+    val increment_scope_to : t -> Scope.t -> t
 
     val domain : t -> Name_occurrences.t
 
@@ -121,13 +104,6 @@ module type S = sig
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t
-
-    val resolve_any_toplevel_alias
-       : t
-      -> flambda_type
-      -> flambda_type * (Simple.t option)
- 
-    val restrict_to_symbols : t -> t
   end
 
   val join : Typing_env.t -> t -> t -> t

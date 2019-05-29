@@ -33,10 +33,9 @@ module K = Flambda_kind
    types?  It would remove most of the "everything_must_only_be_names"
    stuff. *)
 
-module Make (Term_language_function_declaration : sig
-  include Expr_std.S
-  val code_id : t -> Code_id.t
-end) = struct
+module Make
+  (Term_language_function_declaration : Term_language_function_declaration.S)
+= struct
   (* -- module rec binding here -- *)
 
   include Flambda_type0_core
@@ -44,6 +43,8 @@ end) = struct
 
   let meet = Api_meet_and_join.meet
   let join = Api_meet_and_join.join
+
+(*
 
   let meet_skeleton env t ~skeleton ~result ~result_kind : _ Or_bottom.t =
     let env =
@@ -1456,4 +1457,6 @@ end) = struct
                 | Proved _ty_naked_number -> Boxed_nativeint
                 | Invalid | Unknown -> Cannot_unbox
   *)
+
+*)
 end
