@@ -131,7 +131,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           (k_exn : Continuation.t) : Ilambda.t =
   match lam with
   | Lvar id -> k id
-  | Lconst _ -> name_then_cps_non_tail "const" lam k k_exn
+  | Lconst const -> name_then_cps_non_tail "const" (I.Const const) k k_exn
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall; ap_inlined;
       ap_specialised; } ->
     cps_non_tail_list ap_args (fun args ->
@@ -165,7 +165,10 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
         }) k_exn)
       k_exn
   | Lfunction func ->
-    name_then_cps_non_tail (name_for_function func) lam k k_exn
+    let id = Ident.create_local (name_for_function func) in
+    let func = cps_function func in
+    let body = k id in
+    Let_rec ([id, func], body)
   | Llet (Variable, value_kind, id, defining_expr, body) ->
     seen_let_mutable := true;
     let temp_id = Ident.create_local "let_mutable" in
@@ -373,7 +376,12 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
         };
       handler = k result_var;
     }
-  | Lassign _ -> name_then_cps_non_tail "assign" lam k k_exn
+  | Lassign (being_assigned, new_value) ->
+    cps_non_tail new_value (fun new_value ->
+        name_then_cps_non_tail "assign"
+          (I.Assign { being_assigned; new_value; })
+          k k_exn)
+      k_exn
   | Lsequence _ | Lifthenelse _ | Lwhile _ | Lfor _ | Lifused _ | Levent _ ->
     Misc.fatal_errorf "Term should have been eliminated by [Prepare_lambda]: %a"
       Printlambda.lambda lam
@@ -382,7 +390,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       : Ilambda.t =
   match lam with
   | Lvar id -> Apply_cont (k, None, [id])
-  | Lconst _ -> name_then_cps_tail "const" lam k k_exn
+  | Lconst const -> name_then_cps_tail "const" (I.Const const) k k_exn
   | Lapply apply ->
     cps_non_tail_list apply.ap_args (fun args ->
       cps_non_tail apply.ap_func (fun func ->
@@ -403,7 +411,10 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
           specialised = apply.ap_specialised;
         } in
         I.Apply apply) k_exn) k_exn
-  | Lfunction func -> name_then_cps_tail (name_for_function func) lam k k_exn
+  | Lfunction func ->
+    let id = Ident.create_local (name_for_function func) in
+    let func = cps_function func in
+    Let_rec ([id, func], Apply_cont (k, None, [id]))
   | Llet (Variable, value_kind, id, defining_expr, body) ->
     seen_let_mutable := true;
     let temp_id = Ident.create_local "let_mutable" in
@@ -528,7 +539,11 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
             specialised = Default_specialise;
           } in
           I.Apply apply) k_exn) k_exn) k_exn
-  | Lassign _ -> name_then_cps_tail "assign" lam k k_exn
+  | Lassign (being_assigned, new_value) ->
+    cps_non_tail new_value (fun new_value ->
+        name_then_cps_tail "assign" (I.Assign { being_assigned; new_value; })
+        k k_exn)
+      k_exn
   | Ltrywith (body, id, handler) ->
     let body_result = Ident.create_local "body_result" in
     let body_continuation = Continuation.create () in
@@ -572,13 +587,14 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     Misc.fatal_errorf "Term should have been eliminated by [Prepare_lambda]: %a"
       Printlambda.lambda lam
 
-and name_then_cps_non_tail name lam k k_exn =
-  let var = Ident.create_local name in
-  cps_non_tail (L.Llet (Strict, Pgenval, var, lam, Lvar var)) k k_exn
+and name_then_cps_non_tail name defining_expr k _k_exn : I.t =
+  let id = Ident.create_local name in
+  let body = k id in
+  Let (id, Pgenval, defining_expr, body)
 
-and name_then_cps_tail name lam k k_exn =
-  let var = Ident.create_local name in
-  cps_tail (L.Llet (Strict, Pgenval, var, lam, Lvar var)) k k_exn
+and name_then_cps_tail name defining_expr k _k_exn : I.t =
+  let id = Ident.create_local name in
+  Let (id, Pgenval, defining_expr, Apply_cont (k, None, [id]))
 
 and cps_non_tail_list lams k k_exn =
   let lams = List.rev lams in  (* Always evaluate right-to-left. *)
