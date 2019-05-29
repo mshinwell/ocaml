@@ -56,6 +56,13 @@ let print_rawflambda ppf program =
       Flambda_static.Program.print program
   end
 
+let print_flambda name ppf program =
+  if !Clflags.dump_flambda then begin
+    Format.fprintf ppf "After %s:@ %a@."
+      name
+      Flambda_static.Program.print program
+  end
+
 let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
       ~module_ident ~module_initializer =
   Profile.record_call "flambda2.0" (fun () ->
@@ -86,6 +93,8 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
     in
     print_rawflambda ppf flambda;
     check_invariants flambda;
+    let flambda = Simplify.run ~backend ~round:1 flambda in
+    print_flambda "simplify" ppf flambda;
     flambda)
 
 let middle_end ~ppf_dump:ppf ~prefixname ~backend ~size ~filename ~module_ident

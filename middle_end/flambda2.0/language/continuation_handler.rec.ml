@@ -46,10 +46,10 @@ let print_using_where_with_cache ~cache ppf k
 
 let print _ppf _t =
   (* XXX Where do we get [k] from? *)
-  Misc.fatal_error "Not yet implemented"
+  Misc.fatal_error "Continuation_handler.print not yet implemented"
 
 let print_with_cache ~cache:_ _ppf _t =
-  Misc.fatal_error "Not yet implemented"
+  Misc.fatal_error "Continuation_handler.print_with_cache not yet implemented"
 
 (*
 let print_with_cache ~cache ppf (t : t) =
