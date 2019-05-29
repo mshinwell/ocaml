@@ -131,7 +131,7 @@ let print_with_cache ~cache ppf
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let invariant ?force t =
+let invariant0 ?force t =
   if !Clflags.flambda_invariant_checks || Option.is_some (force : unit option)
   then begin
     let no_empty_prev_levels =
@@ -159,8 +159,10 @@ let invariant ?force t =
   end
 
 let invariant_should_fail t =
-  invariant ~force:() t;
+  invariant0 ~force:() t;
   Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
+
+let invariant t : unit = invariant0 t
 
 let resolver t = t.resolver
 
@@ -180,7 +182,7 @@ let create ~resolver =
 
 let create_using_resolver_from t = create ~resolver:t.resolver
 
-let increment_scope_level_to t scope =
+let increment_scope_to t scope =
   let current_scope = current_scope t in
   if Scope.(<=) scope current_scope then begin
     Misc.fatal_errorf "New level %a must exceed %a:@ %a"
@@ -200,8 +202,8 @@ let increment_scope_level_to t scope =
     current_level;
   }
 
-let increment_scope_level t =
-  increment_scope_level_to t (One_level.next_scope t.current_level)
+let increment_scope t =
+  increment_scope_to t (One_level.next_scope t.current_level)
 
 let fast_equal t1 t2 =
   t1 == t2
@@ -210,7 +212,7 @@ let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
 
 let domain t =
-  Name_occurrences.
+  Name_occurrences.create_names_in_types (domain0 t)
 
 let find t name =
   match Name.Map.find name (names_to_types t) with
@@ -448,3 +450,7 @@ let create_using_resolver_and_symbol_bindings_from t =
       add_equation t name typ)
     names_to_types
     (create_using_resolver_from t)
+
+let get_canonical_name t name = Aliases.get_canonical_name (aliases t) name
+
+let aliases_of_simple t simple = Aliases.aliases_of_simple (aliases t) simple
