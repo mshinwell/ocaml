@@ -24,6 +24,8 @@ val is_obviously_bottom : Flambda_types.t -> bool
 
 val ty_is_obviously_bottom : _ Flambda_types.ty -> bool
 
+val is_obviously_unknown : Flambda_types.t -> bool
+
 val of_ty_value : Flambda_types.ty_value -> Flambda_types.t
 
 val of_ty_naked_number

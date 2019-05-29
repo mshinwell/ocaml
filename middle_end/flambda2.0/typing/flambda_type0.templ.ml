@@ -42,7 +42,12 @@ module Make
   include Flambda_types
 
   let meet = Api_meet_and_join.meet
-  let join = Api_meet_and_join.join
+  let join env t1 t2 : t = Api_meet_and_join.join env t1 t2
+
+  let erase_aliases = Type_erase_aliases.erase_aliases
+
+  let arity_of_list ts =
+    Flambda_arity.create (List.map Flambda_type0_core.kind ts)
 
 (*
 
@@ -76,13 +81,17 @@ module Make
   let as_or_more_precise = Api_meet_and_join.as_or_more_precise
   let strictly_more_precise = Api_meet_and_join.strictly_more_precise
 
-  let fast_equal = Type_equality.fast_equal
+*)
+
+  type typing_env = Typing_env.t
+  type typing_env_extension = Typing_env_extension.t
+
   let equal = Type_equality.equal
 
   let print = Type_printers.print
   let print_with_cache = Type_printers.print_with_cache
 
-  module JE = Join_env
+  let invariant _env _t = ()  (* CR mshinwell: implement *)
 
   type 'a type_accessor = Typing_env.t -> 'a
 
@@ -99,19 +108,207 @@ module Make
     this_tagged_immediate Immediate.zero
 
   let unit_bottom () =
-    bottom (K.value ())
+    bottom K.value
 
   let is_bottom env t =
-    let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.is_bottom simplified
+    let t, _simple = Typing_env.resolve_any_toplevel_alias env t in
+    is_obviously_bottom t
 
   let is_unknown env t =
-    let simplified, _canonical_simple = Simplified_type.create env t in
-    Simplified_type.is_unknown simplified
+    let t, _simple = Typing_env.resolve_any_toplevel_alias env t in
+    is_obviously_unknown t
 
   let is_known env t =
     not (is_unknown env t)
 
+  let term_language_function_declaration (decl : function_declaration) =
+    match decl with
+    | Non_inlinable -> None
+    | Inlinable inlinable -> Some (inlinable.function_decl)
+
+  type 'a proof =
+    | Proved of 'a
+    | Unknown
+    | Invalid
+
+  let prove_single_closures_entry env t : _ proof =
+    let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
+    let resolved, _simple = Typing_env.resolve_type env t in
+    match resolved with
+    | Resolved_value Unknown -> Unknown
+    | Resolved_value (Ok (Closures closures)) ->
+      begin
+        match Closures_entry_by_closure_id.get_singleton closures.by_closure_id
+      with
+      | None -> Unknown
+      | Some ((closure_id, _var_within_closures), closures_entry) ->
+        Proved (closure_id, closures_entry.function_decl)
+      end
+    | Resolved_value (Ok _) -> Invalid
+    | Resolved_value Bottom -> Invalid
+    | Resolved_naked_number _ -> wrong_kind ()
+    | Resolved_fabricated _ -> wrong_kind ()
+
+  type to_lift =
+    | Boxed_float of Float.t
+    | Boxed_int32 of Int32.t
+    | Boxed_int64 of Int64.t
+    | Boxed_nativeint of Targetint.t
+
+  type reification_result =
+    | Term of Simple.t * t
+    | Lift of to_lift
+    | Cannot_reify
+    | Invalid
+
+  (* CR mshinwell: Move into submodule *)
+  let resolved_type_is_bottom (resolved_t : resolved_t) =
+    match resolved_t with
+    | Resolved_value Bottom -> true
+    | Resolved_naked_number (Bottom, _) -> true
+    | Resolved_fabricated Bottom -> true
+    | Resolved_value _ -> false
+    | Resolved_naked_number _ -> false
+    | Resolved_fabricated _ -> false
+
+  let reify env ~allow_free_variables t : reification_result =
+    let resolved, canonical_simple = Typing_env.resolve_type env t in
+    (* CR mshinwell: We need the [free_names] computation.  That should probably
+       also resolve aliases throughout the type to try to get them to
+       symbols *)
+(*
+    let can_lift =
+      Name_occurrences.contains_only_symbols (free_names t)
+    in
+*)
+    if resolved_type_is_bottom resolved then Invalid
+    else
+      let result, canonical_var =
+        match canonical_simple with
+        | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
+          Some (Term (simple, alias_type_of (kind t) simple)), None
+        | Some ((Name ((Var _) as name)) as simple) ->
+          if allow_free_variables
+          then None, Some simple
+          else None, None
+        | None -> None, None
+      in
+      match result with
+      | Some result -> result
+      | None ->
+        let try_canonical_var () : reification_result =
+          match canonical_var with
+          | Some simple -> Term (simple, alias_type_of (kind t) simple)
+          | None -> Cannot_reify
+        in
+        try_canonical_var ()
+
+(*
+        match resolved with
+        | Resolved_value unknown_or_join ->
+          begin match unknown_or_join with
+          | Unknown -> try_canonical_var ()
+          | Bottom -> Invalid
+          | Ok (Blocks_and_tagged_immediates { blocks; immediates; }, _perm) ->
+            if not (Blocks.is_empty blocks) then try_canonical_var ()
+            else
+              begin match Immediates.get_singleton immediates with
+              | Some (imm, _env_extension) ->
+                Term (Simple.const (Tagged_immediate imm), t)
+              | None -> try_canonical_var ()
+              end
+          | Ok (Boxed_number (Boxed_float ty_naked_number), _perm) ->
+            if not can_lift then try_canonical_var ()
+            else
+              let contents =
+                of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
+              in
+              begin match prove_unique_naked_float env contents with
+              | Proved f -> Lift (Boxed_float f)
+              | Unknown -> try_canonical_var ()
+              | Invalid -> try_canonical_var ()
+              end
+          | Ok (Boxed_number (Boxed_int32 ty_naked_number), _perm) ->
+            if not can_lift then try_canonical_var ()
+            else
+              let contents =
+                of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
+              in
+              begin match prove_unique_naked_int32 env contents with
+              | Proved i -> Lift (Boxed_int32 i)
+              | Unknown -> try_canonical_var ()
+              | Invalid -> try_canonical_var ()
+              end
+          | Ok (Boxed_number (Boxed_int64 ty_naked_number), _perm) ->
+            if not can_lift then try_canonical_var ()
+            else
+              let contents =
+                of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
+              in
+              begin match prove_unique_naked_int64 env contents with
+              | Proved i -> Lift (Boxed_int64 i)
+              | Unknown -> try_canonical_var ()
+              | Invalid -> try_canonical_var ()
+              end
+          | Ok (Boxed_number (Boxed_nativeint ty_naked_number), _perm) ->
+            if not can_lift then try_canonical_var ()
+            else
+              let contents =
+                of_ty_naked_number ty_naked_number
+                  K.Naked_number.Naked_nativeint
+              in
+              begin match prove_unique_naked_nativeint env contents with
+              | Proved i -> Lift (Boxed_nativeint i)
+              | Unknown -> try_canonical_var ()
+              | Invalid -> try_canonical_var ()
+              end
+          | Ok ((Closures _ | String _), _perm) -> try_canonical_var ()
+          end
+        | Simplified_type.Naked_number (ty_naked_number, _) ->
+          begin match ty_naked_number with
+          | Unknown -> try_canonical_var ()
+          | Bottom -> Invalid
+          | Ok (Immediate imms, _perm) ->
+            begin match Immediate.Set.get_singleton imms with
+            | Some imm -> Term (Simple.const (Naked_immediate imm), t)
+            | None -> try_canonical_var ()
+            end
+          | Ok (Float fs, _perm) ->
+            begin match Float.Set.get_singleton fs with
+            | Some f -> Term (Simple.const (Naked_float f), t)
+            | None -> try_canonical_var ()
+            end
+          | Ok (Int32 is, _perm) ->
+            begin match Int32.Set.get_singleton is with
+            | Some i -> Term (Simple.const (Naked_int32 i), t)
+            | None -> try_canonical_var ()
+            end
+          | Ok (Int64 is, _perm) ->
+            begin match Int64.Set.get_singleton is with
+            | Some i -> Term (Simple.const (Naked_int64 i), t)
+            | None -> try_canonical_var ()
+            end
+          | Ok (Nativeint is, _perm) ->
+            begin match Targetint.Set.get_singleton is with
+            | Some i -> Term (Simple.const (Naked_nativeint i), t)
+            | None -> try_canonical_var ()
+            end
+          end
+        | Fabricated (Ok (Set_of_closures _set_of_closures, _perm)) ->
+          try_canonical_var ()
+        | Fabricated (Ok (Discriminants discriminants, _perm)) ->
+          begin match Discriminants.get_singleton discriminants with
+          | None -> try_canonical_var ()
+          | Some (discriminant, _env_extension) ->
+            (* CR mshinwell: Here and above, should the [env_extension] be
+               returned? *)
+            Term (Simple.discriminant discriminant, t)
+          end
+        | Fabricated Unknown -> try_canonical_var ()
+        | Fabricated Bottom -> Invalid
+*)
+
+(*
   let is_useful env t =
     let simplified, _canonical_simple = Simplified_type.create env t in
     (not (Simplified_type.is_unknown simplified))
@@ -119,100 +316,6 @@ module Make
 
   let all_not_useful env ts =
     List.for_all (fun t -> not (is_useful env t)) ts
-
-  module Simplified_type : sig
-    (* Simplified types omit the following at top level:
-       - alias information;
-       - joins between incompatible types (these turn into "Unknown").
-    *)
-    type t = private
-      | Value of ty_value
-      | Naked_number :
-          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
-      | Fabricated of ty_fabricated
-
-    and ty_value = of_kind_value ty
-    and 'a ty_naked_number = 'a of_kind_naked_number ty
-    and ty_fabricated = of_kind_fabricated ty
-
-    and 'a ty = private
-      | Unknown
-      | Ok of 'a * Name_permutation.t
-      | Bottom
-
-    (* Create a simple type from a type.  If the type has an alias at its
-       top level stating that it is the type of some named value, that alias
-       is (recursively) expanded, and the final ("canonical") simple value
-       returned. *)
-    val create : (flambda_type -> t * (Simple.t option)) type_accessor
-
-    val is_unknown : t -> bool
-    val is_bottom : t -> bool
-  end = struct
-    type 'a normal_ty = 'a ty
-    
-    type t =
-      | Value of ty_value
-      | Naked_number :
-          'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
-      | Fabricated of ty_fabricated
-    
-    and ty_value = of_kind_value ty
-    and 'a ty_naked_number = 'a of_kind_naked_number ty
-    and ty_fabricated = of_kind_fabricated ty
-    
-    and 'a ty =
-      | Unknown
-      | Ok of 'a * Name_permutation.t
-      | Bottom
-    
-    let is_unknown t =
-      match t with
-      | Value Unknown -> true
-      | Naked_number (Unknown, _) -> true
-      | Fabricated Unknown -> true
-      | _ -> false
-    
-    let is_bottom t =
-      match t with
-      | Value Bottom -> true
-      | Naked_number (Bottom, _) -> true
-      | Fabricated Bottom -> true
-      | _ -> false
-    
-    let ty_from_ty (ty : _ normal_ty) : _ ty =
-      match ty with
-      | Type _ | Equals _ -> Unknown
-      | No_alias unknown_or_join ->
-        match unknown_or_join with
-        | Unknown -> Unknown
-        | Join [] -> Bottom
-        | Join [of_kind_foo, perm] -> Ok (of_kind_foo, perm)
-        | Join _ -> Unknown
-    
-    let create env (t : flambda_type) : t * (Simple.t option) =
-      let t, canonical_simple = Typing_env.resolve_aliases env t in
-      let t : t =
-        match t with
-        | Value ty_value ->
-          let ty_value : ty_value = ty_from_ty ty_value in
-          Value ty_value
-        | Naked_number (ty_naked_number, kind) ->
-          let ty_naked_number : _ ty_naked_number =
-            ty_from_ty ty_naked_number
-          in
-          Naked_number (ty_naked_number, kind)
-        | Fabricated ty_fabricated ->
-          let ty_fabricated : ty_fabricated = ty_from_ty ty_fabricated in
-          Fabricated ty_fabricated
-      in
-      t, canonical_simple
-  end
-
-  type 'a proof =
-    | Proved of 'a
-    | Unknown
-    | Invalid
 
   let _unknown_proof () = Unknown
 
@@ -353,158 +456,6 @@ module Make
     | Value _ -> wrong_kind ()
     | Simplified_type.Naked_number _ -> wrong_kind ()
   *)
-
-  type to_lift =
-    | Boxed_float of Float.t
-    | Boxed_int32 of Int32.t
-    | Boxed_int64 of Int64.t
-    | Boxed_nativeint of Targetint.t
-
-  type reification_result =
-    | Term of Simple.t * t
-    | Lift of to_lift
-    | Cannot_reify
-    | Invalid
-
-  let reify env ~allow_free_variables t : reification_result =
-    let t, canonical_simple = Typing_env.resolve_aliases env t in
-  (*
-  Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
-    canonical_simple;
-  *)
-    let can_lift =
-      Name.Set.for_all (fun (name : Name.t) ->
-          match name with
-          | Var _ | Logical_var _ -> false
-          | Symbol _ -> true)
-        (Name_occurrences.everything_must_only_be_names (free_names t))
-    in
-    let simplified, canonical_simple' = Simplified_type.create env t in
-    assert (Misc.Stdlib.Option.equal Simple.equal
-      canonical_simple canonical_simple');
-    if Simplified_type.is_bottom simplified then Invalid
-    else
-      let result, canonical_var =
-        match canonical_simple with
-        | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
-          Some (Term (simple, alias_type_of (kind t) simple)), None
-        | Some ((Name ((Var _) as name)) as simple) ->
-          if allow_free_variables
-            && (not (Typing_env.was_existential_exn env name))
-          then None, Some simple
-          else None, None
-        | Some (Name (Logical_var _)) | None -> None, None
-      in
-      match result with
-      | Some result -> result
-      | None ->
-        let try_canonical_var () : reification_result =
-          match canonical_var with
-          | Some simple -> Term (simple, alias_type_of (kind t) simple)
-          | None -> Cannot_reify
-        in
-        match simplified with
-        | Value ty_value ->
-          begin match ty_value with
-          | Unknown -> try_canonical_var ()
-          | Bottom -> Invalid
-          | Ok (Blocks_and_tagged_immediates { blocks; immediates; }, _perm) ->
-            if not (Blocks.is_empty blocks) then try_canonical_var ()
-            else
-              begin match Immediates.get_singleton immediates with
-              | Some (imm, _env_extension) ->
-                Term (Simple.const (Tagged_immediate imm), t)
-              | None -> try_canonical_var ()
-              end
-          | Ok (Boxed_number (Boxed_float ty_naked_number), _perm) ->
-            if not can_lift then try_canonical_var ()
-            else
-              let contents =
-                of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
-              in
-              begin match prove_unique_naked_float env contents with
-              | Proved f -> Lift (Boxed_float f)
-              | Unknown -> try_canonical_var ()
-              | Invalid -> try_canonical_var ()
-              end
-          | Ok (Boxed_number (Boxed_int32 ty_naked_number), _perm) ->
-            if not can_lift then try_canonical_var ()
-            else
-              let contents =
-                of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
-              in
-              begin match prove_unique_naked_int32 env contents with
-              | Proved i -> Lift (Boxed_int32 i)
-              | Unknown -> try_canonical_var ()
-              | Invalid -> try_canonical_var ()
-              end
-          | Ok (Boxed_number (Boxed_int64 ty_naked_number), _perm) ->
-            if not can_lift then try_canonical_var ()
-            else
-              let contents =
-                of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
-              in
-              begin match prove_unique_naked_int64 env contents with
-              | Proved i -> Lift (Boxed_int64 i)
-              | Unknown -> try_canonical_var ()
-              | Invalid -> try_canonical_var ()
-              end
-          | Ok (Boxed_number (Boxed_nativeint ty_naked_number), _perm) ->
-            if not can_lift then try_canonical_var ()
-            else
-              let contents =
-                of_ty_naked_number ty_naked_number
-                  K.Naked_number.Naked_nativeint
-              in
-              begin match prove_unique_naked_nativeint env contents with
-              | Proved i -> Lift (Boxed_nativeint i)
-              | Unknown -> try_canonical_var ()
-              | Invalid -> try_canonical_var ()
-              end
-          | Ok ((Closures _ | String _), _perm) -> try_canonical_var ()
-          end
-        | Simplified_type.Naked_number (ty_naked_number, _) ->
-          begin match ty_naked_number with
-          | Unknown -> try_canonical_var ()
-          | Bottom -> Invalid
-          | Ok (Immediate imms, _perm) ->
-            begin match Immediate.Set.get_singleton imms with
-            | Some imm -> Term (Simple.const (Naked_immediate imm), t)
-            | None -> try_canonical_var ()
-            end
-          | Ok (Float fs, _perm) ->
-            begin match Float.Set.get_singleton fs with
-            | Some f -> Term (Simple.const (Naked_float f), t)
-            | None -> try_canonical_var ()
-            end
-          | Ok (Int32 is, _perm) ->
-            begin match Int32.Set.get_singleton is with
-            | Some i -> Term (Simple.const (Naked_int32 i), t)
-            | None -> try_canonical_var ()
-            end
-          | Ok (Int64 is, _perm) ->
-            begin match Int64.Set.get_singleton is with
-            | Some i -> Term (Simple.const (Naked_int64 i), t)
-            | None -> try_canonical_var ()
-            end
-          | Ok (Nativeint is, _perm) ->
-            begin match Targetint.Set.get_singleton is with
-            | Some i -> Term (Simple.const (Naked_nativeint i), t)
-            | None -> try_canonical_var ()
-            end
-          end
-        | Fabricated (Ok (Set_of_closures _set_of_closures, _perm)) ->
-          try_canonical_var ()
-        | Fabricated (Ok (Discriminants discriminants, _perm)) ->
-          begin match Discriminants.get_singleton discriminants with
-          | None -> try_canonical_var ()
-          | Some (discriminant, _env_extension) ->
-            (* CR mshinwell: Here and above, should the [env_extension] be
-               returned? *)
-            Term (Simple.discriminant discriminant, t)
-          end
-        | Fabricated Unknown -> try_canonical_var ()
-        | Fabricated Bottom -> Invalid
 
   (* CR mshinwell: rename to "prove_must_be_tagged_immediate" *)
   let prove_tagged_immediate env t : Immediate.Set.t proof =

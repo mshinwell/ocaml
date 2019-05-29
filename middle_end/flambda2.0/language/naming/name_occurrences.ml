@@ -45,6 +45,8 @@ end) = struct
 
   let empty = N.Map.empty
 
+  let is_empty = N.Map.is_empty
+
   let singleton name = N.Map.singleton name 1
 
   let add t name =
@@ -522,3 +524,18 @@ let remove_var t var =
     variables_in_types;
     variables_debug_only;
   }
+
+let only_contains_symbols
+      { variables_in_terms;
+        variables_in_types;
+        variables_debug_only;
+        continuations;
+        symbols_in_terms;
+        symbols_in_types;
+      } =
+  For_variables.is_empty variables_in_terms
+    && For_variables.is_empty variables_in_types
+    && For_variables.is_empty variables_debug_only
+    && For_continuations.is_empty continuations
+    && For_symbols.is_empty symbols_in_terms
+    && For_symbols.is_empty symbols_in_types
