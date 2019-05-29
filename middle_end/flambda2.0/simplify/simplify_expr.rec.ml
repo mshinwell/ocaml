@@ -27,7 +27,7 @@ module T = Flambda_type
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
-let rec simplify_let env r (let_expr : Flambda.Let.t) : Expr.t * R.t =
+let rec simplify_let env r (let_expr : Let.t) : Expr.t * R.t =
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->

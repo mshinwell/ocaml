@@ -81,7 +81,7 @@ let apply_name_permutation t perm =
   | Set_of_closures set ->
     let set' = Set_of_closures.apply_name_permutation set perm in
     if set == set' then t
-    else Set_of_closures set
+    else Set_of_closures set'
 
 let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
   let simple = Simple.name name in

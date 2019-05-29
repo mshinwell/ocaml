@@ -44,15 +44,13 @@ let update function_decls ~funs =
     funs;
   }
 
-let print_with_cache ~cache ppf (t : t) =
-  let funs ppf t =
-    Closure_id.Map.iter (fun _ decl ->
-        Function_declaration.print_with_cache ~cache ppf decl)
-      t
-  in
-  fprintf ppf "@[<hov 1>(funs@ %a)@ (set_of_closures_origin %a)@]"
-    funs t.funs
-    Set_of_closures_origin.print t.set_of_closures_origin
+let print_with_cache ~cache ppf { set_of_closures_origin; funs; } =
+  fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(funs@ %a)@]@ \
+      @[<hov 1>(set_of_closures_origin@ %a)@]\
+      )@]"
+    (Closure_id.Map.print (Function_declaration.print_with_cache ~cache)) funs
+    Set_of_closures_origin.print set_of_closures_origin
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
