@@ -153,7 +153,7 @@ let create_let0 bound_var kind defining_expr body : t * let_creation_result =
     let let_expr = Let_expr.create ~bound_var ~kind ~defining_expr ~body in
     let free_names = Let_expr.free_names let_expr in
     let t =
-      { descr = Let (Let_expr.create ~bound_var ~kind ~defining_expr ~body);
+      { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
         free_names = Ok free_names;
       }
