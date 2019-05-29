@@ -14,27 +14,35 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Construction of meet and join operations for types of kind Value. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-  (E : Lattice_ops_intf.S
-    with type typing_env := Typing_env.t
-    with type meet_env := Meet_env.t
-    with type typing_env_extension := Typing_env_extension.t) :
-sig
-  include Meet_and_join_spec_intf.S
-    with type flambda_type := Flambda_types.t
-    with type 'a ty := 'a Flambda_types.ty
-    with type meet_env := Meet_env.t
-    with type typing_env_extension := Typing_env_extension.t
-    with type of_kind_foo = Flambda_types.of_kind_value
+type t = Set_of_closures_entry.t
 
-  val meet_or_join_closures_entry
-     : Meet_env.t
-    -> Flambda_types.closures_entry
-    -> Flambda_types.closures_entry
-    -> (Flambda_types.closures_entry * Typing_env_extension.t)
-         Or_bottom.t
-end
+let create_bottom () : t =
+  { by_closure_id = Types_by_closure_id.bottom;
+  }
+
+let print_with_cache ~cache ppf ({ by_closure_id; } : t) =
+  Format.fprintf ppf
+    "@[<hov 1>(@\
+     @[<hov 1>(by_closure_id@ %a)@])@]"
+    (Types_by_closure_id.print_with_cache ~cache) by_closure_id
+
+let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+let equal = Type_equality.equal_set_of_closures_entry
+
+let widen t ~to_match:_ = t  (* XXX Think about this *)
+
+module Meet_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_meet)
+module Join_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_join)
+
+let meet env t1 t2 =
+  let env = Meet_env.create env in
+  Meet_fabricated.meet_or_join_set_of_closures_entry env t1 t2
+
+let join env t1 t2 =
+  let env = Meet_env.create env in
+  match Join_fabricated.meet_or_join_set_of_closures_entry env t1 t2 with
+  | Ok (t, _env_extension) -> t
+  | Bottom -> create_bottom ()
