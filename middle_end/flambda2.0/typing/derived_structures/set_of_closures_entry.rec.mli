@@ -14,27 +14,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Construction of meet and join operations for types of kind Value. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make
-  (E : Lattice_ops_intf.S
-    with type typing_env := Typing_env.t
-    with type meet_env := Meet_env.t
-    with type typing_env_extension := Typing_env_extension.t) :
-sig
-  include Meet_and_join_spec_intf.S
-    with type flambda_type := Flambda_types.t
-    with type 'a ty := 'a Flambda_types.ty
-    with type meet_env := Meet_env.t
-    with type typing_env_extension := Typing_env_extension.t
-    with type of_kind_foo = Flambda_types.of_kind_value
+type t = Flambda_types.set_of_closures_entry
 
-  val meet_or_join_closures_entry
-     : Meet_env.t
-    -> Flambda_types.closures_entry
-    -> Flambda_types.closures_entry
-    -> (Flambda_types.closures_entry * Typing_env_extension.t)
-         Or_bottom.t
-end
+val create_bottom : unit -> t
+
+val add_or_meet_equations
+    : t
+      -> Meet_env.t
+      -> Typing_env_extension.t
+      -> t
+
+val widen : t -> to_match:t -> t
+
+include Type_structure_intf.S
+        with type t := t
+        with type flambda_type := Flambda_types.t
+        with type typing_env := Typing_env.t
+        with type meet_env := Meet_env.t
+        with type type_equality_env := Type_equality_env.t
+        with type typing_env_extension := Typing_env_extension.t

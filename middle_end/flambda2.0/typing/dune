@@ -10,9 +10,11 @@
     derived_structures/blocks.rec.ml
     derived_structures/closure_elements.rec.ml
     derived_structures/closure_ids.rec.ml
+    derived_structures/closures_entry.rec.ml
     derived_structures/closures_entry_by_closure_id.rec.ml
     derived_structures/discriminants.rec.ml
     derived_structures/immediates.rec.ml
+    derived_structures/set_of_closures_entry.rec.ml
     derived_structures/types_by_closure_id.rec.ml
     env/typing_env_extension.rec.ml
     env/typing_env_level.rec.ml
@@ -41,9 +43,11 @@
     derived_structures/blocks.rec.mli
     derived_structures/closure_elements.rec.mli
     derived_structures/closure_ids.rec.mli
+    derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_closure_id.rec.mli
     derived_structures/discriminants.rec.mli
     derived_structures/immediates.rec.mli
+    derived_structures/set_of_closures_entry.rec.mli
     derived_structures/types_by_closure_id.rec.mli
     env/typing_env_extension.rec.mli
     env/typing_env_level.rec.mli

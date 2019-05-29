@@ -18,56 +18,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: Why aren't these in separate units? *)
-module Closures_entry : sig
-  type t = Flambda_types.closures_entry
-
-  val create_bottom : unit -> t
-
-  val add_or_meet_equations
-     : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
-    -> t
-
-  val widen : t -> to_match:t -> t
-
-  include Type_structure_intf.S
-    with type t := t
-    with type flambda_type := Flambda_types.t
-    with type typing_env := Typing_env.t
-    with type meet_env := Meet_env.t
-    with type type_equality_env := Type_equality_env.t
-    with type typing_env_extension := Typing_env_extension.t
-end
-
-module Set_of_closures_entry : sig
-  type t = Flambda_types.set_of_closures_entry
-
-  val create_bottom : unit -> t
-
-  val add_or_meet_equations
-     : t
-    -> Meet_env.t
-    -> Typing_env_extension.t
-    -> t
-
-  val widen : t -> to_match:t -> t
-
-  include Type_structure_intf.S
-    with type t := t
-    with type flambda_type := Flambda_types.t
-    with type typing_env := Typing_env.t
-    with type meet_env := Meet_env.t
-    with type type_equality_env := Type_equality_env.t
-    with type typing_env_extension := Typing_env_extension.t
-end
-
 val get_alias : Flambda_types.t -> Simple.t option
 
 val is_obviously_bottom : Flambda_types.t -> bool
 
-val ty_is_bottom : Typing_env.t -> _ Flambda_types.ty -> bool
+val ty_is_obviously_bottom : _ Flambda_types.ty -> bool
 
 val of_ty_value : Flambda_types.ty_value -> Flambda_types.t
 
@@ -120,11 +75,8 @@ val these_boxed_int64s : Numbers.Int64.Set.t -> Flambda_types.t
 val this_boxed_nativeint : Targetint.t -> Flambda_types.t
 val these_boxed_nativeints : Targetint.Set.t -> Flambda_types.t
 val this_immutable_string : string -> Flambda_types.t
-val this_immutable_float_array
-   : Numbers.Float_by_bit_pattern.t array
-  -> Flambda_types.t
 
-val these_tagged_immediates_with_envs
+val these_tagged_immediates
    : Typing_env_extension.t Immediate.Map.t
   -> Flambda_types.t
 
@@ -145,8 +97,6 @@ val these_naked_nativeints : Targetint.Set.t -> Flambda_types.t
 
 val immutable_string : size:Targetint.OCaml.t -> Flambda_types.t
 val mutable_string : size:Targetint.OCaml.t -> Flambda_types.t
-
-val mutable_float_array : size:Targetint.OCaml.t -> Flambda_types.t
 
 val this_discriminant : Discriminant.t -> Flambda_types.t
 
@@ -169,10 +119,6 @@ val box_int32 : Flambda_types.t -> Flambda_types.t
 val box_int64 : Flambda_types.t -> Flambda_types.t
 val box_nativeint : Flambda_types.t -> Flambda_types.t
 
-val immutable_float_array
-   : Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number array
-  -> Flambda_types.t
-
 val block
    : Tag.t
   -> fields:Flambda_types.t list
@@ -181,11 +127,6 @@ val block
 val block_of_values
    : Tag.t
   -> fields:Flambda_types.ty_value list
-  -> Flambda_types.t
-
-val block_of_unknown_values
-   : Tag.t
-  -> size:int
   -> Flambda_types.t
 
 val block_with_size_at_least
