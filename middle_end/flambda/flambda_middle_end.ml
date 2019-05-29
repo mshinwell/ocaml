@@ -186,10 +186,12 @@ let lambda_to_flambda ~ppf_dump ~prefixname ~backend ~size ~filename
                     "[@unroll] attribute was not used on this function \
                      application (the optimizer did not know what function \
                      was being applied)"));
+(*
            if !Clflags.dump_flambda
            then
              Format.fprintf ppf_dump "End of middle end:@ %a@."
                Flambda.print_program flam;
+*)
            check flam;
            (* CR-someday mshinwell: add -d... option for this *)
            (* dump_function_sizes flam ~backend; *)
