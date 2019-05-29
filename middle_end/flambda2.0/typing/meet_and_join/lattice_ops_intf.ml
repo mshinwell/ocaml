@@ -102,12 +102,4 @@ module type S = sig
     -> 'a
     -> 'a
     -> ('a * typing_env_extension) Or_bottom.t
-
-  val switch'
-     : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
-    -> (typing_env -> 'a -> 'a -> 'a)
-    -> meet_env
-    -> 'a
-    -> 'a
-    -> 'a Or_bottom.t
 end

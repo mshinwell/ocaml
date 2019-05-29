@@ -54,10 +54,6 @@ module For_meet = struct
 
   let switch meet _join meet_env thing1 thing2 =
     meet meet_env thing1 thing2
-
-  let switch' meet _join meet_env thing1 thing2 : _ Or_bottom.t =
-    Or_bottom.map (meet meet_env thing1 thing2)
-      ~f:(fun (thing, _) -> thing)
 end
 
 module For_join = struct
@@ -95,7 +91,4 @@ module For_join = struct
 
   let switch _meet join meet_env thing1 thing2 : _ Or_bottom.t =
     Ok (join (Meet_env.env meet_env) thing1 thing2, TEE.empty)
-
-  let switch' _meet join meet_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join (Meet_env.env meet_env) thing1 thing2)
 end

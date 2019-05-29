@@ -48,21 +48,20 @@ module Make (Thing : Identifiable.S) = struct
     create_exactly_multiple things
 
   let all t : _ Or_unknown.t =
-    match at_least t, known t with
-    | Unknown, _ | _, Unknown -> Unknown
-    | Known indexes, Known known ->
-      if not (Unit.Map.is_empty indexes) then Unknown
-      else
-        let things =
-          Thing_and_unit.Set.fold (fun (thing, ()) things ->
-              Thing.Set.add thing things)
-            (Thing_and_unit.Map.keys known)
-            Thing.Set.empty
-        in
-        Known things
+    let indexes = at_least t in
+    let known = known t in
+    if not (Unit.Map.is_empty indexes) then Unknown
+    else
+      let things =
+        Thing_and_unit.Set.fold (fun (thing, ()) things ->
+            Thing.Set.add thing things)
+          (Thing_and_unit.Map.keys known)
+          Thing.Set.empty
+      in
+      Known things
 
   let get_singleton t =
     match get_singleton t with
     | None -> None
-    | Some ((thing, ()), ()) -> Some (thing, ())
+    | Some ((thing, ()), ()) -> Some thing
 end
