@@ -27,10 +27,11 @@ let create_bottom () : t =
 let print_with_cache ~cache ppf
       ({ function_decl; closure_elements; set_of_closures; } : t) =
   Format.fprintf ppf
-    "@[<hov 1>(@\
+    "@[<hov 1>(\
       @[<hov 1>(function_decl@ %a)@]@ \
       @[<hov 1>(closure_elements@ %a)@]@ \
-      @[<hov 1>(set_of_closures@ %a)@])@]"
+      @[<hov 1>(set_of_closures@ %a)@]\
+      )@]"
     (Type_printers.print_function_declaration_with_cache ~cache)
       function_decl
     (Closure_elements.print_with_cache ~cache) closure_elements

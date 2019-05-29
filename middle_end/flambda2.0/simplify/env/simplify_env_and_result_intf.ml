@@ -141,9 +141,13 @@ module type Result = sig
 
   type env
 
+  val print : Format.formatter -> t -> unit
+
   val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
   val add_continuation : t -> env -> Continuation.t -> t
+
+  val add_exn_continuation : t -> env -> Exn_continuation.t -> t
 
   val record_continuation_use
      : t

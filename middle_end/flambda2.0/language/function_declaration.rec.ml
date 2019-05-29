@@ -50,7 +50,7 @@ let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
     is_a_functor;
   }
 
-let print_with_cache ~cache ppf
+let print_with_cache0 ~compact ~cache ppf
       { closure_origin;
         params_and_body;
         code_id = _;
@@ -76,9 +76,7 @@ let print_with_cache ~cache ppf
           @[<hov 1>(is_a_functor@ %b)@]@ \
           @[<hov 1>(params@ %a)@]@ \
           @[<hov 1>(my_closure@ %s%a%s)@]@ \
-          @[<hov 1>(result_arity@ %a)@]@ \
-          @[<hov 1>(body@ %a)@]@ \
-          )@]"
+          @[<hov 1>(result_arity@ %a)@]@ "
         Closure_origin.print closure_origin
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
@@ -90,10 +88,21 @@ let print_with_cache ~cache ppf
         (Misc.Color.bold_magenta ())
         Variable.print my_closure
         (Misc.Color.reset ())
-        Flambda_arity.print result_arity
-        (Expr.print_with_cache ~cache) body)
+        Flambda_arity.print result_arity;
+      if compact then begin
+        fprintf ppf "@[<hov 1>(body@ <elided>)@])@]"
+      end else begin
+        fprintf ppf "@[<hov 1>(body@ %a)@])@]"
+          (Expr.print_with_cache ~cache) body
+      end)
+
+let print_with_cache ~cache ppf t =
+  print_with_cache0 ~compact:false ~cache ppf t
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+let print_compact ppf t =
+  print_with_cache0 ~compact:true ~cache:(Printing_cache.create ()) ppf t
 
 let closure_origin t = t.closure_origin
 let params_and_body t = t.params_and_body
