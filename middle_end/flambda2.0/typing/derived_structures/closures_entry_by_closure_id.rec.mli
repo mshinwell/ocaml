@@ -31,8 +31,6 @@ val create_at_least_multiple
    : Flambda_types.closures_entry Var_within_closure_set.Map.t
   -> t
 
-val map_types : t -> f:(Flambda_types.t -> Flambda_types.t) -> t
-
 include Type_structure_intf.S
   with type t := t
   with type flambda_type := Flambda_types.t

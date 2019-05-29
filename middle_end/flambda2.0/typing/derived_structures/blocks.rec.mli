@@ -26,9 +26,7 @@ val create_bottom : unit -> t
 
 val invariant : t -> unit
 
-val is_empty : t -> bool
-
-val map_types : t -> f:(Flambda_types.t -> Flambda_types.t) -> t
+val is_bottom : t -> bool
 
 include Type_structure_intf.S
   with type t := t

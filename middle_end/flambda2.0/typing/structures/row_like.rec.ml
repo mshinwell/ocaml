@@ -48,6 +48,8 @@ struct
       (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
       (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
 
+  let invariant _t = ()
+
   let create_bottom () =
     { known = Tag_and_index.Map.empty;
       at_least = Index.Map.empty;

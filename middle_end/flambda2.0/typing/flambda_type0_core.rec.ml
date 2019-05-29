@@ -281,9 +281,9 @@ let this_naked_immediate i =
 let this_naked_float f =
   these_naked_floats (Float.Set.singleton f)
 
-let this_naked_float_as_ty_naked_float f =
+let this_naked_float_as_ty_naked_float f : _ ty_naked_number =
   let fs = Float.Set.singleton f in
-  let of_kind : _ of_kind_naked_number = Float fs in
+  let of_kind : K.naked_float of_kind_naked_number = Float fs in
   No_alias (Ok of_kind)
 
 let this_naked_int32 i =
@@ -421,9 +421,8 @@ let kind (t : t) =
   | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
   | Fabricated _ -> K.fabricated
 
-let block tag ~(fields : t list) ~field_kind:_ =
-  (* CR mshinwell: We should check the field kinds against the tag; and
-     check the kinds of the [fields] against [field_kind]. *)
+let block tag ~(fields : t list) =
+  (* CR mshinwell: We should check the field kinds against the tag. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
     Misc.fatal_error "Block too long for target"
@@ -439,10 +438,8 @@ let block tag ~(fields : t list) ~field_kind:_ =
 (* CR mshinwell: bad name *)
 let block_of_values tag ~(fields : ty_value list) =
   block tag ~fields:(List.map (fun field : t -> Value field) fields)
-    ~field_kind:K.value
 
-(* CR mshinwell: Decide what to do about [field_kind] *)
-let block_with_size_at_least ~n ~field_n_minus_one ~field_kind:_ =
+let block_with_size_at_least ~n ~field_n_minus_one =
   let type_of_field_n_minus_one =
     alias_type_of K.value (Simple.var field_n_minus_one)
   in

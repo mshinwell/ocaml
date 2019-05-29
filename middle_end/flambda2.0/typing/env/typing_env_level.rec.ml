@@ -144,3 +144,11 @@ let erase_aliases t ~allowed =
   { t with
     equations;
   }
+
+let meet_equation t1 env name ty =
+  let t2 =
+    { defined_names = Name.Map.empty;
+      equations = Name.Map.singleton name ty;
+    }
+  in
+  meet env t1 t2

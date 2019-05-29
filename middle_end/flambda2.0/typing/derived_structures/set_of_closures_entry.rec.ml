@@ -38,7 +38,6 @@ module Meet_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_meet)
 module Join_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_join)
 
 let meet env t1 t2 =
-  let env = Meet_env.create env in
   Meet_fabricated.meet_or_join_set_of_closures_entry env t1 t2
 
 let join env t1 t2 =
@@ -46,3 +45,7 @@ let join env t1 t2 =
   match Join_fabricated.meet_or_join_set_of_closures_entry env t1 t2 with
   | Ok (t, _env_extension) -> t
   | Bottom -> create_bottom ()
+
+let erase_aliases ({ by_closure_id; } : t) ~allowed : t =
+  { by_closure_id = Types_by_closure_id.erase_aliases by_closure_id ~allowed;
+  }
