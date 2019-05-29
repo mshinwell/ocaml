@@ -19,7 +19,7 @@
 module RL =
   Row_like.Make (Closure_id) (Var_within_closure_set)
     (Closure_id_and_var_within_closure_set)
-    (Flambda_type0_core.Closures_entry)
+    (Closures_entry)
 
 type t = RL.t
 
