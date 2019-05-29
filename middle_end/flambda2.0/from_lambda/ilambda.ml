@@ -111,7 +111,7 @@ type program = {
 let fprintf = Format.fprintf
 
 let print_ident_and_value_kind ppf (id, kind) =
-  fprintf ppf "@[%a :: %a@]"
+  fprintf ppf "@[%a@ \u{2237}@ %a@]"
     Ident.print id
     Printlambda.value_kind' kind
 
@@ -181,14 +181,14 @@ and print ppf (t : t) =
   | Let (id, kind, arg, body) ->
     let rec let_body = function
       | Let (id, kind, arg, body) ->
-        fprintf ppf "@ @[<2>%a :: %a =@ %a@]"
+        fprintf ppf "@ @[<2>%a@ \u{2237}@ %a =@ %a@]"
           Ident.print id
           Printlambda.value_kind' kind
           print_named arg;
           let_body body
       | expr -> expr
     in
-    fprintf ppf "@[<2>(let@ @[<v 1>(@[<2>%a :: %a =@ %a@]"
+    fprintf ppf "@[<2>(let@ @[<v 1>(@[<2>%a@ \u{2237}@ %a =@ %a@]"
       Ident.print id
       Printlambda.value_kind' kind
       print_named arg;
@@ -245,7 +245,7 @@ and print ppf (t : t) =
         (match params with [] -> "" | _ -> " (")
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           (fun ppf (ident, kind) ->
-            Format.fprintf ppf "%a::%a"
+            Format.fprintf ppf "%a@ \u{2237}@ %a"
               Ident.print ident
               Printlambda.value_kind' kind)) params
         (match params with [] -> "" | _ -> ")")

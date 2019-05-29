@@ -272,7 +272,7 @@ module Program_body = struct
         Exn_continuation.print exn_continuation
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           (fun ppf (var, kind) ->
-            Format.fprintf ppf "@[(%a :: %a)@]"
+            Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
               Variable.print var
               Flambda_kind.print kind))
         computed_values
@@ -292,7 +292,7 @@ module Program_body = struct
     let print ppf t =
       match t with
       | Singleton (sym, kind) ->
-        Format.fprintf ppf "@[(singleton@ (%a :: %a))@]"
+        Format.fprintf ppf "@[(singleton@ (%a@ \u{2237}@ %a))@]"
           Symbol.print sym
           Flambda_kind.print kind
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->

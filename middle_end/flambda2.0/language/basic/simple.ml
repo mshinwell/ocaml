@@ -264,7 +264,7 @@ module With_kind = struct
       Hashtbl.hash (hash s, Flambda_kind.hash k)
 
     let print ppf (s, k) =
-      Format.fprintf ppf "@[(%a :: %a)@]"
+      Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
         print s
         Flambda_kind.print k
 
