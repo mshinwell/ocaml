@@ -31,15 +31,15 @@ let print_using_where_with_cache ~cache ppf k
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 1>%swhere%s @[<hov 1>%a%s%s@[<hov 1>%a"
+      fprintf ppf "@[<hov 1>%swhere%s @[<hov 1>%a%s%s@ @[<hov 1>%a"
         (Misc.Color.bold_cyan ())
         (Misc.Color.reset ())
 (*
         (if first_and_non_recursive then "" else "and ")
 *)
         Continuation.print k
-        (if stub then " *stub* " else "")
-        (if is_exn_handler then "*exn* " else "")
+        (if stub then " *stub*" else "")
+        (if is_exn_handler then " *exn*" else "")
         Kinded_parameter.List.print params;
       fprintf ppf "@]@] =@ %a"
         (Expr.print_with_cache ~cache) handler)
