@@ -602,7 +602,7 @@ and simplify_apply_cont env r apply_cont : Expr.t * R.t =
           in
           try simplify_expr env r expr
           with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is:%s inlining [Apply_cont] %a.@ \
+            Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
                 The inlined body was:@ %a@ in environment:@ %a\n"
               (Misc.Color.bold_red ())
               (Misc.Color.reset ())
