@@ -33,6 +33,8 @@ module Make
 sig
   type t
 
+  val invariant : t -> unit
+
   val create_bottom : unit -> t
 
   val create_unknown : unit -> t

@@ -18,8 +18,8 @@
 
 include Trivial_row_like_intf.S
   with module Thing_without_names := Discriminant
-  with type flambda_type := Flambda_types.t
   with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type type_equality_env := Type_equality_env.t
   with type typing_env_extension := Typing_env_extension.t
+  with type flambda_type := Flambda_types.t

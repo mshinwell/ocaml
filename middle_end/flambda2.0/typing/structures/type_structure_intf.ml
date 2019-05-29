@@ -29,6 +29,8 @@ module type S = sig
 
   val print : Format.formatter -> t -> unit
 
+  (* CR mshinwell: Add [bottom] here? *)
+
   val equal : type_equality_env -> t -> t -> bool
 
   val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
@@ -38,7 +40,7 @@ module type S = sig
      that we're trying to propagate bottom upwards? *)
   val join : typing_env -> t -> t -> t
 
-  val map_types : t -> f:(flambda_type -> flambda_type) -> t
+  val erase_aliases : t -> allowed:Variable.Set.t -> t
 
   (** Type algebraic structures are never kept underneath object-language
       binders at present, so we don't include [Contains_names.S]. *)

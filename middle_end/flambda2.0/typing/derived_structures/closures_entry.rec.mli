@@ -20,18 +20,12 @@ type t = Flambda_types.closures_entry
 
 val create_bottom : unit -> t
 
-val add_or_meet_equations
-    : t
-      -> Meet_env.t
-      -> Typing_env_extension.t
-      -> t
-
 val widen : t -> to_match:t -> t
 
 include Type_structure_intf.S
-        with type t := t
-        with type flambda_type := Flambda_types.t
-        with type typing_env := Typing_env.t
-        with type meet_env := Meet_env.t
-        with type type_equality_env := Type_equality_env.t
-        with type typing_env_extension := Typing_env_extension.t
+  with type t := t
+  with type flambda_type := Flambda_types.t
+  with type typing_env := Typing_env.t
+  with type meet_env := Meet_env.t
+  with type type_equality_env := Type_equality_env.t
+  with type typing_env_extension := Typing_env_extension.t

@@ -60,11 +60,11 @@ and erase_aliases_of_kind_value ~allowed (of_kind : Flambda_types.of_kind_value)
   | Blocks_and_tagged_immediates { blocks; immediates; } ->
     let blocks =
       Or_unknown.map blocks ~f:(fun blocks ->
-        Blocks.map_types blocks ~f:(erase_aliases ~allowed))
+        Blocks.erase_aliases blocks ~allowed)
     in
     let immediates =
       Or_unknown.map immediates ~f:(fun immediates ->
-        Immediates.map_types immediates ~f:(erase_aliases ~allowed));
+        Immediates.erase_aliases immediates ~allowed);
     in
     Blocks_and_tagged_immediates {
       blocks;
@@ -85,8 +85,7 @@ and erase_aliases_of_kind_value ~allowed (of_kind : Flambda_types.of_kind_value)
   | Closures { by_closure_id; } ->
     Closures {
       by_closure_id =
-        Closures_entry_by_closure_id.map_types
-          by_closure_id ~f:(erase_aliases ~allowed);
+        Closures_entry_by_closure_id.erase_aliases by_closure_id ~allowed;
     }
   | String _ -> of_kind
 
@@ -95,8 +94,11 @@ and erase_aliases_of_kind_fabricated ~allowed
       : Flambda_types.of_kind_fabricated =
   match of_kind with
   | Discriminants discrs ->
-    Discriminants (Discriminants.map_types discrs ~f:(erase_aliases ~allowed))
+    Discriminants (Discriminants.erase_aliases discrs ~allowed)
   | Set_of_closures { closures; } ->
     Set_of_closures {
-      closures = Closure_ids.map_types closures ~f:(erase_aliases ~allowed);
+      closures = Closure_ids.erase_aliases closures ~allowed;
     }
+
+let erase_aliases_ty_fabricated ~allowed ty =
+  erase_aliases_ty ~allowed erase_aliases_of_kind_fabricated ty

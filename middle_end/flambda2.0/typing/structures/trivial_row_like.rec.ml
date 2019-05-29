@@ -31,7 +31,7 @@ module Make (Thing : Identifiable.S) = struct
     let meet _env () () = Or_bottom.Ok ((), TEE.empty)
     let join _env () () = ()
     let equal _env () () = true
-    let map_types () ~f:_ = ()
+    let erase_aliases () ~allowed:_ = ()
     let create_bottom () = ()
     let widen () ~to_match:() = ()
   end
