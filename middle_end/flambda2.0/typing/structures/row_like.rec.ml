@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module TEE = Typing_env_extension
+
 module Make
   (Tag : Identifiable.S)
   (Index : Identifiable.S)
@@ -73,7 +75,7 @@ struct
       at_least;
     }
 
-  let equal env result
+  let equal env
         { known = known1; at_least = at_least1; }
         { known = known2; at_least = at_least2; } =
     match
@@ -93,15 +95,16 @@ struct
       | None | Some false -> false
       | Some true -> true
 
-  module Meet_or_join
+  module Row_like_meet_or_join
     (E : Lattice_ops_intf.S
       with type typing_env := Typing_env.t
       with type meet_env := Meet_env.t
       with type typing_env_extension := Typing_env_extension.t) =
   struct
-    let meet_or_join env t1 t2 =
+    let meet_or_join env t1 t2 : _ Or_bottom.t =
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
+      let env_extension = ref TEE.empty in
       let one_side_only index1 maps_to1 at_least2 =
         let from_at_least2 =
           Index.Map.find_last_opt
@@ -117,16 +120,16 @@ struct
           end
         | Some (index2, from_at_least2) ->
           assert (Index.compare index2 index1 <= 0);
-          (* CR mshinwell: What happens to any generated equations in the
-             [meet] case (same below)? *)
           let maps_to =
-            E.switch' Maps_to.meet Maps_to.join env
+            E.switch Maps_to.meet Maps_to.join env
               maps_to1
               (Maps_to.widen from_at_least2 ~to_match:maps_to1)
           in
           match maps_to with
           | Bottom -> None
-          | Ok maps_to -> Some maps_to
+          | Ok (maps_to, env_extension') ->
+            env_extension := TEE.meet env !env_extension env_extension';
+            Some maps_to
         end
       in
       let merge index maps_to1 maps_to2 =
@@ -137,12 +140,13 @@ struct
           one_side_only index maps_to2 at_least1
         | Some maps_to1, Some maps_to2 ->
           let maps_to =
-            E.switch' Maps_to.meet Maps_to.join env
-              maps_to1 maps_to2
+            E.switch Maps_to.meet Maps_to.join env maps_to1 maps_to2
           in
           begin match maps_to with
           | Bottom -> None
-          | Ok maps_to -> Some maps_to
+          | Ok (maps_to, env_extension') ->
+             env_extension := TEE.meet env !env_extension env_extension';
+            Some maps_to
           end
         | None, None -> None
       in
@@ -158,19 +162,24 @@ struct
           at_least1
           at_least2
       in
-      { known;
-        at_least;
-      }
+      if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then
+        Bottom
+      else
+        Ok ({ known; at_least; }, !env_extension)
   end
 
   let all_maps_to { known; at_least; } =
     (Tag_and_index.Map.data known) @ (Index.Map.data at_least)
 
-  module Meet = Meet_or_join (Lattice_ops.For_meet)
-  module Join = Meet_or_join (Lattice_ops.For_join)
+  module Meet = Row_like_meet_or_join (Lattice_ops.For_meet)
+  module Join = Row_like_meet_or_join (Lattice_ops.For_join)
 
   let meet = Meet.meet_or_join
-  let join = Join.meet_or_join
+
+  let join env t1 t2 =
+    match Join.meet_or_join (Meet_env.create env) t1 t2 with
+    | Ok (t, _env_extension) -> t
+    | Bottom -> create_bottom ()
 
   let is_bottom { known; at_least; } =
     Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
