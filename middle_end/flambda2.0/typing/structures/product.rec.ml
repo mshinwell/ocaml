@@ -35,7 +35,7 @@ module Make (Index : Identifiable.S) = struct
 
   let print_with_cache ~cache:_ ppf t = print ppf t
 
-  let equal env result
+  let equal env
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } =
     let equal =
@@ -43,13 +43,18 @@ module Make (Index : Identifiable.S) = struct
         (fun _index component1 component2 equal ->
           equal &&
             (* CR mshinwell: Why is this [bound_name] needed? *)
-            Type_equality.equal ~bound_name:None env env component1 component2)
+            Type_equality.equal_with_env ?bound_name:None env
+              component1 component2)
         components_by_index1 components_by_index2
         true
     in
     match equal with
     | None | Some false -> false
     | Some true -> true
+
+  let create components_by_index =
+    { components_by_index;
+    }
 
   let create_bottom () =
     { components_by_index = Index.Map.empty;
@@ -103,6 +108,13 @@ module Make (Index : Identifiable.S) = struct
             components_by_index)
         missing_indexes
         t.components_by_index
+    in
+    { components_by_index; }
+
+  let erase_aliases { components_by_index; } ~allowed =
+    let components_by_index =
+      Index.Map.map (fun typ -> Type_erase_aliases.erase_aliases typ ~allowed)
+        components_by_index
     in
     { components_by_index; }
 end
