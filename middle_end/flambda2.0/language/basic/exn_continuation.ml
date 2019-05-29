@@ -25,7 +25,7 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let print_simple_and_kind ppf (simple, kind) =
-    Format.fprintf ppf "@[(%a :: %a)@]"
+    Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
       Simple.print simple
       Flambda_kind.print kind
 
