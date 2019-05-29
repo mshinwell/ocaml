@@ -28,7 +28,7 @@ val of_ty_value : Flambda_types.ty_value -> Flambda_types.t
 
 val of_ty_naked_number
    : 'kind Flambda_types.ty_naked_number
-  -> 'kind
+  -> 'kind Flambda_kind.Naked_number.t
   -> Flambda_types.t
 
 val of_ty_fabricated : Flambda_types.ty_fabricated -> Flambda_types.t
@@ -54,7 +54,7 @@ val any_naked_float : unit -> Flambda_types.t
 
 val any_naked_float_as_ty_naked_float
   : unit
- -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
+ -> Flambda_kind.naked_float Flambda_types.ty_naked_number
 
 val any_naked_int32 : unit -> Flambda_types.t
 
@@ -76,15 +76,13 @@ val this_boxed_nativeint : Targetint.t -> Flambda_types.t
 val these_boxed_nativeints : Targetint.Set.t -> Flambda_types.t
 val this_immutable_string : string -> Flambda_types.t
 
-val these_tagged_immediates
-   : Typing_env_extension.t Immediate.Map.t
-  -> Flambda_types.t
+val these_tagged_immediates : Immediate.Set.t -> Flambda_types.t
 
 val this_naked_immediate : Immediate.t -> Flambda_types.t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> Flambda_types.t
 val this_naked_float_as_ty_naked_float
    : Numbers.Float_by_bit_pattern.t
-  -> Numbers.Float_by_bit_pattern.Set.t Flambda_types.ty_naked_number
+  -> Flambda_kind.naked_float Flambda_types.ty_naked_number
 val these_naked_floats
    : Numbers.Float_by_bit_pattern.Set.t
   -> Flambda_types.t
@@ -104,12 +102,10 @@ val this_discriminant_as_ty_fabricated
    : Discriminant.t
   -> Flambda_types.ty_fabricated
 
-val these_discriminants
-   : Typing_env_extension.t Discriminant.Map.t
-  -> Flambda_types.t
+val these_discriminants : Discriminant.Set.t -> Flambda_types.t
 
 val these_discriminants_as_ty_fabricated
-   : Typing_env_extension.t Discriminant.Map.t
+   : Discriminant.Set.t
   -> Flambda_types.ty_fabricated
 
 val any_discriminant_as_ty_fabricated : unit -> Flambda_types.ty_fabricated

@@ -37,5 +37,3 @@ let create ~field_tys (open_or_closed : open_or_closed) =
   match open_or_closed with
   | Open -> create_at_least size product
   | Closed tag -> create_exactly tag size product
-
-let create_bottom = create_bottom
