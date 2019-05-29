@@ -18,7 +18,7 @@
 
 open Flambda_types
 
-let force_to_kind_value t =
+let force_to_kind_value (t : t) =
   match t with
   | Value ty_value -> ty_value
   | Naked_number _
@@ -107,7 +107,7 @@ let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
       K.Naked_number.print kind
       Type_printers.print t
 
-let force_to_kind_fabricated t =
+let force_to_kind_fabricated (t : t) =
   match t with
   | Fabricated ty_fabricated -> ty_fabricated
   | Value _
@@ -125,6 +125,17 @@ let is_obviously_bottom (t : t) =
   | Value ty -> ty_is_obviously_bottom ty
   | Naked_number (ty, _) -> ty_is_obviously_bottom ty
   | Fabricated ty -> ty_is_obviously_bottom ty
+
+let ty_is_obviously_unknown (ty : _ ty) =
+  match ty with
+  | No_alias Unknown -> true
+  | _ -> false
+
+let is_obviously_unknown (t : t) =
+  match t with
+  | Value ty -> ty_is_obviously_unknown ty
+  | Naked_number (ty, _) -> ty_is_obviously_unknown ty
+  | Fabricated ty -> ty_is_obviously_unknown ty
 
 let of_ty_value ty_value : t =
   Value ty_value
@@ -238,7 +249,7 @@ let any_naked_nativeint () : t =
 let any_fabricated () : t =
   Fabricated (No_alias Unknown)
 
-let unknown (kind : K.t) =
+let unknown (kind : K.t) : t =
   match kind with
   | Value ->
     Value (No_alias Unknown)
@@ -421,7 +432,7 @@ let kind (t : t) =
   | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
   | Fabricated _ -> K.fabricated
 
-let block tag ~(fields : t list) =
+let block tag ~(fields : t list) : t =
   (* CR mshinwell: We should check the field kinds against the tag. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
@@ -439,7 +450,7 @@ let block tag ~(fields : t list) =
 let block_of_values tag ~(fields : ty_value list) =
   block tag ~fields:(List.map (fun field : t -> Value field) fields)
 
-let block_with_size_at_least ~n ~field_n_minus_one =
+let block_with_size_at_least ~n ~field_n_minus_one : t =
   let type_of_field_n_minus_one =
     alias_type_of K.value (Simple.var field_n_minus_one)
   in
@@ -480,7 +491,7 @@ let create_inlinable_function_declaration function_decl : function_declaration =
 let create_non_inlinable_function_declaration () : function_declaration =
   Non_inlinable
 
-let closure closure_id function_decl closure_elements ~set_of_closures =
+let closure closure_id function_decl closure_elements ~set_of_closures : t =
   let closure_elements' =
     let closure_elements =
       Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
@@ -506,7 +517,7 @@ let closure closure_id function_decl closure_elements ~set_of_closures =
   in
   Value (No_alias (Ok (Closures closures)))
 
-let closure_containing_at_least var_within_closure =
+let closure_containing_at_least var_within_closure : t =
   let ty_value = any_value_as_ty_value () in
   let closure_elements =
     Var_within_closure.Map.singleton var_within_closure (Value ty_value)
@@ -530,7 +541,7 @@ let closure_containing_at_least var_within_closure =
   in
   Value (No_alias (Ok (Closures closures)))
 
-let set_of_closures ~closures =
+let set_of_closures ~closures : t =
   if Closure_id.Map.is_empty closures then bottom K.value
   else
     let all_closures = Closure_id.Map.keys closures in
@@ -545,7 +556,7 @@ let set_of_closures ~closures =
     in
     Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
-let set_of_closures_containing_at_least closure_id =
+let set_of_closures_containing_at_least closure_id : t =
   let by_closure_id =
     Types_by_closure_id.create
       (Closure_id.Map.singleton closure_id (any_value ()))

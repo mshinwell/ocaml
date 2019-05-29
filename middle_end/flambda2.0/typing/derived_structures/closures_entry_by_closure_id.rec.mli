@@ -31,6 +31,11 @@ val create_at_least_multiple
    : Flambda_types.closures_entry Var_within_closure_set.Map.t
   -> t
 
+val get_singleton
+   : t
+  -> ((Closure_id.t * Var_within_closure.Set.t)
+       * Flambda_types.closures_entry) option
+
 include Type_structure_intf.S
   with type t := t
   with type flambda_type := Flambda_types.t
