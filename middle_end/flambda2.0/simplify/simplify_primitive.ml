@@ -42,5 +42,5 @@ let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
       Named.create_prim (Variadic (prim, args)) dbg
   in
   let ty = T.any_value () in
-  let env_extension = TEE.add_equation TEE.empty (Name.var result_var) ty in
+  let env_extension = TEE.one_equation (Name.var result_var) ty in
   Reachable.reachable named, env_extension, r
