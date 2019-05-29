@@ -24,10 +24,6 @@ module type S = sig
   (** Create a value which describes the presence of exactly no things. *)
   val create_bottom : unit -> t
 
-  (** Create a value which describes the presence of an unknown set of
-      things. *)
-  val create_unknown : unit -> t
-
   (** Create a value which describes the presence of exactly the given
       things. *)
   val create : Thing_without_names.Set.t -> t
@@ -35,8 +31,6 @@ module type S = sig
   val all : t -> Thing_without_names.Set.t Or_unknown.t
 
   val get_singleton : t -> Thing_without_names.t option
-
-  val classify : t -> unit Or_unknown_or_bottom.t
 
   include Type_structure_intf.S with type t := t
 end
