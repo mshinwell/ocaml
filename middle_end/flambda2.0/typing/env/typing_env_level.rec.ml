@@ -82,6 +82,11 @@ let add_definition t name kind =
     defined_names = Name.Map.add name kind t.defined_names
   }
 
+let one_equation name ty =
+  { defined_names = Name.Map.empty;
+    equations = Name.Map.singleton name ty;
+  }
+
 let add_or_replace_equation t name ty =
   { t with
     equations = Name.Map.add name ty t.equations;

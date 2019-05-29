@@ -100,7 +100,7 @@ end = struct
   let increment_continuation_scope_level t =
     let continuation_scope_level = Scope.next t.continuation_scope_level in
     let typing_env =
-      TE.increment_scope_level_to t.typing_env continuation_scope_level
+      TE.increment_scope_to t.typing_env continuation_scope_level
     in
     { t with
       typing_env;
