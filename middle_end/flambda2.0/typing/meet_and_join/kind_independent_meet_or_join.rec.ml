@@ -39,7 +39,7 @@ struct
 
   let add_equation env (simple : Simple.t) ty env_extension =
     match simple with
-    | Name name -> TEE.meet_equation env_extension (Meet_env.env env) name ty
+    | Name name -> TEE.meet_equation env_extension env name ty
     | Const _ | Discriminant _ -> env_extension
 
   let all_aliases_of env simple_opt =
