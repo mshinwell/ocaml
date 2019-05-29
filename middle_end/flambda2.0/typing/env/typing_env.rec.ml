@@ -269,7 +269,7 @@ let add_equation t name ty =
     let aliases =
       let aliases = aliases t in
       match Flambda_type0_core.get_alias ty with
-      | None -> aliases
+      | None -> Aliases.add_canonical_name aliases name
       | Some alias_of -> Aliases.add aliases (Simple.name name) alias_of
     in
     let names_to_types = Name.Map.add name ty (names_to_types t) in
@@ -353,6 +353,17 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
       at_or_after_cut
       Typing_env_level.empty
 
+let get_canonical_name t name =
+  match Aliases.get_canonical_name (aliases t) name with
+  | None ->
+    Misc.fatal_errorf "Cannot get canonical name for unbound \
+        name %a:@ %a"
+      Name.print name
+      print t
+  | Some name -> name
+
+let aliases_of_simple t simple = Aliases.aliases_of_simple (aliases t) simple
+
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
       ~print_ty:_ (ty : a Flambda_types.ty)
@@ -377,7 +388,7 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     in
     ty, Some simple
   | Equals (Name name) ->
-    let name = Aliases.get_canonical_name (aliases t) name in
+    let name = get_canonical_name t name in
     let ty = force_to_kind (find t name) in
     match ty with
     | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
@@ -393,7 +404,7 @@ let resolve_any_toplevel_alias_on_ty (type a) t
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals ((Const _ | Discriminant _) as simple) -> ty, Some simple
   | Equals (Name name) ->
-    let name = Aliases.get_canonical_name (aliases t) name in
+    let name = get_canonical_name t name in
     let ty = force_to_kind (find t name) in
     match ty with
     | No_alias _ -> ty, Some (Simple.name name)
@@ -472,7 +483,3 @@ let create_using_resolver_and_symbol_bindings_from t =
       add_equation t name typ)
     names_to_types
     (create_using_resolver_from t)
-
-let get_canonical_name t name = Aliases.get_canonical_name (aliases t) name
-
-let aliases_of_simple t simple = Aliases.aliases_of_simple (aliases t) simple

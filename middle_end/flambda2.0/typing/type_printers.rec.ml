@@ -160,7 +160,7 @@ and print_inlinable_function_declaration_with_cache ~cache ppf
         "@[<hov 1>(Inlinable@ \
           @[<hov 1>(function_decl@ %a)@]\
           )@]"
-        Term_language_function_declaration.print function_decl)
+        Term_language_function_declaration.print_compact function_decl)
 
 and print_function_declaration_with_cache ~cache ppf
       (decl : Flambda_types.function_declaration) =

@@ -39,9 +39,10 @@ struct
 
   let print_with_cache ~cache ppf ({ known; at_least } : t) =
     Format.fprintf ppf 
-      "@[<v 1>(\
+      "@[<hov 1>(\
          @[<hov 1>(known@ %a)@]@ \
-         @[<hov 1>(at_least@ %a)@])@]"
+         @[<hov 1>(at_least@ %a)@]\
+         )@]"
       (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
       (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
 

@@ -20,6 +20,7 @@ module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
+(* CR mshinwell: Add submodule *)
 type lifted_constants =
   (Symbol.t * (Flambda_type.t * Flambda_static.Static_part.t)) list
 
@@ -28,6 +29,7 @@ module rec Env : sig
     with type result := Result.t
 
   val continuation_scope_level : t -> Continuation.t -> Scope.t
+  val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
 end = struct
   type t = {
     backend : (module Flambda2_backend_intf.S);
@@ -59,8 +61,8 @@ end = struct
 
   let print_scope_level_and_continuation_in_env ppf (scope_level, cont_in_env) =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(scope_level %a)@]@ \
-        @[<hov 1>(cont_in_env %a)@]\
+        @[<hov 1>(scope_level@ %a)@]@ \
+        @[<hov 1>(cont_in_env@ %a)@]\
         )@]"
       Scope.print scope_level
       Continuation_in_env.print cont_in_env
@@ -197,6 +199,14 @@ end = struct
         print t
     | (scope_level, _cont_in_env) -> scope_level
 
+  let exn_continuation_scope_level t exn_cont =
+    match Exn_continuation.Map.find exn_cont t.exn_continuations with
+    | exception Not_found ->
+       Misc.fatal_errorf "Unbound exn continuation %a in environment:@ %a"
+         Exn_continuation.print exn_cont
+         print t
+    | scope_level -> scope_level
+
   let resolve_continuation_aliases t cont =
     match Continuation.Map.find cont t.continuation_aliases with
     | exception Not_found -> cont
@@ -326,7 +336,16 @@ end = struct
       lifted_constants_rev : lifted_constants;
     }
 
-  (* CR mshinwell: Add [print] *)
+  let print ppf { resolver = _; continuations; imported_symbols;
+                  lifted_constants_rev = _;
+                } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(continuations@ %a)@]@ \
+        @[<hov 1>(imported_symbols@ %a)@]@ \
+        @[<hov 1>(lifted_constants_rev@ <TBD>)@]\
+        )@]"
+      (Continuation.Map.print Continuation_uses.print) continuations
+      (Symbol.Map.print Flambda_kind.print) imported_symbols
 
   let create ~resolver =
     { resolver;
@@ -352,12 +371,34 @@ end = struct
           present in [r]"
         Continuation.print cont
 
+  let add_exn_continuation t env exn_cont =
+    let cont = Exn_continuation.exn_handler exn_cont in
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      let arity = Exn_continuation.arity exn_cont in
+      let definition_scope_level =
+        Env.exn_continuation_scope_level env exn_cont
+      in
+      let uses =
+        Continuation_uses.create arity ~definition_scope_level
+      in
+      { t with
+        continuations = Continuation.Map.add cont uses t.continuations;
+      }
+    | _uses ->
+      Misc.fatal_errorf "Cannot redefine exception continuation %a that is \
+          already present in [r]"
+        Exn_continuation.print exn_cont
+
   let record_continuation_use t env cont ~arg_types =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
-      Misc.fatal_errorf "Continuation %a not present in [r]"
+      Misc.fatal_errorf "[record_continuation_use]:@ \
+          Continuation %a not present in [r]:@ %a"
         Continuation.print cont
+        print t
     | uses ->
+      (* XXX This needs to deal with exn continuation extra-args *)
       let uses =
         Continuation_uses.add_use uses (Env.typing_env env) ~arg_types
       in
@@ -368,8 +409,10 @@ end = struct
   let continuation_env_and_arg_types t env cont =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
-      Misc.fatal_errorf "Continuation %a not present in [r]"
+      Misc.fatal_errorf "[continuation_env_and_arg_types]:@ \
+          Continuation %a not present in [r]:@ %a"
         Continuation.print cont
+        print t
     | uses -> Continuation_uses.env_and_arg_types uses (Env.typing_env env)
 
   let imported_symbols t = t.imported_symbols

@@ -24,8 +24,9 @@ let create_bottom () : t =
 
 let print_with_cache ~cache ppf ({ by_closure_id; } : t) =
   Format.fprintf ppf
-    "@[<hov 1>(@\
-     @[<hov 1>(by_closure_id@ %a)@])@]"
+    "@[<hov 1>(\
+       @[<hov 1>(by_closure_id@ %a)@]\
+       )@]"
     (Types_by_closure_id.print_with_cache ~cache) by_closure_id
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
