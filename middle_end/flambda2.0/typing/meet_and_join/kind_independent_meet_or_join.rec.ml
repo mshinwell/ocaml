@@ -155,6 +155,6 @@ struct
     let ty, env_extension =
       E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
     in
-    if Flambda_type0_core.ty_is_bottom (Meet_env.env env) ty then Bottom
+    if Flambda_type0_core.ty_is_obviously_bottom ty then Bottom
     else Ok (ty, env_extension)
 end
