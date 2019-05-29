@@ -223,10 +223,24 @@ let add t simple1 simple2 =
   invariant t;
   t
 
+let add_canonical_name t name =
+  if Name.Map.mem name t.canonical_names then begin
+    Misc.fatal_errorf "Name %a already in alias tracker:@ %a"
+      Name.print name
+      print t
+  end;
+  let canonical_names = Name.Map.add name name t.canonical_names in
+  let aliases_of_canonical_names =
+    Name.Map.add name Name.Set.empty t.aliases_of_canonical_names
+  in
+  { canonical_names;
+    aliases_of_canonical_names;
+  }
+
 let get_canonical_name t name =
   match Name.Map.find name t.canonical_names with
-  | exception Not_found -> Misc.fatal_errorf "Unbound name %a" Name.print name
-  | canonical_name -> canonical_name
+  | exception Not_found -> None
+  | canonical_name -> Some canonical_name
 
 let aliases_of_simple t (simple : Simple.t) =
   match simple with

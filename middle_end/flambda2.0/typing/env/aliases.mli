@@ -27,9 +27,11 @@ val invariant : t -> unit
 
 val empty : t
 
+val add_canonical_name : t -> Name.t -> t
+
 val add : t -> Simple.t -> Simple.t -> t
 
-val get_canonical_name : t -> Name.t -> Name.t
+val get_canonical_name : t -> Name.t -> Name.t option
 
 val aliases_of_simple : t -> Simple.t -> Name.Set.t
 

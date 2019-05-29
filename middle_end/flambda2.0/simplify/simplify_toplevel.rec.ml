@@ -30,6 +30,8 @@ let simplify_toplevel env r_outer expr ~return_continuation
   E.check_continuation_is_bound env return_continuation;
   E.check_exn_continuation_is_bound env exn_continuation;
   let r = R.create ~resolver:(E.resolver env) in
+  let r = R.add_continuation r env return_continuation in
+  let r = R.add_exn_continuation r env exn_continuation in
   let expr, r = Simplify_expr.simplify_expr env r expr in
   let r_outer = R.add_lifted_constants r_outer ~from:r in
   expr, r_outer

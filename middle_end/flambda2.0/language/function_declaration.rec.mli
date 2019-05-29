@@ -21,6 +21,9 @@ type t
 (** Printing, invariant checks, name manipulation, etc. *)
 include Expr_std.S with type t := t
 
+(** Compact printer for use when printing types. *)
+val print_compact : Format.formatter -> t -> unit
+
 (** Create a function declaration.  This calculates the free variables and
     symbols occurring in the specified [body].
 
