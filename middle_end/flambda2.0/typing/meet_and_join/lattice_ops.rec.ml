@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module JE = Typing_env
+module TE = Typing_env
 module TEE = Typing_env_extension
 
 module For_meet = struct
@@ -46,17 +46,17 @@ module For_meet = struct
   module Tag = Make (Tag)
   module Discriminant = Make (Discriminant)
 
-  let switch_no_bottom meet _join typing_env thing1 thing2 =
-    meet typing_env thing1 thing2
+  let switch_no_bottom meet _join meet_env thing1 thing2 =
+    meet meet_env thing1 thing2
 
-  let switch0 meet _join typing_env thing1 thing2 =
-    meet typing_env thing1 thing2
+  let switch0 meet _join meet_env thing1 thing2 =
+    meet meet_env thing1 thing2
 
-  let switch meet _join typing_env thing1 thing2 =
-    meet typing_env thing1 thing2
+  let switch meet _join meet_env thing1 thing2 =
+    meet meet_env thing1 thing2
 
-  let switch' meet _join typing_env thing1 thing2 : _ Or_bottom.t =
-    Or_bottom.map (meet typing_env thing1 thing2)
+  let switch' meet _join meet_env thing1 thing2 : _ Or_bottom.t =
+    Or_bottom.map (meet meet_env thing1 thing2)
       ~f:(fun (thing, _) -> thing)
 end
 
@@ -87,15 +87,15 @@ module For_join = struct
   module Tag = Make (Tag)
   module Discriminant = Make (Discriminant)
 
-  let switch_no_bottom _meet join typing_env thing1 thing2 =
-    join typing_env thing1 thing2, TEE.empty
+  let switch_no_bottom _meet join meet_env thing1 thing2 =
+    join (Meet_env.env meet_env) thing1 thing2, TEE.empty
 
-  let switch0 _meet join typing_env thing1 thing2 =
-    join typing_env thing1 thing2
+  let switch0 _meet join meet_env thing1 thing2 =
+    join (Meet_env.env meet_env) thing1 thing2
 
-  let switch _meet join typing_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join typing_env thing1 thing2, TEE.empty)
+  let switch _meet join meet_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join (Meet_env.env meet_env) thing1 thing2, TEE.empty)
 
-  let switch' _meet join typing_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join typing_env thing1 thing2)
+  let switch' _meet join meet_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join (Meet_env.env meet_env) thing1 thing2)
 end

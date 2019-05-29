@@ -37,8 +37,6 @@ sig
 
   val create_bottom : unit -> t
 
-  val create_unknown : unit -> t
-
   val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
 
   val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
@@ -49,13 +47,11 @@ sig
 
   val is_bottom : t -> bool
 
-  val known : t -> Maps_to.t Tag_and_index.Map.t Or_unknown.t
+  val known : t -> Maps_to.t Tag_and_index.Map.t
 
-  val at_least : t -> Maps_to.t Index.Map.t Or_unknown.t
+  val at_least : t -> Maps_to.t Index.Map.t
 
   val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
-
-  val classify : t -> unit Or_unknown_or_bottom.t
 
   (** The [Maps_to] value which [meet] returns contains the join of all
       [Maps_to] values in the range of the row-like structure after the meet
