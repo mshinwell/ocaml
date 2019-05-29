@@ -119,3 +119,5 @@ val symbols : t -> Symbol.Set.t
 val mem_var : t -> Variable.t -> bool
 
 val remove_var : t -> Variable.t -> t
+
+val only_contains_symbols : t -> bool

@@ -36,8 +36,20 @@ and 'a ty = 'a unknown_or_join or_alias
 
 (** For each kind there is a lattice of types.
     Unknown = "Any value can flow to this point": the top element.
-*)
+ *)
 and 'a unknown_or_join = 'a Or_unknown_or_bottom.t
+
+(* CR mshinwell: Put this in it's own submodule *)
+and resolved_t =
+  | Resolved_value of resolved_ty_value
+  | Resolved_naked_number
+       : 'k resolved_ty_naked_number * 'k Flambda_kind.Naked_number.t
+      -> resolved_t
+  | Resolved_fabricated of resolved_ty_fabricated
+
+and resolved_ty_value = of_kind_value unknown_or_join
+and 'a resolved_ty_naked_number = 'a of_kind_naked_number unknown_or_join
+and resolved_ty_fabricated = of_kind_fabricated unknown_or_join
 
 and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
