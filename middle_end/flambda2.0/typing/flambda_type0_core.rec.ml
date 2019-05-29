@@ -126,30 +126,6 @@ let is_obviously_bottom (t : t) =
   | Naked_number (ty, _) -> ty_is_obviously_bottom ty
   | Fabricated ty -> ty_is_obviously_bottom ty
 
-let ty_is_obviously_unknown (ty : _ ty) =
-  match ty with
-  | No_alias Unknown -> true
-  | _ -> false
-
-let is_obviously_unknown (t : t) =
-  match t with
-  | Value ty -> ty_is_obviously_unknown ty
-  | Naked_number (ty, _) -> ty_is_obviously_unknown ty
-  | Fabricated ty -> ty_is_obviously_unknown ty
-
-let of_ty_value ty_value : t =
-  Value ty_value
-
-let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number)
-      (kind : n K.Naked_number.t) : t =
-  Naked_number (ty_naked_number, kind)
-
-let of_ty_fabricated ty_fabricated : t =
-  Fabricated ty_fabricated
-
-(* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
-   simplified if [K.t] were a GADT. *)
-
 let alias_type_of (kind : K.t) name : t =
   match kind with
   | Value ->
@@ -167,29 +143,7 @@ let alias_type_of (kind : K.t) name : t =
   | Fabricated ->
     Fabricated (Equals name)
 
-let alias_type_of_as_ty_value name : ty_value = Equals name
-
 let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
-
-let alias_type (kind : K.t) export_id : t =
-  match kind with
-  | Value ->
-    Value (Type export_id)
-  | Naked_number Naked_immediate ->
-    Naked_number (Type export_id, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (Type export_id, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (Type export_id, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (Type export_id, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
-  | Fabricated ->
-    Fabricated (Type export_id)
-
-let bottom_as_ty_value () : ty_value =
-  No_alias Bottom
 
 let bottom_as_ty_fabricated () : ty_fabricated =
   No_alias Bottom
@@ -212,12 +166,6 @@ let bottom (kind : K.t) : t =
     Fabricated (No_alias Bottom)
 
 let any_value_as_ty_value () : ty_value =
-  No_alias Unknown
-
-let any_fabricated_as_ty_fabricated () : ty_fabricated =
-  No_alias Unknown
-
-let any_naked_float_as_ty_naked_float () : _ ty_naked_number =
   No_alias Unknown
 
 let any_value () : t =
@@ -291,11 +239,6 @@ let this_naked_immediate i =
 
 let this_naked_float f =
   these_naked_floats (Float.Set.singleton f)
-
-let this_naked_float_as_ty_naked_float f : _ ty_naked_number =
-  let fs = Float.Set.singleton f in
-  let of_kind : K.naked_float of_kind_naked_number = Float fs in
-  No_alias (Ok of_kind)
 
 let this_naked_int32 i =
   these_naked_int32s (Int32.Set.singleton i)
@@ -374,18 +317,6 @@ let this_boxed_int32 f = box_int32 (this_naked_int32 f)
 let this_boxed_int64 f = box_int64 (this_naked_int64 f)
 let this_boxed_nativeint f = box_nativeint (this_naked_nativeint f)
 
-let these_boxed_floats f = box_float (these_naked_floats f)
-let these_boxed_int32s f = box_int32 (these_naked_int32s f)
-let these_boxed_int64s f = box_int64 (these_naked_int64s f)
-let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
-
-let these_discriminants_as_ty_fabricated discriminants : ty_fabricated =
-  let discriminants = Discriminants.create discriminants in
-  No_alias (Ok (Discriminants discriminants))
-
-let these_discriminants discriminants : t =
-  Fabricated (these_discriminants_as_ty_fabricated discriminants)
-
 let this_discriminant_as_ty_fabricated discriminant : ty_fabricated =
   let discriminants =
     Discriminants.create (Discriminant.Set.singleton discriminant)
@@ -394,33 +325,6 @@ let this_discriminant_as_ty_fabricated discriminant : ty_fabricated =
 
 let this_discriminant discriminant : t =
   Fabricated (this_discriminant_as_ty_fabricated discriminant)
-
-let any_discriminant_as_ty_fabricated () : ty_fabricated =
-  No_alias Unknown
-
-let this_immutable_string_as_ty_value str : ty_value =
-  let str =
-    String_info.create ~contents:(Contents str)
-      ~size:(Targetint.OCaml.of_int (String.length str))
-  in
-  let str = String_info.Set.singleton str in
-  No_alias (Ok (String str))
-
-let this_immutable_string str : t =
-  Value (this_immutable_string_as_ty_value str)
-
-let immutable_string_as_ty_value ~size : ty_value =
-  let str = String_info.create ~contents:Unknown_or_mutable ~size in
-  let str = String_info.Set.singleton str in
-  No_alias (Ok (String str))
-
-let immutable_string ~size : t =
-  Value (immutable_string_as_ty_value ~size)
-
-let mutable_string ~size : t =
-  let str = String_info.create ~contents:Unknown_or_mutable ~size in
-  let str = String_info.Set.singleton str in
-  Value (No_alias (Ok (String str)))
 
 let kind (t : t) =
   match t with
@@ -446,39 +350,10 @@ let block tag ~(fields : t list) : t =
     in
     Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
 
-(* CR mshinwell: bad name *)
-let block_of_values tag ~(fields : ty_value list) =
-  block tag ~fields:(List.map (fun field : t -> Value field) fields)
-
-let block_with_size_at_least ~n ~field_n_minus_one : t =
-  let type_of_field_n_minus_one =
-    alias_type_of K.value (Simple.var field_n_minus_one)
-  in
-  let field_tys =
-    List.init n (fun index ->
-      if index = n - 1 then type_of_field_n_minus_one
-      else any_value ())
-  in
-  let blocks = Blocks.create ~field_tys Open in
-  let blocks_imms : blocks_and_tagged_immediates =
-    { immediates = Known (Immediates.create_bottom ());
-      blocks = Known blocks;
-    }
-  in
-  Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
-
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
 let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
-
-let check_of_kind t (expected_kind : K.t) =
-  let actual_kind = kind t in
-  if not (K.equal actual_kind expected_kind) then begin
-    Misc.fatal_errorf "Type has wrong kind: have %a but expected %a"
-      K.print actual_kind
-      K.print expected_kind
-  end
 
 let bottom_like t = bottom (kind t)
 let unknown_like t = unknown (kind t)
@@ -517,30 +392,6 @@ let closure closure_id function_decl closure_elements ~set_of_closures : t =
   in
   Value (No_alias (Ok (Closures closures)))
 
-let closure_containing_at_least var_within_closure : t =
-  let ty_value = any_value_as_ty_value () in
-  let closure_elements =
-    Var_within_closure.Map.singleton var_within_closure (Value ty_value)
-  in
-  let closure_elements = Closure_elements.create closure_elements in
-  let closures_entry : closures_entry =
-    { function_decl = Non_inlinable;
-      closure_elements;
-      set_of_closures = any_fabricated_as_ty_fabricated ()
-    }
-  in
-  let by_closure_id =
-    Closures_entry_by_closure_id.create_at_least_multiple
-      (Var_within_closure_set.Map.singleton
-        (Var_within_closure.Set.singleton var_within_closure)
-        closures_entry)
-  in
-  let closures : closures =
-    { by_closure_id;
-    }
-  in
-  Value (No_alias (Ok (Closures closures)))
-
 let set_of_closures ~closures : t =
   if Closure_id.Map.is_empty closures then bottom K.value
   else
@@ -555,20 +406,6 @@ let set_of_closures ~closures : t =
         Closed
     in
     Fabricated (No_alias (Ok (Set_of_closures { closures; })))
-
-let set_of_closures_containing_at_least closure_id : t =
-  let by_closure_id =
-    Types_by_closure_id.create
-      (Closure_id.Map.singleton closure_id (any_value ()))
-  in
-  let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
-  let closure_id = Closure_id.Set.singleton closure_id in
-  let closures =
-    Closure_ids.create
-      (Closure_id_set.Map.singleton closure_id set_of_closures_entry)
-      Open
-  in
-  Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
 let type_for_const (const : Simple.Const.t) =
   match const with

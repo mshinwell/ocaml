@@ -53,6 +53,3 @@ let now_meeting t simple1 simple2 =
   { t with
     already_meeting;
   }
-
-let with_env t f =
-  { t with env = f t.env; }

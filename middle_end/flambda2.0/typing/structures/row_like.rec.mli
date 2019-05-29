@@ -33,8 +33,6 @@ module Make
 sig
   type t
 
-  val invariant : t -> unit
-
   val create_bottom : unit -> t
 
   val create_exactly : Tag.t -> Index.t -> Maps_to.t -> t
@@ -44,8 +42,6 @@ sig
   val create_at_least : Index.t -> Maps_to.t -> t
 
   val create_at_least_multiple : Maps_to.t Index.Map.t -> t
-
-  val is_bottom : t -> bool
 
   val known : t -> Maps_to.t Tag_and_index.Map.t
 

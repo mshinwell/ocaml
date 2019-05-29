@@ -23,7 +23,7 @@ module Cached = struct
     aliases : Aliases.t;
   }
 
-  let print_with_cache ~cache ppf { names_to_types; aliases; } =
+  let _print_with_cache ~cache ppf { names_to_types; aliases; } =
     Format.fprintf ppf
       "@[<hov 1>(\
         @[<hov 1>(names_to_types@ %a)@]@ \
@@ -32,7 +32,7 @@ module Cached = struct
       (Name.Map.print (Type_printers.print_with_cache ~cache)) names_to_types
       Aliases.print aliases
 
-  let invariant t =
+  let _invariant t =
     let canonical_names = Aliases.canonical_names t.aliases in
     Name.Set.iter (fun name ->
         match Name.Map.find name t.names_to_types with
@@ -99,9 +99,6 @@ module One_level = struct
   let is_empty t = Typing_env_level.is_empty t.level
 
   let next_scope t = Scope.next t.scope
-
-  (* CR mshinwell: Rename to [domain]? *)
-  let defined_names t = Cached.domain t.just_after_level
 end
 
 type t = {
@@ -204,9 +201,6 @@ let increment_scope_to t scope =
 
 let increment_scope t =
   increment_scope_to t (One_level.next_scope t.current_level)
-
-let fast_equal t1 t2 =
-  t1 == t2
 
 let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
@@ -361,7 +355,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~print_ty (ty : a Flambda_types.ty)
+      ~print_ty:_ (ty : a Flambda_types.ty)
       : (a Flambda_types.unknown_or_join) * (Simple.t option) =
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
@@ -392,7 +386,7 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
 
 let resolve_any_toplevel_alias_on_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~print_ty (ty : a Flambda_types.ty)
+      ~print_ty:_ (ty : a Flambda_types.ty)
       : (a Flambda_types.ty) * (Simple.t option) =
   match ty with
   | No_alias _ -> ty, None
@@ -467,7 +461,7 @@ let create_using_resolver_and_symbol_bindings_from t =
     Name.Map.filter_map (names_to_types t) ~f:(fun (name : Name.t) typ ->
       match name with
       | Var _ -> None
-      | Symbol sym ->
+      | Symbol _ ->
         let typ =
           Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
         in

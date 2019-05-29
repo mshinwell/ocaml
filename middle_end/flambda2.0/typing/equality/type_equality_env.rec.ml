@@ -21,7 +21,7 @@ type t = {
   typing_env_right : Typing_env.t;
 }
 
-let print ppf { typing_env_left; typing_env_right; } =
+let _print ppf { typing_env_left; typing_env_right; } =
   Format.fprintf ppf
     "@[<hov 1>(\
       @[<hov 1>(typing_env_left@ %a)@]@ \
@@ -37,21 +37,3 @@ let create ~typing_env_left ~typing_env_right =
 
 let typing_env_left t = t.typing_env_left
 let typing_env_right t = t.typing_env_right
-
-let replace_typing_environments t ~left:typing_env_left
-      ~right:typing_env_right =
-   { typing_env_left;
-     typing_env_right;
-   }
-
-let add_definition_typing_env_left t name kind =
-  let typing_env_left =
-    Typing_env.add_definition t.typing_env_left name kind
-  in
-  { t with typing_env_left; }
-
-let add_definition_typing_env_right t name kind =
-  let typing_env_right =
-    Typing_env.add_definition t.typing_env_right name kind
-  in
-  { t with typing_env_right; }

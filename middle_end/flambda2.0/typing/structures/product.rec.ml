@@ -23,7 +23,7 @@ module Make (Index : Identifiable.S) = struct
     components_by_index : T.t Index.Map.t;
   }
 
-  let invariant t =
+  let _invariant t =
     Index.Map.cardinal t.components_by_index > 0
 
   let print ppf { components_by_index; } =
