@@ -32,11 +32,11 @@ val resolver : t -> (Export_id.t -> Flambda_types.t option)
 
 val is_empty : t -> bool
 
-val current_level : t -> Scope.t
+val current_scope : t -> Scope.t
 
-val increment_scope_level : t -> t
+val increment_scope : t -> t
 
-val increment_scope_level_to : t -> Scope.t -> t
+val increment_scope_to : t -> Scope.t -> t
 
 val domain : t -> Name_occurrences.t
 
@@ -53,11 +53,6 @@ val add_env_extension
   -> Typing_env_extension.t
   -> t
 
-val add_opened_env_extension
-   : t
-  -> Typing_env_level.t
-  -> t
-
 val get_canonical_name : t -> Name.t -> Name.t
 
 val aliases_of_simple : t -> Simple.t -> Name.Set.t
@@ -69,15 +64,15 @@ val cut
 
 val resolve_any_toplevel_alias_on_ty0
    : t
-  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
 val resolve_any_toplevel_alias_on_ty
    : t
-  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.ty * (Simple.t option)
 
