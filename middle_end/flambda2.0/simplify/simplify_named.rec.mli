@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2018 OCamlPro SAS                                    *)
-(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,4 +16,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (Simplify_expr : Simplify_expr_intf.S) : Simplify_toplevel_intf.S
+val simplify_named
+   : Simplify_env_and_result.Env.t
+  -> Simplify_env_and_result.Result.t
+  -> Flambda.Named.t
+  -> result_var:Variable.t
+  -> Simplify_env_and_result.Env.t
+       * Simplify_env_and_result.Result.t
+       * Flambda_type.t
+       * Reachable.t
+
+val simplify_set_of_closures_and_drop_type
+   : Simplify_env_and_result.Env.t
+  -> Simplify_env_and_result.Result.t
+  -> Flambda.Set_of_closures.t
+  -> Flambda.Set_of_closures.t * Simplify_env_and_result.Result.t

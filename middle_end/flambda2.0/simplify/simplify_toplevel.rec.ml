@@ -16,12 +16,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  val simplify_toplevel
-     : Simplify_env_and_result.Env.t
-    -> Simplify_env_and_result.Result.t
-    -> Flambda.Expr.t
-    -> return_continuation:Continuation.t
-    -> Exn_continuation.t
-    -> Flambda.Expr.t * Simplify_env_and_result.Result.t
-end
+module E = Simplify_env_and_result.Env
+module R = Simplify_env_and_result.Result
+
+(* Values of two types hold the information propagated during simplification:
+   - [E.t] "environments", top-down, almost always called "env";
+   - [R.t] "results", bottom-up approximately following the evaluation order,
+     almost always called "r".  These results come along with rewritten
+     Flambda terms.
+*)
+let simplify_toplevel env r_outer expr ~return_continuation
+     exn_continuation =
+  E.check_continuation_is_bound env return_continuation;
+  E.check_exn_continuation_is_bound env exn_continuation;
+  let r = R.create ~resolver:(E.resolver env) in
+  let expr, r = Simplify_expr.simplify_expr env r expr in
+  let r_outer = R.add_lifted_constants r_outer ~from:r in
+  expr, r_outer
