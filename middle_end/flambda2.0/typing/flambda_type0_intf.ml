@@ -41,7 +41,7 @@ module type S = sig
 
   val arity_of_list : t list -> Flambda_arity.t
 
-  val erase_aliases : t -> allowed:Variable.Set.t -> t
+  val erase_aliases : allowed:Variable.Set.t -> t -> t
 
   type typing_env
   type typing_env_extension

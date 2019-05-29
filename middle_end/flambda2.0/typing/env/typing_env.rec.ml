@@ -434,6 +434,34 @@ let resolve_any_toplevel_alias t (ty : Flambda_types.t)
     in
     Fabricated ty_fabricated, canonical_simple
 
+let resolve_type t (ty : Flambda_types.t)
+      : Flambda_types.resolved_t * (Simple.t option) =
+  match ty with
+  | Value ty_value ->
+    let unknown_or_join, canonical_simple =
+      resolve_any_toplevel_alias_on_ty0 t
+        ~force_to_kind:Flambda_type0_core.force_to_kind_value
+        ~print_ty:Type_printers.print_ty_value
+        ty_value
+    in
+    Resolved_value unknown_or_join, canonical_simple
+  | Naked_number (ty_naked_number, kind) ->
+    let unknown_or_join, canonical_simple =
+      resolve_any_toplevel_alias_on_ty0 t
+        ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
+        ~print_ty:Type_printers.print_ty_naked_number
+        ty_naked_number
+    in
+    Resolved_naked_number (unknown_or_join, kind), canonical_simple
+  | Fabricated ty_fabricated ->
+    let unknown_or_join, canonical_simple =
+      resolve_any_toplevel_alias_on_ty0 t
+        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+        ~print_ty:Type_printers.print_ty_fabricated
+        ty_fabricated
+    in
+    Resolved_fabricated unknown_or_join, canonical_simple
+
 let create_using_resolver_and_symbol_bindings_from t =
   let names_to_types =
     Name.Map.filter_map (names_to_types t) ~f:(fun (name : Name.t) typ ->

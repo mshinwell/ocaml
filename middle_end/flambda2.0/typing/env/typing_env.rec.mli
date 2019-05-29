@@ -76,7 +76,13 @@ val resolve_any_toplevel_alias_on_ty
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.ty * (Simple.t option)
 
+(* CR mshinwell: Maybe this should be deleted *)
 val resolve_any_toplevel_alias
    : t
   -> Flambda_types.t
   -> Flambda_types.t * (Simple.t option)
+
+val resolve_type
+   : t
+  -> Flambda_types.t
+  -> Flambda_types.resolved_t * (Simple.t option)
