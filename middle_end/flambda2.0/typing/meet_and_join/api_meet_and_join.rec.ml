@@ -24,6 +24,7 @@ module Join = Meet_or_join.Make (Lattice_ops.For_join)
 let meet env t1 t2 = Meet.meet_or_join env t1 t2
 
 let join ?bound_name env t1 t2 =
+  let env = Meet_env.create env in
   let joined, env_extension = Join.meet_or_join ?bound_name env t1 t2 in
   if not (TEE.is_empty env_extension) then begin
     Misc.fatal_errorf "Non-empty environment extension produced from a \

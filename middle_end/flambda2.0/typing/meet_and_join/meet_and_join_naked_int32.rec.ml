@@ -24,7 +24,7 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
-  type of_kind_foo = Int32.Set.t Flambda_types.of_kind_naked_number
+  type of_kind_foo = K.naked_int32 Flambda_types.of_kind_naked_number
 
   let kind = K.naked_int32
   let to_type ty : Flambda_types.t = Naked_number (ty, Naked_int32)

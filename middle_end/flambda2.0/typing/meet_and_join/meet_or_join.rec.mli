@@ -29,7 +29,7 @@ sig
   (* CR mshinwell: Document [bound_name]. *)
   val meet_or_join
      : ?bound_name:Name.t
-    -> Typing_env.t
+    -> Meet_env.t
     -> Flambda_types.t
     -> Flambda_types.t
     -> Flambda_types.t * Typing_env_extension.t

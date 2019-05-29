@@ -24,29 +24,27 @@ module Make
     include Identifiable.S with type t := t
   end)
   (Maps_to : Row_like_maps_to_intf.S
-    with type meet_env := Meet_env.t
+    with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
+    with type meet_env := Meet_env.t
+    with type type_equality_env := Type_equality_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
-  module Tag_and_index = struct
-    include Tag_and_index
-
-    let create tag index = tag, index
-    let index (_tag, index) = index
-  end
-
   type t = {
     known : Maps_to.t Tag_and_index.Map.t;
     at_least : Maps_to.t Index.Map.t;
   }
 
-  let print ~cache ppf ({ known; at_least } : t) =
+  let print_with_cache ~cache ppf ({ known; at_least } : t) =
     Format.fprintf ppf 
       "@[<v 1>(\
          @[<hov 1>(known@ %a)@]@ \
          @[<hov 1>(at_least@ %a)@])@]"
       (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
       (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let invariant _t = ()
 
@@ -56,8 +54,7 @@ struct
     }
 
   let create_exactly tag index maps_to =
-    let tag_and_index = Tag_and_index.create tag index in
-    { known = Tag_and_index.Map.singleton tag_and_index maps_to;
+    { known = Tag_and_index.Map.singleton (tag, index) maps_to;
       at_least = Index.Map.empty;
     }
 
@@ -150,8 +147,7 @@ struct
         | None, None -> None
       in
       let known =
-        Tag_and_index.Map.merge (fun tag_and_index maps_to1 maps_to2 ->
-            let index = Tag_and_index.index tag_and_index in
+        Tag_and_index.Map.merge (fun (_tag, index) maps_to1 maps_to2 ->
             merge index maps_to1 maps_to2)
           known1
           known2
@@ -195,4 +191,19 @@ struct
           Maps_to.join env maps_to result)
         maps_to
         other_maps_to
+
+  let erase_aliases { known; at_least; } ~allowed =
+    let known =
+      Tag_and_index.Map.map (fun maps_to ->
+          Maps_to.erase_aliases maps_to ~allowed)
+        known
+    in
+    let at_least =
+      Index.Map.map (fun maps_to ->
+          Maps_to.erase_aliases maps_to ~allowed)
+        at_least
+    in
+    { known;
+      at_least;
+    }
 end
