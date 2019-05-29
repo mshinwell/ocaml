@@ -18,5 +18,6 @@
 
 module type S = sig
   include Expr_std.S
+  val print_compact : Format.formatter -> t -> unit
   val code_id : t -> Code_id.t
 end

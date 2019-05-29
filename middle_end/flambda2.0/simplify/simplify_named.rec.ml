@@ -38,7 +38,7 @@ let simplify_simple_for_rhs_of_let env r (simple : Simple.t) =
   | Discriminant t -> simple, T.this_discriminant t, r
   | Name name -> simplify_name_for_rhs_of_let env r name
 
-let simplify_function env r function_decl =
+let simplify_function env r closure_id function_decl =
   let params_and_body, r =
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
@@ -52,9 +52,27 @@ let simplify_function env r function_decl =
         let env = E.add_variable env my_closure (T.any_value ()) in
         let env = E.increment_continuation_scope_level env in
         let body, r =
-          Simplify_toplevel.simplify_toplevel env r body
-            ~return_continuation
-            exn_continuation
+          try
+            Simplify_toplevel.simplify_toplevel env r body
+              ~return_continuation
+              exn_continuation
+          with Misc.Fatal_error -> begin
+            Format.eprintf "\n%sContext is:%s simplifying function \
+                with closure ID %a,@ params %a,@ return continuation %a,@ \
+                exn continuation %a,@ my_closure %a,@ body:@ %a@ \
+                in environment:@ %a@ with (outer) result structure:@ %a\n"
+              (Misc.Color.bold_red ())
+              (Misc.Color.reset ())
+              Closure_id.print closure_id
+              Kinded_parameter.List.print params
+              Continuation.print return_continuation
+              Exn_continuation.print exn_continuation
+              Variable.print my_closure
+              Expr.print body
+              E.print env
+              R.print r;
+            raise Misc.Fatal_error
+          end
         in
         let function_decl =
           Function_params_and_body.create ~return_continuation
@@ -78,7 +96,9 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
   let funs = Function_declarations.funs function_decls in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-        let function_decl, ty, r = simplify_function env r function_decl in
+        let function_decl, ty, r =
+          simplify_function env r closure_id function_decl
+        in
         let funs = Closure_id.Map.add closure_id function_decl funs in
         let fun_types = Closure_id.Map.add closure_id ty fun_types in
         funs, fun_types, r)

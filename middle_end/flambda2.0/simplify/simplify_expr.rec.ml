@@ -97,6 +97,7 @@ and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
                   (Non_recursive_let_cont_handler.handler non_rec_handler)
         in
         let env = E.increment_continuation_scope_level env in
+        let r = R.add_continuation r env cont in
         simplify_expr env r body
       in
       (* Lifted constants arising from simplification of the body need to
@@ -115,12 +116,14 @@ and simplify_recursive_let_cont_handlers env r rec_handlers : Expr.t * R.t =
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body cont_handlers ->
       let cont_handlers = Continuation_handlers.to_map cont_handlers in
-      let env =
-        Continuation.Map.fold (fun cont cont_handler env ->
+      let env, r =
+        Continuation.Map.fold (fun cont cont_handler (env, r) ->
             let arity = Continuation_handler.arity cont_handler in
-            E.add_continuation env cont arity)
+            let env = E.add_continuation env cont arity in
+            let r = R.add_continuation r env cont in
+            env, r)
           cont_handlers
-          env
+          (env, r)
       in
       let body, r = simplify_expr env r body in
       let cont_handlers, r =
@@ -388,8 +391,19 @@ and simplify_function_call_where_callee's_type_unavailable env r apply
     match call with
     | Indirect_unknown_arity ->
       let r =
-        R.record_continuation_use r env (Apply.continuation apply)
-          ~arg_types:[T.any_value ()]
+        try
+          R.record_continuation_use r env (Apply.continuation apply)
+            ~arg_types:[T.any_value ()]
+        with Misc.Fatal_error -> begin
+          Format.eprintf "\n%sContext is:%s simplifying [Apply]@ %a@ \
+              in environment:@ %a@ with result structure:@ %a\n"
+            (Misc.Color.bold_red ())
+            (Misc.Color.reset ())
+            Apply.print apply
+            E.print env
+            R.print r;
+          raise Misc.Fatal_error
+        end
       in
       Call_kind.indirect_function_call_unknown_arity (), r
     | Indirect_known_arity { param_arity; return_arity; } ->
