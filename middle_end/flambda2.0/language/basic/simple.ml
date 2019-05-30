@@ -154,6 +154,11 @@ let free_names t =
   | Name name -> Name_occurrences.singleton_name_in_terms name
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
+let free_names_in_types t =
+  match t with
+  | Name name -> Name_occurrences.singleton_name_in_types name
+  | Const _ | Discriminant _ -> Name_occurrences.empty
+
 let apply_name_permutation t perm =
   match t with
   | Name name ->
