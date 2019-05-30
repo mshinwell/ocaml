@@ -245,6 +245,8 @@ let domain0 t =
 let domain t =
   Name_occurrences.create_names_in_types (domain0 t)
 
+let var_domain t = Name.set_to_var_set (domain0 t)
+
 let find t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
@@ -282,15 +284,15 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
   | (Const _ | Discriminant _), Name _ -> true
   | Name _, (Const _ | Discriminant _) -> false
   | Name name1, Name name2 ->
-     let time1 = Cached.binding_time (cached t) name1 in
-     let time2 = Cached.binding_time (cached t) name2 in
-     if Binding_time.equal time1 time2 then begin
-         Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
-           Name.print name1
-           Name.print name2
-           print t
-       end;
-     Binding_time.strictly_earlier time1 ~than:time2
+    let time1 = Cached.binding_time (cached t) name1 in
+    let time2 = Cached.binding_time (cached t) name2 in
+    if Binding_time.equal time1 time2 then begin
+        Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
+          Name.print name1
+          Name.print name2
+          print t
+      end;
+    Binding_time.strictly_earlier time1 ~than:time2
 
 let add_definition t name kind =
   if mem t name then begin
@@ -316,7 +318,15 @@ let add_definition t name kind =
     (Binding_time.succ t.next_binding_time)
 
 (* CR mshinwell: This should check that precision is not decreasing. *)
-let invariant_for_new_equation _t _name _ty = ()
+let invariant_for_new_equation t name ty =
+  let defined_names = domain t in
+  let free_names = Type_free_names.free_names ty in
+  if not (Name_occurrences.subset free_names defined_names) then begin
+    Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names:@ %a"
+      Name.print name
+      Type_printers.print ty
+      print t
+  end
 
 let add_equation t name ty =
   if not (mem t name) then begin
@@ -393,7 +403,7 @@ let rec add_env_extension starting_t level : t =
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
   if Scope.(>) min_scope current_scope then
-    Typing_env_level.empty
+    Typing_env_level.empty, var_domain t
   else
     let all_levels =
       Scope.Map.add current_scope t.current_level t.prev_levels
@@ -426,18 +436,21 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
     invariant t;
     let meet_env = Meet_env.create t in
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
-    Scope.Map.fold (fun _scope one_level result ->
-        let level =
-          (* Since environment extensions are not allowed to define names at
-             the moment, any [Equals] aliases to names not in scope at the cut
-             point have to be squashed to "Unknown". *)
-          One_level.level one_level
-          |> Typing_env_level.remove_definitions_and_equations_thereon
-          |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
-        in
-        Typing_env_level.meet meet_env level result)
-      at_or_after_cut
-      Typing_env_level.empty
+    let env_extension =
+      Scope.Map.fold (fun _scope one_level result ->
+          let level =
+            (* Since environment extensions are not allowed to define names at
+               the moment, any [Equals] aliases to names not in scope at the cut
+               point have to be squashed to "Unknown". *)
+            One_level.level one_level
+            |> Typing_env_level.remove_definitions_and_equations_thereon
+            |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
+          in
+          Typing_env_level.meet meet_env level result)
+        at_or_after_cut
+        Typing_env_level.empty
+    in
+    env_extension, vars_in_scope_at_cut
 
 let get_canonical_name t name =
   match Aliases.get_canonical_name (aliases t) name with

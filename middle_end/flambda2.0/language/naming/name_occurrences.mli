@@ -102,6 +102,8 @@ val add_variable_in_terms : t -> Variable.t -> t
 
 val singleton_name_in_terms : Name.t -> t
 
+val singleton_name_in_types : Name.t -> t
+
 val singleton_symbol_in_terms : Symbol.t -> t
 
 val create_names_in_types : Name.Set.t -> t
@@ -111,6 +113,8 @@ val diff : t -> t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
+
+val subset : t -> t -> bool
 
 val variables : t -> Variable.Set.t
 

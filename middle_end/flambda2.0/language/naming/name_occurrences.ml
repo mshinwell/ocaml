@@ -79,6 +79,8 @@ end) = struct
         else Some count)
       t1 t2
 
+  let subset t1 t2 = N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
+
   let keys t = N.Map.keys t
 
   let mem t name = N.Map.mem name t
@@ -379,6 +381,11 @@ let singleton_variable_in_terms var =
     variables_in_terms = For_variables.singleton var;
   }
 
+let singleton_variable_in_types var =
+  { empty with
+    variables_in_types = For_variables.singleton var;
+  }
+
 let add_variable_in_terms t var =
   { t with
     variables_in_terms = For_variables.add t.variables_in_terms var;
@@ -399,10 +406,20 @@ let singleton_symbol_in_terms sym =
     symbols_in_terms = For_symbols.singleton sym;
   }
 
+let singleton_symbol_in_types sym =
+  { empty with
+    symbols_in_types = For_symbols.singleton sym;
+  }
+
 let singleton_name_in_terms (name : Name.t) =
   match name with
   | Var var -> singleton_variable_in_terms var
   | Symbol sym -> singleton_symbol_in_terms sym
+
+let singleton_name_in_types (name : Name.t) =
+  match name with
+  | Var var -> singleton_variable_in_types var
+  | Symbol sym -> singleton_symbol_in_types sym
 
 let create_names_in_types names =
   Name.Set.fold (fun (name : Name.t) t ->
@@ -440,6 +457,46 @@ let apply_name_permutation { variables_in_terms; variables_in_types;
     symbols_in_terms;
     symbols_in_types;
   }
+
+let binary_predicate ~for_variables ~for_continuations ~for_symbols
+      { variables_in_terms = variables_in_terms1;
+        variables_in_types = variables_in_types1;
+        variables_debug_only = variables_debug_only1;
+        continuations = continuations1;
+        symbols_in_terms = symbols_in_terms1;
+        symbols_in_types = symbols_in_types1;
+      }
+      { variables_in_terms = variables_in_terms2;
+        variables_in_types = variables_in_types2;
+        variables_debug_only = variables_debug_only2;
+        continuations = continuations2;
+        symbols_in_terms = symbols_in_terms2;
+        symbols_in_types = symbols_in_types2;
+      } =
+  let variables_in_terms =
+    for_variables variables_in_terms1 variables_in_terms2
+  in
+  let variables_in_types =
+    for_variables variables_in_types1 variables_in_types2
+  in
+  let variables_debug_only =
+    for_variables variables_debug_only1 variables_debug_only2
+  in
+  let continuations =
+    for_continuations continuations1 continuations2
+  in
+  let symbols_in_terms =
+    for_symbols symbols_in_terms1 symbols_in_terms2
+  in
+  let symbols_in_types =
+    for_symbols symbols_in_types1 symbols_in_types2
+  in
+  variables_in_terms
+    && variables_in_types
+    && variables_debug_only
+    && continuations
+    && symbols_in_terms
+    && symbols_in_types
 
 let binary_op ~for_variables ~for_continuations ~for_symbols
       { variables_in_terms = variables_in_terms1;
@@ -492,6 +549,12 @@ let union t1 t2 =
   binary_op ~for_variables:For_variables.union
     ~for_continuations:For_continuations.union
     ~for_symbols:For_symbols.union
+    t1 t2
+
+let subset t1 t2 =
+  binary_predicate ~for_variables:For_variables.subset
+    ~for_continuations:For_continuations.subset
+    ~for_symbols:For_symbols.subset
     t1 t2
 
 let rec union_list ts =

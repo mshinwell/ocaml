@@ -87,6 +87,8 @@ module type S = sig
 
     val domain : t -> Name_occurrences.t
 
+    val var_domain : t -> Variable.Set.t
+
     val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
     val add_equation : t -> Name.t -> flambda_type -> t
@@ -107,7 +109,7 @@ module type S = sig
     val cut
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
-      -> Typing_env_extension.t
+      -> Typing_env_extension.t * Variable.Set.t
   end
 
   val join : Typing_env.t -> t -> t -> t
