@@ -126,8 +126,15 @@ module type S = sig
 
   type function_declaration
 
+  val erase_aliases_ty_value
+     : allowed:Variable.Set.t
+    -> ty_value
+    -> ty_value
+
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
+
+  val unknown_as_ty_fabricated : unit -> ty_fabricated
 
   val any_value : unit -> t
 

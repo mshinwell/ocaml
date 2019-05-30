@@ -389,14 +389,14 @@ module Program_body = struct
   let rec print_with_cache ~cache ppf t =
     match t with
     | Define_symbol (defn, t) ->
-      Format.fprintf ppf "@[<v 2>(%sDefine_symbol%s@ %a)@]@;"
-        (Misc.Color.bold_blue ())
+      Format.fprintf ppf "@[<v 2>(@<0>%sDefine_symbol@<0>%s@ %a)@]@;"
+        (Misc.Color.bold_yellow ())
         (Misc.Color.reset ())
         (Definition.print_with_cache ~cache) defn;
       print_with_cache ~cache ppf t
     | Root sym ->
-      Format.fprintf ppf "@[(%sRoot%s %a)@]"
-        (Misc.Color.bold_blue ())
+      Format.fprintf ppf "@[(@<0>%sRoot@<0>%s %a)@]"
+        (Misc.Color.bold_yellow ())
         (Misc.Color.reset ())
         Symbol.print sym
 

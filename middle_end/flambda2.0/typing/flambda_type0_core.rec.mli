@@ -65,6 +65,7 @@ val bottom_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 val bottom_like : Flambda_types.t -> Flambda_types.t
 
 val unknown_like : Flambda_types.t -> Flambda_types.t
+val unknown_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
 val type_for_const : Simple.Const.t -> Flambda_types.t
 

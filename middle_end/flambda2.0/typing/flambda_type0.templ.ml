@@ -44,6 +44,7 @@ module Make
   let join env t1 t2 : t = Api_meet_and_join.join env t1 t2
 
   let erase_aliases = Type_erase_aliases.erase_aliases
+  let erase_aliases_ty_value = Type_erase_aliases.erase_aliases_ty_value
 
   let arity_of_list ts =
     Flambda_arity.create (List.map Flambda_type0_core.kind ts)

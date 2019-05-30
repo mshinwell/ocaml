@@ -214,6 +214,8 @@ let unknown (kind : K.t) : t =
   | Fabricated ->
     Fabricated (No_alias Unknown)
 
+let unknown_as_ty_fabricated () : ty_fabricated = No_alias Unknown
+
 let these_naked_immediates (is : Immediate.Set.t) : t =
   let of_kind : _ of_kind_naked_number = Immediate is in
   Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
