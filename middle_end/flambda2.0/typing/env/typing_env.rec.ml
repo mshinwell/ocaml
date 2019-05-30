@@ -16,13 +16,36 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Binding_time : sig
+  type t
+
+(*
+  val print : Format.formatter -> t -> unit
+*)
+
+  val zero : t
+  val succ : t -> t
+
+  val strictly_earlier : t -> than:t -> bool
+  val equal : t -> t -> bool
+end = struct
+  include Numbers.Int
+
+  let strictly_earlier t ~than =
+    t < than
+
+  let zero = 0
+  let succ t = t + 1
+end
+
 (* CR mshinwell: Add signatures to these submodules. *)
 module Cached = struct
   type t = {
-    names_to_types : Flambda_types.t Name.Map.t;
+    names_to_types : (Flambda_types.t * Binding_time.t) Name.Map.t;
     aliases : Aliases.t;
   }
 
+(*
   let _print_with_cache ~cache ppf { names_to_types; aliases; } =
     Format.fprintf ppf
       "@[<hov 1>(\
@@ -47,6 +70,7 @@ module Cached = struct
               Name.print name
               Simple.print alias_of)
       canonical_names
+*)
 
   let empty =
     { names_to_types = Name.Map.empty;
@@ -65,6 +89,14 @@ module Cached = struct
 
   let names_to_types t = t.names_to_types
   let aliases t = t.aliases
+
+  (* CR mshinwell: Add type lookup function *)
+
+  let binding_time t name =
+    match Name.Map.find name t.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound name %a" Name.print name
+    | (_ty, time) -> time
 
   let domain t = Name.Map.keys t.names_to_types
 end
@@ -105,6 +137,7 @@ type t = {
   resolver : (Export_id.t -> Flambda_types.t option);
   prev_levels : One_level.t Scope.Map.t;
   current_level : One_level.t;
+  next_binding_time : Binding_time.t;
 }
 
 let is_empty t =
@@ -112,7 +145,8 @@ let is_empty t =
     && Scope.Map.is_empty t.prev_levels
 
 let print_with_cache ~cache ppf
-      ({ resolver = _; prev_levels; current_level; } as t) =
+      ({ resolver = _; prev_levels; current_level; next_binding_time = _;
+       } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
   else
@@ -177,6 +211,7 @@ let create ~resolver =
   { resolver;
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
+    next_binding_time = Binding_time.zero;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
@@ -216,12 +251,13 @@ let find t name =
     Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
       Name.print name
       print t
-  | ty -> ty
+  (* CR mshinwell: Should this resolve aliases? *)
+  | ty, _binding_time -> ty
 
 let find_opt t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found -> None
-  | ty -> Some ty
+  | ty, _binding_time -> Some ty
 
 let mem t name =
   Name.Map.mem name (names_to_types t)
@@ -230,6 +266,31 @@ let with_current_level t ~current_level =
   let t = { t with current_level; } in
   invariant t;
   t
+
+let with_current_level_and_next_binding_time t ~current_level
+      next_binding_time =
+  let t = { t with current_level; next_binding_time; } in
+  invariant t;
+  t
+
+let cached t = One_level.just_after_level t.current_level
+
+let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
+  match simple, than with
+  | (Const _ | Discriminant _), (Const _ | Discriminant _) ->
+    Simple.compare simple than <= 0
+  | (Const _ | Discriminant _), Name _ -> true
+  | Name _, (Const _ | Discriminant _) -> false
+  | Name name1, Name name2 ->
+     let time1 = Cached.binding_time (cached t) name1 in
+     let time2 = Cached.binding_time (cached t) name2 in
+     if Binding_time.equal time1 time2 then begin
+         Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
+           Name.print name1
+           Name.print name2
+           print t
+       end;
+     Binding_time.strictly_earlier time1 ~than:time2
 
 let add_definition t name kind =
   if mem t name then begin
@@ -242,7 +303,8 @@ let add_definition t name kind =
   in
   let just_after_level =
     let names_to_types =
-      Name.Map.add name (Flambda_type0_core.unknown kind) (names_to_types t)
+      Name.Map.add name (Flambda_type0_core.unknown kind, t.next_binding_time)
+        (names_to_types t)
     in
     Cached.with_names_to_types (One_level.just_after_level t.current_level)
       ~names_to_types
@@ -250,7 +312,8 @@ let add_definition t name kind =
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
   in
-  with_current_level t ~current_level
+  with_current_level_and_next_binding_time t ~current_level
+    (Binding_time.succ t.next_binding_time)
 
 (* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation _t _name _ty = ()
@@ -262,25 +325,44 @@ let add_equation t name ty =
       Name.print name
       print t
   end;
-  invariant_for_new_equation t name ty;
-  let level =
-    Typing_env_level.add_or_replace_equation
-      (One_level.level t.current_level) name ty
+  let aliases, simple, ty =
+    let aliases = aliases t in
+    match Flambda_type0_core.get_alias ty with
+    | None ->
+      Aliases.add_canonical_name aliases name, Simple.name name, ty
+    | Some alias_of ->
+      match
+        Aliases.add aliases (Simple.name name) alias_of
+          ~defined_earlier:(fun simple ~than -> defined_earlier t simple ~than)
+      with
+      | None, aliases -> aliases, alias_of, ty
+      | (Some { canonical_name; alias_of; }), aliases ->
+        let kind = Flambda_type0_core.kind ty in
+        let ty =
+          Flambda_type0_core.alias_type_of kind (Simple.name canonical_name)
+        in
+        aliases, Simple.name alias_of, ty
   in
-  let just_after_level =
-    let aliases =
-      let aliases = aliases t in
-      match Flambda_type0_core.get_alias ty with
-      | None -> Aliases.add_canonical_name aliases name
-      | Some alias_of -> Aliases.add aliases (Simple.name name) alias_of
+  match simple with
+  | Const _ | Discriminant _ -> t
+  | Name name ->
+    invariant_for_new_equation t name ty;
+    let level =
+      Typing_env_level.add_or_replace_equation
+        (One_level.level t.current_level) name ty
     in
-    let names_to_types = Name.Map.add name ty (names_to_types t) in
-    Cached.create ~names_to_types aliases
-  in
-  let current_level =
-    One_level.create (current_scope t) level ~just_after_level
-  in
-  with_current_level t ~current_level
+    (* CR mshinwell: remove second lookup *)
+    let binding_time = Cached.binding_time (cached t) name in
+    let just_after_level =
+      let names_to_types =
+        Name.Map.add name (ty, binding_time) (names_to_types t)
+      in
+      Cached.create ~names_to_types aliases
+    in
+    let current_level =
+      One_level.create (current_scope t) level ~just_after_level
+    in
+    with_current_level t ~current_level
 
 let rec add_env_extension starting_t level : t =
   if not (Name.Map.is_empty (Typing_env_level.defined_names level)) then begin
@@ -338,6 +420,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
         { resolver = t.resolver;
           prev_levels;
           current_level;
+          next_binding_time = t.next_binding_time;
         }
     in
     invariant t;
@@ -490,16 +573,17 @@ let resolve_type t (ty : Flambda_types.t)
 
 let create_using_resolver_and_symbol_bindings_from t =
   let names_to_types =
-    Name.Map.filter_map (names_to_types t) ~f:(fun (name : Name.t) typ ->
-      match name with
-      | Var _ -> None
-      | Symbol _ ->
-        let typ =
-          Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
-        in
-        Some typ)
+    Name.Map.filter_map (names_to_types t)
+      ~f:(fun (name : Name.t) (typ, binding_time) ->
+        match name with
+        | Var _ -> None
+        | Symbol _ ->
+          let typ =
+            Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
+          in
+          Some (typ, binding_time))
   in
-  Name.Map.fold (fun name typ t ->
+  Name.Map.fold (fun name (typ, _binding_time) t ->
       let t = add_definition t name (Flambda_type0_core.kind typ) in
       add_equation t name typ)
     names_to_types
