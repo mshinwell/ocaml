@@ -29,7 +29,17 @@ val empty : t
 
 val add_canonical_name : t -> Name.t -> t
 
-val add : t -> Simple.t -> Simple.t -> t
+type add_result = private {
+  canonical_name : Name.t;
+  alias_of : Name.t;
+}
+
+val add
+   : t
+  -> Simple.t
+  -> Simple.t
+  -> defined_earlier:(Simple.t -> than:Simple.t -> bool)
+  -> add_result option * t
 
 val get_canonical_name : t -> Name.t -> Name.t option
 

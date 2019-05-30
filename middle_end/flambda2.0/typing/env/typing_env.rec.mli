@@ -79,3 +79,5 @@ val resolve_type
    : t
   -> Flambda_types.t
   -> Flambda_types.resolved_t * (Simple.t option)
+
+val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
