@@ -23,7 +23,7 @@ module T = Flambda_type
 module TEE = T.Typing_env_extension
 
 let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
-Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;
+(*Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;*)
   let named =
     match prim with
     | Unary (prim, arg) ->
