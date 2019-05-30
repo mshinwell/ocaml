@@ -80,6 +80,9 @@ val map_var : t -> f:(Variable.t -> Variable.t) -> t
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
 include Contains_names.S with type t := t
+
+val free_names_in_types : t -> Name_occurrences.t
+
 include Identifiable.S with type t := t
 
 module List : sig

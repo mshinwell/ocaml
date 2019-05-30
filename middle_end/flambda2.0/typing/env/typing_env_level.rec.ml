@@ -116,7 +116,10 @@ let meet env (t1 : t) (t2 : t) =
     let env = Typing_env.add_env_extension env t1 in
     let env = Typing_env.add_env_extension env t2 in
     let level = Typing_env.current_scope env in
-    Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
+    let env_extension, _names_in_scope_at_cut =
+      Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
+    in
+    env_extension
   end
 
 let join env (t1 : t) (t2 : t) : t =

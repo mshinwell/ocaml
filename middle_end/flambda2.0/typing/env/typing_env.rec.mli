@@ -40,6 +40,8 @@ val increment_scope_to : t -> Scope.t -> t
 
 val domain : t -> Name_occurrences.t
 
+val var_domain : t -> Variable.Set.t
+
 val add_definition : t -> Name.t -> Flambda_kind.t -> t
 
 val add_equation : t -> Name.t -> Flambda_types.t -> t
@@ -60,7 +62,7 @@ val aliases_of_simple : t -> Simple.t -> Name.Set.t
 val cut
    : t
   -> unknown_if_defined_at_or_later_than:Scope.t
-  -> Typing_env_extension.t
+  -> Typing_env_extension.t * Variable.Set.t
 
 val resolve_any_toplevel_alias_on_ty0
    : t

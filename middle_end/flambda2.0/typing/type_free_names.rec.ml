@@ -21,7 +21,7 @@ let free_names_or_alias free_names_contents
   match or_alias with
   | No_alias contents -> free_names_contents contents
   | Type _export_id -> Name_occurrences.empty
-  | Equals simple -> Simple.free_names simple
+  | Equals simple -> Simple.free_names_in_types simple
 
 let free_names_unknown_or_join free_names_contents
       (o : _ Flambda_types.unknown_or_join) : Name_occurrences.t =
