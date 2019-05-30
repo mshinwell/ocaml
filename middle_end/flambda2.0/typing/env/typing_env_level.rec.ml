@@ -31,7 +31,7 @@ let print_with_cache ~cache ppf ({ defined_names; equations; } : t) =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (name, ty) ->
           Format.fprintf ppf
-            "@[<hov 1>%s%a%s :@ %a@]"
+            "@[<hov 1>%s%a%s@ :@ %a@]"
             (Misc.Color.bold_green ())
             Name.print name
             (Misc.Color.reset ())
@@ -42,15 +42,15 @@ let print_with_cache ~cache ppf ({ defined_names; equations; } : t) =
   if Name.Map.is_empty defined_names then
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(equations@ @[<v 1>%a@])@])\
+        @[<hov 1>(equations@ @[<hov 1>%a@])@])\
         @]"
       print_equations equations
   else
     Format.fprintf ppf
-      "@[<v 1>(\
-          @[<hov 1>(defined_names@ @[<v 1>%a@])@]@;\
-          @[<hov 1>(equations@ @[<v 1>%a@])@]\
-          )@]"
+      "@[<hov 1>(\
+        @[<hov 1>(defined_names@ @[<hov 1>%a@])@]@;\
+        @[<hov 1>(equations@ @[<hov 1>%a@])@]\
+        )@]"
       Name.Set.print (Name.Map.keys defined_names)
       print_equations equations
 
@@ -157,3 +157,12 @@ let meet_equation t1 env name ty =
     }
   in
   meet env t1 t2
+
+let remove_definitions_and_equations_thereon t =
+  let equations =
+    Name.Map.filter (fun name _ty -> not (Name.Map.mem name t.defined_names))
+      t.equations
+  in
+  { defined_names = Name.Map.empty;
+    equations;
+  }

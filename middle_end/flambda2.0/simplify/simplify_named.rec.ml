@@ -106,7 +106,6 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
       (Closure_id.Map.empty, Closure_id.Map.empty, r)
   in
   let function_decls = Function_declarations.create funs in
-Format.eprintf "Set of closures:@ %a\n%!" Set_of_closures.print set_of_closures;
   let closure_elements, closure_element_types, r =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
