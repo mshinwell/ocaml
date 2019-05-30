@@ -101,12 +101,10 @@ struct
         let env = Meet_env.now_meeting env simple1 simple2 in
         meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
       in
-      (* This matches up with [Aliases] in terms of which name is given
-         the [Equals] type.  The aim is to ensure that the canonical
-         representative of a name's equivalence class in [Alias] always has
-         a non-[Equals] type (cf. [Typing_env.Cached.invariant]). *)
       let env_extension =
-        if Simple.compare simple1 simple2 < 0 then
+        if Typing_env.defined_earlier (Meet_env.env env)
+             simple1 ~than:simple2
+        then
           env_extension
           |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
           |> add_equation env simple2 (S.to_type (Equals simple1))

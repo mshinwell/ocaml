@@ -135,11 +135,10 @@ type to_be_demoted = {
   to_be_demoted : Name.t;
 }
 
-(* This matches up with [Kind_independent_meet_and_join].  See the comment in
-   the implementation of that module. *)
-let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2 =
-  if Simple.compare (Simple.name canonical_name1)
-    (Simple.name canonical_name2) < 0
+let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
+      ~defined_earlier =
+  if defined_earlier (Simple.name canonical_name1)
+       ~than:(Simple.name canonical_name2)
   then
     { canonical_name = canonical_name1;
       to_be_demoted = canonical_name2;
@@ -149,7 +148,12 @@ let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2 =
       to_be_demoted = canonical_name1;
     }
 
-let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) =
+type add_result = {
+  canonical_name : Name.t;
+  alias_of : Name.t;
+}
+
+let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) ~defined_earlier =
   match simple1, simple2 with
   | Name name1, Name name2 ->
     begin match canonical t name1, canonical t name2 with
@@ -172,9 +176,17 @@ let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) =
         Name.Map.add canonical_name (Name.Set.singleton name)
           t.aliases_of_canonical_names
       in
-      { canonical_names;
-        aliases_of_canonical_names;
-      }
+      let add_result =
+        { canonical_name;
+          alias_of = name;
+        }
+      in
+      let t =
+        { canonical_names;
+          aliases_of_canonical_names;
+        }
+      in
+      Some add_result, t
     | Not_seen_before name, Is_canonical canonical_name
     | Is_canonical canonical_name, Not_seen_before name ->
       assert (not (Name.Map.mem name t.aliases_of_canonical_names));
@@ -183,45 +195,81 @@ let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) =
         t.canonical_names
         |> Name.Map.add (* replace *) name canonical_name
       in
-      add_alias_of_canonical_name { t with canonical_names; }
-        name ~canonical_name
+      let add_result =
+        { canonical_name;
+          alias_of = name;
+        }
+      in
+      let t =
+        add_alias_of_canonical_name { t with canonical_names; }
+          name ~canonical_name
+      in
+      Some add_result, t
     | Is_canonical canonical_name, Is_canonical to_be_demoted ->
-      add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
-    | Alias_of_canonical { name; canonical_name = canonical_name1; },
-        Is_canonical canonical_name2
-    | Is_canonical canonical_name1,
-        Alias_of_canonical { name; canonical_name = canonical_name2; } ->
-      let { canonical_name; to_be_demoted; } =
-        choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
+      let add_result =
+        { canonical_name;
+          alias_of = to_be_demoted;
+        }
       in
       let t =
         add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
       in
-      add_alias_of_canonical_name t name ~canonical_name
-    | Alias_of_canonical { name = name1; canonical_name = canonical_name1; },
-        Alias_of_canonical { name = name2; canonical_name = canonical_name2; }
+      Some add_result, t
+    | Alias_of_canonical { name = _; canonical_name = canonical_name1; },
+        Is_canonical canonical_name2
+    | Is_canonical canonical_name1,
+        Alias_of_canonical { name = _; canonical_name = canonical_name2; } ->
+      let { canonical_name; to_be_demoted; } =
+        choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
+          ~defined_earlier
+      in
+      let add_result =
+        { canonical_name;
+          alias_of = to_be_demoted;
+        }
+      in
+      let t =
+        add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
+      in
+      Some add_result, t
+    | Alias_of_canonical { name = _; canonical_name = canonical_name1; },
+        Alias_of_canonical { name = _; canonical_name = canonical_name2; }
         ->
       let { canonical_name; to_be_demoted; } =
         choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
+          ~defined_earlier
+      in
+      let add_result =
+        { canonical_name;
+          alias_of = to_be_demoted;
+        }
       in
       let t =
         add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
       in
-      add_alias_of_canonical_name
-        (add_alias_of_canonical_name t name2 ~canonical_name)
-        name1 ~canonical_name
+      Some add_result, t
     | Alias_of_canonical { name; canonical_name; }, Not_seen_before not_seen
     | Not_seen_before not_seen, Alias_of_canonical { name; canonical_name; } ->
-      add_alias_of_canonical_name
-        (add_alias_of_canonical_name t name ~canonical_name)
-        not_seen ~canonical_name
+      let add_result =
+        { canonical_name;
+          alias_of = not_seen;
+        }
+      in
+      let t =
+        add_alias_of_canonical_name
+          (add_alias_of_canonical_name t name ~canonical_name)
+          not_seen ~canonical_name
+      in
+      Some add_result, t
     end
-  | _, _ -> t
+  (* CR mshinwell: Think about recording of aliases when one side is a Simple;
+     may not be needed for first version. *)
+  | _, _ -> None, t
 
-let add t simple1 simple2 =
-  let t = add_alias t simple1 simple2 in
+let add t simple1 simple2 ~defined_earlier =
+  let add_result, t = add_alias t simple1 simple2 ~defined_earlier in
   invariant t;
-  t
+  add_result, t
 
 let add_canonical_name t name =
   if Name.Map.mem name t.canonical_names then begin
