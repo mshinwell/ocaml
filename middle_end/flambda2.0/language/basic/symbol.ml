@@ -41,9 +41,11 @@ module I = Identifiable.Make (struct
   let hash t = t.hash
 
   let print ppf t =
+    Format.fprintf ppf "@<0>%s" (Misc.Color.bold_blue ());
     Compilation_unit.print ppf t.compilation_unit;
     Format.pp_print_string ppf ".";
-    Linkage_name.print ppf t.linkage_name
+    Linkage_name.print ppf t.linkage_name;
+    Format.fprintf ppf "@<0>%s" (Misc.Color.reset ())
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
