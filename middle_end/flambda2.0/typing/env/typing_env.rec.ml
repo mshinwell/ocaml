@@ -347,6 +347,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
              the moment, any [Equals] aliases to names not in scope at the cut
              point have to be squashed to "Unknown". *)
           One_level.level one_level
+          |> Typing_env_level.remove_definitions_and_equations_thereon
           |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
         in
         Typing_env_level.meet meet_env level result)
