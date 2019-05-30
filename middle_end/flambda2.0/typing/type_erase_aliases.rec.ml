@@ -100,5 +100,8 @@ and erase_aliases_of_kind_fabricated ~allowed
       closures = Closure_ids.erase_aliases closures ~allowed;
     }
 
+let erase_aliases_ty_value ~allowed ty =
+  erase_aliases_ty ~allowed erase_aliases_of_kind_value ty
+
 let erase_aliases_ty_fabricated ~allowed ty =
   erase_aliases_ty ~allowed erase_aliases_of_kind_fabricated ty

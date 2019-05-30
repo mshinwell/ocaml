@@ -38,7 +38,7 @@ let simplify_simple_for_rhs_of_let env r (simple : Simple.t) =
   | Discriminant t -> simple, T.this_discriminant t, r
   | Name name -> simplify_name_for_rhs_of_let env r name
 
-let simplify_function env r closure_id function_decl =
+let simplify_function env r closure_id function_decl ~type_of_my_closure =
   let params_and_body, r =
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
@@ -49,8 +49,15 @@ let simplify_function env r closure_id function_decl =
         let env = E.add_continuation env return_continuation result_arity in
         let env = E.add_exn_continuation env exn_continuation in
         let env = E.add_parameters_with_unknown_types env params in
-        let env = E.add_variable env my_closure (T.any_value ()) in
+        let type_of_my_closure = type_of_my_closure closure_id in
+        let env = E.add_variable env my_closure type_of_my_closure in
         let env = E.increment_continuation_scope_level env in
+(*
+Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
+  Closure_id.print closure_id
+  E.print env
+  Expr.print body;
+*)
         let body, r =
           try
             Simplify_toplevel.simplify_toplevel env r body
@@ -92,20 +99,6 @@ let simplify_function env r closure_id function_decl =
   function_decl, function_decl_type, r
 
 let simplify_set_of_closures0 env r set_of_closures ~result_var =
-  let function_decls = Set_of_closures.function_decls set_of_closures in
-  let funs = Function_declarations.funs function_decls in
-  let funs, fun_types, r =
-    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-        let function_decl, ty, r =
-          simplify_function env r closure_id function_decl
-        in
-        let funs = Closure_id.Map.add closure_id function_decl funs in
-        let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        funs, fun_types, r)
-      funs
-      (Closure_id.Map.empty, Closure_id.Map.empty, r)
-  in
-  let function_decls = Function_declarations.create funs in
   let closure_elements, closure_element_types, r =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
@@ -124,6 +117,32 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
       (Set_of_closures.closure_elements set_of_closures)
       (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
   in
+  let internal_closure_element_types =
+    Var_within_closure.Map.map (fun ty_value ->
+        T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
+      closure_element_types
+  in
+  let type_of_my_closure closure_id =
+    (* CR mshinwell: Think more about the following. *)
+    T.closure closure_id
+      (T.create_non_inlinable_function_declaration ())
+      internal_closure_element_types
+      ~set_of_closures:(T.unknown_as_ty_fabricated ())
+  in
+  let function_decls = Set_of_closures.function_decls set_of_closures in
+  let funs = Function_declarations.funs function_decls in
+  let funs, fun_types, r =
+    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+        let function_decl, ty, r =
+          simplify_function env r closure_id function_decl ~type_of_my_closure
+        in
+        let funs = Closure_id.Map.add closure_id function_decl funs in
+        let fun_types = Closure_id.Map.add closure_id ty fun_types in
+        funs, fun_types, r)
+      funs
+      (Closure_id.Map.empty, Closure_id.Map.empty, r)
+  in
+  let function_decls = Function_declarations.create funs in
   let set_of_closures =
     Set_of_closures.create ~function_decls ~closure_elements
   in
