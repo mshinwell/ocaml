@@ -50,3 +50,6 @@ let join env t1 t2 =
 let erase_aliases ({ by_closure_id; } : t) ~allowed : t =
   { by_closure_id = Types_by_closure_id.erase_aliases by_closure_id ~allowed;
   }
+
+let free_names ({ by_closure_id; } : t) =
+  Types_by_closure_id.free_names by_closure_id

@@ -29,6 +29,18 @@ let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
   | Boxed_int64 i -> Boxed_int64 (Const i)
   | Boxed_nativeint i -> Boxed_nativeint (Const i)
 
+let lift env r ty ~bound_to (static_part : Flambda_static.Static_part.t) =
+  let symbol, r =
+    let name = Variable.unique_name bound_to in
+    R.new_lifted_constant r ~name ty static_part
+  in
+  let env = E.add_symbol env symbol ty in
+  let symbol = Simple.symbol symbol in
+  let term = Named.create_simple symbol in
+  let ty = T.alias_type_of (T.kind ty) symbol in
+  let env = E.add_equation_on_variable env bound_to ty in
+  Reachable.reachable term, env, ty, r
+
 let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
   let ty = E.find_variable env bound_to in
   match term with
@@ -36,27 +48,26 @@ let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
     let ty = T.bottom_like ty in
     let env = E.add_equation_on_variable env bound_to ty in
     term, env, ty, r
-  | Reachable _ ->
-    match T.reify (E.typing_env env) ty ~allow_free_variables:true with
-    | Term (simple, ty) ->
-      let term = Named.create_simple simple in
-      Reachable.reachable term, env, ty, r
-    | Lift to_lift ->
-      if cannot_lift then term, env, ty, r
-      else
-        let symbol, r =
-          let name = Variable.unique_name bound_to in
-          let static_part = create_static_part to_lift in
-          R.new_lifted_constant r ~name ty static_part
-        in
-        let env = E.add_symbol env symbol ty in
-        let symbol = Simple.symbol symbol in
-        let term = Named.create_simple symbol in
-        let ty = T.alias_type_of (T.kind ty) symbol in
-        let env = E.add_equation_on_variable env bound_to ty in
+  | Reachable named ->
+    match named with
+    | Set_of_closures set_of_closures
+        when Set_of_closures.has_empty_environment set_of_closures ->
+      lift env r ty ~bound_to (Set_of_closures set_of_closures)
+    | Prim (Unary (Project_closure closure_id,
+        Name (Symbol set_of_closures_symbol)), _dbg) ->
+      lift env r ty ~bound_to (Closure (set_of_closures_symbol, closure_id))
+    | _ ->
+      match T.reify (E.typing_env env) ty ~allow_free_variables:true with
+      | Term (simple, ty) ->
+        let term = Named.create_simple simple in
         Reachable.reachable term, env, ty, r
-    | Cannot_reify -> term, env, ty, r
-    | Invalid ->
-      let ty = T.bottom_like ty in
-      let env = E.add_equation_on_variable env bound_to ty in
-      Reachable.invalid (), env, ty, r
+      | Lift to_lift ->
+        if cannot_lift then term, env, ty, r
+        else
+          let static_part = create_static_part to_lift in
+          lift env r ty ~bound_to static_part
+      | Cannot_reify -> term, env, ty, r
+      | Invalid ->
+        let ty = T.bottom_like ty in
+        let env = E.add_equation_on_variable env bound_to ty in
+        Reachable.invalid (), env, ty, r

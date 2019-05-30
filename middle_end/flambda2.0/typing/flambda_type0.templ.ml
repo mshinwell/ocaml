@@ -117,14 +117,11 @@ module Make
 
   let reify env ~allow_free_variables t : reification_result =
     let resolved, canonical_simple = Typing_env.resolve_type env t in
-    (* CR mshinwell: We need the [free_names] computation.  That should probably
-       also resolve aliases throughout the type to try to get them to
-       symbols *)
-(*
-    let can_lift =
-      Name_occurrences.contains_only_symbols (free_names t)
+    (* CR mshinwell: We should probably also resolve aliases throughout the
+       type to try to get them to symbols. *)
+    let _can_lift =
+      Name_occurrences.only_contains_symbols (Type_free_names.free_names t)
     in
-*)
     if resolved_type_is_bottom resolved then Invalid
     else
       let result, canonical_var =
@@ -145,5 +142,6 @@ module Make
           | Some simple -> Term (simple, alias_type_of (kind t) simple)
           | None -> Cannot_reify
         in
-        try_canonical_var ()
+        match resolved with
+        | _ -> try_canonical_var ()
 end
