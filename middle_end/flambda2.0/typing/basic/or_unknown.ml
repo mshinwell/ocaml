@@ -22,7 +22,7 @@ type 'a t =
 
 let print f ppf t =
   match t with
-  | Known contents -> Format.fprintf ppf "@[(Known %a)@]" f contents
+  | Known contents -> Format.fprintf ppf "@[<hov 1>(Known@ %a)@]" f contents
   | Unknown -> Format.pp_print_string ppf "Unknown"
 
 let equal equal_contents t1 t2 =

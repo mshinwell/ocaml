@@ -181,8 +181,8 @@ module Make_map (T : Thing) = struct
 
   let print f ppf s =
     let elts ppf s = iter (fun id v ->
-        Format.fprintf ppf "@ (@[%a@ %a@])" T.print id f v) s in
-    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+        Format.fprintf ppf "@ (@[<hov 1>%a@ %a@])" T.print id f v) s in
+    Format.fprintf ppf "@[<hov 1>{%a}@]" elts s
 
   module T_set = Set.Make (T)
 
