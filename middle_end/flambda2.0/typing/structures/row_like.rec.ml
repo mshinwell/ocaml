@@ -203,4 +203,21 @@ struct
     { known;
       at_least;
     }
+
+  let free_names { known; at_least; } =
+    let from_known =
+      Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
+          Name_occurrences.union free_names
+            (Maps_to.free_names maps_to))
+        known
+        Name_occurrences.empty
+    in
+    let from_at_least =
+      Index.Map.fold (fun _index maps_to free_names ->
+          Name_occurrences.union free_names
+            (Maps_to.free_names maps_to))
+        at_least
+        Name_occurrences.empty
+    in
+    Name_occurrences.union from_known from_at_least
 end

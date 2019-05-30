@@ -6,6 +6,7 @@
     flambda_types.rec.ml
     flambda_type0_core.rec.ml
     type_erase_aliases.rec.ml
+    type_free_names.rec.ml
     type_printers.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closure_elements.rec.ml
@@ -39,6 +40,7 @@
     flambda_types.rec.mli
     flambda_type0_core.rec.mli
     type_erase_aliases.rec.mli
+    type_free_names.rec.mli
     type_printers.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closure_elements.rec.mli
