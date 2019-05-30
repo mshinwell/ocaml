@@ -117,4 +117,10 @@ module Make (Index : Identifiable.S) = struct
         components_by_index
     in
     { components_by_index; }
+
+  let free_names { components_by_index; } =
+    Index.Map.fold (fun _index ty free_names ->
+        Name_occurrences.union (Type_free_names.free_names ty) free_names)
+      components_by_index
+      Name_occurrences.empty
 end

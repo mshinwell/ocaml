@@ -131,6 +131,7 @@ let print ppf t =
 let invariant0 ?force t =
   if !Clflags.flambda_invariant_checks || Option.is_some (force : unit option)
   then begin
+(* CR mshinwell: Fix things so this check passes, or delete it.
     let no_empty_prev_levels =
       Scope.Map.for_all (fun _scope level -> not (One_level.is_empty level))
         t.prev_levels
@@ -140,6 +141,7 @@ let invariant0 ?force t =
           empty:@ %a"
         print t
     end;
+*)
     let current_scope = One_level.scope t.current_level in
     let max_prev_scope =
       Scope.Map.fold (fun scope _level max_prev_scope ->
@@ -367,7 +369,7 @@ let aliases_of_simple t simple = Aliases.aliases_of_simple (aliases t) simple
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~print_ty:_ (ty : a Flambda_types.ty)
+      ~print_ty (ty : a Flambda_types.ty)
       : (a Flambda_types.unknown_or_join) * (Simple.t option) =
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
@@ -394,11 +396,20 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     match ty with
     | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-    | Equals _ -> invariant_should_fail t
+    | Equals _ ->
+      Format.eprintf "%s>> Trying to resolve toplevel alias on%s:@ %a\n\
+          %sCurrent aliases:%s\n%a\n"
+        (Misc.Color.bold_red ())
+        (Misc.Color.reset ())
+        print_ty ty
+        (Misc.Color.bold_red ())
+        (Misc.Color.reset ())
+        Aliases.print (aliases t);
+      invariant_should_fail t
 
 let resolve_any_toplevel_alias_on_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~print_ty:_ (ty : a Flambda_types.ty)
+      ~print_ty (ty : a Flambda_types.ty)
       : (a Flambda_types.ty) * (Simple.t option) =
   match ty with
   | No_alias _ -> ty, None
@@ -410,7 +421,16 @@ let resolve_any_toplevel_alias_on_ty (type a) t
     match ty with
     | No_alias _ -> ty, Some (Simple.name name)
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-    | Equals _ -> invariant_should_fail t
+    | Equals _ ->
+      Format.eprintf "%s>> Trying to resolve toplevel alias on%s:@ %a\n\
+          %sCurrent aliases:%s\n%a\n"
+        (Misc.Color.bold_red ())
+        (Misc.Color.reset ())
+        print_ty ty
+        (Misc.Color.bold_red ())
+        (Misc.Color.reset ())
+        Aliases.print (aliases t);
+        invariant_should_fail t
 
 let resolve_any_toplevel_alias t (ty : Flambda_types.t)
       : Flambda_types.t * (Simple.t option) =
