@@ -120,11 +120,11 @@ let simplify_computation env r
     in
     let computation : Program_body.Computation.t option =
       Some ({
-            expr;
-            return_continuation = computation.return_continuation;
-            exn_continuation = computation.exn_continuation;
-            computed_values = computation.computed_values;
-        })
+        expr;
+        return_continuation = computation.return_continuation;
+        exn_continuation = computation.exn_continuation;
+        computed_values = computation.computed_values;
+      })
     in
     env, r, computation
 
@@ -207,7 +207,7 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
       in
       Define_symbol (definition, body))
     body
-    lifted_constants
+    (List.rev lifted_constants)
 
 let simplify_program env (program : Program.t) : Program.t =
   let backend = E.backend env in

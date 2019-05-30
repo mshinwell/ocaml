@@ -32,10 +32,10 @@ let simplify_simple env (simple : Simple.t) =
   | Const c -> simple, T.type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
   | Name name ->
-Format.eprintf "simplify_simple %a\n%!" Name.print name;
+(*Format.eprintf "simplify_simple %a\n%!" Name.print name;*)
     let typing_env = E.typing_env env in
     let ty = TE.find typing_env name in
-Format.eprintf "ty: %a\n%!" T.print ty;
+(*Format.eprintf "ty: %a\n%!" T.print ty;*)
     (* We reify an [Equals] type in case the type itself can't be reified but
        there is an interesting alias (e.g. a symbol). *)
     let kind = T.kind ty in
@@ -45,7 +45,7 @@ Format.eprintf "ty: %a\n%!" T.print ty;
     in
     match reified with
     | Term (simple, ty) ->
-Format.eprintf "returning reified Simple %a\n%!" Simple.print simple;
+(*Format.eprintf "returning reified Simple %a\n%!" Simple.print simple;*)
       simple, ty
     | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
