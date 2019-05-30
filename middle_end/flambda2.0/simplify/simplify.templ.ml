@@ -97,7 +97,9 @@ let simplify_computation env r
     let env =
       E.add_continuation env computation.return_continuation return_cont_arity
     in
+    let r = R.add_continuation r env computation.return_continuation in
     let env = E.add_exn_continuation env computation.exn_continuation in
+    let r = R.add_exn_continuation r env computation.exn_continuation in
     let env = E.increment_continuation_scope_level env in
     let expr, r =
       Simplify_toplevel.simplify_toplevel env r computation.expr
@@ -105,13 +107,24 @@ let simplify_computation env r
         computation.exn_continuation
     in
     let env = E.add_lifted_constants_from_r env r in
+    let typing_env, arg_types =
+      R.continuation_env_and_arg_types r env computation.return_continuation
+    in
+    assert (List.compare_lengths arg_types computation.computed_values = 0);
+    let env =
+      List.fold_left2 (fun env ty (var, kind) ->
+          assert (Flambda_kind.equal (T.kind ty) kind);
+          E.add_variable env var ty)
+        (E.with_typing_environment env typing_env)
+        arg_types computation.computed_values
+    in
     let computation : Program_body.Computation.t option =
       Some ({
-        expr;
-        return_continuation = computation.return_continuation;
-        exn_continuation = computation.exn_continuation;
-        computed_values = computation.computed_values;
-      })
+            expr;
+            return_continuation = computation.return_continuation;
+            exn_continuation = computation.exn_continuation;
+            computed_values = computation.computed_values;
+        })
     in
     env, r, computation
 

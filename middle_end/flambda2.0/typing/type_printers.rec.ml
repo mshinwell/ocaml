@@ -135,9 +135,10 @@ let rec print_of_kind_value ~cache ppf
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
        they're empty. *)
     Format.fprintf ppf
-      "(Blocks_and_immediates@ \
-        @[<v>@[<hov 1>(blocks@ %a)@]@ \
-        @[<hov 1>(immediates@ %a)@]@])"
+      "@[<hov 1>(Blocks_and_immediates@ \
+        @[<hov 1>(blocks@ %a)@]@ \
+        @[<hov 1>(immediates@ %a)@]\
+        )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
       (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
   | Boxed_number n ->
@@ -185,12 +186,12 @@ and print_ty_fabricated_with_cache ~cache ppf
 and print_with_cache ~cache ppf (t : Flambda_types.t) =
   match t with
   | Value ty ->
-    Format.fprintf ppf "@[<hov 1>(Val %a)@]"
+    Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
       (print_ty_value_with_cache ~cache) ty
   | Naked_number (ty, _kind) ->
-    Format.fprintf ppf "@[<hov 1>(Naked %a)@]" print_ty_naked_number ty
+    Format.fprintf ppf "@[<hov 1>(Naked@ %a)@]" print_ty_naked_number ty
   | Fabricated ty ->
-    Format.fprintf ppf "@[<hov 1>(Fab %a)@]"
+    Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
       (print_ty_fabricated_with_cache ~cache) ty
 
 and print ppf t =
