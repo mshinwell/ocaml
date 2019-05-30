@@ -154,9 +154,15 @@ let simplify_set_of_closures_and_drop_type env r set_of_closures =
   set_of_closures, r
 
 let simplify_named0 env r (named : Named.t) ~result_var =
+Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;
   match named with
   | Simple simple ->
+let orig_simple = simple in
     let simple, ty, r = simplify_simple_for_rhs_of_let env r simple in
+Format.eprintf "Simplified %a --> %a, type %a\n%!"
+  Simple.print orig_simple
+  Simple.print simple
+  T.print ty;
     let env = E.add_variable env result_var ty in
     Reachable.reachable (Named.create_simple simple), env, ty, r
   | Prim (prim, dbg) ->

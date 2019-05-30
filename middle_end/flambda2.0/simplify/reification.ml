@@ -39,6 +39,9 @@ let lift env r ty ~bound_to (static_part : Flambda_static.Static_part.t) =
   let term = Named.create_simple symbol in
   let ty = T.alias_type_of (T.kind ty) symbol in
   let env = E.add_equation_on_variable env bound_to ty in
+Format.eprintf "Equation for lifted constant: %a = %a\n%!"
+  Variable.print bound_to T.print ty;
+Format.eprintf "New environment:@ %a\n%!" T.Typing_env.print (E.typing_env env);
   Reachable.reachable term, env, ty, r
 
 let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =

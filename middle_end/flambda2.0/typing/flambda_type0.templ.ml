@@ -122,11 +122,13 @@ module Make
     let _can_lift =
       Name_occurrences.only_contains_symbols (Type_free_names.free_names t)
     in
+Format.eprintf "reify %a\n%!" Type_printers.print t;
     if resolved_type_is_bottom resolved then Invalid
     else
       let result, canonical_var =
         match canonical_simple with
         | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
+Format.eprintf "...returning %a\n%!" Simple.print simple;
           Some (Term (simple, alias_type_of (kind t) simple)), None
         | Some ((Name ((Var _) as _name)) as simple) ->
           if allow_free_variables
