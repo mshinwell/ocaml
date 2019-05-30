@@ -317,7 +317,10 @@ end = struct
     }
 
   let add_lifted_constants t (lifted : lifted_constants) =
+    let allowed = TE.var_domain t.typing_env in
     List.fold_left (fun t (sym, (ty, _static_part)) ->
+        (* CR mshinwell: Try to avoid this erasure here? *)
+        let ty = T.erase_aliases ty ~allowed in
         add_symbol_if_not_defined t sym ty)
       t
       lifted
