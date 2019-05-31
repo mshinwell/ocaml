@@ -155,7 +155,7 @@ let lift_set_of_closures env r ~name set_of_closures ~closure_element_types
     T.set_of_closures ~closures:closure_types_via_symbols
   in
   let r =
-    R.new_lifted_constant r ~name set_of_closures_type static_structure
+    R.new_lifted_constant0 r ~name set_of_closures_type static_structure
   in
   let env = E.add_symbol env symbol set_of_closures_type
   let env =
