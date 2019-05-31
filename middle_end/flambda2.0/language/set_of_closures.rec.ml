@@ -35,6 +35,13 @@ let closure_elements t = t.closure_elements
 let has_empty_environment t =
   Var_within_closure.Map.is_empty t.closure_elements
 
+let environment_doesn't_mention_variables t =
+  Var_within_closure.Map.for_all (fun _vwc (simple : Simple.t) ->
+      match simple with
+      | Name (Symbol _) -> false
+      | _ -> true)
+    t.closure_elements
+
 let print_with_cache ~cache ppf
       { function_decls; 
         closure_elements;
