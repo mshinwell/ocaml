@@ -50,6 +50,8 @@ let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
 
 let simplify_static_part env r (static_part : Static_part.t)
       : Static_part.t * R.t =
+  (* CR mshinwell: This should not drop the types.  It should use the types
+     for the symbol bindings in the env. *)
   match static_part with
   | Block (tag, is_mutable, fields) ->
     let fields =
@@ -66,9 +68,6 @@ let simplify_static_part env r (static_part : Static_part.t)
         set_of_closures
     in
     Set_of_closures set_of_closures, r
-  | Closure (sym, _closure) ->
-    E.check_symbol_is_bound env sym;
-    static_part, r
   | Boxed_float or_var -> Boxed_float (simplify_or_variable env or_var), r
   | Boxed_int32 or_var -> Boxed_int32 (simplify_or_variable env or_var), r
   | Boxed_int64 or_var -> Boxed_int64 (simplify_or_variable env or_var), r
