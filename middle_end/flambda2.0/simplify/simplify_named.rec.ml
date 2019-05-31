@@ -157,7 +157,7 @@ let lift_set_of_closures env r ~name set_of_closures ~closure_element_types
   let r =
     R.new_lifted_constant0 r ~name set_of_closures_type static_structure
   in
-  let env = E.add_symbol env symbol set_of_closures_type
+  let env = E.add_symbol env symbol set_of_closures_type in
   let env =
     Closure_id.Map.fold (fun _closure_id (symbol, typ) env ->
         E.add_symbol env symbol typ)

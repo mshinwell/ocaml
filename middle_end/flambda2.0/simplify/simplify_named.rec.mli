@@ -26,7 +26,7 @@ val simplify_named
        * Flambda_type.t
        * Reachable.t
 
-val simplify_set_of_closures_and_drop_type
+val simplify_lifted_set_of_closures
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
   -> Flambda.Set_of_closures.t
