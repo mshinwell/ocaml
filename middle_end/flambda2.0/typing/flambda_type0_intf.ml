@@ -208,11 +208,21 @@ module type S = sig
     -> set_of_closures:ty_fabricated
     -> t
 
+  (** The type of a closure (of kind [Value]) containing at least one
+      closure that holds the given closure variable with the given type. *)
+  val closure_containing_at_least
+     : Var_within_closure.t
+    -> Flambda_types.t
+
   (** The type of a set of closures containing exactly those closure IDs
       with the given types. *)
   val set_of_closures
      : closures:t Closure_id.Map.t
     -> t
+
+  (** The type of a set of closures containing at least one closure with
+      the given closure ID. *)
+  val set_of_closures_containing_at_least : Closure_id.t -> Flambda_types.t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
