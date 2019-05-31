@@ -52,23 +52,18 @@ let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
     let ty = T.bottom_like ty in
     let env = E.add_equation_on_variable env bound_to ty in
     term, env, ty, r
-  | Reachable named ->
-    match named with
-    | Set_of_closures set_of_closures
-        when Set_of_closures.has_empty_environment set_of_closures ->
-      lift env r ty ~bound_to (Set_of_closures set_of_closures)
-    | _ ->
-      match T.reify (E.typing_env env) ty ~allow_free_variables:true with
-      | Term (simple, ty) ->
-        let term = Named.create_simple simple in
-        Reachable.reachable term, env, ty, r
-      | Lift to_lift ->
-        if cannot_lift then term, env, ty, r
-        else
-          let static_part = create_static_part to_lift in
-          lift env r ty ~bound_to static_part
-      | Cannot_reify -> term, env, ty, r
-      | Invalid ->
-        let ty = T.bottom_like ty in
-        let env = E.add_equation_on_variable env bound_to ty in
-        Reachable.invalid (), env, ty, r
+  | Reachable _ ->
+    match T.reify (E.typing_env env) ty ~allow_free_variables:true with
+    | Term (simple, ty) ->
+      let term = Named.create_simple simple in
+      Reachable.reachable term, env, ty, r
+    | Lift to_lift ->
+      if cannot_lift then term, env, ty, r
+      else
+        let static_part = create_static_part to_lift in
+        lift env r ty ~bound_to static_part
+    | Cannot_reify -> term, env, ty, r
+    | Invalid ->
+      let ty = T.bottom_like ty in
+      let env = E.add_equation_on_variable env bound_to ty in
+      Reachable.invalid (), env, ty, r
