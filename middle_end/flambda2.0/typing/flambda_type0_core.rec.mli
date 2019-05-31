@@ -84,9 +84,15 @@ val closure
   -> set_of_closures:Flambda_types.ty_fabricated
   -> Flambda_types.t
 
+val closure_containing_at_least
+   : Var_within_closure.t
+  -> Flambda_types.t
+
 val set_of_closures
    : closures:Flambda_types.t Closure_id.Map.t
   -> Flambda_types.t
+
+val set_of_closures_containing_at_least : Closure_id.t -> Flambda_types.t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t
 val alias_type_of_as_ty_fabricated : Simple.t -> Flambda_types.ty_fabricated
