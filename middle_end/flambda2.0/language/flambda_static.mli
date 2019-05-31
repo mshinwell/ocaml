@@ -95,6 +95,8 @@ module Program_body : sig
             the binding of possibly multiple symbols to the individual closures
             within such set of closures.  The corresponding [Static_part]
             must be a [Set_of_closures]. *)
+
+    val being_defined : t -> Symbol.Set.t
   end
 
   module Static_structure : sig

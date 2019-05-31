@@ -164,6 +164,13 @@ module type Result = sig
     -> Continuation.t
     -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 
+  val new_lifted_constant0
+     : t
+    -> name:string
+    -> Flambda_type.t
+    -> Flambda_static.Static_structure.t
+    -> t
+
   val new_lifted_constant
      : t
     -> name:string

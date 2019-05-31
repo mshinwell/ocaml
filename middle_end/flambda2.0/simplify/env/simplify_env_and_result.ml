@@ -20,10 +20,6 @@ module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
-(* CR mshinwell: Add submodule *)
-type lifted_constants =
-  (Symbol.t * (Flambda_type.t * Flambda_static.Static_part.t)) list
-
 module rec Env : sig
   include Simplify_env_and_result_intf.Env
     with type result := Result.t
@@ -317,13 +313,13 @@ end = struct
     }
 
   let add_lifted_constants t (lifted : lifted_constants) =
-    let allowed = TE.var_domain t.typing_env in
-    List.fold_left (fun t (sym, (ty, _static_part)) ->
-        (* CR mshinwell: Try to avoid this erasure here? *)
-        let ty = T.erase_aliases ty ~allowed in
-        add_symbol_if_not_defined t sym ty)
-      t
-      lifted
+    let typing_env =
+      List.fold_left (fun typing_env lifted_constant ->
+          Lifted_constant.introduce lifted_constant typing_env)
+        t
+        (typing_env t)
+    in
+    with_typing_environment t typing_env
 
   (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
   let add_lifted_constants_from_r t r =
@@ -336,25 +332,27 @@ end = struct
     { resolver : (Export_id.t -> Flambda_type.t option);
       continuations : Continuation_uses.t Continuation.Map.t;
       imported_symbols : Flambda_kind.t Symbol.Map.t;
-      lifted_constants_rev : lifted_constants;
+      lifted_constants_innermost_first : Lifted_constant.t list;
     }
 
   let print ppf { resolver = _; continuations; imported_symbols;
-                  lifted_constants_rev = _;
+                  lifted_constants_innermost_first;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(continuations@ %a)@]@ \
         @[<hov 1>(imported_symbols@ %a)@]@ \
-        @[<hov 1>(lifted_constants_rev@ <TBD>)@]\
+        @[<hov 1>(lifted_constants_innermost_first@ %a)@]\
         )@]"
       (Continuation.Map.print Continuation_uses.print) continuations
       (Symbol.Map.print Flambda_kind.print) imported_symbols
+      (Misc.Stdlib.List.print Lifted_constant.print)
+        lifted_constants_innermost_first
 
   let create ~resolver =
     { resolver;
       continuations = Continuation.Map.empty;
       imported_symbols = Symbol.Map.empty;
-      lifted_constants_rev = [];
+      lifted_constants_innermost_first = [];
     }
 
   let add_continuation t env cont =
@@ -420,26 +418,18 @@ end = struct
 
   let imported_symbols t = t.imported_symbols
 
-  (* CR mshinwell: We need a better representation for the lifted
-     constants; maybe in a separate module. *)
-
-  let new_lifted_constant t ~name ty static_part =
-    let symbol =
-      Symbol.create (Compilation_unit.get_current_exn ())
-        (Linkage_name.create name)
-    in
-    let t =
-      { t with
-        lifted_constants_rev =
-          (symbol, (ty, static_part)) :: t.lifted_constants_rev;
-      }
-    in
-    symbol, t
+  let new_lifted_constant t lifted_constant =
+    { t with
+      lifted_constants_innermost_first =
+        lifted_constant :: t.lifted_constants_innermost_first;
+    }
 
   let add_lifted_constants t ~from =
     { t with
-      lifted_constants_rev = from.lifted_constants_rev @ t.lifted_constants_rev;
+      lifted_constants_innermost_first =
+        from.lifted_constants_innermost_first
+          @ t.lifted_constants_innermost_first;
     }
 
-  let get_lifted_constants t = List.rev t.lifted_constants_rev
+  let lifted_constants_innermost_first t = t.lifted_constants_innermost_first
 end
