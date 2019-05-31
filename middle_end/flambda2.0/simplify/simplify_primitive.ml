@@ -29,11 +29,10 @@ let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
     Simplify_unary_primitive.simplify_unary_primitive env r prim arg dbg
       ~result_var
   | _ ->
+    (* CR mshinwell: temporary code *)
     let named =
       match prim with
       | Unary _ -> assert false
-        let arg = S.simplify_simple_and_drop_type env arg in
-        Named.create_prim (Unary (prim, arg)) dbg
       | Binary (prim, arg1, arg2) ->
         let arg1 = S.simplify_simple_and_drop_type env arg1 in
         let arg2 = S.simplify_simple_and_drop_type env arg2 in
