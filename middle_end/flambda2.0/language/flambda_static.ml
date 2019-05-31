@@ -91,7 +91,6 @@ module Static_part = struct
     | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
     | Set_of_closures of Flambda.Set_of_closures.t
-    | Closure of Symbol.t * Closure_id.t
     | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
@@ -110,7 +109,6 @@ module Static_part = struct
     | Fabricated_block _ -> true
     | Set_of_closures set ->
       not (Flambda.Set_of_closures.has_empty_environment set)
-    | Closure _
     | Boxed_float _
     | Boxed_int32 _
     | Boxed_int64 _
@@ -129,8 +127,6 @@ module Static_part = struct
     | Fabricated_block v ->
       Name_occurrences.singleton_variable_in_terms v
     | Set_of_closures set -> Flambda.Set_of_closures.free_names set
-    | Closure (sym, _) ->
-      Name_occurrences.singleton_symbol_in_terms sym
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
     | Boxed_int64 (Var v)
@@ -172,10 +168,6 @@ module Static_part = struct
     | Set_of_closures set_of_closures ->
       fprintf ppf "@[(Set_of_closures@ (%a))@]"
         (Flambda.Set_of_closures.print_with_cache ~cache) set_of_closures
-    | Closure (set_of_closures, closure_id) ->
-      fprintf ppf "@[(Closure (set_of_closures %a) (closure_id %a))@]"
-        Symbol.print set_of_closures
-        Closure_id.print closure_id
     | Boxed_float (Const f) ->
       fprintf ppf "@[(Boxed_float %a)@]" Numbers.Float_by_bit_pattern.print f
     | Boxed_float (Var v) ->
@@ -220,8 +212,6 @@ module Static_part = struct
         E.check_variable_is_bound_and_of_kind env field Flambda_kind.fabricated
       | Set_of_closures set ->
         Flambda.Set_of_closures.invariant env set
-      | Closure (sym, _closure_id) ->
-        E.check_symbol_is_bound env sym
       | Boxed_float (Var v) ->
         E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_float
       | Boxed_int32 (Var v) ->
@@ -306,7 +296,13 @@ module Program_body = struct
     (* CR mshinwell: This should have an [invariant] function.  One thing to
        check is that the [closure_symbols] are all distinct (and presumably
        different from the set of closure symbol too, even though one will
-       eventually end up the same). *)
+       eventually end up the same).
+
+       Also: [Set_of_closures] static parts are only allowed with
+       [Set_of_closures ... : Bound_symbols.t].  The symbols in the
+       [Set_of_closures] static part must match up with the symbols being
+       claimed to be bound.
+    *)
 
     let being_defined t =
       match t with

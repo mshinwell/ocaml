@@ -36,3 +36,8 @@ val closure_elements : t -> Simple.t Var_within_closure.Map.t
 
 (** Returns true iff the given set of closures has an empty environment. *)
 val has_empty_environment : t -> bool
+
+(** Returns true iff the given set of closures does not contain any variables
+    in its environment.  (If this condition is satisfied, a set of closures
+    may be lifted.) *)
+val environment_doesn't_mention_variables : t -> bool

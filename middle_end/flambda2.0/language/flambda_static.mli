@@ -46,7 +46,6 @@ module Static_part : sig
     | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
     | Set_of_closures of Flambda.Set_of_closures.t
-    | Closure of Symbol.t * Closure_id.t
     | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
@@ -86,14 +85,16 @@ module Program_body : sig
   module Bound_symbols : sig
     type t =
       | Singleton of Symbol.t * Flambda_kind.t
-        (** A binding of a single symbol of the given kind. *)
+        (** A binding of a single symbol of the given kind.  The corresponding
+            [Static_part] may not be a [Set_of_closures]. *)
       | Set_of_closures of {
           set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         }
         (** A binding of a single symbol to a set of closures together with
             the binding of possibly multiple symbols to the individual closures
-            within such set of closures. *)
+            within such set of closures.  The corresponding [Static_part]
+            must be a [Set_of_closures]. *)
   end
 
   module Static_structure : sig
