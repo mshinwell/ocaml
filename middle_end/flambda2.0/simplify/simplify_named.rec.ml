@@ -98,7 +98,79 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   in
   function_decl, function_decl_type, r
 
-let simplify_set_of_closures0 env r set_of_closures ~result_var =
+let lift_set_of_closures env r ~name set_of_closures ~closure_element_types
+      ~result_var =
+  let name = Variable.unique_name result_var in
+  let set_of_closures_symbol =
+    Symbol.create (Compilation_unit.get_current_exn ()) name
+  in
+  let set_of_closures_ty_fabricated =
+    T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
+  in
+  let closure_types =
+    Closure_id.Map.mapi (fun closure_id function_decl_type ->
+        T.closure closure_id function_decl_type closure_element_types
+          ~set_of_closures:set_of_closures_ty_fabricated)
+      fun_types
+  in
+  let closure_symbols_and_types =
+    Closure_id.Map.map (fun typ ->
+        let closure_symbol =
+          Symbol.create (Compilation_unit.get_current_exn ())
+            (Closure_id.unique_name closure_id)
+        in
+        closure_symbol, typ)
+      closure_types
+  in
+  let closure_symbols =
+    Closure_id.Map.map (fun (sym, typ) -> sym) closure_symbols_and_types
+  in
+  let static_part : Flambda_static.Static_part.t =
+    Set_of_closures set_of_closures
+  in
+  let bound_symbols : Flambda_static.Bound_symbols.t =
+    Set_of_closures {
+      set_of_closures_symbol;
+      closure_symbols;
+    }
+  in
+  let static_structure = [bound_symbols, static_part] in
+  let set_of_closures_ty_fabricated =
+    T.alias_type_of_as_ty_fabricated (Simple.var result_var)
+  in
+  let set_of_closures_type =
+    (* The set-of-closures type describes the closures it contains via
+        aliases to the closure symbols.  This means that when an appropriate
+        [Project_closure] primitive, for example, is encountered then it will
+        simplify directly to a symbol without any further work.
+
+        The detail of the closures themselves is described using closure
+        types assigned to the individual closure symbols.  These types in
+        turn tie back recursively to the set-of-closures symbol. *)
+    let closure_types_via_symbols =
+      Closure_id.Map.map (fun closure_sym ->
+          T.alias_type_of K.value (Simple.symbol closure_sym))
+        closure_symbols
+    in
+    T.set_of_closures ~closures:closure_types_via_symbols
+  in
+  let r =
+    R.new_lifted_constant r ~name set_of_closures_type static_structure
+  in
+  let env = E.add_symbol env symbol set_of_closures_type
+  let env =
+    Closure_id.Map.fold (fun _closure_id (symbol, typ) env ->
+        E.add_symbol env symbol typ)
+      closure_symbols_and_types
+      env
+  in
+  let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
+  let term = Named.create_simple set_of_closures_symbol in
+  let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
+  let env = E.add_equation_on_variable env result_var ty in
+  term, env, r
+
+let simplify_set_of_closures env r set_of_closures ~result =
   let closure_elements, closure_element_types, r =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
@@ -146,99 +218,33 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
   let set_of_closures =
     Set_of_closures.create ~function_decls ~closure_elements
   in
-  let closure_types =
-    Closure_id.Map.mapi (fun closure_id function_decl_type ->
-        T.closure closure_id function_decl_type closure_element_types
-          ~set_of_closures:set_of_closures_ty_fabricated)
-      fun_types
-  in
   (* The resulting set-of-closures and closures types are recursive. To avoid
      having to rewrite the type afterwards in the case of lifting the set of
      closures, we determine now if lifting will happen, and if so tie the
      recursive loop(s) via a set-of-closures symbol instead of a variable. *)
-  let will_lift =
+  let can_lift =
     Set_of_closures.environment_doesn't_mention_variables set_of_closures
   in
-  if not will_lift then
+  match can_lift, result with
+  | true, Name (Var result_var) ->
+    (* Since [result] is a [Var], we know that the set of closures hasn't
+       already been lifted.  (In that situation, [result] would be a
+       [Symbol].) *)
+    lift_set_of_closures env r ~name set_of_closures ~closure_element_types
+      ~result_var
+  | _, _ ->
     let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
+      T.alias_type_of_as_ty_fabricated result
+    in
+    let closure_types =
+      Closure_id.Map.mapi (fun closure_id function_decl_type ->
+          T.closure closure_id function_decl_type closure_element_types
+            ~set_of_closures:set_of_closures_ty_fabricated)
+        fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    set_of_closures, set_of_closures_type, env, r
-  else
-    let name = Variable.unique_name result_var in
-    let set_of_closures_symbol =
-      Symbol.create (Compilation_unit.get_current_exn ()) name
-    in
-    let closure_symbols_and_types =
-      Closure_id.Map.map (fun typ ->
-          let closure_symbol =
-            Symbol.create (Compilation_unit.get_current_exn ())
-              (Closure_id.unique_name closure_id)
-          in
-          closure_symbol, typ)
-        closure_types
-    in
-    let closure_symbols =
-      Closure_id.Map.map (fun (sym, typ) -> sym) closure_symbols_and_types
-    in
-    let static_part : Flambda_static.Static_part.t =
-      Set_of_closures set_of_closures
-    in
-    let bound_symbols : Flambda_static.Bound_symbols.t =
-      Set_of_closures {
-        set_of_closures_symbol;
-        closure_symbols;
-      }
-    in
-    let static_structure = [bound_symbols, static_part] in
-    let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
-    in
-    let set_of_closures_type =
-      (* The set-of-closures type describes the closures it contains via
-         aliases to the closure symbols.  This means that when an appropriate
-         [Project_closure] primitive, for example, is encountered then it will
-         simplify directly to a symbol without any further work.
-
-         The detail of the closures themselves is described using closure
-         types assigned to the individual closure symbols.  These types in
-         turn tie back recursively to the set-of-closures symbol. *)
-      let closure_types_via_symbols =
-        Closure_id.Map.map (fun closure_sym ->
-            T.alias_type_of K.value (Simple.symbol closure_sym))
-          closure_symbols
-      in
-      T.set_of_closures ~closures:closure_types_via_symbols
-    in
-    let r =
-      R.new_lifted_constant r ~name set_of_closures_type static_structure
-    in
-    let env = E.add_symbol env symbol set_of_closures_type
-    let env =
-      Closure_id.Map.fold (fun _closure_id (symbol, typ) env ->
-          E.add_symbol env symbol typ)
-        closure_symbols_and_types
-        env
-    in
-    let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
-    let term = Named.create_simple set_of_closures_symbol in
-    let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
-    let env = E.add_equation_on_variable env bound_to ty in
-    term, ty, env, r
-
-let simplify_set_of_closures env r set_of_closures ~result_var =
-  let set_of_closures, ty, r =
-    simplify_set_of_closures0 env r set_of_closures ~result_var
-  in
-  Named.create_set_of_closures set_of_closures, ty, r
-
-let simplify_set_of_closures_and_drop_type env r set_of_closures =
-  let result_var = Variable.create "set_of_closures" in
-  let set_of_closures, _ty, r =
-    simplify_set_of_closures0 env r set_of_closures ~result_var
-  in
-  set_of_closures, r
+    let env = E.add_simple env result set_of_closures_type in
+    Named.create_set_of_closures set_of_closures, env, r
 
 let simplify_named0 env r (named : Named.t) ~result_var =
 (*Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;*)
@@ -267,10 +273,9 @@ let simplify_named0 env r (named : Named.t) ~result_var =
     Reification.try_to_reify env r term
       ~bound_to:result_var ~cannot_lift:(not effects_and_coeffects_ok)
   | Set_of_closures set_of_closures ->
-    let term, ty, r =
+    let term, env, r =
       simplify_set_of_closures env r set_of_closures ~result_var
     in
-    let env = E.add_variable env result_var ty in
     Reification.try_to_reify env r (Reachable.reachable term)
       ~bound_to:result_var ~cannot_lift:false
 
