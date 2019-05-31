@@ -155,7 +155,7 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
   (* The resulting set-of-closures and closures types are recursive. To avoid
      having to rewrite the type afterwards in the case of lifting the set of
      closures, we determine now if lifting will happen, and if so tie the
-     recursive loop via a symbol instead of a variable. *)
+     recursive loop(s) via a set-of-closures symbol instead of a variable. *)
   let will_lift =
     Set_of_closures.environment_doesn't_mention_variables set_of_closures
   in
@@ -191,11 +191,26 @@ let simplify_set_of_closures0 env r set_of_closures ~result_var =
         closure_symbols;
       }
     in
+    let static_structure = [bound_symbols, static_part] in
     let set_of_closures_ty_fabricated =
       T.alias_type_of_as_ty_fabricated (Simple.var result_var)
     in
-    let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    let static_structure = [bound_symbols, static_part] in
+    let set_of_closures_type =
+      (* The set-of-closures type describes the closures it contains via
+         aliases to the closure symbols.  This means that when an appropriate
+         [Project_closure] primitive, for example, is encountered then it will
+         simplify directly to a symbol without any further work.
+
+         The detail of the closures themselves is described using closure
+         types assigned to the individual closure symbols.  These types in
+         turn tie back recursively to the set-of-closures symbol. *)
+      let closure_types_via_symbols =
+        Closure_id.Map.map (fun closure_sym ->
+            T.alias_type_of K.value (Simple.symbol closure_sym))
+          closure_symbols
+      in
+      T.set_of_closures ~closures:closure_types_via_symbols
+    in
     let r =
       R.new_lifted_constant r ~name set_of_closures_type static_structure
     in
