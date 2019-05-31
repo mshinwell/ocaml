@@ -57,9 +57,6 @@ let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
     | Set_of_closures set_of_closures
         when Set_of_closures.has_empty_environment set_of_closures ->
       lift env r ty ~bound_to (Set_of_closures set_of_closures)
-    | Prim (Unary (Project_closure closure_id,
-        Name (Symbol set_of_closures_symbol)), _dbg) ->
-      lift env r ty ~bound_to (Closure (set_of_closures_symbol, closure_id))
     | _ ->
       match T.reify (E.typing_env env) ty ~allow_free_variables:true with
       | Term (simple, ty) ->
