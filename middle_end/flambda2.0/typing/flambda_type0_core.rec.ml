@@ -197,6 +197,9 @@ let any_naked_nativeint () : t =
 let any_fabricated () : t =
   Fabricated (No_alias Unknown)
 
+let any_fabricated_as_ty_fabricated () : ty_fabricated =
+  No_alias Unknown
+
 let unknown (kind : K.t) : t =
   match kind with
   | Value ->
@@ -394,20 +397,56 @@ let closure closure_id function_decl closure_elements ~set_of_closures : t =
   in
   Value (No_alias (Ok (Closures closures)))
 
+let closure_containing_at_least var_within_closure =
+  let ty_value = any_value_as_ty_value () in
+  let closure_elements =
+    Var_within_closure.Map.singleton var_within_closure (Value ty_value)
+  in
+  let closure_elements = Closure_elements.create closure_elements in
+  let closures_entry : closures_entry =
+    { function_decl = Non_inlinable;
+      closure_elements;
+      set_of_closures = any_fabricated_as_ty_fabricated ();
+    }
+  in
+  let by_closure_id =
+    Closures_entry_by_closure_id.create_at_least_multiple
+      (Var_within_closure_set.Map.singleton
+        (Var_within_closure.Set.singleton var_within_closure)
+        closures_entry)
+  in
+  let closures : closures =
+    { by_closure_id;
+    }
+  in
+  Value (No_alias (Ok (Closures closures)))
+
 let set_of_closures ~closures : t =
   if Closure_id.Map.is_empty closures then bottom K.value
   else
     let all_closures = Closure_id.Map.keys closures in
     let by_closure_id = Types_by_closure_id.create closures in
-    let set_of_closures_entry : set_of_closures_entry =
-       { by_closure_id; }
-    in
+    let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
     let closures =
       Closure_ids.create
         (Closure_id_set.Map.singleton all_closures set_of_closures_entry)
         Closed
     in
     Fabricated (No_alias (Ok (Set_of_closures { closures; })))
+
+let set_of_closures_containing_at_least closure_id =
+  let all_closures = Closure_id.Set.singleton closure_id in
+  let by_closure_id =
+    Types_by_closure_id.create
+      (Closure_id.Map.singleton closure_id (any_value ()))
+  in
+  let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
+  let closures =
+    Closure_ids.create
+      (Closure_id_set.Map.singleton closure_id set_of_closures_entry)
+      Open
+  in
+  Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
 let type_for_const (const : Simple.Const.t) =
   match const with
