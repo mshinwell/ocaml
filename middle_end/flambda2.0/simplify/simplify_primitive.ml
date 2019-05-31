@@ -24,24 +24,29 @@ module TEE = T.Typing_env_extension
 
 let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
 (*Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;*)
-  let named =
-    match prim with
-    | Unary (prim, arg) ->
-      let arg = S.simplify_simple_and_drop_type env arg in
-      Named.create_prim (Unary (prim, arg)) dbg
-    | Binary (prim, arg1, arg2) ->
-      let arg1 = S.simplify_simple_and_drop_type env arg1 in
-      let arg2 = S.simplify_simple_and_drop_type env arg2 in
-      Named.create_prim (Binary (prim, arg1, arg2)) dbg
-    | Ternary (prim, arg1, arg2, arg3) ->
-      let arg1 = S.simplify_simple_and_drop_type env arg1 in
-      let arg2 = S.simplify_simple_and_drop_type env arg2 in
-      let arg3 = S.simplify_simple_and_drop_type env arg3 in
-      Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
-    | Variadic (prim, args) ->
-      let args = S.simplify_simples_and_drop_types env args in
-      Named.create_prim (Variadic (prim, args)) dbg
-  in
-  let ty = T.any_value () in
-  let env_extension = TEE.one_equation (Name.var result_var) ty in
-  Reachable.reachable named, env_extension, r
+  match prim with
+  | Unary (prim, arg) ->
+    Simplify_unary_primitive.simplify_unary_primitive env r prim arg dbg
+      ~result_var
+  | _ ->
+    let named =
+      match prim with
+      | Unary _ -> assert false
+        let arg = S.simplify_simple_and_drop_type env arg in
+        Named.create_prim (Unary (prim, arg)) dbg
+      | Binary (prim, arg1, arg2) ->
+        let arg1 = S.simplify_simple_and_drop_type env arg1 in
+        let arg2 = S.simplify_simple_and_drop_type env arg2 in
+        Named.create_prim (Binary (prim, arg1, arg2)) dbg
+      | Ternary (prim, arg1, arg2, arg3) ->
+        let arg1 = S.simplify_simple_and_drop_type env arg1 in
+        let arg2 = S.simplify_simple_and_drop_type env arg2 in
+        let arg3 = S.simplify_simple_and_drop_type env arg3 in
+        Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
+      | Variadic (prim, args) ->
+        let args = S.simplify_simples_and_drop_types env args in
+        Named.create_prim (Variadic (prim, args)) dbg
+    in
+    let ty = T.any_value () in
+    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    Reachable.reachable named, env_extension, r

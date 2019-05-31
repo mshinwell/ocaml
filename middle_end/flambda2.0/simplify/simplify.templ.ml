@@ -48,24 +48,22 @@ let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
     E.check_variable_is_bound env var;
     or_variable
 
-let simplify_static_part env r (static_part : Static_part.t)
-      : Static_part.t * R.t =
-  (* CR mshinwell: This should not drop the types.  It should use the types
-     for the symbol bindings in the env. *)
+let simplify_static_part env r (static_part : Static_part.t) ~result_sym
+      : Static_part.t * T.t * R.t =
   match static_part with
   | Block (tag, is_mutable, fields) ->
     let fields =
       List.map (fun of_kind_value -> simplify_of_kind_value env of_kind_value)
         fields
     in
-    Block (tag, is_mutable, fields), r
+    Block (tag, is_mutable, fields), T.any_value (), r
   | Fabricated_block var ->
     E.check_variable_is_bound env var;
-    static_part, r
+    static_part, T.any_fabricated (), r
   | Set_of_closures set_of_closures ->
-    let set_of_closures, r =
-      Simplify_named.simplify_set_of_closures_and_drop_type env r
-        set_of_closures
+    let set_of_closures, env, r
+    Simplify_named.simplify_lifted_set_of_closures env r set_of_closures
+      ~result:(Simple.symbol result_sym)
     in
     Set_of_closures set_of_closures, r
   | Boxed_float or_var -> Boxed_float (simplify_or_variable env or_var), r
