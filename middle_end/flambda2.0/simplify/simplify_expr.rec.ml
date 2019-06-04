@@ -447,6 +447,7 @@ and simplify_function_call env r apply ~callee_ty
     simplify_function_call_where_callee's_type_unavailable env r apply call
       ~arg_types
   in
+  (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   match T.prove_single_closures_entry (E.typing_env env) callee_ty with
   | Proved (callee's_closure_id, func_decl_type) ->
     (* CR mshinwell: We should check that the [set_of_closures] in the
