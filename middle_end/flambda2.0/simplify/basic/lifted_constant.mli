@@ -27,8 +27,8 @@ val print : Format.formatter -> t -> unit
 
 val create
    : Flambda_type.t Symbol.Map.t
-  -> Flambda_static.Program_body.Bound_symbols.t
-  -> Flambda_static.Static_part.t
+  -> 'k Flambda_static.Program_body.Bound_symbols.t
+  -> 'k Flambda_static.Static_part.t
   -> t
 
 val create_from_static_structure

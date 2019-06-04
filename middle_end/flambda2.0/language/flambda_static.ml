@@ -87,17 +87,21 @@ module Static_part = struct
 
   type mutable_or_immutable = Mutable | Immutable
 
-  type t =
-    | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
-    | Fabricated_block of Variable.t
-    | Set_of_closures of Flambda.Set_of_closures.t
-    | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
-    | Boxed_int32 of Int32.t or_variable
-    | Boxed_int64 of Int64.t or_variable
-    | Boxed_nativeint of Targetint.t or_variable
-    | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
-    | Mutable_string of { initial_value : string or_variable; }
-    | Immutable_string of string or_variable
+  type 'k t =
+    | Block : Tag.Scannable.t * mutable_or_immutable
+              * (Of_kind_value.t list) -> Flambda_kind.value t
+    | Fabricated_block : Variable.t -> Flambda_kind.value t
+    | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
+    | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
+                    -> Flambda_kind.value t
+    | Boxed_int32 : Int32.t or_variable -> Flambda_kind.value t
+    | Boxed_int64 : Int64.t or_variable -> Flambda_kind.value t
+    | Boxed_nativeint : Targetint.t or_variable -> Flambda_kind.value t
+    | Immutable_float_array : Numbers.Float_by_bit_pattern.t or_variable list
+                              -> Flambda_kind.value t
+    | Mutable_string : { initial_value : string or_variable; }
+                       -> Flambda_kind.value t
+    | Immutable_string : string or_variable -> Flambda_kind.value t
 
   let needs_gc_root t =
     match t with
@@ -272,12 +276,12 @@ module Program_body = struct
   end
 
   module Bound_symbols = struct
-    type t =
-      | Singleton of Symbol.t * Flambda_kind.t
-      | Set_of_closures of {
+    type 'k t =
+      | Singleton : Symbol.t -> Flambda_kind.value t
+      | Set_of_closures : {
           set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
-        }
+        } -> Flambda_kind.fabricated t
 
     let print ppf t =
       match t with
@@ -297,11 +301,6 @@ module Program_body = struct
        check is that the [closure_symbols] are all distinct (and presumably
        different from the set of closure symbol too, even though one will
        eventually end up the same).
-
-       Also: [Set_of_closures] static parts are only allowed with
-       [Set_of_closures ... : Bound_symbols.t].  The symbols in the
-       [Set_of_closures] static part must match up with the symbols being
-       claimed to be bound.
     *)
 
     let being_defined t =

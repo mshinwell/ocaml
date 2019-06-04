@@ -141,7 +141,8 @@ let simplify_set_of_closures env ~result_env set_of_closures
     T.set_of_closures ~closures:closure_types_via_symbols
   in
   (* The returned bindings are put into [result_env], rather than [env], so
-     the code below can correctly handle simultaneous definitions of symbols. *)
+     [simplify_static_structure] below can correctly handle simultaneous
+     definitions of symbols. *)
   let env =
     E.add_symbol result_env set_of_closures_symbol set_of_closures_type
   in
@@ -276,6 +277,10 @@ let simplify_piece_of_static_structure (type k) env ~result_env
 
 let simplify_static_structure env r (str : Program_body.Static_structure.t) =
   let str_rev, next_env, result =
+    (* The bindings in the individual pieces of the [Static_structure] are
+       simultaneous, so we keep a [result_env] accumulating the final
+       environment, but always use [env] for the simplification of the
+       pieces. *)
     List.fold_left (fun (str_rev, result_env, r) (bound_syms, static_part) ->
         let static_part, result_env, r =
           simplify_piece_of_static_structure env ~result_env
