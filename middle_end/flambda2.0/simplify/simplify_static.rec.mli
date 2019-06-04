@@ -14,16 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Simplification of toplevel definitions. *)
 
-(** Simplification of primitives taking one argument. *)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val simplify_unary_primitive
+val simplify_lifted_set_of_closures
+    : Simplify_env_and_result.Env.t
+   -> Simplify_env_and_result.Result.t
+   -> set_of_closures_symbol:Symbol.t
+   -> closure_symbols:Symbol.t Closure_id.Map.t
+   -> Flambda.Set_of_closures.t
+   -> Flambda.Set_of_closures.t * Simplify_env_and_result.Env.t
+        * Flambda_type.t * Simplify_env_and_result.Result.t
+
+val simplify_program
    : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Flambda_primitive.unary_primitive
-  -> Simple.t
-  -> Debuginfo.t
-  -> result_var:Variable.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t
-       * Simplify_env_and_result.Result.t
+  -> Flambda_static.Program.t
+  -> Flambda_static.Program.t

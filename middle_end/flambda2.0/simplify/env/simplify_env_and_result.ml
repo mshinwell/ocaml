@@ -153,10 +153,12 @@ end = struct
     in
     { t with typing_env; }
 
+(*
   let add_symbol_if_not_defined t sym ty =
     let name = Name.symbol sym in
     if TE.mem t.typing_env name then t
     else add_symbol t sym ty
+*)
 
   let add_parameters t params ~arg_types =
     List.fold_left2 (fun t param arg_type ->
@@ -312,12 +314,12 @@ end = struct
       can_inline = false;
     }
 
-  let add_lifted_constants t (lifted : lifted_constants) =
+  let add_lifted_constants t lifted =
     let typing_env =
       List.fold_left (fun typing_env lifted_constant ->
           Lifted_constant.introduce lifted_constant typing_env)
-        t
         (typing_env t)
+        lifted
     in
     with_typing_environment t typing_env
 
@@ -345,7 +347,7 @@ end = struct
         )@]"
       (Continuation.Map.print Continuation_uses.print) continuations
       (Symbol.Map.print Flambda_kind.print) imported_symbols
-      (Misc.Stdlib.List.print Lifted_constant.print)
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
         lifted_constants_innermost_first
 
   let create ~resolver =
@@ -431,5 +433,9 @@ end = struct
           @ t.lifted_constants_innermost_first;
     }
 
+(*
   let lifted_constants_innermost_first t = t.lifted_constants_innermost_first
+*)
+
+  let get_lifted_constants t = t.lifted_constants_innermost_first
 end
