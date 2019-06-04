@@ -18,9 +18,6 @@
 
 open! Flambda.Import
 
-type lifted_constants =
-  (Symbol.t * (Flambda_type.t * Flambda_static.Static_part.t)) list
-
 module type Env = sig
   (** Environments, following the lexical scope of the program, used during
       simplification. *)
@@ -125,7 +122,7 @@ module type Env = sig
 
   (** Add the given lifted constants to the environment.  Symbols that are
       already defined in the environment are ignored. *)
-  val add_lifted_constants : t -> lifted_constants -> t
+  val add_lifted_constants : t -> Lifted_constant.t list -> t
 
   (** Like [add_lifted_constants], but takes the constants from the given
       result structure. *)
@@ -170,7 +167,8 @@ module type Result = sig
 
   (** Retrieve constants lifted to toplevel.  The constants must be defined
       in the order returned (first element of the list defined first). *)
-  val get_lifted_constants : t -> lifted_constants
+  (* CR mshinwell: Update name to reflect this *)
+  val get_lifted_constants : t -> Lifted_constant.t list
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

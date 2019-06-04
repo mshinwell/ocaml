@@ -96,6 +96,8 @@ module Program_body : sig
             within such set of closures.  The corresponding [Static_part]
             must be a [Set_of_closures]. *)
 
+    val print : Format.formatter -> t -> unit
+
     val being_defined : t -> Symbol.Set.t
   end
 
