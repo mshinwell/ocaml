@@ -40,34 +40,48 @@ let equal_or_alias ?bound_name equal_unknown_or_join env
       ~print_ty
       or_alias2
   in
-  let all_aliases1 =
-    match canonical_simple1 with
-    | None -> Name.Set.empty
-    | Some canonical_simple ->
-      Typing_env.aliases_of_simple (Type_equality_env.typing_env_left env)
-        canonical_simple
+  let already_comparing =
+    match canonical_simple1, canonical_simple2 with
+    | Some simple1, Some simple2 ->
+      Type_equality_env.already_comparing env simple1 simple2
+    | _, _ -> false
   in
-  let all_aliases2 =
-    match canonical_simple2 with
-    | None -> Name.Set.empty
-    | Some canonical_simple ->
-      Typing_env.aliases_of_simple (Type_equality_env.typing_env_right env)
-        canonical_simple
-  in
-  let all_aliases1 =
-    match bound_name with
-    | None -> all_aliases1
-    | Some bound_name -> Name.Set.remove bound_name all_aliases1
-  in
-  let all_aliases2 =
-    match bound_name with
-    | None -> all_aliases2
-    | Some bound_name -> Name.Set.remove bound_name all_aliases2
-  in
-  if not (Name.Set.equal all_aliases1 all_aliases2) then
-    false
+  if already_comparing then true
   else
-    equal_unknown_or_join env unknown_or_join1 unknown_or_join2
+    let env =
+      match canonical_simple1, canonical_simple2 with
+      | Some simple1, Some simple2 ->
+        Type_equality_env.now_comparing env simple1 simple2
+      | _, _ -> env
+    in
+    let all_aliases1 =
+      match canonical_simple1 with
+      | None -> Name.Set.empty
+      | Some canonical_simple ->
+        Typing_env.aliases_of_simple (Type_equality_env.typing_env_left env)
+          canonical_simple
+    in
+    let all_aliases2 =
+      match canonical_simple2 with
+      | None -> Name.Set.empty
+      | Some canonical_simple ->
+        Typing_env.aliases_of_simple (Type_equality_env.typing_env_right env)
+          canonical_simple
+    in
+    let all_aliases1 =
+      match bound_name with
+      | None -> all_aliases1
+      | Some bound_name -> Name.Set.remove bound_name all_aliases1
+    in
+    let all_aliases2 =
+      match bound_name with
+      | None -> all_aliases2
+      | Some bound_name -> Name.Set.remove bound_name all_aliases2
+    in
+    if not (Name.Set.equal all_aliases1 all_aliases2) then
+      false
+    else
+      equal_unknown_or_join env unknown_or_join1 unknown_or_join2
 
 let equal_unknown_or_join equal_of_kind_foo env
       (uj1 : _ Flambda_types.unknown_or_join)

@@ -130,7 +130,7 @@ let lift_set_of_closures env r set_of_closures ~closure_elements_and_types
   let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
   let term = Named.create_simple set_of_closures_symbol in
   let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
-  let env = E.add_equation_on_variable env result_var ty in
+  let env = E.add_variable env result_var ty in
   Reachable.reachable term, env, ty, r
 
 let simplify_set_of_closures env r set_of_closures ~result_var =
