@@ -19,15 +19,19 @@
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
+(* CR mshinwell: Add [Flambda_static.Import] *)
 module Bound_symbols = Flambda_static.Program_body.Bound_symbols
+module Program_body = Flambda_static.Program_body
+module Static_part = Flambda_static.Static_part
 
-type t = {
-  types : T.t Symbol.Map.t;
-  bound_symbols : Bound_symbols.t;
-  static_part : Flambda_static.Static_part.t;
-}
+type t =
+  | T : {
+    types : T.t Symbol.Map.t;
+    bound_symbols : 'k Bound_symbols.t;
+    static_part : 'k Static_part.t;
+  } -> t
 
-let print ppf { types; bound_symbols; static_part; } =
+let print ppf (T { types; bound_symbols; static_part; }) =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(types@ %a)@]@ \
       @[<hov 1>(bound_symbols@ %a)@]@ \
@@ -35,7 +39,7 @@ let print ppf { types; bound_symbols; static_part; } =
       )@]"
     (Symbol.Map.print T.print) types
     Bound_symbols.print bound_symbols
-    Flambda_static.Static_part.print static_part
+    Static_part.print static_part
 
 let create types bound_symbols static_part =
   let being_defined = Bound_symbols.being_defined bound_symbols in
@@ -54,18 +58,19 @@ let create types bound_symbols static_part =
       end)
     types;
 *)
-  { types;
+  T {
+    types;
     bound_symbols;
     static_part;
   }
 
 let create_from_static_structure types
-      (static_structure : Flambda_static.Program_body.Static_structure.t) =
+      ((S pieces) : Program_body.Static_structure.t) =
   List.map (fun (bound_symbols, static_part) ->
       create types bound_symbols static_part)
-    static_structure
+    pieces
 
-let introduce t typing_env =
+let introduce (T { types; _ }) typing_env =
   let allowed = TE.var_domain typing_env in
   Symbol.Map.fold (fun sym typ typing_env ->
       let sym = Name.symbol sym in
@@ -74,8 +79,9 @@ let introduce t typing_env =
         TE.add_equation typing_env sym (T.erase_aliases typ ~allowed)
       else
         typing_env)
-    t.types
+    types
     typing_env
 
-let static_structure t =
-  [t.bound_symbols, t.static_part]
+let static_structure (T { bound_symbols; static_part; _ })
+      : Program_body.Static_structure.t =
+  S [bound_symbols, static_part]

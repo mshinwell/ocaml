@@ -19,10 +19,12 @@
 open! Flambda.Import
 
 module E = Simplify_env_and_result.Env
+module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
-let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
+let create_static_part (to_lift : T.to_lift)
+    : K.value Flambda_static.Static_part.t =
   match to_lift with
   | Boxed_float f -> Boxed_float (Const f)
   | Boxed_int32 i -> Boxed_int32 (Const i)
