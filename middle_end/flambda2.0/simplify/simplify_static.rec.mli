@@ -20,12 +20,12 @@
 
 val simplify_lifted_set_of_closures
     : Simplify_env_and_result.Env.t
-   -> Simplify_env_and_result.Result.t
    -> set_of_closures_symbol:Symbol.t
    -> closure_symbols:Symbol.t Closure_id.Map.t
    -> Flambda.Set_of_closures.t
    -> Flambda.Set_of_closures.t * Simplify_env_and_result.Env.t
-        * Flambda_type.t * Simplify_env_and_result.Result.t
+        * Flambda_type.t * Flambda_type.t Symbol.Map.t
+        * Flambda_static.Program_body.Static_structure.t
 
 val simplify_program
    : Simplify_env_and_result.Env.t
