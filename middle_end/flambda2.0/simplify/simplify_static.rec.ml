@@ -44,9 +44,54 @@ let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
     E.check_variable_is_bound env var;
     or_variable
 
-let simplify_lifted_set_of_closures env ~name set_of_closures
+let simplify_set_of_closures env ~result_env set_of_closures
       ~set_of_closures_symbol ~closure_symbols ~closure_element_types
       : Static_part.t * E.t * R.t =
+  let closure_elements, closure_element_types, r =
+    match closure_element_types with
+    | Some closure_element_types -> closure_element_types
+    | None ->
+      Var_within_closure.Map.fold
+        (fun var_within_closure simple
+             (closure_elements, closure_element_types, r) ->
+          let simple, ty = Simplify_simple.simplify_simple env simple in
+          let closure_elements =
+            Var_within_closure.Map.add var_within_closure simple
+              closure_elements
+          in
+          let ty_value = T.force_to_kind_value ty in
+          let closure_element_types =
+            Var_within_closure.Map.add var_within_closure ty_value
+              closure_element_types
+          in
+          closure_elements, closure_element_types, r)
+        (Set_of_closures.closure_elements set_of_closures)
+        (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
+  in
+  let type_of_my_closure closure_id =
+    (* CR mshinwell: Should this [function_declaration] type be improved? *)
+    T.closure closure_id
+      (T.create_non_inlinable_function_declaration ())
+      internal_closure_element_types
+      ~set_of_closures:(T.alias_type_of (Simple.symbol set_of_closures_symbol))
+  in
+  let function_decls = Set_of_closures.function_decls set_of_closures in
+  let funs = Function_declarations.funs function_decls in
+  let funs, fun_types, r =
+    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+        let function_decl, ty, r =
+          simplify_function env r closure_id function_decl ~type_of_my_closure
+        in
+        let funs = Closure_id.Map.add closure_id function_decl funs in
+        let fun_types = Closure_id.Map.add closure_id ty fun_types in
+        funs, fun_types, r)
+      funs
+      (Closure_id.Map.empty, Closure_id.Map.empty, r)
+  in
+  let function_decls = Function_declarations.create funs in
+  let set_of_closures =
+    Set_of_closures.create ~function_decls ~closure_elements
+  in
   let set_of_closures_ty_fabricated =
     T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
   in
@@ -95,7 +140,11 @@ let simplify_lifted_set_of_closures env ~name set_of_closures
     in
     T.set_of_closures ~closures:closure_types_via_symbols
   in
-  let env = E.add_symbol env set_of_closures_symbol set_of_closures_type in
+  (* The returned bindings are put into [result_env], rather than [env], so
+     the code below can correctly handle simultaneous definitions of symbols. *)
+  let env =
+    E.add_symbol result_env set_of_closures_symbol set_of_closures_type
+  in
   let env =
     Closure_id.Map.fold (fun _ (symbol, typ) env ->
         E.add_symbol env symbol typ)
@@ -112,39 +161,65 @@ let simplify_lifted_set_of_closures env ~name set_of_closures
     Symbol.Map.add set_of_closures_symbol set_of_closures_type
       static_structure_types
   in
-  term, env, ty, static_structure_types, static_structure
+  set_of_closures, env, ty, static_structure_types, static_structure
 
-let simplify_static_part env r (static_part : Static_part.t) ~result_sym
-      : Static_part.t * E.t * R.t =
+let simplify_static_part_of_kind_value env r
+      (static_part : K.value Static_part.t) ~result_sym
+      : K.value Static_part.t * E.t * R.t =
+  let bind_result_sym ty = E.add_symbol env result_sym ty in
   match static_part with
   | Block (tag, is_mutable, fields) ->
     let fields =
       List.map (fun of_kind_value -> simplify_of_kind_value env of_kind_value)
         fields
     in
-    Block (tag, is_mutable, fields), T.any_value (), r
+    let env = bind_result_sym (T.any_value ()) in
+    Block (tag, is_mutable, fields), env, r
   | Fabricated_block var ->
     E.check_variable_is_bound env var;
-    static_part, T.any_fabricated (), r
-  | Set_of_closures set_of_closures ->
-    simplify_lifted_set_of_closures env r set_of_closures
-      ~result:(Simple.symbol result_sym)
-  | Boxed_float or_var -> Boxed_float (simplify_or_variable env or_var), r
-  | Boxed_int32 or_var -> Boxed_int32 (simplify_or_variable env or_var), r
-  | Boxed_int64 or_var -> Boxed_int64 (simplify_or_variable env or_var), r
+    let env = bind_result_sym (T.any_fabricated ()) in
+    static_part, env, r
+  | Boxed_float or_var ->
+    let env = bind_result_sym (T.any_boxed_float ()) in
+    Boxed_float (simplify_or_variable env or_var), env, r
+  | Boxed_int32 or_var ->
+    let env = bind_result_sym (T.any_boxed_int32 ()) in
+    Boxed_int32 (simplify_or_variable env or_var), env, r
+  | Boxed_int64 or_var ->
+    let env = bind_result_sym (T.any_boxed_int64 ()) in
+    Boxed_int64 (simplify_or_variable env or_var), env, r
   | Boxed_nativeint or_var ->
-    Boxed_nativeint (simplify_or_variable env or_var), r
+    let env = bind_result_sym (T.any_boxed_nativeint ()) in
+    Boxed_nativeint (simplify_or_variable env or_var), env, r
   | Immutable_float_array fields ->
     let fields =
       List.map (fun field -> simplify_or_variable env field) fields
     in
-    Immutable_float_array fields, r
+    let env = bind_result_sym (T.any_value ()) in
+    Immutable_float_array fields, env, r
   | Mutable_string { initial_value; } ->
-    Mutable_string {
-      initial_value = simplify_or_variable env initial_value;
-    }, r
+    let static_part =
+      Mutable_string {
+        initial_value = simplify_or_variable env initial_value;
+      }
+    in
+    let env = bind_result_sym (T.any_value ()) in
+    static_part, env, r
   | Immutable_string or_var ->
-    Immutable_string (simplify_or_variable env or_var), r
+    let env = bind_result_sym (T.any_value ()) in
+    Immutable_string (simplify_or_variable env or_var), env, r
+
+let simplify_static_part_of_kind_fabricated env ~result_env r
+      (static_part : K.fabricated Static_part.t)
+      ~set_of_closures_symbol ~closure_symbols
+    : K.fabricated Static_part.t * E.t * R.t =
+  match static_part with
+  | Set_of_closures set_of_closures ->
+     let set_of_closures, env, _ty, _static_structure_types, _static_structure =
+       simplify_set_of_closures env ~result_env set_of_closures
+         ~set_of_closures_symbol ~closure_symbols ~closure_element_types:None
+     in
+     Set_of_closures set_of_closures, env, r
 
 let simplify_computation env r
       (computation : Program_body.Computation.t option) =
@@ -188,33 +263,26 @@ let simplify_computation env r
     in
     env, r, computation
 
+let simplify_piece_of_static_structure (type k) env ~result_env
+      (bound_syms : k Program_body.Bound_symbols.t)
+      (static_part : k Static_part.t)
+      : k Static_part.t * E.t * R.t =
+  match bound_syms with
+  | Singleton sym ->
+    simplify_static_part_of_kind_value env r static_part
+  | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+    simplify_static_part_of_kind_fabricated env ~result_env r static_part
+      ~set_of_closures_symbol ~closure_symbols
+
 let simplify_static_structure env r (str : Program_body.Static_structure.t) =
   let str_rev, next_env, result =
-    List.fold_left (fun (str_rev, next_env, r)
-              ((bound_syms : Program_body.Bound_symbols.t), static_part) ->
-        let static_part, r = simplify_static_part env r static_part in
-        let str_rev = (bound_syms, static_part) :: str_rev in
-        let next_env =
-          match bound_syms with
-          | Singleton (sym, kind) ->
-            let ty = T.unknown kind in
-            E.add_symbol next_env sym ty
-          | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-            begin match static_part with
-            | Set_of_closures _ | Fabricated_block _ -> ()
-            | _ ->
-              Misc.fatal_errorf "Illegal static part binding to \
-                  set-of-closures symbol %a"
-                Symbol.print set_of_closures_symbol
-            end;
-            let ty = T.unknown K.fabricated in
-            let next_env = E.add_symbol next_env set_of_closures_symbol ty in
-            Closure_id.Map.fold (fun _closure_id closure_sym next_env ->
-                E.add_symbol next_env closure_sym (T.any_value ()))
-              closure_symbols
-              next_env
+    List.fold_left (fun (str_rev, result_env, r) (bound_syms, static_part) ->
+        let static_part, result_env, r =
+          simplify_piece_of_static_structure env ~result_env
+            bound_syms static_part
         in
-        str_rev, next_env, r)
+        let str_rev = (bound_syms, static_part) :: str_rev in
+        str_rev, result_env, r)
       ([], env, r)
       str
   in

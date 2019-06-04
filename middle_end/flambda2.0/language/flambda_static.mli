@@ -42,24 +42,26 @@ module Static_part : sig
 
   (** The static structure of a symbol, possibly with holes, ready to be
       filled with values computed at runtime. *)
-  type t =
-    | Block of Tag.Scannable.t * mutable_or_immutable * (Of_kind_value.t list)
-    | Fabricated_block of Variable.t
-    | Set_of_closures of Flambda.Set_of_closures.t
-    | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
-    | Boxed_int32 of Int32.t or_variable
-    | Boxed_int64 of Int64.t or_variable
-    | Boxed_nativeint of Targetint.t or_variable
-    | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
-    | Mutable_string of { initial_value : string or_variable; }
-    | Immutable_string of string or_variable
+  type 'k t =
+    | Block : Tag.Scannable.t * mutable_or_immutable
+        * (Of_kind_value.t list) -> K.value t
+    | Fabricated_block : Variable.t -> K.value t
+    | Set_of_closures of Flambda.Set_of_closures.t -> K.fabricated t
+    | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable -> K.value t
+    | Boxed_int32 : Int32.t or_variable -> K.value t
+    | Boxed_int64 : Int64.t or_variable -> K.value t
+    | Boxed_nativeint : Targetint.t or_variable -> K.value t
+    | Immutable_float_array : Numbers.Float_by_bit_pattern.t or_variable list
+        -> K.value t
+    | Mutable_string : { initial_value : string or_variable; } -> K.value t
+    | Immutable_string : string or_variable -> K.value t
 
   (** Print a static structure definition to a formatter. *)
-  val print : Format.formatter -> t -> unit
+  val print : Format.formatter -> _ t -> unit
 
   (** All names free in the given static part.  (Note that this will
       descend into function bodies to find symbols.) *)
-  val free_names : t -> Name_occurrences.t
+  val free_names : _ t -> Name_occurrences.t
 end
 
 module Program_body : sig
@@ -83,26 +85,26 @@ module Program_body : sig
   end
 
   module Bound_symbols : sig
-    type t =
-      | Singleton of Symbol.t * Flambda_kind.t
-        (** A binding of a single symbol of the given kind.  The corresponding
-            [Static_part] may not be a [Set_of_closures]. *)
-      | Set_of_closures of {
+    type 'k t =
+      | Singleton : Symbol.t : K.value t
+        (** A binding of a single symbol of kind [Value]. *)
+      | Set_of_closures : {
           set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
-        }
+        } -> K.fabricated t
         (** A binding of a single symbol to a set of closures together with
             the binding of possibly multiple symbols to the individual closures
-            within such set of closures.  The corresponding [Static_part]
-            must be a [Set_of_closures]. *)
+            within such set of closures. *)
 
-    val print : Format.formatter -> t -> unit
+    val print : Format.formatter -> _ t -> unit
 
-    val being_defined : t -> Symbol.Set.t
+    val being_defined : _ t -> Symbol.Set.t
   end
 
   module Static_structure : sig
-    type t = (Bound_symbols.t * Static_part.t) list
+    type t =
+      | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
+      [@@unboxed]
   end
 
   module Definition : sig
