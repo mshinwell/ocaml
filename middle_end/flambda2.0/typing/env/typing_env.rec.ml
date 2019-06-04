@@ -596,8 +596,13 @@ let create_using_resolver_and_symbol_bindings_from t =
           in
           Some (typ, binding_time))
   in
+  let t =
+    Name.Map.fold (fun name (typ, _binding_time) t ->
+        add_definition t name (Flambda_type0_core.kind typ))
+      names_to_types
+      (create_using_resolver_from t)
+  in
   Name.Map.fold (fun name (typ, _binding_time) t ->
-      let t = add_definition t name (Flambda_type0_core.kind typ) in
       add_equation t name typ)
     names_to_types
-    (create_using_resolver_from t)
+    t

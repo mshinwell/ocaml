@@ -44,11 +44,24 @@ let simplify_function env r closure_id function_decl ~type_of_my_closure =
       (Function_declaration.params_and_body function_decl)
       ~f:(fun ~return_continuation exn_continuation params ~body
               ~my_closure ->
+(*
+Format.eprintf "Closure ID %a, entering closure\n%!"
+  Closure_id.print closure_id;
+*)
         let env = E.enter_closure env in
+(*
+Format.eprintf "Closure ID %a, done entering closure\n%!"
+  Closure_id.print closure_id;
+*)
         let result_arity = Function_declaration.result_arity function_decl in
         let env = E.add_continuation env return_continuation result_arity in
         let env = E.add_exn_continuation env exn_continuation in
         let env = E.add_parameters_with_unknown_types env params in
+(*
+Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
+  Closure_id.print closure_id
+  T.print (type_of_my_closure closure_id);
+*)
         let type_of_my_closure = type_of_my_closure closure_id in
         let env = E.add_variable env my_closure type_of_my_closure in
         let env = E.increment_continuation_scope_level env in
@@ -59,6 +72,11 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   Expr.print body;
 *)
         let body, r =
+(*
+          Format.eprintf "Environment inside function %a:\n%a\n%!"
+            Closure_id.print closure_id
+            T.Typing_env.print (E.typing_env env);
+*)
           try
             Simplify_toplevel.simplify_toplevel env r body
               ~return_continuation
@@ -154,11 +172,6 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
       (Set_of_closures.closure_elements set_of_closures)
       (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
   in
-  let internal_closure_element_types =
-    Var_within_closure.Map.map (fun ty_value ->
-        T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
-      closure_element_types
-  in
   let can_lift =
     Var_within_closure.Map.for_all (fun _ (simple : Simple.t) ->
         match simple with
@@ -172,6 +185,11 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
         (Some (closure_elements, closure_element_types))
       ~result_var
   else
+    let internal_closure_element_types =
+      Var_within_closure.Map.map (fun ty_value ->
+          T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
+        closure_element_types
+    in
     let type_of_my_closure closure_id =
       (* CR mshinwell: Think more: what should the set of closures type be?
          Should the [function_declaration] type be improved? *)
@@ -187,6 +205,10 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
        from the fact that closure elements (at least in the presence of
        out-of-scope inlining, which will be implemented in due course) cannot
        be deleted without a global analysis. *)
+(*
+Format.eprintf "Environment outside functions:\n%a\n%!"
+  T.Typing_env.print (E.typing_env env);
+*)
     let funs, fun_types, r =
       Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
           let function_decl, ty, r =
