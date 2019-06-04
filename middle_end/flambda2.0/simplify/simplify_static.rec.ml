@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda.Import
+
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
@@ -44,12 +46,12 @@ let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
     E.check_variable_is_bound env var;
     or_variable
 
-let simplify_set_of_closures env ~result_env set_of_closures
-      ~set_of_closures_symbol ~closure_symbols ~closure_element_types
-      : Static_part.t * E.t * R.t =
+let simplify_set_of_closures env ~result_env r set_of_closures
+      ~set_of_closures_symbol ~closure_symbols ~closure_elements_and_types =
   let closure_elements, closure_element_types, r =
-    match closure_element_types with
-    | Some closure_element_types -> closure_element_types
+    match closure_elements_and_types with
+    | Some (closure_elements, closure_element_types) ->
+      closure_elements, closure_element_types, r
     | None ->
       Var_within_closure.Map.fold
         (fun var_within_closure simple
@@ -69,18 +71,22 @@ let simplify_set_of_closures env ~result_env set_of_closures
         (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
   in
   let type_of_my_closure closure_id =
+    let set_of_closures =
+      T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
+    in
     (* CR mshinwell: Should this [function_declaration] type be improved? *)
     T.closure closure_id
       (T.create_non_inlinable_function_declaration ())
-      internal_closure_element_types
-      ~set_of_closures:(T.alias_type_of (Simple.symbol set_of_closures_symbol))
+      closure_element_types
+      ~set_of_closures
   in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
         let function_decl, ty, r =
-          simplify_function env r closure_id function_decl ~type_of_my_closure
+          Simplify_named.simplify_function env r closure_id function_decl
+            ~type_of_my_closure
         in
         let funs = Closure_id.Map.add closure_id function_decl funs in
         let fun_types = Closure_id.Map.add closure_id ty fun_types in
@@ -102,28 +108,27 @@ let simplify_set_of_closures env ~result_env set_of_closures
       fun_types
   in
   let closure_symbols_and_types =
-    Closure_id.Map.map (fun typ ->
-        let closure_symbol =
-          Symbol.create (Compilation_unit.get_current_exn ())
-            (Closure_id.unique_name closure_id)
-        in
+    Closure_id.Map.mapi (fun closure_id typ ->
+        (* CR mshinwell: clean this up *)
+        let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
         closure_symbol, typ)
       closure_types
   in
   let closure_symbols =
-    Closure_id.Map.map (fun (sym, typ) -> sym) closure_symbols_and_types
+    Closure_id.Map.map (fun (sym, _typ) -> sym) closure_symbols_and_types
   in
-  let static_part : Flambda_static.Static_part.t =
+  let static_part : K.fabricated Static_part.t =
     Set_of_closures set_of_closures
   in
-  let bound_symbols : Flambda_static.Bound_symbols.t =
+  let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
     Set_of_closures {
       set_of_closures_symbol;
       closure_symbols;
     }
   in
-  let static_structure = [bound_symbols, static_part] in
-  let set_of_closures_ty_fabricated = T.alias_type_of_as_ty_fabricated result in
+  let static_structure : Program_body.Static_structure.t =
+    S [bound_symbols, static_part]
+  in
   let set_of_closures_type =
     (* The set-of-closures type describes the closures it contains via
        aliases to the closure symbols.  This means that when an appropriate
@@ -162,7 +167,8 @@ let simplify_set_of_closures env ~result_env set_of_closures
     Symbol.Map.add set_of_closures_symbol set_of_closures_type
       static_structure_types
   in
-  set_of_closures, env, ty, static_structure_types, static_structure
+  set_of_closures, env, set_of_closures_type, r, static_structure_types,
+    static_structure
 
 let simplify_static_part_of_kind_value env r
       (static_part : K.value Static_part.t) ~result_sym
@@ -199,7 +205,7 @@ let simplify_static_part_of_kind_value env r
     let env = bind_result_sym (T.any_value ()) in
     Immutable_float_array fields, env, r
   | Mutable_string { initial_value; } ->
-    let static_part =
+    let static_part : K.value Static_part.t =
       Mutable_string {
         initial_value = simplify_or_variable env initial_value;
       }
@@ -216,9 +222,11 @@ let simplify_static_part_of_kind_fabricated env ~result_env r
     : K.fabricated Static_part.t * E.t * R.t =
   match static_part with
   | Set_of_closures set_of_closures ->
-     let set_of_closures, env, _ty, _static_structure_types, _static_structure =
-       simplify_set_of_closures env ~result_env set_of_closures
-         ~set_of_closures_symbol ~closure_symbols ~closure_element_types:None
+     let set_of_closures, env, _ty, r, _static_structure_types,
+         _static_structure =
+       simplify_set_of_closures env ~result_env r set_of_closures
+         ~set_of_closures_symbol ~closure_symbols
+         ~closure_elements_and_types:None
      in
      Set_of_closures set_of_closures, env, r
 
@@ -264,18 +272,20 @@ let simplify_computation env r
     in
     env, r, computation
 
-let simplify_piece_of_static_structure (type k) env ~result_env
+let simplify_piece_of_static_structure (type k) env ~result_env r
       (bound_syms : k Program_body.Bound_symbols.t)
       (static_part : k Static_part.t)
       : k Static_part.t * E.t * R.t =
   match bound_syms with
-  | Singleton sym ->
-    simplify_static_part_of_kind_value env r static_part
+  | Singleton result_sym ->
+    simplify_static_part_of_kind_value env r static_part ~result_sym
   | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
     simplify_static_part_of_kind_fabricated env ~result_env r static_part
       ~set_of_closures_symbol ~closure_symbols
 
-let simplify_static_structure env r (str : Program_body.Static_structure.t) =
+let simplify_static_structure env r
+      ((S pieces) : Program_body.Static_structure.t)
+      : E.t * R.t * Program_body.Static_structure.t =
   let str_rev, next_env, result =
     (* The bindings in the individual pieces of the [Static_structure] are
        simultaneous, so we keep a [result_env] accumulating the final
@@ -283,15 +293,15 @@ let simplify_static_structure env r (str : Program_body.Static_structure.t) =
        pieces. *)
     List.fold_left (fun (str_rev, result_env, r) (bound_syms, static_part) ->
         let static_part, result_env, r =
-          simplify_piece_of_static_structure env ~result_env
+          simplify_piece_of_static_structure env ~result_env r
             bound_syms static_part
         in
         let str_rev = (bound_syms, static_part) :: str_rev in
         str_rev, result_env, r)
       ([], env, r)
-      str
+      pieces
   in
-  next_env, result, List.rev str_rev
+  next_env, result, S (List.rev str_rev)
 
 let simplify_definition env r (defn : Program_body.Definition.t) =
   let env, r, computation = simplify_computation env r defn.computation in
@@ -328,14 +338,13 @@ let check_imported_symbols_don't_overlap_predef_exns
   end
 
 let define_lifted_constants lifted_constants (body : Program_body.t) =
-  List.fold_left (fun body (symbol, (ty, static_part))
-            : Program_body.t ->
-      let bound_symbols : Program_body.Bound_symbols.t =
-        Singleton (symbol, T.kind ty)
+  List.fold_left (fun body lifted_constant : Program_body.t ->
+      let static_structure =
+        Lifted_constant.static_structure lifted_constant
       in
       let definition : Program_body.Definition.t =
         { computation = None;
-          static_structure = [bound_symbols, static_part];
+          static_structure;
         }
       in
       Define_symbol (definition, body))

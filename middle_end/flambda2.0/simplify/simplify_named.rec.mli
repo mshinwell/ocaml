@@ -26,17 +26,11 @@ val simplify_named
        * Flambda_type.t
        * Reachable.t
 
-val simplify_lifted_set_of_closures
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
-  -> Flambda.Set_of_closures.t
-  -> Flambda.Set_of_closures.t * Simplify_env_and_result.Result.t
-
 val simplify_function
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
   -> Closure_id.t
   -> Flambda.Function_declaration.t
-  -> type_of_my_closure:Flambda_type.t
-  -> Flambda.Function_declaration.t * Flambda_type.t
+  -> type_of_my_closure:(Closure_id.t -> Flambda_type.t)
+  -> Flambda.Function_declaration.t * Flambda_type.function_declaration
        * Simplify_env_and_result.Result.t
