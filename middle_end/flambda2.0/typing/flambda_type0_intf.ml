@@ -59,6 +59,8 @@ module type S = sig
 
     val invariant : t -> unit
 
+    val empty : t
+
     val one_equation : Name.t -> flambda_type -> t
   end
 
@@ -111,6 +113,14 @@ module type S = sig
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Variable.Set.t
   end
+
+  val meet_shape
+     : Typing_env.t
+    -> flambda_type
+    -> shape:flambda_type
+    -> result_var:Variable.t
+    -> result_kind:Flambda_kind.t
+    -> Typing_env_extension.t Or_bottom.t
 
   val join : Typing_env.t -> t -> t -> t
 
