@@ -36,7 +36,7 @@ type t = {
   filename : string;
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
-  mutable declared_symbols : (Symbol.t * Static_part.t) list;
+  mutable declared_symbols : (Symbol.t * K.value Static_part.t) list;
 }
 
 let symbol_for_ident t id =
@@ -130,7 +130,7 @@ let tupled_function_call_stub
     ~inline:Default_inline
     ~is_a_functor:false
 
-let register_const t (constant : Static_part.t) name
+let register_const t (constant : K.value Static_part.t) name
       : Flambda_static.Of_kind_value.t * string =
   let current_compilation_unit = Compilation_unit.get_current_exn () in
   (* Create a variable to ensure uniqueness of the symbol. *)
@@ -184,7 +184,7 @@ let rec declare_const t (const : Lambda.structured_constant)
            Static_part.Const f) c))
       "float_array"
   | Const_block (tag, consts) ->
-    let const : Static_part.t =
+    let const : K.value Static_part.t =
       Block
         (Tag.Scannable.create_exn tag, Immutable,
          List.map (fun c -> fst (declare_const t c)) consts)
@@ -844,7 +844,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       computed_values = field_vars;
     }
   in
-  let static_part : Static_part.t =
+  let static_part : K.value Static_part.t =
     let field_vars =
       List.map (fun (var, _) : Flambda_static.Of_kind_value.t ->
           Dynamically_computed var)
@@ -853,12 +853,12 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Block (module_block_tag, Immutable, field_vars)
   in
   let program_body : Program_body.t =
-    let bound_symbols : Program_body.Bound_symbols.t =
-      Singleton (module_symbol, K.value)
+    let bound_symbols : K.value Program_body.Bound_symbols.t =
+      Singleton module_symbol
     in
     let definition : Program_body.Definition.t =
       { computation = Some computation;
-        static_structure = [bound_symbols, static_part];
+        static_structure = S [bound_symbols, static_part];
       }
     in
     Define_symbol (definition, Root module_symbol)
@@ -866,10 +866,12 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let program_body =
     (* CR mshinwell: Share with [Simplify_program] *)
     List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
-        let bound_symbols : Program_body.Bound_symbols.t =
-          Singleton (symbol, K.value)
+        let bound_symbols : K.value Program_body.Bound_symbols.t =
+          Singleton symbol
         in
-        let static_structure = [bound_symbols, static_part] in
+        let static_structure : Program_body.Static_structure.t =
+          S [bound_symbols, static_part]
+        in
         let definition : Program_body.Definition.t =
           { computation = None;
             static_structure;
