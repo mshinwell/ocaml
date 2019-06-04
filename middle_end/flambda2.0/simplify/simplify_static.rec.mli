@@ -18,10 +18,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val simplify_lifted_set_of_closures
+val simplify_set_of_closures
     : Simplify_env_and_result.Env.t
+   -> result_env:Simplify_env_and_result.Env.t
    -> set_of_closures_symbol:Symbol.t
    -> closure_symbols:Symbol.t Closure_id.Map.t
+   -> closure_element_types:Flambda_type.t Var_within_closure.Map.t option
    -> Flambda.Set_of_closures.t
    -> Flambda.Set_of_closures.t * Simplify_env_and_result.Env.t
         * Flambda_type.t * Flambda_type.t Symbol.Map.t

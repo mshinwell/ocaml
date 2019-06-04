@@ -112,7 +112,7 @@ let lift_set_of_closures env r set_of_closures ~fun_types ~closure_element_types
       fun_types
   in
   let term, env, ty, static_structure_types, static_structure =
-    Simplify_static.simplify_lifted_set_of_closures env
+    Simplify_static.simplify_set_of_closures env ~result_env:env
       set_of_closures ~set_of_closures_symbol ~closure_symbols
   in
   let r =
@@ -132,6 +132,8 @@ let lift_set_of_closures env r set_of_closures ~fun_types ~closure_element_types
   Reachable.reachable term, env, ty, r
 
 let simplify_set_of_closures env r set_of_closures ~result_var =
+  (* By simplifying the types of the closure elements, attempt to show that
+     the set of closures can be lifted, and hence statically allocated. *)
   let closure_elements, closure_element_types, r =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
@@ -155,40 +157,47 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
         T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
       closure_element_types
   in
-  let type_of_my_closure closure_id =
-    (* CR mshinwell: Think more about the following. *)
-    T.closure closure_id
-      (T.create_non_inlinable_function_declaration ())
-      internal_closure_element_types
-      ~set_of_closures:(T.unknown_as_ty_fabricated ())
+  let can_lift =
+    Var_within_closure.Map.for_all (fun _ (simple : Simple.t) ->
+        match simple with
+        | Name (Symbol _) -> true
+        | _ -> false)
+      closure_elements
   in
-  let function_decls = Set_of_closures.function_decls set_of_closures in
-  let funs = Function_declarations.funs function_decls in
-  let funs, fun_types, r =
-    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-        let function_decl, ty, r =
-          simplify_function env r closure_id function_decl ~type_of_my_closure
-        in
-        let funs = Closure_id.Map.add closure_id function_decl funs in
-        let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        funs, fun_types, r)
-      funs
-      (Closure_id.Map.empty, Closure_id.Map.empty, r)
-  in
-  let function_decls = Function_declarations.create funs in
-  let set_of_closures =
-    Set_of_closures.create ~function_decls ~closure_elements
-  in
-  (* The resulting set-of-closures and closures types are recursive. To avoid
-     having to rewrite the types afterwards in the case of lifting the set of
-     closures, we determine now if lifting will happen, and if so tie the
-     recursive loop(s) via a set-of-closures symbol instead of a variable.
-     Lifting of the set of closures is then performed straight away, rather
-     than e.g. going via [Reification]. *)
-  if Set_of_closures.environment_doesn't_mention_variables set_of_closures then
+  if can_lift then
     lift_set_of_closures env r set_of_closures ~fun_types
       ~closure_element_types ~result_var
   else
+    let type_of_my_closure closure_id =
+      (* CR mshinwell: Think more: what should the set of closures type be?
+         Should the [function_declaration] type be improved? *)
+      T.closure closure_id
+        (T.create_non_inlinable_function_declaration ())
+        internal_closure_element_types
+        ~set_of_closures:(T.unknown_as_ty_fabricated ())
+    in
+    let function_decls = Set_of_closures.function_decls set_of_closures in
+    let funs = Function_declarations.funs function_decls in
+    (* Note that simplifying the bodies of the functions won't change the
+       set-of-closures' eligibility for lifting.  That this is so follows
+       from the fact that closure elements (at least in the presence of
+       out-of-scope inlining, which will be implemented in due course) cannot
+       be deleted without a global analysis. *)
+    let funs, fun_types, r =
+      Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+          let function_decl, ty, r =
+            simplify_function env r closure_id function_decl ~type_of_my_closure
+          in
+          let funs = Closure_id.Map.add closure_id function_decl funs in
+          let fun_types = Closure_id.Map.add closure_id ty fun_types in
+          funs, fun_types, r)
+        funs
+        (Closure_id.Map.empty, Closure_id.Map.empty, r)
+    in
+    let function_decls = Function_declarations.create funs in
+    let set_of_closures =
+      Set_of_closures.create ~function_decls ~closure_elements
+    in
     let set_of_closures_ty_fabricated =
       T.alias_type_of_as_ty_fabricated (Simple.var result_var)
     in
