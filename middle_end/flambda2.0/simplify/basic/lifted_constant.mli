@@ -31,6 +31,11 @@ val create
   -> Flambda_static.Static_part.t
   -> t
 
+val create_from_static_structure
+   : Flambda_type.t Symbol.Map.t
+  -> Flambda_static.Program_body.Static_structure.t
+  -> t list
+
 (* CR mshinwell: Add comment that this doesn't introduce anything if the
    symbols are defined.  Is this the best semantics?  It comes from not wanting
    to diff lifted constants in [r] *)
