@@ -36,9 +36,13 @@ let lift env r ty ~bound_to static_part =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create (Variable.unique_name bound_to))
   in
+  if not (K.equal (T.kind ty) K.value) then begin
+    Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
+      Variable.print bound_to
+  end;
   let lifted_constant =
     Lifted_constant.create (Symbol.Map.singleton symbol ty)
-      (Singleton (symbol, T.kind ty))
+      (Singleton symbol)
       static_part
   in
   let r = R.new_lifted_constant r lifted_constant in

@@ -107,6 +107,8 @@ module Program_body : sig
     type t =
       | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
       [@@unboxed]
+
+    (* CR mshinwell: Add a creation function *)
   end
 
   module Definition : sig
