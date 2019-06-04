@@ -144,12 +144,26 @@ end = struct
 
   let find_variable t var = find_name t (Name.var var)
 
+  let define_symbol t sym kind =
+    let typing_env =
+      let sym = Name.symbol sym in
+      TE.add_definition t.typing_env sym kind
+    in
+    { t with typing_env; }
+
   let add_symbol t sym ty =
     let typing_env =
       let sym = Name.symbol sym in
       TE.add_equation
         (TE.add_definition t.typing_env sym (T.kind ty))
         sym ty
+    in
+    { t with typing_env; }
+
+  let add_equation_on_symbol t sym ty =
+    let typing_env =
+      let sym = Name.symbol sym in
+      TE.add_equation t.typing_env sym ty
     in
     { t with typing_env; }
 

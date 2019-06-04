@@ -26,3 +26,12 @@ val create
 val typing_env_left : t -> Typing_env.t
 
 val typing_env_right : t -> Typing_env.t
+
+(** Note that we are now in the process of comparing the given two
+    [Simple]s for equality. *)
+val now_comparing : t -> Simple.t -> Simple.t -> t
+
+(** Determine whether we are now in the process of comparing the given two
+    [Simple]s for equality. The arguments do not have to be provided in the same
+    order as when [now_comparing] was called. *)
+val already_comparing : t -> Simple.t -> Simple.t -> bool
