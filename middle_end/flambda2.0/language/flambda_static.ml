@@ -18,6 +18,8 @@
 
 let fprintf = Format.fprintf
 
+module K = Flambda_kind
+
 module Of_kind_value = struct
   type t =
     | Symbol of Symbol.t
@@ -77,7 +79,7 @@ module Of_kind_value = struct
     | Symbol sym -> E.check_symbol_is_bound env sym
     | Tagged_immediate _ -> ()
     | Dynamically_computed var ->
-      E.check_variable_is_bound_and_of_kind env var Flambda_kind.value
+      E.check_variable_is_bound_and_of_kind env var K.value
 end
 
 module Static_part = struct
@@ -89,21 +91,21 @@ module Static_part = struct
 
   type 'k t =
     | Block : Tag.Scannable.t * mutable_or_immutable
-              * (Of_kind_value.t list) -> Flambda_kind.value t
-    | Fabricated_block : Variable.t -> Flambda_kind.value t
-    | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
+              * (Of_kind_value.t list) -> K.value t
+    | Fabricated_block : Variable.t -> K.value t
+    | Set_of_closures : Flambda.Set_of_closures.t -> K.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
-                    -> Flambda_kind.value t
-    | Boxed_int32 : Int32.t or_variable -> Flambda_kind.value t
-    | Boxed_int64 : Int64.t or_variable -> Flambda_kind.value t
-    | Boxed_nativeint : Targetint.t or_variable -> Flambda_kind.value t
+                    -> K.value t
+    | Boxed_int32 : Int32.t or_variable -> K.value t
+    | Boxed_int64 : Int64.t or_variable -> K.value t
+    | Boxed_nativeint : Targetint.t or_variable -> K.value t
     | Immutable_float_array : Numbers.Float_by_bit_pattern.t or_variable list
-                              -> Flambda_kind.value t
+                              -> K.value t
     | Mutable_string : { initial_value : string or_variable; }
-                       -> Flambda_kind.value t
-    | Immutable_string : string or_variable -> Flambda_kind.value t
+                       -> K.value t
+    | Immutable_string : string or_variable -> K.value t
 
-  let needs_gc_root t =
+  let needs_gc_root (type k) (t : k t) =
     match t with
     | Block (_tag, mut, fields) ->
       begin match mut with
@@ -121,7 +123,7 @@ module Static_part = struct
     | Mutable_string _
     | Immutable_string _ -> false
 
-  let free_names t =
+  let free_names (type k) (t : k t) =
     match t with
     | Block (_tag, _mut, fields) ->
       List.fold_left (fun fvs field ->
@@ -154,7 +156,7 @@ module Static_part = struct
 
   let free_symbols t = Name_occurrences.symbols (free_names t)
 
-  let print_with_cache ~cache ppf (t : t) =
+  let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
       | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
       | Var v -> Variable.print ppf v
@@ -206,27 +208,27 @@ module Static_part = struct
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let _invariant env t =
+  let _invariant (type k) env (t : k t) =
     try
       let module E = Invariant_env in
       match t with
       | Block (_tag, _mut, fields) ->
         List.iter (fun field -> Of_kind_value.invariant env field) fields
       | Fabricated_block field ->
-        E.check_variable_is_bound_and_of_kind env field Flambda_kind.fabricated
+        E.check_variable_is_bound_and_of_kind env field K.fabricated
       | Set_of_closures set ->
         Flambda.Set_of_closures.invariant env set
       | Boxed_float (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_float
+        E.check_variable_is_bound_and_of_kind env v K.naked_float
       | Boxed_int32 (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_int32
+        E.check_variable_is_bound_and_of_kind env v K.naked_int32
       | Boxed_int64 (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_int64
+        E.check_variable_is_bound_and_of_kind env v K.naked_int64
       | Boxed_nativeint (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v Flambda_kind.naked_nativeint
+        E.check_variable_is_bound_and_of_kind env v K.naked_nativeint
       | Mutable_string { initial_value = Var v; }
       | Immutable_string (Var v) ->
-        E.check_variable_is_bound_and_of_kind env v Flambda_kind.value
+        E.check_variable_is_bound_and_of_kind env v K.value
       | Boxed_float (Const _)
       | Boxed_int32 (Const _)
       | Boxed_int64 (Const _)
@@ -238,7 +240,7 @@ module Static_part = struct
             match field with
             | Var v ->
               E.check_variable_is_bound_and_of_kind env v
-                Flambda_kind.naked_float
+                K.naked_float
             | Const _ -> ())
           fields
     with Misc.Fatal_error ->
@@ -251,7 +253,7 @@ module Program_body = struct
       expr : Flambda.Expr.t;
       return_continuation : Continuation.t;
       exn_continuation : Exn_continuation.t;
-      computed_values : (Variable.t * Flambda_kind.t) list;
+      computed_values : (Variable.t * K.t) list;
     }
 
     let print ppf { expr; return_continuation; exn_continuation;
@@ -268,7 +270,7 @@ module Program_body = struct
           (fun ppf (var, kind) ->
             Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
               Variable.print var
-              Flambda_kind.print kind))
+              K.print kind))
         computed_values
 
     let free_symbols t =
@@ -277,18 +279,18 @@ module Program_body = struct
 
   module Bound_symbols = struct
     type 'k t =
-      | Singleton : Symbol.t -> Flambda_kind.value t
+      | Singleton : Symbol.t -> K.value t
       | Set_of_closures : {
           set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
-        } -> Flambda_kind.fabricated t
+        } -> K.fabricated t
 
-    let print ppf t =
+    let print (type k) ppf (t : k t) =
       match t with
-      | Singleton (sym, kind) ->
+      | Singleton sym ->
         Format.fprintf ppf "@[(singleton@ (%a@ \u{2237}@ %a))@]"
           Symbol.print sym
-          Flambda_kind.print kind
+          K.print K.value
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
         Format.fprintf ppf "@[(set_of_closures@ \
             (set_of_closures_symbol %a)@ \
@@ -303,16 +305,16 @@ module Program_body = struct
        eventually end up the same).
     *)
 
-    let being_defined t =
+    let being_defined (type k) (t : k t) =
       match t with
-      | Singleton (sym, _kind) -> Symbol.Set.singleton sym
+      | Singleton sym -> Symbol.Set.singleton sym
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
         Symbol.Set.add set_of_closures_symbol
           (Symbol.Set.of_list (Closure_id.Map.data closure_symbols))
 
-    let gc_roots t =
+    let gc_roots (type k) (t : k t) =
       match t with
-      | Singleton (sym, _kind) -> Symbol.Set.singleton sym
+      | Singleton sym -> Symbol.Set.singleton sym
       | Set_of_closures { set_of_closures_symbol; closure_symbols = _; } ->
         (* Since all of the closures will be within the set of closures
            value, using [Infix_tag], the individual closure symbols do not
@@ -321,9 +323,11 @@ module Program_body = struct
   end
 
   module Static_structure = struct
-    type t = (Bound_symbols.t * Static_part.t) list
+    type t =
+      | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
+      [@@unboxed]
 
-    let print_with_cache ~cache ppf t =
+    let print_with_cache ~cache ppf (S pieces) =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (bound_symbols, static_part) ->
           Format.fprintf ppf "@[<hov 1>(\
@@ -332,22 +336,22 @@ module Program_body = struct
               )@]"
             Bound_symbols.print bound_symbols
             (Static_part.print_with_cache ~cache) static_part)
-        ppf t
+        ppf pieces
 
-    let being_defined t =
+    let being_defined (S pieces) =
       List.fold_left (fun being_defined (bound_syms, _static_part) ->
           Symbol.Set.union (Bound_symbols.being_defined bound_syms)
             being_defined)
         Symbol.Set.empty
-        t
+        pieces
 
-    let free_symbols t =
+    let free_symbols ((S pieces) as t) =
       let free_in_static_parts =
         List.fold_left (fun free_in_static_parts (_bound_syms, static_part) ->
             Symbol.Set.union (Static_part.free_symbols static_part)
               free_in_static_parts)
           Symbol.Set.empty
-          t
+          pieces
       in
       Symbol.Set.diff free_in_static_parts (being_defined t)
   end
@@ -404,15 +408,17 @@ module Program_body = struct
       | Root _ -> roots
       | Define_symbol (defn, t) ->
         let roots =
-          List.fold_left (fun roots (bound_symbols, static_part) ->
-              (* CR mshinwell: check [kind] against the result of
-                 [needs_gc_root] *)
-              if Static_part.needs_gc_root static_part then
-                Symbol.Set.union (Bound_symbols.gc_roots bound_symbols) roots
-              else
-                roots)
-            roots
-            defn.static_structure
+          match defn.static_structure with
+          | S pieces ->
+            List.fold_left (fun roots (bound_symbols, static_part) ->
+                (* CR mshinwell: check [kind] against the result of
+                   [needs_gc_root] *)
+                if Static_part.needs_gc_root static_part then
+                  Symbol.Set.union (Bound_symbols.gc_roots bound_symbols) roots
+                else
+                  roots)
+              roots
+              pieces
         in
         gc_roots t roots
     in
@@ -429,13 +435,13 @@ end
 
 module Program = struct
   type t = {
-    imported_symbols : Flambda_kind.t Symbol.Map.t;
+    imported_symbols : K.t Symbol.Map.t;
     body : Program_body.t;
   }
 
   let print ppf t =
     Format.fprintf ppf "@[(@[(imported_symbols %a)@]@ @[<1>(body@ %a)@])@]"
-      (Symbol.Map.print Flambda_kind.print) t.imported_symbols
+      (Symbol.Map.print K.print) t.imported_symbols
       Program_body.print t.body
 
   let gc_roots t =
