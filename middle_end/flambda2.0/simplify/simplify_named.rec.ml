@@ -98,22 +98,24 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   in
   function_decl, function_decl_type, r
 
-let lift_set_of_closures env r set_of_closures ~fun_types ~closure_element_types
+let lift_set_of_closures env r set_of_closures ~closure_elements_and_types
       ~result_var =
-  let result = Simple.var result_var in
   let set_of_closures_symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create (Variable.unique_name result_var))
   in
+  let function_decls = Set_of_closures.function_decls set_of_closures in
+  let funs = Function_declarations.funs function_decls in
   let closure_symbols =
-    Closure_id.Map.mapi (fun closure_id _typ ->
+    Closure_id.Map.mapi (fun closure_id _func_decl ->
         Symbol.create (Compilation_unit.get_current_exn ())
           (Linkage_name.create (Closure_id.unique_name closure_id)))
-      fun_types
+      funs
   in
-  let term, env, ty, static_structure_types, static_structure =
-    Simplify_static.simplify_set_of_closures env ~result_env:env
+  let _set_of_closures, env, ty, r, static_structure_types, static_structure =
+    Simplify_static.simplify_set_of_closures env ~result_env:env r
       set_of_closures ~set_of_closures_symbol ~closure_symbols
+      ~closure_elements_and_types
   in
   let r =
     let lifted_constants =
@@ -165,8 +167,10 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
       closure_elements
   in
   if can_lift then
-    lift_set_of_closures env r set_of_closures ~fun_types
-      ~closure_element_types ~result_var
+    lift_set_of_closures env r set_of_closures
+      ~closure_elements_and_types:
+        (Some (closure_elements, closure_element_types))
+      ~result_var
   else
     let type_of_my_closure closure_id =
       (* CR mshinwell: Think more: what should the set of closures type be?
