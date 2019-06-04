@@ -102,24 +102,34 @@ let lift_set_of_closures env r set_of_closures ~fun_types ~closure_element_types
       ~result_var =
   let result = Simple.var result_var in
   let set_of_closures_symbol =
-    Symbol.create (Compilation_unit.get_current_exn ()) name
+    Symbol.create (Compilation_unit.get_current_exn ())
+      (Linkage_name.create (Variable.unique_name result_var))
   in
   let closure_symbols =
-    Closure_id.Map.map (fun _typ ->
+    Closure_id.Map.mapi (fun closure_id _typ ->
         Symbol.create (Compilation_unit.get_current_exn ())
-          (Closure_id.unique_name closure_id))
+          (Linkage_name.create (Closure_id.unique_name closure_id)))
       fun_types
   in
-  let term, env, ty, static_structure =
+  let term, env, ty, static_structure_types, static_structure =
     Simplify_static.simplify_lifted_set_of_closures env
       set_of_closures ~set_of_closures_symbol ~closure_symbols
-      ~closure_element_types ~result
   in
   let r =
-    let name = Variable.unique_name result_var in
-    R.new_lifted_constant0 r ~name set_of_closures_type static_structure
+    let lifted_constants =
+      Lifted_constant.create_from_static_structure static_structure_types
+        static_structure
+    in
+    List.fold_left (fun r lifted_constant ->
+        R.new_lifted_constant r lifted_constant)
+      r
+      lifted_constants
   in
-  term, env, ty, r
+  let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
+  let term = Named.create_simple set_of_closures_symbol in
+  let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
+  let env = E.add_equation_on_variable env result_var ty in
+  Reachable.reachable term, env, ty, r
 
 let simplify_set_of_closures env r set_of_closures ~result_var =
   let closure_elements, closure_element_types, r =
@@ -176,11 +186,11 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
      Lifting of the set of closures is then performed straight away, rather
      than e.g. going via [Reification]. *)
   if Set_of_closures.environment_doesn't_mention_variables set_of_closures then
-    lift_set_of_closures env r ~name set_of_closures ~closure_element_types
-      ~result_var
+    lift_set_of_closures env r set_of_closures ~fun_types
+      ~closure_element_types ~result_var
   else
     let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated result
+      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
     in
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
@@ -189,8 +199,9 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
         fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    let env = E.add_name env result_name set_of_closures_type in
-    Named.create_set_of_closures set_of_closures, env, set_of_closures_type, r
+    let env = E.add_variable env result_var set_of_closures_type in
+    let term = Named.create_set_of_closures set_of_closures in
+    Reachable.reachable term, env, set_of_closures_type, r
 
 let simplify_named0 env r (named : Named.t) ~result_var =
 (*Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;*)
