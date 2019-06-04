@@ -443,7 +443,8 @@ let set_of_closures_containing_at_least closure_id =
   let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
   let closures =
     Closure_ids.create
-      (Closure_id_set.Map.singleton closure_id set_of_closures_entry)
+      (Closure_id_set.Map.singleton (Closure_id.Set.singleton closure_id)
+        set_of_closures_entry)
       Open
   in
   Fabricated (No_alias (Ok (Set_of_closures { closures; })))
