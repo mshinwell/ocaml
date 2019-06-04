@@ -24,38 +24,39 @@ module R = Simplify_env_and_result.Result
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
-let simplify_projection env r ~original_term ~deconstructing ~skeleton ~result
+let simplify_projection env r ~original_term ~deconstructing ~shape ~result_var
       ~result_kind : Reachable.t * TEE.t * R.t =
-  match T.meet_skeleton env ty ~skeleton ~result ~result_kind with
+  let env = E.typing_env env in
+  match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty, r
   | Ok env_extension -> Reachable.reachable original_term, env_extension, r
 
 let simplify_project_closure env r ~original_term ~set_of_closures_ty closure_id
       ~result_var =
   simplify_projection env r ~original_term ~deconstructing:set_of_closures_ty
-    ~skeleton:(T.set_of_closures_containing_at_least closure)
-    ~result ~result_kind:K.value
+    ~shape:(T.set_of_closures_containing_at_least closure_id)
+    ~result_var ~result_kind:K.value
 
 let simplify_project_var env r ~original_term ~closure_ty closure_element
       ~result_var =
   simplify_projection env r ~original_term ~deconstructing:closure_ty
-    ~skeleton:(T.closure_containing_at_least closure_element)
-    ~result ~result_kind:K.value
+    ~shape:(T.closure_containing_at_least closure_element)
+    ~result_var ~result_kind:K.value
 
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var : Reachable.t * TEE.t * R.t =
-  let arg, arg_ty = S.simplify_simple_and_drop_type env arg in
-  let original_term = Named.create_prim (Unary (prim, arg), dbg) in
+  let arg, arg_ty = Simplify_simple.simplify_simple env arg in
+  let original_term = Named.create_prim (Unary (prim, arg)) dbg in
   match prim with
   | Project_closure closure_id ->
     simplify_project_closure env r ~original_term ~set_of_closures_ty:arg_ty
       closure_id ~result_var
   | Project_var closure_element ->
-    simplify_project_closure env r ~original_term ~closure_ty:arg_ty
+    simplify_project_var env r ~original_term ~closure_ty:arg_ty
       closure_element ~result_var
   | _ ->
     (* CR mshinwell: temporary code *)
-    let arg = S.simplify_simple_and_drop_type env arg in
+    let arg = Simplify_simple.simplify_simple_and_drop_type env arg in
     let named = Named.create_prim (Unary (prim, arg)) dbg in
     let ty = T.any_value () in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
