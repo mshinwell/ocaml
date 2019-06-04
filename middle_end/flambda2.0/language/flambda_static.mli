@@ -44,17 +44,19 @@ module Static_part : sig
       filled with values computed at runtime. *)
   type 'k t =
     | Block : Tag.Scannable.t * mutable_or_immutable
-        * (Of_kind_value.t list) -> K.value t
-    | Fabricated_block : Variable.t -> K.value t
-    | Set_of_closures of Flambda.Set_of_closures.t -> K.fabricated t
-    | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable -> K.value t
-    | Boxed_int32 : Int32.t or_variable -> K.value t
-    | Boxed_int64 : Int64.t or_variable -> K.value t
-    | Boxed_nativeint : Targetint.t or_variable -> K.value t
+        * (Of_kind_value.t list) -> Flambda_kind.value t
+    | Fabricated_block : Variable.t -> Flambda_kind.value t
+    | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
+    | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
+        -> Flambda_kind.value t
+    | Boxed_int32 : Int32.t or_variable -> Flambda_kind.value t
+    | Boxed_int64 : Int64.t or_variable -> Flambda_kind.value t
+    | Boxed_nativeint : Targetint.t or_variable -> Flambda_kind.value t
     | Immutable_float_array : Numbers.Float_by_bit_pattern.t or_variable list
-        -> K.value t
-    | Mutable_string : { initial_value : string or_variable; } -> K.value t
-    | Immutable_string : string or_variable -> K.value t
+        -> Flambda_kind.value t
+    | Mutable_string : { initial_value : string or_variable; }
+        -> Flambda_kind.value t
+    | Immutable_string : string or_variable -> Flambda_kind.value t
 
   (** Print a static structure definition to a formatter. *)
   val print : Format.formatter -> _ t -> unit
@@ -86,12 +88,12 @@ module Program_body : sig
 
   module Bound_symbols : sig
     type 'k t =
-      | Singleton : Symbol.t : K.value t
+      | Singleton : Symbol.t -> Flambda_kind.value t
         (** A binding of a single symbol of kind [Value]. *)
       | Set_of_closures : {
           set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
-        } -> K.fabricated t
+        } -> Flambda_kind.fabricated t
         (** A binding of a single symbol to a set of closures together with
             the binding of possibly multiple symbols to the individual closures
             within such set of closures. *)
