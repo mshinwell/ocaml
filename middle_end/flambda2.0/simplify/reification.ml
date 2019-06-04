@@ -29,11 +29,17 @@ let create_static_part (to_lift : T.to_lift) : Flambda_static.Static_part.t =
   | Boxed_int64 i -> Boxed_int64 (Const i)
   | Boxed_nativeint i -> Boxed_nativeint (Const i)
 
-let lift env r ty ~bound_to (static_part : Flambda_static.Static_part.t) =
-  let symbol, r =
-    let name = Variable.unique_name bound_to in
-    R.new_lifted_constant r ~name ty static_part
+let lift env r ty ~bound_to static_part =
+  let symbol =
+    Symbol.create (Compilation_unit.get_current_exn ())
+      (Linkage_name.create (Variable.unique_name bound_to))
   in
+  let lifted_constant =
+    Lifted_constant.create (Symbol.Map.singleton symbol ty)
+      (Singleton (symbol, T.kind ty))
+      static_part
+  in
+  let r = R.new_lifted_constant r lifted_constant in
   let env = E.add_symbol env symbol ty in
   let symbol = Simple.symbol symbol in
   let term = Named.create_simple symbol in

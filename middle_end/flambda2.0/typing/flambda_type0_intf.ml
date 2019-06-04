@@ -212,7 +212,7 @@ module type S = sig
       closure that holds the given closure variable with the given type. *)
   val closure_containing_at_least
      : Var_within_closure.t
-    -> Flambda_types.t
+    -> flambda_type
 
   (** The type of a set of closures containing exactly those closure IDs
       with the given types. *)
@@ -222,7 +222,7 @@ module type S = sig
 
   (** The type of a set of closures containing at least one closure with
       the given closure ID. *)
-  val set_of_closures_containing_at_least : Closure_id.t -> Flambda_types.t
+  val set_of_closures_containing_at_least : Closure_id.t -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
