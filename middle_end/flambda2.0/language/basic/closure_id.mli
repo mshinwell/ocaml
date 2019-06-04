@@ -26,3 +26,7 @@
     (viz. [Project_closure]). *)
 
 include module type of Closure_element
+
+(* CR mshinwell: Fix the problem that Closure_id and Var_within_closure seem
+   to be being used interchangeably by the type checker---presumably they are
+   actually equal?? *)
