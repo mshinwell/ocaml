@@ -39,8 +39,8 @@ let print ppf { types; bound_symbols; static_part; } =
 
 let create types bound_symbols static_part =
   let being_defined = Bound_symbols.being_defined bound_symbols in
-  if not (Symbol.Set.equal being_defined (Symbol.Map.keys types)) then begin
-    Misc.fatal_errorf "[types]:@ %a@ does not match [bound_symbols]:@ %a"
+  if not (Symbol.Set.subset (Symbol.Map.keys types) being_defined) then begin
+    Misc.fatal_errorf "[types]:@ %a@ does not cover [bound_symbols]:@ %a"
       (Symbol.Map.print T.print) types
       Bound_symbols.print bound_symbols
   end;
@@ -58,6 +58,12 @@ let create types bound_symbols static_part =
     bound_symbols;
     static_part;
   }
+
+let create_from_static_structure types
+      (static_structure : Flambda_static.Program_body.Static_structure.t) =
+  List.map (fun (bound_symbols, static_part) ->
+      create types bound_symbols static_part)
+    static_structure
 
 let introduce t typing_env =
   let allowed = TE.var_domain typing_env in

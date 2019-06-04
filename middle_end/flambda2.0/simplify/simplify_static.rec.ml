@@ -45,8 +45,7 @@ let simplify_or_variable env (or_variable : _ Static_part.or_variable) =
     or_variable
 
 let simplify_lifted_set_of_closures env ~name set_of_closures
-      ~set_of_closures_symbol ~closure_symbols
-      ~closure_element_types ~result
+      ~set_of_closures_symbol ~closure_symbols ~closure_element_types
       : Static_part.t * E.t * R.t =
   let set_of_closures_ty_fabricated =
     T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
@@ -96,18 +95,24 @@ let simplify_lifted_set_of_closures env ~name set_of_closures
     in
     T.set_of_closures ~closures:closure_types_via_symbols
   in
-  let env = E.add_symbol env symbol set_of_closures_type in
+  let env = E.add_symbol env set_of_closures_symbol set_of_closures_type in
   let env =
-    Closure_id.Map.fold (fun _closure_id (symbol, typ) env ->
+    Closure_id.Map.fold (fun _ (symbol, typ) env ->
         E.add_symbol env symbol typ)
       closure_symbols_and_types
       env
   in
-  let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
-  let term = Named.create_simple set_of_closures_symbol in
-  let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
-  let env = E.add_equation_on_variable env result_var ty in
-  term, env, ty, static_structure
+  let static_structure_types =
+    let static_structure_types =
+      Closure_id.Map.fold (fun _ (symbol, typ) static_structure_types ->
+          Symbol.Map.add symbol typ static_structure_types)
+        closure_symbols_and_types
+        Symbol.Map.empty
+    in
+    Symbol.Map.add set_of_closures_symbol set_of_closures_type
+      static_structure_types
+  in
+  term, env, ty, static_structure_types, static_structure
 
 let simplify_static_part env r (static_part : Static_part.t) ~result_sym
       : Static_part.t * E.t * R.t =
