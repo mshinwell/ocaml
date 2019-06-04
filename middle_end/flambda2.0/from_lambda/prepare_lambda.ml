@@ -68,7 +68,9 @@ type letrec = {
   (* CR pchambart: Should we preallocate with the tag ?
      How to get the tag for cases involving duprecord ?
      mshinwell: I think the tag is always zero for duprecord, but need to
-     double-check. *)
+     double-check.
+     sdolan observes that the tag might not be zero if duprecord is ever
+     generated for an inline record constructor *)
   consts : (Ident.t * L.structured_constant) list;
   pre : Lambda.lambda -> Lambda.lambda;
   effects : Lambda.lambda;
