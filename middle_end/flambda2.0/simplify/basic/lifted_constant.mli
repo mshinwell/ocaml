@@ -27,10 +27,13 @@ val print : Format.formatter -> t -> unit
 
 val create
    : Flambda_type.t Symbol.Map.t
-  -> Flambda_static.Bound_symbols.t
+  -> Flambda_static.Program_body.Bound_symbols.t
   -> Flambda_static.Static_part.t
   -> t
 
-val introduce : t -> Flambda_type.Typing_env.t -> t
+(* CR mshinwell: Add comment that this doesn't introduce anything if the
+   symbols are defined.  Is this the best semantics?  It comes from not wanting
+   to diff lifted constants in [r] *)
+val introduce : t -> Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t
 
-val static_structure : t -> Flambda_static.Static_structure.t
+val static_structure : t -> Flambda_static.Program_body.Static_structure.t
