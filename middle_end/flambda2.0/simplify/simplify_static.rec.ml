@@ -82,6 +82,10 @@ let simplify_set_of_closures env ~result_env r set_of_closures
   in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
+  let env =
+    (* CR mshinwell: think more about this *)
+    E.add_symbol env set_of_closures_symbol (T.any_fabricated ())
+  in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
         let function_decl, ty, r =
@@ -148,12 +152,19 @@ let simplify_set_of_closures env ~result_env r set_of_closures
   (* The returned bindings are put into [result_env], rather than [env], so
      [simplify_static_structure] below can correctly handle simultaneous
      definitions of symbols. *)
+  let env = E.define_symbol result_env set_of_closures_symbol K.fabricated in
   let env =
-    E.add_symbol result_env set_of_closures_symbol set_of_closures_type
+    Closure_id.Map.fold (fun _ (symbol, _typ) env ->
+        E.define_symbol env symbol K.value)
+      closure_symbols_and_types
+      env
+  in
+  let env =
+    E.add_equation_on_symbol env set_of_closures_symbol set_of_closures_type
   in
   let env =
     Closure_id.Map.fold (fun _ (symbol, typ) env ->
-        E.add_symbol env symbol typ)
+        E.add_equation_on_symbol env symbol typ)
       closure_symbols_and_types
       env
   in
