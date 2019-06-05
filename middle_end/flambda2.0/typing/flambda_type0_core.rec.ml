@@ -143,6 +143,8 @@ let alias_type_of (kind : K.t) name : t =
   | Fabricated ->
     Fabricated (Equals name)
 
+let alias_type_of_as_ty_value name : ty_value = Equals name
+
 let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
 
 let bottom_as_ty_fabricated () : ty_fabricated =
@@ -397,8 +399,8 @@ let closure closure_id function_decl closure_elements ~set_of_closures : t =
   in
   Value (No_alias (Ok (Closures closures)))
 
-let closure_containing_at_least var_within_closure =
-  let ty_value = any_value_as_ty_value () in
+let closure_containing_at_least var_within_closure ~closure_element_var =
+  let ty_value = alias_type_of_as_ty_value (Simple.var closure_element_var) in
   let closure_elements =
     Var_within_closure.Map.singleton var_within_closure (Value ty_value)
   in

@@ -224,6 +224,7 @@ module type S = sig
       closure that holds the given closure variable with the given type. *)
   val closure_containing_at_least
      : Var_within_closure.t
+    -> closure_element_var:Variable.t
     -> flambda_type
 
   (** The type of a set of closures containing exactly those closure IDs
