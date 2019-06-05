@@ -51,7 +51,8 @@ let simplify_project_closure env r ~original_term ~set_of_closures_ty closure_id
 let simplify_project_var env r ~original_term ~closure_ty closure_element
       ~result_var =
   simplify_projection env r ~original_term ~deconstructing:closure_ty
-    ~shape:(T.closure_containing_at_least closure_element)
+    ~shape:(T.closure_containing_at_least closure_element
+      ~closure_element_var:result_var)
     ~result_var ~result_kind:K.value
 
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
