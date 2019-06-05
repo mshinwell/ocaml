@@ -70,21 +70,64 @@ let simplify_set_of_closures env ~result_env r set_of_closures
         (Set_of_closures.closure_elements set_of_closures)
         (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
   in
-  let type_of_my_closure closure_id =
-    let set_of_closures =
-      T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
-    in
-    (* CR mshinwell: Should this [function_declaration] type be improved? *)
-    T.closure closure_id
-      (T.create_non_inlinable_function_declaration ())
-      closure_element_types
-      ~set_of_closures
-  in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
+  let env = E.define_symbol env set_of_closures_symbol K.fabricated in
   let env =
-    (* CR mshinwell: think more about this *)
-    E.add_symbol env set_of_closures_symbol (T.any_fabricated ())
+    Closure_id.Map.fold (fun _closure_id closure_symbol env ->
+        E.define_symbol env closure_symbol K.value)
+      closure_symbols
+      env
+  in
+  let set_of_closures_ty_fabricated =
+    T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
+  in
+  (* CR mshinwell: Some of this code could maybe be shared with the
+     post-body-simplification code that builds types, below. *)
+  let set_of_closures_type =
+    (* The set-of-closures type describes the closures it contains via
+       aliases to the closure symbols.  This means that when an appropriate
+       [Project_closure] primitive, for example, is encountered then it will
+       simplify directly to a symbol.
+
+       The detail of the closures themselves is described using closure
+       types assigned to the individual closure symbols.  These types in
+       turn tie back recursively to the set-of-closures symbol. *)
+    let closure_types_via_symbols =
+      Closure_id.Map.map (fun closure_sym ->
+          T.alias_type_of K.value (Simple.symbol closure_sym))
+        closure_symbols
+    in
+    T.set_of_closures ~closures:closure_types_via_symbols
+  in
+  let env =
+    E.add_equation_on_symbol env set_of_closures_symbol set_of_closures_type
+  in
+  let closure_symbols_and_types =
+    Closure_id.Map.mapi (fun closure_id closure_symbol ->
+        let function_decl_type =
+          T.create_non_inlinable_function_declaration ()
+        in
+        let closure_type =
+          T.closure closure_id function_decl_type closure_element_types
+            ~set_of_closures:set_of_closures_ty_fabricated
+        in
+        closure_symbol, closure_type)
+      closure_symbols
+  in
+  let env =
+    Closure_id.Map.fold (fun _closure_id (closure_symbol, closure_type) env ->
+        E.add_equation_on_symbol env closure_symbol closure_type)
+      closure_symbols_and_types
+      env
+  in
+  let type_of_my_closure closure_id =
+    match Closure_id.Map.find closure_id closure_symbols with
+    | exception Not_found ->
+      Misc.fatal_errorf "No closure symbol for %a"
+        Closure_id.print closure_id
+    | closure_symbol ->
+      T.alias_type_of K.value (Simple.symbol closure_symbol)
   in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
@@ -101,9 +144,6 @@ let simplify_set_of_closures env ~result_env r set_of_closures
   let function_decls = Function_declarations.create funs in
   let set_of_closures =
     Set_of_closures.create ~function_decls ~closure_elements
-  in
-  let set_of_closures_ty_fabricated =
-    T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
   in
   let closure_types =
     Closure_id.Map.mapi (fun closure_id function_decl_type ->
@@ -134,14 +174,6 @@ let simplify_set_of_closures env ~result_env r set_of_closures
     S [bound_symbols, static_part]
   in
   let set_of_closures_type =
-    (* The set-of-closures type describes the closures it contains via
-       aliases to the closure symbols.  This means that when an appropriate
-       [Project_closure] primitive, for example, is encountered then it will
-       simplify directly to a symbol without any further work.
-
-       The detail of the closures themselves is described using closure
-       types assigned to the individual closure symbols.  These types in
-       turn tie back recursively to the set-of-closures symbol. *)
     let closure_types_via_symbols =
       Closure_id.Map.map (fun closure_sym ->
           T.alias_type_of K.value (Simple.symbol closure_sym))
