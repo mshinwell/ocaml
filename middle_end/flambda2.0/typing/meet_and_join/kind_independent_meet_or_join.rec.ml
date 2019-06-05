@@ -102,8 +102,7 @@ struct
         meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
       in
       let env_extension =
-        if Typing_env.defined_earlier (Meet_env.env env)
-             simple1 ~than:simple2
+        if Typing_env.defined_earlier (Meet_env.env env) simple1 ~than:simple2
         then
           env_extension
           |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
@@ -113,6 +112,7 @@ struct
           |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
           |> add_equation env simple1 (S.to_type (Equals simple2))
       in
+      (* It doesn't matter whether [simple1] or [simple2] is returned here. *)
       Equals simple1, env_extension
     | Some simple, None | None, Some simple ->
       let unknown_or_join, env_extension =

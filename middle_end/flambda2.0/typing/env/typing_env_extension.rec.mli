@@ -39,3 +39,5 @@ val meet_equation : t -> Meet_env.t -> Name.t -> Flambda_types.t -> t
 val meet : Meet_env.t -> t -> t -> t
 
 val join : Typing_env.t -> t -> t -> t
+
+val mem : t -> Name.t -> bool

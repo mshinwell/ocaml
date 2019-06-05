@@ -19,6 +19,8 @@
 type t = {
   closure_origin : Closure_origin.t;
   params_and_body : Function_params_and_body.t;
+  (* CR mshinwell: Need to document that [code_id] is used for equality
+     checking, so it must be updated.  Maybe it's a misnomer in fact. *)
   code_id : Code_id.t;
   result_arity : Flambda_arity.t;
   stub : bool;

@@ -56,6 +56,8 @@ module Make (Index : Identifiable.S) = struct
     { components_by_index;
     }
 
+  (* XXX This isn't right -- it seems the 0-arity one isn't bottom.  This
+     presumably needs to take a kind? *)
   let create_bottom () =
     { components_by_index = Index.Map.empty;
     }
@@ -83,7 +85,7 @@ module Make (Index : Identifiable.S) = struct
         components_by_index1
         components_by_index2
     in
-    if !all_bottom then Bottom
+    if !all_bottom && Index.Map.cardinal components_by_index > 0 then Bottom
     else Ok ({ components_by_index; }, !env_extension)
 
   let join env
