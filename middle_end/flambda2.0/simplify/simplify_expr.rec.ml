@@ -18,16 +18,19 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module KP = Kinded_parameter
 module R = Simplify_env_and_result.Result
 module S = Simplify_simple
 module T = Flambda_type
+module UE = Simplify_env_and_result.Upwards_env
+
+type simplify_result = Expr.t * UE.t * R.t
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
-let rec simplify_let env r (let_expr : Let.t) : Expr.t * R.t =
+let rec simplify_let env r (let_expr : Let.t) : simplify_result =
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
@@ -74,7 +77,7 @@ and simplify_one_continuation_handler env r cont cont_handler =
       cont_handler, r)
 
 and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
-      : Expr.t * R.t =
+      : simplify_result =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
@@ -112,7 +115,7 @@ and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
-and simplify_recursive_let_cont_handlers env r rec_handlers : Expr.t * R.t =
+and simplify_recursive_let_cont_handlers env r rec_handlers : simplify_result =
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body cont_handlers ->
       let cont_handlers = Continuation_handlers.to_map cont_handlers in
@@ -137,7 +140,7 @@ and simplify_recursive_let_cont_handlers env r rec_handlers : Expr.t * R.t =
       in
       Let_cont.create_recursive cont_handlers ~body, r)
 
-and simplify_let_cont env r (let_cont : Let_cont.t) : Expr.t * R.t =
+and simplify_let_cont env r (let_cont : Let_cont.t) : simplify_result =
   match let_cont with
   | Non_recursive { handler; _ } ->
     simplify_non_recursive_let_cont_handler env r let_cont handler
@@ -441,7 +444,7 @@ and simplify_function_call_where_callee's_type_unavailable env r apply
   Expr.create_apply (Apply.with_call_kind apply call_kind), r
 
 and simplify_function_call env r apply ~callee_ty
-      (call : Call_kind.Function_call.t) ~arg_types : Expr.t * R.t =
+      (call : Call_kind.Function_call.t) ~arg_types : simplify_result =
   let type_unavailable () =
     simplify_function_call_where_callee's_type_unavailable env r apply call
       ~arg_types
@@ -544,7 +547,7 @@ and simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
   in
   Expr.create_apply apply, r
 
-and simplify_apply env r apply : Expr.t * R.t =
+and simplify_apply env r apply : simplify_result =
   let callee_ty, apply, arg_types, r = simplify_apply_shared env r apply in
   match Apply.call_kind apply with
   | Function call ->
@@ -555,7 +558,7 @@ and simplify_apply env r apply : Expr.t * R.t =
     simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
       ~arg_types
 
-and simplify_apply_cont env r apply_cont : Expr.t * R.t =
+and simplify_apply_cont env r apply_cont : simplify_result =
   let module AC = Apply_cont in
   let cont =
     E.resolve_continuation_aliases env (AC.continuation apply_cont)
@@ -620,7 +623,8 @@ and simplify_apply_cont env r apply_cont : Expr.t * R.t =
             raise Misc.Fatal_error
           end)
 
-and simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
+and simplify_switch env r (switch : Flambda.Switch.t) k : simplify_result =
+  let uenv, r = k env r in
   let reachable_arms =
     Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun _arm cont ->
       let cont = E.resolve_continuation_aliases env cont in
@@ -632,13 +636,13 @@ and simplify_switch env r (switch : Flambda.Switch.t) : Expr.t * R.t =
     Expr.create_switch ~scrutinee:(Switch.scrutinee switch)
       ~arms:reachable_arms
   in
-  expr, r
+  expr, uenv, r
 
-and simplify_expr env r expr : Expr.t * R.t =
+and simplify_expr env r expr : simplify_result =
   match Expr.descr expr with
   | Let let_expr -> simplify_let env r let_expr
   | Let_cont let_cont -> simplify_let_cont env r let_cont
   | Apply apply -> simplify_apply env r apply
   | Apply_cont apply_cont -> simplify_apply_cont env r apply_cont
   | Switch switch -> simplify_switch env r switch
-  | Invalid _ -> expr, r
+  | Invalid _ -> expr, UE.empty, r
