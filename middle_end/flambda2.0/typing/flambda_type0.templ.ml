@@ -75,11 +75,6 @@ module Make
     let t, _simple = Typing_env.resolve_any_toplevel_alias env t in
     is_obviously_bottom t
 
-  let term_language_function_declaration (decl : function_declaration) =
-    match decl with
-    | Non_inlinable -> None
-    | Inlinable inlinable -> Some (inlinable.function_decl)
-
   type 'a proof =
     | Proved of 'a
     | Unknown

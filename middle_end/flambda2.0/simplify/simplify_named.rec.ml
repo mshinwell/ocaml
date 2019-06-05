@@ -23,6 +23,9 @@ module T = Flambda_type
 module TE = T.Typing_env
 
 let simplify_function env r closure_id function_decl ~type_of_my_closure =
+  (* CR mshinwell: improve efficiency by not opening abstraction 3 times *)
+  let param_arity = Function_declaration.params_arity function_decl in
+  let result_arity = Function_declaration.result_arity function_decl in
   let params_and_body, r =
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
@@ -37,7 +40,6 @@ Format.eprintf "Closure ID %a, entering closure\n%!"
 Format.eprintf "Closure ID %a, done entering closure\n%!"
   Closure_id.print closure_id;
 *)
-        let result_arity = Function_declaration.result_arity function_decl in
         let env = E.add_continuation env return_continuation result_arity in
         let env = E.add_exn_continuation env exn_continuation in
         let env = E.add_parameters_with_unknown_types env params in
@@ -46,7 +48,9 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
   Closure_id.print closure_id
   T.print (type_of_my_closure closure_id);
 *)
-        let type_of_my_closure = type_of_my_closure closure_id in
+        let type_of_my_closure =
+          type_of_my_closure closure_id ~param_arity ~result_arity
+        in
         let env = E.add_variable env my_closure type_of_my_closure in
         let env = E.increment_continuation_scope_level env in
 (*
@@ -96,7 +100,8 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
     if Inlining_decision.can_inline env function_decl then
       T.create_inlinable_function_declaration function_decl
     else
-      T.create_non_inlinable_function_declaration ()
+      T.create_non_inlinable_function_declaration
+        ~param_arity ~result_arity
   in
   function_decl, function_decl_type, r
 
@@ -174,11 +179,10 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
           T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
         closure_element_types
     in
-    let type_of_my_closure closure_id =
-      (* CR mshinwell: Think more: what should the set of closures type be?
-         Should the [function_declaration] type be improved? *)
+    let type_of_my_closure closure_id ~param_arity ~result_arity =
+      (* CR mshinwell: Think more: what should the set of closures type be? *)
       T.closure closure_id
-        (T.create_non_inlinable_function_declaration ())
+        (T.create_non_inlinable_function_declaration ~param_arity ~result_arity)
         internal_closure_element_types
         ~set_of_closures:(T.unknown_as_ty_fabricated ())
     in
