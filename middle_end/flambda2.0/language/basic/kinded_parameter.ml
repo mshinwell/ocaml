@@ -37,7 +37,7 @@ include Identifiable.Make (struct
     Hashtbl.hash (Parameter.hash param, Flambda_kind.hash kind)
 
   let print ppf { param; kind; } =
-    Format.fprintf ppf "(%s%a%s@ \u{2237}@ %a)"
+    Format.fprintf ppf "(%s%a%s \u{2237} %a)"
       (Misc.Color.bold_magenta ())
       Parameter.print param
       (Misc.Color.reset ())

@@ -30,7 +30,7 @@
 
 module Value_kind : sig
   type t =
-    | Unknown
+    | Pointer_or_immediate
     | Definitely_pointer
     | Definitely_immediate
 

@@ -63,7 +63,7 @@ val of_block_shape : Lambda.block_shape -> num_fields:int -> t
 let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields (fun _field : P.Value_kind.t -> Unknown)
+    List.init num_fields (fun _field : P.Value_kind.t -> Pointer_or_immediate)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -74,7 +74,7 @@ let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
     end;
     List.map (fun (kind : Lambda.value_kind) : P.Value_kind.t ->
         match kind with
-        | Pgenval -> Unknown
+        | Pgenval -> Pointer_or_immediate
         | Pfloatval | Pboxedintval _ -> Definitely_pointer
         | Pintval -> Definitely_immediate)
       shape
@@ -147,7 +147,7 @@ let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
 let convert_access_kind i_or_p : P.Block_access_kind.t0 =
   match i_or_p with
   | Lambda.Immediate -> Value Definitely_immediate
-  | Lambda.Pointer -> Value Unknown
+  | Lambda.Pointer -> Value Pointer_or_immediate
 
 let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment)
    : P.init_or_assign =
@@ -164,7 +164,7 @@ let convert_array_kind (kind : Lambda.array_kind)
   | Pgenarray ->
     Generic_array
       (P.Generic_array_specialisation.no_specialisation ())
-  | Paddrarray -> Array (Value Unknown)
+  | Paddrarray -> Array (Value Pointer_or_immediate)
   | Pintarray -> Array (Value Definitely_immediate)
   | Pfloatarray -> Array Naked_float
 
@@ -413,7 +413,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Binary (Float_comp (convert_float_comparison comp),
             unbox_float arg1, unbox_float arg2)
   | Pfield_computed, [obj; field] ->
-    Binary (Block_load (Block (Value Unknown), Mutable), obj, field)
+    Binary (Block_load (
+      Block (Value Pointer_or_immediate), Mutable), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
     let access_kind =
       convert_access_kind imm_or_pointer
@@ -536,7 +537,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 (* XXX *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Binary (Block_load (Block (Value Unknown), Immutable), arg, Simple field)
+    Binary (Block_load (Block (Value Pointer_or_immediate), Immutable), arg,
+      Simple field)
   | Pfloatfield field, [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
