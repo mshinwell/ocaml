@@ -119,22 +119,56 @@ struct
            closure_elements = closure_elements2;
            set_of_closures = set_of_closures2;
          } : T.closures_entry) =
-    let function_decl : T.function_declaration =
+    let function_decl : T.function_declaration Or_unknown.t =
       match function_decl1, function_decl2 with
-      | Non_inlinable, (Non_inlinable | Inlinable _)
-      | Inlinable _, Non_inlinable -> Non_inlinable
-      | Inlinable { function_decl = decl1; },
-          Inlinable { function_decl = decl2; } ->
-        let module TFD = Term_language_function_declaration in
-        match E.op () with
-        | Join ->
-          if Code_id.equal (TFD.code_id decl1) (TFD.code_id decl2)
-          then function_decl1
-          else Non_inlinable
-        | Meet ->
-          (* We can arbitrarily pick one of the functions, since they must
-             both behave in the same way, even if we cannot prove it. *)
-          function_decl1
+      | Unknown, Unknown -> Unknown
+      | Known _, Unknown ->
+        begin match E.op () with
+        | Join -> Unknown
+        | Meet -> function_decl1
+        end
+      | Unknown, Known _ ->
+        begin match E.op () with
+        | Join -> Unknown
+        | Meet -> function_decl2
+        end
+      | Known decl1, Known decl2 ->
+        match decl1, decl2 with
+        | Non_inlinable {
+            param_arity = param_arity1; result_arity = result_arity1;
+          }, Non_inlinable {
+            param_arity = param_arity2; result_arity = result_arity2;
+          } ->
+          (* CR mshinwell: Are fatal errors right here?  Given the arbitrary
+             choice below, it would seem so, but unsure.  Also, the error
+             message is currently poor. *)
+          if Flambda_arity.equal param_arity1 param_arity2
+            && Flambda_arity.equal result_arity1 result_arity2
+          then
+            Known decl1
+          else
+            Misc.fatal_error "Mismatched Non_inlinable arities"
+        | Non_inlinable _ , Inlinable _
+        | Inlinable _, Non_inlinable _ ->
+          (* CR mshinwell: This should presumably return [Non_inlinable] if
+             the arities match. *)
+          Unknown
+        | Inlinable { function_decl = decl1; },
+            Inlinable { function_decl = decl2; } ->
+          (* CR mshinwell: Assertions about other properties of
+             [decl1] versus [decl2]? *)
+          let module TFD = Term_language_function_declaration in
+          match E.op () with
+          | Join ->
+            (* CR mshinwell: As mentioned in [Function_declaration], [Code_id]
+               is a misnomer at present. *)
+            if Code_id.equal (TFD.code_id decl1) (TFD.code_id decl2)
+            then function_decl1
+            else Unknown
+          | Meet ->
+            (* We can arbitrarily pick one of the functions, since they must
+               both behave in the same way, even if we cannot prove it. *)
+            function_decl1
     in
     let closure_elements =
       E.switch Closure_elements.meet Closure_elements.join env

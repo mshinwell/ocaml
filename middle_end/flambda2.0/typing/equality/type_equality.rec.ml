@@ -226,9 +226,17 @@ and equal_function_declaration _env
     let code_id1 = TFD.code_id decl1.function_decl in
     let code_id2 = TFD.code_id decl2.function_decl in
     Code_id.equal code_id1 code_id2
-  | Non_inlinable, Non_inlinable -> true
-  | Inlinable _, Non_inlinable
-  | Non_inlinable, Inlinable _ -> false
+  | Non_inlinable {
+      param_arity = param_arity1;
+      result_arity = result_arity1;
+    }, Non_inlinable {
+      param_arity = param_arity2;
+      result_arity = result_arity2;
+    } -> 
+    Flambda_arity.equal param_arity1 param_arity2
+      && Flambda_arity.equal result_arity1 result_arity2
+  | Inlinable _, Non_inlinable _
+  | Non_inlinable _, Inlinable _ -> false
 
 and equal_of_kind_naked_number
    : type a b.
@@ -270,12 +278,13 @@ and equal_closures_entry env
          closure_elements = closure_elements2;
          set_of_closures = set_of_closures2;
        } : Flambda_types.closures_entry) =
-  equal_function_declaration env function_decl1 function_decl2
-    && Closure_elements.equal env closure_elements1 closure_elements2
-    && equal_ty_fabricated env
-      ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
-      ~print_ty:Type_printers.print_ty_fabricated
-      set_of_closures1 set_of_closures2
+  Or_unknown.equal (equal_function_declaration env)
+    function_decl1 function_decl2
+  && Closure_elements.equal env closure_elements1 closure_elements2
+  && equal_ty_fabricated env
+    ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+    ~print_ty:Type_printers.print_ty_fabricated
+    set_of_closures1 set_of_closures2
 
 and equal_set_of_closures_entry env
       ({ by_closure_id = by_closure_id1; }

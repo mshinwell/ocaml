@@ -74,7 +74,8 @@ val create_inlinable_function_declaration
   -> Flambda_types.function_declaration
 
 val create_non_inlinable_function_declaration
-   : unit
+   : param_arity:Flambda_arity.t
+  -> result_arity:Flambda_arity.t
   -> Flambda_types.function_declaration
 
 val closure

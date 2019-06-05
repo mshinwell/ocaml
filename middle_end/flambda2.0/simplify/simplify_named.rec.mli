@@ -31,6 +31,10 @@ val simplify_function
   -> Simplify_env_and_result.Result.t
   -> Closure_id.t
   -> Flambda.Function_declaration.t
-  -> type_of_my_closure:(Closure_id.t -> Flambda_type.t)
+  -> type_of_my_closure:(
+       Closure_id.t
+    -> param_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.t
+    -> Flambda_type.t)
   -> Flambda.Function_declaration.t * Flambda_type.function_declaration
        * Simplify_env_and_result.Result.t

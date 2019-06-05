@@ -136,7 +136,18 @@ module type S = sig
   type 'a ty_naked_number
   type ty_fabricated
 
-  type function_declaration
+  (* CR mshinwell: The function declaration types should probably be abstract *)
+
+  type inlinable_function_declaration = private {
+    function_decl : term_language_function_declaration;
+  }
+
+  type function_declaration = private
+    | Non_inlinable of {
+        param_arity : Flambda_arity.t;
+        result_arity : Flambda_arity.t;
+      }
+    | Inlinable of inlinable_function_declaration
 
   val erase_aliases_ty_value
      : allowed:Variable.Set.t
@@ -203,14 +214,11 @@ module type S = sig
     -> function_declaration
 
   (** Create a description of a function declaration whose code is unknown.
-      Such declarations cannot be inlined. *)
+      Such declarations cannot be inlined, but can be direct called. *)
   val create_non_inlinable_function_declaration
-     : unit
+     : param_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.t
     -> function_declaration
-
-  val term_language_function_declaration
-     : function_declaration
-    -> term_language_function_declaration option
 
   (** Create a closure type given full information about the closure. *)
   val closure
@@ -292,9 +300,10 @@ module type S = sig
 
   (** Prove that the given type, of kind [Value], is a closures type
       describing exactly one closure.  The function declaration corresponding
-      to such closure is returned together with its closure ID. *)
+      to such closure is returned together with its closure ID, if it is
+      known. *)
   val prove_single_closures_entry
      : Typing_env.t
     -> t
-    -> (Closure_id.t * function_declaration) proof
+    -> (Closure_id.t * function_declaration Or_unknown.t) proof
 end

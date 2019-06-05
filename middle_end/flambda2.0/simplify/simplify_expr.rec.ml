@@ -144,23 +144,26 @@ and simplify_let_cont env r (let_cont : Let_cont.t) : Expr.t * R.t =
   | Recursive handlers ->
     simplify_recursive_let_cont_handlers env r handlers
 
-and simplify_direct_full_application env r apply function_decl =
+and simplify_direct_full_application env r apply function_decl_opt =
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
-    Inlining_transforms.inline env ~callee
-      ~args function_decl
-      ~apply_return_continuation:(Apply.continuation apply)
-      ~apply_exn_continuation:(Apply.exn_continuation apply)
-      (Apply.dbg apply)
-      (Apply.inline apply)
+    match function_decl_opt with
+    | None -> None
+    | Some function_decl ->
+      Inlining_transforms.inline env ~callee
+        ~args function_decl
+        ~apply_return_continuation:(Apply.continuation apply)
+        ~apply_exn_continuation:(Apply.exn_continuation apply)
+        (Apply.dbg apply)
+        (Apply.inline apply)
   in
   match inlined with
   | Some (env, inlined) -> simplify_expr env r inlined
   | None -> Expr.create_apply apply, r
 
 and simplify_direct_partial_application env r apply ~callee's_closure_id
-      function_decl =
+      ~param_arity ~result_arity =
   (* For simplicity, we disallow [@inline] attributes on partial
      applications.  The user may always write an explicit wrapper instead
      with such an attribute. *)
@@ -180,167 +183,158 @@ and simplify_direct_partial_application env r apply ~callee's_closure_id
         on partial applications")
   | Default_inline -> ()
   end;
-  Function_params_and_body.pattern_match
-    (Function_declaration.params_and_body function_decl)
-    ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
-            ~my_closure:_ ->
-      (* Since we're not inlining, the continuation parameters and body
-         of the function declaration, etc., are irrelevant. *)
-      let arity = List.length params in
-      assert (arity > List.length args);
-      let applied_args, remaining_params =
-        Misc.Stdlib.List.map2_prefix (fun arg param ->
-            let kind = KP.kind param in
-            if not (K.equal kind K.value) then begin
-              Misc.fatal_errorf "Non-[value] kind in partial application: %a"
-                Apply.print apply
-            end;
-            arg)
-          args params
-      in
-      let return_arity = Function_declaration.result_arity function_decl in
-      begin match return_arity with
-      | [kind] when Flambda_kind.equal kind K.value -> ()
-      | _ ->
-        Misc.fatal_errorf "Partially-applied function with non-[value] \
-            return kind: %a"
-          Apply.print apply
-      end;
-      let wrapper_var = Variable.create "partial" in
-      let wrapper_taking_remaining_args =
-        let return_continuation = Continuation.create () in
-        let args = applied_args @ (List.map KP.simple remaining_params) in
-        let call_kind =
-          Call_kind.direct_function_call callee's_closure_id ~return_arity
-        in
-        let full_application =
-          Apply.create ~callee:(Apply.callee apply)
-            ~continuation:return_continuation
-            (Apply.exn_continuation apply)
-            ~args
-            ~call_kind
-            dbg
-            ~inline:Default_inline
-        in
-        let applied_args_with_closure_vars =
-          List.map (fun applied_arg ->
-              Var_within_closure.wrap (Variable.create "arg"), applied_arg)
-            applied_args
-        in
-        let my_closure = Variable.create "my_closure" in
-        let body =
-          List.fold_left (fun expr (closure_var, applied_arg) ->
-              match Simple.must_be_var applied_arg with
-              | None -> expr
-              | Some applied_arg ->
-                Expr.create_let applied_arg K.value
-                  (Named.create_prim
-                    (Unary (Project_var closure_var, Simple.var my_closure))
-                    dbg)
-                  expr)
-            (Expr.create_apply full_application)
-            (List.rev applied_args_with_closure_vars)
-        in
-        let params_and_body =
-          Function_params_and_body.create ~return_continuation
-            (Apply.exn_continuation apply)
-            remaining_params
-            ~body
-            ~my_closure
-        in
-        let closure_origin =
-          Function_declaration.closure_origin function_decl
-        in
-        let function_decl =
-          Function_declaration.create ~closure_origin
-            ~params_and_body
-            ~result_arity:return_arity
-            ~stub:true
-            ~dbg
-            ~inline:Default_inline
-            ~is_a_functor:false
-        in
-        let closure_id = Closure_id.wrap (Variable.create "closure") in
-        let function_decls =
-          Function_declarations.create
-            (Closure_id.Map.singleton closure_id function_decl)
-        in
-        let closure_elements =
-          Var_within_closure.Map.of_list applied_args_with_closure_vars
-        in
-        Set_of_closures.create ~function_decls ~closure_elements
-      in
-      let apply_cont =
-        Apply_cont.create (Apply.continuation apply)
-          ~args:[Simple.var wrapper_var]
-      in
-      let expr =
-        Expr.create_let wrapper_var K.value
-          (Named.create_set_of_closures wrapper_taking_remaining_args)
-          (Expr.create_apply_cont apply_cont)
-      in
-      simplify_expr env r expr)
+  let arity = List.length param_arity in
+  assert (arity > List.length args);
+  let applied_args, remaining_param_arity =
+    Misc.Stdlib.List.map2_prefix (fun arg kind ->
+        if not (K.equal kind K.value) then begin
+          Misc.fatal_errorf "Non-[value] kind in partial application: %a"
+            Apply.print apply
+        end;
+        arg)
+      args param_arity
+  in
+  begin match result_arity with
+  | [kind] when Flambda_kind.equal kind K.value -> ()
+  | _ ->
+    Misc.fatal_errorf "Partially-applied function with non-[value] \
+        return kind: %a"
+      Apply.print apply
+  end;
+  let wrapper_var = Variable.create "partial" in
+  let wrapper_taking_remaining_args =
+    let return_continuation = Continuation.create () in
+    let remaining_params =
+      List.map (fun kind ->
+          let param = Parameter.wrap (Variable.create "param") in
+          Kinded_parameter.create param kind)
+        remaining_param_arity
+    in
+    let args = applied_args @ (List.map KP.simple remaining_params) in
+    let call_kind =
+      Call_kind.direct_function_call callee's_closure_id
+        ~return_arity:result_arity
+    in
+    let full_application =
+      Apply.create ~callee:(Apply.callee apply)
+        ~continuation:return_continuation
+        (Apply.exn_continuation apply)
+        ~args
+        ~call_kind
+        dbg
+        ~inline:Default_inline
+    in
+    let applied_args_with_closure_vars =
+      List.map (fun applied_arg ->
+          Var_within_closure.wrap (Variable.create "arg"), applied_arg)
+        applied_args
+    in
+    let my_closure = Variable.create "my_closure" in
+    let body =
+      List.fold_left (fun expr (closure_var, applied_arg) ->
+          match Simple.must_be_var applied_arg with
+          | None -> expr
+          | Some applied_arg ->
+            Expr.create_let applied_arg K.value
+              (Named.create_prim
+                (Unary (Project_var closure_var, Simple.var my_closure))
+                dbg)
+              expr)
+        (Expr.create_apply full_application)
+        (List.rev applied_args_with_closure_vars)
+    in
+    let params_and_body =
+      Function_params_and_body.create ~return_continuation
+        (Apply.exn_continuation apply)
+        remaining_params
+        ~body
+        ~my_closure
+    in
+    let closure_origin = Closure_origin.create callee's_closure_id in
+    let function_decl =
+      Function_declaration.create ~closure_origin
+        ~params_and_body
+        ~result_arity
+        ~stub:true
+        ~dbg
+        ~inline:Default_inline
+        ~is_a_functor:false
+    in
+    let closure_id = Closure_id.wrap (Variable.create "closure") in
+    let function_decls =
+      Function_declarations.create
+        (Closure_id.Map.singleton closure_id function_decl)
+    in
+    let closure_elements =
+      Var_within_closure.Map.of_list applied_args_with_closure_vars
+    in
+    Set_of_closures.create ~function_decls ~closure_elements
+  in
+  let apply_cont =
+    Apply_cont.create (Apply.continuation apply)
+      ~args:[Simple.var wrapper_var]
+  in
+  let expr =
+    Expr.create_let wrapper_var K.value
+      (Named.create_set_of_closures wrapper_taking_remaining_args)
+      (Expr.create_apply_cont apply_cont)
+  in
+  simplify_expr env r expr
 
-and simplify_direct_over_application env r apply function_decl =
-  Function_params_and_body.pattern_match
-    (Function_declaration.params_and_body function_decl)
-    ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
-            ~my_closure:_ ->
-      let arity = List.length params in
-      let args = Apply.args apply in
-      assert (arity < List.length args);
-      let result_arity = Function_declaration.result_arity function_decl in
-      let return_params =
-        List.mapi (fun index kind ->
-            let name = Format.sprintf "result%d" index in
-            let var = Variable.create name in
-            Kinded_parameter.create (Parameter.wrap var) kind)
-          result_arity
-      in
-      let _, remaining_args = Misc.Stdlib.List.split_at arity args in
-      let func_var = Variable.create "full_apply" in
-      let perform_over_application =
-        Apply.create ~callee:(Simple.var func_var)
-          ~continuation:(Apply.continuation apply)
-          (Apply.exn_continuation apply)
-          ~args:remaining_args
-          ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())
-          (Apply.dbg apply)
-          ~inline:(Apply.inline apply)
-      in
-      let after_full_application = Continuation.create () in
-      let after_full_application_handler =
-        let params_and_handler =
-          Continuation_params_and_handler.create return_params
-            ~handler:(Expr.create_apply perform_over_application)
-        in
-        Continuation_handler.create ~params_and_handler
-          ~stub:false
-          ~is_exn_handler:false
-      in
-      let expr =
-        Let_cont.create_non_recursive after_full_application
-          after_full_application_handler
-          ~body:(Expr.create_apply
-            (Apply.with_continuation apply after_full_application))
-      in
-      simplify_expr env r expr)
+and simplify_direct_over_application env r apply ~param_arity ~result_arity =
+  let arity = List.length param_arity in
+  let args = Apply.args apply in
+  assert (arity < List.length args);
+  let return_params =
+    List.mapi (fun index kind ->
+        let name = Format.sprintf "result%d" index in
+        let var = Variable.create name in
+        Kinded_parameter.create (Parameter.wrap var) kind)
+      result_arity
+  in
+  let _, remaining_args = Misc.Stdlib.List.split_at arity args in
+  let func_var = Variable.create "full_apply" in
+  let perform_over_application =
+    Apply.create ~callee:(Simple.var func_var)
+      ~continuation:(Apply.continuation apply)
+      (Apply.exn_continuation apply)
+      ~args:remaining_args
+      ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())
+      (Apply.dbg apply)
+      ~inline:(Apply.inline apply)
+  in
+  let after_full_application = Continuation.create () in
+  let after_full_application_handler =
+    let params_and_handler =
+      Continuation_params_and_handler.create return_params
+        ~handler:(Expr.create_apply perform_over_application)
+    in
+    Continuation_handler.create ~params_and_handler
+      ~stub:false
+      ~is_exn_handler:false
+  in
+  let expr =
+    Let_cont.create_non_recursive after_full_application
+      after_full_application_handler
+      ~body:(Expr.create_apply
+        (Apply.with_continuation apply after_full_application))
+  in
+  simplify_expr env r expr
 
-and simplify_inlinable_direct_function_call env r apply
-      ~callee's_closure_id function_decl ~arg_types =
-  let params_arity = Function_declaration.params_arity function_decl in
+and simplify_direct_function_call env r apply
+      ~callee's_closure_id ~param_arity ~result_arity ~arg_types
+      function_decl_opt =
   let args_arity = T.arity_of_list arg_types in
-  if not (Flambda_arity.equal params_arity args_arity) then begin
+  if not (Flambda_arity.equal param_arity args_arity) then begin
     Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
         (expected %a, found %a):@ %a"
-      Flambda_arity.print params_arity
+      Flambda_arity.print param_arity
       Flambda_arity.print args_arity
       Apply.print apply
   end;
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
-  let result_arity = Function_declaration.result_arity function_decl in
   if not (Flambda_arity.equal result_arity_of_application result_arity)
   then begin
     Misc.fatal_errorf "Wrong return arity for direct OCaml function call \
@@ -360,14 +354,14 @@ and simplify_inlinable_direct_function_call env r apply
   in
   let args = Apply.args apply in
   let provided_num_args = List.length args in
-  let num_params = List.length params_arity in
+  let num_params = List.length param_arity in
   if provided_num_args = num_params then
-    simplify_direct_full_application env r apply function_decl
+    simplify_direct_full_application env r apply function_decl_opt
   else if provided_num_args > num_params then
-    simplify_direct_over_application env r apply function_decl
+    simplify_direct_over_application env r apply ~param_arity ~result_arity
   else if provided_num_args > 0 && provided_num_args < num_params then
     simplify_direct_partial_application env r apply
-      ~callee's_closure_id function_decl
+      ~callee's_closure_id ~param_arity ~result_arity
   else
     Misc.fatal_errorf "Function with %d params when simplifying \
         direct OCaml function call with %d arguments: %a"
@@ -375,6 +369,8 @@ and simplify_inlinable_direct_function_call env r apply
       provided_num_args
       Apply.print apply
 
+(* CR mshinwell: Rename to make clear that the typing info that's missing
+   is the function declaration, not the closure ID *)
 and simplify_function_call_where_callee's_type_unavailable env r apply
       (call : Call_kind.Function_call.t) ~arg_types =
   let cont = Apply.continuation apply in
@@ -456,8 +452,8 @@ and simplify_function_call env r apply ~callee_ty
     (* CR mshinwell: We should check that the [set_of_closures] in the
        [closures_entry] structure in the type does indeed contain the
        closure in question. *)
-    begin match T.term_language_function_declaration func_decl_type with
-    | Some function_decl ->
+    begin match func_decl_type with
+    | Known (Inlinable { function_decl; }) ->
       begin match call with
       | Direct { closure_id; _ } ->
         if not (Closure_id.equal closure_id callee's_closure_id) then begin
@@ -470,9 +466,17 @@ and simplify_function_call env r apply ~callee_ty
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> ()
       end;
-      simplify_inlinable_direct_function_call env r apply
-        ~callee's_closure_id function_decl ~arg_types
-    | None -> type_unavailable ()
+      simplify_direct_function_call env r apply
+        ~callee's_closure_id ~arg_types
+        ~param_arity:(Function_declaration.params_arity function_decl)
+        ~result_arity:(Function_declaration.result_arity function_decl)
+        (Some function_decl)
+    | Known (Non_inlinable { param_arity; result_arity; }) ->
+      simplify_direct_function_call env r apply
+        ~callee's_closure_id ~arg_types
+        ~param_arity ~result_arity
+        None
+    | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
   | Invalid -> Expr.create_invalid (), r
