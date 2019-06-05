@@ -48,7 +48,7 @@ module Function_call = struct
     | Indirect_unknown_arity ->
       fprintf ppf "Indirect_unknown_arity"
     | Indirect_known_arity { param_arity; return_arity; } ->
-      fprintf ppf "@[(Indirect_known_arity %a -> %a)@]"
+      fprintf ppf "@[(Indirect_known_arity %a \u{2192} %a)@]"
         Flambda_arity.print param_arity
         Flambda_arity.print return_arity
 
