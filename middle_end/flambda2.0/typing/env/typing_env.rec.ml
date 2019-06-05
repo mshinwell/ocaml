@@ -131,6 +131,8 @@ end
 type t = {
   resolver : (Export_id.t -> Flambda_types.t option);
   prev_levels : One_level.t Scope.Map.t;
+  (* CR mshinwell: hold list of symbol definitions, then change defined_names
+     to variables, then remove artificial symbol precedence *)
   current_level : One_level.t;
   next_binding_time : Binding_time.t;
 }
