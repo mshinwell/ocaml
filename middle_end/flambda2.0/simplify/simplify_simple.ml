@@ -20,13 +20,6 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 module TE = T.Typing_env
 
-let simplify_name env name =
-  let typing_env = E.typing_env env in
-  let name = TE.get_canonical_name typing_env name in
-  (* CR mshinwell: Avoid double lookup here *)
-  let ty = TE.find typing_env name in
-  name, ty
-
 let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, T.type_for_const c

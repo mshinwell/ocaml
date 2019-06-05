@@ -72,7 +72,7 @@ let tupled_function_call_stub
       Call_kind.direct_function_call unboxed_version ~return_arity:[K.value]
     in
     let apply =
-      Flambda.Apply.create ~callee:(Name.var unboxed_version_var)
+      Flambda.Apply.create ~callee:(Simple.var unboxed_version_var)
         ~continuation:return_continuation
         exn_continuation
         ~args:(Simple.vars params)
@@ -221,7 +221,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
   in
   let call args =
     let apply =
-      Flambda.Apply.create ~callee:(Name.symbol call_symbol)
+      Flambda.Apply.create ~callee:(Simple.symbol call_symbol)
         ~continuation:return_continuation
         exn_continuation
         ~args
@@ -451,11 +451,12 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       match kind with
       | Function -> Call_kind.indirect_function_call_unknown_arity ()
       | Method { kind; obj; } ->
-        Call_kind.method_call (LC.method_kind kind) ~obj:(Env.find_name env obj)
+        Call_kind.method_call (LC.method_kind kind)
+          ~obj:(Env.find_simple env obj)
     in
     let exn_continuation = close_exn_continuation env exn_continuation in
     let apply =
-      Flambda.Apply.create ~callee:(Env.find_name env func)
+      Flambda.Apply.create ~callee:(Env.find_simple env func)
         ~continuation
         exn_continuation
         ~args:(Env.find_simples env args)

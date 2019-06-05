@@ -26,7 +26,7 @@ include Expr_std.S with type t := t
 
 (** Create an application expression. *)
 val create
-   : callee:Name.t
+   : callee:Simple.t
   -> continuation:Continuation.t
   -> Exn_continuation.t
   -> args:Simple.t list
@@ -36,7 +36,7 @@ val create
   -> t
 
 (** The function or method being applied. *)
-val callee : t -> Name.t
+val callee : t -> Simple.t
 
 (** The arguments of the function or method being applied. *)
 val args : t -> Simple.t list
@@ -68,6 +68,6 @@ val with_call_kind : t -> Call_kind.t -> t
 val with_continuation_callee_and_args
    : t
   -> Continuation.t
-  -> callee:Name.t
+  -> callee:Simple.t
   -> args:Simple.t list
   -> t
