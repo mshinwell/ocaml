@@ -149,7 +149,7 @@ and simplify_direct_full_application env r apply call function_decl
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
-    Inlining_transforms.inline env ~callee:(Simple.name callee)
+    Inlining_transforms.inline env ~callee
       ~args function_decl
       ~apply_return_continuation:(Apply.continuation apply)
       ~apply_exn_continuation:(Apply.exn_continuation apply)
@@ -303,7 +303,7 @@ and simplify_direct_over_application env r apply function_decl =
       let _, remaining_args = Misc.Stdlib.List.split_at arity args in
       let func_var = Variable.create "full_apply" in
       let perform_over_application =
-        Apply.create ~callee:(Name.var func_var)
+        Apply.create ~callee:(Simple.var func_var)
           ~continuation:(Apply.continuation apply)
           (Apply.exn_continuation apply)
           ~args:remaining_args
@@ -477,7 +477,7 @@ and simplify_function_call env r apply ~callee_ty
 and simplify_apply_shared env r apply =
   let cont = E.resolve_continuation_aliases env (Apply.continuation apply) in
   E.check_exn_continuation_is_bound env (Apply.exn_continuation apply);
-  let callee, callee_ty = S.simplify_name env (Apply.callee apply) in
+  let callee, callee_ty = S.simplify_simple env (Apply.callee apply) in
   let args_with_types = S.simplify_simples env (Apply.args apply) in
   let args, arg_types = List.split args_with_types in
   let apply =
@@ -492,7 +492,7 @@ and simplify_method_call env r apply ~callee_ty ~kind:_ ~obj ~arg_types =
       K.print callee_kind
       T.print callee_ty
   end;
-  E.check_name_is_bound env obj;
+  E.check_simple_is_bound env obj;
   let expected_arity = List.map (fun _ -> K.value) arg_types in
   let args_arity = T.arity_of_list arg_types in
   if not (Flambda_arity.equal expected_arity args_arity) then begin

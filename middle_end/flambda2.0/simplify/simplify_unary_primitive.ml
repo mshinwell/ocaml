@@ -54,8 +54,10 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var : Reachable.t * TEE.t * R.t =
 begin match (arg : Simple.t) with
 | Name (Var arg) ->
-Format.eprintf "simplify_unary_primitive: type of arg:@ %a\n%!"
+Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
+  Variable.print arg
   T.print (E.find_variable env arg)
+  E.print env
 | _ -> ()
 end;
   let arg, arg_ty = Simplify_simple.simplify_simple env arg in

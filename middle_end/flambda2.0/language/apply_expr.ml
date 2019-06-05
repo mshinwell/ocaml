@@ -19,7 +19,7 @@
 module K = Flambda_kind
 
 type t = {
-  callee : Name.t;
+  callee : Simple.t;
   continuation : Continuation.t;
   exn_continuation : Exn_continuation.t;
   args : Simple.t list;
@@ -38,7 +38,7 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
       @[<hov 1>(call_kind %a)@]@ \
       @[<hov 1>(dbg %a)@]@ \
       @[<hov 1>(inline %a)@])@]"
-    Name.print callee
+    Simple.print callee
     Simple.List.print args
     Continuation.print continuation
     Exn_continuation.print exn_continuation
@@ -68,7 +68,7 @@ let invariant env
 (*
     let stack = E.current_continuation_stack env in
 *)
-    E.check_name_is_bound_and_of_kind env callee K.value;
+    E.check_simple_is_bound_and_of_kind env callee K.value;
     begin match call_kind with
     | Function (Direct { closure_id = _; return_arity = _; }) ->
       (* Note that [return_arity] is checked for all the cases below. *)
@@ -80,14 +80,14 @@ let invariant env
       E.check_simples_are_bound env args
     | Method { kind; obj; } ->
       ignore (kind : Call_kind.method_kind);
-      E.check_name_is_bound_and_of_kind env obj K.value;
+      E.check_simple_is_bound_and_of_kind env obj K.value;
       E.check_simples_are_bound_and_of_kind env args K.value
     | C_call { alloc = _; param_arity = _; return_arity = _; } ->
       (* CR mshinwell: Check exactly what Cmmgen can compile and then
          add further checks on [param_arity] and [return_arity] *)
       begin match callee with
-      | Symbol _ -> ()
-      | Var _ ->
+      | Name (Symbol _) -> ()
+      | _ ->
         (* CR-someday mshinwell: We could expose indirect C calls at the
            source language level. *)
         Misc.fatal_errorf "For [C_call] applications the callee must be \
@@ -180,7 +180,7 @@ let free_names
         inline = _;
       } =
   Name_occurrences.union_list [
-    Name_occurrences.singleton_name_in_terms callee;
+    Simple.free_names callee;
     Name_occurrences.singleton_continuation continuation;
     Exn_continuation.free_names exn_continuation;
     Simple.List.free_names args;
@@ -203,7 +203,7 @@ let apply_name_permutation
   let exn_continuation' =
     Exn_continuation.apply_name_permutation exn_continuation perm
   in
-  let callee' = Name_permutation.apply_name perm callee in
+  let callee' = Simple.apply_name_permutation callee perm in
   let args' = Simple.List.apply_name_permutation args perm in
   let call_kind' = Call_kind.apply_name_permutation call_kind perm in
   if continuation == continuation'

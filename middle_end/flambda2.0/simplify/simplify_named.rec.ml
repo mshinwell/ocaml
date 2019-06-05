@@ -22,22 +22,6 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 module TE = T.Typing_env
 
-let simplify_name_for_rhs_of_let env r name =
-  let typing_env = E.typing_env env in
-  let name = TE.get_canonical_name typing_env name in
-  (* CR mshinwell: Avoid double lookup here *)
-  let kind = T.kind (TE.find typing_env name) in
-  let simple = Simple.name name in
-  (* We don't resolve [name] right back to a type and return that, for
-     such a procedure would cause loss of alias information. *)
-  simple, T.alias_type_of kind simple, r
-
-let simplify_simple_for_rhs_of_let env r (simple : Simple.t) =
-  match simple with
-  | Const c -> simple, T.type_for_const c, r
-  | Discriminant t -> simple, T.this_discriminant t, r
-  | Name name -> simplify_name_for_rhs_of_let env r name
-
 let simplify_function env r closure_id function_decl ~type_of_my_closure =
   let params_and_body, r =
     Function_params_and_body.pattern_match
@@ -243,7 +227,7 @@ let simplify_named0 env r (named : Named.t) ~result_var =
   match named with
   | Simple simple ->
 (*let orig_simple = simple in*)
-    let simple, ty, r = simplify_simple_for_rhs_of_let env r simple in
+    let simple, ty = Simplify_simple.simplify_simple env simple in
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
   Simple.print orig_simple
   Simple.print simple

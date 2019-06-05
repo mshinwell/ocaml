@@ -278,6 +278,8 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
     Simple.compare simple than <= 0
   | (Const _ | Discriminant _), Name _ -> true
   | Name _, (Const _ | Discriminant _) -> false
+  | Name (Symbol _), Name (Var _) -> true
+  | Name (Var _), Name (Symbol _) -> false
   | Name name1, Name name2 ->
     let time1 = Cached.binding_time (cached t) name1 in
     let time2 = Cached.binding_time (cached t) name2 in
@@ -302,7 +304,9 @@ let add_definition t name kind =
     let aliases =
       Aliases.add_canonical_name (aliases t) name
     in
+(*
 Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.print aliases;
+*)
     let names_to_types =
       Name.Map.add name (Flambda_type0_core.unknown kind, t.next_binding_time)
         (names_to_types t)
@@ -333,16 +337,9 @@ let add_equation t name ty =
       Name.print name
       print t
   end;
-  let free_names = Type_free_names.free_names ty in
-  (* Recursion through set-of-closures and closures types is permitted, but
-     those are of different kinds, so this check should never fail. *)
-  if Name_occurrences.mem_name free_names name then begin
-    Misc.fatal_errorf "Cannot add equation:@ %a = %a@ due to a \
-        circularity.@ Environment:@ %a"
-      Name.print name
-      Type_printers.print ty
-      print t
-  end;
+Format.eprintf "Trying to add equation %a = %a\n%!"
+  Name.print name
+  Type_printers.print ty;
   let aliases, simple, ty =
     let aliases = aliases t in
     match Flambda_type0_core.get_alias ty with
@@ -354,6 +351,10 @@ let add_equation t name ty =
       with
       | None, aliases -> aliases, alias_of, ty
       | (Some { canonical_name; alias_of; }), aliases ->
+Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
+  Name.print name
+  Name.print canonical_name
+  Name.print alias_of;
         let kind = Flambda_type0_core.kind ty in
         let ty =
           Flambda_type0_core.alias_type_of kind (Simple.name canonical_name)
@@ -361,7 +362,7 @@ let add_equation t name ty =
         aliases, Simple.name alias_of, ty
   in
 Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
-  Name.print name
+  Simple.print simple
   Type_printers.print ty
   Aliases.print aliases;
   match simple with
