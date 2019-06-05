@@ -370,8 +370,12 @@ let create_inlinable_function_declaration function_decl : function_declaration =
     function_decl;
   }
 
-let create_non_inlinable_function_declaration () : function_declaration =
-  Non_inlinable
+let create_non_inlinable_function_declaration ~param_arity ~result_arity
+      : function_declaration =
+  Non_inlinable {
+    param_arity;
+    result_arity;
+  }
 
 let closure closure_id function_decl closure_elements ~set_of_closures : t =
   let closure_elements' =
@@ -382,7 +386,7 @@ let closure closure_id function_decl closure_elements ~set_of_closures : t =
     Closure_elements.create closure_elements
   in
   let closures_entry : closures_entry =
-    { function_decl;
+    { function_decl = Known function_decl;
       closure_elements = closure_elements';
       set_of_closures;
     }
@@ -406,7 +410,7 @@ let closure_containing_at_least var_within_closure ~closure_element_var =
   in
   let closure_elements = Closure_elements.create closure_elements in
   let closures_entry : closures_entry =
-    { function_decl = Non_inlinable;
+    { function_decl = Unknown;
       closure_elements;
       set_of_closures = any_fabricated_as_ty_fabricated ();
     }

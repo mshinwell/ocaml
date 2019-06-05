@@ -104,16 +104,19 @@ let simplify_set_of_closures env ~result_env r set_of_closures
     E.add_equation_on_symbol env set_of_closures_symbol set_of_closures_type
   in
   let closure_symbols_and_types =
-    Closure_id.Map.mapi (fun closure_id closure_symbol ->
+    Closure_id.Map.mapi (fun closure_id func_decl ->
+        let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
+        let param_arity = Function_declaration.params_arity func_decl in
+        let result_arity = Function_declaration.result_arity func_decl in
         let function_decl_type =
-          T.create_non_inlinable_function_declaration ()
+          T.create_non_inlinable_function_declaration ~param_arity ~result_arity
         in
         let closure_type =
           T.closure closure_id function_decl_type closure_element_types
             ~set_of_closures:set_of_closures_ty_fabricated
         in
         closure_symbol, closure_type)
-      closure_symbols
+      funs
   in
   let env =
     Closure_id.Map.fold (fun _closure_id (closure_symbol, closure_type) env ->
@@ -121,7 +124,7 @@ let simplify_set_of_closures env ~result_env r set_of_closures
       closure_symbols_and_types
       env
   in
-  let type_of_my_closure closure_id =
+  let type_of_my_closure closure_id ~param_arity:_ ~result_arity:_ =
     match Closure_id.Map.find closure_id closure_symbols with
     | exception Not_found ->
       Misc.fatal_errorf "No closure symbol for %a"
