@@ -51,3 +51,5 @@ val join : Typing_env.t -> t -> t -> t
 val erase_aliases : t -> allowed:Variable.Set.t -> t
 
 val remove_definitions_and_equations_thereon : t -> t
+
+val mem : t -> Name.t -> bool

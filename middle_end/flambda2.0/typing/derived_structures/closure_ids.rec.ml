@@ -39,7 +39,3 @@ let create closure_ids_map open_or_closed : t =
         Unit_and_closure_id_set.Map.empty
     in
     create_exactly_multiple closure_ids_map
-
-let meet env t1 t2 : _ Or_bottom.t =
-  Or_bottom.map (meet env t1 t2)
-    ~f:(fun (t, _set_of_closures_entry) -> t, Typing_env_extension.empty)
