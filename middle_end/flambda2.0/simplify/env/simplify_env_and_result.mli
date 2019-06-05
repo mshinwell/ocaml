@@ -18,7 +18,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module rec Env : (Simplify_env_and_result_intf.Env
+module rec Downwards_env : (Simplify_env_and_result_intf.Downwards_env
   with type result := Result.t)
+and Upwards_env : (Simplify_env_and_result_intf.Upwards_env)
 and Result : (Simplify_env_and_result_intf.Result
   with type env := Env.t)
