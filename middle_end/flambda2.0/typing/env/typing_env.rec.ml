@@ -82,11 +82,6 @@ module Cached = struct
       aliases;
     }
 
-  let with_names_to_types t ~names_to_types =
-    { names_to_types;
-      aliases = t.aliases;
-    }
-
   let names_to_types t = t.names_to_types
   let aliases t = t.aliases
 
@@ -304,12 +299,15 @@ let add_definition t name kind =
     Typing_env_level.add_definition (One_level.level t.current_level) name kind
   in
   let just_after_level =
+    let aliases =
+      Aliases.add_canonical_name (aliases t) name
+    in
+Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.print aliases;
     let names_to_types =
       Name.Map.add name (Flambda_type0_core.unknown kind, t.next_binding_time)
         (names_to_types t)
     in
-    Cached.with_names_to_types (One_level.just_after_level t.current_level)
-      ~names_to_types
+    Cached.create ~names_to_types aliases
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -335,11 +333,20 @@ let add_equation t name ty =
       Name.print name
       print t
   end;
+  let free_names = Type_free_names.free_names ty in
+  (* Recursion through set-of-closures and closures types is permitted, but
+     those are of different kinds, so this check should never fail. *)
+  if Name_occurrences.mem_name free_names name then begin
+    Misc.fatal_errorf "Cannot add equation:@ %a = %a@ due to a \
+        circularity.@ Environment:@ %a"
+      Name.print name
+      Type_printers.print ty
+      print t
+  end;
   let aliases, simple, ty =
     let aliases = aliases t in
     match Flambda_type0_core.get_alias ty with
-    | None ->
-      Aliases.add_canonical_name aliases name, Simple.name name, ty
+    | None -> aliases, Simple.name name, ty
     | Some alias_of ->
       match
         Aliases.add aliases (Simple.name name) alias_of
@@ -353,6 +360,10 @@ let add_equation t name ty =
         in
         aliases, Simple.name alias_of, ty
   in
+Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
+  Name.print name
+  Type_printers.print ty
+  Aliases.print aliases;
   match simple with
   | Const _ | Discriminant _ -> t
   | Name name ->

@@ -434,11 +434,12 @@ let set_of_closures ~closures : t =
     in
     Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
-let set_of_closures_containing_at_least closure_id =
+let set_of_closures_containing_at_least closure_id ~closure_var =
   let all_closures = Closure_id.Set.singleton closure_id in
   let by_closure_id =
     Types_by_closure_id.create
-      (Closure_id.Map.singleton closure_id (any_value ()))
+      (Closure_id.Map.singleton closure_id
+        (alias_type_of K.value (Simple.var closure_var)))
   in
   let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
   let closures =
