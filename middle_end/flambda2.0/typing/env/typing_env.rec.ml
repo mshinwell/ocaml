@@ -278,6 +278,8 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
     Simple.compare simple than <= 0
   | (Const _ | Discriminant _), Name _ -> true
   | Name _, (Const _ | Discriminant _) -> false
+  (* We would like the types of variables to be [Equals] types to symbols,
+     rather than the other way around; so force symbols to come first. *)
   | Name (Symbol _), Name (Var _) -> true
   | Name (Var _), Name (Symbol _) -> false
   | Name name1, Name name2 ->

@@ -169,3 +169,6 @@ let remove_definitions_and_equations_thereon t =
   { defined_names = Name.Map.empty;
     equations;
   }
+
+let mem t name =
+  Name.Map.mem name t.equations

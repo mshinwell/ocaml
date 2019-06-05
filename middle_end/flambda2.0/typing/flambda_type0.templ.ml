@@ -45,9 +45,8 @@ module Make
   let join env t1 t2 = Api_meet_and_join.join env t1 t2
 
   let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
-    let env =
-      Typing_env.add_definition env (Name.var result_var) result_kind
-    in
+    let result = Name.var result_var in
+    let env = Typing_env.add_definition env result result_kind in
     let env = Meet_env.create env in
     let meet_ty, env_extension = meet env t shape in
     if is_obviously_bottom meet_ty then Bottom
