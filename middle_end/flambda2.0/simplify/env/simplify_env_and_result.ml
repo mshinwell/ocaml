@@ -304,6 +304,12 @@ end = struct
         print t
     end
 
+  let check_simple_is_bound t (simple : Simple.t) =
+    match simple with
+    | Name name -> check_name_is_bound t name
+    (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
+    | Const _ | Discriminant _ -> ()
+
   let check_continuation_is_bound t cont =
     if not (Continuation.Map.mem cont t.continuations) then begin
       Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
