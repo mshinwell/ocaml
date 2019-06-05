@@ -27,14 +27,18 @@ module TEE = Flambda_type.Typing_env_extension
 let simplify_projection env r ~original_term ~deconstructing ~shape ~result_var
       ~result_kind : Reachable.t * TEE.t * R.t =
   let env = E.typing_env env in
+(*
 Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
   Named.print original_term
   T.print shape
   T.print deconstructing;
+*)
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty, r
   | Ok env_extension ->
+(*
 Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
+*)
     Reachable.reachable original_term, env_extension, r
 
 let simplify_project_closure env r ~original_term ~set_of_closures_ty closure_id
@@ -52,6 +56,7 @@ let simplify_project_var env r ~original_term ~closure_ty closure_element
 
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var : Reachable.t * TEE.t * R.t =
+(*
 begin match (arg : Simple.t) with
 | Name (Var arg) ->
 Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
@@ -60,6 +65,7 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
   E.print env
 | _ -> ()
 end;
+*)
   let arg, arg_ty = Simplify_simple.simplify_simple env arg in
   let original_term = Named.create_prim (Unary (prim, arg)) dbg in
   match prim with
