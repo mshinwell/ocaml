@@ -22,13 +22,13 @@ module K = Flambda_kind
 
 module Value_kind = struct
   type t =
-    | Pointer_or_immediate
+    | Anything
     | Definitely_pointer
     | Definitely_immediate
 
   let print ppf t =
     match t with
-    | Pointer_or_immediate -> Format.pp_print_string ppf "Pointer_or_immediate"
+    | Anything -> Format.pp_print_string ppf "Anything"
     | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
     | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
 
