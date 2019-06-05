@@ -392,7 +392,7 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
       in
       Define_symbol (definition, body))
     body
-    (List.rev lifted_constants)
+    lifted_constants
 
 let simplify_program env (program : Program.t) : Program.t =
   let backend = E.backend env in
