@@ -21,7 +21,18 @@ module TEE = Typing_env_extension
 module Meet = Meet_or_join.Make (Lattice_ops.For_meet)
 module Join = Meet_or_join.Make (Lattice_ops.For_join)
 
-let meet env t1 t2 = Meet.meet_or_join env t1 t2
+let meet env t1 t2 =
+let ty, ext =
+  Meet.meet_or_join env t1 t2
+in
+(*
+Format.eprintf "meet:@ %a@ and@ %a@ =@ %a@ with extension:@ %a\n%!"
+  Type_printers.print t1
+  Type_printers.print t2
+  Type_printers.print ty
+  TEE.print ext;
+*)
+ty, ext
 
 let join ?bound_name env t1 t2 =
   let env = Meet_env.create env in

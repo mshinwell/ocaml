@@ -129,7 +129,17 @@ struct
           match maps_to with
           | Bottom -> None
           | Ok (maps_to, env_extension') ->
+(*
+Format.eprintf "Existing env extension, case 1:@ %a\n%!"
+  TEE.print !env_extension;
+Format.eprintf "New env extension, case 1:@ %a\n%!"
+  TEE.print env_extension';
+*)
             env_extension := TEE.meet env !env_extension env_extension';
+(*
+Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
+  TEE.print !env_extension;
+*)
             Some maps_to
         end
       in
@@ -146,7 +156,17 @@ struct
           begin match maps_to with
           | Bottom -> None
           | Ok (maps_to, env_extension') ->
+(*
+Format.eprintf "Existing env extension, case 1:@ %a\n%!"
+  TEE.print !env_extension;
+Format.eprintf "New env extension, case 1:@ %a\n%!"
+  TEE.print env_extension';
+*)
              env_extension := TEE.meet env !env_extension env_extension';
+(*
+Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
+  TEE.print !env_extension;
+*)
             Some maps_to
           end
         | None, None -> None
@@ -163,9 +183,12 @@ struct
           at_least1
           at_least2
       in
-      if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then
+      if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then begin
+(*
+Format.eprintf "RL meet is returning bottom\n%!";
+*)
         Bottom
-      else
+      end else
         Ok ({ known; at_least; }, !env_extension)
   end
 
