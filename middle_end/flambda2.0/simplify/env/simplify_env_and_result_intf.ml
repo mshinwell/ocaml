@@ -18,9 +18,7 @@
 
 open! Flambda.Import
 
-module type Env = sig
-  (** Environments, following the lexical scope of the program, used during
-      simplification. *)
+module type Downwards_env = sig
   type t
 
   type result
@@ -70,6 +68,48 @@ module type Env = sig
 
   val add_parameters_with_unknown_types : t -> Kinded_parameter.t list -> t
 
+  val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
+
+  val with_typing_environment : t -> Flambda_type.Typing_env.t -> t
+
+  val check_variable_is_bound : t -> Variable.t -> unit
+
+  val check_symbol_is_bound : t -> Symbol.t -> unit
+
+  val check_name_is_bound : t -> Name.t -> unit
+
+  val check_simple_is_bound : t -> Simple.t -> unit
+
+  (** Appends the locations of inlined call-sites to the given debuginfo
+      and sets the resulting debuginfo as the current one in the
+      environment. *)
+  val add_inlined_debuginfo : t -> Debuginfo.t -> t
+
+  val round : t -> int
+
+  (** Prevent function inlining from occurring in the given environment. *)
+  val disable_function_inlining : t -> t
+
+  (** Add the given lifted constants to the environment.  Symbols that are
+      already defined in the environment are ignored. *)
+  val add_lifted_constants : t -> Lifted_constant.t list -> t
+
+  (** Like [add_lifted_constants], but takes the constants from the given
+      result structure. *)
+  val add_lifted_constants_from_r : t -> result -> t
+
+  val can_inline : t -> bool
+end
+
+module type Upwards_env = sig
+  type t
+
+  val empty : t
+
+  val invariant : t -> unit
+
+  val print : Format.formatter -> t -> unit
+
   val add_continuation : t -> Continuation.t -> Flambda_arity.t -> t
 
   val add_unreachable_continuation
@@ -100,46 +140,16 @@ module type Env = sig
 
   val continuation_arity : t -> Continuation.t -> Flambda_arity.t
 
-  val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
-
-  val with_typing_environment : t -> Flambda_type.Typing_env.t -> t
-
-  val check_variable_is_bound : t -> Variable.t -> unit
-
-  val check_symbol_is_bound : t -> Symbol.t -> unit
-
-  val check_name_is_bound : t -> Name.t -> unit
-
-  val check_simple_is_bound : t -> Simple.t -> unit
-
   val check_continuation_is_bound : t -> Continuation.t -> unit
 
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
 
-  (** Appends the locations of inlined call-sites to the given debuginfo
-      and sets the resulting debuginfo as the current one in the
-      environment. *)
-  val add_inlined_debuginfo : t -> Debuginfo.t -> t
+  val continuation_scope_level : t -> Continuation.t -> Scope.t
 
-  val round : t -> int
-
-  (** Prevent function inlining from occurring in the given environment. *)
-  val disable_function_inlining : t -> t
-
-  (** Add the given lifted constants to the environment.  Symbols that are
-      already defined in the environment are ignored. *)
-  val add_lifted_constants : t -> Lifted_constant.t list -> t
-
-  (** Like [add_lifted_constants], but takes the constants from the given
-      result structure. *)
-  val add_lifted_constants_from_r : t -> result -> t
-
-  val can_inline : t -> bool
+  val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
 end
 
 module type Result = sig
-  (** The result structure used during simplification. *)
-
   type t
 
   type env
