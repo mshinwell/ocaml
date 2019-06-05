@@ -67,11 +67,13 @@ let canonical_names t = Name.Map.keys t.canonical_names
 type canonical =
   | Is_canonical of Name.t
   | Alias_of_canonical of { name : Name.t; canonical_name : Name.t; }
-  | Not_seen_before of Name.t
 
 let canonical t name : canonical =
   match Name.Map.find name t.canonical_names with
-  | exception Not_found -> Not_seen_before name
+  | exception Not_found ->
+    Misc.fatal_errorf "Name %a hasn't been seen by alias tracker (ensure \
+        that [add_canonical_name] was called)"
+      Name.print name
   | canonical_name ->
     if Name.equal name canonical_name then Is_canonical name
     else Alias_of_canonical { name; canonical_name; }
@@ -82,16 +84,6 @@ let get_aliases_of_canonical_name t ~canonical_name =
     Misc.fatal_errorf "No alias map entry for canonical name %a"
       Name.print canonical_name
   | aliases -> aliases
-
-let add_alias_of_canonical_name t name ~canonical_name =
-  let existing_aliases = get_aliases_of_canonical_name t ~canonical_name in
-  let aliases_of_canonical_names =
-    Name.Map.add canonical_name (Name.Set.add name existing_aliases)
-      t.aliases_of_canonical_names
-  in
-  { t with
-    aliases_of_canonical_names;
-  }
 
 let add_alias_between_canonical_names t ~canonical_name ~to_be_demoted =
   assert (Name.Map.mem canonical_name t.aliases_of_canonical_names);
@@ -148,64 +140,37 @@ let choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
       to_be_demoted = canonical_name1;
     }
 
+(* CR mshinwell: add submodule *)
 type add_result = {
   canonical_name : Name.t;
   alias_of : Name.t;
 }
 
+let invariant_add_result t ~original_t { canonical_name; alias_of; }
+      ~defined_earlier =
+  if not (Name.equal canonical_name alias_of) then begin
+    let canonical_name' = Simple.name canonical_name in
+    let alias_of' = Simple.name alias_of in
+    if not (defined_earlier canonical_name' ~than:alias_of') then begin
+      Misc.fatal_errorf "Canonical name %a should be defined earlier than \
+          %a after alias addition.@ Original alias tracker:@ %a@ \
+          Resulting alias tracker:@ %a"
+        Name.print canonical_name
+        Name.print alias_of
+        print original_t
+        print t
+    end
+  end
+
 let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) ~defined_earlier =
   match simple1, simple2 with
   | Name name1, Name name2 ->
     begin match canonical t name1, canonical t name2 with
-    | Not_seen_before name1, Not_seen_before name2 ->
-      (* CR mshinwell: Does this case actually happen? *)
-      assert (not (Name.Map.mem name1 t.aliases_of_canonical_names));
-      assert (not (Name.Map.mem name2 t.aliases_of_canonical_names));
-      let canonical_name, name =
-        if Simple.compare (Simple.name name1) (Simple.name name2) < 0 then
-          name1, name2
-        else
-          name2, name1
+    | Is_canonical canonical_name1, Is_canonical canonical_name2 ->
+      let { canonical_name; to_be_demoted; } =
+        choose_canonical_name_to_be_demoted ~canonical_name1 ~canonical_name2
+          ~defined_earlier
       in
-      let canonical_names =
-        t.canonical_names
-        |> Name.Map.add name canonical_name
-        |> Name.Map.add canonical_name canonical_name
-      in
-      let aliases_of_canonical_names =
-        Name.Map.add canonical_name (Name.Set.singleton name)
-          t.aliases_of_canonical_names
-      in
-      let add_result =
-        { canonical_name;
-          alias_of = name;
-        }
-      in
-      let t =
-        { canonical_names;
-          aliases_of_canonical_names;
-        }
-      in
-      Some add_result, t
-    | Not_seen_before name, Is_canonical canonical_name
-    | Is_canonical canonical_name, Not_seen_before name ->
-      assert (not (Name.Map.mem name t.aliases_of_canonical_names));
-      assert (Name.Map.mem canonical_name t.aliases_of_canonical_names);
-      let canonical_names =
-        t.canonical_names
-        |> Name.Map.add (* replace *) name canonical_name
-      in
-      let add_result =
-        { canonical_name;
-          alias_of = name;
-        }
-      in
-      let t =
-        add_alias_of_canonical_name { t with canonical_names; }
-          name ~canonical_name
-      in
-      Some add_result, t
-    | Is_canonical canonical_name, Is_canonical to_be_demoted ->
       let add_result =
         { canonical_name;
           alias_of = to_be_demoted;
@@ -248,27 +213,18 @@ let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) ~defined_earlier =
         add_alias_between_canonical_names t ~canonical_name ~to_be_demoted
       in
       Some add_result, t
-    | Alias_of_canonical { name; canonical_name; }, Not_seen_before not_seen
-    | Not_seen_before not_seen, Alias_of_canonical { name; canonical_name; } ->
-      let add_result =
-        { canonical_name;
-          alias_of = not_seen;
-        }
-      in
-      let t =
-        add_alias_of_canonical_name
-          (add_alias_of_canonical_name t name ~canonical_name)
-          not_seen ~canonical_name
-      in
-      Some add_result, t
     end
   (* CR mshinwell: Think about recording of aliases when one side is a Simple;
      may not be needed for first version. *)
   | _, _ -> None, t
 
 let add t simple1 simple2 ~defined_earlier =
+  let original_t = t in
   let add_result, t = add_alias t simple1 simple2 ~defined_earlier in
   invariant t;
+  Option.iter (fun add_result ->
+      invariant_add_result t ~original_t add_result ~defined_earlier)
+    add_result;
   add_result, t
 
 let add_canonical_name t name =
@@ -302,4 +258,3 @@ let aliases_of_simple t (simple : Simple.t) =
       let aliases = get_aliases_of_canonical_name t ~canonical_name in
       assert (Name.Set.mem name aliases);
       Name.Set.add canonical_name aliases
-    | Not_seen_before _ -> Name.Set.empty

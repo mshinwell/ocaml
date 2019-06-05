@@ -337,9 +337,11 @@ let add_equation t name ty =
       Name.print name
       print t
   end;
+(*
 Format.eprintf "Trying to add equation %a = %a\n%!"
   Name.print name
   Type_printers.print ty;
+*)
   let aliases, simple, ty =
     let aliases = aliases t in
     match Flambda_type0_core.get_alias ty with
@@ -351,20 +353,24 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
       with
       | None, aliases -> aliases, alias_of, ty
       | (Some { canonical_name; alias_of; }), aliases ->
+(*
 Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
   Name.print name
   Name.print canonical_name
   Name.print alias_of;
+*)
         let kind = Flambda_type0_core.kind ty in
         let ty =
           Flambda_type0_core.alias_type_of kind (Simple.name canonical_name)
         in
         aliases, Simple.name alias_of, ty
   in
+(*
 Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
   Simple.print simple
   Type_printers.print ty
   Aliases.print aliases;
+*)
   match simple with
   | Const _ | Discriminant _ -> t
   | Name name ->
