@@ -32,16 +32,16 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
       dbg; inline; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(callee %a)@]@ \
+      @[<hov 1>(args (%a))@]@ \
       @[<hov 1>(continuation %a)@]@ \
       @[<hov 1>(exn_continuation %a)@]@ \
-      @[<hov 1>(args (%a))@]@ \
       @[<hov 1>(call_kind %a)@]@ \
       @[<hov 1>(dbg %a)@]@ \
       @[<hov 1>(inline %a)@])@]"
     Name.print callee
+    Simple.List.print args
     Continuation.print continuation
     Exn_continuation.print exn_continuation
-    Simple.List.print args
     Call_kind.print call_kind
     Debuginfo.print_compact dbg
     Inline_attribute.print inline

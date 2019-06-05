@@ -22,13 +22,13 @@ module K = Flambda_kind
 
 module Value_kind = struct
   type t =
-    | Unknown
+    | Pointer_or_immediate
     | Definitely_pointer
     | Definitely_immediate
 
   let print ppf t =
     match t with
-    | Unknown -> Format.pp_print_string ppf "Unknown"
+    | Pointer_or_immediate -> Format.pp_print_string ppf "Pointer_or_immediate"
     | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
     | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
 
@@ -1132,31 +1132,31 @@ include Identifiable.Make (struct
   let print ppf t =
     match t with
     | Unary (prim, v0) ->
-      Format.fprintf ppf "@[<hov 1>(%sprim%s@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
         (Misc.Color.bold_green ())
-        (Misc.Color.reset ())
         print_unary_primitive prim
+        (Misc.Color.reset ())
         Simple.print v0
     | Binary (prim, v0, v1) ->
-      Format.fprintf ppf "@[<hov 1>(%sprim%s@ %a@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a)@]"
         (Misc.Color.bold_green ())
-        (Misc.Color.reset ())
         print_binary_primitive prim
+        (Misc.Color.reset ())
         Simple.print v0
         Simple.print v1
     | Ternary (prim, v0, v1, v2) ->
-      Format.fprintf ppf "@[<hov 1>(%sprim%s@ %a@ %a@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a@ %a)@]"
         (Misc.Color.bold_green ())
-        (Misc.Color.reset ())
         print_ternary_primitive prim
+        (Misc.Color.reset ())
         Simple.print v0
         Simple.print v1
         Simple.print v2
     | Variadic (prim, vs) ->
-      Format.fprintf ppf "@[<hov 1>(%sprim%s@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
         (Misc.Color.bold_green ())
-        (Misc.Color.reset ())
         print_variadic_primitive prim
+        (Misc.Color.reset ())
         (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) vs
 
   let output chan t =
