@@ -100,7 +100,7 @@ let tupled_function_call_stub
           let pos = Immediate.int (Targetint.OCaml.of_int pos) in
           Named.create_prim
             (Binary (
-              Block_load (Block (Value Pointer_or_immediate), Immutable),
+              Block_load (Block (Value Anything), Immutable),
               Simple.var tuple_param_var,
               Simple.const (Tagged_immediate pos)))
             dbg
@@ -796,7 +796,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         Expr.create_let var K.value
           (Named.create_prim
             (Binary (
-              Block_load (Block (Value Pointer_or_immediate), Immutable),
+              Block_load (Block (Value Anything), Immutable),
               Simple.var module_block_var,
               Simple.const (Tagged_immediate pos)))
             Debuginfo.none)
