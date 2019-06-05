@@ -44,7 +44,7 @@ type method_kind = Self | Public | Cached
     invocation, an OCaml method invocation, or an external call. *)
 type t = private
   | Function of Function_call.t
-  | Method of { kind : method_kind; obj : Name.t; }
+  | Method of { kind : method_kind; obj : Simple.t; }
   | C_call of {
       alloc : bool;
       param_arity : Flambda_arity.t;
@@ -62,7 +62,7 @@ val indirect_function_call_known_arity
   -> return_arity:Flambda_arity.t
   -> t
 
-val method_call : method_kind -> obj:Name.t -> t
+val method_call : method_kind -> obj:Simple.t -> t
 
 val c_call
    : alloc:bool

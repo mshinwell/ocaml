@@ -110,6 +110,8 @@ module type Env = sig
 
   val check_name_is_bound : t -> Name.t -> unit
 
+  val check_simple_is_bound : t -> Simple.t -> unit
+
   val check_continuation_is_bound : t -> Continuation.t -> unit
 
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit

@@ -77,7 +77,7 @@ let print_method_kind ppf kind =
 
 type t =
   | Function of Function_call.t
-  | Method of { kind : method_kind; obj : Name.t; }
+  | Method of { kind : method_kind; obj : Simple.t; }
   | C_call of {
       alloc : bool;
       param_arity : Flambda_arity.t;
@@ -89,7 +89,7 @@ let print ppf t =
   | Function call -> Function_call.print ppf call
   | Method { kind; obj; } ->
     fprintf ppf "@[(Method %a : %a)@]"
-      Name.print obj
+      Simple.print obj
       print_method_kind kind
   | C_call { alloc; param_arity; return_arity; } ->
     fprintf ppf "@[(C (alloc %b) : %a -> %a)@]"
@@ -138,13 +138,16 @@ let return_arity t : Flambda_arity.t =
 let free_names t =
   match t with
   | Function _ | C_call _ -> Name_occurrences.empty
-  | Method { kind = _; obj; } -> Name_occurrences.singleton_name_in_terms obj
+  | Method { kind = _; obj; } ->
+    match obj with
+    | Name obj -> Name_occurrences.singleton_name_in_terms obj
+    | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
   match t with
   | Function _ | C_call _ -> t
   | Method { kind; obj; } ->
-    let obj' = Name_permutation.apply_name perm obj in
+    let obj' = Simple.apply_name_permutation obj perm in
     if obj == obj' then t
     else
       Method {
