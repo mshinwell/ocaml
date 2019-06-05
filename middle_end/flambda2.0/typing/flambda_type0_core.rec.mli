@@ -86,6 +86,7 @@ val closure
 
 val closure_containing_at_least
    : Var_within_closure.t
+  -> closure_element_var:Variable.t
   -> Flambda_types.t
 
 val set_of_closures
