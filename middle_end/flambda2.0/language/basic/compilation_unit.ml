@@ -66,8 +66,8 @@ let get_linkage_name cu = cu.linkage_name
 
 (* XXX hack for testing in the toplevel *)
 let current = (* ref None *)
-  ref (Some (create (Ident.create_persistent "*compunit*")
-    (Linkage_name.create "*compunit*")))
+  ref (Some (create (Ident.create_persistent "Foo")
+    (Linkage_name.create "Foo")))
 
 let set_current t = current := Some t
 let get_current () = !current

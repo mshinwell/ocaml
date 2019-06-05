@@ -578,6 +578,15 @@ let mem_var t var =
     || For_variables.mem t.variables_in_types var
     || For_variables.mem t.variables_debug_only var
 
+let mem_symbol t symbol =
+  For_symbols.mem t.symbols_in_terms symbol
+  || For_symbols.mem t.symbols_in_types symbol
+
+let mem_name t (name : Name.t) =
+  match name with
+  | Var var -> mem_var t var
+  | Symbol symbol -> mem_symbol t symbol
+
 let remove_var t var =
   let variables_in_terms = For_variables.remove t.variables_in_terms var in
   let variables_in_types = For_variables.remove t.variables_in_types var in

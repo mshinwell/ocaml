@@ -230,9 +230,12 @@ module type S = sig
      : closures:t Closure_id.Map.t
     -> t
 
-  (** The type of a set of closures containing at least one closure with
-      the given closure ID. *)
-  val set_of_closures_containing_at_least : Closure_id.t -> flambda_type
+  (** The type of a set of closures containing at least one closure,
+      whose type should be "Equals closure_var", with the given closure ID. *)
+  val set_of_closures_containing_at_least
+     : Closure_id.t
+    -> closure_var:Variable.t
+    -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
@@ -273,16 +276,6 @@ module type S = sig
       The resulting term will never cause an allocation.  The term will also
       not contain any free variables unless [allow_free_variables] has been set
       to [true].
-
-      This function may be used to turn the types of [Simple] terms into their
-      canonical representative terms (as it follows aliases in the environment).
-
-      The returned type will not be an alias type in the case where the type
-      completely describes the reified value.  In other cases, aliases will be
-      preserved, in case the types in question get refined later.
-
-      If [expected_kind] does not match the kind of the term / type being
-      returned then a fatal error will be produced.
   *)
   val reify
      : (allow_free_variables:bool
