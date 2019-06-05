@@ -98,13 +98,16 @@ and inlinable_function_declaration = {
 }
 
 and function_declaration =
-  | Non_inlinable
+  | Non_inlinable of {
+      param_arity : Flambda_arity.t;
+      result_arity : Flambda_arity.t;
+    }
   | Inlinable of inlinable_function_declaration
 
 and closures_entry = {
-  function_decl : function_declaration;
-  (** Information from the term language about the function declaration
-      associated with the closure (call it [C]) described by a
+  function_decl : function_declaration Or_unknown.t;
+  (** Information from the term language, if available, about the function
+      declaration associated with the closure (call it [C]) described by a
       [closures_entry]. *)
   closure_elements : Closure_elements.t;
   (** Product describing the variables within a closure. *)

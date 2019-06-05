@@ -19,7 +19,7 @@
 type t = Flambda_types.closures_entry
 
 let create_bottom () : t =
-  { function_decl = Non_inlinable;
+  { function_decl = Unknown;
     closure_elements = Closure_elements.bottom;
     set_of_closures = Flambda_type0_core.bottom_as_ty_fabricated ();
   }
@@ -32,8 +32,9 @@ let print_with_cache ~cache ppf
       @[<hov 1>(closure_elements@ %a)@]@ \
       @[<hov 1>(set_of_closures@ %a)@]\
       )@]"
-    (Type_printers.print_function_declaration_with_cache ~cache)
-      function_decl
+    (Or_unknown.print
+      (Type_printers.print_function_declaration_with_cache ~cache))
+    function_decl
     (Closure_elements.print_with_cache ~cache) closure_elements
     (Type_printers.print_ty_fabricated_with_cache ~cache) set_of_closures
 
