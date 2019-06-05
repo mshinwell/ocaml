@@ -144,8 +144,7 @@ and simplify_let_cont env r (let_cont : Let_cont.t) : Expr.t * R.t =
   | Recursive handlers ->
     simplify_recursive_let_cont_handlers env r handlers
 
-and simplify_direct_full_application env r apply call function_decl
-      ~arg_types =
+and simplify_direct_full_application env r apply function_decl =
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
@@ -157,10 +156,8 @@ and simplify_direct_full_application env r apply call function_decl
       (Apply.inline apply)
   in
   match inlined with
-  | None ->
-    simplify_function_call_where_callee's_type_unavailable env r apply call
-      ~arg_types
   | Some (env, inlined) -> simplify_expr env r inlined
+  | None -> Expr.create_apply apply, r
 
 and simplify_direct_partial_application env r apply ~callee's_closure_id
       function_decl =
@@ -329,7 +326,7 @@ and simplify_direct_over_application env r apply function_decl =
       in
       simplify_expr env r expr)
 
-and simplify_inlinable_direct_function_call env r apply call
+and simplify_inlinable_direct_function_call env r apply
       ~callee's_closure_id function_decl ~arg_types =
   let params_arity = Function_declaration.params_arity function_decl in
   let args_arity = T.arity_of_list arg_types in
@@ -340,8 +337,9 @@ and simplify_inlinable_direct_function_call env r apply call
       Flambda_arity.print args_arity
       Apply.print apply
   end;
-  let call_kind = Apply.call_kind apply in
-  let result_arity_of_application = Call_kind.return_arity call_kind in
+  let result_arity_of_application =
+    Call_kind.return_arity (Apply.call_kind apply)
+  in
   let result_arity = Function_declaration.result_arity function_decl in
   if not (Flambda_arity.equal result_arity_of_application result_arity)
   then begin
@@ -351,6 +349,11 @@ and simplify_inlinable_direct_function_call env r apply call
       Flambda_arity.print result_arity_of_application
       Apply.print apply
   end;
+  let call_kind =
+    Call_kind.direct_function_call callee's_closure_id
+      ~return_arity:result_arity
+  in
+  let apply = Apply.with_call_kind apply call_kind in
   let r =
     R.record_continuation_use r env (Apply.continuation apply)
       ~arg_types:(T.unknown_types_from_arity result_arity)
@@ -359,7 +362,7 @@ and simplify_inlinable_direct_function_call env r apply call
   let provided_num_args = List.length args in
   let num_params = List.length params_arity in
   if provided_num_args = num_params then
-    simplify_direct_full_application env r apply call function_decl ~arg_types
+    simplify_direct_full_application env r apply function_decl
   else if provided_num_args > num_params then
     simplify_direct_over_application env r apply function_decl
   else if provided_num_args > 0 && provided_num_args < num_params then
@@ -467,7 +470,7 @@ and simplify_function_call env r apply ~callee_ty
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> ()
       end;
-      simplify_inlinable_direct_function_call env r apply call
+      simplify_inlinable_direct_function_call env r apply
         ~callee's_closure_id function_decl ~arg_types
     | None -> type_unavailable ()
     end
