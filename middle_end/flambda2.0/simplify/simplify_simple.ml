@@ -38,7 +38,6 @@ let simplify_simple env (simple : Simple.t) =
 (*Format.eprintf "ty: %a\n%!" T.print ty;*)
     (* We reify an [Equals] type in case the type itself can't be reified but
        there is an interesting alias (e.g. a symbol). *)
-    (* CR mshinwell: Make sure reify picks Symbol out of the alias set *)
     let kind = T.kind ty in
     let reified =
       T.reify ~allow_free_variables:true typing_env
