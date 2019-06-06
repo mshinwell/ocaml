@@ -30,12 +30,12 @@ type simplify_result = Expr.t * UE.t * R.t
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
-let rec simplify_let env r (let_expr : Let.t) : simplify_result =
+let rec simplify_let denv r (let_expr : Let.t) k : simplify_result =
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let env, r, ty, (defining_expr : Reachable.t) =
-      Simplify_named.simplify_named env r (L.defining_expr let_expr)
+    let denv, r, ty, (defining_expr : Reachable.t) =
+      Simplify_named.simplify_named denv r (L.defining_expr let_expr)
         ~result_var:bound_var
     in
     let kind = L.kind let_expr in
@@ -47,36 +47,59 @@ let rec simplify_let env r (let_expr : Let.t) : simplify_result =
         L.print let_expr
     end;
     match defining_expr with
-    | Invalid _ -> Expr.create_invalid (), r
+    | Invalid _ -> Expr.create_invalid (), UE.empty, r
     | Reachable defining_expr ->
-      let body, r = simplify_expr env r body in
+      let body, uenv, r = simplify_expr denv r body in
       let expr = Expr.create_let bound_var kind defining_expr body in
-      expr, r)
+      expr, uenv, r)
 
-and simplify_one_continuation_handler env r cont cont_handler =
-  let params_and_handler =
-    Continuation_handler.params_and_handler cont_handler
-  in
-  Continuation_params_and_handler.pattern_match params_and_handler
+and simplify_one_continuation_handler denv uenv r cont cont_handler =
+  Continuation_params_and_handler.pattern_match
+    (Continuation_handler.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
       let typing_env, arg_types =
-        R.continuation_env_and_arg_types r env cont
+        UE.continuation_env_and_arg_types r env cont
       in
-      let env =
-        E.add_parameters (E.with_typing_environment env typing_env)
+      let denv =
+        DE.add_parameters (DE.with_typing_environment denv typing_env)
           params ~arg_types
       in
-      let handler, r = simplify_expr env r handler in
+      let handler, uenv, r =
+        simplify_expr denv r handler (fun (_denv, r) -> uenv, r)
+      in
+      let used_params, unused_params =
+        let free_names = Expr.free_names handler in
+        List.filter (fun param ->
+            Name_occurrences.mem_var free_names (KP.var param))
+          params
+      in
       let params_and_handler =
-        Continuation_params_and_handler.create params ~handler
+        Continuation_params_and_handler.create used_params ~handler
       in
       let cont_handler =
         Continuation_handler.with_params_and_handler cont_handler
           params_and_handler
       in
-      cont_handler, r)
+      match unused_params with
+      | [] -> cont_handler, None, uenv, r
+      | unused_params ->
+        let original_cont = Continuation.create () in
+        let wrapper_code =
+          Expr.create_apply_cont (
+            Apply_cont.create original_cont ~args:used_params)
+        in
+        let wrapper_params_and_handler =
+          Continuation_params_and_handler.create params
+            ~handler:wrapper_code
+        in
+        let wrapper_cont_handler =
+          Continuation_handler.create wrapper_params_and_handler
+            ~stub:true
+            ~is_exn_handler:false
+        in
+        wrapper_cont_handler, Some (original_cont, cont_handler), uenv, r)
 
-and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
+and simplify_non_recursive_let_cont_handler denv r let_cont non_rec_handler k
       : simplify_result =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
@@ -107,7 +130,7 @@ and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
          be collected up and put in the environment before simplifying the
          handler, since the type(s) of the continuation's parameter(s) may
          involve the associated symbols. *)
-      let env = E.add_lifted_constants env (R.get_lifted_constants r) in
+      let denv = DE.add_lifted_constants denv (R.get_lifted_constants r) in
       let cont_handler, r =
         simplify_one_continuation_handler env r cont cont_handler
       in
@@ -115,7 +138,8 @@ and simplify_non_recursive_let_cont_handler env r let_cont non_rec_handler
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
-and simplify_recursive_let_cont_handlers env r rec_handlers : simplify_result =
+and simplify_recursive_let_cont_handlers denv r rec_handlers k
+      : simplify_result =
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body cont_handlers ->
       let cont_handlers = Continuation_handlers.to_map cont_handlers in
@@ -128,24 +152,24 @@ and simplify_recursive_let_cont_handlers env r rec_handlers : simplify_result =
           cont_handlers
           (env, r)
       in
-      let body, r = simplify_expr env r body in
+      let body, uenv, r = simplify_expr env r body in
       let cont_handlers, r =
         Continuation.Map.fold (fun cont cont_handler (cont_handlers, r) ->
             let cont_handler, r =
-              simplify_one_continuation_handler env r cont cont_handler
+              simplify_one_continuation_handler denv uenv r cont cont_handler
             in
             Continuation.Map.add cont cont_handler cont_handlers, r)
           cont_handlers
           (Continuation.Map.empty, r)
       in
-      Let_cont.create_recursive cont_handlers ~body, r)
+      Let_cont.create_recursive cont_handlers ~body, uenv, r)
 
-and simplify_let_cont env r (let_cont : Let_cont.t) : simplify_result =
+and simplify_let_cont denv r (let_cont : Let_cont.t) k : simplify_result =
   match let_cont with
   | Non_recursive { handler; _ } ->
-    simplify_non_recursive_let_cont_handler env r let_cont handler
+    simplify_non_recursive_let_cont_handler denv r let_cont handler k
   | Recursive handlers ->
-    simplify_recursive_let_cont_handlers env r handlers
+    simplify_recursive_let_cont_handlers denv r handlers k
 
 and simplify_direct_full_application env r apply function_decl_opt =
   let callee = Apply.callee apply in
@@ -443,10 +467,10 @@ and simplify_function_call_where_callee's_type_unavailable env r apply
   in
   Expr.create_apply (Apply.with_call_kind apply call_kind), r
 
-and simplify_function_call env r apply ~callee_ty
-      (call : Call_kind.Function_call.t) ~arg_types : simplify_result =
+and simplify_function_call denv r apply ~callee_ty
+      (call : Call_kind.Function_call.t) ~arg_types k : simplify_result =
   let type_unavailable () =
-    simplify_function_call_where_callee's_type_unavailable env r apply call
+    simplify_function_call_where_callee's_type_unavailable denv r apply call
       ~arg_types
   in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
@@ -484,7 +508,8 @@ and simplify_function_call env r apply ~callee_ty
   | Unknown -> type_unavailable ()
   | Invalid -> Expr.create_invalid (), r
 
-and simplify_apply_shared env r apply =
+and simplify_apply_shared denv r apply =
+  (* XXX *)
   let cont = E.resolve_continuation_aliases env (Apply.continuation apply) in
   E.check_exn_continuation_is_bound env (Apply.exn_continuation apply);
   let callee, callee_ty = S.simplify_simple env (Apply.callee apply) in
@@ -495,7 +520,7 @@ and simplify_apply_shared env r apply =
   in
   callee_ty, apply, arg_types, r
 
-and simplify_method_call env r apply ~callee_ty ~kind:_ ~obj ~arg_types =
+and simplify_method_call denv r apply ~callee_ty ~kind:_ ~obj ~arg_types k =
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
@@ -510,14 +535,15 @@ and simplify_method_call env r apply ~callee_ty ~kind:_ ~obj ~arg_types =
         [value]:@ %a"
       Apply.print apply
   end;
-  let r =
-    R.record_continuation_use r env (Apply.continuation apply)
+  let denv =
+    DE.record_continuation_use denv (Apply.continuation apply)
       ~arg_types:[T.any_value ()]
   in
-  Expr.create_apply apply, r
+  let uenv, r = k denv r in
+  Expr.create_apply apply, uenv, r
 
-and simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
-      ~arg_types =
+and simplify_c_call denv r apply ~callee_ty ~param_arity ~return_arity
+      ~arg_types k =
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "C callees must be of kind [value], not %a: %a"
@@ -541,33 +567,35 @@ and simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
       Flambda_arity.print return_arity
       Apply.print apply
   end;
-  let r =
-    R.record_continuation_use r env (Apply.continuation apply)
+  let denv =
+    DE.record_continuation_use denv (Apply.continuation apply)
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
-  Expr.create_apply apply, r
+  let uenv, r = k denv r in
+  Expr.create_apply apply, uenv, r
 
-and simplify_apply env r apply : simplify_result =
+and simplify_apply denv r apply k : simplify_result =
   let callee_ty, apply, arg_types, r = simplify_apply_shared env r apply in
   match Apply.call_kind apply with
   | Function call ->
-    simplify_function_call env r apply ~callee_ty call ~arg_types
+    simplify_function_call denv r apply ~callee_ty call ~arg_types k
   | Method { kind; obj; } ->
-    simplify_method_call env r apply ~callee_ty ~kind ~obj ~arg_types
+    simplify_method_call denv r apply ~callee_ty ~kind ~obj ~arg_types k
   | C_call { alloc = _; param_arity; return_arity; } ->
-    simplify_c_call env r apply ~callee_ty ~param_arity ~return_arity
-      ~arg_types
+    simplify_c_call denv r apply ~callee_ty ~param_arity ~return_arity
+      ~arg_types k
 
-and simplify_apply_cont env r apply_cont : simplify_result =
+and simplify_apply_cont denv r apply_cont k : simplify_result =
   let module AC = Apply_cont in
-  let cont =
-    E.resolve_continuation_aliases env (AC.continuation apply_cont)
-  in
   (* CR mshinwell: Consider changing interface of [simplify_simples] *)
-  let args_with_types = S.simplify_simples env (AC.args apply_cont) in
+  let args_with_types = S.simplify_simples denv (AC.args apply_cont) in
   let args, arg_types = List.split args_with_types in
   let args_arity = T.arity_of_list arg_types in
-  let r = R.record_continuation_use r env cont ~arg_types in
+  let denv = DE.record_continuation_use denv cont ~arg_types in
+  let uenv, r = k denv r in
+  let cont =
+    UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
+  in
   let check_arity_against_args ~arity =
     if not (Flambda_arity.equal args_arity arity) then begin
       Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
@@ -578,9 +606,9 @@ and simplify_apply_cont env r apply_cont : simplify_result =
   in
   let normal_case () =
     Expr.create_apply_cont
-      (AC.update_continuation_and_args apply_cont cont ~args), r
+      (AC.update_continuation_and_args apply_cont cont ~args), uenv, r
   in
-  match E.find_continuation env cont with
+  match UE.find_continuation uenv cont with
   | Unknown { arity; } ->
     check_arity_against_args ~arity;
     normal_case ()
@@ -589,8 +617,12 @@ and simplify_apply_cont env r apply_cont : simplify_result =
     (* N.B. We allow this transformation even if there is a trap action,
        on the basis that there wouldn't be any opportunity to collect any
        backtrace, even if the [Apply_cont] were compiled as "raise". *)
-    Expr.create_invalid (), r
+    Expr.create_invalid (), uenv, r
   | Inline { arity; handler; } ->
+    (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
+       or "stub" -- could avoid resimplification of linearly used ones maybe,
+       although this wouldn't remove any parameter-to-argument [Let]s.
+       However perhaps [Flambda_to_cmm] could deal with these. *)
     check_arity_against_args ~arity;
     match AC.trap_action apply_cont with
     | Some _ ->
@@ -611,7 +643,7 @@ and simplify_apply_cont env r apply_cont : simplify_result =
           let expr =
             Expr.bind_parameters_to_simples ~bind:params ~target:args handler
           in
-          try simplify_expr env r expr
+          try simplify_expr denv r expr (fun _denv, r -> uenv, r)
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
                 The inlined body was:@ %a@ in environment:@ %a\n"
@@ -619,16 +651,16 @@ and simplify_apply_cont env r apply_cont : simplify_result =
               (Misc.Color.reset ())
               AC.print apply_cont
               Expr.print expr
-              E.print env;
+              DE.print denv;
             raise Misc.Fatal_error
           end)
 
-and simplify_switch env r (switch : Flambda.Switch.t) k : simplify_result =
-  let uenv, r = k env r in
+and simplify_switch denv r (switch : Flambda.Switch.t) k : simplify_result =
+  let uenv, r = k denv r in
   let reachable_arms =
     Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun _arm cont ->
-      let cont = E.resolve_continuation_aliases env cont in
-      match E.find_continuation env cont with
+      let cont = UE.resolve_continuation_aliases uenv cont in
+      match UE.find_continuation uenv cont with
       | Unreachable _ -> None
       | Unknown _ | Inline _ -> Some cont)
   in
