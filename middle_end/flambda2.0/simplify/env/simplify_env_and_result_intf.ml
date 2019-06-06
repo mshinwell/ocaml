@@ -147,20 +147,6 @@ module type Upwards_env = sig
   val continuation_scope_level : t -> Continuation.t -> Scope.t
 
   val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
-end
-
-module type Result = sig
-  type t
-
-  type env
-
-  val print : Format.formatter -> t -> unit
-
-  val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
-
-  val add_continuation : t -> env -> Continuation.t -> t
-
-  val add_exn_continuation : t -> env -> Exn_continuation.t -> t
 
   val record_continuation_use
      : t
@@ -176,6 +162,16 @@ module type Result = sig
     -> env
     -> Continuation.t
     -> Flambda_type.Typing_env.t * (Flambda_type.t list)
+end
+
+module type Result = sig
+  type t
+
+  type env
+
+  val print : Format.formatter -> t -> unit
+
+  val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
   val new_lifted_constant : t -> Lifted_constant.t -> t
 
