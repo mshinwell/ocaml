@@ -47,22 +47,26 @@ let rec simplify_let dacc (let_expr : Let.t) k =
         L.print let_expr
     end;
     let dacc = DA.with_denv dacc denv in
-    let user_data, uacc = k dacc in
     match defining_expr with
-    | Invalid _ -> Expr.create_invalid (), user_data, uacc
+    | Invalid _ ->
+      let user_data, uacc = k dacc in
+      Expr.create_invalid (), user_data, uacc
     | Reachable defining_expr ->
-      let body, uacc = simplify_expr dacc body (fun _dacc -> user_data, uacc) in
+      let body, user_data, uacc = simplify_expr dacc body k in
       let expr = Expr.create_let bound_var kind defining_expr body in
       expr, user_data, uacc)
 
-and simplify_one_continuation_handler denv uenv r cont cont_handler =
+and simplify_one_continuation_handler dacc uacc cont cont_handler =
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-      let arg_types = DE.continuation_arg_types r denv cont in
-      let denv = DE.add_parameters denv params ~arg_types in
-      let handler, uacc = simplify_expr dacc handler ...uenv... in
+      let denv =
+        DA.with_denv dacc ~f:(fun denv ->
+          let arg_types = DE.continuation_arg_types r denv cont in
+          DE.add_parameters denv params ~arg_types)
+      in
+      let handler, uacc = simplify_expr dacc handler (fun _dacc -> uacc) in
       let used_params, unused_params =
         let free_names = Expr.free_names handler in
         List.partition (fun param ->
@@ -99,6 +103,7 @@ and simplify_non_recursive_let_cont_handler dacc let_cont non_rec_handler k =
               (DE.add_continuation denv cont arity))
         in
         simplify_expr dacc r body (fun dacc ->
+          (* XXX Need to check [dacc] here to count uses *)
           (* The environment currently in [dacc] is discarded because we need
              to use the environment of the [Let_cont] when simplifying the
              handler.
@@ -121,7 +126,7 @@ and simplify_non_recursive_let_cont_handler dacc let_cont non_rec_handler k =
               | Alias_for { arity; alias_for; } ->
                 UE.add_continuation_alias uenv cont arity ~alias_for
               | Unknown { arity; } ->
-                match Let_cont.should_inline_out let_cont with
+                match (* XXX *) Let_cont.should_inline_out let_cont with
                 | None -> UE.add_continuation uenv cont arity
                 | Some non_rec_handler ->
                   UE.add_continuation_to_inline uenv cont arity
