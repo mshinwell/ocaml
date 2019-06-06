@@ -16,15 +16,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
+type t
 
-val inline
-   : Simplify_env_and_result.Downwards_acc.t
-  -> callee:Simple.t
-  -> args:Simple.t list
-  -> Flambda.Function_declaration.t
-  -> apply_return_continuation:Continuation.t
-  -> apply_exn_continuation:Exn_continuation.t
-  -> Debuginfo.t
-  -> Inline_attribute.t
-  -> (Simplify_env_and_result.Downwards_acc.t * Expr.t) option
+(** Create an upwards accumulator by copying the result structure out of
+    the given downwards accumulator. *)
+val of_dacc : Downwards_acc.t -> t
+
+(** Extract the environment component of the given upwards accumulator. *)
+val uenv : t -> Upwards_env.t
+
+(** Map the environment component of the given upwards accumulator. *)
+val map_uenv : t -> f:(Upwards_env.t -> Upwards_env.t) -> t
+
+(** Replace the environment component of the given upwards accumulator. *)
+val with_uenv : t -> Upwards_env.t -> t
+
+(** The result structure of the given upwards accumulator. *)
+val r : t -> Simplify_result.t
