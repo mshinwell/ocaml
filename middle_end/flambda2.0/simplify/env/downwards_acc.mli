@@ -51,6 +51,9 @@ val map_r
     -> Simplify_env_and_result.Result.t)
   -> t
 
+(** Replace the result structure of the given downwards accumulator. *)
+val with_r : t -> Simplify_env_and_result.Result.t -> t
+
 include Continuation_uses_env_intf.S with type t := t
 
 val continuation_uses_env : t -> Continuation_uses_env.t
