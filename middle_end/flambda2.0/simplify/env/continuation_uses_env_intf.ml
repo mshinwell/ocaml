@@ -56,4 +56,6 @@ module type S = sig
   val check_continuation_is_bound : t -> Continuation.t -> unit
 
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
+
+  val continuation_arity : t -> Continuation.t -> Flambda_arity.t
 end
