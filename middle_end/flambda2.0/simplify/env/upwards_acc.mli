@@ -40,3 +40,6 @@ val with_uenv : t -> Simplify_env_and_result.Upwards_env.t -> t
 
 (** The result structure of the given upwards accumulator. *)
 val r : t -> Simplify_env_and_result.Result.t
+
+(** Replace the result structure of the given downwards accumulator. *)
+val with_r : t -> Simplify_env_and_result.Result.t -> t

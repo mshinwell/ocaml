@@ -51,3 +51,8 @@ let with_uenv t uenv =
   }
 
 let r t = t.r
+
+let with_r t r =
+  { t with
+    r;
+  }

@@ -61,6 +61,11 @@ let map_r t ~f =
     r = f t.r;
   }
 
+let with_r t r =
+  { t with
+    r;
+  }
+
 let with_continuation_uses_env t continuation_uses_env =
   { t with
     continuation_uses_env;
