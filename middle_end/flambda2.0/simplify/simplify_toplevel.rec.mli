@@ -21,4 +21,4 @@ val simplify_toplevel
   -> Flambda.Expr.t
   -> return_continuation:Continuation.t
   -> Exn_continuation.t
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
