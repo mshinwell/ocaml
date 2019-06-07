@@ -52,4 +52,8 @@ module type S = sig
     -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 
   val num_continuation_uses : t -> Continuation.t -> int
+
+  val check_continuation_is_bound : t -> Continuation.t -> unit
+
+  val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
 end
