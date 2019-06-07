@@ -63,16 +63,16 @@ let rec simplify_let
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> Continuation.t -> arg_types:T.t list -> Continuation_handler.t
+  : 'a. DA.t -> arg_types:T.t list -> Continuation_handler.t
     -> 'a k 
     -> Continuation_handler.t
          * ((Continuation.t * Continuation_handler.t) option) * 'a * UA.t
-= fun dacc cont ~arg_types cont_handler k ->
+= fun dacc ~arg_types cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-      let denv =
+      let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
       in
@@ -147,8 +147,7 @@ and simplify_non_recursive_let_cont_handler
           in
           let dacc = DA.create definition_denv cont_uses_env r in
           let cont_handler, additional_cont_handler, user_data, uacc =
-            simplify_one_continuation_handler dacc cont ~arg_types
-              cont_handler k
+            simplify_one_continuation_handler dacc ~arg_types cont_handler k
           in
           let uenv = UA.uenv uacc in
           let uenv' = uenv in
@@ -494,11 +493,10 @@ and simplify_function_call_where_callee's_type_unavailable
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply (call : Call_kind.Function_call.t) ~arg_types k ->
   let cont = Apply.continuation apply in
-  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
   let check_return_arity_and_record_return_cont_use ~return_arity =
-    let cont_arity = UE.continuation_arity (UA.uenv uacc) cont in
+    let cont_arity = DA.continuation_arity dacc cont in
     if not (Flambda_arity.equal return_arity cont_arity) then begin
       Misc.fatal_errorf "Return arity (%a) on application's continuation@ \
           doesn't match return arity (%a) specified in [Call_kind]:@ %a"
@@ -509,10 +507,10 @@ and simplify_function_call_where_callee's_type_unavailable
     DA.record_continuation_use dacc cont ~typing_env_at_use
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
-  let call_kind, denv =
+  let call_kind, dacc =
     match call with
     | Indirect_unknown_arity ->
-      let denv =
+      let dacc =
         try
           DA.record_continuation_use dacc (Apply.continuation apply)
             ~typing_env_at_use ~arg_types:[T.any_value ()]
@@ -526,7 +524,7 @@ and simplify_function_call_where_callee's_type_unavailable
           raise Misc.Fatal_error
         end
       in
-      Call_kind.indirect_function_call_unknown_arity (), denv
+      Call_kind.indirect_function_call_unknown_arity (), dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
       let args_arity = T.arity_of_list arg_types in
       if not (Flambda_arity.equal param_arity args_arity) then begin
@@ -537,12 +535,12 @@ and simplify_function_call_where_callee's_type_unavailable
           Flambda_arity.print args_arity
           Apply.print apply
       end;
-      let denv = check_return_arity_and_record_return_cont_use ~return_arity in
+      let dacc = check_return_arity_and_record_return_cont_use ~return_arity in
       let call_kind =
         Call_kind.indirect_function_call_known_arity ~param_arity
           ~return_arity
       in
-      call_kind, denv
+      call_kind, dacc
     | Direct { return_arity; _ } ->
       let param_arity =
         (* Some types have regressed in precision.  Since this used to be a
@@ -553,13 +551,14 @@ and simplify_function_call_where_callee's_type_unavailable
             T.kind ty)
           (Apply.args apply)
       in
-      let denv = check_return_arity_and_record_return_cont_use ~return_arity in
+      let dacc = check_return_arity_and_record_return_cont_use ~return_arity in
       let call_kind =
         Call_kind.indirect_function_call_known_arity ~param_arity
           ~return_arity
       in
-      call_kind, denv
+      call_kind, dacc
   in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   Expr.create_apply (Apply.with_call_kind apply call_kind), user_data, uacc
 
 and simplify_function_call
@@ -642,7 +641,7 @@ and simplify_method_call
         [value]:@ %a"
       Apply.print apply
   end;
-  let denv =
+  let dacc =
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
@@ -680,7 +679,7 @@ and simplify_c_call
       Flambda_arity.print return_arity
       Apply.print apply
   end;
-  let denv =
+  let dacc =
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)

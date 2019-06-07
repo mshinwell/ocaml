@@ -33,6 +33,11 @@ let print ppf { uenv; r; } =
     UE.print uenv
     R.print r
 
+let create uenv r =
+  { uenv;
+    r;
+  }
+
 let of_dacc dacc =
   { uenv = UE.empty;
     r = DA.r dacc;

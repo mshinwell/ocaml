@@ -54,16 +54,16 @@ let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
     DE.check_variable_is_bound denv var;
     or_variable
 
-let simplify_set_of_closures dacc ~result_dacc r set_of_closures
+let simplify_set_of_closures dacc ~result_dacc set_of_closures
       ~set_of_closures_symbol ~closure_symbols ~closure_elements_and_types =
-  let closure_elements, closure_element_types, r =
+  let closure_elements, closure_element_types =
     match closure_elements_and_types with
     | Some (closure_elements, closure_element_types) ->
-      closure_elements, closure_element_types, r
+      closure_elements, closure_element_types
     | None ->
       Var_within_closure.Map.fold
         (fun var_within_closure simple
-             (closure_elements, closure_element_types, r) ->
+             (closure_elements, closure_element_types) ->
           let simple, ty = Simplify_simple.simplify_simple dacc simple in
           let closure_elements =
             Var_within_closure.Map.add var_within_closure simple
@@ -74,16 +74,16 @@ let simplify_set_of_closures dacc ~result_dacc r set_of_closures
             Var_within_closure.Map.add var_within_closure ty_value
               closure_element_types
           in
-          closure_elements, closure_element_types, r)
+          closure_elements, closure_element_types)
         (Set_of_closures.closure_elements set_of_closures)
-        (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
+        (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
   in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
   let denv = DA.denv dacc in
-  let env = DE.define_symbol denv set_of_closures_symbol K.fabricated in
+  let denv = DE.define_symbol denv set_of_closures_symbol K.fabricated in
   let denv =
-    Closure_id.Map.fold (fun _closure_id closure_symbol env ->
+    Closure_id.Map.fold (fun _closure_id closure_symbol denv ->
         DE.define_symbol denv closure_symbol K.value)
       closure_symbols
       denv
@@ -128,11 +128,12 @@ let simplify_set_of_closures dacc ~result_dacc r set_of_closures
       funs
   in
   let denv =
-    Closure_id.Map.fold (fun _closure_id (closure_symbol, closure_type) env ->
-        DE.add_equation_on_symbol env closure_symbol closure_type)
+    Closure_id.Map.fold (fun _closure_id (closure_symbol, closure_type) denv ->
+        DE.add_equation_on_symbol denv closure_symbol closure_type)
       closure_symbols_and_types
       denv
   in
+  let dacc = DA.with_denv dacc denv in
   let type_of_my_closure closure_id ~param_arity:_ ~result_arity:_ =
     match Closure_id.Map.find closure_id closure_symbols with
     | exception Not_found ->
@@ -141,8 +142,10 @@ let simplify_set_of_closures dacc ~result_dacc r set_of_closures
     | closure_symbol ->
       T.alias_type_of K.value (Simple.symbol closure_symbol)
   in
+  let r = DA.r dacc in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+        let dacc = DA.with_r dacc r in
         let function_decl, ty, r =
           Simplify_named.simplify_function dacc closure_id function_decl
             ~type_of_my_closure
@@ -153,6 +156,7 @@ let simplify_set_of_closures dacc ~result_dacc r set_of_closures
       funs
       (Closure_id.Map.empty, Closure_id.Map.empty, r)
   in
+  let dacc = DA.with_r dacc r in
   let function_decls = Function_declarations.create funs in
   let set_of_closures =
     Set_of_closures.create ~function_decls ~closure_elements
@@ -210,7 +214,7 @@ let simplify_set_of_closures dacc ~result_dacc r set_of_closures
   in
   let denv =
     Closure_id.Map.fold (fun _ (symbol, typ) denv ->
-        DE.add_equation_on_symbol env symbol typ)
+        DE.add_equation_on_symbol denv symbol typ)
       closure_symbols_and_types
       denv
   in
@@ -241,11 +245,11 @@ let simplify_static_part_of_kind_value dacc
           simplify_of_kind_value dacc of_kind_value)
         fields
     in
-    let env = bind_result_sym (T.any_value ()) in
+    let dacc = bind_result_sym (T.any_value ()) in
     Block (tag, is_mutable, fields), dacc
   | Fabricated_block var ->
     DE.check_variable_is_bound (DA.denv dacc) var;
-    let env = bind_result_sym (T.any_fabricated ()) in
+    let dacc = bind_result_sym (T.any_fabricated ()) in
     static_part, dacc
   | Boxed_float or_var ->
     let dacc = bind_result_sym (T.any_boxed_float ()) in
@@ -277,7 +281,7 @@ let simplify_static_part_of_kind_value dacc
     let dacc = bind_result_sym (T.any_value ()) in
     Immutable_string (simplify_or_variable dacc or_var), dacc
 
-let simplify_static_part_of_kind_fabricated dacc ~result_dacc r
+let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
       ~set_of_closures_symbol ~closure_symbols
     : K.fabricated Static_part.t * DA.t =
@@ -285,7 +289,7 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc r
   | Set_of_closures set_of_closures ->
      let set_of_closures, dacc, _ty, _static_structure_types,
          _static_structure =
-       simplify_set_of_closures dacc ~result_dacc r set_of_closures
+       simplify_set_of_closures dacc ~result_dacc set_of_closures
          ~set_of_closures_symbol ~closure_symbols
          ~closure_elements_and_types:None
      in
@@ -314,22 +318,26 @@ let simplify_computation dacc
       DA.map_denv dacc
         ~f:(fun denv -> DE.increment_continuation_scope_level denv)
     in
-    let expr, r =
+    let expr, cont_uses_env, r =
       Simplify_toplevel.simplify_toplevel dacc computation.expr
         ~return_continuation:computation.return_continuation
         computation.exn_continuation
     in
     let denv = DE.add_lifted_constants_from_r outer_denv r in
+    let dacc = DA.create denv Continuation_uses_env.empty r in
     let typing_env, arg_types =
-      DA.continuation_env_and_arg_types r denv computation.return_continuation
+      CUE.continuation_env_and_arg_types cont_uses_env
+        ~definition_typing_env:(DE.typing_env denv)
+        computation.return_continuation
     in
     assert (List.compare_lengths arg_types computation.computed_values = 0);
-    let denv =
-      List.fold_left2 (fun denv ty (var, kind) ->
-          assert (Flambda_kind.equal (T.kind ty) kind);
-          DE.add_variable denv var ty)
-        (DE.with_typing_environment denv typing_env)
-        arg_types computation.computed_values
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        List.fold_left2 (fun denv ty (var, kind) ->
+            assert (Flambda_kind.equal (T.kind ty) kind);
+            DE.add_variable denv var ty)
+          (DE.with_typing_environment denv typing_env)
+          arg_types computation.computed_values)
     in
     let computation : Program_body.Computation.t option =
       Some ({
@@ -347,15 +355,15 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       : k Static_part.t * DA.t =
   match bound_syms with
   | Singleton result_sym ->
-    simplify_static_part_of_kind_value env r static_part ~result_sym
+    simplify_static_part_of_kind_value dacc static_part ~result_sym
   | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-    simplify_static_part_of_kind_fabricated env ~result_env r static_part
+    simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~set_of_closures_symbol ~closure_symbols
 
 let simplify_static_structure dacc
       ((S pieces) : Program_body.Static_structure.t)
-      : DE.t * R.t * Program_body.Static_structure.t =
-  let str_rev, next_env, result =
+      : DA.t * Program_body.Static_structure.t =
+  let str_rev, next_dacc =
     (* The bindings in the individual pieces of the [Static_structure] are
        simultaneous, so we keep a [result_dacc] accumulating the final
        environment, but always use [dacc] for the simplification of the
@@ -370,10 +378,10 @@ let simplify_static_structure dacc
       ([], dacc)
       pieces
   in
-  next_env, result, S (List.rev str_rev)
+  next_dacc, S (List.rev str_rev)
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
-  let dacc, computation = simplify_computation env r defn.computation in
+  let dacc, computation = simplify_computation dacc defn.computation in
   let dacc, static_structure =
     simplify_static_structure dacc defn.static_structure
   in
@@ -384,7 +392,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
   in
   definition, dacc
 
-let rec simplify_program_body dacc r (body : Program_body.t) =
+let rec simplify_program_body dacc (body : Program_body.t) =
   match body with
   | Define_symbol (defn, body) ->
     let defn, dacc = simplify_definition dacc defn in
@@ -428,18 +436,18 @@ let simplify_program denv (program : Program.t) : Program.t =
       Backend.all_predefined_exception_symbols
       Symbol.Map.empty
   in
-  let env =
+  let denv =
     Symbol.Map.fold (fun symbol kind denv ->
         DE.add_symbol denv symbol (T.unknown kind))
       (Symbol.Map.disjoint_union program.imported_symbols predef_exn_symbols)
-      env
+      denv
   in
   check_imported_symbols_don't_overlap_predef_exns
     ~imported_symbols:program.imported_symbols ~predef_exn_symbols
     ~descr:"before simplification";
   let r = R.create ~resolver:(DE.resolver denv) in
   let dacc = DA.create denv Continuation_uses_env.empty r in
-  let body, dacc = simplify_program_body dacc r program.body in
+  let body, dacc = simplify_program_body dacc program.body in
   let r = DA.r dacc in
   let body = define_lifted_constants (R.get_lifted_constants r) body in
   let imported_symbols = R.imported_symbols r in
