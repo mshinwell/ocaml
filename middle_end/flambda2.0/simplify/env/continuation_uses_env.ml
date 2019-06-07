@@ -117,3 +117,11 @@ let check_continuation_is_bound t cont =
 
 let check_exn_continuation_is_bound t exn_cont =
   check_continuation_is_bound t (Exn_continuation.exn_handler exn_cont)
+
+let continuation_arity t cont =
+  match Continuation.Map.find cont t.continuation_uses with
+  | exception Not_found ->
+    Misc.fatal_errorf "Unbound continuation %a in uses environment:@ %a"
+      Continuation.print cont
+      print t
+  | uses -> Continuation_uses.arity uses

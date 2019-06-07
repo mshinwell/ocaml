@@ -576,15 +576,15 @@ and simplify_function_call dacc apply ~callee_ty
 and simplify_apply_shared dacc apply =
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
-  let callee, callee_ty = S.simplify_simple env (Apply.callee apply) in
-  let args_with_types = S.simplify_simples env (Apply.args apply) in
+  let callee, callee_ty = S.simplify_simple dacc (Apply.callee apply) in
+  let args_with_types = S.simplify_simples dacc (Apply.args apply) in
   let args, arg_types = List.split args_with_types in
   let apply =
     (* CR mshinwell: Remove continuation argument *)
     Apply.with_continuation_callee_and_args apply (Apply.continuation apply)
       ~callee ~args
   in
-  callee_ty, apply, arg_types, r
+  callee_ty, apply, arg_types
 
 and simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
   let callee_kind = T.kind callee_ty in
@@ -593,7 +593,8 @@ and simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
       K.print callee_kind
       T.print callee_ty
   end;
-  E.check_simple_is_bound env obj;
+  let denv = DA.denv dacc in
+  DE.check_simple_is_bound denv obj;
   let expected_arity = List.map (fun _ -> K.value) arg_types in
   let args_arity = T.arity_of_list arg_types in
   if not (Flambda_arity.equal expected_arity args_arity) then begin
@@ -602,17 +603,13 @@ and simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
       Apply.print apply
   end;
   let denv =
-    DE.record_continuation_use denv (Apply.continuation apply)
+    DA.record_continuation_use dacc (Apply.continuation apply)
+      ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
-  let user_data, uacc = k (DA.with_denv dacc denv) in
-  (* CR mshinwell: Following few lines could be factored out *)
-  let uenv = UA.uenv uacc in
-  UE.check_exn_continuation_is_bound uenv (Apply.exn_continuation apply);
-  let cont = UE.resolve_continuation_aliases uenv (Apply.continuation apply) in
-  let apply = Apply.with_continuation apply cont in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   Expr.create_apply apply, user_data, uacc
 
 and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
@@ -632,7 +629,7 @@ and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       Apply.print apply
   end;
   let cont = Apply.continuation apply in
-  let cont_arity = E.continuation_arity env cont in
+  let cont_arity = UE.continuation_arity env cont in
   if not (Flambda_arity.equal cont_arity return_arity) then begin
     Misc.fatal_errorf "Arity %a of [Apply] continuation doesn't match \
         return arity %a of C callee:@ %a"
@@ -652,7 +649,7 @@ and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
   Expr.create_apply apply, uacc
 
 and simplify_apply dacc apply k =
-  let callee_ty, apply, arg_types, r = simplify_apply_shared env r apply in
+  let callee_ty, apply, arg_types = simplify_apply_shared env r apply in
   match Apply.call_kind apply with
   | Function call ->
     simplify_function_call dacc apply ~callee_ty call ~arg_types k

@@ -101,3 +101,6 @@ let check_continuation_is_bound t cont =
 
 let check_exn_continuation_is_bound t exn_cont =
   CUE.check_exn_continuation_is_bound t.continuation_uses_env exn_cont
+
+let continuation_arity t cont =
+  CUE.continuation_arity t.continuation_uses_env cont
