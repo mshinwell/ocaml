@@ -35,7 +35,6 @@ end = struct
 
   let print ppf { backend = _; round; typing_env;
                   continuation_scope_level; inlined_debuginfo; can_inline;
-                  continuation_uses;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -49,7 +48,6 @@ end = struct
       Scope.print continuation_scope_level
       Debuginfo.print inlined_debuginfo
       can_inline
-      (Continuation.Map.print Continuation_uses.print) continuation_uses
 
   let invariant _t = ()
 
