@@ -87,12 +87,15 @@ end = struct
 
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
+                      continuation_uses = _; continuation_scope_level = _;
                     } =
     { backend;
       round;
       typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
+      continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
+      continuation_uses = Continuation.Map.empty;
     }
 
   let add_variable t var ty =
@@ -221,43 +224,41 @@ end = struct
   let add_lifted_constants_from_r t r =
     add_lifted_constants t (Result.get_lifted_constants r)
 
-  let add_continuation t env cont =
+  let add_continuation t cont arity =
     match Continuation.Map.find cont t.continuation_uses with
     | exception Not_found ->
-      (* CR mshinwell: Avoid repeated lookups. *)
-      let arity = Env.continuation_arity env cont in
-      let definition_scope_level = Env.continuation_scope_level env cont in
       let uses =
-        Continuation_uses.create arity ~definition_scope_level
+        Continuation_uses.create arity
+          ~definition_scope_level:t.continuation_scope_level
       in
       { t with
-        continuations = Continuation.Map.add cont uses t.continuation_uses;
+        continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
       }
     | _uses ->
-      Misc.fatal_errorf "Cannot redefine continuation %a that is already \
-          present in [r]"
+      Misc.fatal_errorf "Cannot redefine continuation %a in downwards \
+          environment:@ %a"
         Continuation.print cont
+        print t
 
-  let add_exn_continuation t env exn_cont =
+  let add_exn_continuation t exn_cont =
     let cont = Exn_continuation.exn_handler exn_cont in
     match Continuation.Map.find cont t.continuation_uses with
     | exception Not_found ->
       let arity = Exn_continuation.arity exn_cont in
-      let definition_scope_level =
-        Env.exn_continuation_scope_level env exn_cont
-      in
       let uses =
-        Continuation_uses.create arity ~definition_scope_level
+        Continuation_uses.create arity
+          ~definition_scope_level:t.continuation_scope_level
       in
       { t with
-        continuations = Continuation.Map.add cont uses t.continuation_uses;
+        continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
       }
     | _uses ->
-      Misc.fatal_errorf "Cannot redefine exception continuation %a that is \
-          already present in [r]"
+      Misc.fatal_errorf "Cannot redefine exn continuation %a in downwards \
+          environment:@ %a"
         Exn_continuation.print exn_cont
+        print t
 
-  let record_continuation_use t env cont ~arg_types =
+  let record_continuation_use t cont ~arg_types =
     match Continuation.Map.find cont t.continuation_uses with
     | exception Not_found ->
       Misc.fatal_errorf "[record_continuation_use]:@ \
@@ -267,42 +268,62 @@ end = struct
     | uses ->
       (* XXX This needs to deal with exn continuation extra-args *)
       let uses =
-        Continuation_uses.add_use uses (Env.typing_env env) ~arg_types
+        Continuation_uses.add_use uses (typing_env t) ~arg_types
       in
       { t with
         continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
       }
 
-  let continuation_env_and_arg_types t env cont =
-    match Continuation.Map.find cont t.continuation_usess with
+  let continuation_env_and_arg_types t ~definition_env cont =
+    match Continuation.Map.find cont t.continuation_uses with
     | exception Not_found ->
       Misc.fatal_errorf "[continuation_env_and_arg_types]:@ \
           Continuation %a not present in downwards env:@ %a"
         Continuation.print cont
         print t
-    | uses -> Continuation_uses.env_and_arg_types uses (Env.typing_env env)
+    | uses ->
+      Continuation_uses.env_and_arg_types uses (typing_env definition_env)
+
+  let continuation_scope_level t cont =
+    match Continuation.Map.find cont t.continuation_uses with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+        Continuation.print cont
+        print t
+    | uses -> Continuation_uses.definition_scope_level uses
+
+  let exn_continuation_scope_level t exn_cont =
+    let cont = Exn_continuation.exn_handler exn_cont in
+    match Continuation.Map.find cont t.continuation_uses with
+    | exception Not_found ->
+       Misc.fatal_errorf "Unbound exn continuation %a in environment:@ %a"
+         Exn_continuation.print exn_cont
+         print t
+    | uses -> Continuation_uses.definition_scope_level uses
+
+  let num_continuation_uses t cont =
+    match Continuation.Map.find cont t.continuation_uses with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+        Continuation.print cont
+        print t
+    | uses -> Continuation_uses.number_of_uses uses
 end and Upwards_env : sig
   include Simplify_env_and_result_intf.Upwards_env
     with type downwards_env := Downwards_env.t
 end = struct
   type t = {
-    backend : (module Flambda2_backend_intf.S);
     continuations : (Scope.t * Continuation_in_env.t) Continuation.Map.t;
     exn_continuations : Scope.t Exn_continuation.Map.t;
     continuation_aliases : Continuation.t Continuation.Map.t;
-    continuation_scope_level : Scope.t;
   }
 
   let invariant _t = ()
 
-  let create ~backend =
-    (* CR mshinwell: [resolver] should come from [backend] *)
-    let resolver _export_id = None in
-    { backend;
-      continuations = Continuation.Map.empty;
+  let empty =
+    { continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
-      continuation_scope_level = Scope.initial;
     }
 
   let print_scope_level_and_continuation_in_env ppf (scope_level, cont_in_env) =
@@ -313,13 +334,11 @@ end = struct
       Scope.print scope_level
       Continuation_in_env.print cont_in_env
 
-  let print ppf { backend = _; continuations;
-                  exn_continuations; continuation_aliases;
+  let print ppf { continuations; exn_continuations; continuation_aliases;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(continuations@ %a)@]@ \
         @[<hov 1>(exn_continuations@ %a)@]@ \
-        @[<hov 1>(continuation_scope_level@ %a)@]@ \
         @[<hov 1>(continuation_aliases@ %a)@]\
         )@]"
       (Continuation.Map.print print_scope_level_and_continuation_in_env)
@@ -327,38 +346,13 @@ end = struct
       (Exn_continuation.Map.print Scope.print) exn_continuations
       (Continuation.Map.print Continuation.print) continuation_aliases
 
-  let add_continuation0 t cont cont_in_env =
-    let continuations =
-      Continuation.Map.add cont (t.continuation_scope_level, cont_in_env)
-        t.continuations
-    in
-    { t with
-      continuations;
-    }
-
   let find_continuation t cont =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+      Misc.fatal_errorf "Unbound continuation %a in upwards environment:@ %a"
         Continuation.print cont
         print t
     | (_scope_level, cont_in_env) -> cont_in_env
-
-  let continuation_scope_level t cont =
-    match Continuation.Map.find cont t.continuations with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | (scope_level, _cont_in_env) -> scope_level
-
-  let exn_continuation_scope_level t exn_cont =
-    match Exn_continuation.Map.find exn_cont t.exn_continuations with
-    | exception Not_found ->
-       Misc.fatal_errorf "Unbound exn continuation %a in environment:@ %a"
-         Exn_continuation.print exn_cont
-         print t
-    | scope_level -> scope_level
 
   let resolve_continuation_aliases t cont =
     match Continuation.Map.find cont t.continuation_aliases with
@@ -371,11 +365,19 @@ end = struct
     | Unreachable { arity; }
     | Inline { arity; _ } -> arity
 
-  let add_continuation t cont arity =
-    add_continuation0 t cont (Unknown { arity; })
+  let add_continuation0 t cont scope cont_in_env =
+    let continuations =
+      Continuation.Map.add cont (scope, cont_in_env) t.continuations
+    in
+    { t with
+      continuations;
+    }
 
-  let add_unreachable_continuation t cont arity =
-    add_continuation0 t cont (Unreachable { arity; })
+  let add_continuation t cont scope arity =
+    add_continuation0 t cont scope (Unknown { arity; })
+
+  let add_unreachable_continuation t cont scope arity =
+    add_continuation0 t cont scope (Unreachable { arity; })
 
   let add_continuation_alias t cont arity ~alias_for =
     let alias_for_arity = continuation_arity t alias_for in
@@ -384,7 +386,7 @@ end = struct
           since the two continuations differ in arity"
         Continuation.print cont
         Flambda_arity.print arity
-        Continuation.print alias_for
+        Continuation.print alias_for 
         Flambda_arity.print alias_for_arity
     end;
     if Continuation.Map.mem cont t.continuation_aliases then begin
@@ -401,13 +403,12 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_to_inline t cont arity handler =
-    add_continuation0 t cont (Inline { arity; handler; })
+  let add_continuation_to_inline t cont scope arity handler =
+    add_continuation0 t cont scope (Inline { arity; handler; })
 
-  let add_exn_continuation t exn_cont =
+  let add_exn_continuation t exn_cont scope =
     let exn_continuations =
-      Exn_continuation.Map.add exn_cont t.continuation_scope_level
-        t.exn_continuations
+      Exn_continuation.Map.add exn_cont scope t.exn_continuations
     in
     { t with
       exn_continuations;
@@ -428,7 +429,6 @@ end = struct
     end
 end and Result : sig
   include Simplify_env_and_result_intf.Result
-    with type env := Env.t
 end = struct
   type t =
     { resolver : (Export_id.t -> Flambda_type.t option);
@@ -436,22 +436,19 @@ end = struct
       lifted_constants_innermost_first : Lifted_constant.t list;
     }
 
-  let print ppf { resolver = _; continuations; imported_symbols;
+  let print ppf { resolver = _; imported_symbols;
                   lifted_constants_innermost_first;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(continuations@ %a)@]@ \
         @[<hov 1>(imported_symbols@ %a)@]@ \
         @[<hov 1>(lifted_constants_innermost_first@ %a)@]\
         )@]"
-      (Continuation.Map.print Continuation_uses.print) continuations
       (Symbol.Map.print Flambda_kind.print) imported_symbols
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
         lifted_constants_innermost_first
 
   let create ~resolver =
     { resolver;
-      continuations = Continuation.Map.empty;
       imported_symbols = Symbol.Map.empty;
       lifted_constants_innermost_first = [];
     }
@@ -470,10 +467,6 @@ end = struct
         from.lifted_constants_innermost_first
           @ t.lifted_constants_innermost_first;
     }
-
-(*
-  let lifted_constants_innermost_first t = t.lifted_constants_innermost_first
-*)
 
   let get_lifted_constants t = t.lifted_constants_innermost_first
 end

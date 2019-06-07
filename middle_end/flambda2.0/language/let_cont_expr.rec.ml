@@ -142,15 +142,3 @@ let apply_name_permutation t perm =
     in
     if handlers == handlers' then t
     else Recursive handlers'
-
-let should_inline_out t =
-  match t with
-  | Non_recursive { handler = non_rec_handler; num_free_occurrences; } ->
-    let handler = Non_recursive_let_cont_handler.handler non_rec_handler in
-    let stub = Continuation_handler.stub handler in
-    let is_exn_handler = Continuation_handler.is_exn_handler handler in
-    if (stub || num_free_occurrences <= 1) && not is_exn_handler then
-      Some non_rec_handler
-    else
-      None
-  | Recursive _ -> None

@@ -17,18 +17,13 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val simplify_named
-   : Simplify_env_and_result.Downwards_env.t
-  -> Simplify_env_and_result.Result.t
+   : Downwards_acc.t
   -> Flambda.Named.t
   -> result_var:Variable.t
-  -> Simplify_env_and_result.Downwards_env.t
-       * Simplify_env_and_result.Result.t
-       * Flambda_type.t
-       * Reachable.t
+  -> Downwards_acc.t * Flambda_type.t * Reachable.t
 
 val simplify_function
-   : Simplify_env_and_result.Downwards_env.t
-  -> Simplify_env_and_result.Result.t
+   : Downwards_acc.t
   -> Closure_id.t
   -> Flambda.Function_declaration.t
   -> type_of_my_closure:(
@@ -37,4 +32,4 @@ val simplify_function
     -> result_arity:Flambda_arity.t
     -> Flambda_type.t)
   -> Flambda.Function_declaration.t * Flambda_type.function_declaration
-       * Simplify_env_and_result.Result.t
+       * Downwards_acc.t

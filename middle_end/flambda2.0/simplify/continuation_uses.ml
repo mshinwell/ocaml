@@ -107,3 +107,7 @@ let env_and_arg_types t env =
         env, arg_types)
       (TE.add_env_extension env (Use.env_extension use), Use.arg_types use)
       uses
+
+let definition_scope_level t = t.definition_scope_level
+
+let number_of_uses t = List.length t.uses
