@@ -111,3 +111,5 @@ let env_and_arg_types t env =
 let definition_scope_level t = t.definition_scope_level
 
 let number_of_uses t = List.length t.uses
+
+let arity t = t.arity
