@@ -14,14 +14,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Simplification of primitives taking one argument. *)
+type t
 
-val simplify_unary_primitive
-   : Downwards_acc.t
-  -> Flambda_primitive.unary_primitive
-  -> Simple.t
-  -> Debuginfo.t
-  -> result_var:Variable.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
+(** Print a downwards accumulator to a formatter. *)
+val print : Format.formatter -> t -> unit
+
+(** Extract the environment component of the given downwards accumulator. *)
+val denv : t -> Simplify_env_and_result.Downwards_env.t
+
+(** Map the environment component of the given downwards accumulator. *)
+val map_denv
+   : t
+  -> f:(Simplify_env_and_result.Downwards_env.t
+    -> Simplify_env_and_result.Downwards_env.t)
+  -> t
+
+(** Replace the environment component of the given downwards accumulator. *)
+val with_denv : t -> Simplify_env_and_result.Downwards_env.t -> t
+
+(** The result structure of the given downwards accumulator. *)
+val r : t -> Simplify_env_and_result.Result.t
+
+(** Map the result structure of the given downwards accumulator. *)
+val map_r
+   : t
+  -> f:(Simplify_env_and_result.Result.t
+    -> Simplify_env_and_result.Result.t)
+  -> t

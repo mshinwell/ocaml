@@ -18,15 +18,15 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
-module R = Simplify_env_and_result.Result
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
-let simplify_projection env r ~original_term ~deconstructing ~shape ~result_var
-      ~result_kind : Reachable.t * TEE.t * R.t =
-  let env = E.typing_env env in
+let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
+      ~result_kind =
+  let env = DE.typing_env (DA.denv dacc) in
 (*
 Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
   Named.print original_term
@@ -34,29 +34,29 @@ Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructin
   T.print deconstructing;
 *)
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
-  | Bottom -> Reachable.invalid (), TEE.empty, r
+  | Bottom -> Reachable.invalid (), TEE.empty, dacc
   | Ok env_extension ->
 (*
 Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
 *)
-    Reachable.reachable original_term, env_extension, r
+    Reachable.reachable original_term, env_extension, dacc
 
-let simplify_project_closure env r ~original_term ~set_of_closures_ty closure_id
+let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
       ~result_var =
-  simplify_projection env r ~original_term ~deconstructing:set_of_closures_ty
+  simplify_projection dacc ~original_term ~deconstructing:set_of_closures_ty
     ~shape:(T.set_of_closures_containing_at_least closure_id
       ~closure_var:result_var)
     ~result_var ~result_kind:K.value
 
-let simplify_project_var env r ~original_term ~closure_ty closure_element
+let simplify_project_var dacc ~original_term ~closure_ty closure_element
       ~result_var =
-  simplify_projection env r ~original_term ~deconstructing:closure_ty
+  simplify_projection dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.closure_containing_at_least closure_element
       ~closure_element_var:result_var)
     ~result_var ~result_kind:K.value
 
-let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
-      arg dbg ~result_var : Reachable.t * TEE.t * R.t =
+let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
+      arg dbg ~result_var =
 (*
 begin match (arg : Simple.t) with
 | Name (Var arg) ->
@@ -67,19 +67,19 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
 | _ -> ()
 end;
 *)
-  let arg, arg_ty = Simplify_simple.simplify_simple env arg in
+  let arg, arg_ty = Simplify_simple.simplify_simple dacc arg in
   let original_term = Named.create_prim (Unary (prim, arg)) dbg in
   match prim with
   | Project_closure closure_id ->
-    simplify_project_closure env r ~original_term ~set_of_closures_ty:arg_ty
+    simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
       closure_id ~result_var
   | Project_var closure_element ->
-    simplify_project_var env r ~original_term ~closure_ty:arg_ty
+    simplify_project_var dacc ~original_term ~closure_ty:arg_ty
       closure_element ~result_var
   | _ ->
     (* CR mshinwell: temporary code *)
-    let arg = Simplify_simple.simplify_simple_and_drop_type env arg in
+    let arg = Simplify_simple.simplify_simple_and_drop_type dacc arg in
     let named = Named.create_prim (Unary (prim, arg)) dbg in
     let ty = T.any_value () in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable named, env_extension, r
+    Reachable.reachable named, env_extension, dacc

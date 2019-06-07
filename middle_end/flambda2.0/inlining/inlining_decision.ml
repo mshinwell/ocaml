@@ -18,9 +18,9 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DE = Simplify_env_and_result.Downwards_env
 
-let can_inline env function_decl =
+let can_inline denv function_decl =
   (* At present, we follow Closure, taking inlining decisions without
      first examining call sites. *)
   match Function_declaration.inline function_decl with
@@ -33,7 +33,7 @@ let can_inline env function_decl =
         ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
                 ~my_closure:_ ->
           let inlining_threshold : Inlining_cost.Threshold.t =
-            let round = E.round env in
+            let round = DE.round denv in
             let unscaled =
               Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
             in

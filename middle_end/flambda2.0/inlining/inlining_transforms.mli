@@ -19,7 +19,7 @@
 open! Flambda.Import
 
 val inline
-   : Simplify_env_and_result.Downwards_acc.t
+   : Downwards_acc.t
   -> callee:Simple.t
   -> args:Simple.t list
   -> Flambda.Function_declaration.t
@@ -27,4 +27,4 @@ val inline
   -> apply_exn_continuation:Exn_continuation.t
   -> Debuginfo.t
   -> Inline_attribute.t
-  -> (Simplify_env_and_result.Downwards_acc.t * Expr.t) option
+  -> (Downwards_acc.t * Expr.t) option
