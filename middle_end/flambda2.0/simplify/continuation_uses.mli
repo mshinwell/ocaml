@@ -44,3 +44,5 @@ val env_and_arg_types
 val definition_scope_level : t -> Scope.t
 
 val number_of_uses : t -> int
+
+val arity : t -> Flambda_arity.t
