@@ -40,3 +40,7 @@ val env_and_arg_types
    : t
   -> Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t * (Flambda_type.t list)
+
+val definition_scope_level : t -> Scope.t
+
+val number_of_uses : t -> int
