@@ -95,7 +95,7 @@ let exn_continuation_scope_level t exn_cont =
   let cont = Exn_continuation.exn_handler exn_cont in
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found ->
-     Misc.fatal_errorf "Unbound exn continuation %a in environment:@ %a"
+     Misc.fatal_errorf "Unbound exn continuation %a in uses environment:@ %a"
        Exn_continuation.print exn_cont
        print t
   | uses -> Continuation_uses.definition_scope_level uses
@@ -103,7 +103,17 @@ let exn_continuation_scope_level t exn_cont =
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found ->
-    Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
+    Misc.fatal_errorf "Unbound continuation %a in uses environment:@ %a"
       Continuation.print cont
       print t
   | uses -> Continuation_uses.number_of_uses uses
+
+let check_continuation_is_bound t cont =
+  if not (Continuation.Map.mem cont t.continuation_uses) then begin
+    Misc.fatal_errorf "Continuation %a not bound in uses environment:@ %a"
+      Continuation.print cont
+      print t
+  end
+
+let check_exn_continuation_is_bound t exn_cont =
+  check_continuation_is_bound t (Exn_continuation.exn_handler exn_cont)
