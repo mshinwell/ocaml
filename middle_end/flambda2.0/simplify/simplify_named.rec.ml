@@ -71,7 +71,8 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   DE.print env
   Expr.print body;
 *)
-        let body, r =
+        (* CR mshinwell: Should probably look at [cont_uses]? *)
+        let body, _cont_uses, r =
 (*
           Format.eprintf "Environment inside function %a:\n%a\n%!"
             Closure_id.print closure_id
@@ -114,7 +115,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
       T.create_non_inlinable_function_declaration
         ~param_arity ~result_arity
   in
-  function_decl, function_decl_type, DA.with_r dacc r
+  function_decl, function_decl_type, r
 
 let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
       ~result_var =
@@ -152,7 +153,7 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   let dacc =
     DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
   in
-  Reachable.reachable term, dacc, ty
+  Reachable.reachable term, DA.with_r dacc r, ty
 
 let simplify_set_of_closures dacc set_of_closures ~result_var =
   (* By simplifying the types of the closure elements, attempt to show that
@@ -211,18 +212,20 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
 Format.eprintf "Environment outside functions:\n%a\n%!"
   T.Typing_env.print (DE.typing_env env);
 *)
-    let funs, fun_types, dacc =
+    let funs, fun_types, r =
       Closure_id.Map.fold
-        (fun closure_id function_decl (funs, fun_types, dacc) ->
-          let function_decl, ty, dacc =
+        (fun closure_id function_decl (funs, fun_types, r) ->
+          let dacc = DA.with_r dacc r in
+          let function_decl, ty, r =
             simplify_function dacc closure_id function_decl ~type_of_my_closure
           in
           let funs = Closure_id.Map.add closure_id function_decl funs in
           let fun_types = Closure_id.Map.add closure_id ty fun_types in
-          funs, fun_types, dacc)
+          funs, fun_types, r)
         funs
-        (Closure_id.Map.empty, Closure_id.Map.empty, dacc)
+        (Closure_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
     in
+    let dacc = DA.with_r dacc r in
     let function_decls = Function_declarations.create funs in
     let set_of_closures =
       Set_of_closures.create ~function_decls ~closure_elements
@@ -262,7 +265,7 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
     in
-    let denv =
+    let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let kind = Flambda_primitive.result_kind' prim in
         let denv = DE.add_variable denv result_var (T.unknown kind) in
@@ -285,4 +288,4 @@ let simplify_named dacc named ~result_var =
       if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
       else named
   in
-  dacc, ty, named
+  named, dacc, ty
