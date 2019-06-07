@@ -21,5 +21,5 @@
 (* -- module rec binding here -- *)
 
 let run ~backend ~round program =
-  let denv = Downwards_env.create ~round ~backend in
+  let denv = Simplify_env_and_result.Downwards_env.create ~round ~backend in
   Simplify_static.simplify_program denv program

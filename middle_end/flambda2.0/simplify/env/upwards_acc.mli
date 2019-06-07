@@ -21,6 +21,11 @@ type t
 (** Print a upwards accumulator to a formatter. *)
 val print : Format.formatter -> t -> unit
 
+val create
+   : Simplify_env_and_result.Upwards_env.t
+  -> Simplify_env_and_result.Result.t
+  -> t
+
 (** Create an upwards accumulator by copying the result structure out of
     the given downwards accumulator. *)
 val of_dacc : Downwards_acc.t -> t
