@@ -10,7 +10,7 @@
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
+(*   special exception on linking described in the file LICENSDE.          *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -18,14 +18,18 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
+module R = Simplify_env_and_result.Result
 module T = Flambda_type
 module TE = T.Typing_env
+module UA = Upwards_acc
 
-let simplify_function env r closure_id function_decl ~type_of_my_closure =
+let simplify_function dacc closure_id function_decl ~type_of_my_closure =
   (* CR mshinwell: improve efficiency by not opening abstraction 3 times *)
   let param_arity = Function_declaration.params_arity function_decl in
   let result_arity = Function_declaration.result_arity function_decl in
+  let denv = DA.denv dacc in
   let params_and_body, r =
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
@@ -35,14 +39,21 @@ let simplify_function env r closure_id function_decl ~type_of_my_closure =
 Format.eprintf "Closure ID %a, entering closure\n%!"
   Closure_id.print closure_id;
 *)
-        let env = E.enter_closure env in
+        let dacc =
+          DA.add_continuation dacc return_continuation
+            ~definition_scope_level:Scope.initial
+            result_arity
+        in
+        let dacc =
+          DA.add_exn_continuation dacc exn_continuation
+            ~definition_scope_level:Scope.initial
+        in
+        let denv = DE.enter_closure denv in
 (*
 Format.eprintf "Closure ID %a, done entering closure\n%!"
   Closure_id.print closure_id;
 *)
-        let env = E.add_continuation env return_continuation result_arity in
-        let env = E.add_exn_continuation env exn_continuation in
-        let env = E.add_parameters_with_unknown_types env params in
+        let denv = DE.add_parameters_with_unknown_types denv params in
 (*
 Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
   Closure_id.print closure_id
@@ -51,29 +62,30 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
         let type_of_my_closure =
           type_of_my_closure closure_id ~param_arity ~result_arity
         in
-        let env = E.add_variable env my_closure type_of_my_closure in
-        let env = E.increment_continuation_scope_level env in
+        let denv = DE.add_variable denv my_closure type_of_my_closure in
+        let denv = DE.increment_continuation_scope_level denv in
+        let dacc = DA.with_denv dacc denv in
 (*
 Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   Closure_id.print closure_id
-  E.print env
+  DE.print env
   Expr.print body;
 *)
-        let body, r =
+        let body, uacc =
 (*
           Format.eprintf "Environment inside function %a:\n%a\n%!"
             Closure_id.print closure_id
-            T.Typing_env.print (E.typing_env env);
+            T.Typing_env.print (DE.typing_env env);
 *)
           try
-            Simplify_toplevel.simplify_toplevel env r body
+            Simplify_toplevel.simplify_toplevel dacc body
               ~return_continuation
               exn_continuation
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s simplifying function \
                 with closure ID %a,@ params %a,@ return continuation %a,@ \
                 exn continuation %a,@ my_closure %a,@ body:@ %a@ \
-                in environment:@ %a@ with (outer) result structure:@ %a\n"
+                with downwards accumulator:@ %a\n"
               (Misc.Color.bold_red ())
               (Misc.Color.reset ())
               Closure_id.print closure_id
@@ -82,8 +94,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
               Exn_continuation.print exn_continuation
               Variable.print my_closure
               Expr.print body
-              E.print env
-              R.print r;
+              DA.print dacc;
             raise Misc.Fatal_error
           end
         in
@@ -91,21 +102,21 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
           Function_params_and_body.create ~return_continuation
             exn_continuation params ~body ~my_closure
         in
-        function_decl, r)
+        function_decl, UA.r uacc)
   in
   let function_decl =
     Function_declaration.update_params_and_body function_decl params_and_body
   in
   let function_decl_type =
-    if Inlining_decision.can_inline env function_decl then
+    if Inlining_decision.can_inline denv function_decl then
       T.create_inlinable_function_declaration function_decl
     else
       T.create_non_inlinable_function_declaration
         ~param_arity ~result_arity
   in
-  function_decl, function_decl_type, r
+  function_decl, function_decl_type, DA.with_r dacc r
 
-let lift_set_of_closures env r set_of_closures ~closure_elements_and_types
+let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
       ~result_var =
   let set_of_closures_symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
@@ -119,11 +130,12 @@ let lift_set_of_closures env r set_of_closures ~closure_elements_and_types
           (Linkage_name.create (Closure_id.unique_name closure_id)))
       funs
   in
-  let _set_of_closures, env, ty, r, static_structure_types, static_structure =
-    Simplify_static.simplify_set_of_closures env ~result_env:env r
+  let _set_of_closures, dacc, ty, static_structure_types, static_structure =
+    Simplify_static.simplify_set_of_closures dacc ~result_dacc:dacc
       set_of_closures ~set_of_closures_symbol ~closure_symbols
       ~closure_elements_and_types
   in
+  let r = DA.r dacc in
   let r =
     let lifted_constants =
       Lifted_constant.create_from_static_structure static_structure_types
@@ -137,17 +149,19 @@ let lift_set_of_closures env r set_of_closures ~closure_elements_and_types
   let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
   let term = Named.create_simple set_of_closures_symbol in
   let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
-  let env = E.add_variable env result_var ty in
-  Reachable.reachable term, env, ty, r
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
+  in
+  Reachable.reachable term, dacc, ty
 
-let simplify_set_of_closures env r set_of_closures ~result_var =
+let simplify_set_of_closures dacc set_of_closures ~result_var =
   (* By simplifying the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated. *)
-  let closure_elements, closure_element_types, r =
+  let closure_elements, closure_element_types =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
-           (closure_elements, closure_element_types, r) ->
-        let simple, ty = Simplify_simple.simplify_simple env simple in
+           (closure_elements, closure_element_types) ->
+        let simple, ty = Simplify_simple.simplify_simple dacc simple in
         let closure_elements =
           Var_within_closure.Map.add var_within_closure simple
             closure_elements
@@ -157,9 +171,9 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
           Var_within_closure.Map.add var_within_closure ty_value
             closure_element_types
         in
-        closure_elements, closure_element_types, r)
+        closure_elements, closure_element_types)
       (Set_of_closures.closure_elements set_of_closures)
-      (Var_within_closure.Map.empty, Var_within_closure.Map.empty, r)
+      (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
   in
   let can_lift =
     Var_within_closure.Map.for_all (fun _ (simple : Simple.t) ->
@@ -169,7 +183,7 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
       closure_elements
   in
   if can_lift then
-    lift_set_of_closures env r set_of_closures
+    lift_set_of_closures dacc set_of_closures
       ~closure_elements_and_types:
         (Some (closure_elements, closure_element_types))
       ~result_var
@@ -195,18 +209,19 @@ let simplify_set_of_closures env r set_of_closures ~result_var =
        be deleted without a global analysis. *)
 (*
 Format.eprintf "Environment outside functions:\n%a\n%!"
-  T.Typing_env.print (E.typing_env env);
+  T.Typing_env.print (DE.typing_env env);
 *)
-    let funs, fun_types, r =
-      Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-          let function_decl, ty, r =
-            simplify_function env r closure_id function_decl ~type_of_my_closure
+    let funs, fun_types, dacc =
+      Closure_id.Map.fold
+        (fun closure_id function_decl (funs, fun_types, dacc) ->
+          let function_decl, ty, dacc =
+            simplify_function dacc closure_id function_decl ~type_of_my_closure
           in
           let funs = Closure_id.Map.add closure_id function_decl funs in
           let fun_types = Closure_id.Map.add closure_id ty fun_types in
-          funs, fun_types, r)
+          funs, fun_types, dacc)
         funs
-        (Closure_id.Map.empty, Closure_id.Map.empty, r)
+        (Closure_id.Map.empty, Closure_id.Map.empty, dacc)
     in
     let function_decls = Function_declarations.create funs in
     let set_of_closures =
@@ -222,45 +237,52 @@ Format.eprintf "Environment outside functions:\n%a\n%!"
         fun_types
     in
     let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-    let env = E.add_variable env result_var set_of_closures_type in
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        DE.add_variable denv result_var set_of_closures_type)
+    in
     let term = Named.create_set_of_closures set_of_closures in
-    Reachable.reachable term, env, set_of_closures_type, r
+    Reachable.reachable term, dacc, set_of_closures_type
 
-let simplify_named0 env r (named : Named.t) ~result_var =
+let simplify_named0 dacc (named : Named.t) ~result_var =
 (*Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;*)
   match named with
   | Simple simple ->
 (*let orig_simple = simple in*)
-    let simple, ty = Simplify_simple.simplify_simple env simple in
+    let simple, ty = Simplify_simple.simplify_simple dacc simple in
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
   Simple.print orig_simple
   Simple.print simple
   T.print ty;*)
-    let env = E.add_variable env result_var ty in
-    Reachable.reachable (Named.create_simple simple), env, ty, r
-  | Prim (prim, dbg) ->
-    let term, env_extension, r =
-      Simplify_primitive.simplify_primitive env r prim dbg ~result_var
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
     in
-    let env =
-      let kind = Flambda_primitive.result_kind' prim in
-      let env = E.add_variable env result_var (T.unknown kind) in
-      E.extend_typing_environment env env_extension
+    Reachable.reachable (Named.create_simple simple), dacc, ty
+  | Prim (prim, dbg) ->
+    let term, env_extension, dacc =
+      Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
+    in
+    let denv =
+      DA.map_denv dacc ~f:(fun denv ->
+        let kind = Flambda_primitive.result_kind' prim in
+        let denv = DE.add_variable denv result_var (T.unknown kind) in
+        DE.extend_typing_environment denv env_extension)
     in
     let cannot_lift =
       not (Flambda_primitive.With_fixed_value.eligible prim)
     in
-    Reification.try_to_reify env r term ~bound_to:result_var ~cannot_lift
+    Reification.try_to_reify dacc term ~bound_to:result_var ~cannot_lift
   | Set_of_closures set_of_closures ->
-    simplify_set_of_closures env r set_of_closures ~result_var
+    simplify_set_of_closures dacc set_of_closures ~result_var
 
-let simplify_named env r named ~result_var =
-  let named, env, ty, r = simplify_named0 env r named ~result_var in
+let simplify_named dacc named ~result_var =
+  let named, dacc, ty = simplify_named0 dacc named ~result_var in
   let named : Reachable.t =
     match named with
     | Invalid _ -> named
     | Reachable _ ->
-      if T.is_bottom (E.typing_env env) ty then Reachable.invalid ()
+      let denv = DA.denv dacc in
+      if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
       else named
   in
-  env, r, ty, named
+  dacc, ty, named
