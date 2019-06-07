@@ -18,15 +18,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module E = Simplify_env_and_result.Env
-module R = Simplify_env_and_result.Result
-module T = Flambda_type
-
 val try_to_reify
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
+   : Downwards_acc.t
   -> Reachable.t
   -> bound_to:Variable.t
   -> cannot_lift:bool
-  -> Reachable.t * Simplify_env_and_result.Env.t * Flambda_type.t
-       * Simplify_env_and_result.Result.t
+  -> Reachable.t * Downwards_acc.t * Flambda_type.t

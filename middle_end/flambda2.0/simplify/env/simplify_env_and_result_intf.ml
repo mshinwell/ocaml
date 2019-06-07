@@ -104,6 +104,8 @@ end
 module type Upwards_env = sig
   type t
 
+  type downwards_env
+
   val empty : t
 
   val invariant : t -> unit
@@ -150,7 +152,7 @@ module type Upwards_env = sig
 
   val record_continuation_use
      : t
-    -> env
+    -> downwards_env
     -> Continuation.t
     -> arg_types:Flambda_type.t list
     -> t
@@ -159,7 +161,7 @@ module type Upwards_env = sig
 
   val continuation_env_and_arg_types
      : t
-    -> env
+    -> downwards_env
     -> Continuation.t
     -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 end
