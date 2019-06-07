@@ -21,6 +21,7 @@ type t
 (** Print a downwards accumulator to a formatter. *)
 val print : Format.formatter -> t -> unit
 
+(** Create a downwards accumulator. *)
 val create
    : Simplify_env_and_result.Downwards_env.t
   -> Continuation_uses_env.t
