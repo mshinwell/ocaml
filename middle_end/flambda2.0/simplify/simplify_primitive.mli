@@ -19,10 +19,8 @@
 (** Simplification of primitive applications. *)
 
 val simplify_primitive
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
+   : Downwards_acc.t
   -> Flambda_primitive.t
   -> Debuginfo.t
   -> result_var:Variable.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t
-       * Simplify_env_and_result.Result.t
+  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t

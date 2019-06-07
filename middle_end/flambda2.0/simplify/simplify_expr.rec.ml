@@ -63,7 +63,10 @@ and simplify_one_continuation_handler dacc uacc cont cont_handler =
     ~f:(fun params ~handler ->
       let denv =
         DA.with_denv dacc ~f:(fun denv ->
-          let arg_types = DE.continuation_arg_types r denv cont in
+          let typing_env, arg_types =
+            DE.continuation_env_and_arg_types r denv cont
+          in
+          let denv = DE.with_typing_environment denv typing_env in
           DE.add_parameters denv params ~arg_types)
       in
       let handler, uacc = simplify_expr dacc handler (fun _dacc -> uacc) in

@@ -14,14 +14,40 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Simplification of primitives taking one argument. *)
+module DA = Downwards_acc
+module R = Simplify_env_and_result.Result
+module UE = Simplify_env_and_result.Upwards_env
 
-val simplify_unary_primitive
-   : Downwards_acc.t
-  -> Flambda_primitive.unary_primitive
-  -> Simple.t
-  -> Debuginfo.t
-  -> result_var:Variable.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
+type t = {
+  uenv : UE.t;
+  r : R.t;
+}
+
+let print ppf { uenv; r; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[(uenv@ %a)@]@ \
+      @[(r@ %a)@]\
+      )@]"
+    UE.print uenv
+    R.print r
+
+let of_dacc dacc =
+  { uenv = UE.empty;
+    r = DA.r dacc;
+  }
+
+let uenv t = t.uenv
+
+let map_uenv t ~f =
+  { t with
+    uenv = f t.uenv;
+  }
+
+let with_uenv t uenv =
+  { t with
+    uenv;
+  }
+
+let r t = t.r
