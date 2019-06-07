@@ -21,4 +21,6 @@ type t
 (** Print a downwards accumulator to a formatter. *)
 val print : Format.formatter -> t -> unit
 
+val empty : t
+
 include Continuation_uses_env_intf.S with type t := t
