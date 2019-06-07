@@ -16,40 +16,42 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+module type S = sig
+  type t
 
-(** Print a downwards accumulator to a formatter. *)
-val print : Format.formatter -> t -> unit
+  val empty : t
 
-val create
-   : Simplify_env_and_result.Downwards_env.t
-  -> Continuation_uses_env.t
-  -> Simplify_env_and_result.Result.t
-  -> t
+  val add_continuation
+     : t
+    -> Continuation.t
+    -> definition_scope_level:Scope.t
+    -> Flambda_arity.t
+    -> t
 
-(** Extract the environment component of the given downwards accumulator. *)
-val denv : t -> Simplify_env_and_result.Downwards_env.t
+  val add_exn_continuation
+     : t
+    -> Exn_continuation.t
+    -> definition_scope_level:Scope.t
+    -> t
 
-(** Map the environment component of the given downwards accumulator. *)
-val map_denv
-   : t
-  -> f:(Simplify_env_and_result.Downwards_env.t
-    -> Simplify_env_and_result.Downwards_env.t)
-  -> t
+  val record_continuation_use
+     : t
+    -> Continuation.t
+    -> typing_env_at_use:Flambda_type.Typing_env.t
+    -> arg_types:Flambda_type.t list
+    -> t
 
-(** Replace the environment component of the given downwards accumulator. *)
-val with_denv : t -> Simplify_env_and_result.Downwards_env.t -> t
+  val continuation_scope_level : t -> Continuation.t -> Scope.t
 
-(** The result structure of the given downwards accumulator. *)
-val r : t -> Simplify_env_and_result.Result.t
+  val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
 
-(** Map the result structure of the given downwards accumulator. *)
-val map_r
-   : t
-  -> f:(Simplify_env_and_result.Result.t
-    -> Simplify_env_and_result.Result.t)
-  -> t
+  (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
-include Continuation_uses_env_intf.S with type t := t
+  val continuation_env_and_arg_types
+     : t
+    -> definition_typing_env:Flambda_type.Typing_env.t
+    -> Continuation.t
+    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 
-val continuation_uses_env : t -> Continuation_uses_env.t
+  val num_continuation_uses : t -> Continuation.t -> int
+end

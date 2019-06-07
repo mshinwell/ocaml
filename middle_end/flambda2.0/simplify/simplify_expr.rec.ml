@@ -18,15 +18,16 @@
 
 open! Flambda.Import
 
+module CUE = Continuation_uses_env
 module DA = Downwards_acc
-module DE = Downwards_env
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module KP = Kinded_parameter
-module R = Simplify_result
+module R = Simplify_env_and_result.Result
 module S = Simplify_simple
 module T = Flambda_type
 module UA = Upwards_acc
-module UE = Upwards_env
+module UE = Simplify_env_and_result.Upwards_env
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 
@@ -34,7 +35,7 @@ let rec simplify_let dacc (let_expr : Let.t) k =
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let denv, ty, (defining_expr : Reachable.t) =
+    let dacc, ty, (defining_expr : Reachable.t) =
       Simplify_named.simplify_named dacc (L.defining_expr let_expr)
         ~result_var:bound_var
     in
@@ -46,7 +47,6 @@ let rec simplify_let dacc (let_expr : Let.t) k =
         K.print new_kind
         L.print let_expr
     end;
-    let dacc = DA.with_denv dacc denv in
     match defining_expr with
     | Invalid _ ->
       let user_data, uacc = k dacc in
@@ -56,20 +56,12 @@ let rec simplify_let dacc (let_expr : Let.t) k =
       let expr = Expr.create_let bound_var kind defining_expr body in
       expr, user_data, uacc)
 
-and simplify_one_continuation_handler dacc uacc cont cont_handler =
+and simplify_one_continuation_handler dacc cont cont_handler k =
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-      let denv =
-        DA.with_denv dacc ~f:(fun denv ->
-          let typing_env, arg_types =
-            DE.continuation_env_and_arg_types r denv cont
-          in
-          let denv = DE.with_typing_environment denv typing_env in
-          DE.add_parameters denv params ~arg_types)
-      in
-      let handler, uacc = simplify_expr dacc handler (fun _dacc -> uacc) in
+      let handler, user_data, uacc = simplify_expr dacc handler k in
       let used_params, unused_params =
         let free_names = Expr.free_names handler in
         List.partition (fun param ->
@@ -81,44 +73,64 @@ and simplify_one_continuation_handler dacc uacc cont cont_handler =
           (CPH.create used_params ~handler)
       in
       match unused_params with
-      | [] -> cont_handler, None, uacc
+      | [] -> cont_handler, None, user_data, uacc
       | _::_ ->
         let original_cont = Continuation.create () in
         let wrapper_cont_handler =
           Continuation_handler.create
-            (Continuation_params_and_handler.create params ~handler:
-              (Expr.create_apply_cont (
-                Apply_cont.create original_cont ~args:used_params)))
+            ~params_and_handler:
+              (Continuation_params_and_handler.create params ~handler:
+                (Expr.create_apply_cont (
+                  Apply_cont.create original_cont ~args:used_params)))
             ~stub:true
             ~is_exn_handler:false
         in
-        wrapper_cont_handler, Some (original_cont, cont_handler), uacc)
+        wrapper_cont_handler, Some (original_cont, cont_handler),
+          user_data, uacc)
 
 and simplify_non_recursive_let_cont_handler dacc let_cont non_rec_handler k =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
+  let definition_denv = DA.denv dacc in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let body, (cont_handler, additional_cont_handler, uenv), uacc =
+      let body, (cont_handler, additional_cont_handler, user_data, uenv'),
+          uacc =
         let arity = Continuation_handler.arity cont_handler in
         let dacc =
           DA.map_denv dacc (fun denv ->
             DE.increment_continuation_scope_level
               (DE.add_continuation denv cont arity))
         in
-        simplify_expr dacc r body (fun dacc ->
-          (* XXX Need to check [dacc] here to count uses *)
-          (* The environment currently in [dacc] is discarded because we need
-             to use the environment of the [Let_cont] when simplifying the
-             handler.
-             Lifted constants arising from simplification of the body need to
-             be collected up and put in that environment before simplifying the
-             handler, since the type(s) of the continuation's parameter(s) may
-             involve the associated symbols. *)
-          let denv = DE.add_lifted_constants denv (R.get_lifted_constants r) in
-          let dacc = DA.with_denv dacc denv in
-          let cont_handler, additional_cont_handler, uacc =
-            simplify_one_continuation_handler dacc r cont cont_handler
+        simplify_expr dacc r body (fun cont_uses_env r ->
+          (* The environment currently in [dacc] is not the correct environment
+             for simplifying the handler. Instead, we must use the environment
+             of the [Let_cont] definition itself, augmented with any lifted
+             constants arising from simplification of the body. (These need to
+             be present since the type(s) of the continuation's parameter(s) may
+             involve the associated symbols.)
+             The environment in [dacc] does, however, contain the usage
+             information for the continuation.  This will be used to
+             compute the types of the continuation's parameter(s). *)
+          let definition_denv =
+            DE.add_lifted_constants definition_denv
+              (R.get_lifted_constants r)
           in
+          let typing_env, arg_types =
+            CUE.continuation_env_and_arg_types cont_uses_env 
+              ~definition_denv cont
+          in
+          let definition_denv =
+            DE.with_typing_environment definition_denv typing_env
+          in
+          let definition_denv =
+            DE.add_parameters definition_denv params ~arg_types
+          in
+          let dacc = DA.create definition_denv cont_uses_env r in
+          let cont_handler, additional_cont_handler, user_data, uacc =
+            simplify_one_continuation_handler dacc cont cont_handler k
+          in
+          let uenv = UA.uenv uacc in
+          let uenv' = uenv in
           let uenv =
             if Continuation_handler.is_exn_handler cont_handler then
               UE.add_continuation uenv cont arity
@@ -129,26 +141,27 @@ and simplify_non_recursive_let_cont_handler dacc let_cont non_rec_handler k =
               | Alias_for { arity; alias_for; } ->
                 UE.add_continuation_alias uenv cont arity ~alias_for
               | Unknown { arity; } ->
-                let num_uses = DE.num_continuation_uses denv cont in
+                let num_uses = DA.num_continuation_uses dacc cont in
                 if num_uses = 1 || Continuation_handler.stub cont_handler then
                   UE.add_continuation_to_inline uenv cont arity
                     (Non_recursive_let_cont_handler.handler non_rec_handler)
                 else
                   UE.add_continuation uenv cont arity
           in
-          let uacc = UA.create uenv r in
-          (cont_handler, additional_cont_handler, uenv), uacc)
+          let uacc = UA.with_uenv uacc uenv in
+          (cont_handler, additional_cont_handler, uenv', user_data), uacc)
       in
-      (* The environment currently in [uacc] is discarded because we're about
-         to move out of the scope of the [Let_cont]. *)
-      let uacc = UA.with_uenv uacc uenv in
+      (* The upwards environment of [uacc] is replaced so that out-of-scope
+         continuation bindings do not end up in the accumulator. *)
+      let uacc = UA.with_uenv uacc uenv' in
       match additional_cont_handler with
       | None ->
-        Let_cont.create_non_recursive cont cont_handler ~body, uacc
+        Let_cont.create_non_recursive cont cont_handler ~body,
+          user_data, uacc
       | Some (additional_cont, additional_cont_handler) ->
         Let_cont.create_non_recursive additional_cont additional_cont_handler
             ~body:(Let_cont.create_non_recursive cont cont_handler ~body),
-          uacc)
+          user_data, uacc)
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
@@ -207,7 +220,7 @@ and simplify_let_cont dacc (let_cont : Let_cont.t) k =
   | Recursive handlers ->
     simplify_recursive_let_cont_handlers dacc handlers k
 
-and simplify_direct_full_application dacc apply function_decl_opt =
+and simplify_direct_full_application dacc apply function_decl_opt k =
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
@@ -222,8 +235,10 @@ and simplify_direct_full_application dacc apply function_decl_opt =
         (Apply.inline apply)
   in
   match inlined with
-  | Some (dacc, inlined) -> simplify_expr dacc r inlined
-  | None -> Expr.create_apply apply, UA.of_dacc dacc
+  | Some (dacc, inlined) -> simplify_expr dacc inlined k
+  | None ->
+    let user_data, uacc = k dacc in
+    Expr.create_apply apply, user_data, uacc
 
 and simplify_direct_partial_application dacc apply ~callee's_closure_id
       ~param_arity ~result_arity k =
@@ -502,8 +517,8 @@ and simplify_function_call_where_callee's_type_unavailable dacc apply
       in
       call_kind, denv
   in
-  let uacc = k (DE.with_denv dacc denv) in
-  Expr.create_apply (Apply.with_call_kind apply call_kind), uacc
+  let user_data, uacc = k (DE.with_denv dacc denv) in
+  Expr.create_apply (Apply.with_call_kind apply call_kind), user_data, uacc
 
 and simplify_function_call dacc apply ~callee_ty
       (call : Call_kind.Function_call.t) ~arg_types k =
@@ -577,8 +592,8 @@ and simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
     DE.record_continuation_use denv (Apply.continuation apply)
       ~arg_types:[T.any_value ()]
   in
-  let uacc = k (DA.with_denv dacc denv) in
-  Expr.create_apply apply, uacc
+  let user_data, uacc = k (DA.with_denv dacc denv) in
+  Expr.create_apply apply, user_data, uacc
 
 and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       ~arg_types k =
