@@ -629,7 +629,7 @@ and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       Apply.print apply
   end;
   let cont = Apply.continuation apply in
-  let cont_arity = UE.continuation_arity env cont in
+  let cont_arity = DA.continuation_arity dacc cont in
   if not (Flambda_arity.equal cont_arity return_arity) then begin
     Misc.fatal_errorf "Arity %a of [Apply] continuation doesn't match \
         return arity %a of C callee:@ %a"
@@ -638,18 +638,17 @@ and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       Apply.print apply
   end;
   let denv =
-    DE.record_continuation_use denv (Apply.continuation apply)
+    DA.record_continuation_use dacc (Apply.continuation apply)
+      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
-  let uacc = k (DA.with_denv dacc denv) in
-  let uenv = UA.uenv uacc in
-  UE.check_exn_continuation_is_bound uenv (Apply.exn_continuation apply);
-  let cont = UE.resolve_continuation_aliases uenv (Apply.continuation apply) in
-  let apply = Apply.with_continuation apply cont in
-  Expr.create_apply apply, uacc
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+  (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
+     called before building of any term that contains a continuation *)
+  Expr.create_apply apply, user_data, uacc
 
 and simplify_apply dacc apply k =
-  let callee_ty, apply, arg_types = simplify_apply_shared env r apply in
+  let callee_ty, apply, arg_types = simplify_apply_shared dacc apply in
   match Apply.call_kind apply with
   | Function call ->
     simplify_function_call dacc apply ~callee_ty call ~arg_types k
@@ -662,14 +661,15 @@ and simplify_apply dacc apply k =
 and simplify_apply_cont dacc apply_cont k =
   let module AC = Apply_cont in
   (* CR mshinwell: Consider changing interface of [simplify_simples] *)
-  let args_with_types = S.simplify_simples denv (AC.args apply_cont) in
+  let args_with_types = S.simplify_simples dacc (AC.args apply_cont) in
   let args, arg_types = List.split args_with_types in
   let args_arity = T.arity_of_list arg_types in
   let dacc =
-    DA.with_denv dacc
-      (fun denv -> DE.record_continuation_use denv cont ~arg_types)
+    DA.record_continuation_use dacc (AC.continuation apply_cont)
+      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~arg_types
   in
-  let uacc = k dacc in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let uenv = UA.uenv uacc in
   let cont =
     UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
@@ -721,7 +721,9 @@ and simplify_apply_cont dacc apply_cont k =
           let expr =
             Expr.bind_parameters_to_simples ~bind:params ~target:args handler
           in
-          try simplify_expr dacc expr (fun _dacc -> uacc)
+          let dacc = DA.with_r dacc (UA.r uacc) in
+          try
+            simplify_expr dacc expr (fun _cont_uses_env r -> (UA.with_r uacc r))
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
                 The inlined body was:@ %a@ in environment:@ %a\n"
@@ -734,7 +736,7 @@ and simplify_apply_cont dacc apply_cont k =
           end)
 
 and simplify_switch dacc (switch : Flambda.Switch.t) k =
-  let user_data, uacc = k dacc in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let uenv = UA.uenv uacc in
   let reachable_arms =
     Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun _arm cont ->
@@ -759,5 +761,5 @@ and simplify_expr
   | Apply_cont apply_cont -> simplify_apply_cont env r apply_cont k
   | Switch switch -> simplify_switch env r switch k
   | Invalid _ ->
-    let user_data, uacc = k dacc in
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     expr, user_data, uacc
