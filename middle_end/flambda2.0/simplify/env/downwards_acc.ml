@@ -16,20 +16,37 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+module DE = Simplify_env_and_result.Downwards_env
+module R = Simplify_env_and_result.Result
 
-(** Create an upwards accumulator by copying the result structure out of
-    the given downwards accumulator. *)
-val of_dacc : Downwards_acc.t -> t
+type t = {
+  denv : DE.t;
+  r : R.t;
+}
 
-(** Extract the environment component of the given upwards accumulator. *)
-val uenv : t -> Upwards_env.t
+let print ppf { denv; r; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[(denv@ %a)@]@ \
+      @[(r@ %a)@]\
+      )@]"
+    DE.print denv
+    R.print r
 
-(** Map the environment component of the given upwards accumulator. *)
-val map_uenv : t -> f:(Upwards_env.t -> Upwards_env.t) -> t
+let denv t = t.denv
 
-(** Replace the environment component of the given upwards accumulator. *)
-val with_uenv : t -> Upwards_env.t -> t
+let map_denv t ~f =
+  { t with
+    denv = f t.denv;
+  }
 
-(** The result structure of the given upwards accumulator. *)
-val r : t -> Simplify_result.t
+let with_denv t denv =
+  { t with
+    denv;
+  }
+
+let r t = t.r
+
+let map_r t ~f =
+  { t with
+    r = f t.r;
+  }

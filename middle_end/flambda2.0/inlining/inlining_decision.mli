@@ -19,6 +19,6 @@
 open! Flambda.Import
 
 val can_inline
-   : Simplify_env_and_result.Env.t
+   : Simplify_env_and_result.Downwards_env.t
   -> Function_declaration.t
   -> bool

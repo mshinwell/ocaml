@@ -18,14 +18,25 @@
 
 type t
 
-(** Extract the environment component of the given downwards accumulator. *)
-val denv : t -> Downwards_env.t
+(** Print a upwards accumulator to a formatter. *)
+val print : Format.formatter -> t -> unit
 
-(** Map the environment component of the given downwards accumulator. *)
-val map_denv : t -> f:(Downwards_env.t -> Downwards_env.t) -> t
+(** Create an upwards accumulator by copying the result structure out of
+    the given downwards accumulator. *)
+val of_dacc : Downwards_acc.t -> t
 
-(** Replace the environment component of the given downwards accumulator. *)
-val with_denv : t -> Downwards_env.t -> t
+(** Extract the environment component of the given upwards accumulator. *)
+val uenv : t -> Simplify_env_and_result.Upwards_env.t
 
-(** The result structure of the given downwards accumulator. *)
-val r : t -> Simplify_result.t
+(** Map the environment component of the given upwards accumulator. *)
+val map_uenv
+   : t
+  -> f:(Simplify_env_and_result.Upwards_env.t
+    -> Simplify_env_and_result.Upwards_env.t)
+  -> t
+
+(** Replace the environment component of the given upwards accumulator. *)
+val with_uenv : t -> Simplify_env_and_result.Upwards_env.t -> t
+
+(** The result structure of the given upwards accumulator. *)
+val r : t -> Simplify_env_and_result.Result.t

@@ -18,13 +18,15 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 
-let inline env ~callee ~args function_decl
+let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       dbg (inline : Inline_attribute.t) =
-  if not (E.can_inline env) then
+  let denv = DA.denv dacc in
+  if not (DE.can_inline denv) then
     None
   else
     match inline with
@@ -34,8 +36,8 @@ let inline env ~callee ~args function_decl
         (Function_declaration.params_and_body function_decl)
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ->
-          let env =
-            E.disable_function_inlining (E.add_inlined_debuginfo env dbg)
+          let denv =
+            DE.disable_function_inlining (DE.add_inlined_debuginfo denv dbg)
           in
           let expr =
             Expr.link_continuations
@@ -50,4 +52,4 @@ let inline env ~callee ~args function_decl
                   (Expr.create_let my_closure K.value
                     (Named.create_simple callee) body)))
           in
-          Some (env, expr))
+          Some (DA.with_denv dacc denv, expr))

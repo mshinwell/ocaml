@@ -10,7 +10,7 @@
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
+(*   special exception on linking described in the file LICENSDE.          *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -18,7 +18,8 @@
 
 open! Flambda.Import
 
-module E = Simplify_env_and_result.Env
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
@@ -31,7 +32,7 @@ let create_static_part (to_lift : T.to_lift)
   | Boxed_int64 i -> Boxed_int64 (Const i)
   | Boxed_nativeint i -> Boxed_nativeint (Const i)
 
-let lift env r ty ~bound_to static_part =
+let lift dacc ty ~bound_to static_part =
   let symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create (Variable.unique_name bound_to))
@@ -45,37 +46,43 @@ let lift env r ty ~bound_to static_part =
       (Singleton symbol)
       static_part
   in
-  let r = R.new_lifted_constant r lifted_constant in
-  let env = E.add_symbol env symbol ty in
-  let symbol = Simple.symbol symbol in
-  let term = Named.create_simple symbol in
-  let ty = T.alias_type_of (T.kind ty) symbol in
-  let env = E.add_equation_on_variable env bound_to ty in
+  let dacc =
+    DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+  in
+  let symbol' = Simple.symbol symbol in
+  let term = Named.create_simple symbol' in
+  let ty = T.alias_type_of (T.kind ty) symbol' in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      let denv = DE.add_symbol denv symbol ty in
+      DE.add_equation_on_variable denv bound_to ty)
+  in
 (*Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
-Format.eprintf "New environment:@ %a\n%!" T.Typing_env.print (E.typing_env env);
+Format.eprintf "New environment:@ %a\n%!" T.Typing_env.print (DE.typing_env env);
 *)
-  Reachable.reachable term, env, ty, r
+  Reachable.reachable term, dacc, ty
 
-let try_to_reify env r (term : Reachable.t) ~bound_to ~cannot_lift =
-  let ty = E.find_variable env bound_to in
+let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
+  let denv = DA.denv dacc in
+  let ty = DE.find_variable denv bound_to in
   match term with
   | Invalid _ -> 
     let ty = T.bottom_like ty in
-    let env = E.add_equation_on_variable env bound_to ty in
-    term, env, ty, r
+    let denv = DE.add_equation_on_variable denv bound_to ty in
+    term, (DA.with_denv dacc denv), ty
   | Reachable _ ->
-    match T.reify (E.typing_env env) ty ~allow_free_variables:true with
+    match T.reify (DE.typing_env denv) ty ~allow_free_variables:true with
     | Term (simple, ty) ->
       let term = Named.create_simple simple in
-      Reachable.reachable term, env, ty, r
+      Reachable.reachable term, dacc, ty
     | Lift to_lift ->
-      if cannot_lift then term, env, ty, r
+      if cannot_lift then term, dacc, ty
       else
         let static_part = create_static_part to_lift in
-        lift env r ty ~bound_to static_part
-    | Cannot_reify -> term, env, ty, r
+        lift dacc ty ~bound_to static_part
+    | Cannot_reify -> term, dacc, ty
     | Invalid ->
       let ty = T.bottom_like ty in
-      let env = E.add_equation_on_variable env bound_to ty in
-      Reachable.invalid (), env, ty, r
+      let denv = DE.add_equation_on_variable denv bound_to ty in
+      Reachable.invalid (), DA.with_denv dacc denv, ty
