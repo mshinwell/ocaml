@@ -19,8 +19,6 @@
 module type S = sig
   type t
 
-  val empty : t
-
   val add_continuation
      : t
     -> Continuation.t

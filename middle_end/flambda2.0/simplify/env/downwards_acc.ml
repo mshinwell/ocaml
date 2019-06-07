@@ -36,9 +36,10 @@ let print ppf { denv; continuation_uses_env; r; } =
     CUE.print continuation_uses_env
     R.print r
 
-let create ~round ~backend = {
-  denv = DE.create ~round ~backend;
-  continuation_uses_env = CUE.empty;
+let create denv continuation_uses_env r = {
+  denv;
+  continuation_uses_env;
+  r;
 }
 
 let denv t = t.denv
@@ -65,17 +66,30 @@ let with_continuation_uses_env t continuation_uses_env =
     continuation_uses_env;
   }
 
-let add_continuation t cont arity =
-  with_continuation_uses_env (
-    CUE.add_continuation t.continuation_uses_env cont arity)
+let add_continuation t cont ~definition_scope_level arity =
+  with_continuation_uses_env t (
+    CUE.add_continuation t.continuation_uses_env cont ~definition_scope_level
+      arity)
 
-let add_exn_continuation t exn_cont =
-  with_continuation_uses_env (
-    CUE.add_exn_continuation t.continuation_uses_env exn_cont)
+let add_exn_continuation t exn_cont ~definition_scope_level =
+  with_continuation_uses_env t (
+    CUE.add_exn_continuation t.continuation_uses_env ~definition_scope_level
+      exn_cont)
 
-let record_continuation_use t cont ~arg_types =
-  with_continuation_uses_env (
-    CUE.record_continuation_use t.continuation_uses_env t cont ~arg_types)
+let record_continuation_use t cont ~typing_env_at_use ~arg_types =
+  with_continuation_uses_env t (
+    CUE.record_continuation_use t.continuation_uses_env cont
+      ~typing_env_at_use ~arg_types)
+
+let continuation_scope_level t cont =
+  CUE.continuation_scope_level t.continuation_uses_env cont
+
+let exn_continuation_scope_level t exn_cont =
+  CUE.exn_continuation_scope_level t.continuation_uses_env exn_cont
+
+let continuation_env_and_arg_types t ~definition_typing_env cont =
+  CUE.continuation_env_and_arg_types t.continuation_uses_env
+    ~definition_typing_env cont
 
 let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont
