@@ -255,10 +255,6 @@ end and Let_cont_expr : sig
      : Continuation_handler.t Continuation.Map.t
     -> body:Expr.t
     -> Expr.t
-
-  (** Determine whether the continuation bound by the [Let_cont] should be
-      inlined out. *)
-  val should_inline_out : t -> Non_recursive_let_cont_handler.t option
 end and Non_recursive_let_cont_handler : sig
   (** The representation of the alpha-equivalence class of the binding of a
       single non-recursive continuation handler over a body. *)

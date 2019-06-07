@@ -64,7 +64,3 @@ val create_recursive
    : Continuation_handler.t Continuation.Map.t
   -> body:Expr.t
   -> Expr.t
-
-(** Determine whether the continuation bound by the [Let_cont] should be
-    inlined out. *)
-val should_inline_out : t -> Non_recursive_let_cont_handler.t option

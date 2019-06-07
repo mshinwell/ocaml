@@ -99,6 +99,30 @@ module type Downwards_env = sig
   val add_lifted_constants_from_r : t -> result -> t
 
   val can_inline : t -> bool
+
+  val add_continuation : t -> Continuation.t -> Flambda_arity.t -> t
+
+  val add_exn_continuation : t -> Exn_continuation.t -> t
+
+  val record_continuation_use
+     : t
+    -> Continuation.t
+    -> arg_types:Flambda_type.t list
+    -> t
+
+  val continuation_scope_level : t -> Continuation.t -> Scope.t
+
+  val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
+
+  (* CR mshinwell: Add [record_exn_continuation_use]? *)
+
+  val continuation_env_and_arg_types
+     : t
+    -> definition_env:t
+    -> Continuation.t
+    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
+
+  val num_continuation_uses : t -> Continuation.t -> int
 end
 
 module type Upwards_env = sig
@@ -112,11 +136,17 @@ module type Upwards_env = sig
 
   val print : Format.formatter -> t -> unit
 
-  val add_continuation : t -> Continuation.t -> Flambda_arity.t -> t
+  val add_continuation
+     : t
+    -> Continuation.t
+    -> Scope.t
+    -> Flambda_arity.t
+    -> t
 
   val add_unreachable_continuation
      : t
     -> Continuation.t
+    -> Scope.t
     -> Flambda_arity.t
     -> t
 
@@ -130,11 +160,16 @@ module type Upwards_env = sig
   val add_continuation_to_inline
      : t
     -> Continuation.t
+    -> Scope.t
     -> Flambda_arity.t
     -> Continuation_handler.t
     -> t
 
-  val add_exn_continuation : t -> Exn_continuation.t -> t
+  val add_exn_continuation
+     : t
+    -> Exn_continuation.t
+    -> Scope.t
+    -> t
 
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
 
@@ -145,31 +180,10 @@ module type Upwards_env = sig
   val check_continuation_is_bound : t -> Continuation.t -> unit
 
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
-
-  val continuation_scope_level : t -> Continuation.t -> Scope.t
-
-  val exn_continuation_scope_level : t -> Exn_continuation.t -> Scope.t
-
-  val record_continuation_use
-     : t
-    -> downwards_env
-    -> Continuation.t
-    -> arg_types:Flambda_type.t list
-    -> t
-
-  (* CR mshinwell: Add [record_exn_continuation_use]? *)
-
-  val continuation_env_and_arg_types
-     : t
-    -> downwards_env
-    -> Continuation.t
-    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
 end
 
 module type Result = sig
   type t
-
-  type env
 
   val print : Format.formatter -> t -> unit
 
