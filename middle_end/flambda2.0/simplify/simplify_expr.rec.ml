@@ -41,7 +41,7 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let dacc, ty, (defining_expr : Reachable.t) =
+    let (defining_expr : Reachable.t), dacc, ty =
       Simplify_named.simplify_named dacc (L.defining_expr let_expr)
         ~result_var:bound_var
     in

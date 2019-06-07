@@ -20,7 +20,7 @@ val simplify_named
    : Downwards_acc.t
   -> Flambda.Named.t
   -> result_var:Variable.t
-  -> Downwards_acc.t * Flambda_type.t * Reachable.t
+  -> Reachable.t * Downwards_acc.t * Flambda_type.t
 
 val simplify_function
    : Downwards_acc.t
@@ -32,4 +32,4 @@ val simplify_function
     -> result_arity:Flambda_arity.t
     -> Flambda_type.t)
   -> Flambda.Function_declaration.t * Flambda_type.function_declaration
-       * Downwards_acc.t
+       * Simplify_env_and_result.Result.t
