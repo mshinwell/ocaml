@@ -31,8 +31,25 @@ end = struct
     continuation_scope_level : Scope.t;
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
-    continuation_uses : Continuation_uses.t Continuation.Map.t;
   }
+
+  let print ppf { backend = _; round; typing_env;
+                  continuation_scope_level; inlined_debuginfo; can_inline;
+                  continuation_uses;
+                } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(round@ %d)@]@ \
+        @[<hov 1>(typing_env@ %a)@]@ \
+        @[<hov 1>(continuation_scope_level@ %a)@]@ \
+        @[<hov 1>(inlined_debuginfo@ %a)@]@ \
+        @[<hov 1>(can_inline@ %b)@]\
+        )@]"
+      round
+      TE.print typing_env
+      Scope.print continuation_scope_level
+      Debuginfo.print inlined_debuginfo
+      can_inline
+      (Continuation.Map.print Continuation_uses.print) continuation_uses
 
   let invariant _t = ()
 
@@ -45,27 +62,7 @@ end = struct
       continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline = false;
-      continuation_uses = Continuation.Map.empty;
     }
-
-  let print ppf { backend = _; round; typing_env;
-                  continuation_scope_level; inlined_debuginfo; can_inline;
-                  continuation_uses;
-                } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(round@ %d)@]@ \
-        @[<hov 1>(typing_env@ %a)@]@ \
-        @[<hov 1>(continuation_scope_level@ %a)@]@ \
-        @[<hov 1>(inlined_debuginfo@ %a)@]@ \
-        @[<hov 1>(can_inline@ %b)@]@ \
-        @[<hov 1>(continuation_uses@ %a)@]\
-        )@]"
-      round
-      TE.print typing_env
-      Scope.print continuation_scope_level
-      Debuginfo.print inlined_debuginfo
-      can_inline
-      (Continuation.Map.print Continuation_uses.print) continuation_uses
 
   let resolver t = TE.resolver t.typing_env
   let backend t = t.backend
@@ -87,7 +84,7 @@ end = struct
 
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
-                      continuation_uses = _; continuation_scope_level = _;
+                      continuation_scope_level = _;
                     } =
     { backend;
       round;
@@ -95,7 +92,6 @@ end = struct
       continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
-      continuation_uses = Continuation.Map.empty;
     }
 
   let add_variable t var ty =
@@ -223,91 +219,6 @@ end = struct
   (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
   let add_lifted_constants_from_r t r =
     add_lifted_constants t (Result.get_lifted_constants r)
-
-  let add_continuation t cont arity =
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      let uses =
-        Continuation_uses.create arity
-          ~definition_scope_level:t.continuation_scope_level
-      in
-      { t with
-        continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-      }
-    | _uses ->
-      Misc.fatal_errorf "Cannot redefine continuation %a in downwards \
-          environment:@ %a"
-        Continuation.print cont
-        print t
-
-  let add_exn_continuation t exn_cont =
-    let cont = Exn_continuation.exn_handler exn_cont in
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      let arity = Exn_continuation.arity exn_cont in
-      let uses =
-        Continuation_uses.create arity
-          ~definition_scope_level:t.continuation_scope_level
-      in
-      { t with
-        continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-      }
-    | _uses ->
-      Misc.fatal_errorf "Cannot redefine exn continuation %a in downwards \
-          environment:@ %a"
-        Exn_continuation.print exn_cont
-        print t
-
-  let record_continuation_use t cont ~arg_types =
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      Misc.fatal_errorf "[record_continuation_use]:@ \
-          Continuation %a not present in downwards env:@ %a"
-        Continuation.print cont
-        print t
-    | uses ->
-      (* XXX This needs to deal with exn continuation extra-args *)
-      let uses =
-        Continuation_uses.add_use uses (typing_env t) ~arg_types
-      in
-      { t with
-        continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-      }
-
-  let continuation_env_and_arg_types t ~definition_env cont =
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      Misc.fatal_errorf "[continuation_env_and_arg_types]:@ \
-          Continuation %a not present in downwards env:@ %a"
-        Continuation.print cont
-        print t
-    | uses ->
-      Continuation_uses.env_and_arg_types uses (typing_env definition_env)
-
-  let continuation_scope_level t cont =
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | uses -> Continuation_uses.definition_scope_level uses
-
-  let exn_continuation_scope_level t exn_cont =
-    let cont = Exn_continuation.exn_handler exn_cont in
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-       Misc.fatal_errorf "Unbound exn continuation %a in environment:@ %a"
-         Exn_continuation.print exn_cont
-         print t
-    | uses -> Continuation_uses.definition_scope_level uses
-
-  let num_continuation_uses t cont =
-    match Continuation.Map.find cont t.continuation_uses with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
-        Continuation.print cont
-        print t
-    | uses -> Continuation_uses.number_of_uses uses
 end and Upwards_env : sig
   include Simplify_env_and_result_intf.Upwards_env
     with type downwards_env := Downwards_env.t

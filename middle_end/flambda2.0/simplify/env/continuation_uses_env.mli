@@ -21,35 +21,4 @@ type t
 (** Print a downwards accumulator to a formatter. *)
 val print : Format.formatter -> t -> unit
 
-val create
-   : Simplify_env_and_result.Downwards_env.t
-  -> Continuation_uses_env.t
-  -> Simplify_env_and_result.Result.t
-  -> t
-
-(** Extract the environment component of the given downwards accumulator. *)
-val denv : t -> Simplify_env_and_result.Downwards_env.t
-
-(** Map the environment component of the given downwards accumulator. *)
-val map_denv
-   : t
-  -> f:(Simplify_env_and_result.Downwards_env.t
-    -> Simplify_env_and_result.Downwards_env.t)
-  -> t
-
-(** Replace the environment component of the given downwards accumulator. *)
-val with_denv : t -> Simplify_env_and_result.Downwards_env.t -> t
-
-(** The result structure of the given downwards accumulator. *)
-val r : t -> Simplify_env_and_result.Result.t
-
-(** Map the result structure of the given downwards accumulator. *)
-val map_r
-   : t
-  -> f:(Simplify_env_and_result.Result.t
-    -> Simplify_env_and_result.Result.t)
-  -> t
-
 include Continuation_uses_env_intf.S with type t := t
-
-val continuation_uses_env : t -> Continuation_uses_env.t
