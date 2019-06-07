@@ -71,7 +71,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   DE.print env
   Expr.print body;
 *)
-        let body, uacc =
+        let body, r =
 (*
           Format.eprintf "Environment inside function %a:\n%a\n%!"
             Closure_id.print closure_id
@@ -102,7 +102,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
           Function_params_and_body.create ~return_continuation
             exn_continuation params ~body ~my_closure
         in
-        function_decl, UA.r uacc)
+        function_decl, r)
   in
   let function_decl =
     Function_declaration.update_params_and_body function_decl params_and_body
