@@ -34,7 +34,7 @@ let rec simplify_let dacc (let_expr : Let.t) k =
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let denv, r, ty, (defining_expr : Reachable.t) =
+    let denv, ty, (defining_expr : Reachable.t) =
       Simplify_named.simplify_named dacc (L.defining_expr let_expr)
         ~result_var:bound_var
     in
@@ -129,11 +129,12 @@ and simplify_non_recursive_let_cont_handler dacc let_cont non_rec_handler k =
               | Alias_for { arity; alias_for; } ->
                 UE.add_continuation_alias uenv cont arity ~alias_for
               | Unknown { arity; } ->
-                match (* XXX *) Let_cont.should_inline_out let_cont with
-                | None -> UE.add_continuation uenv cont arity
-                | Some non_rec_handler ->
+                let num_uses = DE.num_continuation_uses denv cont in
+                if num_uses = 1 || Continuation_handler.stub cont_handler then
                   UE.add_continuation_to_inline uenv cont arity
                     (Non_recursive_let_cont_handler.handler non_rec_handler)
+                else
+                  UE.add_continuation uenv cont arity
           in
           let uacc = UA.create uenv r in
           (cont_handler, additional_cont_handler, uenv), uacc)

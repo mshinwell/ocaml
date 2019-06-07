@@ -18,13 +18,8 @@
 (* CR mshinwell: Fix warning 60 *)
 [@@@ocaml.warning "-60"]
 
-module E = Simplify_env_and_result.Env
-module K = Flambda_kind
-module R = Simplify_env_and_result.Result
-module T = Flambda_type
-
 (* -- module rec binding here -- *)
 
 let run ~backend ~round program =
-  let env = E.create ~round ~backend in
-  Simplify_static.simplify_program env program
+  let denv = Downwards_env.create ~round ~backend in
+  Simplify_static.simplify_program denv program

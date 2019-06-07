@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val simplify_expr
-   : Simplify_env_and_result.Env.t
-  -> Simplify_env_and_result.Result.t
+   : Downwards_acc.t
   -> Flambda.Expr.t
-  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
+  -> Flambda.Expr.t * Upwards_acc.t
