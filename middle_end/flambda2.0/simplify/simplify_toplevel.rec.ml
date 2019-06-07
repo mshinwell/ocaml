@@ -16,22 +16,15 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module E = Simplify_env_and_result.Env
+module DA = Downwards_acc
 module R = Simplify_env_and_result.Result
+module UA = Upwards_acc
 
-(* Values of two types hold the information propagated during simplification:
-   - [E.t] "environments", top-down, almost always called "env";
-   - [R.t] "results", bottom-up approximately following the evaluation order,
-     almost always called "r".  These results come along with rewritten
-     Flambda terms.
-*)
-let simplify_toplevel env r_outer expr ~return_continuation
-     exn_continuation =
-  E.check_continuation_is_bound env return_continuation;
-  E.check_exn_continuation_is_bound env exn_continuation;
-  let r = R.create ~resolver:(E.resolver env) in
-  let r = R.add_continuation r env return_continuation in
-  let r = R.add_exn_continuation r env exn_continuation in
-  let expr, r = Simplify_expr.simplify_expr env r expr in
-  let r_outer = R.add_lifted_constants r_outer ~from:r in
+let simplify_toplevel dacc expr ~return_continuation exn_continuation =
+  DA.check_continuation_is_bound dacc return_continuation;
+  DA.check_exn_continuation_is_bound dacc exn_continuation;
+  let expr, uacc =
+    Simplify_expr.simplify_expr dacc expr (fun dacc -> UA.of_dacc dacc)
+  in
+  let r_outer = R.add_lifted_constants (DA.r dacc) ~from:(UA.r uacc) in
   expr, r_outer

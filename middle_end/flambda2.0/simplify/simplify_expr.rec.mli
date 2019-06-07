@@ -16,7 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type 'a k =
+     Continuation_uses_env.t
+  -> Simplify_env_and_result.Result.t
+  -> ('a * Upwards_acc.t)
+
 val simplify_expr
    : Downwards_acc.t
   -> Flambda.Expr.t
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> 'a k
+  -> Flambda.Expr.t * 'a * Upwards_acc.t
