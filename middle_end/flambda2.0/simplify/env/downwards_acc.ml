@@ -95,3 +95,9 @@ let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont
 
 let continuation_uses_env t = t.continuation_uses_env
+
+let check_continuation_is_bound t cont =
+  CUE.check_continuation_is_bound t.continuation_uses_env cont
+
+let check_exn_continuation_is_bound t exn_cont =
+  CUE.check_exn_continuation_is_bound t.continuation_uses_env exn_cont

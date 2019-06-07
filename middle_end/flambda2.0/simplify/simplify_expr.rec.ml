@@ -574,14 +574,15 @@ and simplify_function_call dacc apply ~callee_ty
     Expr.create_invalid (), user_data, uacc
 
 and simplify_apply_shared dacc apply =
-  (* XXX *)
-  let cont = E.resolve_continuation_aliases env (Apply.continuation apply) in
-  E.check_exn_continuation_is_bound env (Apply.exn_continuation apply);
+  DA.check_continuation_is_bound dacc (Apply.continuation apply);
+  DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
   let callee, callee_ty = S.simplify_simple env (Apply.callee apply) in
   let args_with_types = S.simplify_simples env (Apply.args apply) in
   let args, arg_types = List.split args_with_types in
   let apply =
-    Apply.with_continuation_callee_and_args apply cont ~callee ~args
+    (* CR mshinwell: Remove continuation argument *)
+    Apply.with_continuation_callee_and_args apply (Apply.continuation apply)
+      ~callee ~args
   in
   callee_ty, apply, arg_types, r
 
@@ -604,7 +605,14 @@ and simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
     DE.record_continuation_use denv (Apply.continuation apply)
       ~arg_types:[T.any_value ()]
   in
+  (* CR mshinwell: Need to record exception continuation use (check all other
+     cases like this too) *)
   let user_data, uacc = k (DA.with_denv dacc denv) in
+  (* CR mshinwell: Following few lines could be factored out *)
+  let uenv = UA.uenv uacc in
+  UE.check_exn_continuation_is_bound uenv (Apply.exn_continuation apply);
+  let cont = UE.resolve_continuation_aliases uenv (Apply.continuation apply) in
+  let apply = Apply.with_continuation apply cont in
   Expr.create_apply apply, user_data, uacc
 
 and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
@@ -637,6 +645,10 @@ and simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let uacc = k (DA.with_denv dacc denv) in
+  let uenv = UA.uenv uacc in
+  UE.check_exn_continuation_is_bound uenv (Apply.exn_continuation apply);
+  let cont = UE.resolve_continuation_aliases uenv (Apply.continuation apply) in
+  let apply = Apply.with_continuation apply cont in
   Expr.create_apply apply, uacc
 
 and simplify_apply dacc apply k =
