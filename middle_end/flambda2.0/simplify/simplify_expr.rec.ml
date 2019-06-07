@@ -533,10 +533,11 @@ and simplify_function_call dacc apply ~callee_ty
       (call : Call_kind.Function_call.t) ~arg_types k =
   let type_unavailable () =
     simplify_function_call_where_callee's_type_unavailable dacc apply call
-      ~arg_types
+      ~arg_types k
   in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
-  match T.prove_single_closures_entry (E.typing_env env) callee_ty with
+  let denv = DA.denv dacc in
+  match T.prove_single_closures_entry (DE.typing_env denv) callee_ty with
   | Proved (callee's_closure_id, func_decl_type) ->
     (* CR mshinwell: We should check that the [set_of_closures] in the
        [closures_entry] structure in the type does indeed contain the
@@ -555,20 +556,22 @@ and simplify_function_call dacc apply ~callee_ty
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> ()
       end;
-      simplify_direct_function_call env r apply
+      simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
         ~param_arity:(Function_declaration.params_arity function_decl)
         ~result_arity:(Function_declaration.result_arity function_decl)
-        (Some function_decl)
+        (Some function_decl) k
     | Known (Non_inlinable { param_arity; result_arity; }) ->
-      simplify_direct_function_call env r apply
+      simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
         ~param_arity ~result_arity
-        None
+        None k
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
-  | Invalid -> Expr.create_invalid (), uacc
+  | Invalid ->
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    Expr.create_invalid (), user_data, uacc
 
 and simplify_apply_shared dacc apply =
   (* XXX *)
