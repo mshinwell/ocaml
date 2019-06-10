@@ -29,7 +29,7 @@ module type S = sig
 
   val print : Format.formatter -> t -> unit
 
-  (* CR mshinwell: Add [bottom] here? *)
+  (* CR mshinwell: Add [bottom] here?  Probably [is_bottom] too *)
 
   val equal : type_equality_env -> t -> t -> bool
 

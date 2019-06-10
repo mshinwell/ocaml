@@ -202,7 +202,7 @@ Format.eprintf "RL meet is returning bottom\n%!";
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
 
-  let _is_bottom { known; at_least; } =
+  let is_bottom { known; at_least; } =
     Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
 
   let known t = t.known
