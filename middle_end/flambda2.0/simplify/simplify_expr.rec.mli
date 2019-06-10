@@ -21,6 +21,18 @@ type 'a k =
   -> Simplify_env_and_result.Result.t
   -> ('a * Upwards_acc.t)
 
+val simplify_body_of_non_recursive_let_cont
+   : Downwards_acc.t
+  -> Continuation.t
+  -> Flambda.Continuation_handler.t
+  -> body:Flambda.Expr.t
+  -> 'a k
+  -> Flambda.Expr.t
+       * Flambda.Continuation_handler.t
+       * (Continuation.t * Flambda.Continuation_handler.t) option
+       * 'a
+       * Upwards_acc.t
+
 val simplify_expr
    : Downwards_acc.t
   -> Flambda.Expr.t
