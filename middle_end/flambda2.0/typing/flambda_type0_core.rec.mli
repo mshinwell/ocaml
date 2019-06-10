@@ -65,6 +65,11 @@ val immutable_block_of_values
   -> fields:Flambda_types.ty_value list
   -> Flambda_types.t
 
+val immutable_block_with_size_at_least
+   : n:Targetint.OCaml.t
+  -> field_n_minus_one:Variable.t
+  -> Flambda_types.t
+
 val bottom : Flambda_kind.t -> Flambda_types.t
 val bottom_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 val bottom_like : Flambda_types.t -> Flambda_types.t
