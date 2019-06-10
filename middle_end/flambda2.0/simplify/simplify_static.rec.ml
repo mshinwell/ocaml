@@ -304,15 +304,16 @@ let simplify_computation dacc
       List.map (fun (_var, kind) -> kind) computation.computed_values
     in
     let outer_denv = DA.denv dacc in
+    let scope = Scope.initial in
     let dacc =
       DA.add_continuation dacc computation.return_continuation
         (* CR mshinwell: think about toplevel scope levels *)
-        ~definition_scope_level:Scope.initial
+        ~definition_scope_level:scope
         return_cont_arity
     in
     let dacc =
       DA.add_exn_continuation dacc computation.exn_continuation
-        ~definition_scope_level:Scope.initial
+        ~definition_scope_level:scope
     in
     let dacc =
       DA.map_denv dacc
@@ -321,7 +322,9 @@ let simplify_computation dacc
     let expr, cont_uses_env, r =
       Simplify_toplevel.simplify_toplevel dacc computation.expr
         ~return_continuation:computation.return_continuation
+        ~return_arity:return_cont_arity
         computation.exn_continuation
+        scope
     in
     let denv = DE.add_lifted_constants_from_r outer_denv r in
     let dacc = DA.create denv Continuation_uses_env.empty r in

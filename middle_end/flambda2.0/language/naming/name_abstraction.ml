@@ -64,7 +64,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
   let print ppf t =
     let style = !printing_style in
     pattern_match t ~f:(fun name term ->
-      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
+      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
         (Misc.Color.reset ())
@@ -77,7 +77,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
   let print_with_cache ~cache ppf t =
     let style = !printing_style in
     pattern_match t ~f:(fun name term ->
-      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@,%a@]"
+      Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
         (Misc.Color.reset ())
@@ -159,13 +159,13 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
 
   let print ppf t =
     pattern_match t ~f:(fun names term ->
-      Format.fprintf ppf "@[%a@,%a@]"
+      Format.fprintf ppf "@[<hov 1>%a@ %a@]"
         print_bindable_name_list names
         Term.print term)
 
   let print_with_cache ~cache ppf t =
     pattern_match t ~f:(fun names term ->
-      Format.fprintf ppf "@[%a@,%a@]"
+      Format.fprintf ppf "@[<hov 1>%a@ %a@]"
         print_bindable_name_list names
         (Term.print_with_cache ~cache) term)
 

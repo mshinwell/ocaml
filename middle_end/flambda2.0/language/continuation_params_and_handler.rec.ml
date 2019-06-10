@@ -23,7 +23,7 @@ module T0 = struct
 
   let print_with_cache ~cache ppf { handler; } =
     fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(handler %a)@]\
+        @[<hov 1>(handler@ %a)@]\
         )@]"
       (Expr.print_with_cache ~cache) handler
 
