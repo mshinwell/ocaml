@@ -50,6 +50,8 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
       (Linkage_name.create (Variable.unique_name bound_to))
   in
   if not (K.equal (T.kind ty) K.value) then begin
+    (* Sets of closures may be lifted and are not of kind [Value], but they
+       are dealt with directly in [Simplify_named]. *)
     Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
       Variable.print bound_to
   end;
@@ -67,11 +69,15 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.add_symbol denv symbol ty in
       let ty = T.alias_type_of (T.kind ty) symbol' in
+(*
 Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
+*)
       DE.add_equation_on_variable denv bound_to ty)
   in
+(*
 Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
+*)
   Reachable.reachable term, dacc, ty
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
