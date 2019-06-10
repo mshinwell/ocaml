@@ -103,7 +103,9 @@ struct
       with type typing_env_extension := Typing_env_extension.t) =
   struct
     let meet_or_join env t1 t2 : _ Or_bottom.t =
+(*
 Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
+*)
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
       let env_extension = ref TEE.empty in
@@ -130,13 +132,17 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
           match maps_to with
           | Bottom -> None
           | Ok (maps_to, env_extension') ->
+(*
 Format.eprintf "Existing env extension, case 1:@ %a\n%!"
   TEE.print !env_extension;
 Format.eprintf "New env extension, case 1:@ %a\n%!"
   TEE.print env_extension';
+*)
             env_extension := TEE.meet env !env_extension env_extension';
+(*
 Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
   TEE.print !env_extension;
+*)
             Some maps_to
         end
       in
@@ -153,13 +159,17 @@ Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
           begin match maps_to with
           | Bottom -> None
           | Ok (maps_to, env_extension') ->
+(*
 Format.eprintf "Existing env extension, case 2:@ %a\n%!"
   TEE.print !env_extension;
 Format.eprintf "New env extension, case 2:@ %a\n%!"
   TEE.print env_extension';
+*)
              env_extension := TEE.meet env !env_extension env_extension';
+(*
 Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
   TEE.print !env_extension;
+*)
             Some maps_to
           end
         | None, None -> None
@@ -177,7 +187,9 @@ Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
           at_least2
       in
       if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then begin
+(*
 Format.eprintf "RL meet is returning bottom\n%!";
+*)
         Bottom
       end else
         Ok ({ known; at_least; }, !env_extension)
