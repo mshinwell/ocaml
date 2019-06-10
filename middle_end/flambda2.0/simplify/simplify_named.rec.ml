@@ -274,6 +274,9 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
         let denv = DE.add_variable denv result_var (T.unknown kind) in
         DE.extend_typing_environment denv env_extension)
     in
+    (* CR mshinwell: Think about whether [cannot_lift] is actually needed.
+       It seems like maybe not: if we don't know the result of the primitive
+       then the type should be Unknown. *)
     let cannot_lift =
       not (Flambda_primitive.With_fixed_value.eligible prim)
     in
