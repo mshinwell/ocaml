@@ -343,7 +343,7 @@ let kind (t : t) =
   | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
   | Fabricated _ -> K.fabricated
 
-let block tag ~(fields : t list) : t =
+let immutable_block tag ~(fields : t list) : t =
   (* CR mshinwell: We should check the field kinds against the tag. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
@@ -356,6 +356,10 @@ let block tag ~(fields : t list) : t =
       }
     in
     Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
+
+let immutable_block_of_values tag ~fields =
+  let fields = List.map (fun ty_value : t -> Value ty_value) fields in
+  immutable_block tag ~fields
 
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())

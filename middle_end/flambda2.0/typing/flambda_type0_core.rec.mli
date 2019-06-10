@@ -55,9 +55,14 @@ val this_naked_nativeint : Targetint.t -> Flambda_types.t
 
 val this_discriminant : Discriminant.t -> Flambda_types.t
 
-val block
+val immutable_block
    : Tag.t
   -> fields:Flambda_types.t list
+  -> Flambda_types.t
+
+val immutable_block_of_values
+   : Tag.t
+  -> fields:Flambda_types.ty_value list
   -> Flambda_types.t
 
 val bottom : Flambda_kind.t -> Flambda_types.t
@@ -100,6 +105,7 @@ val set_of_closures_containing_at_least
   -> Flambda_types.t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t
+val alias_type_of_as_ty_value : Simple.t -> Flambda_types.ty_value
 val alias_type_of_as_ty_fabricated : Simple.t -> Flambda_types.ty_fabricated
 
 val kind : Flambda_types.t -> Flambda_kind.t
