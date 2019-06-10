@@ -16,23 +16,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  module Thing_without_names : Identifiable.S
+(** Simplification of primitives taking variable numbers of arguments. *)
 
-  type t
-
-  (** Create a value which describes the presence of exactly no things. *)
-  val create_bottom : unit -> t
-
-  (** Create a value which describes the presence of exactly the given
-      things. *)
-  val create : Thing_without_names.Set.t -> t
-
-  val is_bottom : t -> bool
-
-  val all : t -> Thing_without_names.Set.t Or_unknown.t
-
-  val get_singleton : t -> Thing_without_names.t option
-
-  include Type_structure_intf.S with type t := t
-end
+val simplify_variadic_primitive
+   : Downwards_acc.t
+  -> Flambda_primitive.variadic_primitive
+  -> Simple.t list
+  -> Debuginfo.t
+  -> result_var:Variable.t
+  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t

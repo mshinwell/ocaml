@@ -64,6 +64,11 @@ module Make (Index : Identifiable.S) = struct
 
   let indexes t = Index.Map.keys t.components_by_index
 
+  let width t =
+    Targetint.OCaml.of_int (Index.Map.cardinal t.components_by_index)
+
+  let components t = Index.Map.data t.components_by_index
+
   let meet env
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } : _ Or_bottom.t =

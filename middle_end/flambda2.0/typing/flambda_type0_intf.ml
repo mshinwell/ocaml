@@ -154,6 +154,8 @@ module type S = sig
     -> ty_value
     -> ty_value
 
+  val bottom : Flambda_kind.t -> t
+
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
 
@@ -196,10 +198,17 @@ module type S = sig
   (** The given discriminant. *)
   val this_discriminant : Discriminant.t -> t
 
-  (** The type of a block with a known tag, size and field types. *)
-  val block
+  (** The type of an immutable block with a known tag, size and field types. *)
+  val immutable_block
      : Tag.t
     -> fields:t list
+    -> t
+
+  (** Like [immutable_block], except that the field types are statically
+      known to be of kind [Value]). *)
+  val immutable_block_of_values
+     : Tag.t
+    -> fields:ty_value list
     -> t
 
   (** Create an "bottom" type with the same kind as the given type. *)
@@ -252,6 +261,8 @@ module type S = sig
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
+  val alias_type_of_as_ty_value : Simple.t -> ty_value
+
   (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
   val alias_type_of_as_ty_fabricated : Simple.t -> ty_fabricated
 
@@ -272,12 +283,13 @@ module type S = sig
   val type_for_const : Simple.Const.t -> t
 
   type to_lift =
+    | Immutable_block of Tag.Scannable.t * (Symbol.t list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
     | Boxed_nativeint of Targetint.t
 
-  type reification_result =
+  type reification_result = private
     | Term of Simple.t * t
     | Lift of to_lift
     | Cannot_reify

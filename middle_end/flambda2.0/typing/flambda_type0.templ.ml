@@ -98,7 +98,14 @@ module Make
     | Resolved_naked_number _ -> wrong_kind ()
     | Resolved_fabricated _ -> wrong_kind ()
 
+  let prove_equals_to_symbol env t =
+    let _resolved, simple = Typing_env.resolve_type env t in
+    match simple with
+    | Some (Name (Symbol sym)) -> Some sym
+    | _ -> None
+
   type to_lift =
+    | Immutable_block of Tag.Scannable.t * (Symbol.t list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
@@ -139,6 +146,9 @@ module Make
           let all_symbol_aliases = Name.set_to_symbol_set all_aliases in
           begin match Symbol.Set.get_singleton all_symbol_aliases with
           | Some symbol ->
+            (* CR mshinwell: I'm not sure this should ever happen, since the
+               symbol should always be the canonical, in preference to a
+               variable. *)
 (*Format.eprintf "using symbol %a\n%!" Symbol.print symbol;*)
             let simple = Simple.symbol symbol in
             Some (Term (simple, alias_type_of (kind t) simple)), None
@@ -158,5 +168,34 @@ module Make
           | None -> Cannot_reify
         in
         match resolved with
+        | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+          begin match blocks_imms.blocks, blocks_imms.immediates with
+          | Known blocks, Known imms ->
+            if Immediates.is_bottom imms then
+              match Blocks.get_singleton blocks with
+              | None -> try_canonical_var ()
+              | Some ((tag, size), field_types) ->
+                assert (Targetint.OCaml.equal size
+                  (Blocks.Int_indexed_product.width field_types));
+                (* CR mshinwell: Could recognise other things, e.g. tagged
+                   immediates and float arrays, supported by [Static_part]. *)
+                let field_types =
+                  Blocks.Int_indexed_product.components field_types
+                in
+                let symbols =
+                  List.filter_map (fun field_type ->
+                      prove_equals_to_symbol env field_type)
+                    field_types
+                in
+                if List.compare_lengths field_types symbols = 0 then
+                  match Tag.Scannable.of_tag tag with
+                  | Some tag -> Lift (Immutable_block (tag, symbols))
+                  | None -> try_canonical_var ()
+                else
+                  try_canonical_var ()
+            else
+              try_canonical_var ()
+          | _, _ -> try_canonical_var ()
+          end
         | _ -> try_canonical_var ()
 end
