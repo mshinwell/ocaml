@@ -361,6 +361,21 @@ let immutable_block_of_values tag ~fields =
   let fields = List.map (fun ty_value : t -> Value ty_value) fields in
   immutable_block tag ~fields
 
+let immutable_block_with_size_at_least ~n ~field_n_minus_one : t =
+  let n = Targetint.OCaml.to_int n in
+  let field_tys =
+    List.init n (fun index ->
+        if index < n - 1 then any_value ()
+        else alias_type_of K.value (Simple.var field_n_minus_one))
+  in
+  let blocks = Blocks.create ~field_tys Open in
+  let blocks_imms : blocks_and_tagged_immediates =
+    { immediates = Known (Immediates.create_bottom ());
+      blocks = Known blocks;
+    }
+  in
+  Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
+
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
