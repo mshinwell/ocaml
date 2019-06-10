@@ -39,14 +39,15 @@ let simplify_function dacc closure_id function_decl ~type_of_my_closure =
 Format.eprintf "Closure ID %a, entering closure\n%!"
   Closure_id.print closure_id;
 *)
+        let scope = Scope.initial in
         let dacc =
           DA.add_continuation dacc return_continuation
-            ~definition_scope_level:Scope.initial
+            ~definition_scope_level:scope
             result_arity
         in
         let dacc =
           DA.add_exn_continuation dacc exn_continuation
-            ~definition_scope_level:Scope.initial
+            ~definition_scope_level:scope
         in
         let denv = DE.enter_closure denv in
 (*
@@ -81,7 +82,9 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
           try
             Simplify_toplevel.simplify_toplevel dacc body
               ~return_continuation
+              ~return_arity:result_arity
               exn_continuation
+              scope
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s simplifying function \
                 with closure ID %a,@ params %a,@ return continuation %a,@ \

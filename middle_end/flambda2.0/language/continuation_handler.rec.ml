@@ -44,12 +44,18 @@ let print_using_where_with_cache ~cache ppf k
       fprintf ppf "@]@] =@ %a"
         (Expr.print_with_cache ~cache) handler)
 
-let print _ppf _t =
-  (* XXX Where do we get [k] from? *)
-  Misc.fatal_error "Continuation_handler.print not yet implemented"
+let print_with_cache ~cache ppf { params_and_handler; stub; is_exn_handler; } =
+  Format.fprintf ppf "@[<hov 1>\
+      @[<hov 1>(params_and_handler@ %a)@]@ \
+      @[<hov 1>(stub@ %b)@]@ \
+      @[<hov 1>(is_exn_handler@ %b)@]\
+      @]"
+    (Continuation_params_and_handler.print_with_cache ~cache) params_and_handler
+    stub
+    is_exn_handler
 
-let print_with_cache ~cache:_ _ppf _t =
-  Misc.fatal_error "Continuation_handler.print_with_cache not yet implemented"
+let print ppf t =
+  print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 (*
 let print_with_cache ~cache ppf (t : t) =
