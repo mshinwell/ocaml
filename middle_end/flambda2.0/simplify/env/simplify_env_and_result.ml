@@ -312,8 +312,10 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_to_inline t cont scope arity handler =
-    add_continuation0 t cont scope (Inline { arity; handler; })
+  let add_continuation_to_inline t cont scope arity handler
+        ~wrapper_with_scope_and_arity =
+    add_continuation0 t cont scope 
+      (Inline { arity; handler; wrapper_with_scope_and_arity; })
 
   let add_exn_continuation t exn_cont scope =
     let exn_continuations =
