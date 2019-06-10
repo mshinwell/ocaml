@@ -24,16 +24,13 @@ module TEE = Flambda_type.Typing_env_extension
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DE.typing_env (DA.denv dacc) in
-(*
-Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
-  Named.print original_term
+Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a@ env:@ %a\n%!"
+  Flambda.Named.print original_term
   T.print shape
-  T.print deconstructing;
-*)
+  T.print deconstructing
+  DA.print dacc;
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty, dacc
   | Ok env_extension ->
-(*
 Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
-*)
     Reachable.reachable original_term, env_extension, dacc
