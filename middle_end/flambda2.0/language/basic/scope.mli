@@ -33,5 +33,3 @@ val (>=): t -> t -> bool
 val max : t -> t -> t
 
 val to_int : t -> int
-
-val for_symbols : t

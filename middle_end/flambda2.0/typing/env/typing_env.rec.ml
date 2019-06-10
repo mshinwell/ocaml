@@ -23,7 +23,8 @@ module Binding_time : sig
   val print : Format.formatter -> t -> unit
 *)
 
-  val zero : t
+  val symbols : t
+  val earliest_var : t
   val succ : t -> t
 
   val strictly_earlier : t -> than:t -> bool
@@ -34,8 +35,14 @@ end = struct
   let strictly_earlier t ~than =
     t < than
 
-  let zero = 0
-  let succ t = t + 1
+  let symbols = 0
+  let earliest_var = 1
+
+  let succ t =
+    if t < earliest_var then
+      Misc.fatal_error "Cannot increment binding time for symbols"
+    else
+      t + 1
 end
 
 (* CR mshinwell: Add signatures to these submodules. *)
@@ -130,6 +137,7 @@ end
 
 type t = {
   resolver : (Export_id.t -> Flambda_types.t option);
+  defined_symbols : Symbol.Set.t;
   prev_levels : One_level.t Scope.Map.t;
   (* CR mshinwell: hold list of symbol definitions, then change defined_names
      to variables, then remove artificial symbol precedence *)
@@ -140,9 +148,11 @@ type t = {
 let is_empty t =
   One_level.is_empty t.current_level
     && Scope.Map.is_empty t.prev_levels
+    && Symbol.Set.is_empty t.defined_symbols
 
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
+         defined_symbols;
        } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
@@ -151,10 +161,12 @@ let print_with_cache ~cache ppf
       Format.fprintf ppf
         "@[<hov 1>(\
             @[<hov 1>(prev_levels@ %a)@]@ \
-            @[<hov 1>(current_level@ %a)@]\
+            @[<hov 1>(current_level@ %a)@]@ \
+            @[<hov 1>(defined_symbols@ %a)@]\
             )@]"
         (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
-        (One_level.print_with_cache ~cache) current_level)
+        (One_level.print_with_cache ~cache) current_level
+        Symbol.Set.print defined_symbols)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -208,7 +220,8 @@ let create ~resolver =
   { resolver;
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
-    next_binding_time = Binding_time.zero;
+    next_binding_time = Binding_time.earliest_var;
+    defined_symbols = Symbol.Set.empty;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
@@ -280,10 +293,6 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
     Simple.compare simple than <= 0
   | (Const _ | Discriminant _), Name _ -> true
   | Name _, (Const _ | Discriminant _) -> false
-  (* We would like the types of variables to be [Equals] types to symbols,
-     rather than the other way around; so force symbols to come first. *)
-  | Name (Symbol _), Name (Var _) -> true
-  | Name (Var _), Name (Symbol _) -> false
   | Name name1, Name name2 ->
     if Name.equal name1 name2 then
       false
@@ -291,21 +300,23 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
       let time1 = Cached.binding_time (cached t) name1 in
       let time2 = Cached.binding_time (cached t) name2 in
       if Binding_time.equal time1 time2 then begin
-          Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
+          Misc.fatal_errorf "Unequal names with same binding time: \
+              %a and %a:@ %a"
             Name.print name1
             Name.print name2
             print t
         end;
       Binding_time.strictly_earlier time1 ~than:time2
 
-let add_definition t name kind =
+let add_variable_definition t var kind =
+  let name = Name.var var in
   if mem t name then begin
     Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
       Name.print name
       print t
   end;
   let level =
-    Typing_env_level.add_definition (One_level.level t.current_level) name kind
+    Typing_env_level.add_definition (One_level.level t.current_level) var kind
   in
   let just_after_level =
     let aliases =
@@ -325,6 +336,34 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
   in
   with_current_level_and_next_binding_time t ~current_level
     (Binding_time.succ t.next_binding_time)
+
+let add_symbol_definition t sym =
+  let name = Name.symbol sym in
+  let just_after_level =
+    let aliases =
+      Aliases.add_canonical_name (aliases t) name
+    in
+    let names_to_types =
+      Name.Map.add name (Flambda_type0_core.any_value (), Binding_time.symbols)
+        (names_to_types t)
+    in
+    Cached.create ~names_to_types aliases
+  in
+  let current_level =
+    One_level.create (current_scope t) (One_level.level t.current_level)
+      ~just_after_level
+  in
+  with_current_level t ~current_level
+
+let add_definition t (name : Name.t) kind =
+  match name with
+  | Var var -> add_variable_definition t var kind
+  | Symbol sym ->
+    if not (K.equal kind K.value) then begin
+      Misc.fatal_errorf "Cannot add definition for symbol %a not of kind Value"
+        Symbol.print sym
+    end;
+    add_symbol_definition t sym
 
 (* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation t name ty =
@@ -400,9 +439,11 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
     with_current_level t ~current_level
 
 let rec add_env_extension starting_t level : t =
-  if not (Name.Map.is_empty (Typing_env_level.defined_names level)) then begin
+  if not (Variable.Map.is_empty (Typing_env_level.defined_vars level)) then
+  begin
     (* The full type system will remove this restriction. *)
-    Misc.fatal_errorf "Typing environment extensions cannot define names:@ %a"
+    Misc.fatal_errorf "Typing environment extensions cannot define variables:\
+        @ %a"
       Typing_env_level.print level
   end;
   Name.Map.fold (fun name ty t ->
@@ -456,6 +497,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
           prev_levels;
           current_level;
           next_binding_time = t.next_binding_time;
+          defined_symbols = t.defined_symbols;
         }
     in
     invariant t;
