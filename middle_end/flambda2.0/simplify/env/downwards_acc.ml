@@ -29,7 +29,7 @@ type t = {
 let print ppf { denv; continuation_uses_env; r; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
-      @[<hov 1>(continuation_uses_env@ %a)@] \
+      @[<hov 1>(continuation_uses_env@ %a)@]@ \
       @[<hov 1>(r@ %a)@]\
       )@]"
     DE.print denv
