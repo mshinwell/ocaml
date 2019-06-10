@@ -175,11 +175,26 @@ and simplify_non_recursive_let_cont_handler
               | Unknown { arity; } ->
                 let num_uses = DA.num_continuation_uses dacc cont in
                 if num_uses = 1 || Continuation_handler.stub cont_handler then
+                  let wrapper_with_scope_and_arity =
+                    match additional_cont_handler with
+                    | None -> None
+                    | Some (cont, cont_handler) ->
+                      let arity = Continuation_handler.arity cont_handler in
+                      Some (cont, definition_scope_level, arity)
+                  in
                   UE.add_continuation_to_inline uenv cont
                     definition_scope_level arity
-                    (Non_recursive_let_cont_handler.handler non_rec_handler)
+                    cont_handler
+                    ~wrapper_with_scope_and_arity
                 else
                   UE.add_continuation uenv cont definition_scope_level arity
+          in
+          let uenv =
+            match additional_cont_handler with
+            | None -> uenv
+            | Some (cont, cont_handler) ->
+              let arity = Continuation_handler.arity cont_handler in
+              UE.add_continuation uenv cont definition_scope_level arity
           in
           let uacc = UA.with_uenv uacc uenv in
           (cont_handler, additional_cont_handler, uenv', user_data), uacc)
@@ -754,7 +769,7 @@ and simplify_apply_cont
        on the basis that there wouldn't be any opportunity to collect any
        backtrace, even if the [Apply_cont] were compiled as "raise". *)
     Expr.create_invalid (), user_data, uacc
-  | Inline { arity; handler; } ->
+  | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
     (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
        or "stub" -- could avoid resimplification of linearly used ones maybe,
        although this wouldn't remove any parameter-to-argument [Let]s.
@@ -780,6 +795,12 @@ and simplify_apply_cont
             Expr.bind_parameters_to_simples ~bind:params ~target:args handler
           in
           let dacc = DA.with_r dacc (UA.r uacc) in
+          let dacc =
+            match wrapper_with_scope_and_arity with
+            | None -> dacc
+            | Some (wrapper, definition_scope_level, arity) ->
+              DA.add_continuation dacc wrapper ~definition_scope_level arity
+          in
           try
             simplify_expr dacc expr (fun _cont_uses_env r ->
               user_data, (UA.with_r uacc r))
