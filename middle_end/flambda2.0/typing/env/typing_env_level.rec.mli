@@ -32,13 +32,13 @@ val empty : t
 
 val is_empty : t -> bool
 
-val defined_names : t -> Flambda_kind.t Name.Map.t
+val defined_vars : t -> Flambda_kind.t Variable.Map.t
 
 val equations : t -> Flambda_types.t Name.Map.t
 
 val one_equation : Name.t -> Flambda_types.t -> t
 
-val add_definition : t -> Name.t -> Flambda_kind.t -> t
+val add_definition : t -> Variable.t -> Flambda_kind.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
