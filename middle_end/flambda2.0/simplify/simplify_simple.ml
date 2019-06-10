@@ -22,6 +22,7 @@ module T = Flambda_type
 module TE = T.Typing_env
 
 let simplify_simple dacc (simple : Simple.t) =
+let _orig = simple in
   match simple with
   | Const c -> simple, T.type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
@@ -39,7 +40,11 @@ let simplify_simple dacc (simple : Simple.t) =
     in
     match reified with
     | Term (simple, ty) ->
-(*Format.eprintf "returning reified Simple %a\n%!" Simple.print simple;*)
+(*
+Format.eprintf "returning reified Simple: %a --> %a\n%!"
+  Simple.print orig
+  Simple.print simple;
+*)
       simple, ty
     | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
