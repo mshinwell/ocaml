@@ -14,18 +14,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Construct terms using only information from types. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val try_to_reify
-   : Downwards_acc.t
-  -> Reachable.t
-  -> bound_to:Variable.t
-  -> cannot_lift:bool
-  -> Reachable.t * Downwards_acc.t * Flambda_type.t
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
+module T = Flambda_type
+module TEE = Flambda_type.Typing_env_extension
 
-val reify_to_tagged_immediate
-   : Downwards_acc.t
-  -> Flambda_type.t
-  -> Immediate.t option Or_bottom.t
+let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
+      ~result_kind =
+  let env = DE.typing_env (DA.denv dacc) in
+(*
+Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
+  Named.print original_term
+  T.print shape
+  T.print deconstructing;
+*)
+  match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
+  | Bottom -> Reachable.invalid (), TEE.empty, dacc
+  | Ok env_extension ->
+(*
+Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
+*)
+    Reachable.reachable original_term, env_extension, dacc

@@ -198,6 +198,8 @@ module type S = sig
   (** The given discriminant. *)
   val this_discriminant : Discriminant.t -> t
 
+  (* CR mshinwell: decide on exact strategy for mutable blocks *)
+
   (** The type of an immutable block with a known tag, size and field types. *)
   val immutable_block
      : Tag.t
@@ -209,6 +211,18 @@ module type S = sig
   val immutable_block_of_values
      : Tag.t
     -> fields:ty_value list
+    -> t
+
+  (** The type of an immutable block with at least [n] fields and an unknown
+      tag.
+
+      The type of the [n - 1]th field is taken to be an [Equals] to the
+      given variable. *)
+  (* CR mshinwell: Should add "kind" argument?  Implementation assumes
+     "value" at the moment *)
+  val immutable_block_with_size_at_least
+     : n:Targetint.OCaml.t
+    -> field_n_minus_one:Variable.t
     -> t
 
   (** Create an "bottom" type with the same kind as the given type. *)

@@ -18,39 +18,22 @@
 
 open! Flambda.Import
 
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
-let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
-      ~result_kind =
-  let env = DE.typing_env (DA.denv dacc) in
-(*
-Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
-  Named.print original_term
-  T.print shape
-  T.print deconstructing;
-*)
-  match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
-  | Bottom -> Reachable.invalid (), TEE.empty, dacc
-  | Ok env_extension ->
-(*
-Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
-*)
-    Reachable.reachable original_term, env_extension, dacc
-
 let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
       ~result_var =
-  simplify_projection dacc ~original_term ~deconstructing:set_of_closures_ty
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:set_of_closures_ty
     ~shape:(T.set_of_closures_containing_at_least closure_id
       ~closure_var:result_var)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var dacc ~original_term ~closure_ty closure_element
       ~result_var =
-  simplify_projection dacc ~original_term ~deconstructing:closure_ty
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.closure_containing_at_least closure_element
       ~closure_element_var:result_var)
     ~result_var ~result_kind:K.value

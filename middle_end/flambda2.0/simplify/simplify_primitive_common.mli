@@ -14,18 +14,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Construct terms using only information from types. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val try_to_reify
+val simplify_projection
    : Downwards_acc.t
-  -> Reachable.t
-  -> bound_to:Variable.t
-  -> cannot_lift:bool
-  -> Reachable.t * Downwards_acc.t * Flambda_type.t
-
-val reify_to_tagged_immediate
-   : Downwards_acc.t
-  -> Flambda_type.t
-  -> Immediate.t option Or_bottom.t
+  -> original_term:Flambda.Named.t
+  -> deconstructing:Flambda_type.t
+  -> shape:Flambda_type.t
+  -> result_var:Variable.t
+  -> result_kind:Flambda_kind.t
+  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
