@@ -167,7 +167,9 @@ module type Result = sig
 
   val new_lifted_constant : t -> Lifted_constant.t -> t
 
+(* can cause duplicates
   val add_lifted_constants : t -> from:t -> t
+*)
 
   (** Retrieve constants lifted to toplevel.  The constants must be defined
       in the order returned (first element of the list defined first). *)
