@@ -185,6 +185,12 @@ module Make
                   | None -> Cannot_reify
                 else
                   Cannot_reify
+            else if Blocks.is_bottom blocks then
+              match Immediates.get_singleton imms with
+              | None -> Cannot_reify
+              | Some imm ->
+                let simple = Simple.const (Tagged_immediate imm) in
+                Term (simple, alias_type_of K.value simple)
             else
               Cannot_reify
           | _, _ -> Cannot_reify

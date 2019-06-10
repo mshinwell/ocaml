@@ -38,6 +38,8 @@ val create : field_tys:Flambda_types.t list -> open_or_closed -> t
 
 val create_bottom : unit -> t
 
+val is_bottom : t -> bool
+
 val get_singleton
    : t
   -> (Tag_and_targetint_ocaml.t * Int_indexed_product.t) option
