@@ -44,5 +44,4 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       raise Misc.Fatal_error
     end
   in
-  let r_outer = R.add_lifted_constants (DA.r dacc) ~from:(UA.r uacc) in
-  expr, cont_uses_env, r_outer
+  expr, cont_uses_env, UA.r uacc
