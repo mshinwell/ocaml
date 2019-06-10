@@ -119,7 +119,10 @@ and simplify_non_recursive_let_cont_handler
         let arity = Continuation_handler.arity cont_handler in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
-            DE.increment_continuation_scope_level denv)
+            (* The level is incremented by two to leave a gap in case a
+               wrapper is generated for this continuation handler. *)
+            DE.increment_continuation_scope_level
+              (DE.increment_continuation_scope_level denv))
         in
         let dacc =
           DA.add_continuation dacc cont ~definition_scope_level arity
@@ -163,6 +166,11 @@ and simplify_non_recursive_let_cont_handler
           let uenv = UA.uenv uacc in
           let uenv' = uenv in
           let uenv =
+            let definition_scope_level =
+              match additional_cont_handler with
+              | None -> definition_scope_level
+              | Some _ -> Scope.next definition_scope_level
+            in
             if Continuation_handler.is_exn_handler cont_handler then
               UE.add_continuation uenv cont definition_scope_level arity
             else

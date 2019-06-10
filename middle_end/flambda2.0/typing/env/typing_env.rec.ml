@@ -459,10 +459,18 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
         }
     in
     invariant t;
+(*
+Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
+  Scope.print min_scope
+  print orig_t
+  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
+*)
     let meet_env = Meet_env.create t in
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     let env_extension =
-      Scope.Map.fold (fun _scope one_level result ->
+      Scope.Map.fold (fun scope one_level result ->
+Format.eprintf "Folding in scope %a\n%!" Scope.print scope;
+Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_level);
           let level =
             (* Since environment extensions are not allowed to define names at
                the moment, any [Equals] aliases to names not in scope at the cut
@@ -471,10 +479,12 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
             |> Typing_env_level.remove_definitions_and_equations_thereon
             |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
           in
+Format.eprintf "Level for meet:@ %a\n%!" Typing_env_level.print level;
           Typing_env_level.meet meet_env level result)
         at_or_after_cut
         Typing_env_level.empty
     in
+Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
     env_extension, vars_in_scope_at_cut
 
 let get_canonical_name t name =

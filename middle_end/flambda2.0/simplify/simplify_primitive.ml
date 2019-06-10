@@ -28,6 +28,9 @@ let simplify_primitive dacc (prim : Flambda_primitive.t) dbg ~result_var =
   | Unary (prim, arg) ->
     Simplify_unary_primitive.simplify_unary_primitive dacc prim arg dbg
       ~result_var
+  | Binary (prim, arg1, arg2) ->
+    Simplify_binary_primitive.simplify_binary_primitive dacc prim arg1 arg2 dbg
+      ~result_var
   | Variadic (prim, args) ->
     Simplify_variadic_primitive.simplify_variadic_primitive dacc prim args dbg
       ~result_var
@@ -35,11 +38,7 @@ let simplify_primitive dacc (prim : Flambda_primitive.t) dbg ~result_var =
     (* CR mshinwell: temporary code *)
     let named =
       match prim with
-      | Unary _ | Variadic _ -> assert false
-      | Binary (prim, arg1, arg2) ->
-        let arg1 = S.simplify_simple_and_drop_type dacc arg1 in
-        let arg2 = S.simplify_simple_and_drop_type dacc arg2 in
-        Named.create_prim (Binary (prim, arg1, arg2)) dbg
+      | Unary _ | Binary _ | Variadic _ -> assert false
       | Ternary (prim, arg1, arg2, arg3) ->
         let arg1 = S.simplify_simple_and_drop_type dacc arg1 in
         let arg2 = S.simplify_simple_and_drop_type dacc arg2 in
