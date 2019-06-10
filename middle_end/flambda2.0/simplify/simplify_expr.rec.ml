@@ -104,112 +104,125 @@ and simplify_one_continuation_handler
         wrapper_cont_handler, Some (original_cont, cont_handler),
           user_data, uacc)
 
-and simplify_non_recursive_let_cont_handler
-  : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc non_rec_handler k ->
-  let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
+and simplify_body_of_non_recursive_let_cont
+  : 'a. DA.t -> Continuation.t -> Continuation_handler.t
+    -> body:Expr.t -> 'a k
+    -> Expr.t * Continuation_handler.t
+         * (Continuation.t * Continuation_handler.t) option
+         * 'a * UA.t
+= fun dacc cont cont_handler ~body k ->
   let definition_denv = DA.denv dacc in
   let definition_scope_level =
     DE.get_continuation_scope_level definition_denv
   in
+  let body, (cont_handler, additional_cont_handler, uenv', user_data),
+      uacc =
+    let arity = Continuation_handler.arity cont_handler in
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        (* The level is incremented by two to leave a gap in case a
+           wrapper is generated for this continuation handler. *)
+        DE.increment_continuation_scope_level
+          (DE.increment_continuation_scope_level denv))
+    in
+    let dacc =
+      DA.add_continuation dacc cont ~definition_scope_level arity
+    in
+    simplify_expr dacc body (fun cont_uses_env r ->
+      (* The environment currently in [dacc] is not the correct environment
+         for simplifying the handler. Instead, we must use the environment
+         of the [Let_cont] definition itself, augmented with any lifted
+         constants arising from simplification of the body. (These need to
+         be present since the type(s) of the continuation's parameter(s) may
+         involve the associated symbols.)
+         The environment in [dacc] does, however, contain the usage
+         information for the continuation.  This will be used to
+         compute the types of the continuation's parameter(s). *)
+      let definition_denv =
+        DE.add_lifted_constants definition_denv
+          (R.get_lifted_constants r)
+      in
+      let typing_env, arg_types =
+        CUE.continuation_env_and_arg_types cont_uses_env 
+          ~definition_typing_env:(DE.typing_env definition_denv) cont
+      in
+      let definition_denv =
+        DE.with_typing_environment definition_denv typing_env
+      in
+      let dacc = DA.create definition_denv cont_uses_env r in
+      let cont_handler, additional_cont_handler, user_data, uacc =
+        try
+          simplify_one_continuation_handler dacc ~arg_types cont_handler k
+        with Misc.Fatal_error -> begin
+          Format.eprintf "\n%sContext is:%s simplifying continuation \
+              handler@ %a@ \
+              with downwards accumulator:@ %a\n"
+            (Misc.Color.bold_red ())
+            (Misc.Color.reset ())
+            Continuation_handler.print cont_handler
+            DA.print dacc;
+          raise Misc.Fatal_error
+        end
+      in
+      let uenv = UA.uenv uacc in
+      let uenv' = uenv in
+      let uenv =
+        let definition_scope_level =
+          match additional_cont_handler with
+          | None -> definition_scope_level
+          | Some _ -> Scope.next definition_scope_level
+        in
+        if Continuation_handler.is_exn_handler cont_handler then
+          UE.add_continuation uenv cont definition_scope_level arity
+        else
+          match Continuation_handler.behaviour cont_handler with
+          | Unreachable { arity; } ->
+            UE.add_unreachable_continuation uenv cont
+              definition_scope_level arity
+          | Alias_for { arity; alias_for; } ->
+            UE.add_continuation_alias uenv cont arity ~alias_for
+          | Unknown { arity; } ->
+            let num_uses = DA.num_continuation_uses dacc cont in
+            if num_uses = 1 || Continuation_handler.stub cont_handler then
+              let wrapper_with_scope_and_arity =
+                match additional_cont_handler with
+                | None -> None
+                | Some (cont, cont_handler) ->
+                  let arity = Continuation_handler.arity cont_handler in
+                  Some (cont, definition_scope_level, arity)
+              in
+              UE.add_continuation_to_inline uenv cont
+                definition_scope_level arity
+                cont_handler
+                ~wrapper_with_scope_and_arity
+            else
+              UE.add_continuation uenv cont definition_scope_level arity
+      in
+      let uenv =
+        match additional_cont_handler with
+        | None -> uenv
+        | Some (cont, cont_handler) ->
+          let arity = Continuation_handler.arity cont_handler in
+          UE.add_continuation uenv cont definition_scope_level arity
+      in
+      let uacc = UA.with_uenv uacc uenv in
+      (cont_handler, additional_cont_handler, uenv', user_data), uacc)
+  in
+  (* The upwards environment of [uacc] is replaced so that out-of-scope
+     continuation bindings do not end up in the accumulator. *)
+  let uacc = UA.with_uenv uacc uenv' in
+  body, cont_handler, additional_cont_handler, user_data, uacc
+
+and simplify_non_recursive_let_cont_handler
+  : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
+= fun dacc non_rec_handler k ->
+  let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let body, (cont_handler, additional_cont_handler, uenv', user_data),
-          uacc =
-        let arity = Continuation_handler.arity cont_handler in
-        let dacc =
-          DA.map_denv dacc ~f:(fun denv ->
-            (* The level is incremented by two to leave a gap in case a
-               wrapper is generated for this continuation handler. *)
-            DE.increment_continuation_scope_level
-              (DE.increment_continuation_scope_level denv))
-        in
-        let dacc =
-          DA.add_continuation dacc cont ~definition_scope_level arity
-        in
-        simplify_expr dacc body (fun cont_uses_env r ->
-          (* The environment currently in [dacc] is not the correct environment
-             for simplifying the handler. Instead, we must use the environment
-             of the [Let_cont] definition itself, augmented with any lifted
-             constants arising from simplification of the body. (These need to
-             be present since the type(s) of the continuation's parameter(s) may
-             involve the associated symbols.)
-             The environment in [dacc] does, however, contain the usage
-             information for the continuation.  This will be used to
-             compute the types of the continuation's parameter(s). *)
-          let definition_denv =
-            DE.add_lifted_constants definition_denv
-              (R.get_lifted_constants r)
-          in
-          let typing_env, arg_types =
-            CUE.continuation_env_and_arg_types cont_uses_env 
-              ~definition_typing_env:(DE.typing_env definition_denv) cont
-          in
-          let definition_denv =
-            DE.with_typing_environment definition_denv typing_env
-          in
-          let dacc = DA.create definition_denv cont_uses_env r in
-          let cont_handler, additional_cont_handler, user_data, uacc =
-            try
-              simplify_one_continuation_handler dacc ~arg_types cont_handler k
-            with Misc.Fatal_error -> begin
-              Format.eprintf "\n%sContext is:%s simplifying continuation \
-                  handler@ %a@ \
-                  with downwards accumulator:@ %a\n"
-                (Misc.Color.bold_red ())
-                (Misc.Color.reset ())
-                Continuation_handler.print cont_handler
-                DA.print dacc;
-              raise Misc.Fatal_error
-            end
-          in
-          let uenv = UA.uenv uacc in
-          let uenv' = uenv in
-          let uenv =
-            let definition_scope_level =
-              match additional_cont_handler with
-              | None -> definition_scope_level
-              | Some _ -> Scope.next definition_scope_level
-            in
-            if Continuation_handler.is_exn_handler cont_handler then
-              UE.add_continuation uenv cont definition_scope_level arity
-            else
-              match Continuation_handler.behaviour cont_handler with
-              | Unreachable { arity; } ->
-                UE.add_unreachable_continuation uenv cont
-                  definition_scope_level arity
-              | Alias_for { arity; alias_for; } ->
-                UE.add_continuation_alias uenv cont arity ~alias_for
-              | Unknown { arity; } ->
-                let num_uses = DA.num_continuation_uses dacc cont in
-                if num_uses = 1 || Continuation_handler.stub cont_handler then
-                  let wrapper_with_scope_and_arity =
-                    match additional_cont_handler with
-                    | None -> None
-                    | Some (cont, cont_handler) ->
-                      let arity = Continuation_handler.arity cont_handler in
-                      Some (cont, definition_scope_level, arity)
-                  in
-                  UE.add_continuation_to_inline uenv cont
-                    definition_scope_level arity
-                    cont_handler
-                    ~wrapper_with_scope_and_arity
-                else
-                  UE.add_continuation uenv cont definition_scope_level arity
-          in
-          let uenv =
-            match additional_cont_handler with
-            | None -> uenv
-            | Some (cont, cont_handler) ->
-              let arity = Continuation_handler.arity cont_handler in
-              UE.add_continuation uenv cont definition_scope_level arity
-          in
-          let uacc = UA.with_uenv uacc uenv in
-          (cont_handler, additional_cont_handler, uenv', user_data), uacc)
+      let body, cont_handler, additional_cont_handler, user_data, uacc =
+        simplify_body_of_non_recursive_let_cont dacc
+          cont cont_handler ~body k
       in
-      (* The upwards environment of [uacc] is replaced so that out-of-scope
-         continuation bindings do not end up in the accumulator. *)
-      let uacc = UA.with_uenv uacc uenv' in
       match additional_cont_handler with
       | None ->
         Let_cont.create_non_recursive cont cont_handler ~body,
