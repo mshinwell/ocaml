@@ -39,6 +39,12 @@ let create_static_part (to_lift : T.to_lift)
   | Boxed_nativeint i -> Boxed_nativeint (Const i)
 
 let lift dacc ty ~bound_to static_part =
+(*
+Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
+  Variable.print bound_to
+  T.print ty
+  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
+*)
   let symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create (Variable.unique_name bound_to))
@@ -57,10 +63,10 @@ let lift dacc ty ~bound_to static_part =
   in
   let symbol' = Simple.symbol symbol in
   let term = Named.create_simple symbol' in
-  let ty = T.alias_type_of (T.kind ty) symbol' in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.add_symbol denv symbol ty in
+      let ty = T.alias_type_of (T.kind ty) symbol' in
       DE.add_equation_on_variable denv bound_to ty)
   in
 (*Format.eprintf "Equation for lifted constant: %a = %a\n%!"

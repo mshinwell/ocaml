@@ -285,15 +285,18 @@ let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
   | Name (Symbol _), Name (Var _) -> true
   | Name (Var _), Name (Symbol _) -> false
   | Name name1, Name name2 ->
-    let time1 = Cached.binding_time (cached t) name1 in
-    let time2 = Cached.binding_time (cached t) name2 in
-    if Binding_time.equal time1 time2 then begin
-        Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
-          Name.print name1
-          Name.print name2
-          print t
-      end;
-    Binding_time.strictly_earlier time1 ~than:time2
+    if Name.equal name1 name2 then
+      false
+    else
+      let time1 = Cached.binding_time (cached t) name1 in
+      let time2 = Cached.binding_time (cached t) name2 in
+      if Binding_time.equal time1 time2 then begin
+          Misc.fatal_errorf "Names with same binding time: %a and %a:@ %a"
+            Name.print name1
+            Name.print name2
+            print t
+        end;
+      Binding_time.strictly_earlier time1 ~than:time2
 
 let add_definition t name kind =
   if mem t name then begin
@@ -515,8 +518,8 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals _ ->
-      Format.eprintf "%s>> Trying to resolve toplevel alias on%s:@ %a\n\
-          %sCurrent aliases:%s\n%a\n"
+      Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
+          @ %a@ %sCurrent aliases:%s@ %a@]\n"
         (Misc.Color.bold_red ())
         (Misc.Color.reset ())
         print_ty ty
@@ -540,11 +543,14 @@ let resolve_any_toplevel_alias_on_ty (type a) t
     | No_alias _ -> ty, Some (Simple.name name)
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals _ ->
-      Format.eprintf "%s>> Trying to resolve toplevel alias on%s:@ %a\n\
-          %sCurrent aliases:%s\n%a\n"
+      Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
+          @ %a@ %sCanonical name:%s %a@ %sCurrent aliases:%s@ %a@]\n"
         (Misc.Color.bold_red ())
         (Misc.Color.reset ())
         print_ty ty
+        (Misc.Color.bold_red ())
+        (Misc.Color.reset ())
+        Name.print name
         (Misc.Color.bold_red ())
         (Misc.Color.reset ())
         Aliases.print (aliases t);

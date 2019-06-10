@@ -127,7 +127,7 @@ module Make
     | Resolved_naked_number _ -> false
     | Resolved_fabricated _ -> false
 
-  let reify env ~allow_free_variables t : reification_result =
+  let reify env ~allow_free_variables:_ t : reification_result =
     let resolved, canonical_simple = Typing_env.resolve_type env t in
     (* CR mshinwell: We should probably also resolve aliases throughout the
        type to try to get them to symbols. *)
@@ -136,10 +136,10 @@ module Make
     in
     if resolved_type_is_bottom resolved then Invalid
     else
-      let result, canonical_var =
+      let result =
         match canonical_simple with
         | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
-          Some (Term (simple, alias_type_of (kind t) simple)), None
+          Some (Term (simple, alias_type_of (kind t) simple))
         | Some ((Name ((Var _) as _name)) as simple) ->
           let all_aliases = Typing_env.aliases_of_simple env simple in
 (*Format.eprintf "all_aliases %a\n%!" Name.Set.print all_aliases;*)
@@ -151,29 +151,21 @@ module Make
                variable. *)
 (*Format.eprintf "using symbol %a\n%!" Symbol.print symbol;*)
             let simple = Simple.symbol symbol in
-            Some (Term (simple, alias_type_of (kind t) simple)), None
-          | None ->
-            if allow_free_variables
-            then None, Some simple
-            else None, None
+            Some (Term (simple, alias_type_of (kind t) simple))
+          | None -> None
           end
-        | None -> None, None
+        | None -> None
       in
       match result with
       | Some result -> result
       | None ->
-        let try_canonical_var () : reification_result =
-          match canonical_var with
-          | Some simple -> Term (simple, alias_type_of (kind t) simple)
-          | None -> Cannot_reify
-        in
         match resolved with
         | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
           begin match blocks_imms.blocks, blocks_imms.immediates with
           | Known blocks, Known imms ->
             if Immediates.is_bottom imms then
               match Blocks.get_singleton blocks with
-              | None -> try_canonical_var ()
+              | None -> Cannot_reify
               | Some ((tag, size), field_types) ->
                 assert (Targetint.OCaml.equal size
                   (Blocks.Int_indexed_product.width field_types));
@@ -190,12 +182,12 @@ module Make
                 if List.compare_lengths field_types symbols = 0 then
                   match Tag.Scannable.of_tag tag with
                   | Some tag -> Lift (Immutable_block (tag, symbols))
-                  | None -> try_canonical_var ()
+                  | None -> Cannot_reify
                 else
-                  try_canonical_var ()
+                  Cannot_reify
             else
-              try_canonical_var ()
-          | _, _ -> try_canonical_var ()
+              Cannot_reify
+          | _, _ -> Cannot_reify
           end
-        | _ -> try_canonical_var ()
+        | _ -> Cannot_reify
 end
