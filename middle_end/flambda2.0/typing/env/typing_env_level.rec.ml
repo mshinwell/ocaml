@@ -17,11 +17,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = {
-  defined_names : Flambda_kind.t Name.Map.t;
+  defined_vars : Flambda_kind.t Variable.Map.t;
   equations : Flambda_types.t Name.Map.t;
 }
 
-let print_with_cache ~cache ppf ({ defined_names; equations; } : t) =
+let print_with_cache ~cache ppf ({ defined_vars; equations; } : t) =
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -39,7 +39,7 @@ let print_with_cache ~cache ppf ({ defined_names; equations; } : t) =
         ppf equations;
       Format.pp_print_string ppf ")"
   in
-  if Name.Map.is_empty defined_names then
+  if Variable.Map.is_empty defined_vars then
     Format.fprintf ppf
       "@[<hov 1>(\
         @[<hov 1>(equations@ @[<hov 1>%a@])@])\
@@ -48,10 +48,10 @@ let print_with_cache ~cache ppf ({ defined_names; equations; } : t) =
   else
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(defined_names@ @[<hov 1>%a@])@]@;\
+        @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@;\
         @[<hov 1>(equations@ @[<hov 1>%a@])@]\
         )@]"
-      Name.Set.print (Name.Map.keys defined_names)
+      Variable.Set.print (Variable.Map.keys defined_vars)
       print_equations equations
 
 let print ppf t =
@@ -60,30 +60,30 @@ let print ppf t =
 let invariant _t = ()
 
 let empty =
-  { defined_names = Name.Map.empty;
+  { defined_vars = Variable.Map.empty;
     equations = Name.Map.empty;
   }
 
-let is_empty { defined_names; equations; } =
-  Name.Map.is_empty defined_names
+let is_empty { defined_vars; equations; } =
+  Variable.Map.is_empty defined_vars
     && Name.Map.is_empty equations
 
 let equations t = t.equations
 
-let defined_names t = t.defined_names
+let defined_vars t = t.defined_vars
 
-let add_definition t name kind =
-  if Name.Map.mem name t.defined_names then begin
-    Misc.fatal_errorf "Environment extension already binds name %a:@ %a"
-      Name.print name
+let add_definition t var kind =
+  if Variable.Map.mem var t.defined_vars then begin
+    Misc.fatal_errorf "Environment extension already binds variable %a:@ %a"
+      Variable.print var
       print t
   end;
   { t with
-    defined_names = Name.Map.add name kind t.defined_names
+    defined_vars = Variable.Map.add var kind t.defined_vars
   }
 
 let one_equation name ty =
-  { defined_names = Name.Map.empty;
+  { defined_vars = Variable.Map.empty;
     equations = Name.Map.singleton name ty;
   }
 
@@ -124,10 +124,10 @@ let meet env (t1 : t) (t2 : t) =
 
 let join env (t1 : t) (t2 : t) : t =
   (* This restriction will be relaxed in the full type system. *)
-  if not
-    (Name.Map.is_empty t1.defined_names && Name.Map.is_empty t2.defined_names)
+  if not (Variable.Map.is_empty t1.defined_vars
+           && Variable.Map.is_empty t2.defined_vars)
   then begin
-    Misc.fatal_errorf "Cannot join environment levels that define names:@ \
+    Misc.fatal_errorf "Cannot join environment levels that define variables:@ \
         %a@ and@ %a"
       print t1
       print t2
@@ -155,7 +155,7 @@ let erase_aliases t ~allowed =
 
 let meet_equation t1 env name ty =
   let t2 =
-    { defined_names = Name.Map.empty;
+    { defined_vars = Variable.Map.empty;
       equations = Name.Map.singleton name ty;
     }
   in
@@ -163,10 +163,13 @@ let meet_equation t1 env name ty =
 
 let remove_definitions_and_equations_thereon t =
   let equations =
-    Name.Map.filter (fun name _ty -> not (Name.Map.mem name t.defined_names))
+    Name.Map.filter (fun (name : Name.t) _ty ->
+        match name with
+        | Var var -> not (Variable.Map.mem var t.defined_vars)
+        | Symbol _ -> true)
       t.equations
   in
-  { defined_names = Name.Map.empty;
+  { defined_vars = Variable.Map.empty;
     equations;
   }
 

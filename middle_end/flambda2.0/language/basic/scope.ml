@@ -16,9 +16,7 @@
 
 include Numbers.Int
 
-let for_symbols = 0
-
-let initial = for_symbols + 1
+let initial = 0
 
 let next t =
   t + 1
