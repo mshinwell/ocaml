@@ -337,14 +337,14 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
   with_current_level_and_next_binding_time t ~current_level
     (Binding_time.succ t.next_binding_time)
 
-let add_symbol_definition t sym =
+let add_symbol_definition t sym kind =
   let name = Name.symbol sym in
   let just_after_level =
     let aliases =
       Aliases.add_canonical_name (aliases t) name
     in
     let names_to_types =
-      Name.Map.add name (Flambda_type0_core.any_value (), Binding_time.symbols)
+      Name.Map.add name (Flambda_type0_core.unknown kind, Binding_time.symbols)
         (names_to_types t)
     in
     Cached.create ~names_to_types aliases
@@ -358,12 +358,7 @@ let add_symbol_definition t sym =
 let add_definition t (name : Name.t) kind =
   match name with
   | Var var -> add_variable_definition t var kind
-  | Symbol sym ->
-    if not (K.equal kind K.value) then begin
-      Misc.fatal_errorf "Cannot add definition for symbol %a not of kind Value"
-        Symbol.print sym
-    end;
-    add_symbol_definition t sym
+  | Symbol sym -> add_symbol_definition t sym kind
 
 (* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation t name ty =
