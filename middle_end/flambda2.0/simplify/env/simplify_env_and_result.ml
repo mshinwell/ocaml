@@ -370,12 +370,14 @@ end = struct
         lifted_constant :: t.lifted_constants_innermost_first;
     }
 
+(*
   let add_lifted_constants t ~from =
     { t with
       lifted_constants_innermost_first =
         from.lifted_constants_innermost_first
           @ t.lifted_constants_innermost_first;
     }
+*)
 
   let get_lifted_constants t = t.lifted_constants_innermost_first
 end
