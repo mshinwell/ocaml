@@ -147,7 +147,18 @@ and simplify_non_recursive_let_cont_handler
           in
           let dacc = DA.create definition_denv cont_uses_env r in
           let cont_handler, additional_cont_handler, user_data, uacc =
-            simplify_one_continuation_handler dacc ~arg_types cont_handler k
+            try
+              simplify_one_continuation_handler dacc ~arg_types cont_handler k
+            with Misc.Fatal_error -> begin
+              Format.eprintf "\n%sContext is:%s simplifying continuation \
+                  handler@ %a@ \
+                  with downwards accumulator:@ %a\n"
+                (Misc.Color.bold_red ())
+                (Misc.Color.reset ())
+                Continuation_handler.print cont_handler
+                DA.print dacc;
+              raise Misc.Fatal_error
+            end
           in
           let uenv = UA.uenv uacc in
           let uenv' = uenv in
