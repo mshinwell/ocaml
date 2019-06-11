@@ -372,17 +372,20 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           ~stub:false
           ~is_exn_handler:false
       in
-      let definition_denv = DA.denv dacc in
       let expr, _dummy_cont_handler, additional_cont_handler,
-          (used_computed_values, static_structure, dacc), uacc =
+          (used_computed_values, static_structure, dacc), _uacc =
         Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
           computation.return_continuation
           dummy_cont_handler
           ~body:computation.expr
           (fun cont_uses_env r ->
+            let dacc =
+              DA.map_denv dacc
+                ~f:(fun denv -> DE.add_lifted_constants_from_r denv r)
+            in
             let typing_env, arg_types =
               CUE.continuation_env_and_arg_types cont_uses_env
-                ~definition_typing_env:(DE.typing_env definition_denv)
+                ~definition_typing_env:(DE.typing_env (DA.denv dacc))
                 computation.return_continuation
             in
             assert (List.compare_lengths arg_types
@@ -408,12 +411,11 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
                   Variable.Set.mem (KP.var param) free_variables)
                 computation.computed_values
             in
-            let uacc = UA.create UE.empty r in
+            let uenv =
+              UE.add_continuation UE.empty dummy_cont scope return_cont_arity
+            in
+            let uacc = UA.create uenv r in
             (used_computed_values, static_structure, dacc), uacc)
-      in
-      let r = UA.r uacc in
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv -> DE.add_lifted_constants_from_r denv r)
       in
       let computed_values =
         List.filter_map (fun (param, is_used) ->
