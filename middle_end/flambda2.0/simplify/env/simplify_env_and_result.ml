@@ -59,7 +59,7 @@ end = struct
       typing_env = TE.create ~resolver;
       continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
-      can_inline = false;
+      can_inline = true;
     }
 
   let resolver t = TE.resolver t.typing_env
