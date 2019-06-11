@@ -76,7 +76,7 @@ module Program_body : sig
       (** The return continuation of [expr]. *)
       exn_continuation : Exn_continuation.t;
       (** The uncaught exception continuation of [expr]. *)
-      computed_values : (Variable.t * Flambda_kind.t) list;
+      computed_values : Kinded_parameter.t list;
       (** Variables, with their kinds, used to reference results of the
           computation [expr] inside the [static_structure] (see below).  This
           list of variables must be in bijection with the parameters of the
@@ -109,6 +109,8 @@ module Program_body : sig
       [@@unboxed]
 
     (* CR mshinwell: Add a creation function *)
+
+    val free_variables : t -> Variable.Set.t
   end
 
   module Definition : sig

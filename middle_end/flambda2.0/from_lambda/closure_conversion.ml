@@ -27,6 +27,7 @@ module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
 
 module K = Flambda_kind
+module KP = Kinded_parameter
 module LC = Lambda_conversions
 module P = Flambda_primitive
 
@@ -838,11 +839,15 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Exn_continuation.create ~exn_handler:ilam.exn_continuation.exn_handler
       ~extra_args:[]
   in
+  let computed_values =
+    List.map (fun (var, kind) -> KP.create (Parameter.wrap var) kind)
+      field_vars
+  in
   let computation : Program_body.Computation.t =
     { expr;
       return_continuation = return_cont;
       exn_continuation;
-      computed_values = field_vars;
+      computed_values;
     }
   in
   let static_part : K.value Static_part.t =

@@ -228,6 +228,8 @@ and simplify_non_recursive_let_cont_handler
         Let_cont.create_non_recursive cont cont_handler ~body,
           user_data, uacc
       | Some (additional_cont, additional_cont_handler) ->
+        (* CR mshinwell: Isn't [additional_cont] always unused, since the
+           inlining-out of the wrapper has been performed already? *)
         Let_cont.create_non_recursive additional_cont additional_cont_handler
             ~body:(Let_cont.create_non_recursive cont cont_handler ~body),
           user_data, uacc)
