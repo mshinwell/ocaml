@@ -79,7 +79,7 @@ let print_with_cache ~cache ppf t =
         Continuation_handler.print_using_where_with_cache ~cache
           ppf cont handler ~first:!first;
         first := false)
-      let_conts;
+      (List.rev let_conts);
     fprintf ppf "@]@])@]"
   end
 
