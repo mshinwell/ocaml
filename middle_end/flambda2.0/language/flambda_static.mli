@@ -109,8 +109,15 @@ module Program_body : sig
       [@@unboxed]
 
     (* CR mshinwell: Add a creation function *)
+    (* CR mshinwell: make [t] abstract *)
+
+    val is_empty : t -> bool
+
+    val being_defined : t -> Symbol.Set.t
 
     val free_variables : t -> Variable.Set.t
+
+    val delete_bindings : t -> allowed:Symbol.Set.t -> t
   end
 
   module Definition : sig
@@ -137,6 +144,8 @@ module Program_body : sig
 
   (** Print a list of symbol definitions to a formatter. *)
   val print : Format.formatter -> t -> unit
+
+  val free_symbols : t -> Symbol.Set.t
 end
 
 (** A "program" is the contents of one compilation unit.  It describes the
