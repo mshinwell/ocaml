@@ -198,3 +198,7 @@ let is_goto t k =
   Continuation.equal (continuation t) k
     && no_args t
     && Option.is_none (trap_action t)
+
+let to_goto t =
+  if no_args t && Option.is_none (trap_action t) then Some (continuation t)
+  else None
