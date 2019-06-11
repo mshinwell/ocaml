@@ -381,9 +381,7 @@ module Program_body = struct
       in
       S pieces
 
-    let iter_static_parts
-          : 'k. t -> f:('k Static_part.t -> unit) -> unit
-    = fun (S pieces) ~f ->
+    let iter_static_parts (S pieces) ~(f : _ Static_part.t -> unit) =
       List.iter (fun (type k) (_bound_syms, (static_part : k Static_part.t)) ->
           f static_part)
         pieces
