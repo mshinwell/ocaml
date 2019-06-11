@@ -335,6 +335,11 @@ module Program_body = struct
             (Static_part.print_with_cache ~cache) static_part)
         ppf pieces
 
+    let is_empty (S pieces) =
+      match pieces with
+      | [] -> true
+      | _::_ -> false
+
     let being_defined (S pieces) =
       List.fold_left (fun being_defined (bound_syms, _static_part) ->
           Symbol.Set.union (Bound_symbols.being_defined bound_syms)
@@ -358,6 +363,16 @@ module Program_body = struct
             free_in_static_parts)
         Variable.Set.empty
         pieces
+
+    let delete_bindings (S pieces) ~allowed =
+      let pieces =
+        List.filter (fun (bound_syms, _static_part) ->
+            not (Symbol.Set.is_empty (
+              Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
+                allowed)))
+          pieces
+      in
+      S pieces
   end
 
   module Definition = struct
@@ -428,6 +443,8 @@ module Program_body = struct
     in
     gc_roots t Symbol.Set.empty
 
+  (* CR mshinwell: Free symbols should be cached at each level otherwise
+     we have quadratic behaviour when adding lifted constants *)
   let rec free_symbols t =
     match t with
     | Define_symbol (defn, t) ->
