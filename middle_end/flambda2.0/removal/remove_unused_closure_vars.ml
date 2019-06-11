@@ -146,11 +146,12 @@ let run program =
           Flambda_static.Program_body.Computation.iter_expr computation
             ~f:(fun expr -> collect_vars_expr used_closure_vars expr));
       Flambda_static.Program_body.Definition.iter_static_parts defn
-        ~f:(fun (type k) (static_part : k  Flambda_static.Static_part.t) ->
+        { f = (fun (type k) (static_part : k  Flambda_static.Static_part.t) ->
           match static_part with
           | Set_of_closures set_of_closures ->
             collect_vars_set_of_closures used_closure_vars set_of_closures
-          | _ -> ())));
+          | _ -> ());
+        }));
   let used_closure_vars = !used_closure_vars in
   if Var_within_closure.Set.is_empty used_closure_vars then program
   else
@@ -163,12 +164,13 @@ let run program =
                 ~f:(fun expr -> remove_vars_expr used_closure_vars expr))
         in
         Flambda_static.Program_body.Definition.map_static_parts defn
-          ~f:(fun (type k) (static_part : k Flambda_static.Static_part.t)
-                : k Flambda_static.Static_part.t ->
-            match static_part with
-            | Set_of_closures set_of_closures ->
-              let set_of_closures =
-                remove_vars_set_of_closures used_closure_vars set_of_closures
-              in
-              Set_of_closures set_of_closures
-            | static_part -> static_part)))
+          { f = (fun (type k) (static_part : k Flambda_static.Static_part.t)
+                  : k Flambda_static.Static_part.t ->
+              match static_part with
+              | Set_of_closures set_of_closures ->
+                let set_of_closures =
+                  remove_vars_set_of_closures used_closure_vars set_of_closures
+                in
+                Set_of_closures set_of_closures
+              | static_part -> static_part);
+          }))
