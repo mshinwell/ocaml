@@ -366,7 +366,8 @@ let infer_let_kind (defining_expr : Named.t)
      will be verified by invariant checks. In other cases, we infer the Flambda
      kind. *)
   match defining_expr with
-  | Prim (Unary (Discriminant_of_int, _), _dbg) -> K.fabricated
+  | Prim (Unary (Discriminant_of_int, _), _dbg)
+  | Prim (Unary (Is_int, _), _dbg) -> K.fabricated
   | Set_of_closures _ ->
     begin match lambda_kind with
     | Pgenval -> K.fabricated

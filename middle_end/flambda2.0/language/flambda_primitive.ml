@@ -1204,6 +1204,30 @@ let result_kind' t =
   | Singleton kind -> kind
   | Unit -> K.value
 
+let result_kind_of_unary_primitive' t =
+  match result_kind_of_unary_primitive t with
+  (* CR mshinwell: factor out this mapping *)
+  | Singleton kind -> kind
+  | Unit -> K.value
+
+let result_kind_of_binary_primitive' t =
+  match result_kind_of_binary_primitive t with
+  (* CR mshinwell: factor out this mapping *)
+  | Singleton kind -> kind
+  | Unit -> K.value
+
+let result_kind_of_ternary_primitive' t =
+  match result_kind_of_ternary_primitive t with
+  (* CR mshinwell: factor out this mapping *)
+  | Singleton kind -> kind
+  | Unit -> K.value
+
+let result_kind_of_variadic_primitive' t =
+  match result_kind_of_variadic_primitive t with
+  (* CR mshinwell: factor out this mapping *)
+  | Singleton kind -> kind
+  | Unit -> K.value
+
 let effects_and_coeffects (t : t) =
   match t with
   | Unary (prim, _) -> effects_and_coeffects_of_unary_primitive prim
