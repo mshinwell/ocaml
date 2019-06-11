@@ -66,6 +66,14 @@ module Static_part : sig
   val free_names : _ t -> Name_occurrences.t
 end
 
+type static_part_iterator = {
+  f : 'k. ('k Static_part.t -> unit);
+}
+
+type static_part_mapper = {
+  f : 'k. ('k Static_part.t -> 'k Static_part.t);
+}
+
 module Program_body : sig
   module Computation : sig
     type t = {
@@ -141,9 +149,9 @@ module Program_body : sig
 
     val map_computation : t -> f:(Computation.t -> Computation.t) -> t
 
-    val iter_static_parts : t -> f:(_ Static_part.t -> unit) -> unit
+    val iter_static_parts : t -> static_part_iterator -> unit
 
-    val map_static_parts : t -> f:('a Static_part.t -> 'a Static_part.t) -> t
+    val map_static_parts : t -> static_part_mapper -> t
   end
 
   type t =
