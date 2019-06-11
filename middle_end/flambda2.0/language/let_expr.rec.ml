@@ -45,7 +45,7 @@ let print_with_cache ~cache ppf
     | _ -> expr
   in
   pattern_match t ~f:(fun ~bound_var ~body ->
-    fprintf ppf "@[<2>(%slet%s@ @[<hov 1>(\
+    fprintf ppf "@[<hov 1>(%slet%s@ @[<hov 1>(\
         @[<hov 1>%a@[@ %s\u{2237}@ %a%s@]@ %a@]"
       (Misc.Color.bold_cyan ())
       (Misc.Color.reset ())

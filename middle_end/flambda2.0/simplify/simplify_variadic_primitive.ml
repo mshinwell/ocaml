@@ -94,6 +94,7 @@ let simplify_variadic_primitive dacc
   | Bigarray_load (_num_dims, _kind, _layout) ->
     let args = Simplify_simple.simplify_simples_and_drop_types dacc args in
     let named = Named.create_prim (Variadic (prim, args)) dbg in
-    let ty = T.any_value () in
+    let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
+    let ty = T.unknown kind in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.reachable named, env_extension, dacc

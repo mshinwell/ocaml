@@ -72,24 +72,23 @@ let print_with_cache ~cache ppf t =
             (Continuation.Map.bindings handlers) @ let_conts, body)
     in
     let let_conts, body = gather_let_conts [] t in
-    fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>"
-      (Expr.print_with_cache ~cache) body;
+    fprintf ppf "@[<hov 1>(%a@;" (Expr.print_with_cache ~cache) body;
     let first = ref true in
     List.iter (fun (cont, handler) ->
         Continuation_handler.print_using_where_with_cache ~cache
           ppf cont handler ~first:!first;
         first := false)
       (List.rev let_conts);
-    fprintf ppf "@]@])@]"
+    fprintf ppf ")@]"
   end
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create_non_recursive k handler ~body =
+let create_non_recursive cont handler ~body =
   let free_names = Expr.free_names body in
   let num_free_occurrences =
-    Name_occurrences.count_continuation free_names k
+    Name_occurrences.count_continuation free_names cont
   in
   (* We don't inline out linear uses of continuations here, as it could
      result in quadratic behaviour.  However we can safely avoid creating
@@ -98,7 +97,7 @@ let create_non_recursive k handler ~body =
     body
   else
     match Expr.descr body with
-    | Apply_cont apply_cont when Apply_cont.is_goto apply_cont k ->
+    | Apply_cont apply_cont when Apply_cont.is_goto apply_cont cont ->
       (* CR mshinwell: This could work for the >0 arity-case too, to handle
          continuation aliases. *)
       Continuation_params_and_handler.pattern_match
@@ -111,7 +110,7 @@ let create_non_recursive k handler ~body =
               "Continuation handler expected to have zero arity: %a"
               Continuation_handler.print handler)
     | _ ->
-      let handler = Non_recursive_let_cont_handler.create k handler ~body in
+      let handler = Non_recursive_let_cont_handler.create cont handler ~body in
       Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
 
 let create_recursive handlers ~body =

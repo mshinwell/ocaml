@@ -252,7 +252,7 @@ module Make_set (T : Thing) = struct
 
   let get_singleton t =
     match elements t with
-    | elt::_ -> Some elt
+    | [elt] -> Some elt
     | _ -> None
 end
 
