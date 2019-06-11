@@ -373,7 +373,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           ~is_exn_handler:false
       in
       let expr, _dummy_cont_handler, additional_cont_handler,
-          (used_computed_values, static_structure, dacc), _uacc =
+          (used_computed_values, static_structure, dacc), uacc =
         Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
           computation.return_continuation
           dummy_cont_handler
@@ -417,6 +417,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             let uacc = UA.create uenv r in
             (used_computed_values, static_structure, dacc), uacc)
       in
+      let dacc = DA.with_r dacc (UA.r uacc) in
       let computed_values =
         List.filter_map (fun (param, is_used) ->
             if is_used then Some param else None)
@@ -430,13 +431,25 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           cont
         | None -> computation.return_continuation
       in
+      let computation_can_be_deleted =
+        match Expr.descr expr with
+        | Apply_cont apply_cont ->
+          begin match Apply_cont.to_goto apply_cont with
+          | Some cont when Continuation.equal cont return_continuation ->
+            true
+          | _ -> false
+          end
+        | _ -> false
+      in
       let computation : Program_body.Computation.t option =
-        Some ({
-          expr;
-          return_continuation;
-          exn_continuation = computation.exn_continuation;
-          computed_values;
-        })
+        if computation_can_be_deleted then None
+        else
+          Some ({
+            expr;
+            return_continuation;
+            exn_continuation = computation.exn_continuation;
+            computed_values;
+          })
       in
       dacc, computation, static_structure
   in

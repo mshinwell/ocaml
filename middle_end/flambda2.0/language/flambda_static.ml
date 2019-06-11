@@ -260,11 +260,11 @@ module Program_body = struct
 
     let print ppf { expr; return_continuation; exn_continuation;
                     computed_values; } =
-      Format.fprintf ppf "@[<2>(\
-          @[(expr@ %a)@]@ \
-          @[(return_continuation@ %a)@]@ \
-          @[(exn_continuation@ %a)@]@ \
-          @[(computed_values@ @[%a@])@])@]"
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(expr@ %a)@]@ \
+          @[<hov 1>(return_continuation@ %a)@]@ \
+          @[<hov 1>(exn_continuation@ %a)@]@ \
+          @[<hov 1>(computed_values@ @[(%a)@])@])@]"
         Flambda.Expr.print expr
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
