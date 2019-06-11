@@ -484,14 +484,18 @@ let check_imported_symbols_don't_overlap_predef_exns
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
       let static_structure =
-        Lifted_constant.static_structure lifted_constant
+        Static_structure.delete_bindings
+          (Lifted_constant.static_structure lifted_constant)
+          ~allowed:(Program_body.free_symbols body)
       in
-      let definition : Program_body.Definition.t =
-        { computation = None;
-          static_structure;
-        }
-      in
-      Define_symbol (definition, body))
+      if Static_structure.is_empty static_structure then body
+      else
+        let definition : Program_body.Definition.t =
+          { computation = None;
+            static_structure;
+          }
+        in
+        Define_symbol (definition, body))
     body
     lifted_constants
 
