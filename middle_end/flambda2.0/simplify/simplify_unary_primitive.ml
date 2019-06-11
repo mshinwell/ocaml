@@ -63,6 +63,7 @@ end;
     (* CR mshinwell: temporary code *)
     let arg = Simplify_simple.simplify_simple_and_drop_type dacc arg in
     let named = Named.create_prim (Unary (prim, arg)) dbg in
-    let ty = T.any_value () in
+    let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
+    let ty = T.unknown kind in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.reachable named, env_extension, dacc
