@@ -63,6 +63,7 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
     let arg1 = Simplify_simple.simplify_simple_and_drop_type dacc arg1 in
     let arg2 = Simplify_simple.simplify_simple_and_drop_type dacc arg2 in
     let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-    let ty = T.any_value () in
+    let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
+    let ty = T.unknown kind in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.reachable named, env_extension, dacc
