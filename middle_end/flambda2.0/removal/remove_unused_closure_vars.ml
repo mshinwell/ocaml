@@ -153,24 +153,22 @@ let run program =
           | _ -> ());
         }));
   let used_closure_vars = !used_closure_vars in
-  if Var_within_closure.Set.is_empty used_closure_vars then program
-  else
-    Flambda_static.Program.map_body program ~f:(fun body ->
-      Flambda_static.Program_body.map_definitions body ~f:(fun defn ->
-        let defn =
-          Flambda_static.Program_body.Definition.map_computation defn
-            ~f:(fun computation ->
-              Flambda_static.Program_body.Computation.map_expr computation
-                ~f:(fun expr -> remove_vars_expr used_closure_vars expr))
-        in
-        Flambda_static.Program_body.Definition.map_static_parts defn
-          { f = (fun (type k) (static_part : k Flambda_static.Static_part.t)
-                  : k Flambda_static.Static_part.t ->
-              match static_part with
-              | Set_of_closures set_of_closures ->
-                let set_of_closures =
-                  remove_vars_set_of_closures used_closure_vars set_of_closures
-                in
-                Set_of_closures set_of_closures
-              | static_part -> static_part);
-          }))
+  Flambda_static.Program.map_body program ~f:(fun body ->
+    Flambda_static.Program_body.map_definitions body ~f:(fun defn ->
+      let defn =
+        Flambda_static.Program_body.Definition.map_computation defn
+          ~f:(fun computation ->
+            Flambda_static.Program_body.Computation.map_expr computation
+              ~f:(fun expr -> remove_vars_expr used_closure_vars expr))
+      in
+      Flambda_static.Program_body.Definition.map_static_parts defn
+        { f = (fun (type k) (static_part : k Flambda_static.Static_part.t)
+                : k Flambda_static.Static_part.t ->
+            match static_part with
+            | Set_of_closures set_of_closures ->
+              let set_of_closures =
+                remove_vars_set_of_closures used_closure_vars set_of_closures
+              in
+              Set_of_closures set_of_closures
+            | static_part -> static_part);
+        }))
