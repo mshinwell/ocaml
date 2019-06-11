@@ -249,6 +249,14 @@ module Static_part = struct
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 end
 
+type static_part_iterator = {
+  f : 'k. ('k Static_part.t -> unit);
+}
+
+type static_part_mapper = {
+  f : 'k. ('k Static_part.t -> 'k Static_part.t);
+}
+
 module Program_body = struct
   module Computation = struct
     type t = {
@@ -381,15 +389,15 @@ module Program_body = struct
       in
       S pieces
 
-    let iter_static_parts (S pieces) ~(f : _ Static_part.t -> unit) =
-      List.iter (fun (type k) (_bound_syms, (static_part : k Static_part.t)) ->
-          f static_part)
+    let iter_static_parts (S pieces) (iter : static_part_iterator) =
+      List.iter (fun (_bound_syms, static_part) ->
+          iter.f static_part)
         pieces
 
-    let map_static_parts (S pieces) ~f =
+    let map_static_parts (S pieces) (mapper : static_part_mapper) =
       let pieces =
         List.map (fun (bound_syms, static_part) ->
-            bound_syms, f static_part)
+            bound_syms, mapper.f static_part)
           pieces
       in
       S pieces
@@ -419,20 +427,23 @@ module Program_body = struct
       in
       Symbol.Set.union free_in_computation free_in_static_structure
 
-    let iter_computation t ~f = f t.computation
+    let iter_computation t ~f =
+      match t.computation with
+      | None -> ()
+      | Some computation -> f computation
 
     let map_computation t ~f =
       { t with
-        computation = f t.computation;
+        computation = Option.map f t.computation;
       }
 
-    let iter_static_parts t ~f =
-      Static_structure.iter_static_parts t.static_structure ~f
+    let iter_static_parts t iter =
+      Static_structure.iter_static_parts t.static_structure iter
 
-    let map_static_parts t ~f =
+    let map_static_parts t mapper =
       { t with
         static_structure =
-          Static_structure.map_static_parts t.static_structure ~f;
+          Static_structure.map_static_parts t.static_structure mapper;
       }
   end
 
@@ -489,7 +500,7 @@ module Program_body = struct
 
   let _invariant _env _t = ()
 
-  let iter_definitions t ~f =
+  let rec iter_definitions t ~f =
     match t with
     | Define_symbol (definition, t) ->
       f definition;
@@ -550,6 +561,6 @@ module Program = struct
 
   let map_body t ~f =
     { t with
-      body = f body;
+      body = f t.body;
     }
 end
