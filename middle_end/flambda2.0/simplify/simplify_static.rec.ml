@@ -33,6 +33,7 @@ module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program
 module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
+module Static_structure = Flambda_static.Program_body.Static_structure
 
 (* CR-someday mshinwell: Add improved simplification using types (we have
    prototype code to do this). *)
@@ -298,69 +299,6 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
      in
      Set_of_closures set_of_closures, dacc
 
-let simplify_computation dacc
-      (computation : Program_body.Computation.t option) =
-  match computation with
-  | None -> dacc, None
-  | Some computation ->
-    let return_cont_arity =
-      List.map (fun (_var, kind) -> kind) computation.computed_values
-    in
-    let outer_denv = DA.denv dacc in
-
-    let dacc =
-      DA.add_exn_continuation dacc computation.exn_continuation
-        ~definition_scope_level:scope
-    in
-    let cont_handler =
-      let params_and_handler =
-        Continuation_params_and_handler.create ...
-          (* ... but what handler?? *)
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
-        ~is_exn_handler:false
-    in
-    let expr, cont_handler, additional_cont_handler, _user_data, uacc =
-      Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
-        computation.return_continuation
-        cont_handler
-        ~body:computation.expr
-        (fun cont_uses_env r ->
-          let typing_env, arg_types =
-            CUE.continuation_env_and_arg_types cont_uses_env
-              ~definition_typing_env:(DE.typing_env denv)
-              computation.return_continuation
-          in
-          assert (List.compare_lengths arg_types
-            computation.computed_values = 0);
-
-        )
-    in
-    let r = UA.r uacc in
-    let denv = DE.add_lifted_constants_from_r outer_denv r in
-
-
-
-    let dacc = DA.create denv Continuation_uses_env.empty r in
-    let dacc =
-      DA.map_denv dacc ~f:(fun denv ->
-        List.fold_left2 (fun denv ty (var, kind) ->
-            assert (Flambda_kind.equal (T.kind ty) kind);
-            DE.add_variable denv var ty)
-          (DE.with_typing_environment denv typing_env)
-          arg_types computation.computed_values)
-    in
-    let computation : Program_body.Computation.t option =
-      Some ({
-        expr;
-        return_continuation = computation.return_continuation;
-        exn_continuation = computation.exn_continuation;
-        computed_values = computation.computed_values;
-      })
-    in
-    dacc, computation
-
 let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       (bound_syms : k Program_body.Bound_symbols.t)
       (static_part : k Static_part.t)
@@ -393,9 +331,112 @@ let simplify_static_structure dacc
   next_dacc, S (List.rev str_rev)
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
-  let dacc, computation = simplify_computation dacc defn.computation in
-  let dacc, static_structure =
-    simplify_static_structure dacc defn.static_structure
+  let dacc, computation, static_structure =
+    match defn.computation with
+    | None ->
+      let dacc, static_structure =
+        simplify_static_structure dacc defn.static_structure
+      in
+      dacc, None, static_structure
+    | Some computation ->
+      let return_cont_arity = KP.List.arity computation.computed_values in
+      let scope = Scope.initial in
+      let dacc =
+        DA.add_exn_continuation dacc computation.exn_continuation
+          ~definition_scope_level:scope
+      in
+      let dummy_cont = Continuation.create () in
+      let dacc =
+        DA.add_continuation dacc dummy_cont
+          ~definition_scope_level:scope
+          return_cont_arity
+      in
+      let dummy_cont_handler =
+        (* The handler will never be executed.  It just needs to be an
+           expression that cannot be simplified away and must have the
+           [computed_values] as free variables.  This will then enable the
+           usual unused continuation parameter removal algorithm to work
+           automatically on the return continuation. *)
+        let handler =
+          let apply_cont =
+            Apply_cont.create dummy_cont
+              ~args:(KP.List.simples computation.computed_values)
+          in
+          Expr.create_apply_cont apply_cont
+        in
+        let params_and_handler =
+          Continuation_params_and_handler.create computation.computed_values
+            ~handler
+        in
+        Continuation_handler.create ~params_and_handler
+          ~stub:false
+          ~is_exn_handler:false
+      in
+      let definition_denv = DA.denv dacc in
+      let expr, _dummy_cont_handler, additional_cont_handler,
+          (used_computed_values, static_structure, dacc), uacc =
+        Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
+          computation.return_continuation
+          dummy_cont_handler
+          ~body:computation.expr
+          (fun cont_uses_env r ->
+            let typing_env, arg_types =
+              CUE.continuation_env_and_arg_types cont_uses_env
+                ~definition_typing_env:(DE.typing_env definition_denv)
+                computation.return_continuation
+            in
+            assert (List.compare_lengths arg_types
+              computation.computed_values = 0);
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                List.fold_left2 (fun denv ty param ->
+                    let var = KP.var param in
+                    let kind = KP.kind param in
+                    assert (Flambda_kind.equal (T.kind ty) kind);
+                    DE.add_variable denv var ty)
+                  (DE.with_typing_environment denv typing_env)
+                  arg_types computation.computed_values)
+            in
+            let dacc, static_structure =
+              simplify_static_structure dacc defn.static_structure
+            in
+            let free_variables =
+              Static_structure.free_variables static_structure
+            in
+            let used_computed_values =
+              List.map (fun param ->
+                  Variable.Set.mem (KP.var param) free_variables)
+                computation.computed_values
+            in
+            let uacc = UA.create UE.empty r in
+            (used_computed_values, static_structure, dacc), uacc)
+      in
+      let r = UA.r uacc in
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv -> DE.add_lifted_constants_from_r denv r)
+      in
+      let computed_values =
+        List.filter_map (fun (param, is_used) ->
+            if is_used then Some param else None)
+          (List.combine computation.computed_values used_computed_values)
+      in
+      let return_continuation =
+        match additional_cont_handler with
+        | Some (cont, _) ->
+          assert (not (Continuation.equal cont
+            computation.return_continuation));
+          cont
+        | None -> computation.return_continuation
+      in
+      let computation : Program_body.Computation.t option =
+        Some ({
+          expr;
+          return_continuation;
+          exn_continuation = computation.exn_continuation;
+          computed_values;
+        })
+      in
+      dacc, computation, static_structure
   in
   let definition : Program_body.Definition.t =
     { static_structure;

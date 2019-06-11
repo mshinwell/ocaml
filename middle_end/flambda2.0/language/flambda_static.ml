@@ -156,6 +156,8 @@ module Static_part = struct
 
   let free_symbols t = Name_occurrences.symbols (free_names t)
 
+  let free_variables t = Name_occurrences.variables (free_names t)
+
   let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
       | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
@@ -253,7 +255,7 @@ module Program_body = struct
       expr : Flambda.Expr.t;
       return_continuation : Continuation.t;
       exn_continuation : Exn_continuation.t;
-      computed_values : (Variable.t * K.t) list;
+      computed_values : Kinded_parameter.t list;
     }
 
     let print ppf { expr; return_continuation; exn_continuation;
@@ -266,12 +268,7 @@ module Program_body = struct
         Flambda.Expr.print expr
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          (fun ppf (var, kind) ->
-            Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
-              Variable.print var
-              K.print kind))
-        computed_values
+        Kinded_parameter.List.print computed_values
 
     let free_symbols t =
       Name_occurrences.symbols (Flambda.Expr.free_names t.expr)
@@ -354,6 +351,13 @@ module Program_body = struct
           pieces
       in
       Symbol.Set.diff free_in_static_parts (being_defined t)
+
+    let free_variables (S pieces) =
+      List.fold_left (fun free_in_static_parts (_bound_syms, static_part) ->
+          Variable.Set.union (Static_part.free_variables static_part)
+            free_in_static_parts)
+        Variable.Set.empty
+        pieces
   end
 
   module Definition = struct

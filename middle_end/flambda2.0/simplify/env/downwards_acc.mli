@@ -54,6 +54,8 @@ val map_r
 (** Replace the result structure of the given downwards accumulator. *)
 val with_r : t -> Simplify_env_and_result.Result.t -> t
 
+(* CR mshinwell: Why do these take scope arguments when [DE] knows the
+   current scope level? *)
 include Continuation_uses_env_intf.S with type t := t
 
 val continuation_uses_env : t -> Continuation_uses_env.t
