@@ -84,6 +84,10 @@ module Program_body : sig
           Since we don't really do any transformations on these structures, the
           [computed_values] variables are not treated up to alpha conversion. *)
     }
+
+    val iter_expr : t -> f:(Flambda.Expr.t -> unit) -> unit
+
+    val map_expr : t -> f:(Flambda.Expr.t -> Flambda.Expr.t) -> t
   end
 
   module Bound_symbols : sig
@@ -132,6 +136,14 @@ module Program_body : sig
           Bindings of symbols in each element of a list comprising a
           [static_structure] are simultaneous, not ordered, or recursive. *)
     }
+
+    val iter_computation : t -> f:(Computation.t -> unit) -> unit
+
+    val map_computation : t -> f:(Computation.t -> Computation.t) -> t
+
+    val iter_static_parts : t -> f:(_ Static_part.t -> unit) -> unit
+
+    val map_static_parts : t -> f:('a Static_part.t -> 'a Static_part.t) -> t
   end
 
   type t =
@@ -146,6 +158,10 @@ module Program_body : sig
   val print : Format.formatter -> t -> unit
 
   val free_symbols : t -> Symbol.Set.t
+
+  val iter_definitions : t -> f:(Definition.t -> unit) -> unit
+
+  val map_definitions : t -> f:(Definition.t -> Definition.t) -> t
 end
 
 (** A "program" is the contents of one compilation unit.  It describes the
@@ -176,4 +192,8 @@ module Program : sig
   (** The module block symbol for the given program (the only symbol that
       can never be eliminated). *)
   val root_symbol : t -> Symbol.t
+
+  val iter_body : t -> f:(Program_body.t -> unit) -> unit
+
+  val map_body : t -> f:(Program_body.t -> Program_body.t) -> t
 end

@@ -272,6 +272,13 @@ module Program_body = struct
 
     let free_symbols t =
       Name_occurrences.symbols (Flambda.Expr.free_names t.expr)
+
+    let iter_expr t ~f = f t.expr
+
+    let map_expr t ~f =
+      { t with
+        expr = f t.expr;
+      }
   end
 
   module Bound_symbols = struct
@@ -373,6 +380,21 @@ module Program_body = struct
           pieces
       in
       S pieces
+
+    let iter_static_parts
+          : 'k. t -> f:('k Static_part.t -> unit) -> unit
+    = fun (S pieces) ~f ->
+      List.iter (fun (type k) (_bound_syms, (static_part : k Static_part.t)) ->
+          f static_part)
+        pieces
+
+    let map_static_parts (S pieces) ~f =
+      let pieces =
+        List.map (fun (bound_syms, static_part) ->
+            bound_syms, f static_part)
+          pieces
+      in
+      S pieces
   end
 
   module Definition = struct
@@ -398,6 +420,22 @@ module Program_body = struct
         Static_structure.free_symbols t.static_structure
       in
       Symbol.Set.union free_in_computation free_in_static_structure
+
+    let iter_computation t ~f = f t.computation
+
+    let map_computation t ~f =
+      { t with
+        computation = f t.computation;
+      }
+
+    let iter_static_parts t ~f =
+      Static_structure.iter_static_parts t.static_structure ~f
+
+    let map_static_parts t ~f =
+      { t with
+        static_structure =
+          Static_structure.map_static_parts t.static_structure ~f;
+      }
   end
 
   type t =
@@ -452,6 +490,20 @@ module Program_body = struct
     | Root sym -> Symbol.Set.singleton sym
 
   let _invariant _env _t = ()
+
+  let iter_definitions t ~f =
+    match t with
+    | Define_symbol (definition, t) ->
+      f definition;
+      iter_definitions t ~f
+    | Root _ -> ()
+
+  let rec map_definitions t ~f =
+    match t with
+    | Define_symbol (definition, t) ->
+      let t = map_definitions t ~f in
+      Define_symbol (f definition, t)
+    | Root _ -> t
 end
 
 module Program = struct
@@ -495,4 +547,11 @@ module Program = struct
     loop t.body
 
   let invariant _t = ()
+
+  let iter_body t ~f = f t.body
+
+  let map_body t ~f =
+    { t with
+      body = f body;
+    }
 end
