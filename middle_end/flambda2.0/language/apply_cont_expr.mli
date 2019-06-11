@@ -47,3 +47,5 @@ val update_continuation_and_args
   -> t
 
 val is_goto : t -> Continuation.t -> bool
+
+val to_goto : t -> Continuation.t option
