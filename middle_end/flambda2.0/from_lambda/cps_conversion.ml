@@ -190,6 +190,11 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       body = defining_expr;
       handler = Let_mutable let_mutable;
     }
+  | Llet (Alias, Pgenval, id, Lfunction func, body) ->
+    (* This case is here to get function names right. *)
+    let func = cps_function func in
+    let body = cps_non_tail body k k_exn in
+    Let_rec ([id, func], body)
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_non_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -438,6 +443,11 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       body = defining_expr;
       handler = Let_mutable let_mutable;
     }
+  | Llet (Alias, Pgenval, id, Lfunction func, body) ->
+    (* This case is here to get function names right. *)
+    let func = cps_function func in
+    let body = cps_tail body k k_exn in
+    Let_rec ([id, func], body)
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
