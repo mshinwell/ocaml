@@ -117,7 +117,7 @@ let middle_end ~ppf_dump:ppf ~prefixname ~backend ~size ~filename ~module_ident
       ~module_initializer
   with Misc.Fatal_error -> begin
     Format.eprintf "\n%sOriginal backtrace is:%s\n%s\n"
-      (Misc.Color.bold_red ())
+      (Flambda_colours.error ())
       (Flambda_colours.normal ())
       (Printexc.raw_backtrace_to_string (Misc.fatal_error_callstack ()));
     raise Misc.Fatal_error
