@@ -346,7 +346,7 @@ module Program_body = struct
           Symbol.print sym
           K.print K.value
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-        Format.fprintf ppf "@[<hov 1>(set_of_closures@ \
+        Format.fprintf ppf "@[<hov 1>(\
             @[<hov 1>(set_of_closures_symbol@ %a)@]@ \
             @[<hov 1>(closure_symbol@ %a)@]\
             )@]"
@@ -385,8 +385,8 @@ module Program_body = struct
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (bound_symbols, static_part) ->
           Format.fprintf ppf "@[<hov 1>(\
-              @[<hov 1>(bound_symbols@ %a)@]@ \
-              @[<hov 1>(static_part@ %a)@]\
+              @[<hov 1>(%a)@]@ \
+              @[<hov 1>(%a)@]\
               )@]"
             Bound_symbols.print bound_symbols
             (Static_part.print_with_cache ~cache) static_part)
@@ -454,7 +454,7 @@ module Program_body = struct
     let print_with_cache ~cache ppf { computation; static_structure; } =
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>@<0>%s(computation@ %a)@<0>%s@]@ \
-          @[<hov 1>(static_structure@ @[<hov 1>(%a)@])@])@]"
+          @[<hov 1>(%a)@])@]"
         (if Option.is_none computation then Flambda_colours.elide ()
          else Flambda_colours.normal ())
         (Misc.Stdlib.Option.print Computation.print) computation
