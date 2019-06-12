@@ -401,6 +401,9 @@ module Color : sig
   val set_color_tag_handling : Format.formatter -> unit
   (* adds functions to support color tags to the given formatter. *)
 
+  val fg_256 : int -> string
+  val bg_256 : int -> string
+
   val bold_green : unit -> string
   val bold_red : unit -> string
   val bold_cyan : unit -> string
