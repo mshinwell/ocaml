@@ -433,7 +433,10 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
     in
     with_current_level t ~current_level
 
-let rec add_env_extension starting_t level : t =
+let _ = Type_equality.equal
+let _ = find_opt
+
+let (* rec *) add_env_extension starting_t level : t =
   if not (Variable.Map.is_empty (Typing_env_level.defined_vars level)) then
   begin
     (* The full type system will remove this restriction. *)
@@ -442,6 +445,10 @@ let rec add_env_extension starting_t level : t =
       Typing_env_level.print level
   end;
   Name.Map.fold (fun name ty t ->
+      (* CR mshinwell: Do we actually need the "more precise" check here?
+         Shouldn't the extensions always be as or more precise? *)
+      add_equation t name ty)
+(*
       match find_opt t name with
       | None -> add_equation t name ty
       | Some existing_ty ->
@@ -458,6 +465,7 @@ let rec add_env_extension starting_t level : t =
         let strictly_more_precise = not as_or_strictly_less_precise in
         if strictly_more_precise then add_equation t name meet_ty
         else t)
+*)
     (Typing_env_level.equations level)
     starting_t
 

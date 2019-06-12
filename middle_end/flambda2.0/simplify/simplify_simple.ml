@@ -21,6 +21,7 @@ module DE = Simplify_env_and_result.Downwards_env
 module T = Flambda_type
 module TE = T.Typing_env
 
+(* CR mshinwell: This should be simplified if possible *)
 let simplify_simple dacc (simple : Simple.t) =
 let _orig = simple in
   match simple with
@@ -46,7 +47,15 @@ Format.eprintf "returning reified Simple: %a --> %a\n%!"
   Simple.print simple;
 *)
       simple, ty
-    | Cannot_reify | Lift _ -> Simple.name name, ty
+    | Cannot_reify | Lift _ ->
+      let name = TE.get_canonical_name typing_env name in
+(*
+Format.eprintf "Non-reifiable Simple: %a --> %a, env:@ %a\n%!"
+  Simple.print orig
+  Name.print name
+  TE.print typing_env;
+*)
+      Simple.name name, T.alias_type_of kind (Simple.name name)
     | Invalid -> Simple.name name, T.bottom_like ty
 
 let simplify_simple_and_drop_type dacc simple =

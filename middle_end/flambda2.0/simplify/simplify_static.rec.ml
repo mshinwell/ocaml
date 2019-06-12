@@ -258,9 +258,17 @@ let simplify_static_part_of_kind_value dacc
   | Boxed_float or_var ->
     let dacc = bind_result_sym (T.any_boxed_float ()) in
     Boxed_float (simplify_or_variable dacc or_var), dacc
+  | Boxed_int32 (Const i) ->
+    let ty = T.this_boxed_int32 i in
+    let dacc = bind_result_sym ty in
+    static_part, dacc
   | Boxed_int32 or_var ->
     let dacc = bind_result_sym (T.any_boxed_int32 ()) in
     Boxed_int32 (simplify_or_variable dacc or_var), dacc
+  | Boxed_int64 (Const i) ->
+    let ty = T.this_boxed_int64 i in
+    let dacc = bind_result_sym ty in
+    static_part, dacc
   | Boxed_int64 or_var ->
     let dacc = bind_result_sym (T.any_boxed_int64 ()) in
     Boxed_int64 (simplify_or_variable dacc or_var), dacc
@@ -463,6 +471,8 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
       let static_structure =
+        (* CR mshinwell: We should have deletion of unused symbols
+           automatically -- needs to be done for non-lifted constants too *)
         Static_structure.delete_bindings
           (Lifted_constant.static_structure lifted_constant)
           ~allowed:(Program_body.free_symbols body)

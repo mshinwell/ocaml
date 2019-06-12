@@ -38,6 +38,34 @@ let simplify_project_var dacc ~original_term ~closure_ty closure_element
       ~closure_element_var:result_var)
     ~result_var ~result_kind:K.value
 
+let simplify_unbox_number dacc ~original_term ~boxed_number_ty
+      (boxable_number_kind : K.Boxable_number.t) ~result_var =
+  let shape, result_kind =
+    match boxable_number_kind with
+    | Naked_float -> Misc.fatal_error "Not yet implemented"
+    | Naked_int32 ->
+      T.boxed_int32_alias_to ~naked_int32:result_var, K.naked_int32
+    | Naked_int64 ->
+      T.boxed_int64_alias_to ~naked_int64:result_var, K.naked_int64
+    | Naked_nativeint -> Misc.fatal_error "Not yet implemented"
+  in
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:boxed_number_ty
+    ~shape ~result_var ~result_kind
+
+let simplify_box_number dacc ~original_term ~naked_number_ty
+      (boxable_number_kind : K.Boxable_number.t) ~result_var =
+  let ty =
+    match boxable_number_kind with
+    | Naked_float -> Misc.fatal_error "Not yet implemented"
+    | Naked_int32 -> T.box_int32 naked_number_ty
+    | Naked_int64 -> T.box_int64 naked_number_ty
+    | Naked_nativeint -> Misc.fatal_error "Not yet implemented"
+  in
+  Reachable.reachable original_term,
+    TEE.one_equation (Name.var result_var) ty,
+    dacc
+
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
 (*
@@ -59,6 +87,12 @@ end;
   | Project_var closure_element ->
     simplify_project_var dacc ~original_term ~closure_ty:arg_ty
       closure_element ~result_var
+  | Unbox_number boxable_number_kind ->
+    simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
+      boxable_number_kind ~result_var
+  | Box_number boxable_number_kind ->
+    simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
+      boxable_number_kind ~result_var
   | _ ->
     (* CR mshinwell: temporary code *)
     let arg = Simplify_simple.simplify_simple_and_drop_type dacc arg in
