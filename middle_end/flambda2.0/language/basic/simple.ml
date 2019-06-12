@@ -78,9 +78,9 @@ module Const = struct
       | Tagged_immediate i -> Format.fprintf ppf "%a" Immediate.print i
       | Naked_float f ->
         Format.fprintf ppf "%a!" Numbers.Float_by_bit_pattern.print f
-      | Naked_int32 n -> Format.fprintf ppf "%ld!" n
-      | Naked_int64 n -> Format.fprintf ppf "%Ld!" n
-      | Naked_nativeint n -> Format.fprintf ppf "%a!" Targetint.print n
+      | Naked_int32 n -> Format.fprintf ppf "%ldl!" n
+      | Naked_int64 n -> Format.fprintf ppf "%LdL!" n
+      | Naked_nativeint n -> Format.fprintf ppf "%an!" Targetint.print n
 
     let output chan t =
       print (Format.formatter_of_out_channel chan) t

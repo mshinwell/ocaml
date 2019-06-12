@@ -37,9 +37,10 @@ struct
   let print_ty ppf ty =
     S.print_ty ~cache:(Printing_cache.create ()) ppf ty
 
-  let add_equation env (simple : Simple.t) ty env_extension =
+  let add_equation _env (simple : Simple.t) ty env_extension =
     match simple with
-    | Name name -> TEE.meet_equation env_extension env name ty
+    (* CR mshinwell: Does this need to use some kind of [meet_equation]? *)
+    | Name name -> TEE.add_or_replace_equation env_extension name ty
     | Const _ | Discriminant _ -> env_extension
 
   let all_aliases_of env simple_opt =
@@ -97,10 +98,19 @@ struct
                || Meet_env.already_meeting env simple1 simple2 ->
       Equals simple1, TEE.empty
     | Some simple1, Some simple2 ->
+(*
+Format.eprintf "Meeting simples: %a and %a\n%!"
+  Simple.print simple1
+  Simple.print simple2;
+*)
       let unknown_or_join, env_extension =
         let env = Meet_env.now_meeting env simple1 simple2 in
         meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
       in
+(*
+Format.eprintf "TEE from meeting simples (1): %a\n%!"
+  Typing_env_extension.print env_extension;
+*)
       let env_extension =
         if Typing_env.defined_earlier (Meet_env.env env) simple1 ~than:simple2
         then
@@ -112,6 +122,10 @@ struct
           |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
           |> add_equation env simple1 (S.to_type (Equals simple2))
       in
+(*
+Format.eprintf "TEE from meeting simples (2): %a\n%!"
+  Typing_env_extension.print env_extension;
+*)
       (* It doesn't matter whether [simple1] or [simple2] is returned here. *)
       Equals simple1, env_extension
     | Some simple, None | None, Some simple ->

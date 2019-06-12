@@ -22,12 +22,14 @@ let length l = (length_aux [@inlined never]) 0 l
 
 module Int32 = struct
   external add : int32 -> int32 -> int32 = "%int32_add"
+  external mul : int32 -> int32 -> int32 = "%int32_mul"
 
-  let succ x = add x 1l
+  let succ x = mul (add x 1l) 2l
 end
 
 module Int64 = struct
   external add : int64 -> int64 -> int64 = "%int64_add"
+  external mul : int64 -> int64 -> int64 = "%int64_mul"
 
-  let succ x = add x 1L
+  let succ x = mul (add x 1L) 2L
 end

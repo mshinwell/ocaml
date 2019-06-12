@@ -324,6 +324,12 @@ let this_boxed_int32 f = box_int32 (this_naked_int32 f)
 let this_boxed_int64 f = box_int64 (this_naked_int64 f)
 let this_boxed_nativeint f = box_nativeint (this_naked_nativeint f)
 
+let boxed_int32_alias_to ~naked_int32 =
+  box_int32 (Naked_number (Equals (Simple.var naked_int32), Naked_int32))
+
+let boxed_int64_alias_to ~naked_int64 =
+  box_int64 (Naked_number (Equals (Simple.var naked_int64), Naked_int64))
+
 let this_discriminant_as_ty_fabricated discriminant : ty_fabricated =
   let discriminants =
     Discriminants.create (Discriminant.Set.singleton discriminant)
