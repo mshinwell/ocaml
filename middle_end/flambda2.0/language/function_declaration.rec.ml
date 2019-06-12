@@ -107,7 +107,7 @@ let print_with_cache0 ~compact ~cache ppf
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
         Kinded_parameter.List.print params
-        (Flambda_colours.name ())
+        (Flambda_colours.parameter ())
         Variable.print my_closure
         (Flambda_colours.normal ());
       if compact then begin

@@ -179,10 +179,16 @@ module Make_map (T : Thing) = struct
   let map_keys f m =
     of_list (List.map (fun (k, v) -> f k, v) (bindings m))
 
-  let print f ppf s =
-    let elts ppf s = iter (fun id v ->
-        Format.fprintf ppf "@ (@[<hov 1>%a@ %a@])" T.print id f v) s in
-    Format.fprintf ppf "@[<hov 1>{%a}@]" elts s
+  let print print_datum ppf t =
+    if is_empty t then
+      Format.fprintf ppf "{}"
+    else
+      Format.fprintf ppf "@[<hov 1>{%a}@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (fun ppf (key, datum) ->
+            Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+              T.print key print_datum datum))
+        (bindings t)
 
   module T_set = Set.Make (T)
 
