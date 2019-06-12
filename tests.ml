@@ -19,3 +19,15 @@ let rec length_aux len = function
   | _::l -> length_aux (len + 1) l
 
 let length l = (length_aux [@inlined never]) 0 l
+
+module Int32 = struct
+  external add : int32 -> int32 -> int32 = "%int32_add"
+
+  let succ x = add x 1l
+end
+
+module Int64 = struct
+  external add : int64 -> int64 -> int64 = "%int64_add"
+
+  let succ x = add x 1L
+end

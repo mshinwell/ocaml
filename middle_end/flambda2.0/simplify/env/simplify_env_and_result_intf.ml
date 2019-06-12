@@ -179,4 +179,6 @@ module type Result = sig
   val get_lifted_constants : t -> Lifted_constant.t list
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
+
+  val clear_lifted_constants : t -> t
 end
