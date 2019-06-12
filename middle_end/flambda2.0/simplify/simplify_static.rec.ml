@@ -460,27 +460,6 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
   in
   definition, dacc
 
-let rec simplify_program_body dacc (body : Program_body.t) =
-  match body with
-  | Define_symbol (defn, body) ->
-    let defn, dacc = simplify_definition dacc defn in
-    let body, dacc = simplify_program_body dacc body in
-    let body : Program_body.t = Define_symbol (defn, body) in
-    body, dacc
-  | Root _ -> body, dacc
-
-let check_imported_symbols_don't_overlap_predef_exns
-      ~imported_symbols ~predef_exn_symbols ~descr =
-  let wrong_symbols =
-    Symbol.Set.inter (Symbol.Map.keys imported_symbols)
-      (Symbol.Map.keys predef_exn_symbols)
-  in
-  if not (Symbol.Set.is_empty wrong_symbols) then begin
-    Misc.fatal_errorf "Program's [imported_symbols] (%s) must not contain \
-        predefined exception symbols"
-      descr
-  end
-
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
       let static_structure =
@@ -498,6 +477,30 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
         Define_symbol (definition, body))
     body
     lifted_constants
+
+let rec simplify_program_body dacc (body : Program_body.t) =
+  match body with
+  | Define_symbol (defn, body) ->
+    let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
+    let defn, dacc = simplify_definition dacc defn in
+    let r = DA.r dacc in
+    let body, dacc = simplify_program_body dacc body in
+    let body : Program_body.t = Define_symbol (defn, body) in
+    let body = define_lifted_constants (R.get_lifted_constants r) body in
+    body, dacc
+  | Root _ -> body, dacc
+
+let check_imported_symbols_don't_overlap_predef_exns
+      ~imported_symbols ~predef_exn_symbols ~descr =
+  let wrong_symbols =
+    Symbol.Set.inter (Symbol.Map.keys imported_symbols)
+      (Symbol.Map.keys predef_exn_symbols)
+  in
+  if not (Symbol.Set.is_empty wrong_symbols) then begin
+    Misc.fatal_errorf "Program's [imported_symbols] (%s) must not contain \
+        predefined exception symbols"
+      descr
+  end
 
 let simplify_program denv (program : Program.t) : Program.t =
   let backend = DE.backend denv in
@@ -521,7 +524,6 @@ let simplify_program denv (program : Program.t) : Program.t =
   let dacc = DA.create denv Continuation_uses_env.empty r in
   let body, dacc = simplify_program_body dacc program.body in
   let r = DA.r dacc in
-  let body = define_lifted_constants (R.get_lifted_constants r) body in
   let imported_symbols = R.imported_symbols r in
   check_imported_symbols_don't_overlap_predef_exns
     ~imported_symbols:imported_symbols ~predef_exn_symbols
