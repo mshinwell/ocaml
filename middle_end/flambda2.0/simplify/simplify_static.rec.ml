@@ -484,18 +484,18 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
             static_structure;
           }
         in
-        Define_symbol (definition, body))
+        Program_body.define_symbol definition ~body)
     body
     lifted_constants
 
 let rec simplify_program_body dacc (body : Program_body.t) =
-  match body with
+  match Program_body.descr body with
   | Define_symbol (defn, body) ->
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in
     let body, dacc = simplify_program_body dacc body in
-    let body : Program_body.t = Define_symbol (defn, body) in
+    let body = Program_body.define_symbol defn ~body in
     let body = define_lifted_constants (R.get_lifted_constants r) body in
     body, dacc
   | Root _ -> body, dacc

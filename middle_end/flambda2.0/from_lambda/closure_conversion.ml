@@ -868,11 +868,12 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         static_structure = S [bound_symbols, static_part];
       }
     in
-    Define_symbol (definition, Root module_symbol)
+    Program_body.define_symbol definition
+      ~body:(Program_body.root module_symbol)
   in
   let program_body =
     (* CR mshinwell: Share with [Simplify_program] *)
-    List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
+    List.fold_left (fun body (symbol, static_part) : Program_body.t ->
         let bound_symbols : K.value Program_body.Bound_symbols.t =
           Singleton symbol
         in
@@ -884,7 +885,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
             static_structure;
           }
         in
-        Define_symbol (definition, program_body))
+        Program_body.define_symbol definition ~body)
       program_body
       t.declared_symbols
   in
