@@ -21,3 +21,20 @@ val prim_destructive : unit -> string
 val prim_neither : unit -> string
 
 val naked_number : unit -> string
+
+val kind : unit -> string
+
+val debuginfo : unit -> string
+
+val discriminant : unit -> string
+val name : unit -> string
+val symbol : unit -> string
+
+val let_bound_var : unit -> string
+
+val expr_keyword : unit -> string
+val static_keyword : unit -> string
+
+val continuation : unit -> string
+
+val error : unit -> string

@@ -465,13 +465,13 @@ module Program_body = struct
     match t with
     | Define_symbol { free_symbols = _; defn; body; } ->
       Format.fprintf ppf "@[<v 2>(@<0>%sDefine_symbol@<0>%s@ %a)@]@;"
-        (Misc.Color.bold_yellow ())
+        (Flambda_colours.static_keyword ())
         (Flambda_colours.normal ())
         (Definition.print_with_cache ~cache) defn;
       print_with_cache ~cache ppf body
     | Root sym ->
       Format.fprintf ppf "@[(@<0>%sRoot@<0>%s %a)@]"
-        (Misc.Color.bold_yellow ())
+        (Flambda_colours.static_keyword ())
         (Flambda_colours.normal ())
         Symbol.print sym
 
