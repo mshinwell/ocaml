@@ -76,7 +76,7 @@ include Identifiable.Make (struct
   let hash = Hashtbl.hash
 
   let print ppf t =
-    let colour = Misc.Color.bold_green () in
+    let colour = Flambda_colours.kind () in
     match t with
     | Value ->
       if unicode then

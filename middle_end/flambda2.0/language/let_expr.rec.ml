@@ -35,24 +35,24 @@ let print_with_cache ~cache ppf
     match Expr.descr expr with
     | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
       pattern_match t ~f:(fun ~bound_var ~body ->
-        fprintf ppf "@ @[<hov 1>%a@[@ %s\u{2237}@ %a%s@]@ %a@]"
+        fprintf ppf "@ @[<hov 1>%s%a%s@[@ \u{2237}@ %a@]@ %a@]"
+          (Flambda_colours.let_bound_var ())
           Variable.print bound_var
-          (Misc.Color.bold_white ())
-          Flambda_kind.print kind
           (Flambda_colours.normal ())
+          Flambda_kind.print kind
           (Named.print_with_cache ~cache) defining_expr;
         let_body body)
     | _ -> expr
   in
   pattern_match t ~f:(fun ~bound_var ~body ->
     fprintf ppf "@[<hov 1>(%slet%s@ @[<hov 1>(\
-        @[<hov 1>%a@[@ %s\u{2237}@ %a%s@]@ %a@]"
-      (Misc.Color.bold_cyan ())
+        @[<hov 1>%s%a%s@[@ \u{2237}@ %a@]@ %a@]"
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
+      (Flambda_colours.let_bound_var ())
       Variable.print bound_var
-      (Misc.Color.bold_white ())
-      Flambda_kind.print kind
       (Flambda_colours.normal ())
+      Flambda_kind.print kind
       (Named.print_with_cache ~cache) defining_expr;
     let expr = let_body body in
     fprintf ppf ")@]@ %a)@]"

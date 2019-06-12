@@ -27,15 +27,13 @@ let create_set_of_closures set_of_closures = Set_of_closures set_of_closures
 
 let print_with_cache ~cache ppf (t : t) =
   match t with
-  | Simple simple ->
-    fprintf ppf "%s%a%s"
-      (Misc.Color.bold_green ())
-      Simple.print simple
-      (Flambda_colours.normal ())
+  | Simple simple -> Simple.print ppf simple
   | Prim (prim, dbg) ->
-    fprintf ppf "@[<hov 1>(%a%a)@]"
+    fprintf ppf "@[<hov 1>(%a@<0>%s%a@<0>%s)@]"
       Flambda_primitive.print prim
+      (Flambda_colours.debuginfo ())
       Debuginfo.print_or_elide dbg
+      (Flambda_colours.normal ())
   | Set_of_closures set_of_closures ->
     Set_of_closures.print_with_cache ~cache ppf set_of_closures
 
