@@ -87,7 +87,7 @@ let print_with_cache0 ~compact ~cache ppf
         Inline_attribute.print inline
         is_a_functor
         Kinded_parameter.List.print params
-        (Misc.Color.bold_magenta ())
+        (Flambda_colours.name ())
         Variable.print my_closure
         (Flambda_colours.normal ())
         Flambda_arity.print result_arity;

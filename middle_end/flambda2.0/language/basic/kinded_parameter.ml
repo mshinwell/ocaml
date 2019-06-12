@@ -38,7 +38,7 @@ include Identifiable.Make (struct
 
   let print ppf { param; kind; } =
     Format.fprintf ppf "(%s%a%s \u{2237} %a)"
-      (Misc.Color.bold_magenta ())
+      (Flambda_colours.parameter ())
       Parameter.print param
       (Flambda_colours.normal ())
       Flambda_kind.print kind

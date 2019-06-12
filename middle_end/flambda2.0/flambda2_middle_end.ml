@@ -27,7 +27,7 @@ let check_invariants program =
 let print_prepared_lambda ppf lam =
   if !Clflags.dump_prepared_lambda then begin
     Format.fprintf ppf "%sAfter Prepare_lambda:%s@ %a@."
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.each_file ())
       (Flambda_colours.normal ())
       Printlambda.lambda lam
   end
@@ -37,7 +37,7 @@ let print_ilambda ppf (ilam : Ilambda.program) =
     Format.fprintf ppf
       "\n%sAfter CPS conversion (return continuation %a) \
        (exception continuation %a):%s@ %a@."
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.each_file ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
       (Flambda_colours.normal ())
@@ -50,7 +50,7 @@ let print_ilambda_after_mutable_variable_elimination ppf
     Format.fprintf ppf
       "\n%sAfter mutable variable elimination (return continuation %a) \
        (exception continuation %a):%s@ %a@."
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.each_file ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
       (Flambda_colours.normal ())
@@ -60,7 +60,7 @@ let print_ilambda_after_mutable_variable_elimination ppf
 let print_rawflambda ppf program =
   if !Clflags.dump_rawflambda2 then begin
     Format.fprintf ppf "\n%sAfter closure conversion:%s@ %a@."
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.each_file ())
       (Flambda_colours.normal ())
       Flambda_static.Program.print program
   end
@@ -68,7 +68,7 @@ let print_rawflambda ppf program =
 let print_flambda name ppf program =
   if !Clflags.dump_flambda then begin
     Format.fprintf ppf "\n%sAfter %s:%s@ %a@."
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.each_file ())
       name
       (Flambda_colours.normal ())
       Flambda_static.Program.print program

@@ -39,18 +39,18 @@ let print ppf t =
   match t with
   | Push { exn_handler; } ->
     fprintf ppf "%spush%s %a %sthen%s "
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Continuation.print exn_handler
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
   | Pop { exn_handler; raise_kind; } ->
     fprintf ppf "%spop%s%s %a %sthen%s "
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (raise_kind_option_to_string raise_kind)
       Continuation.print exn_handler
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
 
 let print_with_cache ~cache:_ ppf t = print ppf t
