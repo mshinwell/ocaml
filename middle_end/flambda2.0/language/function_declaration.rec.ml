@@ -89,7 +89,7 @@ let print_with_cache0 ~compact ~cache ppf
         Kinded_parameter.List.print params
         (Misc.Color.bold_magenta ())
         Variable.print my_closure
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Flambda_arity.print result_arity;
       if compact then begin
         fprintf ppf "@[<hov 1>(body@ <elided>)@])@]"

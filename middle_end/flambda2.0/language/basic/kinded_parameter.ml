@@ -40,7 +40,7 @@ include Identifiable.Make (struct
     Format.fprintf ppf "(%s%a%s \u{2237} %a)"
       (Misc.Color.bold_magenta ())
       Parameter.print param
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Flambda_kind.print kind
 
   let output chan t =

@@ -51,7 +51,7 @@ let print_with_cache ~cache ppf
       @[<hov 1>(closure_elements@ %a)@]@ \
       )@]"
     (Misc.Color.bold_green ())
-    (Misc.Color.reset ())
+    (Flambda_colours.normal ())
     (Function_declarations.print_with_cache ~cache) function_decls
     (Var_within_closure.Map.print Simple.print) closure_elements
 
