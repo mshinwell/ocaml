@@ -367,7 +367,7 @@ let infer_let_kind (defining_expr : Named.t)
      kind. *)
   match defining_expr with
   | Prim (Unary (Discriminant_of_int, _), _dbg)
-  | Prim (Unary (Is_int, _), _dbg) -> K.fabricated
+  | Prim (Unary ((Is_int | Get_tag _), _), _dbg) -> K.fabricated
   | Set_of_closures _ ->
     begin match lambda_kind with
     | Pgenval -> K.fabricated
@@ -804,7 +804,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
               Simple.const (Tagged_immediate pos)))
             Debuginfo.none)
           body)
-      body field_vars
+      body (List.rev field_vars)
   in
   let load_fields_cont_handler =
     let param =
