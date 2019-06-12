@@ -75,32 +75,32 @@ module Const = struct
     let print ppf (t : t) =
       match t with
       | Naked_immediate i ->
-        Format.fprintf ppf "%s#%a%s"
+        Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
           Immediate.print i
           (Flambda_colours.normal ())
       | Tagged_immediate i ->
-        Format.fprintf ppf "%s%a%s"
+        Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
           Immediate.print i
           (Flambda_colours.normal ())
       | Naked_float f ->
-        Format.fprintf ppf "%s#%a%s"
+        Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
           Numbers.Float_by_bit_pattern.print f
           (Flambda_colours.normal ())
       | Naked_int32 n ->
-        Format.fprintf ppf "%s#%ldl%s"
+        Format.fprintf ppf "@<0>%s#%ldl@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
       | Naked_int64 n ->
-        Format.fprintf ppf "%s#%LdL%s"
+        Format.fprintf ppf "@<0>%s#%LdL@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
       | Naked_nativeint n ->
-        Format.fprintf ppf "%s#%an%s"
+        Format.fprintf ppf "@<0>%s#%an@<0>%s"
           (Flambda_colours.naked_number ())
           Targetint.print n
           (Flambda_colours.normal ())
