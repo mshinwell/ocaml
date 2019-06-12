@@ -382,4 +382,9 @@ end = struct
 *)
 
   let get_lifted_constants t = t.lifted_constants_innermost_first
+
+  let clear_lifted_constants t =
+    { t with
+      lifted_constants_innermost_first = [];
+    }
 end
