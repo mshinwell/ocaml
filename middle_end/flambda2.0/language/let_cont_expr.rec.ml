@@ -41,7 +41,7 @@ let print_with_cache ~cache ppf t =
       | _ -> ul
     in
     fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (Let_cont_handlers.print_with_cache ~cache) handlers;
     let expr = let_cont_body body in

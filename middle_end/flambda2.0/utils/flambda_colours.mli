@@ -28,6 +28,7 @@ val debuginfo : unit -> string
 
 val discriminant : unit -> string
 val name : unit -> string
+val parameter : unit -> string
 val symbol : unit -> string
 
 val let_bound_var : unit -> string
@@ -37,4 +38,8 @@ val static_keyword : unit -> string
 
 val continuation : unit -> string
 
+val name_abstraction : unit -> string
+
 val error : unit -> string
+
+val each_file : unit -> string
