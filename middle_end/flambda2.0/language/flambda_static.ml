@@ -342,7 +342,7 @@ module Program_body = struct
     let print (type k) ppf (t : k t) =
       match t with
       | Singleton sym ->
-        Format.fprintf ppf "@[(singleton@ (%a@ \u{2237}@ %a))@]"
+        Format.fprintf ppf "@[<hov 1>(singleton@ @[(%a@ \u{2237}@ %a)@])@]"
           Symbol.print sym
           K.print K.value
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
@@ -453,9 +453,12 @@ module Program_body = struct
 
     let print_with_cache ~cache ppf { computation; static_structure; } =
       Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(computation@ %a)@]@ \
+          @[<hov 1>@<0>%s(computation@ %a)@<0>%s@]@ \
           @[<hov 1>(static_structure@ @[<hov 1>(%a)@])@])@]"
+        (if Option.is_none computation then Flambda_colours.elide ()
+         else Flambda_colours.normal ())
         (Misc.Stdlib.Option.print Computation.print) computation
+        (Flambda_colours.normal ())
         (Static_structure.print_with_cache ~cache) static_structure
 
     let free_symbols t =

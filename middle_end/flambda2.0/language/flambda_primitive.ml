@@ -1193,20 +1193,20 @@ include Identifiable.Make (struct
     in
     match t with
     | Unary (prim, v0) ->
-      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(@<0>%s%a@<0>%s@ %a)@]"
         colour
         print_unary_primitive prim
         (Flambda_colours.normal ())
         Simple.print v0
     | Binary (prim, v0, v1) ->
-      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(@<0>%s%a@<0>%s@ %a@ %a)@]"
         colour
         print_binary_primitive prim
         (Flambda_colours.normal ())
         Simple.print v0
         Simple.print v1
     | Ternary (prim, v0, v1, v2) ->
-      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(@<0>%s%a@<0>%s@ %a@ %a@ %a)@]"
         colour
         print_ternary_primitive prim
         (Flambda_colours.normal ())
@@ -1214,7 +1214,7 @@ include Identifiable.Make (struct
         Simple.print v1
         Simple.print v2
     | Variadic (prim, vs) ->
-      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(@<0>%s%a@<0>%s@ %a)@]"
         colour
         print_variadic_primitive prim
         (Flambda_colours.normal ())

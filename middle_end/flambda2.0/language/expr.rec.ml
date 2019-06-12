@@ -90,14 +90,14 @@ let print_with_cache ~cache ppf (t : t) =
   | Let let_expr -> Let_expr.print_with_cache ~cache ppf let_expr
   | Let_cont let_cont -> Let_cont_expr.print_with_cache ~cache ppf let_cont
   | Apply apply ->
-    Format.fprintf ppf "@[<hov 1>(%sapply%s@ %a)@]"
+    Format.fprintf ppf "@[<hov 1>(@<0>%sapply@<0>%s@ %a)@]"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Apply.print apply
   | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
   | Switch switch -> Switch.print ppf switch
   | Invalid semantics ->
-    fprintf ppf "@[%sInvalid %a%s@]"
+    fprintf ppf "@[@<0>%sInvalid %a@<0>%s@]"
       (Flambda_colours.expr_keyword ())
       Invalid_term_semantics.print semantics
       (Flambda_colours.normal ())

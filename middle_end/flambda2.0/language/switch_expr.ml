@@ -29,7 +29,7 @@ let print_arms ppf arms =
   let spc = ref false in
   Discriminant.Map.iter (fun discriminant l ->
       if !spc then fprintf ppf "@ " else spc := true;
-      fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
+      fprintf ppf "@[<h>| %a ->@ @<0>%sgoto@<0>%s %a@]"
         Discriminant.print discriminant
         (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
@@ -38,7 +38,7 @@ let print_arms ppf arms =
 
 let print ppf { scrutinee; arms; } =
   fprintf ppf
-    "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
+    "@[<hov 1>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
     (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
     Name.print scrutinee

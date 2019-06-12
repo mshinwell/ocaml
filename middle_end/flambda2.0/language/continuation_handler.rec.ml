@@ -31,7 +31,7 @@ let print_using_where_with_cache ~cache ppf k
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 1>%swhere%s %a%s%s@ %a"
+      fprintf ppf "@[<hov 1>@<0>%swhere@<0>%s %a@<0>%s@<0>%s %a"
         (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
 (*
@@ -44,8 +44,8 @@ let print_using_where_with_cache ~cache ppf k
       if List.length params > 0 then begin
         fprintf ppf " ";
       end;
-      fprintf ppf "=@ %a" (Expr.print_with_cache ~cache) handler);
-      fprintf ppf "@]"
+      fprintf ppf "=@ %a" (Expr.print_with_cache ~cache) handler;
+      fprintf ppf "@]")
 
 let print_with_cache ~cache ppf { params_and_handler; stub; is_exn_handler; } =
   Format.fprintf ppf "@[<hov 1>\

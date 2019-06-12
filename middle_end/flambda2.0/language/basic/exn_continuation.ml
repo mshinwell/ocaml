@@ -25,17 +25,25 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let print_simple_and_kind ppf (simple, kind) =
-    Format.fprintf ppf "@[(%a@ \u{2237}@ %a)@]"
+    Format.fprintf ppf "@[<h>(%a@ \u{2237}@ %a)@]"
       Simple.print simple
       Flambda_kind.print kind
 
   let print ppf { exn_handler; extra_args; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(exn_handler@ %a)@]@ \
-        @[<hov 1>(extra_args@ (%a))@])@]"
+        @[<hov 1>@<0>%s(extra_args@ @<0>%s(%a)@<0>%s@<0>)@<0>%s@])@]"
       Continuation.print exn_handler
+      (match extra_args with
+       | [] -> Flambda_colours.elide ()
+       | _ -> Flambda_colours.normal ())
+      (Flambda_colours.normal ())
       (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_and_kind)
       extra_args
+      (match extra_args with
+       | [] -> Flambda_colours.elide ()
+       | _ -> Flambda_colours.normal ())
+      (Flambda_colours.normal ())
 
   let compare_simple_and_kind (simple1, kind1) (simple2, kind2) =
     let c = Simple.compare simple1 simple2 in
