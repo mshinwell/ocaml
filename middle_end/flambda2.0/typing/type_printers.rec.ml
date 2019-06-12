@@ -22,12 +22,12 @@ let print_or_alias print_descr ppf (or_alias : _ Flambda_types.or_alias) =
   | Equals simple ->
     Format.fprintf ppf "@[(%s=%s %a)@]"
       (Misc.Color.bold_red ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Simple.print simple
   | Type export_id ->
     Format.fprintf ppf "@[(%s=export_id%s %a)@]"
       (Misc.Color.bold_red ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Export_id.print export_id
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
@@ -38,14 +38,14 @@ let print_unknown_or_join print_contents ppf
   match o with
   | Unknown ->
     if unicode then
-      Format.fprintf ppf "%s\u{22a4}%s" colour (Misc.Color.reset ())
+      Format.fprintf ppf "%s\u{22a4}%s" colour (Flambda_colours.normal ())
     else
-      Format.fprintf ppf "%sT%s" colour (Misc.Color.reset ())
+      Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())
   | Bottom ->
     if unicode then
-      Format.fprintf ppf "%s\u{22a5}%s" colour (Misc.Color.reset ())
+      Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
     else
-      Format.fprintf ppf "%s_|_%s" colour (Misc.Color.reset ())
+      Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
   | Ok contents -> print_contents ppf contents
 
 let print_ty_generic print_contents ppf ty =

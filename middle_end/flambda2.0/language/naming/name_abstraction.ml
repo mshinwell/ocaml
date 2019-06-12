@@ -67,11 +67,11 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Bindable.print name
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Term.print term)
 
   let print_with_cache ~cache ppf t =
@@ -80,11 +80,11 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Bindable.print name
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         (Term.print_with_cache ~cache) term)
 
   let pattern_match_mapi t ~f =
@@ -150,12 +150,12 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
       Format.fprintf ppf "@<1>%s%s@<1>%s%a@<1>%s%s@<1>%s"
         (Misc.Color.bold_cyan ())
         (before_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Bindable.print) bns
         (Misc.Color.bold_cyan ())
         (after_binding_position style)
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
 
   let print ppf t =
     pattern_match t ~f:(fun names term ->

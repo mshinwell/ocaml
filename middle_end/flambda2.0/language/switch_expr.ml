@@ -32,7 +32,7 @@ let print_arms ppf arms =
       fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
         Discriminant.print discriminant
         (Misc.Color.bold_cyan ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Continuation.print l)
     arms
 
@@ -40,7 +40,7 @@ let print ppf { scrutinee; arms; } =
   fprintf ppf
     "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
     (Misc.Color.bold_cyan ())
-    (Misc.Color.reset ())
+    (Flambda_colours.normal ())
     Name.print scrutinee
     print_arms arms
 

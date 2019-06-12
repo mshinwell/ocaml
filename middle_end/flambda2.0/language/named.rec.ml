@@ -31,7 +31,7 @@ let print_with_cache ~cache ppf (t : t) =
     fprintf ppf "%s%a%s"
       (Misc.Color.bold_green ())
       Simple.print simple
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
   | Prim (prim, dbg) ->
     fprintf ppf "@[<hov 1>(%a%a)@]"
       Flambda_primitive.print prim

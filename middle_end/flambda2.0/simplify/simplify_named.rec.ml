@@ -91,7 +91,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
                 exn continuation %a,@ my_closure %a,@ body:@ %a@ \
                 with downwards accumulator:@ %a\n"
               (Misc.Color.bold_red ())
-              (Misc.Color.reset ())
+              (Flambda_colours.normal ())
               Closure_id.print closure_id
               Kinded_parameter.List.print params
               Continuation.print return_continuation

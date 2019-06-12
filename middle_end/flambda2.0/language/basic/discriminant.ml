@@ -60,7 +60,7 @@ include Identifiable.Make (struct
     Format.fprintf ppf "@[%s%a%s@]"
       (Misc.Color.bold_yellow ())
       Targetint.OCaml.print t
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
