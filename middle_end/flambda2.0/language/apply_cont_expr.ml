@@ -29,13 +29,13 @@ let print ppf { k; args; trap_action; } =
   | [] ->
     Format.fprintf ppf "@[<2>%a%sgoto%s@ %a@]"
       Trap_action.Option.print trap_action
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Continuation.print k
   | _ ->
     Format.fprintf ppf "@[<2>%a%sapply_cont%s@ %a@ %a@]"
       Trap_action.Option.print trap_action
-      (Misc.Color.bold_cyan ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Continuation.print k
       Simple.List.print args

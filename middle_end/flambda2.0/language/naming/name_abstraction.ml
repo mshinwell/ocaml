@@ -65,11 +65,11 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
     let style = !printing_style in
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (before_binding_position style)
         (Flambda_colours.normal ())
         Bindable.print name
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (after_binding_position style)
         (Flambda_colours.normal ())
         Term.print term)
@@ -78,11 +78,11 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
     let style = !printing_style in
     pattern_match t ~f:(fun name term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (before_binding_position style)
         (Flambda_colours.normal ())
         Bindable.print name
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (after_binding_position style)
         (Flambda_colours.normal ())
         (Term.print_with_cache ~cache) term)
@@ -148,12 +148,12 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
     | [] -> ()
     | _ ->
       Format.fprintf ppf "@<1>%s%s@<1>%s%a@<1>%s%s@<1>%s"
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (before_binding_position style)
         (Flambda_colours.normal ())
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Bindable.print) bns
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.name_abstraction ())
         (after_binding_position style)
         (Flambda_colours.normal ())
 

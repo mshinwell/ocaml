@@ -32,7 +32,7 @@ let print_using_where_with_cache ~cache ppf k
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
       fprintf ppf "@[<hov 1>%swhere%s %a%s%s@ %a"
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
 (*
         (if first_and_non_recursive then "" else "and ")
