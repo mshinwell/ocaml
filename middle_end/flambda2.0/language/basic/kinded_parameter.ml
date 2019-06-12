@@ -37,7 +37,7 @@ include Identifiable.Make (struct
     Hashtbl.hash (Parameter.hash param, Flambda_kind.hash kind)
 
   let print ppf { param; kind; } =
-    Format.fprintf ppf "(%s%a%s \u{2237} %a)"
+    Format.fprintf ppf "@[(@<0>%s%a@<0>%s \u{2237} %a)@]"
       (Flambda_colours.parameter ())
       Parameter.print param
       (Flambda_colours.normal ())
@@ -123,7 +123,8 @@ module List = struct
       && List.for_all2 equal t1 t2
 
   let print ppf t =
-    Format.pp_print_list ~pp_sep:Format.pp_print_space print ppf t
+    Format.fprintf ppf "@[<hov 0>%a@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print) t
 
   let free_names t =
     List.fold_left (fun result param ->

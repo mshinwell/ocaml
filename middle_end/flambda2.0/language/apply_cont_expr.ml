@@ -27,13 +27,13 @@ type t = {
 let print ppf { k; args; trap_action; } =
   match args with
   | [] ->
-    Format.fprintf ppf "@[<2>%a%sgoto%s@ %a@]"
+    Format.fprintf ppf "@[<hov 1>%a@<0>%sgoto@<0>%s@ %a@]"
       Trap_action.Option.print trap_action
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Continuation.print k
   | _ ->
-    Format.fprintf ppf "@[<2>%a%sapply_cont%s@ %a@ %a@]"
+    Format.fprintf ppf "@[<hov 1>%a@<0>%sapply_cont@<0>%s@ %a@ %a@]"
       Trap_action.Option.print trap_action
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
