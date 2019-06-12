@@ -23,6 +23,7 @@ let prim_destructive () = C.fg_256 62
 let prim_neither () = C.fg_256 130
 
 let naked_number () = C.fg_256 70
+let tagged_immediate () = C.fg_256 70
 
 let kind () = C.fg_256 37
 
@@ -38,10 +39,14 @@ let let_bound_var () = C.fg_256 37
 let expr_keyword () = C.fg_256 51
 let static_keyword () = (C.fg_256 255) ^ (C.bg_256 240)
 
+let static_part () = (C.fg_256 255) ^ (C.bg_256 237)
+
 let continuation () = C.fg_256 35
 
 let name_abstraction () = C.fg_256 172
 
 let error () = C.fg_256 160
+
+let elide () = C.fg_256 243
 
 let each_file () = C.fg_256 51
