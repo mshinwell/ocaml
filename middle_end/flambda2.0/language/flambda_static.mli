@@ -154,22 +154,30 @@ module Program_body : sig
     val map_static_parts : t -> static_part_mapper -> t
   end
 
-  type t =
-    | Define_symbol of Definition.t * t
-      (** Define the given symbol(s).  No symbol defined by the
-          [definition] may be referenced by the same definition, only by
-          subsequent [Define_symbol] constructs. *)
-    | Root of Symbol.t
-      (** The module block symbol for the compilation unit. *)
+  type t
 
   (** Print a list of symbol definitions to a formatter. *)
   val print : Format.formatter -> t -> unit
+
+  (** Define the given symbol(s).  No symbol defined by the
+      [definition] may be referenced by the same definition, only by
+      subsequent [define_symbol] constructs. *)
+  val define_symbol : Definition.t -> body:t -> t
+
+  (** The module block symbol for the compilation unit. *)
+  val root : Symbol.t -> t
 
   val free_symbols : t -> Symbol.Set.t
 
   val iter_definitions : t -> f:(Definition.t -> unit) -> unit
 
   val map_definitions : t -> f:(Definition.t -> Definition.t) -> t
+
+  type descr = private
+    | Define_symbol of Definition.t * t
+    | Root of Symbol.t
+
+  val descr : t -> descr
 end
 
 (** A "program" is the contents of one compilation unit.  It describes the
