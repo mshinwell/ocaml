@@ -32,6 +32,7 @@ val name : unit -> string
 val parameter : unit -> string
 val symbol : unit -> string
 val variable : unit -> string
+val closure_element : unit -> string
 
 val let_bound_var : unit -> string
 

@@ -34,6 +34,7 @@ let name () = C.fg_256 111
 let parameter () = C.fg_256 198
 let symbol () = C.fg_256 97
 let variable () = C.fg_256 111
+let closure_element () = C.fg_256 31
 
 let let_bound_var () = C.fg_256 37
 
