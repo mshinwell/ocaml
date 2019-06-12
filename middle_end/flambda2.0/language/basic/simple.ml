@@ -79,7 +79,11 @@ module Const = struct
           (Flambda_colours.naked_number ())
           Immediate.print i
           (Flambda_colours.normal ())
-      | Tagged_immediate i -> Format.fprintf ppf "%a" Immediate.print i
+      | Tagged_immediate i ->
+        Format.fprintf ppf "%s%a%s"
+          (Flambda_colours.tagged_immediate ())
+          Immediate.print i
+          (Flambda_colours.normal ())
       | Naked_float f ->
         Format.fprintf ppf "%s#%a%s"
           (Flambda_colours.naked_number ())

@@ -32,3 +32,8 @@ let print ppf t =
 
 let equal t1 t2 =
   t1 == t2
+
+let is_default t =
+  match t with
+  | Default_inline -> true
+  | _ -> false

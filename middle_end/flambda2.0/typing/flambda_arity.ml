@@ -49,3 +49,8 @@ let is_all_values t =
 
 let is_all_naked_floats t =
   List.for_all Flambda_kind.is_naked_float t
+
+let is_singleton_value t =
+  match t with
+  | [kind] when Flambda_kind.equal kind Flambda_kind.value -> true
+  | _ -> false

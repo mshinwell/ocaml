@@ -21,6 +21,7 @@ val prim_destructive : unit -> string
 val prim_neither : unit -> string
 
 val naked_number : unit -> string
+val tagged_immediate : unit -> string
 
 val kind : unit -> string
 
@@ -36,9 +37,13 @@ val let_bound_var : unit -> string
 val expr_keyword : unit -> string
 val static_keyword : unit -> string
 
+val static_part : unit -> string
+
 val continuation : unit -> string
 
 val name_abstraction : unit -> string
+
+val elide : unit -> string
 
 val error : unit -> string
 

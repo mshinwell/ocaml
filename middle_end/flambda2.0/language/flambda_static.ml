@@ -171,41 +171,83 @@ module Static_part = struct
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Of_kind_value.print) fields
     | Fabricated_block field ->
-      fprintf ppf "@[(Fabricated_block %a)@]"
+      fprintf ppf "@[@<0>%sFabricated_block@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
         Variable.print field
     | Set_of_closures set_of_closures ->
-      fprintf ppf "@[(Set_of_closures@ (%a))@]"
+      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ (%a))@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
         (Flambda.Set_of_closures.print_with_cache ~cache) set_of_closures
     | Boxed_float (Const f) ->
-      fprintf ppf "@[(Boxed_float %a)@]" Numbers.Float_by_bit_pattern.print f
+      fprintf ppf "@[@<0>%sBoxed_float@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Numbers.Float_by_bit_pattern.print f
     | Boxed_float (Var v) ->
-      fprintf ppf "@[(Boxed_float %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sBoxed_float@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
     | Boxed_int32 (Const n) ->
-      fprintf ppf "@[(Boxed_int32 %ld)@]" n
+      fprintf ppf "@[@<0>%sBoxed_int32@<0>%s %ld)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        n
     | Boxed_int32 (Var v) ->
-      fprintf ppf "@[(Boxed_int32 %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sBoxed_int32@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
     | Boxed_int64 (Const n) ->
-      fprintf ppf "@[(Boxed_int64 %Ld)@]" n
+      fprintf ppf "@[@<0>%sBoxed_int64@<0>%s %Ld)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        n
     | Boxed_int64 (Var v) ->
-      fprintf ppf "@[(Boxed_int64 %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sBoxed_int64@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
     | Boxed_nativeint (Const n) ->
-      fprintf ppf "@[(Boxed_nativeint %a)@]" Targetint.print n
+      fprintf ppf "@[@<0>%sBoxed_nativeint@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Targetint.print n
     | Boxed_nativeint (Var v) ->
-      fprintf ppf "@[(Boxed_nativeint %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sBoxed_nativeint@<0>%s %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
     | Immutable_float_array fields ->
-      fprintf ppf "@[(Immutable_float_array@ @[[| %a |]@])@]"
+      fprintf ppf "@[@<0>%sImmutable_float_array@<0>%s@ @[[| %a |]@])@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
         (Format.pp_print_list
            ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@[; ")
            print_float_array_field)
         fields
     | Mutable_string { initial_value = Const s; } ->
-      fprintf ppf "@[(Mutable_string@ \"%s\")@]" s
+      fprintf ppf "@[@<0>%sMutable_string@<0>%s@ \"%s\")@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        s
     | Mutable_string { initial_value = Var v; } ->
-      fprintf ppf "@[(Mutable_string@ %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sMutable_string@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
     | Immutable_string (Const s) ->
-      fprintf ppf "@[(Immutable_string@ \"%s\")@]" s
+      fprintf ppf "@[@<0>%sImmutable_string@<0>%s@ \"%s\")@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        s
     | Immutable_string (Var v) ->
-      fprintf ppf "@[(Immutable_string@ %a)@]" Variable.print v
+      fprintf ppf "@[@<0>%sImmutable_string@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Variable.print v
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -304,9 +346,9 @@ module Program_body = struct
           Symbol.print sym
           K.print K.value
       | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-        Format.fprintf ppf "@[(set_of_closures@ \
-            (set_of_closures_symbol %a)@ \
-            (closure_symbol %a)\
+        Format.fprintf ppf "@[<hov 1>(set_of_closures@ \
+            @[<hov 1>(set_of_closures_symbol@ %a)@]@ \
+            @[<hov 1>(closure_symbol@ %a)@]\
             )@]"
           Symbol.print set_of_closures_symbol
           (Closure_id.Map.print Symbol.print) closure_symbols
