@@ -31,19 +31,21 @@ type t = {
 let print ppf { callee; continuation; exn_continuation; args; call_kind;
       dbg; inline; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(callee %a)@]@ \
-      @[<hov 1>(args (%a))@]@ \
-      @[<hov 1>(continuation %a)@]@ \
-      @[<hov 1>(exn_continuation %a)@]@ \
-      @[<hov 1>(call_kind %a)@]@ \
-      @[<hov 1>(dbg %a)@]@ \
-      @[<hov 1>(inline %a)@])@]"
+      @[<hov 1>(callee@ %a)@]@ \
+      @[<hov 1>(args@ (%a))@]@ \
+      @[<hov 1>(continuation@ %a)@]@ \
+      @[<hov 1>(exn_continuation@ %a)@]@ \
+      @[<hov 1>(call_kind@ %a)@]@ \
+      @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
+      @[<hov 1>(inline@ %a)@])@]"
     Simple.print callee
     Simple.List.print args
     Continuation.print continuation
     Exn_continuation.print exn_continuation
     Call_kind.print call_kind
+    (Flambda_colours.debuginfo ())
     Debuginfo.print_compact dbg
+    (Flambda_colours.normal ())
     Inline_attribute.print inline
 
 let print_with_cache ~cache:_ ppf t = print ppf t
