@@ -31,10 +31,8 @@ let print_with_cache ~cache ppf ({ defined_vars; equations; } : t) =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (name, ty) ->
           Format.fprintf ppf
-            "@[<hov 1>%s%a%s@ :@ %a@]"
-            (Misc.Color.bold_green ())
+            "@[<hov 1>%a@ :@ %a@]"
             Name.print name
-            (Flambda_colours.normal ())
             (Type_printers.print_with_cache ~cache) ty)
         ppf equations;
       Format.pp_print_string ppf ")"

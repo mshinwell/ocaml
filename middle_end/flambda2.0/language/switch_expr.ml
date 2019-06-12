@@ -31,7 +31,7 @@ let print_arms ppf arms =
       if !spc then fprintf ppf "@ " else spc := true;
       fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
         Discriminant.print discriminant
-        (Misc.Color.bold_cyan ())
+        (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
         Continuation.print l)
     arms
@@ -39,7 +39,7 @@ let print_arms ppf arms =
 let print ppf { scrutinee; arms; } =
   fprintf ppf
     "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
-    (Misc.Color.bold_cyan ())
+    (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
     Name.print scrutinee
     print_arms arms

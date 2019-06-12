@@ -30,6 +30,7 @@ let debuginfo () = C.fg_256 243
 
 let discriminant () = C.fg_256 111
 let name () = C.fg_256 111
+let parameter () = C.fg_256 198
 let symbol () = C.fg_256 97
 
 let let_bound_var () = C.fg_256 37
@@ -39,4 +40,8 @@ let static_keyword () = (C.fg_256 255) ^ (C.bg_256 240)
 
 let continuation () = C.fg_256 35
 
+let name_abstraction () = C.fg_256 172
+
 let error () = C.fg_256 160
+
+let each_file () = C.fg_256 51
