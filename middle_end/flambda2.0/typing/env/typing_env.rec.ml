@@ -582,10 +582,10 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
       Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
           @ %a@ %sCurrent aliases:%s@ %a@]\n"
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         print_ty ty
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Aliases.print (aliases t);
       invariant_should_fail t
 
@@ -607,13 +607,13 @@ let resolve_any_toplevel_alias_on_ty (type a) t
       Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
           @ %a@ %sCanonical name:%s %a@ %sCurrent aliases:%s@ %a@]\n"
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         print_ty ty
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Name.print name
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Aliases.print (aliases t);
         invariant_should_fail t
 

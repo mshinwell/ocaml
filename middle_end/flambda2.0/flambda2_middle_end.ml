@@ -28,7 +28,7 @@ let print_prepared_lambda ppf lam =
   if !Clflags.dump_prepared_lambda then begin
     Format.fprintf ppf "%sAfter Prepare_lambda:%s@ %a@."
       (Misc.Color.bold_cyan ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Printlambda.lambda lam
   end
 
@@ -40,7 +40,7 @@ let print_ilambda ppf (ilam : Ilambda.program) =
       (Misc.Color.bold_cyan ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Ilambda.print ilam.expr
   end
 
@@ -53,7 +53,7 @@ let print_ilambda_after_mutable_variable_elimination ppf
       (Misc.Color.bold_cyan ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Ilambda.print ilam.expr
   end
 
@@ -61,7 +61,7 @@ let print_rawflambda ppf program =
   if !Clflags.dump_rawflambda2 then begin
     Format.fprintf ppf "\n%sAfter closure conversion:%s@ %a@."
       (Misc.Color.bold_cyan ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Flambda_static.Program.print program
   end
 
@@ -70,7 +70,7 @@ let print_flambda name ppf program =
     Format.fprintf ppf "\n%sAfter %s:%s@ %a@."
       (Misc.Color.bold_cyan ())
       name
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Flambda_static.Program.print program
   end
 
@@ -118,7 +118,7 @@ let middle_end ~ppf_dump:ppf ~prefixname ~backend ~size ~filename ~module_ident
   with Misc.Fatal_error -> begin
     Format.eprintf "\n%sOriginal backtrace is:%s\n%s\n"
       (Misc.Color.bold_red ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       (Printexc.raw_backtrace_to_string (Misc.fatal_error_callstack ()));
     raise Misc.Fatal_error
   end

@@ -38,7 +38,7 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       Format.eprintf "\n%sContext is:%s simplifying toplevel expression:@ %a@ \
           in downwards accumulator:@ %a"
         (Misc.Color.bold_red ())
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Expr.print expr
         DA.print dacc;
       raise Misc.Fatal_error

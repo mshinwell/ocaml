@@ -39,7 +39,7 @@ let print_with_cache ~cache ppf
           Variable.print bound_var
           (Misc.Color.bold_white ())
           Flambda_kind.print kind
-          (Misc.Color.reset ())
+          (Flambda_colours.normal ())
           (Named.print_with_cache ~cache) defining_expr;
         let_body body)
     | _ -> expr
@@ -48,11 +48,11 @@ let print_with_cache ~cache ppf
     fprintf ppf "@[<hov 1>(%slet%s@ @[<hov 1>(\
         @[<hov 1>%a@[@ %s\u{2237}@ %a%s@]@ %a@]"
       (Misc.Color.bold_cyan ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Variable.print bound_var
       (Misc.Color.bold_white ())
       Flambda_kind.print kind
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       (Named.print_with_cache ~cache) defining_expr;
     let expr = let_body body in
     fprintf ppf ")@]@ %a)@]"
