@@ -26,16 +26,21 @@ let check_invariants program =
 
 let print_prepared_lambda ppf lam =
   if !Clflags.dump_prepared_lambda then begin
-    Format.fprintf ppf "After Prepare_lambda:@ %a@." Printlambda.lambda lam
+    Format.fprintf ppf "%sAfter Prepare_lambda:%s@ %a@."
+      (Misc.Color.bold_cyan ())
+      (Misc.Color.reset ())
+      Printlambda.lambda lam
   end
 
 let print_ilambda ppf (ilam : Ilambda.program) =
   if !Clflags.dump_ilambda then begin
     Format.fprintf ppf
-      "After CPS conversion (return continuation %a) \
-       (exception continuation %a):@ %a@."
+      "\n%sAfter CPS conversion (return continuation %a) \
+       (exception continuation %a):%s@ %a@."
+      (Misc.Color.bold_cyan ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
+      (Misc.Color.reset ())
       Ilambda.print ilam.expr
   end
 
@@ -43,23 +48,29 @@ let print_ilambda_after_mutable_variable_elimination ppf
       (ilam : Ilambda.program) =
   if !Clflags.dump_ilambda then begin
     Format.fprintf ppf
-      "After mutable variable elimination (return continuation %a) \
-       (exception continuation %a):@ %a@."
+      "\n%sAfter mutable variable elimination (return continuation %a) \
+       (exception continuation %a):%s@ %a@."
+      (Misc.Color.bold_cyan ())
       Continuation.print ilam.return_continuation
       Continuation.print ilam.exn_continuation.exn_handler
+      (Misc.Color.reset ())
       Ilambda.print ilam.expr
   end
 
 let print_rawflambda ppf program =
   if !Clflags.dump_rawflambda2 then begin
-    Format.fprintf ppf "After closure conversion:@ %a@."
+    Format.fprintf ppf "\n%sAfter closure conversion:%s@ %a@."
+      (Misc.Color.bold_cyan ())
+      (Misc.Color.reset ())
       Flambda_static.Program.print program
   end
 
 let print_flambda name ppf program =
   if !Clflags.dump_flambda then begin
-    Format.fprintf ppf "After %s:@ %a@."
+    Format.fprintf ppf "\n%sAfter %s:%s@ %a@."
+      (Misc.Color.bold_cyan ())
       name
+      (Misc.Color.reset ())
       Flambda_static.Program.print program
   end
 

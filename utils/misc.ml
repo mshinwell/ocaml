@@ -85,6 +85,16 @@ module Color = struct
 
   let color_enabled = ref true
 
+  let fg_256 n =
+    if !color_enabled then
+      (Printf.sprintf "\x1b[38:5:%dm" n) ^ (ansi_of_style_l [Bold])
+    else ""
+
+  let bg_256 n =
+    if !color_enabled then
+      (Printf.sprintf "\x1b[48:5:%dm" n) ^ (ansi_of_style_l [Bold])
+    else ""
+
   let bold_red () =
     if !color_enabled then ansi_of_style_l [FG Red; Bold] else ""
 

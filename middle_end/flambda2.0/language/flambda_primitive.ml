@@ -8,7 +8,7 @@
 (*   Copyright 1996 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
 (*                                                                        *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -19,6 +19,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module K = Flambda_kind
+
+type classification_for_printing =
+  | Constructive
+  | Destructive
+  | Neither
 
 module Value_kind = struct
   type t =
@@ -556,7 +561,7 @@ let print_unary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Duplicate_block { kind; source_mutability; destination_mutability; } ->
-    fprintf ppf "(Duplicate_array %a (source %a) (dest %a)"
+    fprintf ppf "(Duplicate_array %a (source %a) (dest %a))"
       print_duplicate_block_kind kind
       print_mutable_or_immutable source_mutability
       print_mutable_or_immutable destination_mutability
@@ -673,6 +678,27 @@ let effects_and_coeffects_of_unary_primitive p =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> No_effects, No_coeffects
+
+let unary_classify_for_printing p =
+  match p with
+  | Duplicate_block _ -> Constructive
+  | String_length _
+  | Get_tag _ -> Destructive
+  | Is_int
+  | Discriminant_of_int
+  | Int_as_pointer
+  | Opaque_identity
+  | Int_arith _
+  | Num_conv _
+  | Boolean_not
+  | Float_arith _ -> Neither
+  | Array_length _
+  | Bigarray_length _
+  | Unbox_number _ -> Destructive
+  | Box_number _ -> Constructive
+  | Project_closure _
+  | Move_within_set_of_closures _
+  | Project_var _ -> Destructive
 
 type binary_int_arith_op =
   | Add | Sub | Mul | Div | Mod | And | Or | Xor
@@ -847,6 +873,17 @@ let effects_and_coeffects_of_binary_primitive p =
   | Float_comp _ -> No_effects, No_coeffects
   | String_or_bigstring_load _ -> reading_from_an_array_like_thing
 
+let binary_classify_for_printing p =
+  match p with
+  | Block_load _ -> Destructive
+  | Phys_equal _
+  | Int_arith _
+  | Int_shift _
+  | Int_comp _
+  | Float_arith _
+  | Float_comp _
+  | String_or_bigstring_load _ -> Neither
+
 type ternary_primitive =
   | Block_set of Block_access_kind.t * init_or_assign
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
@@ -917,6 +954,11 @@ let effects_and_coeffects_of_ternary_primitive p =
   match p with
   | Block_set _
   | Bytes_or_bigstring_set _ -> writing_to_an_array_like_thing
+
+let ternary_classify_for_printing p =
+  match p with
+  | Block_set _
+  | Bytes_or_bigstring_set _ -> Neither
 
 type variadic_primitive =
   | Make_block of make_block_kind * mutable_or_immutable
@@ -1001,6 +1043,12 @@ let effects_and_coeffects_of_variadic_primitive p =
   | Bigarray_load (_, _, _) ->
     reading_from_an_array_like_thing
 
+let variadic_classify_for_printing p =
+  match p with
+  | Make_block _ -> Constructive
+  | Bigarray_set _
+  | Bigarray_load _ -> Neither
+
 type t =
   | Unary of unary_primitive * Simple.t
   | Binary of binary_primitive * Simple.t * Simple.t
@@ -1083,6 +1131,13 @@ let invariant env t =
     | Bigarray_load _ -> ()
     end
 
+let classify_for_printing t =
+  match t with
+  | Unary (prim, _) -> unary_classify_for_printing prim
+  | Binary (prim, _, _) -> binary_classify_for_printing prim
+  | Ternary (prim, _, _, _) -> ternary_classify_for_printing prim
+  | Variadic (prim, _) -> variadic_classify_for_printing prim
+
 include Identifiable.Make (struct
   type nonrec t = t
 
@@ -1130,33 +1185,39 @@ include Identifiable.Make (struct
   let hash _t = Misc.fatal_error "Not implemented"
 
   let print ppf t =
+    let colour =
+      match classify_for_printing t with
+      | Constructive -> Flambda_colours.prim_constructive ()
+      | Destructive -> Flambda_colours.prim_destructive ()
+      | Neither -> Flambda_colours.prim_neither ()
+    in
     match t with
     | Unary (prim, v0) ->
       Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
-        (Misc.Color.bold_green ())
+        colour
         print_unary_primitive prim
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Simple.print v0
     | Binary (prim, v0, v1) ->
       Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a)@]"
-        (Misc.Color.bold_green ())
+        colour
         print_binary_primitive prim
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Simple.print v0
         Simple.print v1
     | Ternary (prim, v0, v1, v2) ->
       Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a@ %a@ %a)@]"
-        (Misc.Color.bold_green ())
+        colour
         print_ternary_primitive prim
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         Simple.print v0
         Simple.print v1
         Simple.print v2
     | Variadic (prim, vs) ->
       Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
-        (Misc.Color.bold_green ())
+        colour
         print_variadic_primitive prim
-        (Misc.Color.reset ())
+        (Flambda_colours.normal ())
         (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) vs
 
   let output chan t =
