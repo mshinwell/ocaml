@@ -94,13 +94,13 @@ include Identifiable.Make (struct
           Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d557}@<0>%s"
             colour (Misc.Color.reset ())
         | Naked_int32 ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d55d}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d7db}\u{1d7da}@<0>%s"
             colour (Misc.Color.reset ())
         | Naked_int64 ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d543}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d7de}\u{1d7dc}@<0>%s"
             colour (Misc.Color.reset ())
         | Naked_nativeint ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d555}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{2115}@<0>%s"
             colour (Misc.Color.reset ())
       end else begin
         Format.fprintf ppf "(Naked_number %a)"
