@@ -90,7 +90,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
                 with closure ID %a,@ params %a,@ return continuation %a,@ \
                 exn continuation %a,@ my_closure %a,@ body:@ %a@ \
                 with downwards accumulator:@ %a\n"
-              (Misc.Color.bold_red ())
+              (Flambda_colours.error ())
               (Flambda_colours.normal ())
               Closure_id.print closure_id
               Kinded_parameter.List.print params

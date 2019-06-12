@@ -157,7 +157,7 @@ and simplify_body_of_non_recursive_let_cont
           Format.eprintf "\n%sContext is:%s simplifying continuation \
               handler@ %a@ \
               with downwards accumulator:@ %a\n"
-            (Misc.Color.bold_red ())
+            (Flambda_colours.error ())
             (Flambda_colours.normal ())
             Continuation_handler.print cont_handler
             DA.print dacc;
@@ -566,7 +566,7 @@ and simplify_function_call_where_callee's_type_unavailable
         with Misc.Fatal_error -> begin
           Format.eprintf "\n%sContext is:%s simplifying [Apply]@ %a@ \
               with downwards accumulator:@ %a\n"
-            (Misc.Color.bold_red ())
+            (Flambda_colours.error ())
             (Flambda_colours.normal ())
             Apply.print apply
             DA.print dacc;
@@ -830,7 +830,7 @@ and simplify_apply_cont
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
                 The inlined body was:@ %a@ in environment:@ %a\n"
-              (Misc.Color.bold_red ())
+              (Flambda_colours.error ())
               (Flambda_colours.normal ())
               AC.print apply_cont
               Expr.print expr
