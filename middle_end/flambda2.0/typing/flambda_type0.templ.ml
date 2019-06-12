@@ -48,7 +48,17 @@ module Make
     let result = Name.var result_var in
     let env = Typing_env.add_definition env result result_kind in
     let env = Meet_env.create env in
+(*
+Format.eprintf "Meeting: %a@ and@ %a\n%!"
+  Type_printers.print t
+  Type_printers.print shape;
+*)
     let meet_ty, env_extension = meet env t shape in
+(*
+Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
+  Type_printers.print meet_ty
+  Typing_env_extension.print env_extension;
+*)
     if is_obviously_bottom meet_ty then Bottom
     else Ok env_extension
 
@@ -134,6 +144,9 @@ module Make
     let _can_lift =
       Name_occurrences.only_contains_symbols (Type_free_names.free_names t)
     in
+(*
+Format.eprintf "reify %a\n%!" Type_printers.print t;
+*)
     if resolved_type_is_bottom resolved then Invalid
     else
       let result =
@@ -194,6 +207,35 @@ module Make
             else
               Cannot_reify
           | _, _ -> Cannot_reify
+          end
+        | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
+          let unknown_or_join, _canonical_simple =
+            Typing_env.resolve_any_toplevel_alias_on_ty0 env
+              ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
+              ~print_ty:Type_printers.print_ty_naked_int64
+              ty_naked_int64
+          in
+          begin match unknown_or_join with
+          | Ok (Int64 ints) ->
+            begin match Int64.Set.get_singleton ints with
+            | Some i -> Lift (Boxed_int64 i)
+            | None -> Cannot_reify
+            end
+          | _ -> Cannot_reify
+          end
+        | Resolved_naked_number (Ok (Int32 ints), Naked_int32) ->
+          begin match Int32.Set.get_singleton ints with
+          | Some i ->
+            Term (Simple.const (Naked_int32 i),
+              Flambda_type0_core.this_naked_int32 i)
+          | None -> Cannot_reify
+          end
+        | Resolved_naked_number (Ok (Int64 ints), Naked_int64) ->
+          begin match Int64.Set.get_singleton ints with
+          | Some i ->
+            Term (Simple.const (Naked_int64 i),
+              Flambda_type0_core.this_naked_int64 i)
+          | None -> Cannot_reify
           end
         | _ -> Cannot_reify
 end

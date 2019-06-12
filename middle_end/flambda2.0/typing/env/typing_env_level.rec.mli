@@ -42,7 +42,9 @@ val add_definition : t -> Variable.t -> Flambda_kind.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
+(*
 val meet_equation : t -> Meet_env.t -> Name.t -> Flambda_types.t -> t
+*)
 
 val meet : Meet_env.t -> t -> t -> t
 

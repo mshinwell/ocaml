@@ -192,6 +192,12 @@ module type S = sig
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
 
+  val boxed_int32_alias_to : naked_int32:Variable.t -> t
+  val boxed_int64_alias_to : naked_int64:Variable.t -> t
+
+  val box_int32 : t -> t
+  val box_int64 : t -> t
+
   (** Building of types corresponding to values that did not exist at
       source level. *)
 

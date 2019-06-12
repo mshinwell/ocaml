@@ -53,6 +53,12 @@ val this_naked_int32 : Int32.t -> Flambda_types.t
 val this_naked_int64 : Int64.t -> Flambda_types.t
 val this_naked_nativeint : Targetint.t -> Flambda_types.t
 
+val boxed_int32_alias_to : naked_int32:Variable.t -> Flambda_types.t
+val boxed_int64_alias_to : naked_int64:Variable.t -> Flambda_types.t
+
+val box_int32 : Flambda_types.t -> Flambda_types.t
+val box_int64 : Flambda_types.t -> Flambda_types.t
+
 val this_discriminant : Discriminant.t -> Flambda_types.t
 
 val immutable_block
