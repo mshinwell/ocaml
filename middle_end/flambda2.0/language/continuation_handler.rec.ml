@@ -44,7 +44,10 @@ let print_using_where_with_cache ~cache ppf k
       if List.length params > 0 then begin
         fprintf ppf " ";
       end;
-      fprintf ppf "=@ %a" (Expr.print_with_cache ~cache) handler;
+      fprintf ppf "%s=%s@ %a"
+        (Flambda_colours.elide ())
+        (Flambda_colours.normal ())
+        (Expr.print_with_cache ~cache) handler;
       fprintf ppf "@]")
 
 let print_with_cache ~cache ppf { params_and_handler; stub; is_exn_handler; } =
