@@ -25,3 +25,5 @@ type t =
 val print : Format.formatter -> t -> unit
 
 val equal : t -> t -> bool
+
+val is_default : t -> bool

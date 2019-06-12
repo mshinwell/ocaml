@@ -66,31 +66,50 @@ let print_with_cache0 ~compact ~cache ppf
      [Function_params_and_body.print_with_cache].  However a proper
      function to print in a more human-readable form will probably look more
      like this code. *)
+  let module C = Flambda_colours in
   Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
       fprintf ppf "@[<hov 1>(\
+          @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
           @[<hov 1>(closure_origin@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ \
-          @[<hov 1>(stub@ %b)@]@ \
-          @[<hov 1>(dbg@ %a)@]@ \
-          @[<hov 1>(inline@ %a)@]@ \
-          @[<hov 1>(is_a_functor@ %b)@]@ \
           @[<hov 1>(params@ %a)@]@ \
-          @[<hov 1>(my_closure@ %s%a%s)@]@ \
-          @[<hov 1>(result_arity@ %a)@]@ "
+          @[<hov 1>(my_closure@ @<0>%s%a@<0>%s)@]@ "
+        (if not stub then Flambda_colours.elide () else C.normal ())
+        stub
+        (Flambda_colours.normal ())
+        (Flambda_colours.debuginfo ())
+        Debuginfo.print_compact dbg
+        (Flambda_colours.normal ())
+        (if Inline_attribute.is_default inline
+         then Flambda_colours.elide ()
+         else C.normal ())
+        Inline_attribute.print inline
+        (Flambda_colours.normal ())
+        (if not is_a_functor then Flambda_colours.elide () else C.normal ())
+        is_a_functor
+        (Flambda_colours.normal ())
+        (if Flambda_arity.is_singleton_value result_arity
+         then Flambda_colours.elide ()
+         else Flambda_colours.normal ())
+        (Flambda_colours.normal ())
+        Flambda_arity.print result_arity
+        (if Flambda_arity.is_singleton_value result_arity
+         then Flambda_colours.elide ()
+         else Flambda_colours.normal ())
+        (Flambda_colours.normal ())
         Closure_origin.print closure_origin
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
-        stub
-        Debuginfo.print_compact dbg
-        Inline_attribute.print inline
-        is_a_functor
         Kinded_parameter.List.print params
         (Flambda_colours.name ())
         Variable.print my_closure
-        (Flambda_colours.normal ())
-        Flambda_arity.print result_arity;
+        (Flambda_colours.normal ());
       if compact then begin
         fprintf ppf "@[<hov 1>(body@ <elided>)@])@]"
       end else begin
