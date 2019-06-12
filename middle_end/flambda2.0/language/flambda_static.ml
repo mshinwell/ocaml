@@ -437,6 +437,10 @@ module Program_body = struct
         computation = Option.map f t.computation;
       }
 
+    let only_generative_effects t =
+      (* CR-someday mshinwell: Could do a proper effects check. *)
+      Option.is_none t.computation
+
     let iter_static_parts t iter =
       Static_structure.iter_static_parts t.static_structure iter
 
@@ -484,9 +488,11 @@ module Program_body = struct
   let define_symbol defn ~body =
     let being_defined = Definition.being_defined defn in
     let free_syms_of_body = free_symbols body in
-    if Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
-    then
-      body
+    let can_delete =
+      Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
+        && Definition.only_generative_effects defn
+    in
+    if can_delete then body
     else
       let free_symbols =
         Symbol.Set.union (Definition.free_symbols defn)
