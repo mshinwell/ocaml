@@ -92,7 +92,7 @@ let print_with_cache ~cache ppf (t : t) =
   | Apply apply ->
     Format.fprintf ppf "@[<hov 1>(%sapply%s@ %a)@]"
       (Misc.Color.bold_cyan ())
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
       Apply.print apply
   | Apply_cont apply_cont -> Apply_cont.print ppf apply_cont
   | Switch switch -> Switch.print ppf switch
@@ -100,7 +100,7 @@ let print_with_cache ~cache ppf (t : t) =
     fprintf ppf "@[%sInvalid %a%s@]"
       (Misc.Color.bold_cyan ())
       Invalid_term_semantics.print semantics
-      (Misc.Color.reset ())
+      (Flambda_colours.normal ())
 
 let print ppf (t : t) =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t

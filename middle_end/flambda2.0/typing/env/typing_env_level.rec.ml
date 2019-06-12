@@ -34,7 +34,7 @@ let print_with_cache ~cache ppf ({ defined_vars; equations; } : t) =
             "@[<hov 1>%s%a%s@ :@ %a@]"
             (Misc.Color.bold_green ())
             Name.print name
-            (Misc.Color.reset ())
+            (Flambda_colours.normal ())
             (Type_printers.print_with_cache ~cache) ty)
         ppf equations;
       Format.pp_print_string ppf ")"

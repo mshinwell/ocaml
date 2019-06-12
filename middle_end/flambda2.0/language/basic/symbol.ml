@@ -45,7 +45,7 @@ module I = Identifiable.Make (struct
     Compilation_unit.print ppf t.compilation_unit;
     Format.pp_print_string ppf ".";
     Linkage_name.print ppf t.linkage_name;
-    Format.fprintf ppf "@<0>%s" (Misc.Color.reset ())
+    Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
