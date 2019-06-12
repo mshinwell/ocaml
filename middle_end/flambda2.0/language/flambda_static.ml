@@ -445,20 +445,26 @@ module Program_body = struct
         static_structure =
           Static_structure.map_static_parts t.static_structure mapper;
       }
+
+    let being_defined t = Static_structure.being_defined t.static_structure
   end
 
   type t =
-    | Define_symbol of Definition.t * t
+    | Define_symbol of {
+        free_symbols : Symbol.Set.t;
+        defn : Definition.t;
+        body : t;
+      }
     | Root of Symbol.t
 
   let rec print_with_cache ~cache ppf t =
     match t with
-    | Define_symbol (defn, t) ->
+    | Define_symbol { free_symbols = _; defn; body; } ->
       Format.fprintf ppf "@[<v 2>(@<0>%sDefine_symbol@<0>%s@ %a)@]@;"
         (Misc.Color.bold_yellow ())
         (Misc.Color.reset ())
         (Definition.print_with_cache ~cache) defn;
-      print_with_cache ~cache ppf t
+      print_with_cache ~cache ppf body
     | Root sym ->
       Format.fprintf ppf "@[(@<0>%sRoot@<0>%s %a)@]"
         (Misc.Color.bold_yellow ())
@@ -468,11 +474,33 @@ module Program_body = struct
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
+  let _invariant _env _t = ()
+
+  let free_symbols t =
+    match t with
+    | Define_symbol { free_symbols; _ } -> free_symbols
+    | Root sym -> Symbol.Set.singleton sym
+
+  let define_symbol defn ~body =
+    let being_defined = Definition.being_defined defn in
+    let free_syms_of_body = free_symbols body in
+    if Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
+    then
+      body
+    else
+      let free_symbols =
+        Symbol.Set.union (Definition.free_symbols defn)
+          free_syms_of_body
+      in
+      Define_symbol { free_symbols; defn; body; }
+
+  let root sym = Root sym
+
   let gc_roots t =
     let rec gc_roots t roots =
       match t with
       | Root _ -> roots
-      | Define_symbol (defn, t) ->
+      | Define_symbol { defn; body; _; } ->
         let roots =
           match defn.static_structure with
           | S pieces ->
@@ -486,33 +514,33 @@ module Program_body = struct
               roots
               pieces
         in
-        gc_roots t roots
+        gc_roots body roots
     in
     gc_roots t Symbol.Set.empty
 
-  (* CR mshinwell: Free symbols should be cached at each level otherwise
-     we have quadratic behaviour when adding lifted constants *)
-  let rec free_symbols t =
-    match t with
-    | Define_symbol (defn, t) ->
-      Symbol.Set.union (Definition.free_symbols defn) (free_symbols t)
-    | Root sym -> Symbol.Set.singleton sym
-
-  let _invariant _env _t = ()
-
   let rec iter_definitions t ~f =
     match t with
-    | Define_symbol (definition, t) ->
-      f definition;
-      iter_definitions t ~f
+    | Define_symbol { defn; body; _ } ->
+      f defn;
+      iter_definitions body ~f
     | Root _ -> ()
 
   let rec map_definitions t ~f =
     match t with
-    | Define_symbol (definition, t) ->
-      let t = map_definitions t ~f in
-      Define_symbol (f definition, t)
+    | Define_symbol { defn; body; free_symbols; } ->
+      let body = map_definitions body ~f in
+      Define_symbol { defn = f defn; body; free_symbols; }
     | Root _ -> t
+
+  type descr =
+    | Define_symbol of Definition.t * t
+    | Root of Symbol.t
+
+  let descr (t : t) : descr =
+    match t with
+    | Define_symbol { defn; body; free_symbols = _; } ->
+      Define_symbol (defn, body)
+    | Root sym -> Root sym
 end
 
 module Program = struct
@@ -550,7 +578,7 @@ module Program = struct
   let root_symbol t =
     let rec loop (body : Program_body.t) =
       match body with
-      | Define_symbol (_, body) -> loop body
+      | Define_symbol { body; _ } -> loop body
       | Root root -> root
     in
     loop t.body
