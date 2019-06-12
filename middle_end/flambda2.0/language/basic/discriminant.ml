@@ -58,7 +58,7 @@ include Identifiable.Make (struct
 
   let print ppf t =
     Format.fprintf ppf "@[%s%a%s@]"
-      (Misc.Color.bold_yellow ())
+      (Flambda_colours.discriminant ())
       Targetint.OCaml.print t
       (Flambda_colours.normal ())
 

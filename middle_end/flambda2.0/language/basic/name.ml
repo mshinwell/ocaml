@@ -57,9 +57,12 @@ module With_map =
     type nonrec t = t
 
     let print ppf t =
-      match t with
+      Format.fprintf ppf "%s" (Flambda_colours.name ());
+      begin match t with
       | Var var -> Variable.print ppf var
       | Symbol sym -> Symbol.print ppf sym
+      end;
+      Format.fprintf ppf "%s" (Flambda_colours.normal ())
 
     let output chan t =
       print (Format.formatter_of_out_channel chan) t

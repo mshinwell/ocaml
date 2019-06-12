@@ -49,6 +49,7 @@ include Identifiable.Make (struct
     Hashtbl.hash (t.id, Compilation_unit.hash t.compilation_unit)
 
   let print ppf t =
+    Format.fprintf ppf "%s" (Flambda_colours.continuation ());
     if Compilation_unit.equal t.compilation_unit
         (Compilation_unit.get_current_exn ())
     then begin
@@ -57,7 +58,8 @@ include Identifiable.Make (struct
       Format.fprintf ppf "%a.k%d"
         Compilation_unit.print t.compilation_unit
         t.id
-    end
+    end;
+    Format.fprintf ppf "%s" (Flambda_colours.normal ())
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
