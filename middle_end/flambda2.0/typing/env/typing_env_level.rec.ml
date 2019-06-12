@@ -100,6 +100,7 @@ let find_equation t name =
       print t
   | ty -> ty
 
+(* XXX Not sure this is correct yet *)
 let meet env (t1 : t) (t2 : t) =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
      As such, since this is [meet], we perform unions on the domains.
@@ -153,6 +154,7 @@ let erase_aliases t ~allowed =
     equations;
   }
 
+(*
 let meet_equation t1 env name ty =
   let t2 =
     { defined_vars = Variable.Map.empty;
@@ -160,6 +162,7 @@ let meet_equation t1 env name ty =
     }
   in
   meet env t1 t2
+*)
 
 let remove_definitions_and_equations_thereon t =
   let equations =

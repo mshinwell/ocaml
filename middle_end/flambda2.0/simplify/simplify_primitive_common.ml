@@ -25,11 +25,10 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DE.typing_env (DA.denv dacc) in
 (*
-Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a@ env:@ %a\n%!"
+Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructing:@ %a\n%!"
   Flambda.Named.print original_term
   T.print shape
-  T.print deconstructing
-  DA.print dacc;
+  T.print deconstructing;
 *)
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty, dacc
