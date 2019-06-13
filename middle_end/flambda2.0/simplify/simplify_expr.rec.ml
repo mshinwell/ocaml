@@ -297,6 +297,7 @@ and simplify_let_cont
 
 and simplify_direct_full_application
   : 'a. DA.t -> Apply.t -> Function_declaration.t option
+    -> function_decl_rec_info:Rec_info.t
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply function_decl_opt k ->
   let callee = Apply.callee apply in
@@ -305,17 +306,28 @@ and simplify_direct_full_application
     match function_decl_opt with
     | None -> None
     | Some function_decl ->
-      Inlining_transforms.inline dacc ~callee
-        ~args function_decl
-        ~apply_return_continuation:(Apply.continuation apply)
-        ~apply_exn_continuation:(Apply.exn_continuation apply)
-        (Apply.dbg apply)
-        (Apply.inline apply)
+      let decision =
+        Inlining_decision.make_decision_for_call_site dacc ~callee
+          ~function_decl_rec_info
+          (Apply.inline apply)
+          (Apply.dbg apply)
+          (Apply.inline apply)
+      in
+      if Inlining_decision.Call_site_decision.can_inline decision then
+        Inlining_transforms.inline dacc ~callee
+          ~args function_decl
+          ~apply_return_continuation:(Apply.continuation apply)
+          ~apply_exn_continuation:(Apply.exn_continuation apply)
+          (Apply.dbg apply)
+      else
+        None
   in
   match inlined with
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
   | None ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    let apply =
+
     Expr.create_apply apply, user_data, uacc
 
 and simplify_direct_partial_application
@@ -490,10 +502,10 @@ and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> arg_types:T.t list
-    -> Function_declaration.t option
+    -> function_decl_rec:info:Rec_info.t -> Function_declaration.t option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
-      ~recursive ~arg_types function_decl_opt k ->
+      ~recursive ~arg_types ~function_decl_rec_info function_decl_opt k ->
   let args_arity = T.arity_of_list arg_types in
   if not (Flambda_arity.equal param_arity args_arity) then begin
     Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
@@ -527,7 +539,8 @@ and simplify_direct_function_call
   let provided_num_args = List.length args in
   let num_params = List.length param_arity in
   if provided_num_args = num_params then
-    simplify_direct_full_application dacc apply function_decl_opt k
+    simplify_direct_full_application dacc apply function_decl_opt
+      ~function_decl_rec_info k
   else if provided_num_args > num_params then
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
@@ -643,11 +656,17 @@ and simplify_function_call
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> ()
       end;
+      let function_decl_rec_info =
+        match Simple.rec_info (Apply.callee apply) with
+        | None -> Rec_info.create ~depth:0 ~to_unroll:None in
+        | Some rec_info -> rec_info
+      in
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
         ~param_arity:(Function_declaration.params_arity function_decl)
         ~result_arity:(Function_declaration.result_arity function_decl)
         ~recursive:(Function_declaration.recursive function_decl)
+        ~function_decl_rec_info
         (Some function_decl) k
     | Known (Non_inlinable { param_arity; result_arity; recursive; }) ->
       simplify_direct_function_call dacc apply
@@ -667,10 +686,18 @@ and simplify_apply_shared dacc apply =
   let callee, callee_ty = S.simplify_simple dacc (Apply.callee apply) in
   let args_with_types = S.simplify_simples dacc (Apply.args apply) in
   let args, arg_types = List.split args_with_types in
+  let inlining_depth =
+    DE.inlining_depth (DA.denv dacc) + Apply.inlining_depth apply
+  in
   let apply =
-    (* CR mshinwell: Remove continuation argument *)
-    Apply.with_continuation_callee_and_args apply (Apply.continuation apply)
-      ~callee ~args
+    Apply.create ~callee
+      ~continuation:(Apply.continuation apply)
+      (Apply.exn_continuation apply)
+      ~args
+      ~call_kind:(Apply.call_kind apply)
+      (Debuginfo.concat ...)
+      ~inline:(Apply.inline apply)
+      ~inlining_depth
   in
   callee_ty, apply, arg_types
 

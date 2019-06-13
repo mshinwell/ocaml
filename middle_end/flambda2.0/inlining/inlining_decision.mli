@@ -18,7 +18,42 @@
 
 open! Flambda.Import
 
-val can_inline
+module Function_declaration_decision : sig
+  type t = private
+    | Never_inline_attribute
+    | Function_body_too_large
+    | Stub
+    | Inline
+
+  val can_inline : t -> bool
+end
+
+val make_decision_for_function_declaration
    : Simplify_env_and_result.Downwards_env.t
   -> Function_declaration.t
-  -> bool
+  -> Function_declaration_decision.t
+
+module Call_site_decision : sig
+  type attribute_causing_inlining = private
+    | Unroll
+    | Always
+
+  type t = private
+    | Environment_says_never_inline
+    | Unrolling_depth_exceeded
+    | Max_inlining_depth_exceeded
+    | Recursion_depth_exceeded
+    | Never_inline_attribute
+    | Inline of {
+        attribute : attribute_causing_inlining option;
+        unroll_to : int option;
+      }
+
+  val can_inline : t -> bool
+end
+
+val make_decision_for_call_site
+   : Simplify_env_and_result.Downwards_env.t
+  -> function_decl_rec_info:Rec_info.t
+  -> Inline_attribute.t
+  -> Call_site_decision.t

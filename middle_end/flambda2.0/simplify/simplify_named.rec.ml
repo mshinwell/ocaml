@@ -187,6 +187,8 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   Reachable.reachable term, DA.with_r dacc r, ty
 
 let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
+  (* CR mshinwell: This variable is problematic; we must not let it appear
+     in any term (e.g. by introducing a [Project_closure]). *)
   let set_of_closures_var = Variable.create "set_of_closures" in
   let set_of_closures_ty_fabricated =
     T.alias_type_of_as_ty_fabricated (Simple.var set_of_closures_var)
