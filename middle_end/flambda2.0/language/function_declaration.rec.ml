@@ -27,13 +27,14 @@ type t = {
   dbg : Debuginfo.t;
   inline : Inline_attribute.t;
   is_a_functor : bool;
+  recursive : Recursive.t;
 }
 
 let invariant _env _t = ()
 
 let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
       ~(inline : Inline_attribute.t)
-      ~is_a_functor : t =
+      ~is_a_functor ~recursive : t =
   begin match stub, inline with
   | true, (Never_inline | Default_inline)
   | false, (Never_inline | Default_inline | Always_inline | Unroll _) -> ()
@@ -50,6 +51,7 @@ let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
     dbg;
     inline;
     is_a_functor;
+    recursive;
   }
 
 let print_with_cache0 ~compact ~cache ppf
@@ -61,6 +63,7 @@ let print_with_cache0 ~compact ~cache ppf
         dbg;
         inline;
         is_a_functor;
+        recursive;
       } =
   (* CR mshinwell: It's a bit strange that this doesn't use
      [Function_params_and_body.print_with_cache].  However a proper
@@ -75,6 +78,7 @@ let print_with_cache0 ~compact ~cache ppf
           @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
           @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
           @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(recursive@ @<0>%s%a@<0>%s)@<0>%s@]@ \
           @[<hov 1>(closure_origin@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ \
@@ -102,6 +106,15 @@ let print_with_cache0 ~compact ~cache ppf
         (if Flambda_arity.is_singleton_value result_arity
          then Flambda_colours.elide ()
          else Flambda_colours.normal ())
+        (Flambda_colours.normal ())
+        (match recursive with
+         | Non_recursive -> Flambda_colours.elide ()
+         | Recursive -> Flambda_colours.normal ())
+        (Flambda_colours.normal ())
+        Recursive.print recursive
+        (match recursive with
+         | Non_recursive -> Flambda_colours.elide ()
+         | Recursive -> Flambda_colours.normal ())
         (Flambda_colours.normal ())
         Closure_origin.print closure_origin
         Continuation.print return_continuation
@@ -133,6 +146,7 @@ let stub t = t.stub
 let dbg t = t.dbg
 let inline t = t.inline
 let is_a_functor t = t.is_a_functor
+let recursive t = t.recursive
 
 let update_params_and_body t params_and_body =
   { t with
@@ -149,6 +163,7 @@ let free_names
         dbg = _;
         inline = _;
         is_a_functor = _;
+        recursive = _;
       } =
   Function_params_and_body.free_names params_and_body
 
@@ -161,6 +176,7 @@ let apply_name_permutation
          dbg;
          inline;
          is_a_functor;
+         recursive;
        } as t) perm =
   let params_and_body' =
     Function_params_and_body.apply_name_permutation params_and_body perm
@@ -175,6 +191,7 @@ let apply_name_permutation
       dbg;
       inline;
       is_a_functor;
+      recursive;
     }
 
 let params_arity t =

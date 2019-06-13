@@ -92,6 +92,13 @@ end = struct
       can_inline;
     }
 
+  let define_variable t var kind =
+    let typing_env =
+      let var = Name.var var in
+      TE.add_definition t.typing_env var kind
+    in
+    { t with typing_env; }
+
   let add_variable t var ty =
     let typing_env =
       let var = Name.var var in
@@ -136,6 +143,16 @@ end = struct
       let sym = Name.symbol sym in
       TE.add_equation t.typing_env sym ty
     in
+    { t with typing_env; }
+
+  let define_name t name kind =
+    let typing_env =
+      TE.add_definition t.typing_env name kind
+    in
+    { t with typing_env; }
+
+  let add_equation_on_name t name ty =
+    let typing_env = TE.add_equation t.typing_env name ty in
     { t with typing_env; }
 
 (*
@@ -318,10 +335,19 @@ end = struct
       (Inline { arity; handler; wrapper_with_scope_and_arity; })
 
   let add_exn_continuation t exn_cont scope =
+    (* CR mshinwell: Think more about keeping these in both maps *)
+    let continuations =
+      let cont = Exn_continuation.exn_handler exn_cont in
+      let cont_in_env : Continuation_in_env.t =
+        Unknown { arity = Exn_continuation.arity exn_cont; }
+      in
+      Continuation.Map.add cont (scope, cont_in_env) t.continuations
+    in
     let exn_continuations =
       Exn_continuation.Map.add exn_cont scope t.exn_continuations
     in
     { t with
+      continuations;
       exn_continuations;
     }
 

@@ -42,6 +42,7 @@ val create
   -> dbg:Debuginfo.t
   -> inline:Inline_attribute.t
   -> is_a_functor:bool
+  -> recursive:Recursive.t
   -> t
 
 (** The closure from which this function declaration originally came.
@@ -82,3 +83,7 @@ val is_a_functor : t -> bool
 
 (** Change the parameters and code of a function declaration. *)
 val update_params_and_body : t -> Function_params_and_body.t -> t
+
+(** Whether the function is recursive, in the sense of the syntactic analysis
+    conducted during closure conversion. *)
+val recursive : t -> Recursive.t

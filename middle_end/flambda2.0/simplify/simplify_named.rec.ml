@@ -20,12 +20,19 @@ open! Flambda.Import
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
+module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 module TE = T.Typing_env
 module UA = Upwards_acc
 
-let simplify_function dacc closure_id function_decl ~type_of_my_closure =
+type pre_simplification_types_of_my_closures = {
+  set_of_closures : (Name.t * Flambda_type.t) option;
+  closure_types : T.t Closure_id.Map.t;
+}
+
+let simplify_function dacc closure_id function_decl
+      pre_simplification_types_of_my_closures =
   (* CR mshinwell: improve efficiency by not opening abstraction 3 times *)
   let param_arity = Function_declaration.params_arity function_decl in
   let result_arity = Function_declaration.result_arity function_decl in
@@ -60,10 +67,30 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
   Closure_id.print closure_id
   T.print (type_of_my_closure closure_id);
 *)
+        let denv =
+          match pre_simplification_types_of_my_closures.set_of_closures with
+          | None -> denv
+          | Some (set_of_closures, set_of_closures_type) ->
+            assert (K.equal (T.kind set_of_closures_type) K.fabricated);
+            DE.define_name denv set_of_closures K.fabricated
+        in
         let type_of_my_closure =
-          type_of_my_closure closure_id ~param_arity ~result_arity
+          match
+            Closure_id.Map.find closure_id
+              pre_simplification_types_of_my_closures.closure_types
+          with
+          | exception Not_found ->
+            Misc.fatal_errorf "No type given for [my_closure] for closure ID %a"
+              Closure_id.print closure_id
+          | ty -> ty
         in
         let denv = DE.add_variable denv my_closure type_of_my_closure in
+        let denv =
+          match pre_simplification_types_of_my_closures.set_of_closures with
+          | None -> denv
+          | Some (set_of_closures, set_of_closures_type) ->
+            DE.add_equation_on_name denv set_of_closures set_of_closures_type
+        in
         let denv = DE.increment_continuation_scope_level denv in
         let dacc = DA.with_denv dacc denv in
 (*
@@ -117,6 +144,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
     else
       T.create_non_inlinable_function_declaration
         ~param_arity ~result_arity
+        ~recursive:(Function_declaration.recursive function_decl)
   in
   function_decl, function_decl_type, r
 
@@ -158,6 +186,41 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   in
   Reachable.reachable term, DA.with_r dacc r, ty
 
+let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
+  let set_of_closures_var = Variable.create "set_of_closures" in
+  let set_of_closures_ty_fabricated =
+    T.alias_type_of_as_ty_fabricated (Simple.var set_of_closures_var)
+  in
+  let closure_element_types =
+    Var_within_closure.Map.map (fun ty_value ->
+        T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
+      closure_element_types
+  in
+  let closure_types =
+    Closure_id.Map.mapi (fun closure_id function_decl ->
+        let function_decl_type =
+          if Inlining_decision.can_inline denv function_decl then
+            T.create_inlinable_function_declaration function_decl
+          else
+            let param_arity =
+              Function_declaration.params_arity function_decl
+            in
+            let result_arity =
+              Function_declaration.result_arity function_decl
+            in
+            T.create_non_inlinable_function_declaration
+              ~param_arity ~result_arity
+              ~recursive:(Function_declaration.recursive function_decl)
+        in
+        T.closure closure_id function_decl_type closure_element_types
+          ~set_of_closures:set_of_closures_ty_fabricated)
+      funs
+  in
+  let set_of_closures_type = T.set_of_closures ~closures:closure_types in
+  { set_of_closures = Some (Name.var set_of_closures_var, set_of_closures_type);
+    closure_types;
+  }
+
 let simplify_set_of_closures dacc set_of_closures ~result_var =
   (* By simplifying the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated. *)
@@ -192,18 +255,6 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
         (Some (closure_elements, closure_element_types))
       ~result_var
   else
-    let internal_closure_element_types =
-      Var_within_closure.Map.map (fun ty_value ->
-          T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
-        closure_element_types
-    in
-    let type_of_my_closure closure_id ~param_arity ~result_arity =
-      (* CR mshinwell: Think more: what should the set of closures type be? *)
-      T.closure closure_id
-        (T.create_non_inlinable_function_declaration ~param_arity ~result_arity)
-        internal_closure_element_types
-        ~set_of_closures:(T.unknown_as_ty_fabricated ())
-    in
     let function_decls = Set_of_closures.function_decls set_of_closures in
     let funs = Function_declarations.funs function_decls in
     (* Note that simplifying the bodies of the functions won't change the
@@ -215,12 +266,17 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
 Format.eprintf "Environment outside functions:\n%a\n%!"
   T.Typing_env.print (DE.typing_env env);
 *)
+    let pre_simplification_types_of_my_closures =
+      pre_simplification_types_of_my_closures (DA.denv dacc)
+        ~funs ~closure_element_types
+    in
     let funs, fun_types, r =
       Closure_id.Map.fold
         (fun closure_id function_decl (funs, fun_types, r) ->
           let dacc = DA.with_r dacc r in
           let function_decl, ty, r =
-            simplify_function dacc closure_id function_decl ~type_of_my_closure
+            simplify_function dacc closure_id function_decl
+              pre_simplification_types_of_my_closures
           in
           let funs = Closure_id.Map.add closure_id function_decl funs in
           let fun_types = Closure_id.Map.add closure_id ty fun_types in
