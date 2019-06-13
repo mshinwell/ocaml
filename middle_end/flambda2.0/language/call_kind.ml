@@ -139,7 +139,7 @@ let free_names t =
   match t with
   | Function _ | C_call _ -> Name_occurrences.empty
   | Method { kind = _; obj; } ->
-    match obj with
+    match Simple.descr obj with
     | Name obj -> Name_occurrences.singleton_name_in_terms obj
     | Const _ | Discriminant _ -> Name_occurrences.empty
 

@@ -87,7 +87,7 @@ let invariant env
     | C_call { alloc = _; param_arity = _; return_arity = _; } ->
       (* CR mshinwell: Check exactly what Cmmgen can compile and then
          add further checks on [param_arity] and [return_arity] *)
-      begin match callee with
+      begin match Simple.descr callee with
       | Name (Symbol _) -> ()
       | _ ->
         (* CR-someday mshinwell: We could expose indirect C calls at the

@@ -33,12 +33,14 @@ module Const : sig
   val kind : t -> Flambda_kind.t
 end
 
-(* CR-someday mshinwell: Consider putting [Var] and [Symbol] directly
-   in here. *)
-type t = private
+type t
+
+type descr = private
   | Name of Name.t
   | Const of Const.t
   | Discriminant of Discriminant.t
+
+val descr : t -> descr
 
 val name : Name.t -> t
 
@@ -49,6 +51,8 @@ val vars : Variable.t list -> t list
 val symbol : Symbol.t -> t
 
 val const : Const.t -> t
+
+val join_rec_info : t -> Rec_info.t -> t
 
 val must_be_var : t -> Variable.t option
 

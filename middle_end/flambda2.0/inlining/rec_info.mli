@@ -14,43 +14,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module C = Misc.Color
+type t
 
-let normal () = C.reset ()
+include Identifiable.S with type t := t
 
-let prim_constructive () = C.fg_256 163
-let prim_destructive () = C.fg_256 62
-let prim_neither () = C.fg_256 130
+val create : depth:int -> unroll_to:int option -> t
 
-let naked_number () = C.fg_256 70
-let tagged_immediate () = C.fg_256 70
+val depth : t -> int
 
-let kind () = C.fg_256 37
+val unroll_to : t -> int option
 
-let debuginfo () = C.fg_256 243
-
-let discriminant () = C.fg_256 111
-let name () = C.fg_256 111
-let parameter () = C.fg_256 198
-let symbol () = C.fg_256 97
-let variable () = C.fg_256 111
-let closure_element () = C.fg_256 31
-
-let let_bound_var () = C.fg_256 37
-
-let expr_keyword () = C.fg_256 51
-let static_keyword () = (C.fg_256 255) ^ (C.bg_256 240)
-
-let static_part () = (C.fg_256 255) ^ (C.bg_256 237)
-
-let continuation () = C.fg_256 35
-
-let name_abstraction () = C.fg_256 172
-
-let rec_info () = C.fg_256 243
-
-let error () = C.fg_256 160
-
-let elide () = C.fg_256 243
-
-let each_file () = C.fg_256 51
+val join : t -> t -> t

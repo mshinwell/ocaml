@@ -24,7 +24,7 @@ module TE = T.Typing_env
 (* CR mshinwell: This should be simplified if possible *)
 let simplify_simple dacc (simple : Simple.t) =
 let _orig = simple in
-  match simple with
+  match Simple.descr simple with
   | Const c -> simple, T.type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
   | Name name ->
