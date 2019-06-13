@@ -110,7 +110,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   let prove_equals_to_symbol env t =
     let _resolved, simple = Typing_env.resolve_type env t in
-    match simple with
+    match Option.map Simple.descr simple with
     | Some (Name (Symbol sym)) -> Some sym
     | _ -> None
 
@@ -151,23 +151,25 @@ Format.eprintf "reify %a\n%!" Type_printers.print t;
     else
       let result =
         match canonical_simple with
-        | Some ((Name (Symbol _) | Const _ | Discriminant _) as simple) ->
-          Some (Term (simple, alias_type_of (kind t) simple))
-        | Some ((Name ((Var _) as _name)) as simple) ->
-          let all_aliases = Typing_env.aliases_of_simple env simple in
-(*Format.eprintf "all_aliases %a\n%!" Name.Set.print all_aliases;*)
-          let all_symbol_aliases = Name.set_to_symbol_set all_aliases in
-          begin match Symbol.Set.get_singleton all_symbol_aliases with
-          | Some symbol ->
-            (* CR mshinwell: I'm not sure this should ever happen, since the
-               symbol should always be the canonical, in preference to a
-               variable. *)
-(*Format.eprintf "using symbol %a\n%!" Symbol.print symbol;*)
-            let simple = Simple.symbol symbol in
-            Some (Term (simple, alias_type_of (kind t) simple))
-          | None -> None
-          end
         | None -> None
+        | Some simple ->
+          match Simple.descr simple with
+          | Name (Symbol _) | Const _ | Discriminant _ ->
+            Some (Term (simple, alias_type_of (kind t) simple))
+          | Name (Var _) ->
+            let all_aliases = Typing_env.aliases_of_simple env simple in
+  (*Format.eprintf "all_aliases %a\n%!" Name.Set.print all_aliases;*)
+            let all_symbol_aliases = Name.set_to_symbol_set all_aliases in
+            begin match Symbol.Set.get_singleton all_symbol_aliases with
+            | Some symbol ->
+              (* CR mshinwell: I'm not sure this should ever happen, since the
+                 symbol should always be the canonical, in preference to a
+                 variable. *)
+  (*Format.eprintf "using symbol %a\n%!" Symbol.print symbol;*)
+              let simple = Simple.symbol symbol in
+              Some (Term (simple, alias_type_of (kind t) simple))
+            | None -> None
+            end
       in
       match result with
       | Some result -> result

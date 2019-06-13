@@ -38,7 +38,7 @@ struct
     S.print_ty ~cache:(Printing_cache.create ()) ppf ty
 
   let add_equation _env (simple : Simple.t) ty env_extension =
-    match simple with
+    match Simple.descr simple with
     (* CR mshinwell: Does this need to use some kind of [meet_equation]? *)
     | Name name -> TEE.add_or_replace_equation env_extension name ty
     | Const _ | Discriminant _ -> env_extension

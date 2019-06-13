@@ -120,8 +120,11 @@ module Const = struct
     | Naked_nativeint _ -> K.naked_nativeint
 end
 
+(* CR-someday mshinwell: Consider putting [Var] and [Symbol] directly
+   in here. *)
 type t =
   | Name of Name.t
+  | Rec_name of Name.t * Rec_info.t
   | Const of Const.t
   | Discriminant of Discriminant.t
 
@@ -143,10 +146,17 @@ let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
 
+let join_rec_info t rec_info =
+  match t with
+  | Const _ | Discriminant _ -> t
+  | Name name -> Rec_name (name, rec_info)
+  | Rec_name (name, rec_info') ->
+    Rec_name (name, Rec_info.join rec_info rec_info')
+
 let must_be_var t =
   match t with
-  | Name (Var var) -> Some var
-  | _ -> None
+  | Name (Var var) | Rec_name (Var var, _) -> Some var
+  | Name _ | Rec_name (_, _) | Const _ | Discriminant _ -> None
 
 let map_name t ~f =
   match t with
@@ -154,6 +164,10 @@ let map_name t ~f =
     let name' = f name in
     if name == name' then t
     else Name name'
+  | Rec_name (name, rec_info) ->
+    let name' = f name in
+    if name == name' then t
+    else Rec_name (name', rec_info)
   | Const _ | Discriminant _ -> t
 
 let map_var t ~f =
@@ -162,6 +176,10 @@ let map_var t ~f =
     let name' = Name.map_var name ~f in
     if name == name' then t
     else Name name'
+  | Rec_name (name, rec_info) ->
+    let name' = Name.map_var name ~f in
+    if name == name' then t
+    else Rec_name (name', rec_info)
   | Const _ | Discriminant _ -> t
 
 let map_symbol t ~f =
@@ -170,16 +188,22 @@ let map_symbol t ~f =
     let name' = Name.map_symbol name ~f in
     if name == name' then t
     else Name name'
+  | Rec_name (name, rec_info) ->
+    let name' = Name.map_symbol name ~f in
+    if name == name' then t
+    else Rec_name (name', rec_info)
   | Const _ | Discriminant _ -> t
 
 let free_names t =
   match t with
-  | Name name -> Name_occurrences.singleton_name_in_terms name
+  | Name name | Rec_name (name, _) ->
+    Name_occurrences.singleton_name_in_terms name
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
-  | Name name -> Name_occurrences.singleton_name_in_types name
+  | Name name | Rec_name (name, _) ->
+    Name_occurrences.singleton_name_in_types name
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
@@ -188,6 +212,10 @@ let apply_name_permutation t perm =
     let name' = Name_permutation.apply_name perm name in
     if name == name' then t
     else Name name'
+  | Rec_name (name, rec_info) ->
+    let name' = Name_permutation.apply_name perm name in
+    if name == name' then t
+    else Rec_name (name', rec_info)
   | Const _ | Discriminant _ -> t
 
 module T0 = Identifiable.Make (struct
@@ -196,26 +224,36 @@ module T0 = Identifiable.Make (struct
   let compare t1 t2 =
     match t1, t2 with
     | Name n1, Name n2 -> Name.compare n1 n2
+    | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
+      let c = Name.compare n1 n2 in
+      if c <> 0 then c
+      else Rec_info.compare rec_info1 rec_info2
     | Const c1, Const c2 -> Const.compare c1 c2
     | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
-    | Name _, Const _ -> -1
-    | Name _, Discriminant _ -> -1
-    | Const _, Name _ -> 1
-    | Const _, Discriminant _ -> -1
-    | Discriminant _, Name _ -> 1
-    | Discriminant _, Const _ -> 1
+    | Name _, _ -> -1
+    | Rec_name _, Name _ -> 1
+    | Rec_name _, _ -> -1
+    | Const _, (Name _ | Rec_name _) -> 1
+    | Const _, _ -> -1
+    | Discriminant _, _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash t =
     match t with
     | Name name -> Hashtbl.hash (0, Name.hash name)
-    | Const c -> Hashtbl.hash (1, Const.hash c)
-    | Discriminant t -> Hashtbl.hash (2, Discriminant.hash t)
+    | Rec_name (name, rec_info) ->
+      Hashtbl.hash (1, (Name.hash name, Rec_info.hash rec_info))
+    | Const c -> Hashtbl.hash (2, Const.hash c)
+    | Discriminant t -> Hashtbl.hash (3, Discriminant.hash t)
 
   let print ppf t =
     match t with
     | Name name -> Name.print ppf name
+    | Rec_name (name, rec_info) ->
+      Format.fprintf ppf "%a%a"
+        Name.print name
+        Rec_info.print rec_info
     | Const c -> Const.print ppf c
     | Discriminant t -> Discriminant.print ppf t
 
@@ -307,3 +345,14 @@ module With_kind = struct
     if simple == simple' then t
     else simple', kind
 end
+
+type descr =
+  | Name of Name.t
+  | Const of Const.t
+  | Discriminant of Discriminant.t
+
+let descr (t : t) : descr =
+  match t with
+  | Name name | Rec_name (name, _) -> Name name
+  | Const const -> Const const
+  | Discriminant discr -> Discriminant discr
