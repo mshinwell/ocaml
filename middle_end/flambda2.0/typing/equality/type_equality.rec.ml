@@ -229,12 +229,15 @@ and equal_function_declaration _env
   | Non_inlinable {
       param_arity = param_arity1;
       result_arity = result_arity1;
+      recursive = recursive1;
     }, Non_inlinable {
       param_arity = param_arity2;
       result_arity = result_arity2;
+      recursive = recursive2;
     } -> 
     Flambda_arity.equal param_arity1 param_arity2
       && Flambda_arity.equal result_arity1 result_arity2
+      && Recursive.equal recursive1 recursive2
   | Inlinable _, Non_inlinable _
   | Non_inlinable _, Inlinable _ -> false
 

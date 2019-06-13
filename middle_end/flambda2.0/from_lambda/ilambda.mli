@@ -46,7 +46,7 @@ type trap_action =
 type t =
   | Let of Ident.t * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
-  | Let_rec of (Ident.t * function_declaration) list * t
+  | Let_rec of function_declarations * t
     (** Value "let rec" has already been expanded by [Prepare_lambda]. *)
   | Let_cont of let_cont
   | Apply of apply
@@ -87,6 +87,8 @@ and function_declaration = {
   loc : Location.t;
   stub : bool;
 }
+
+and function_declarations = (Ident.t * function_declaration) list
 
 and let_cont = {
   name : Continuation.t;
@@ -132,3 +134,5 @@ type program = {
 
 val print : Format.formatter -> t -> unit
 val print_named : Format.formatter -> named -> unit
+
+val recursive_functions : function_declarations -> Ident.Set.t

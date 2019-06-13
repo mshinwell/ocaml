@@ -19,3 +19,5 @@
 type t = Non_recursive | Recursive
 
 val print : Format.formatter -> t -> unit
+
+val equal : t -> t -> bool

@@ -396,10 +396,11 @@ let create_inlinable_function_declaration function_decl : function_declaration =
   }
 
 let create_non_inlinable_function_declaration ~param_arity ~result_arity
-      : function_declaration =
+      ~recursive : function_declaration =
   Non_inlinable {
     param_arity;
     result_arity;
+    recursive;
   }
 
 let closure closure_id function_decl closure_elements ~set_of_closures : t =
