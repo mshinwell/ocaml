@@ -23,7 +23,7 @@ module TE = T.Typing_env
 
 (* CR mshinwell: This should be simplified if possible *)
 let simplify_simple dacc (simple : Simple.t) =
-let _orig = simple in
+  let newer_rec_info = Simple.rec_info simple in
   match Simple.descr simple with
   | Const c -> simple, T.type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
@@ -39,24 +39,28 @@ let _orig = simple in
       T.reify ~allow_free_variables:true typing_env
         (T.alias_type_of kind (Simple.name name))
     in
-    match reified with
-    | Term (simple, ty) ->
+    let simple, ty =
+      match reified with
+      | Term (simple, ty) ->
 (*
 Format.eprintf "returning reified Simple: %a --> %a\n%!"
   Simple.print orig
   Simple.print simple;
 *)
-      simple, ty
-    | Cannot_reify | Lift _ ->
-      let name = TE.get_canonical_name typing_env name in
+        simple, ty
+      | Cannot_reify | Lift _ ->
+        let name = TE.get_canonical_name typing_env name in
 (*
 Format.eprintf "Non-reifiable Simple: %a --> %a, env:@ %a\n%!"
   Simple.print orig
   Name.print name
   TE.print typing_env;
 *)
-      Simple.name name, T.alias_type_of kind (Simple.name name)
-    | Invalid -> Simple.name name, T.bottom_like ty
+        Simple.name name, T.alias_type_of kind (Simple.name name)
+      | Invalid -> Simple.name name, T.bottom_like ty
+    in
+    let simple = Simple.merge_rec_info simple ~newer_rec_info in
+    simple, ty
 
 let simplify_simple_and_drop_type dacc simple =
   fst (simplify_simple dacc simple)

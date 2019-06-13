@@ -390,9 +390,11 @@ let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 let bottom_like t = bottom (kind t)
 let unknown_like t = unknown (kind t)
 
-let create_inlinable_function_declaration function_decl : function_declaration =
+let create_inlinable_function_declaration function_decl rec_info
+      : function_declaration =
   Inlinable {
     function_decl;
+    rec_info;
   }
 
 let create_non_inlinable_function_declaration ~param_arity ~result_arity

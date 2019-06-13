@@ -139,8 +139,13 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
     Function_declaration.update_params_and_body function_decl params_and_body
   in
   let function_decl_type =
-    if Inlining_decision.can_inline denv function_decl then
+    let decision =
+      Inlining_decision.make_decision_for_function_declaration denv
+        function_decl
+    in
+    if Inlining_decision.Function_declaration_decision.can_inline decision then
       T.create_inlinable_function_declaration function_decl
+        (Rec_info.create ~depth:0 ~unroll_to:None)
     else
       T.create_non_inlinable_function_declaration
         ~param_arity ~result_arity
@@ -201,8 +206,14 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
   let closure_types =
     Closure_id.Map.mapi (fun closure_id function_decl ->
         let function_decl_type =
-          if Inlining_decision.can_inline denv function_decl then
+          let decision =
+            Inlining_decision.make_decision_for_function_declaration denv
+              function_decl
+          in
+          if Inlining_decision.Function_declaration_decision.can_inline decision
+          then
             T.create_inlinable_function_declaration function_decl
+              (Rec_info.create ~depth:1 ~unroll_to:None)
           else
             let param_arity =
               Function_declaration.params_arity function_decl
