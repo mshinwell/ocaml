@@ -76,6 +76,7 @@ module Function_decls : sig
       -> loc:Location.t
       -> free_idents_of_body:Ident.Set.t
       -> stub:bool
+      -> Recursive.t
       -> t
 
     val let_rec_ident : t -> Ident.t
@@ -92,6 +93,7 @@ module Function_decls : sig
     val is_a_functor : t -> bool
     val stub : t -> bool
     val loc : t -> Location.t
+    val recursive : t -> Recursive.t
 
     (* Like [all_free_idents], but for just one function. *)
     val free_idents : t -> Ident.Set.t

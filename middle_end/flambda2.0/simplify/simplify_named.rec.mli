@@ -22,14 +22,15 @@ val simplify_named
   -> result_var:Variable.t
   -> Reachable.t * Downwards_acc.t * Flambda_type.t
 
+type pre_simplification_types_of_my_closures = {
+  set_of_closures : (Name.t * Flambda_type.t) option;
+  closure_types : Flambda_type.t Closure_id.Map.t;
+}
+
 val simplify_function
    : Downwards_acc.t
   -> Closure_id.t
   -> Flambda.Function_declaration.t
-  -> type_of_my_closure:(
-       Closure_id.t
-    -> param_arity:Flambda_arity.t
-    -> result_arity:Flambda_arity.t
-    -> Flambda_type.t)
+  -> pre_simplification_types_of_my_closures
   -> Flambda.Function_declaration.t * Flambda_type.function_declaration
        * Simplify_env_and_result.Result.t

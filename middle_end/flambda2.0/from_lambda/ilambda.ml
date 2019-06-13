@@ -31,7 +31,7 @@ type trap_action =
 type t =
   | Let of Ident.t * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
-  | Let_rec of (Ident.t * function_declaration) list * t
+  | Let_rec of function_declarations * t
   | Let_cont of let_cont
   | Apply of apply
   | Apply_cont of Continuation.t * trap_action option * Ident.t list
@@ -69,6 +69,8 @@ and function_declaration = {
   loc : Location.t;
   stub : bool;
 }
+
+and function_declarations = (Ident.t * function_declaration) list
 
 and let_cont = {
   name : Continuation.t;
@@ -270,3 +272,22 @@ and print ppf (t : t) =
       print_trap_action trap_action
       Continuation.print i
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
+
+let recursive_functions func_decls =
+  let module SCC = Strongly_connected_components.Make (Ident) in
+  let fun_ids = Ident.Set.of_list (List.map fst func_decls) in
+  let directed_graph : Ident.Set.t Ident.Map.t =
+    List.fold_left (fun graph (fun_id, decl) ->
+        let free_fun_ids = Ident.Set.inter fun_ids decl.free_idents_of_body in
+        Ident.Map.add fun_id free_fun_ids graph)
+      Ident.Map.empty
+      func_decls
+  in
+  let connected_components =
+    SCC.connected_components_sorted_from_roots_to_leaf directed_graph
+  in
+  Array.fold_left (fun rec_ids component ->
+      match component with
+      | SCC.No_loop _ -> rec_ids
+      | SCC.Has_loop elts -> List.fold_right Ident.Set.add elts rec_ids)
+    Ident.Set.empty connected_components

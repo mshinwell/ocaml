@@ -48,6 +48,8 @@ module type Downwards_env = sig
 
   val typing_env : t -> Flambda_type.Typing_env.t
 
+  val define_variable : t -> Variable.t -> Flambda_kind.t -> t
+
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
   val add_equation_on_variable : t -> Variable.t -> Flambda_type.t -> t
@@ -59,6 +61,10 @@ module type Downwards_env = sig
   val define_symbol : t -> Symbol.t -> Flambda_kind.t -> t
 
   val add_equation_on_symbol : t -> Symbol.t -> Flambda_type.t -> t
+
+  val define_name : t -> Name.t -> Flambda_kind.t -> t
+
+  val add_equation_on_name : t -> Name.t -> Flambda_type.t -> t
 
   val add_parameters
      : t

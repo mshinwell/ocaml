@@ -119,10 +119,8 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
   let closure_symbols_and_types =
     Closure_id.Map.mapi (fun closure_id func_decl ->
         let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
-        let param_arity = Function_declaration.params_arity func_decl in
-        let result_arity = Function_declaration.result_arity func_decl in
         let function_decl_type =
-          T.create_non_inlinable_function_declaration ~param_arity ~result_arity
+          T.create_inlinable_function_declaration func_decl
         in
         let closure_type =
           T.closure closure_id function_decl_type closure_element_types
@@ -138,13 +136,15 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
       denv
   in
   let dacc = DA.with_denv dacc denv in
-  let type_of_my_closure closure_id ~param_arity:_ ~result_arity:_ =
-    match Closure_id.Map.find closure_id closure_symbols with
-    | exception Not_found ->
-      Misc.fatal_errorf "No closure symbol for %a"
-        Closure_id.print closure_id
-    | closure_symbol ->
-      T.alias_type_of K.value (Simple.symbol closure_symbol)
+  let pre_simplification_types_of_my_closures
+        : Simplify_named.pre_simplification_types_of_my_closures =
+    let closure_types =
+      Closure_id.Map.map (fun (_closure_symbol, closure_type) -> closure_type)
+        closure_symbols_and_types
+    in
+    { set_of_closures = None;
+      closure_types;
+    }
   in
   let r = DA.r dacc in
   let funs, fun_types, r =
@@ -152,7 +152,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
         let dacc = DA.with_r dacc r in
         let function_decl, ty, r =
           Simplify_named.simplify_function dacc closure_id function_decl
-            ~type_of_my_closure
+            pre_simplification_types_of_my_closures
         in
         let funs = Closure_id.Map.add closure_id function_decl funs in
         let fun_types = Closure_id.Map.add closure_id ty fun_types in

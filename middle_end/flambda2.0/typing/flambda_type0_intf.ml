@@ -146,6 +146,7 @@ module type S = sig
     | Non_inlinable of {
         param_arity : Flambda_arity.t;
         result_arity : Flambda_arity.t;
+        recursive : Recursive.t;
       }
     | Inlinable of inlinable_function_declaration
 
@@ -247,6 +248,7 @@ module type S = sig
   val create_non_inlinable_function_declaration
      : param_arity:Flambda_arity.t
     -> result_arity:Flambda_arity.t
+    -> recursive:Recursive.t
     -> function_declaration
 
   (** Create a closure type given full information about the closure. *)

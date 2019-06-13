@@ -52,4 +52,5 @@ let inline dacc ~callee ~args function_decl
                   (Expr.create_let my_closure K.value
                     (Named.create_simple callee) body)))
           in
+Format.eprintf "Inlined body:@ %a\n%!" Expr.print expr;
           Some (DA.with_denv dacc denv, expr))

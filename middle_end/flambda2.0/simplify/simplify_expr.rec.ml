@@ -321,8 +321,9 @@ and simplify_direct_full_application
 and simplify_direct_partial_application
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
-    -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity k ->
+    -> recursive:Recursive.t -> 'a k -> Expr.t * 'a * UA.t
+= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
+      ~recursive k ->
   (* For simplicity, we disallow [@inline] attributes on partial
      applications.  The user may always write an explicit wrapper instead
      with such an attribute. *)
@@ -418,6 +419,7 @@ and simplify_direct_partial_application
         ~dbg
         ~inline:Default_inline
         ~is_a_functor:false
+        ~recursive
     in
     let closure_id = Closure_id.wrap (Variable.create "closure") in
     let function_decls =
@@ -487,10 +489,11 @@ and simplify_direct_over_application
 and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
-    -> arg_types:T.t list -> Function_declaration.t option
+    -> recursive:Recursive.t -> arg_types:T.t list
+    -> Function_declaration.t option
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity ~arg_types
-      function_decl_opt k ->
+= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
+      ~recursive ~arg_types function_decl_opt k ->
   let args_arity = T.arity_of_list arg_types in
   if not (Flambda_arity.equal param_arity args_arity) then begin
     Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
@@ -529,7 +532,7 @@ and simplify_direct_function_call
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
     simplify_direct_partial_application dacc apply
-      ~callee's_closure_id ~param_arity ~result_arity k
+      ~callee's_closure_id ~param_arity ~result_arity ~recursive k
   else
     Misc.fatal_errorf "Function with %d params when simplifying \
         direct OCaml function call with %d arguments: %a"
@@ -644,11 +647,12 @@ and simplify_function_call
         ~callee's_closure_id ~arg_types
         ~param_arity:(Function_declaration.params_arity function_decl)
         ~result_arity:(Function_declaration.result_arity function_decl)
+        ~recursive:(Function_declaration.recursive function_decl)
         (Some function_decl) k
-    | Known (Non_inlinable { param_arity; result_arity; }) ->
+    | Known (Non_inlinable { param_arity; result_arity; recursive; }) ->
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
-        ~param_arity ~result_arity
+        ~param_arity ~result_arity ~recursive
         None k
     | Unknown -> type_unavailable ()
     end
