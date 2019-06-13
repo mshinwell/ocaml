@@ -23,7 +23,7 @@ let erase_aliases_or_alias ~allowed erase_aliases_contents
   | No_alias contents -> No_alias (erase_aliases_contents ~allowed contents)
   | Type _export_id -> or_alias
   | Equals simple ->
-    match simple with
+    match Simple.descr simple with
     | Const _ | Discriminant _ | Name (Symbol _) -> or_alias
     | Name (Var var) ->
       if Variable.Set.mem var allowed then or_alias

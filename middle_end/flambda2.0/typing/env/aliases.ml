@@ -163,7 +163,7 @@ let invariant_add_result t ~original_t { canonical_name; alias_of; }
   end
 
 let add_alias t (simple1 : Simple.t) (simple2 : Simple.t) ~defined_earlier =
-  match simple1, simple2 with
+  match Simple.descr simple1, Simple.descr simple2 with
   | Name name1, Name name2 ->
     begin match canonical t name1, canonical t name2 with
     | Is_canonical canonical_name1, Is_canonical canonical_name2 ->
@@ -247,7 +247,7 @@ let get_canonical_name t name =
   | canonical_name -> Some canonical_name
 
 let aliases_of_simple t (simple : Simple.t) =
-  match simple with
+  match Simple.descr simple with
   | Const _ | Discriminant _ -> Name.Set.empty
   | Name name ->
     match canonical t name with

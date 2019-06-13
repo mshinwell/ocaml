@@ -244,7 +244,7 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
   in
   let can_lift =
     Var_within_closure.Map.for_all (fun _ (simple : Simple.t) ->
-        match simple with
+        match Simple.descr simple with
         | Name (Symbol _) -> true
         | _ -> false)
       closure_elements

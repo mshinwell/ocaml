@@ -46,9 +46,10 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     of_kind_value
   | Tagged_immediate _ -> of_kind_value
   | Dynamically_computed var ->
-    match S.simplify_simple dacc (Simple.var var) with
-    | Name (Symbol sym), _ty -> Of_kind_value.Symbol sym
-    | _, _ -> of_kind_value
+    let simple, _ty = S.simplify_simple dacc (Simple.var var) in
+    match Simple.descr simple with
+    | Name (Symbol sym) -> Of_kind_value.Symbol sym
+    | Name (Var _) | Const _ | Discriminant _ -> of_kind_value
 
 let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
   let denv = DA.denv dacc in

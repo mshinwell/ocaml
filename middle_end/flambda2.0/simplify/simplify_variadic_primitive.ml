@@ -54,7 +54,7 @@ let simplify_make_block dacc _prim dbg
           if T.is_bottom (DE.typing_env denv) arg_ty then begin
            found_bottom := true
           end;
-          match arg with
+          match Simple.descr arg with
           | Const _ -> T.force_to_kind_value arg_ty
           | Name name -> T.alias_type_of_as_ty_value (Simple.name name)
           | Discriminant _ -> assert false  (* CR mshinwell: proper error! *) )

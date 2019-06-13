@@ -106,7 +106,12 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
 
 let reify_to_tagged_immediate dacc ty : _ Or_bottom.t =
   let denv = DA.denv dacc in
-  match T.reify (DE.typing_env denv) ty ~allow_free_variables:false with
-  | Term (Const (Tagged_immediate imm), _ty) -> Ok (Some imm)
-  | Term _ | Lift _ | Cannot_reify -> Ok None
+  let reified = T.reify (DE.typing_env denv) ty ~allow_free_variables:false in
+  match reified with
+  | Term (simple, _ty) ->
+    begin match Simple.descr simple with
+    | Const (Tagged_immediate imm) -> Ok (Some imm)
+    | _ -> Ok None
+    end
+  | Lift _ | Cannot_reify -> Ok None
   | Invalid -> Bottom
