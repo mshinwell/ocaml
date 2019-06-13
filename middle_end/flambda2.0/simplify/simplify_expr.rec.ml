@@ -655,9 +655,11 @@ and simplify_function_call
       | Indirect_unknown_arity
       | Indirect_known_arity _ -> ()
       end;
+      (* CR mshinwell: This should go in Typing_env (ditto logic for Rec_info
+         in Simplify_simple *)
       let function_decl_rec_info =
         match Simple.rec_info (Apply.callee apply) with
-        | None -> Rec_info.create ~depth:0 ~unroll_to:None
+        | None -> rec_info
         | Some newer -> Rec_info.merge rec_info ~newer
       in
       simplify_direct_function_call dacc apply
