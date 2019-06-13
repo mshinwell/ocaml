@@ -20,7 +20,7 @@ open! Flambda.Import
 
 module DE = Simplify_env_and_result.Downwards_env
 
-module Function_declaration_decision : sig
+module Function_declaration_decision = struct
   type t =
     | Never_inline_attribute
     | Function_body_too_large
@@ -35,7 +35,8 @@ module Function_declaration_decision : sig
     | Inline -> true
 end
 
-let make_decision_for_function_declaration denv function_decl : Decision.t =
+let make_decision_for_function_declaration denv function_decl
+      : Function_declaration_decision.t =
   (* At present, we follow Closure, taking inlining decisions without
      first examining call sites. *)
   match Function_declaration.inline function_decl with
@@ -46,7 +47,7 @@ let make_decision_for_function_declaration denv function_decl : Decision.t =
       Function_params_and_body.pattern_match
         (Function_declaration.params_and_body function_decl)
         ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
-                ~my_closure:_ ->
+                ~my_closure:_ : Function_declaration_decision.t ->
           let inlining_threshold : Inlining_cost.Threshold.t =
             let round = DE.round denv in
             let unscaled =
@@ -63,7 +64,7 @@ let make_decision_for_function_declaration denv function_decl : Decision.t =
           then Inline
           else Function_body_too_large)
 
-module Call_site_decision : sig
+module Call_site_decision = struct
   type attribute_causing_inlining =
     | Unroll
     | Always
@@ -79,22 +80,27 @@ module Call_site_decision : sig
         unroll_to : int option;
       }
 
-  let can_inline t =
+  type can_inline =
+    | Do_not_inline
+    | Inline of { unroll_to : int option; }
+
+  let can_inline (t : t) : can_inline =
     match t with
     | Environment_says_never_inline
     | Unrolling_depth_exceeded
     | Max_inlining_depth_exceeded
     | Recursion_depth_exceeded
-    | Never_inline_attribute -> false
-    | Inline _ -> true
+    | Never_inline_attribute -> Do_not_inline
+    | Inline { attribute = _; unroll_to; } -> Inline { unroll_to; }
 end
 
-(* CR mshinwell: This needs to be a configurable parameter *)
+(* CR mshinwell: These parameters need to be configurable *)
 let max_inlining_depth = 10
 let max_rec_depth = 1
 
 let make_decision_for_call_site denv ~function_decl_rec_info
-      (inline : Inline_attribute.t) : Decision.t =
+      ~apply_inlining_depth (inline : Inline_attribute.t)
+      : Call_site_decision.t =
   if (not (DE.can_inline denv)) then
     Environment_says_never_inline
   else

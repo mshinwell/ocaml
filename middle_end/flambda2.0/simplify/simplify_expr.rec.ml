@@ -296,8 +296,7 @@ and simplify_let_cont
     simplify_recursive_let_cont_handlers dacc handlers k
 
 and simplify_direct_full_application
-  : 'a. DA.t -> Apply.t -> Function_declaration.t option
-    -> function_decl_rec_info:Rec_info.t
+  : 'a. DA.t -> Apply.t -> (Function_declaration.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply function_decl_opt k ->
   let callee = Apply.callee apply in
@@ -305,29 +304,28 @@ and simplify_direct_full_application
   let inlined =
     match function_decl_opt with
     | None -> None
-    | Some function_decl ->
+    | Some (function_decl, function_decl_rec_info) ->
+      let apply_inlining_depth = Apply.inlining_depth apply in
       let decision =
-        Inlining_decision.make_decision_for_call_site dacc ~callee
+        Inlining_decision.make_decision_for_call_site (DA.denv dacc)
           ~function_decl_rec_info
-          (Apply.inline apply)
-          (Apply.dbg apply)
+          ~apply_inlining_depth
           (Apply.inline apply)
       in
-      if Inlining_decision.Call_site_decision.can_inline decision then
+      match Inlining_decision.Call_site_decision.can_inline decision with
+      | Do_not_inline -> None
+      | Inline { unroll_to; } ->
         Inlining_transforms.inline dacc ~callee
           ~args function_decl
           ~apply_return_continuation:(Apply.continuation apply)
           ~apply_exn_continuation:(Apply.exn_continuation apply)
+          ~apply_inlining_depth ~unroll_to
           (Apply.dbg apply)
-      else
-        None
   in
   match inlined with
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
   | None ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-    let apply =
-
     Expr.create_apply apply, user_data, uacc
 
 and simplify_direct_partial_application
@@ -395,6 +393,7 @@ and simplify_direct_partial_application
         ~call_kind
         dbg
         ~inline:Default_inline
+        ~inlining_depth:(Apply.inlining_depth apply)
     in
     let applied_args_with_closure_vars =
       List.map (fun applied_arg ->
@@ -479,6 +478,7 @@ and simplify_direct_over_application
       ~call_kind:(Call_kind.indirect_function_call_unknown_arity ())
       (Apply.dbg apply)
       ~inline:(Apply.inline apply)
+      ~inlining_depth:(Apply.inlining_depth apply)
   in
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
@@ -502,10 +502,10 @@ and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> arg_types:T.t list
-    -> function_decl_rec:info:Rec_info.t -> Function_declaration.t option
+    -> (Function_declaration.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
-      ~recursive ~arg_types ~function_decl_rec_info function_decl_opt k ->
+      ~recursive ~arg_types function_decl_opt k ->
   let args_arity = T.arity_of_list arg_types in
   if not (Flambda_arity.equal param_arity args_arity) then begin
     Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
@@ -539,8 +539,7 @@ and simplify_direct_function_call
   let provided_num_args = List.length args in
   let num_params = List.length param_arity in
   if provided_num_args = num_params then
-    simplify_direct_full_application dacc apply function_decl_opt
-      ~function_decl_rec_info k
+    simplify_direct_full_application dacc apply function_decl_opt k
   else if provided_num_args > num_params then
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
@@ -643,7 +642,7 @@ and simplify_function_call
        [closures_entry] structure in the type does indeed contain the
        closure in question. *)
     begin match func_decl_type with
-    | Known (Inlinable { function_decl; }) ->
+    | Known (Inlinable { function_decl; rec_info; }) ->
       begin match call with
       | Direct { closure_id; _ } ->
         if not (Closure_id.equal closure_id callee's_closure_id) then begin
@@ -658,16 +657,15 @@ and simplify_function_call
       end;
       let function_decl_rec_info =
         match Simple.rec_info (Apply.callee apply) with
-        | None -> Rec_info.create ~depth:0 ~to_unroll:None in
-        | Some rec_info -> rec_info
+        | None -> Rec_info.create ~depth:0 ~unroll_to:None
+        | Some newer -> Rec_info.merge rec_info ~newer
       in
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
         ~param_arity:(Function_declaration.params_arity function_decl)
         ~result_arity:(Function_declaration.result_arity function_decl)
         ~recursive:(Function_declaration.recursive function_decl)
-        ~function_decl_rec_info
-        (Some function_decl) k
+        (Some (function_decl, function_decl_rec_info)) k
     | Known (Non_inlinable { param_arity; result_arity; recursive; }) ->
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
@@ -687,7 +685,7 @@ and simplify_apply_shared dacc apply =
   let args_with_types = S.simplify_simples dacc (Apply.args apply) in
   let args, arg_types = List.split args_with_types in
   let inlining_depth =
-    DE.inlining_depth (DA.denv dacc) + Apply.inlining_depth apply
+    DE.get_inlining_depth_increment (DA.denv dacc) + Apply.inlining_depth apply
   in
   let apply =
     Apply.create ~callee
@@ -695,7 +693,9 @@ and simplify_apply_shared dacc apply =
       (Apply.exn_continuation apply)
       ~args
       ~call_kind:(Apply.call_kind apply)
-      (Debuginfo.concat ...)
+      (* CR mshinwell: check if the next line has the args the right way
+         around *)
+      (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
       ~inline:(Apply.inline apply)
       ~inlining_depth
   in

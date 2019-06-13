@@ -140,6 +140,7 @@ module type S = sig
 
   type inlinable_function_declaration = private {
     function_decl : term_language_function_declaration;
+    rec_info : Rec_info.t;
   }
 
   type function_declaration = private
@@ -241,6 +242,7 @@ module type S = sig
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
      : term_language_function_declaration
+    -> Rec_info.t
     -> function_declaration
 
   (** Create a description of a function declaration whose code is unknown.

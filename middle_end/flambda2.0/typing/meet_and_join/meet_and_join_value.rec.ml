@@ -156,10 +156,11 @@ struct
           (* CR mshinwell: This should presumably return [Non_inlinable] if
              the arities match. *)
           Unknown
-        | Inlinable { function_decl = decl1; },
-            Inlinable { function_decl = decl2; } ->
+        | Inlinable { function_decl = decl1; rec_info = _rec_info1; },
+            Inlinable { function_decl = decl2; rec_info = _rec_info2; } ->
           (* CR mshinwell: Assertions about other properties of
              [decl1] versus [decl2]? *)
+          (* CR mshinwell: What about [rec_info]? *)
           let module TFD = Term_language_function_declaration in
           match E.op () with
           | Join ->

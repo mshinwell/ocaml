@@ -25,6 +25,7 @@ val inline
   -> Flambda.Function_declaration.t
   -> apply_return_continuation:Continuation.t
   -> apply_exn_continuation:Exn_continuation.t
+  -> apply_inlining_depth:int
+  -> unroll_to:int option
   -> Debuginfo.t
-  -> Inline_attribute.t
   -> (Downwards_acc.t * Expr.t) option
