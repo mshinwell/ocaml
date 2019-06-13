@@ -153,15 +153,17 @@ and print_ty_value_with_cache ~cache ppf (ty : Flambda_types.ty_value) =
   print_ty_generic (print_of_kind_value ~cache) ppf ty
 
 and print_inlinable_function_declaration_with_cache ~cache ppf
-      (({ function_decl;
+      (({ function_decl; rec_info;
         } : Flambda_types.inlinable_function_declaration) as decl) =
   Printing_cache.with_cache cache ppf "inlinable_fundecl" decl
     (fun ppf () ->
       Format.fprintf ppf
         "@[<hov 1>(Inlinable@ \
-          @[<hov 1>(function_decl@ %a)@]\
+          @[<hov 1>(function_decl@ %a)@]@ \
+          @[<hov 1>(rec_info@ %a)@]\
           )@]"
-        Term_language_function_declaration.print_compact function_decl)
+        Term_language_function_declaration.print_compact function_decl
+        Rec_info.print rec_info)
 
 and print_function_declaration_with_cache ~cache ppf
       (decl : Flambda_types.function_declaration) =

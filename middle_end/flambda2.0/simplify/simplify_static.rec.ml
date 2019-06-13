@@ -122,6 +122,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
         let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
         let function_decl_type =
           T.create_inlinable_function_declaration func_decl
+            (Rec_info.create ~depth:1 ~unroll_to:None)
         in
         let closure_type =
           T.closure closure_id function_decl_type closure_element_types

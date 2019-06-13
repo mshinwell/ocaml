@@ -81,6 +81,7 @@ let tupled_function_call_stub
         ~call_kind
         Debuginfo.none
         ~inline:Default_inline
+        ~inlining_depth:0
     in
     Expr.create_apply apply
   in
@@ -231,6 +232,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
         ~call_kind
         dbg
         ~inline:Default_inline
+        ~inlining_depth:0
     in
     Flambda.Expr.create_apply apply
   in
@@ -467,6 +469,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         ~call_kind
         (Debuginfo.from_location loc)
         ~inline:(LC.inline_attribute inlined)
+        ~inlining_depth:0
     in
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->

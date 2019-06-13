@@ -49,11 +49,16 @@ module Call_site_decision : sig
         unroll_to : int option;
       }
 
-  val can_inline : t -> bool
+  type can_inline = private
+    | Do_not_inline
+    | Inline of { unroll_to : int option; }
+
+  val can_inline : t -> can_inline
 end
 
 val make_decision_for_call_site
    : Simplify_env_and_result.Downwards_env.t
   -> function_decl_rec_info:Rec_info.t
+  -> apply_inlining_depth:int
   -> Inline_attribute.t
   -> Call_site_decision.t

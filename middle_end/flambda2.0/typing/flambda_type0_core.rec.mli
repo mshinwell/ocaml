@@ -87,6 +87,7 @@ val type_for_const : Simple.Const.t -> Flambda_types.t
 
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t
+  -> Rec_info.t
   -> Flambda_types.function_declaration
 
 val create_non_inlinable_function_declaration
