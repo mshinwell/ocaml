@@ -31,23 +31,27 @@ end = struct
     continuation_scope_level : Scope.t;
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
+    inlining_depth_increment : int;
   }
 
   let print ppf { backend = _; round; typing_env;
                   continuation_scope_level; inlined_debuginfo; can_inline;
+                  inlining_depth_increment;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
         @[<hov 1>(typing_env@ %a)@]@ \
         @[<hov 1>(continuation_scope_level@ %a)@]@ \
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
-        @[<hov 1>(can_inline@ %b)@]\
+        @[<hov 1>(can_inline@ %b)@]@ \
+        @[<hov 1>(inlining_depth_increment@ %d)@]\
         )@]"
       round
       TE.print typing_env
       Scope.print continuation_scope_level
       Debuginfo.print inlined_debuginfo
       can_inline
+      inlining_depth_increment
 
   let invariant _t = ()
 
@@ -60,6 +64,7 @@ end = struct
       continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline = true;
+      inlining_depth_increment = 0;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -68,6 +73,10 @@ end = struct
   let round t = t.round
   let get_continuation_scope_level t = t.continuation_scope_level
   let can_inline t = t.can_inline
+  let get_inlining_depth_increment t = t.inlining_depth_increment
+
+  let set_inlining_depth_increment t inlining_depth_increment =
+    { t with inlining_depth_increment; }
 
   (* CR mshinwell: remove "_level" *)
   let increment_continuation_scope_level t =
@@ -83,6 +92,7 @@ end = struct
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       continuation_scope_level = _;
+                      inlining_depth_increment = _;
                     } =
     { backend;
       round;
@@ -90,6 +100,7 @@ end = struct
       continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
+      inlining_depth_increment = 0;
     }
 
   let define_variable t var kind =
@@ -212,9 +223,12 @@ end = struct
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
     | Const _ | Discriminant _ -> ()
 
+  let add_inlined_debuginfo' t dbg =
+    Debuginfo.concat t.inlined_debuginfo dbg
+
   let add_inlined_debuginfo t dbg =
     { t with
-      inlined_debuginfo = Debuginfo.concat t.inlined_debuginfo dbg;
+      inlined_debuginfo = add_inlined_debuginfo' t dbg
     }
 
   let disable_function_inlining t =

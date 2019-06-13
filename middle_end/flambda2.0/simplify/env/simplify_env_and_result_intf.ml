@@ -91,6 +91,8 @@ module type Downwards_env = sig
       environment. *)
   val add_inlined_debuginfo : t -> Debuginfo.t -> t
 
+  val add_inlined_debuginfo' : t -> Debuginfo.t -> Debuginfo.t
+
   val round : t -> int
 
   (** Prevent function inlining from occurring in the given environment. *)
@@ -105,6 +107,10 @@ module type Downwards_env = sig
   val add_lifted_constants_from_r : t -> result -> t
 
   val can_inline : t -> bool
+
+  val set_inlining_depth_increment : t -> int -> t
+
+  val get_inlining_depth_increment : t -> int
 end
 
 module type Upwards_env = sig

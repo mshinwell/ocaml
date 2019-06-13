@@ -49,14 +49,13 @@ let create ~depth ~unroll_to =
 let depth t = t.depth
 let unroll_to t = t.unroll_to
 
-let join { depth = depth1; unroll_to = unroll_to1; }
-         { depth = depth2; unroll_to = unroll_to2; } =
+let merge { depth = depth1; unroll_to = older_unroll_to; } ~newer =
+  let { depth = depth2; unroll_to = newer_unroll_to; } = newer in
   let depth = depth1 + depth2 in
   let unroll_to =
-    match unroll_to1, unroll_to2 with
-    | None, None -> None
-    | Some unroll_to, None | None, Some unroll_to -> Some unroll_to
-    | Some unroll_to1, Some unroll_to2 -> Some (unroll_to1 + unroll_to2)
+    match newer_unroll_to with
+    | Some _ -> newer_unroll_to
+    | None -> older_unroll_to
   in
   { depth;
     unroll_to;

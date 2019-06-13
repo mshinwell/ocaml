@@ -24,4 +24,4 @@ val depth : t -> int
 
 val unroll_to : t -> int option
 
-val join : t -> t -> t
+val merge : t -> newer:t -> t

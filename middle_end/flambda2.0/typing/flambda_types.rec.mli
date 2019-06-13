@@ -95,6 +95,7 @@ and 'a of_kind_value_boxed_number =
     closed entities in terms of names. *)
 and inlinable_function_declaration = {
   function_decl : Term_language_function_declaration.t;
+  rec_info : Rec_info.t;
 }
 
 and function_declaration =

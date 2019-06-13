@@ -146,12 +146,20 @@ let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
 
-let join_rec_info t rec_info =
+let merge_rec_info t ~newer_rec_info =
+  match newer_rec_info with
+  | None -> t
+  | Some newer_rec_info ->
+    match t with
+    | Const _ | Discriminant _ -> t
+    | Name name -> Rec_name (name, newer_rec_info)
+    | Rec_name (name, older_rec_info) ->
+      Rec_name (name, Rec_info.merge older_rec_info ~newer:newer_rec_info)
+
+let rec_info t =
   match t with
-  | Const _ | Discriminant _ -> t
-  | Name name -> Rec_name (name, rec_info)
-  | Rec_name (name, rec_info') ->
-    Rec_name (name, Rec_info.join rec_info rec_info')
+  | Rec_name (_, rec_info) -> Some rec_info
+  | Name _ | Const _ | Discriminant _ -> None
 
 let must_be_var t =
   match t with
