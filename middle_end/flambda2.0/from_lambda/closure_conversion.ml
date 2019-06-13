@@ -51,7 +51,8 @@ let symbol_for_ident t id =
 let tupled_function_call_stub
       (original_params : (Variable.t * Lambda.value_kind) list)
       (unboxed_version : Closure_id.t)
-      ~(closure_bound_var : Closure_id.t) =
+      ~(closure_bound_var : Closure_id.t)
+      recursive =
   let dbg = Debuginfo.none in
   let return_continuation = Continuation.create () in
   let exn_continuation =
@@ -130,6 +131,7 @@ let tupled_function_call_stub
     ~dbg
     ~inline:Default_inline
     ~is_a_functor:false
+    ~recursive
 
 let register_const t (constant : K.value Static_part.t) name
       : Flambda_static.Of_kind_value.t * string =
@@ -522,6 +524,7 @@ and close_let_rec t env ~defs ~body =
         env)
       defs env
   in
+  let recursive_functions = Ilambda.recursive_functions defs in
   let function_declarations =
     List.map (function (let_rec_ident,
             ({ kind; return_continuation; exn_continuation;
@@ -532,10 +535,17 @@ and close_let_rec t env ~defs ~body =
           Closure_id.wrap
             (Variable.create_with_same_name_as_ident let_rec_ident)
         in
+        let recursive : Recursive.t =
+          if Ident.Set.mem let_rec_ident recursive_functions then
+            Recursive
+          else
+            Non_recursive
+        in
         let function_declaration =
           Function_decl.create ~let_rec_ident:(Some let_rec_ident)
             ~closure_bound_var ~kind ~params ~return ~return_continuation
             ~exn_continuation ~body ~attr ~loc ~free_idents_of_body ~stub
+            recursive
         in
         function_declaration)
       defs
@@ -626,6 +636,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   let dbg = Debuginfo.from_location loc in
   let params = Function_decl.params decl in
   let return = Function_decl.return decl in
+  let recursive = Function_decl.recursive decl in
   let my_closure = Variable.create "my_closure" in
   let closure_bound_var = Function_decl.closure_bound_var decl in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
@@ -750,12 +761,14 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~dbg
       ~inline
       ~is_a_functor:(Function_decl.is_a_functor decl)
+      ~recursive
   in
   match Function_decl.kind decl with
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
     let generic_function_stub =
       tupled_function_call_stub param_vars unboxed_version ~closure_bound_var
+        recursive
     in
     Closure_id.Map.add unboxed_version fun_decl
       (Closure_id.Map.add closure_bound_var generic_function_stub by_closure_id)

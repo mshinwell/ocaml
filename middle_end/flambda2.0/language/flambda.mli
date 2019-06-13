@@ -509,6 +509,7 @@ end and Function_declaration : sig
     -> dbg:Debuginfo.t
     -> inline:Inline_attribute.t
     -> is_a_functor:bool
+    -> recursive:Recursive.t
     -> t
 
   (** The closure from which this function declaration originally came.
@@ -549,6 +550,10 @@ end and Function_declaration : sig
 
   (** Change the parameters and code of a function declaration. *)
   val update_params_and_body : t -> Function_params_and_body.t -> t
+
+  (** Whether the function is recursive, in the sense of the syntactic analysis
+      conducted during closure conversion. *)
+  val recursive : t -> Recursive.t
 end and Flambda_type : Flambda_type0_intf.S
   with type term_language_function_declaration := Function_declaration.t
 

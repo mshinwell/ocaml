@@ -92,6 +92,7 @@ val create_inlinable_function_declaration
 val create_non_inlinable_function_declaration
    : param_arity:Flambda_arity.t
   -> result_arity:Flambda_arity.t
+  -> recursive:Recursive.t
   -> Flambda_types.function_declaration
 
 val closure

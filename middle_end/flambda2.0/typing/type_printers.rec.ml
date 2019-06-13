@@ -168,14 +168,16 @@ and print_function_declaration_with_cache ~cache ppf
   match decl with
   | Inlinable decl ->
     print_inlinable_function_declaration_with_cache ~cache ppf decl
-  | Non_inlinable { param_arity; result_arity; } ->
+  | Non_inlinable { param_arity; result_arity; recursive; } ->
     Format.fprintf ppf
       "@[<hov 1>(Non_inlinable@ \
        @[<hov 1>(param_arity@ %a)@]@ \
-       @[<hov 1>(result_arity@ %a)@]\
+       @[<hov 1>(result_arity@ %a)@] \
+       @[<hov 1>(recursive@ %a)@]\
        )@]"
       Flambda_arity.print param_arity
       Flambda_arity.print result_arity
+      Recursive.print recursive
 
 and print_of_kind_fabricated ~cache ppf
       (o : Flambda_types.of_kind_fabricated) =

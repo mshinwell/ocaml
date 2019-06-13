@@ -101,6 +101,7 @@ and function_declaration =
   | Non_inlinable of {
       param_arity : Flambda_arity.t;
       result_arity : Flambda_arity.t;
+      recursive : Recursive.t;
     }
   | Inlinable of inlinable_function_declaration
 
