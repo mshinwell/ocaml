@@ -288,7 +288,7 @@ let with_current_level_and_next_binding_time t ~current_level
 let cached t = One_level.just_after_level t.current_level
 
 let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
-  match simple, than with
+  match Simple.descr simple, Simple.descr than with
   | (Const _ | Discriminant _), (Const _ | Discriminant _) ->
     Simple.compare simple than <= 0
   | (Const _ | Discriminant _), Name _ -> true
@@ -412,7 +412,7 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
   Type_printers.print ty
   Aliases.print aliases;
 *)
-  match simple with
+  match Simple.descr simple with
   | Const _ | Discriminant _ -> t
   | Name name ->
     invariant_for_new_equation t name ty;
@@ -562,32 +562,34 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
   match ty with
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-  | Equals ((Const const) as simple) ->
-    let const_type = Flambda_type0_core.type_for_const const in
-    let ty = force_to_unknown_or_join const_type in
-    ty, Some simple
-  | Equals ((Discriminant discriminant) as simple) ->
-    let ty =
-      force_to_unknown_or_join
-        (Flambda_type0_core.this_discriminant discriminant)
-    in
-    ty, Some simple
-  | Equals (Name name) ->
-    let name = get_canonical_name t name in
-    let ty = force_to_kind (find t name) in
-    match ty with
-    | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
-    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-    | Equals _ ->
-      Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
-          @ %a@ %sCurrent aliases:%s@ %a@]\n"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        print_ty ty
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Aliases.print (aliases t);
-      invariant_should_fail t
+  | Equals simple ->
+    match Simple.descr simple with
+    | Const const ->
+      let const_type = Flambda_type0_core.type_for_const const in
+      let ty = force_to_unknown_or_join const_type in
+      ty, Some simple
+    | Discriminant discriminant ->
+      let ty =
+        force_to_unknown_or_join
+          (Flambda_type0_core.this_discriminant discriminant)
+      in
+      ty, Some simple
+    | Name name ->
+      let name = get_canonical_name t name in
+      let ty = force_to_kind (find t name) in
+      match ty with
+      | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
+      | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+      | Equals _ ->
+        Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
+            @ %a@ %sCurrent aliases:%s@ %a@]\n"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          print_ty ty
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Aliases.print (aliases t);
+        invariant_should_fail t
 
 let resolve_any_toplevel_alias_on_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
@@ -596,26 +598,28 @@ let resolve_any_toplevel_alias_on_ty (type a) t
   match ty with
   | No_alias _ -> ty, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-  | Equals ((Const _ | Discriminant _) as simple) -> ty, Some simple
-  | Equals (Name name) ->
-    let name = get_canonical_name t name in
-    let ty = force_to_kind (find t name) in
-    match ty with
-    | No_alias _ -> ty, Some (Simple.name name)
-    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-    | Equals _ ->
-      Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
-          @ %a@ %sCanonical name:%s %a@ %sCurrent aliases:%s@ %a@]\n"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        print_ty ty
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Name.print name
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Aliases.print (aliases t);
-        invariant_should_fail t
+  | Equals simple ->
+    match Simple.descr simple with
+    | (Const _ | Discriminant _) -> ty, Some simple
+    | Name name ->
+      let name = get_canonical_name t name in
+      let ty = force_to_kind (find t name) in
+      match ty with
+      | No_alias _ -> ty, Some (Simple.name name)
+      | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+      | Equals _ ->
+        Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
+            @ %a@ %sCanonical name:%s %a@ %sCurrent aliases:%s@ %a@]\n"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          print_ty ty
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Name.print name
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Aliases.print (aliases t);
+          invariant_should_fail t
 
 let resolve_any_toplevel_alias t (ty : Flambda_types.t)
       : Flambda_types.t * (Simple.t option) =

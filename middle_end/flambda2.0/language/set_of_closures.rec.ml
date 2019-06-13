@@ -37,7 +37,7 @@ let has_empty_environment t =
 
 let environment_doesn't_mention_variables t =
   Var_within_closure.Map.for_all (fun _vwc (simple : Simple.t) ->
-      match simple with
+      match Simple.descr simple with
       | Name (Symbol _) -> true
       | _ -> false)
     t.closure_elements

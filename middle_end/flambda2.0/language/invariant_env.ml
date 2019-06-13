@@ -219,7 +219,7 @@ let check_name_is_bound t name =
   end
 
 let check_simple_is_bound t (simple : Simple.t) =
-  match simple with
+  match Simple.descr simple with
   | Name name -> check_name_is_bound t name
   | Const _ | Discriminant _ -> ()
 
@@ -245,7 +245,7 @@ let check_name_is_bound_and_of_kind t name desired_kind =
       end
 
 let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
-  match simple with
+  match Simple.descr simple with
   | Name name -> check_name_is_bound_and_of_kind t name desired_kind
   | Const const ->
     let actual_kind = Simple.Const.kind const in
@@ -300,7 +300,7 @@ let kind_of_name t name =
   | kind -> kind
 
 let kind_of_simple t (simple : Simple.t) =
-  match simple with
+  match Simple.descr simple with
   | Name name -> kind_of_name t name
   | Const const -> Simple.Const.kind const
   | Discriminant _ -> Flambda_kind.fabricated

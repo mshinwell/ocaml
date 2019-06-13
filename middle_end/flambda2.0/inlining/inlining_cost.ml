@@ -112,8 +112,11 @@ let smaller' expr ~than:threshold =
   and named_size (named : Named.t) =
     if !size > threshold then raise Exit;
     match named with
-    | Simple (Name _) -> ()
-    | Simple (Const _  | Discriminant _) -> incr size
+    | Simple simple ->
+      begin match Simple.descr simple with
+      | Name _ -> ()
+      | Const _  | Discriminant _ -> incr size
+      end
     | Set_of_closures set_of_closures ->
       let func_decls = Set_of_closures.function_decls set_of_closures in
       let funs = Function_declarations.funs func_decls in

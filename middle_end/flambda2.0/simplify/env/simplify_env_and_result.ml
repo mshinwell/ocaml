@@ -207,7 +207,7 @@ end = struct
     end
 
   let check_simple_is_bound t (simple : Simple.t) =
-    match simple with
+    match Simple.descr simple with
     | Name name -> check_name_is_bound t name
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
     | Const _ | Discriminant _ -> ()
