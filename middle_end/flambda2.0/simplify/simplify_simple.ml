@@ -22,7 +22,7 @@ module T = Flambda_type
 module TE = T.Typing_env
 
 (* CR mshinwell: This should be simplified if possible *)
-let simplify_simple dacc (simple : Simple.t) =
+let simplify_simple dacc (simple : Simple.t) : _ Or_bottom.t =
   let newer_rec_info = Simple.rec_info simple in
   match Simple.descr simple with
   | Const c -> simple, T.type_for_const c
@@ -35,29 +35,17 @@ let simplify_simple dacc (simple : Simple.t) =
     (* We reify an [Equals] type in case the type itself can't be reified but
        there is an interesting alias (e.g. a symbol). *)
     let kind = T.kind ty in
-    let reified =
-      T.reify ~allow_free_variables:true typing_env
-        (T.alias_type_of kind (Simple.name name))
+    let canonical_simple, reified =
+      (* Change Aliases to work on Simples, so we don't need reify here. *)
+      T.reify typing_env (T.alias_type_of kind simple)
     in
+
+
     let simple, ty =
       match reified with
-      | Term (simple, ty) ->
-(*
-Format.eprintf "returning reified Simple: %a --> %a\n%!"
-  Simple.print orig
-  Simple.print simple;
-*)
-        simple, ty
-      | Cannot_reify | Lift _ ->
-        let name = TE.get_canonical_name typing_env name in
-(*
-Format.eprintf "Non-reifiable Simple: %a --> %a, env:@ %a\n%!"
-  Simple.print orig
-  Name.print name
-  TE.print typing_env;
-*)
-        Simple.name name, T.alias_type_of kind (Simple.name name)
-      | Invalid -> Simple.name name, T.bottom_like ty
+      | Term | Cannot_reify | Lift _ ->
+        Ok (canonical_simple, T.alias_type_of kind canonical_simple)
+      | Invalid -> Bottom
     in
     let simple = Simple.merge_rec_info simple ~newer_rec_info in
     simple, ty
