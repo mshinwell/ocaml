@@ -33,6 +33,7 @@ val create
   -> call_kind:Call_kind.t
   -> Debuginfo.t
   -> inline:Inline_attribute.t
+  -> inlining_depth:int
   -> t
 
 (** The function or method being applied. *)
@@ -71,3 +72,5 @@ val with_continuation_callee_and_args
   -> callee:Simple.t
   -> args:Simple.t list
   -> t
+
+val inlining_depth : t -> int
