@@ -280,7 +280,10 @@ let add_variable_definition t var kind =
   in
   let just_after_level =
     let aliases =
-      Aliases.add_canonical_element (aliases t) (Simple.name name)
+      let canonical =
+        Alias.create kind (Simple.name name) t.next_binding_time
+      in
+      Aliases.add_canonical_element (aliases t) canonical
     in
 (*
 Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.print aliases;
@@ -301,7 +304,10 @@ let add_symbol_definition t sym kind =
   let name = Name.symbol sym in
   let just_after_level =
     let aliases =
-      Aliases.add_canonical_element (aliases t) (Simple.name name)
+      let canonical =
+        Alias.create kind (Simple.name name) Binding_time.symbols
+      in
+      Aliases.add_canonical_element (aliases t) canonical
     in
     let names_to_types =
       Name.Map.add name (Flambda_type0_core.unknown kind, Binding_time.symbols)
@@ -314,6 +320,20 @@ let add_symbol_definition t sym kind =
       ~just_after_level
   in
   with_current_level t ~current_level
+
+let alias_of_simple t simple =
+  let kind, binding_time =
+    match Simple.descr simple with
+    | Const const ->
+      Flambda_type0_core.kind_for_const const,
+        Binding_time.consts_and_discriminants
+    | Discriminant _ ->
+      K.fabricated, Binding_time.consts_and_discriminants
+    | Name name ->
+      let ty, binding_time = find_with_binding_time t name in
+      Flambda_type0_core.kind ty, binding_time
+  in
+  Alias.create kind simple binding_time
 
 let add_definition t (name : Name.t) kind =
   match name with
@@ -348,12 +368,14 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
     match Flambda_type0_core.get_alias ty with
     | None -> aliases, Simple.name name, ty
     | Some alias_of ->
+      let kind = Flambda_type0_core.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
-        Alias.create_name (T.kind ty) name binding_time
+        Alias.create_name kind name binding_time
       in
+      let alias_of = alias_of_simple t alias_of in
       match Aliases.add aliases alias alias_of with
-      | None, aliases -> aliases, alias_of, ty
+      | None, aliases -> aliases, Alias.simple alias_of, ty
       | (Some { canonical_element; alias_of; }), aliases ->
 (*
 Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
@@ -363,9 +385,10 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
 *)
         let kind = Flambda_type0_core.kind ty in
         let ty =
-          Flambda_type0_core.alias_type_of kind canonical_element
+          Flambda_type0_core.alias_type_of kind
+            (Alias.simple canonical_element)
         in
-        aliases, alias_of, ty
+        aliases, Alias.simple alias_of, ty
   in
 (*
 Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
@@ -499,8 +522,10 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
 *)
     env_extension, vars_in_scope_at_cut
 
+(* CR mshinwell: Think about [Rec_info] in the context of this one *)
 let get_canonical_simple0 t simple =
-  match Aliases.get_canonical_element (aliases t) simple with
+  let alias = alias_of_simple t simple in
+  match Aliases.get_canonical_element (aliases t) alias with
   | None ->
     Misc.fatal_errorf "Cannot get canonical [Simple] for unbound \
         [Simple] %a:@ %a"
@@ -512,67 +537,107 @@ let get_canonical_simple t name =
   get_canonical_simple0 t (Simple.name name)
 
 let aliases_of_simple t simple =
+  let alias = alias_of_simple t simple in
   Alias.Set.fold (fun alias simples ->
       Simple.Set.add (Alias.simple alias) simples)
-    (Aliases.get_aliases (aliases t) simple)
+    (Aliases.get_aliases (aliases t) alias)
     Simple.Set.empty
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
       ~print_ty (ty : a Flambda_types.ty)
-      : a Flambda_types.unknown_or_join Flambda_types.resolved =
+      : a Flambda_types.unknown_or_join * (Simple.t option) =
+  ignore print_ty;  (* CR mshinwell: remove *)
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
-    | No_alias unknown_or_join -> Resolved unknown_or_join
+    | No_alias unknown_or_join -> unknown_or_join
     | Type _ | Equals _ ->
       Misc.fatal_errorf "Expected [No_alias]:@ %a" Type_printers.print typ
   in
   match ty with
-  | No_alias unknown_or_join -> Resolved unknown_or_join
+  | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
-    let simple = get_canonical_simple0 t simple in
+    let _kind, simple = get_canonical_simple0 t simple in
     match Simple.descr simple with
     (* CR mshinwell: Could check kinds against [S.kind] here. *)
-    | Const const -> Const const
-    | Discriminant discr -> Discriminant discr
-    | Name name -> Resolved (force_to_kind (find t name))
+    | Const const ->
+      let typ =
+        match const with
+        | Naked_immediate imm ->
+          Flambda_type0_core.this_naked_immediate_without_alias imm
+        | Tagged_immediate imm ->
+          Flambda_type0_core.this_tagged_immediate_without_alias imm
+        | Naked_float f ->
+          Flambda_type0_core.this_naked_float_without_alias f
+        | Naked_int32 i ->
+          Flambda_type0_core.this_naked_int32_without_alias i
+        | Naked_int64 i ->
+          Flambda_type0_core.this_naked_int64_without_alias i
+        | Naked_nativeint i ->
+          Flambda_type0_core.this_naked_nativeint_without_alias i
+      in
+      force_to_unknown_or_join typ, Some simple
+    | Discriminant discr ->
+      let typ =
+        Flambda_type0_core.this_discriminant_without_alias discr
+      in
+      force_to_unknown_or_join typ, Some simple
+    | Name name ->
+      let ty = force_to_kind (find t name) in
+      match ty with
+      | No_alias unknown_or_join -> unknown_or_join, Some simple
+      | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+      | Equals _ ->
+        Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
+            [Equals] type:%s@ %a@]\n"
+          (Flambda_colours.error ())
+          Simple.print simple
+          (Flambda_colours.normal ())
+          print t;
+        invariant_should_fail t
 
-let resolve_type t (ty : Flambda_types.t)
-      : Flambda_types.resolved_ty Flambda_types.resolved =
+let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
   match ty with
   | Value ty_value ->
-    begin match
+    let unknown_or_join, canonical_simple =
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
-    with
-    | Const const -> Const const
-    | Discriminant discr -> Discriminant discr
-    | Resolved unknown_or_join -> Resolved_value unknown_or_join
+    in
+    begin match Option.map Simple.descr canonical_simple with
+    (* CR mshinwell: add more kind checking & improve error messages *)
+    | Some (Const const) -> Const const
+    | Some (Discriminant _) -> Misc.fatal_error "Kind error"
+    | Some (Name _)
+    | None -> Resolved (Resolved_value unknown_or_join)
     end
   | Naked_number (ty_naked_number, kind) ->
-    begin match
+    let unknown_or_join, canonical_simple =
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ty_naked_number
-    with
-    | Const const -> Const const
-    | Discriminant discr -> Discriminant discr
-    | Resolved unknown_or_join -> Resolved_naked_number (unknown_or_join, kind)
+    in
+    begin match Option.map Simple.descr canonical_simple with
+    | Some (Const _)
+    | Some (Discriminant _) -> Misc.fatal_error "Kind error"
+    | Some (Name _)
+    | None -> Resolved (Resolved_naked_number (unknown_or_join, kind))
     end
   | Fabricated ty_fabricated ->
-    begin match
+    let unknown_or_join, canonical_simple =
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ty_fabricated
-    with
-    | Const const -> Const const
-    | Discriminant discr -> Discriminant discr
-    | Resolved unknown_or_join -> Resolved_fabricated unknown_or_join
+    in
+    begin match Option.map Simple.descr canonical_simple with
+    | Some (Const _) -> Misc.fatal_error "Kind error"
+    | Some (Discriminant discr) -> Discriminant discr
+    | Some (Name _)
+    | None -> Resolved (Resolved_fabricated unknown_or_join)
     end
 
 let create_using_resolver_and_symbol_bindings_from t =
@@ -598,21 +663,7 @@ let create_using_resolver_and_symbol_bindings_from t =
     names_to_types
     t
 
-let kind_and_binding_time_of_simple t simple =
-  match Simple.descr simple with
-  | Const const ->
-    Flambda_type0_core.kind_of_const const,
-      Binding_time.consts_and_discriminants
-  | Discriminant _ -> K.fabricated, Binding_time.consts_and_discriminants
-  | Name name -> find_with_binding_time t name
-
 let defined_earlier t simple ~than =
-  let alias =
-    let kind, binding_time = kind_and_binding_time_of_simple t simple in
-    Alias.create kind simple binding_time
-  in
-  let than =
-    let kind, binding_time = kind_and_binding_time_of_simple t simple in
-    Alias.create kind than binding_time
-  in
+  let alias = alias_of_simple t simple in
+  let than = alias_of_simple t than in
   Alias.defined_earlier alias ~than

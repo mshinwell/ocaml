@@ -248,50 +248,65 @@ let this_naked_nativeint i : t =
   Naked_number (Equals (Simple.const (Naked_nativeint i)),
     K.Naked_number.Naked_nativeint)
 
-let these_naked_immediates (is : Immediate.Set.t) : t =
+let these_naked_immediates ~no_alias (is : Immediate.Set.t) : t =
   match Immediate.Set.get_singleton is with
-  | Some i -> this_naked_immediate i
-  | None ->
+  | Some i when not no_alias -> this_naked_immediate i
+  | _ ->
     if Immediate.Set.is_empty is then bottom K.naked_immediate
     else
       let of_kind : _ of_kind_naked_number = Immediate is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
 
-let these_naked_floats (fs : Float.Set.t) : t =
+let these_naked_floats ~no_alias (fs : Float.Set.t) : t =
   match Float.Set.get_singleton fs with
-  | Some f -> this_naked_float f
-  | None ->
+  | Some f when not no_alias -> this_naked_float f
+  | _ ->
     if Float.Set.is_empty fs then bottom K.naked_float
     else
       let of_kind : _ of_kind_naked_number = Float fs in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
 
-let these_naked_int32s (is : Int32.Set.t) : t =
+let these_naked_int32s ~no_alias (is : Int32.Set.t) : t =
   match Int32.Set.get_singleton is with
-  | Some i -> this_naked_int32 i
-  | None ->
+  | Some i when not no_alias -> this_naked_int32 i
+  | _ ->
     if Int32.Set.is_empty is then bottom K.naked_int32
     else
       let of_kind : _ of_kind_naked_number = Int32 is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
 
-let these_naked_int64s (is : Int64.Set.t) : t =
+let these_naked_int64s ~no_alias (is : Int64.Set.t) : t =
   match Int64.Set.get_singleton is with
-  | Some i -> this_naked_int64 i
-  | None ->
+  | Some i when not no_alias -> this_naked_int64 i
+  | _ ->
     if Int64.Set.is_empty is then bottom K.naked_int64
     else
       let of_kind : _ of_kind_naked_number = Int64 is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
 
-let these_naked_nativeints (is : Targetint.Set.t) : t =
+let these_naked_nativeints ~no_alias (is : Targetint.Set.t) : t =
   match Targetint.Set.get_singleton is with
-  | Some i -> this_naked_nativeint i
-  | None ->
+  | Some i when not no_alias -> this_naked_nativeint i
+  | _ ->
     if Targetint.Set.is_empty is then bottom K.naked_nativeint
     else
       let of_kind : _ of_kind_naked_number = Nativeint is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
+
+let this_naked_immediate_without_alias i =
+  these_naked_immediates ~no_alias:true (Immediate.Set.singleton i)
+
+let this_naked_float_without_alias f =
+  these_naked_floats ~no_alias:true (Float.Set.singleton f)
+
+let this_naked_int32_without_alias i =
+  these_naked_int32s ~no_alias:true (Int32.Set.singleton i)
+
+let this_naked_int64_without_alias i =
+  these_naked_int64s ~no_alias:true (Int64.Set.singleton i)
+
+let this_naked_nativeint_without_alias i =
+  these_naked_nativeints ~no_alias:true (Targetint.Set.singleton i)
 
 let box_float (t : t) : t =
   match t with
@@ -336,10 +351,10 @@ let box_nativeint (t : t) : t =
 let this_tagged_immediate imm : t =
   Value (Equals (Simple.const (Tagged_immediate imm)))
 
-let these_tagged_immediates imms : t =
+let these_tagged_immediates0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
-  | Some imm -> this_tagged_immediate imm
-  | None ->
+  | Some imm when not no_alias -> this_tagged_immediate imm
+  | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
       let immediates = Immediates.create imms in
@@ -350,6 +365,12 @@ let these_tagged_immediates imms : t =
       in
       Value (No_alias (Ok (
         Blocks_and_tagged_immediates blocks_and_tagged_immediates)))
+
+let these_tagged_immediates imms =
+  these_tagged_immediates0 ~no_alias:false imms
+
+let this_tagged_immediate_without_alias imm =
+  these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
 let any_tagged_bool () =
   let bools =
@@ -374,6 +395,12 @@ let this_discriminant_as_ty_fabricated discr : ty_fabricated =
 
 let this_discriminant discr : t =
   Fabricated (this_discriminant_as_ty_fabricated discr)
+
+let this_discriminant_without_alias discr : t =
+  let discriminants =
+    Discriminants.create (Discriminant.Set.singleton discr)
+  in
+  Fabricated (No_alias (Ok (Discriminants discriminants)))
 
 let kind (t : t) =
   match t with

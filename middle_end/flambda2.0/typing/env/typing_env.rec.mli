@@ -50,8 +50,6 @@ val find : t -> Name.t -> Flambda_types.t
 
 val mem : t -> Name.t -> bool
 
-val kind_of_name : t -> Name.t -> Flambda_kind.t
-
 val add_env_extension
    : t
   -> Typing_env_extension.t
@@ -73,15 +71,6 @@ val resolve_any_toplevel_alias_on_ty0
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
-(* CR mshinwell: Maybe this should be deleted *)
-val resolve_any_toplevel_alias
-   : t
-  -> Flambda_types.t
-  -> Flambda_types.t * (Simple.t option)
-
-val resolve_type
-   : t
-  -> Flambda_types.t
-  -> Flambda_types.resolved_t * (Simple.t option)
+val resolve_type : t -> Flambda_types.t -> Flambda_types.resolved
 
 val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
