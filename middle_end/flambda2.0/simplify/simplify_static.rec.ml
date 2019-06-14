@@ -46,10 +46,15 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     of_kind_value
   | Tagged_immediate _ -> of_kind_value
   | Dynamically_computed var ->
-    let simple, _ty = S.simplify_simple dacc (Simple.var var) in
-    match Simple.descr simple with
-    | Name (Symbol sym) -> Of_kind_value.Symbol sym
-    | Name (Var _) | Const _ | Discriminant _ -> of_kind_value
+    match S.simplify_simple dacc (Simple.var var) with
+    | Bottom kind ->
+      assert (K.equal kind K.value);
+      (* CR mshinwell: Work out what should happen here *)
+      of_kind_value
+    | Ok (simple, _ty) ->
+      match Simple.descr simple with
+      | Name (Symbol sym) -> Of_kind_value.Symbol sym
+      | Name (Var _) | Const _ | Discriminant _ -> of_kind_value
 
 let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
   let denv = DA.denv dacc in
@@ -69,17 +74,22 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
       Var_within_closure.Map.fold
         (fun var_within_closure simple
              (closure_elements, closure_element_types) ->
-          let simple, ty = Simplify_simple.simplify_simple dacc simple in
-          let closure_elements =
-            Var_within_closure.Map.add var_within_closure simple
-              closure_elements
-          in
-          let ty_value = T.force_to_kind_value ty in
-          let closure_element_types =
-            Var_within_closure.Map.add var_within_closure ty_value
-              closure_element_types
-          in
-          closure_elements, closure_element_types)
+          match Simplify_simple.simplify_simple dacc simple with
+          | Bottom kind ->
+            assert (K.equal kind K.value);
+            (* CR mshinwell: Work out what should happen here *)
+            closure_elements, closure_element_types
+          | Ok (simple, ty) ->
+            let closure_elements =
+              Var_within_closure.Map.add var_within_closure simple
+                closure_elements
+            in
+            let ty_value = T.force_to_kind_value ty in
+            let closure_element_types =
+              Var_within_closure.Map.add var_within_closure ty_value
+                closure_element_types
+            in
+            closure_elements, closure_element_types)
         (Set_of_closures.closure_elements set_of_closures)
         (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
   in

@@ -16,12 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module S = Simplify_simple
-module T = Flambda_type
-module TEE = T.Typing_env_extension
-
 let simplify_primitive dacc (prim : Flambda_primitive.t) dbg ~result_var =
 (*Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;*)
   match prim with
@@ -31,20 +25,7 @@ let simplify_primitive dacc (prim : Flambda_primitive.t) dbg ~result_var =
   | Binary (prim, arg1, arg2) ->
     Simplify_binary_primitive.simplify_binary_primitive dacc prim arg1 arg2 dbg
       ~result_var
+  | Ternary _ -> Misc.fatal_error "Ternary primitives not yet implemented"
   | Variadic (prim, args) ->
     Simplify_variadic_primitive.simplify_variadic_primitive dacc prim args dbg
       ~result_var
-  | _ ->
-    (* CR mshinwell: temporary code *)
-    let named =
-      match prim with
-      | Unary _ | Binary _ | Variadic _ -> assert false
-      | Ternary (prim, arg1, arg2, arg3) ->
-        let arg1 = S.simplify_simple_and_drop_type dacc arg1 in
-        let arg2 = S.simplify_simple_and_drop_type dacc arg2 in
-        let arg3 = S.simplify_simple_and_drop_type dacc arg3 in
-        Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
-    in
-    let ty = T.any_value () in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable named, env_extension, dacc
