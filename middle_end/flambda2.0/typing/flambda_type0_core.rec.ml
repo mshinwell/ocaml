@@ -229,19 +229,24 @@ let unknown (kind : K.t) : t =
 let unknown_as_ty_fabricated () : ty_fabricated = No_alias Unknown
 
 let this_naked_immediate i : t =
-  Naked_number (Equals (Simple.const (Naked_immediate i)))
+  Naked_number (Equals (Simple.const (Naked_immediate i)),
+    K.Naked_number.Naked_immediate)
 
 let this_naked_float f : t =
-  Naked_number (Equals (Simple.const (Naked_float f)))
+  Naked_number (Equals (Simple.const (Naked_float f)),
+    K.Naked_number.Naked_float)
 
 let this_naked_int32 i : t =
-  Naked_number (Equals (Simple.const (Naked_int32 i)))
+  Naked_number (Equals (Simple.const (Naked_int32 i)),
+    K.Naked_number.Naked_int32)
 
 let this_naked_int64 i : t =
-  Naked_number (Equals (Simple.const (Naked_int64 i)))
+  Naked_number (Equals (Simple.const (Naked_int64 i)),
+    K.Naked_number.Naked_int64)
 
 let this_naked_nativeint i : t =
-  Naked_number (Equals (Simple.const (Naked_nativeint i)))
+  Naked_number (Equals (Simple.const (Naked_nativeint i)),
+    K.Naked_number.Naked_nativeint)
 
 let these_naked_immediates (is : Immediate.Set.t) : t =
   match Immediate.Set.get_singleton is with
@@ -258,7 +263,7 @@ let these_naked_floats (fs : Float.Set.t) : t =
   | None ->
     if Float.Set.is_empty fs then bottom K.naked_float
     else
-      let of_kind : _ of_kind_naked_number = Float is in
+      let of_kind : _ of_kind_naked_number = Float fs in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
 
 let these_naked_int32s (is : Int32.Set.t) : t =
@@ -329,7 +334,7 @@ let box_nativeint (t : t) : t =
       Type_printers.print t
 
 let this_tagged_immediate imm : t =
-  Value (Alias (Simple.const (Tagged_immediate imm)))
+  Value (Equals (Simple.const (Tagged_immediate imm)))
 
 let these_tagged_immediates imms : t =
   match Immediate.Set.get_singleton imms with

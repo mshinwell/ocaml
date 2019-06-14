@@ -90,9 +90,6 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
     term, (DA.with_denv dacc denv), ty
   | Reachable _ ->
     match T.reify (DE.typing_env denv) ty with
-    | Term (simple, ty) ->
-      let term = Named.create_simple simple in
-      Reachable.reachable term, dacc, ty
     | Lift to_lift ->
       if cannot_lift then term, dacc, ty
       else
