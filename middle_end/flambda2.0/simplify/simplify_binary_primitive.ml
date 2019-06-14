@@ -37,7 +37,7 @@ let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
     Reachable.invalid (), env_extension, dacc
   in
 (*Format.eprintf "Reifying index type: %a\n%!" T.print index_ty;*)
-  match Reification.reify_to_tagged_immediate dacc index_ty with
+  match T. dacc index_ty with
   | Bottom -> invalid ()
   | Ok None -> unchanged ()
   | Ok (Some index) ->
