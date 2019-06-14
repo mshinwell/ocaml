@@ -24,8 +24,3 @@ val try_to_reify
   -> bound_to:Variable.t
   -> cannot_lift:bool
   -> Reachable.t * Downwards_acc.t * Flambda_type.t
-
-val reify_to_tagged_immediate
-   : Downwards_acc.t
-  -> Flambda_type.t
-  -> Immediate.t option Or_bottom.t
