@@ -325,6 +325,7 @@ module type S = sig
     | Proved of 'a
     | Unknown
     | Invalid
+  let prove_equals_single_tagged_immediate env t =
 
   (** Prove that the given type, of kind [Value], is a closures type
       describing exactly one closure.  The function declaration corresponding
