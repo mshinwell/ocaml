@@ -23,9 +23,8 @@ module S = Simplify_simple
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
-let simplify_block_load dacc prim ~block ~index dbg ~result_var =
-  let index, index_ty = S.simplify_simple dacc index in
-  let block, block_ty = S.simplify_simple dacc block in
+let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
+      dbg ~result_var =
   let original_term = Named.create_prim (Binary (prim, block, index)) dbg in
   let unchanged () =
     let ty = T.any_value () in
@@ -54,16 +53,27 @@ let simplify_block_load dacc prim ~block ~index dbg ~result_var =
 
 let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       arg1 arg2 dbg ~result_var =
-  match prim with
-  | Block_load (Block (Value Anything), Immutable) ->
-    (* CR mshinwell: extend to other block access kinds *)
-    simplify_block_load dacc prim ~block:arg1 ~index:arg2 dbg ~result_var
-  | _ ->
-    (* temporary code *)
-    let arg1 = Simplify_simple.simplify_simple_and_drop_type dacc arg1 in
-    let arg2 = Simplify_simple.simplify_simple_and_drop_type dacc arg2 in
-    let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-    let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
-    let ty = T.unknown kind in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable named, env_extension, dacc
+  let invalid kind =
+    let env_extension =
+      TEE.one_equation (Name.var result_var) (T.bottom kind)
+    in
+    Reachable.invalid (), env_extension, dacc
+  in
+  match S.simplify_simple dacc arg1 with
+  | Bottom kind -> invalid kind
+  | Ok (arg1, arg1_ty) ->
+    match S.simplify_simple dacc arg2 with
+    | Bottom kind -> invalid kind
+    | Ok (arg2, arg2_ty) ->
+      match prim with
+      | Block_load (Block (Value Anything), Immutable) ->
+        (* CR mshinwell: extend to other block access kinds *)
+        simplify_block_load dacc prim ~block:arg1 ~block_ty:arg1_ty
+          ~index:arg2 ~index_ty:arg2_ty dbg ~result_var
+      | _ ->
+        (* temporary code *)
+        let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
+        let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
+        let ty = T.unknown kind in
+        let env_extension = TEE.one_equation (Name.var result_var) ty in
+        Reachable.reachable named, env_extension, dacc

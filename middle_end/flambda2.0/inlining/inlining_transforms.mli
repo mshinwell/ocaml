@@ -28,4 +28,4 @@ val inline
   -> apply_inlining_depth:int
   -> unroll_to:int option
   -> Debuginfo.t
-  -> (Downwards_acc.t * Expr.t) option
+  -> Downwards_acc.t * Expr.t

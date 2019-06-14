@@ -2,11 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
-(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                   Mark Shinwell, Jane Street Europe                    *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,18 +14,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type 'a t =
-  | Ok of 'a
-  | Bottom
+include Numbers.Int
 
-val print
-   : (Format.formatter -> 'a -> unit)
-  -> Format.formatter
-  -> 'a t
-  -> unit
+let strictly_earlier t ~than =
+  t < than
 
-val both : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t
+let symbols = 0
+let earliest_var = 1
 
-val map : 'a t -> f:('a -> 'b) -> 'b t
-
-val all : 'a t list -> 'a list t
+let succ t =
+  if t < earliest_var then
+    Misc.fatal_error "Cannot increment binding time for symbols"
+  else
+    t + 1

@@ -89,7 +89,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
     let denv = DE.add_equation_on_variable denv bound_to ty in
     term, (DA.with_denv dacc denv), ty
   | Reachable _ ->
-    match T.reify (DE.typing_env denv) ty ~allow_free_variables:true with
+    match T.reify (DE.typing_env denv) ty with
     | Term (simple, ty) ->
       let term = Named.create_simple simple in
       Reachable.reachable term, dacc, ty
@@ -106,7 +106,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
 
 let reify_to_tagged_immediate dacc ty : _ Or_bottom.t =
   let denv = DA.denv dacc in
-  let reified = T.reify (DE.typing_env denv) ty ~allow_free_variables:false in
+  let reified = T.reify (DE.typing_env denv) ty in
   match reified with
   | Term (simple, _ty) ->
     begin match Simple.descr simple with

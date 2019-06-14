@@ -50,14 +50,16 @@ val find : t -> Name.t -> Flambda_types.t
 
 val mem : t -> Name.t -> bool
 
+val kind_of_name : t -> Name.t -> Flambda_kind.t
+
 val add_env_extension
    : t
   -> Typing_env_extension.t
   -> t
 
-val get_canonical_name : t -> Name.t -> Name.t
+val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
 
-val aliases_of_simple : t -> Simple.t -> Name.Set.t
+val aliases_of_simple : t -> Simple.t -> Simple.Set.t
 
 val cut
    : t
