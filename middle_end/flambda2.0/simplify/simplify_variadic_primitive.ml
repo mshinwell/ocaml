@@ -28,10 +28,8 @@ module TEE = Flambda_type.Typing_env_extension
 let simplify_make_block dacc _prim dbg
       ~(make_block_kind : Flambda_primitive.make_block_kind)
       ~(mutable_or_immutable : Flambda_primitive.mutable_or_immutable)
-      args ~result_var =
+      args_with_tys ~result_var =
   let denv = DA.denv dacc in
-  let original_args = args in
-  let args_with_tys = S.simplify_simples dacc args in
   let args, _arg_tys = List.split args_with_tys in
   let invalid () =
     let ty = T.bottom K.value in
@@ -44,7 +42,7 @@ let simplify_make_block dacc _prim dbg
       (* CR mshinwell: improve message *)
       Misc.fatal_errorf "GC value_kind indications in [Make_block] don't \
           match up 1:1 with arguments: %a"
-        Simple.List.print original_args
+        Simple.List.print args
     end;
     (* CR mshinwell: This could probably be done more neatly. *)
     let found_bottom = ref false in
@@ -86,15 +84,22 @@ let simplify_make_block dacc _prim dbg
 
 let simplify_variadic_primitive dacc
       (prim : Flambda_primitive.variadic_primitive) args dbg ~result_var =
-  match prim with
-  | Make_block (make_block_kind, mutable_or_immutable) ->
-    simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
-      args ~result_var
-  | Bigarray_set (_num_dims, _kind, _layout)
-  | Bigarray_load (_num_dims, _kind, _layout) ->
-    let args = Simplify_simple.simplify_simples_and_drop_types dacc args in
-    let named = Named.create_prim (Variadic (prim, args)) dbg in
+  match S.simplify_simples dacc args with
+  | Bottom ->
     let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
-    let ty = T.unknown kind in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable named, env_extension, dacc
+    let env_extension =
+      TEE.one_equation (Name.var result_var) (T.bottom kind)
+    in
+    Reachable.invalid (), env_extension, dacc
+  | Ok args_with_tys ->
+    match prim with
+    | Make_block (make_block_kind, mutable_or_immutable) ->
+      simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
+        args_with_tys ~result_var
+    | Bigarray_set (_num_dims, _kind, _layout)
+    | Bigarray_load (_num_dims, _kind, _layout) ->
+      let named = Named.create_prim (Variadic (prim, args)) dbg in
+      let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
+      let ty = T.unknown kind in
+      let env_extension = TEE.one_equation (Name.var result_var) ty in
+      Reachable.reachable named, env_extension, dacc

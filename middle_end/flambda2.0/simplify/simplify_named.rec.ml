@@ -241,7 +241,15 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
     Var_within_closure.Map.fold
       (fun var_within_closure simple
            (closure_elements, closure_element_types) ->
-        let simple, ty = Simplify_simple.simplify_simple dacc simple in
+        (* CR mshinwell: This should probably be handled differently, but
+           will require some threading through *)
+        let simple, ty =
+          match Simplify_simple.simplify_simple dacc simple with
+          | Bottom kind ->
+            assert (K.equal kind K.value);
+            simple, T.bottom kind
+          | Ok (simple, ty) -> simple, ty
+        in
         let closure_elements =
           Var_within_closure.Map.add var_within_closure simple
             closure_elements
@@ -324,15 +332,18 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
   match named with
   | Simple simple ->
 (*let orig_simple = simple in*)
-    let simple, ty = Simplify_simple.simplify_simple dacc simple in
+    begin match Simplify_simple.simplify_simple dacc simple with
+    | Bottom kind -> Reachable.invalid (), dacc, T.bottom kind
+    | Ok (simple, ty) ->
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
   Simple.print orig_simple
   Simple.print simple
   T.print ty;*)
-    let dacc =
-      DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
-    in
-    Reachable.reachable (Named.create_simple simple), dacc, ty
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
+      in
+      Reachable.reachable (Named.create_simple simple), dacc, ty
+    end
   | Prim (prim, dbg) ->
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var

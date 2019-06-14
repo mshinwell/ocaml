@@ -315,12 +315,15 @@ and simplify_direct_full_application
       match Inlining_decision.Call_site_decision.can_inline decision with
       | Do_not_inline -> None
       | Inline { unroll_to; } ->
-        Inlining_transforms.inline dacc ~callee
-          ~args function_decl
-          ~apply_return_continuation:(Apply.continuation apply)
-          ~apply_exn_continuation:(Apply.exn_continuation apply)
-          ~apply_inlining_depth ~unroll_to
-          (Apply.dbg apply)
+        let dacc, inlined =
+          Inlining_transforms.inline dacc ~callee
+            ~args function_decl
+            ~apply_return_continuation:(Apply.continuation apply)
+            ~apply_exn_continuation:(Apply.exn_continuation apply)
+            ~apply_inlining_depth ~unroll_to
+            (Apply.dbg apply)
+        in
+        Some (dacc, inlined)
   in
   match inlined with
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
@@ -606,15 +609,10 @@ and simplify_function_call_where_callee's_type_unavailable
       in
       call_kind, dacc
     | Direct { return_arity; _ } ->
-      let param_arity =
-        (* Some types have regressed in precision.  Since this used to be a
-           direct call, however, we know the function's arity even though we
-           don't know which function it is. *)
-        List.map (fun arg ->
-            let _arg, ty = S.simplify_simple dacc arg in
-            T.kind ty)
-          (Apply.args apply)
-      in
+      let param_arity = T.arity_of_list arg_types in
+      (* Some types have regressed in precision.  Since this used to be a
+         direct call, however, we know the function's arity even though we
+         don't know which function it is. *)
       let dacc = check_return_arity_and_record_return_cont_use ~return_arity in
       let call_kind =
         Call_kind.indirect_function_call_known_arity ~param_arity
@@ -680,28 +678,33 @@ and simplify_function_call
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
 
-and simplify_apply_shared dacc apply =
+and simplify_apply_shared dacc apply : _ Or_bottom.t =
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
-  let callee, callee_ty = S.simplify_simple dacc (Apply.callee apply) in
-  let args_with_types = S.simplify_simples dacc (Apply.args apply) in
-  let args, arg_types = List.split args_with_types in
-  let inlining_depth =
-    DE.get_inlining_depth_increment (DA.denv dacc) + Apply.inlining_depth apply
-  in
-  let apply =
-    Apply.create ~callee
-      ~continuation:(Apply.continuation apply)
-      (Apply.exn_continuation apply)
-      ~args
-      ~call_kind:(Apply.call_kind apply)
-      (* CR mshinwell: check if the next line has the args the right way
-         around *)
-      (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
-      ~inline:(Apply.inline apply)
-      ~inlining_depth
-  in
-  callee_ty, apply, arg_types
+  match S.simplify_simple dacc (Apply.callee apply) with
+  | Bottom _kind -> Bottom
+  | Ok (callee, callee_ty) ->
+    match S.simplify_simples dacc (Apply.args apply) with
+    | Bottom -> Bottom
+    | Ok args_with_types ->
+      let args, arg_types = List.split args_with_types in
+      let inlining_depth =
+        DE.get_inlining_depth_increment (DA.denv dacc)
+          + Apply.inlining_depth apply
+      in
+      let apply =
+        Apply.create ~callee
+          ~continuation:(Apply.continuation apply)
+          (Apply.exn_continuation apply)
+          ~args
+          ~call_kind:(Apply.call_kind apply)
+          (* CR mshinwell: check if the next line has the args the right way
+             around *)
+          (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
+          ~inline:(Apply.inline apply)
+          ~inlining_depth
+      in
+      Ok (callee_ty, apply, arg_types)
 
 and simplify_method_call
   : 'a. DA.t -> Apply.t -> callee_ty:T.t -> kind:Call_kind.method_kind
@@ -774,102 +777,109 @@ and simplify_c_call
 and simplify_apply
   : 'a. DA.t -> Apply.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply k ->
-  let callee_ty, apply, arg_types = simplify_apply_shared dacc apply in
-  match Apply.call_kind apply with
-  | Function call ->
-    simplify_function_call dacc apply ~callee_ty call ~arg_types k
-  | Method { kind; obj; } ->
-    simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types k
-  | C_call { alloc = _; param_arity; return_arity; } ->
-    simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
-      ~arg_types k
+  match simplify_apply_shared dacc apply with
+  | Bottom ->
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    Expr.create_invalid (), user_data, uacc
+  | Ok (callee_ty, apply, arg_types) ->
+    match Apply.call_kind apply with
+    | Function call ->
+      simplify_function_call dacc apply ~callee_ty call ~arg_types k
+    | Method { kind; obj; } ->
+      simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types k
+    | C_call { alloc = _; param_arity; return_arity; } ->
+      simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
+        ~arg_types k
 
 and simplify_apply_cont
   : 'a. DA.t -> Apply_cont.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply_cont k ->
   let module AC = Apply_cont in
-  (* CR mshinwell: Consider changing interface of [simplify_simples] *)
-  let args_with_types = S.simplify_simples dacc (AC.args apply_cont) in
-  let args, arg_types = List.split args_with_types in
-  let args_arity = T.arity_of_list arg_types in
-  let dacc =
-    DA.record_continuation_use dacc (AC.continuation apply_cont)
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
-      ~arg_types
-  in
-  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-  let uenv = UA.uenv uacc in
-  let cont =
-    UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
-  in
-  let check_arity_against_args ~arity =
-    if not (Flambda_arity.equal args_arity arity) then begin
-      Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
-          match continuation's arity from the environment (%a):@ %a"
-        Flambda_arity.print arity
-        AC.print apply_cont
-    end
-  in
-  let normal_case () =
-    Expr.create_apply_cont
-        (AC.update_continuation_and_args apply_cont cont ~args),
-      user_data, uacc
-  in
-  match UE.find_continuation uenv cont with
-  | Unknown { arity; } ->
-    check_arity_against_args ~arity;
-    normal_case ()
-  | Unreachable { arity; } ->
-    check_arity_against_args ~arity;
-    (* N.B. We allow this transformation even if there is a trap action,
-       on the basis that there wouldn't be any opportunity to collect any
-       backtrace, even if the [Apply_cont] were compiled as "raise". *)
+  match S.simplify_simples dacc (AC.args apply_cont) with
+  | Bottom ->
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
-  | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
-    (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
-       or "stub" -- could avoid resimplification of linearly used ones maybe,
-       although this wouldn't remove any parameter-to-argument [Let]s.
-       However perhaps [Flambda_to_cmm] could deal with these. *)
-    check_arity_against_args ~arity;
-    match AC.trap_action apply_cont with
-    | Some _ ->
-      (* Until such time as we can manually add to the backtrace buffer,
-         never substitute a "raise" for the body of an exception handler. *)
+  | Ok args_with_types ->
+    let args, arg_types = List.split args_with_types in
+    let args_arity = T.arity_of_list arg_types in
+    let dacc =
+      DA.record_continuation_use dacc (AC.continuation apply_cont)
+        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~arg_types
+    in
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    let uenv = UA.uenv uacc in
+    let cont =
+      UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
+    in
+    let check_arity_against_args ~arity =
+      if not (Flambda_arity.equal args_arity arity) then begin
+        Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+            match continuation's arity from the environment (%a):@ %a"
+          Flambda_arity.print arity
+          AC.print apply_cont
+      end
+    in
+    let normal_case () =
+      Expr.create_apply_cont
+          (AC.update_continuation_and_args apply_cont cont ~args),
+        user_data, uacc
+    in
+    match UE.find_continuation uenv cont with
+    | Unknown { arity; } ->
+      check_arity_against_args ~arity;
       normal_case ()
-    | None ->
-      Flambda.Continuation_params_and_handler.pattern_match
-        (Flambda.Continuation_handler.params_and_handler handler)
-        ~f:(fun params ~handler ->
-          let params_arity = KP.List.arity params in
-          if not (Flambda_arity.equal params_arity args_arity) then begin
-            Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
-                match arity of parameters on handler (%a):@ %a"
-              Flambda_arity.print params_arity
-              AC.print apply_cont
-          end;
-          let expr =
-            Expr.bind_parameters_to_simples ~bind:params ~target:args handler
-          in
-          let dacc = DA.with_r dacc (UA.r uacc) in
-          let dacc =
-            match wrapper_with_scope_and_arity with
-            | None -> dacc
-            | Some (wrapper, definition_scope_level, arity) ->
-              DA.add_continuation dacc wrapper ~definition_scope_level arity
-          in
-          try
-            simplify_expr dacc expr (fun _cont_uses_env r ->
-              user_data, (UA.with_r uacc r))
-          with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
-                The inlined body was:@ %a@ in environment:@ %a\n"
-              (Flambda_colours.error ())
-              (Flambda_colours.normal ())
-              AC.print apply_cont
-              Expr.print expr
-              DE.print (DA.denv dacc);
-            raise Misc.Fatal_error
-          end)
+    | Unreachable { arity; } ->
+      check_arity_against_args ~arity;
+      (* N.B. We allow this transformation even if there is a trap action,
+         on the basis that there wouldn't be any opportunity to collect any
+         backtrace, even if the [Apply_cont] were compiled as "raise". *)
+      Expr.create_invalid (), user_data, uacc
+    | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
+      (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
+         or "stub" -- could avoid resimplification of linearly used ones maybe,
+         although this wouldn't remove any parameter-to-argument [Let]s.
+         However perhaps [Flambda_to_cmm] could deal with these. *)
+      check_arity_against_args ~arity;
+      match AC.trap_action apply_cont with
+      | Some _ ->
+        (* Until such time as we can manually add to the backtrace buffer,
+           never substitute a "raise" for the body of an exception handler. *)
+        normal_case ()
+      | None ->
+        Flambda.Continuation_params_and_handler.pattern_match
+          (Flambda.Continuation_handler.params_and_handler handler)
+          ~f:(fun params ~handler ->
+            let params_arity = KP.List.arity params in
+            if not (Flambda_arity.equal params_arity args_arity) then begin
+              Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+                  match arity of parameters on handler (%a):@ %a"
+                Flambda_arity.print params_arity
+                AC.print apply_cont
+            end;
+            let expr =
+              Expr.bind_parameters_to_simples ~bind:params ~target:args handler
+            in
+            let dacc = DA.with_r dacc (UA.r uacc) in
+            let dacc =
+              match wrapper_with_scope_and_arity with
+              | None -> dacc
+              | Some (wrapper, definition_scope_level, arity) ->
+                DA.add_continuation dacc wrapper ~definition_scope_level arity
+            in
+            try
+              simplify_expr dacc expr (fun _cont_uses_env r ->
+                user_data, (UA.with_r uacc r))
+            with Misc.Fatal_error -> begin
+              Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
+                  The inlined body was:@ %a@ in environment:@ %a\n"
+                (Flambda_colours.error ())
+                (Flambda_colours.normal ())
+                AC.print apply_cont
+                Expr.print expr
+                DE.print (DA.denv dacc);
+              raise Misc.Fatal_error
+            end)
 
 and simplify_switch
   : 'a. DA.t -> Switch.t -> 'a k -> Expr.t * 'a * UA.t

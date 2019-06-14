@@ -34,3 +34,14 @@ let map t ~f =
   match t with
   | Ok contents -> Ok (f contents)
   | Bottom -> Bottom
+
+let all ts =
+  let contents =
+    List.filter_map (fun t ->
+        match t with
+        | Ok contents -> Some contents
+        | Bottom -> None)
+      ts
+  in
+  if List.compare_lengths ts contents <> 0 then Bottom
+  else Ok contents

@@ -106,9 +106,9 @@ module type S = sig
       -> Typing_env_extension.t
       -> t
 
-    val get_canonical_name : t -> Name.t -> Name.t
+    val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
 
-    val aliases_of_simple : t -> Simple.t -> Name.Set.t
+    val aliases_of_simple : t -> Simple.t -> Simple.Set.t
 
     val cut
        : t
@@ -305,6 +305,7 @@ module type S = sig
   val is_bottom : (t -> bool) type_accessor
 
   val type_for_const : Simple.Const.t -> t
+  val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (Symbol.t list)
@@ -320,14 +321,8 @@ module type S = sig
     | Invalid
 
   (** Try to produce a canonical Flambda term that has the given Flambda type.
-      The resulting term will never cause an allocation.  The term will also
-      not contain any free variables unless [allow_free_variables] has been set
-      to [true].
-  *)
-  val reify
-     : (allow_free_variables:bool
-    -> t
-    -> reification_result) type_accessor
+      The resulting term will always be a constant. *)
+  val reify : (t -> reification_result) type_accessor
 
   type 'a proof = private
     | Proved of 'a

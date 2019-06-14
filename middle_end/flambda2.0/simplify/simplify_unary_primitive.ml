@@ -78,26 +78,31 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
 | _ -> ()
 end;
 *)
-  let arg, arg_ty = Simplify_simple.simplify_simple dacc arg in
-  let original_term = Named.create_prim (Unary (prim, arg)) dbg in
-  match prim with
-  | Project_closure closure_id ->
-    simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
-      closure_id ~result_var
-  | Project_var closure_element ->
-    simplify_project_var dacc ~original_term ~closure_ty:arg_ty
-      closure_element ~result_var
-  | Unbox_number boxable_number_kind ->
-    simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
-      boxable_number_kind ~result_var
-  | Box_number boxable_number_kind ->
-    simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
-      boxable_number_kind ~result_var
-  | _ ->
-    (* CR mshinwell: temporary code *)
-    let arg = Simplify_simple.simplify_simple_and_drop_type dacc arg in
-    let named = Named.create_prim (Unary (prim, arg)) dbg in
-    let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
-    let ty = T.unknown kind in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable named, env_extension, dacc
+  match Simplify_simple.simplify_simple dacc arg with
+  | Bottom kind ->
+    let env_extension =
+      TEE.one_equation (Name.var result_var) (T.bottom kind)
+    in
+    Reachable.invalid (), env_extension, dacc
+  | Ok (arg, arg_ty) ->
+    let original_term = Named.create_prim (Unary (prim, arg)) dbg in
+    match prim with
+    | Project_closure closure_id ->
+      simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
+        closure_id ~result_var
+    | Project_var closure_element ->
+      simplify_project_var dacc ~original_term ~closure_ty:arg_ty
+        closure_element ~result_var
+    | Unbox_number boxable_number_kind ->
+      simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
+        boxable_number_kind ~result_var
+    | Box_number boxable_number_kind ->
+      simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
+        boxable_number_kind ~result_var
+    | _ ->
+      (* CR mshinwell: temporary code *)
+      let named = Named.create_prim (Unary (prim, arg)) dbg in
+      let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
+      let ty = T.unknown kind in
+      let env_extension = TEE.one_equation (Name.var result_var) ty in
+      Reachable.reachable named, env_extension, dacc
