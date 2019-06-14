@@ -84,7 +84,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
   let is_bottom env t =
     match Typing_env.resolve_type env t with
     | Resolved (Resolved_value Bottom)
-    | Resolved (Resolved_naked_number Bottom)
+    | Resolved (Resolved_naked_number (Bottom, _))
     | Resolved (Resolved_fabricated Bottom) -> true
     | Const _ | Discriminant _
     | Resolved (Resolved_value _)
@@ -123,15 +123,17 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
             Simple.print simple
             K.print kind
             K.print original_kind
+            Type_printers.print t
         end;
         match Simple.descr simple with
         | Const (Tagged_immediate imm) -> Proved imm
         | Name _ -> Unknown
         | Const _ | Discriminant _ ->
           Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-              doesn't match the kind of the returned [Simple] %a"
+              doesn't match the kind of the returned [Simple] %a:@ %a"
             K.print kind
             Simple.print simple
+            Type_printers.print t
 
   let prove_equals_to_symbol env t : _ proof =
     let original_kind = kind t in
@@ -159,15 +161,17 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
             Simple.print simple
             K.print kind
             K.print original_kind
+            Type_printers.print t
         end;
         match Simple.descr simple with
         | Name (Symbol sym) -> Proved sym
         | Name (Var _) -> Unknown
         | Const _ | Discriminant _ ->
           Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-              doesn't match the kind of the returned [Simple] %a"
+              doesn't match the kind of the returned [Simple] %a:@ %a"
             K.print kind
             Simple.print simple
+            Type_printers.print t
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
@@ -211,7 +215,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Known blocks, Known imms ->
           if Immediates.is_bottom imms then
-            match Blocks.get_singleton blocks with
+            begin match Blocks.get_singleton blocks with
             | None -> Cannot_reify
             | Some ((tag, size), field_types) ->
               assert (Targetint.OCaml.equal size
@@ -223,7 +227,10 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
               in
               let symbols =
                 List.filter_map (fun field_type ->
-                    prove_equals_to_symbol env field_type)
+                    match prove_equals_to_symbol env field_type with
+                    | Proved sym -> Some sym
+                    (* CR mshinwell: [Invalid] should propagate up *)
+                    | Unknown | Invalid -> None)
                   field_types
               in
               if List.compare_lengths field_types symbols = 0 then
@@ -232,12 +239,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
                 | None -> Cannot_reify
               else
                 Cannot_reify
-          else if Blocks.is_bottom blocks then
-            match Immediates.get_singleton imms with
-            | None -> Cannot_reify
-            | Some imm ->
-              let simple = Simple.const (Tagged_immediate imm) in
-              Term (simple, alias_type_of K.value simple)
+            end
           else
             Cannot_reify
         | _, _ -> Cannot_reify
@@ -260,7 +262,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
         end
 *)
       | Resolved_value Bottom
-      | Resolved_naked_number Bottom
+      | Resolved_naked_number (Bottom, _)
       | Resolved_fabricated Bottom -> Invalid
       | _ -> Cannot_reify
 end
