@@ -16,6 +16,8 @@
 
 type t
 
+val create : Flambda_kind.t -> Simple.t -> Binding_time.t -> t
+
 val create_name : Flambda_kind.t -> Name.t -> Binding_time.t -> t
 
 include Identifiable.S with type t := t

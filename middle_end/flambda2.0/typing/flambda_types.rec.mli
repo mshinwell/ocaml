@@ -39,7 +39,12 @@ and 'a ty = 'a unknown_or_join or_alias
  *)
 and 'a unknown_or_join = 'a Or_unknown_or_bottom.t
 
-(* CR mshinwell: Put this in it's own submodule *)
+and 'a resolved =
+  | Const of Simple.Const.t
+  | Discriminant of Discriminant.t
+  | Resolved of 'a
+
+(* CR mshinwell: Put this in its own submodule *)
 and resolved_t =
   | Resolved_value of resolved_ty_value
   | Resolved_naked_number

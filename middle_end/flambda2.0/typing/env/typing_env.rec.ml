@@ -239,6 +239,14 @@ let find t name =
   (* CR mshinwell: Should this resolve aliases? *)
   | ty, _binding_time -> ty
 
+let find_with_binding_time t name =
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found ->
+    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+      Name.print name
+      print t
+  | ty, binding_time -> ty, binding_time
+
 let find_opt t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found -> None
@@ -512,136 +520,60 @@ let aliases_of_simple t simple =
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
       ~print_ty (ty : a Flambda_types.ty)
-      : (a Flambda_types.unknown_or_join) * (Simple.t option) =
+      : a Flambda_types.unknown_or_join Flambda_types.resolved =
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
-    | No_alias unknown_or_join -> unknown_or_join
+    | No_alias unknown_or_join -> Resolved unknown_or_join
     | Type _ | Equals _ ->
       Misc.fatal_errorf "Expected [No_alias]:@ %a" Type_printers.print typ
   in
   match ty with
-  | No_alias unknown_or_join -> unknown_or_join, None
-  | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-  | Equals simple ->
-
-
-    match Simple.descr simple with
-    | Const const ->
-      let const_type = Flambda_type0_core.type_for_const const in
-      let ty = force_to_unknown_or_join const_type in
-      ty, Some simple
-    | Discriminant discriminant ->
-      let ty =
-        force_to_unknown_or_join
-          (Flambda_type0_core.this_discriminant discriminant)
-      in
-      ty, Some simple
-    | Name name ->
-      match get_canonical_simple t name with
-      | 
-
-      let ty = force_to_kind (find t name) in
-      match ty with
-      | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
-      | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-      | Equals _ ->
-        Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
-            @ %a@ %sCurrent aliases:%s@ %a@]\n"
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          print_ty ty
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          Aliases.print (aliases t);
-        invariant_should_fail t
-
-let resolve_any_toplevel_alias_on_ty (type a) t
-      ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~print_ty (ty : a Flambda_types.ty)
-      : (a Flambda_types.ty) * (Simple.t option) =
-  match ty with
-  | No_alias _ -> ty, None
+  | No_alias unknown_or_join -> Resolved unknown_or_join
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
     let simple = get_canonical_simple0 t simple in
     match Simple.descr simple with
-    | (Const _ | Discriminant _) ->
-      alias_type_of (T.kind ty) simple, Some simple
-    | Name name ->
-      let simple = get_canonical_name t name in
-      let ty = force_to_kind (find t name) in
-      match ty with
-      | No_alias _ -> ty, Some (Simple.name name)
-      | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
-      | Equals _ ->
-        Format.eprintf "@[<hov 1>%s>> Trying to resolve toplevel alias on%s:\
-            @ %a@ %sCanonical name:%s %a@ %sCurrent aliases:%s@ %a@]\n"
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          print_ty ty
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          Name.print name
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          Aliases.print (aliases t);
-          invariant_should_fail t
-
-let resolve_any_toplevel_alias t (ty : Flambda_types.t)
-      : Flambda_types.t * (Simple.t option) =
-  match ty with
-  | Value ty_value ->
-    let ty_value, canonical_simple =
-      resolve_any_toplevel_alias_on_ty t
-        ~force_to_kind:Flambda_type0_core.force_to_kind_value
-        ~print_ty:Type_printers.print_ty_value
-        ty_value
-    in
-    Value ty_value, canonical_simple
-  | Naked_number (ty_naked_number, kind) ->
-    let ty_naked_number, canonical_simple =
-      resolve_any_toplevel_alias_on_ty t
-        ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
-        ~print_ty:Type_printers.print_ty_naked_number
-        ty_naked_number
-    in
-    Naked_number (ty_naked_number, kind), canonical_simple
-  | Fabricated ty_fabricated ->
-    let ty_fabricated, canonical_simple =
-      resolve_any_toplevel_alias_on_ty t
-        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
-        ~print_ty:Type_printers.print_ty_fabricated
-        ty_fabricated
-    in
-    Fabricated ty_fabricated, canonical_simple
+    (* CR mshinwell: Could check kinds against [S.kind] here. *)
+    | Const const -> Const const
+    | Discriminant discr -> Discriminant discr
+    | Name name -> Resolved (force_to_kind (find t name))
 
 let resolve_type t (ty : Flambda_types.t)
-      : Flambda_types.resolved_t * (Simple.t option) =
+      : Flambda_types.resolved_ty Flambda_types.resolved =
   match ty with
   | Value ty_value ->
-    let unknown_or_join, canonical_simple =
+    begin match
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
-    in
-    Resolved_value unknown_or_join, canonical_simple
+    with
+    | Const const -> Const const
+    | Discriminant discr -> Discriminant discr
+    | Resolved unknown_or_join -> Resolved_value unknown_or_join
+    end
   | Naked_number (ty_naked_number, kind) ->
-    let unknown_or_join, canonical_simple =
+    begin match
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ty_naked_number
-    in
-    Resolved_naked_number (unknown_or_join, kind), canonical_simple
+    with
+    | Const const -> Const const
+    | Discriminant discr -> Discriminant discr
+    | Resolved unknown_or_join -> Resolved_naked_number (unknown_or_join, kind)
+    end
   | Fabricated ty_fabricated ->
-    let unknown_or_join, canonical_simple =
+    begin match
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ty_fabricated
-    in
-    Resolved_fabricated unknown_or_join, canonical_simple
+    with
+    | Const const -> Const const
+    | Discriminant discr -> Discriminant discr
+    | Resolved unknown_or_join -> Resolved_fabricated unknown_or_join
+    end
 
 let create_using_resolver_and_symbol_bindings_from t =
   let names_to_types =
@@ -665,3 +597,22 @@ let create_using_resolver_and_symbol_bindings_from t =
       add_equation t name typ)
     names_to_types
     t
+
+let kind_and_binding_time_of_simple t simple =
+  match Simple.descr simple with
+  | Const const ->
+    Flambda_type0_core.kind_of_const const,
+      Binding_time.consts_and_discriminants
+  | Discriminant _ -> K.fabricated, Binding_time.consts_and_discriminants
+  | Name name -> find_with_binding_time t name
+
+let defined_earlier t simple ~than =
+  let alias =
+    let kind, binding_time = kind_and_binding_time_of_simple t simple in
+    Alias.create kind simple binding_time
+  in
+  let than =
+    let kind, binding_time = kind_and_binding_time_of_simple t simple in
+    Alias.create kind than binding_time
+  in
+  Alias.defined_earlier alias ~than
