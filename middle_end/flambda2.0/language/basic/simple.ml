@@ -148,14 +148,16 @@ let discriminant t = Discriminant t
 
 let merge_rec_info t ~newer_rec_info =
   match newer_rec_info with
-  | None -> t
+  | None -> Some t
   | Some newer_rec_info ->
     match t with
-    (* CR mshinwell: This should return [None] *)
-    | Const _ | Discriminant _ -> t
-    | Name name -> Rec_name (name, newer_rec_info)
+    | Const _ | Discriminant _ -> None
+    | Name name -> Some (Rec_name (name, newer_rec_info))
     | Rec_name (name, older_rec_info) ->
-      Rec_name (name, Rec_info.merge older_rec_info ~newer:newer_rec_info)
+      let t =
+        Rec_name (name, Rec_info.merge older_rec_info ~newer:newer_rec_info)
+      in
+      Some t
 
 let rec_info t =
   match t with

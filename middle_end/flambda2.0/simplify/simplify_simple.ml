@@ -18,43 +18,31 @@
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
+module K = Flambda_kind
 module T = Flambda_type
 module TE = T.Typing_env
 
-(* CR mshinwell: This should be simplified if possible *)
-let simplify_simple dacc (simple : Simple.t) : _ Or_bottom.t =
+type result =
+  | Ok of Simple.t * T.t
+  | Bottom of K.t
+
+let simplify_simple dacc simple : result =
   let newer_rec_info = Simple.rec_info simple in
-  match Simple.descr simple with
-  | Const c -> simple, T.type_for_const c
-  | Discriminant t -> simple, T.this_discriminant t
-  | Name name ->
-(*Format.eprintf "simplify_simple %a\n%!" Name.print name;*)
-    let typing_env = DE.typing_env (DA.denv dacc) in
-    let ty = TE.find typing_env name in
-(*Format.eprintf "ty: %a\n%!" T.print ty;*)
-    (* We reify an [Equals] type in case the type itself can't be reified but
-       there is an interesting alias (e.g. a symbol). *)
-    let kind = T.kind ty in
-    let canonical_simple, reified =
-      (* Change Aliases to work on Simples, so we don't need reify here. *)
-      T.reify typing_env (T.alias_type_of kind simple)
-    in
-
-
-    let simple, ty =
-      match reified with
-      | Term | Cannot_reify | Lift _ ->
-        Ok (canonical_simple, T.alias_type_of kind canonical_simple)
-      | Invalid -> Bottom
-    in
-    let simple = Simple.merge_rec_info simple ~newer_rec_info in
-    simple, ty
-
-let simplify_simple_and_drop_type dacc simple =
-  fst (simplify_simple dacc simple)
+  let kind, simple =
+    match Simple.descr simple with
+    | Name name -> TE.get_canonical_simple (DE.typing_env (DA.denv dacc)) name
+    | Const const -> T.kind_for_const const, simple
+    | Discriminant _ -> K.fabricated, simple
+  in
+  (* CR mshinwell: Should this look through the alias to determine if the
+     type is [Bottom]? *)
+  match Simple.merge_rec_info simple ~newer_rec_info with
+  | Some simple -> Ok (simple, T.alias_type_of kind simple)
+  | None -> Bottom kind
 
 let simplify_simples dacc simples =
-  List.map (fun simple -> simplify_simple dacc simple) simples
-
-let simplify_simples_and_drop_types dacc simples =
-  List.map (fun simple -> simplify_simple_and_drop_type dacc simple) simples
+  Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
+      match simplify_simple dacc simple with
+      | Ok (simple, ty) -> Ok (simple, ty)
+      | Bottom _kind -> Bottom)
+    simples)

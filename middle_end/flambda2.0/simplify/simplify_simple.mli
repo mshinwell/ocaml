@@ -14,28 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Basic simplification functions on [Simple.t], [Name.t], etc. *)
+(** Simplification functions on [Simple.t]. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: Rename "simplify_simple" -> "simplify" *)
+type result = private
+  | Ok of Simple.t * Flambda_type.t
+  | Bottom of Flambda_kind.t
 
 val simplify_simple
    : Downwards_acc.t
   -> Simple.t
-  -> Simple.t * Flambda_type.t
-
-val simplify_simple_and_drop_type
-   : Downwards_acc.t
-  -> Simple.t
-  -> Simple.t
+  -> result
 
 val simplify_simples
    : Downwards_acc.t
   -> Simple.t list
-  -> (Simple.t * Flambda_type.t) list
-
-val simplify_simples_and_drop_types
-   : Downwards_acc.t
-  -> Simple.t list
-  -> Simple.t list
+  -> (Simple.t * Flambda_type.t) list Or_bottom.t

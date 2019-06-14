@@ -16,34 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Binding_time : sig
-  type t
-
-(*
-  val print : Format.formatter -> t -> unit
-*)
-
-  val symbols : t
-  val earliest_var : t
-  val succ : t -> t
-
-  val strictly_earlier : t -> than:t -> bool
-  val equal : t -> t -> bool
-end = struct
-  include Numbers.Int
-
-  let strictly_earlier t ~than =
-    t < than
-
-  let symbols = 0
-  let earliest_var = 1
-
-  let succ t =
-    if t < earliest_var then
-      Misc.fatal_error "Cannot increment binding time for symbols"
-    else
-      t + 1
-end
+module Aliases = Aliases.Make (Alias)
 
 (* CR mshinwell: Add signatures to these submodules. *)
 module Cached = struct
@@ -287,27 +260,6 @@ let with_current_level_and_next_binding_time t ~current_level
 
 let cached t = One_level.just_after_level t.current_level
 
-let defined_earlier t (simple : Simple.t) ~(than : Simple.t) =
-  match Simple.descr simple, Simple.descr than with
-  | (Const _ | Discriminant _), (Const _ | Discriminant _) ->
-    Simple.compare simple than <= 0
-  | (Const _ | Discriminant _), Name _ -> true
-  | Name _, (Const _ | Discriminant _) -> false
-  | Name name1, Name name2 ->
-    if Name.equal name1 name2 then
-      false
-    else
-      let time1 = Cached.binding_time (cached t) name1 in
-      let time2 = Cached.binding_time (cached t) name2 in
-      if Binding_time.equal time1 time2 then begin
-          Misc.fatal_errorf "Unequal names with same binding time: \
-              %a and %a:@ %a"
-            Name.print name1
-            Name.print name2
-            print t
-        end;
-      Binding_time.strictly_earlier time1 ~than:time2
-
 let add_variable_definition t var kind =
   let name = Name.var var in
   if mem t name then begin
@@ -320,7 +272,7 @@ let add_variable_definition t var kind =
   in
   let just_after_level =
     let aliases =
-      Aliases.add_canonical_name (aliases t) name
+      Aliases.add_canonical_element (aliases t) (Simple.name name)
     in
 (*
 Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.print aliases;
@@ -341,7 +293,7 @@ let add_symbol_definition t sym kind =
   let name = Name.symbol sym in
   let just_after_level =
     let aliases =
-      Aliases.add_canonical_name (aliases t) name
+      Aliases.add_canonical_element (aliases t) (Simple.name name)
     in
     let names_to_types =
       Name.Map.add name (Flambda_type0_core.unknown kind, Binding_time.symbols)
@@ -388,12 +340,13 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
     match Flambda_type0_core.get_alias ty with
     | None -> aliases, Simple.name name, ty
     | Some alias_of ->
-      match
-        Aliases.add aliases (Simple.name name) alias_of
-          ~defined_earlier:(fun simple ~than -> defined_earlier t simple ~than)
-      with
+      let alias =
+        let binding_time = Cached.binding_time (cached t) name in
+        Alias.create_name (T.kind ty) name binding_time
+      in
+      match Aliases.add aliases alias alias_of with
       | None, aliases -> aliases, alias_of, ty
-      | (Some { canonical_name; alias_of; }), aliases ->
+      | (Some { canonical_element; alias_of; }), aliases ->
 (*
 Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
   Name.print name
@@ -402,9 +355,9 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
 *)
         let kind = Flambda_type0_core.kind ty in
         let ty =
-          Flambda_type0_core.alias_type_of kind (Simple.name canonical_name)
+          Flambda_type0_core.alias_type_of kind canonical_element
         in
-        aliases, Simple.name alias_of, ty
+        aliases, alias_of, ty
   in
 (*
 Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
@@ -538,16 +491,23 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
 *)
     env_extension, vars_in_scope_at_cut
 
-let get_canonical_name t name =
-  match Aliases.get_canonical_name (aliases t) name with
+let get_canonical_simple0 t simple =
+  match Aliases.get_canonical_element (aliases t) simple with
   | None ->
-    Misc.fatal_errorf "Cannot get canonical name for unbound \
-        name %a:@ %a"
-      Name.print name
+    Misc.fatal_errorf "Cannot get canonical [Simple] for unbound \
+        [Simple] %a:@ %a"
+      Simple.print simple
       print t
-  | Some name -> name
+  | Some alias -> Alias.kind alias, Alias.simple alias
 
-let aliases_of_simple t simple = Aliases.aliases_of_simple (aliases t) simple
+let get_canonical_simple t name =
+  get_canonical_simple0 t (Simple.name name)
+
+let aliases_of_simple t simple =
+  Alias.Set.fold (fun alias simples ->
+      Simple.Set.add (Alias.simple alias) simples)
+    (Aliases.get_aliases (aliases t) simple)
+    Simple.Set.empty
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
@@ -563,6 +523,8 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
+
+
     match Simple.descr simple with
     | Const const ->
       let const_type = Flambda_type0_core.type_for_const const in
@@ -575,7 +537,9 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
       in
       ty, Some simple
     | Name name ->
-      let name = get_canonical_name t name in
+      match get_canonical_simple t name with
+      | 
+
       let ty = force_to_kind (find t name) in
       match ty with
       | No_alias unknown_or_join -> unknown_or_join, Some (Simple.name name)
@@ -599,10 +563,12 @@ let resolve_any_toplevel_alias_on_ty (type a) t
   | No_alias _ -> ty, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
+    let simple = get_canonical_simple0 t simple in
     match Simple.descr simple with
-    | (Const _ | Discriminant _) -> ty, Some simple
+    | (Const _ | Discriminant _) ->
+      alias_type_of (T.kind ty) simple, Some simple
     | Name name ->
-      let name = get_canonical_name t name in
+      let simple = get_canonical_name t name in
       let ty = force_to_kind (find t name) in
       match ty with
       | No_alias _ -> ty, Some (Simple.name name)

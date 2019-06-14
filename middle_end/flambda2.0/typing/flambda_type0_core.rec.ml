@@ -18,6 +18,13 @@
 
 open Flambda_types
 
+(* CR mshinwell: We should have transformations and invariant checks to
+   enforce that, when a type can be expressed just using [Equals] (e.g. to
+   a tagged immediate [Simple]), then it should be.  In the tagged immediate
+   case this would mean forbidding Blocks_and_tagged_immediates with only
+   a single immediate.  Maybe Blocks_and_tagged_immediates should be made
+   abstract *)
+
 let force_to_kind_value (t : t) =
   match t with
   | Value ty_value -> ty_value
@@ -221,40 +228,65 @@ let unknown (kind : K.t) : t =
 
 let unknown_as_ty_fabricated () : ty_fabricated = No_alias Unknown
 
-let these_naked_immediates (is : Immediate.Set.t) : t =
-  let of_kind : _ of_kind_naked_number = Immediate is in
-  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
+let this_naked_immediate i : t =
+  Naked_number (Equals (Simple.const (Naked_immediate i)))
 
-let these_naked_floats (is : Float.Set.t) : t =
-  let of_kind : _ of_kind_naked_number = Float is in
-  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
+let this_naked_float f : t =
+  Naked_number (Equals (Simple.const (Naked_float f)))
+
+let this_naked_int32 i : t =
+  Naked_number (Equals (Simple.const (Naked_int32 i)))
+
+let this_naked_int64 i : t =
+  Naked_number (Equals (Simple.const (Naked_int64 i)))
+
+let this_naked_nativeint i : t =
+  Naked_number (Equals (Simple.const (Naked_nativeint i)))
+
+let these_naked_immediates (is : Immediate.Set.t) : t =
+  match Immediate.Set.get_singleton is with
+  | Some i -> this_naked_immediate i
+  | None ->
+    if Immediate.Set.is_empty is then bottom K.naked_immediate
+    else
+      let of_kind : _ of_kind_naked_number = Immediate is in
+      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
+
+let these_naked_floats (fs : Float.Set.t) : t =
+  match Float.Set.get_singleton fs with
+  | Some f -> this_naked_float f
+  | None ->
+    if Float.Set.is_empty fs then bottom K.naked_float
+    else
+      let of_kind : _ of_kind_naked_number = Float is in
+      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
 
 let these_naked_int32s (is : Int32.Set.t) : t =
-  let of_kind : _ of_kind_naked_number = Int32 is in
-  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
+  match Int32.Set.get_singleton is with
+  | Some i -> this_naked_int32 i
+  | None ->
+    if Int32.Set.is_empty is then bottom K.naked_int32
+    else
+      let of_kind : _ of_kind_naked_number = Int32 is in
+      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
 
 let these_naked_int64s (is : Int64.Set.t) : t =
-  let of_kind : _ of_kind_naked_number = Int64 is in
-  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
+  match Int64.Set.get_singleton is with
+  | Some i -> this_naked_int64 i
+  | None ->
+    if Int64.Set.is_empty is then bottom K.naked_int64
+    else
+      let of_kind : _ of_kind_naked_number = Int64 is in
+      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
 
 let these_naked_nativeints (is : Targetint.Set.t) : t =
-  let of_kind : _ of_kind_naked_number = Nativeint is in
-  Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
-
-let this_naked_immediate i =
-  these_naked_immediates (Immediate.Set.singleton i)
-
-let this_naked_float f =
-  these_naked_floats (Float.Set.singleton f)
-
-let this_naked_int32 i =
-  these_naked_int32s (Int32.Set.singleton i)
-
-let this_naked_int64 i =
-  these_naked_int64s (Int64.Set.singleton i)
-
-let this_naked_nativeint i =
-  these_naked_nativeints (Targetint.Set.singleton i)
+  match Targetint.Set.get_singleton is with
+  | Some i -> this_naked_nativeint i
+  | None ->
+    if Targetint.Set.is_empty is then bottom K.naked_nativeint
+    else
+      let of_kind : _ of_kind_naked_number = Nativeint is in
+      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
 
 let box_float (t : t) : t =
   match t with
@@ -296,21 +328,23 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       Type_printers.print t
 
-let these_tagged_immediates imms : t =
-  if Immediate.Set.is_empty imms then
-    bottom K.value
-  else
-    let immediates = Immediates.create imms in
-    let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-      { immediates = Known immediates;
-        blocks = Known (Blocks.create_bottom ());
-      }
-    in
-    Value (No_alias (Ok (
-      Blocks_and_tagged_immediates blocks_and_tagged_immediates)))
+let this_tagged_immediate imm : t =
+  Value (Alias (Simple.const (Tagged_immediate imm)))
 
-let this_tagged_immediate imm =
-  these_tagged_immediates (Immediate.Set.singleton imm)
+let these_tagged_immediates imms : t =
+  match Immediate.Set.get_singleton imms with
+  | Some imm -> this_tagged_immediate imm
+  | None ->
+    if Immediate.Set.is_empty imms then bottom K.value
+    else
+      let immediates = Immediates.create imms in
+      let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
+        { immediates = Known immediates;
+          blocks = Known (Blocks.create_bottom ());
+        }
+      in
+      Value (No_alias (Ok (
+        Blocks_and_tagged_immediates blocks_and_tagged_immediates)))
 
 let any_tagged_bool () =
   let bools =
@@ -330,14 +364,11 @@ let boxed_int32_alias_to ~naked_int32 =
 let boxed_int64_alias_to ~naked_int64 =
   box_int64 (Naked_number (Equals (Simple.var naked_int64), Naked_int64))
 
-let this_discriminant_as_ty_fabricated discriminant : ty_fabricated =
-  let discriminants =
-    Discriminants.create (Discriminant.Set.singleton discriminant)
-  in
-  No_alias (Ok (Discriminants discriminants))
+let this_discriminant_as_ty_fabricated discr : ty_fabricated =
+  Equals (Simple.discriminant discr)
 
-let this_discriminant discriminant : t =
-  Fabricated (this_discriminant_as_ty_fabricated discriminant)
+let this_discriminant discr : t =
+  Fabricated (this_discriminant_as_ty_fabricated discr)
 
 let kind (t : t) =
   match t with
@@ -491,6 +522,8 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_int32 n -> this_naked_int32 n
   | Naked_int64 n -> this_naked_int64 n
   | Naked_nativeint n -> this_naked_nativeint n
+
+let kind_for_const const = kind (type_for_const const)
 
 let get_alias t =
   match t with
