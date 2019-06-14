@@ -18,6 +18,8 @@
 
 open! Flambda.Import
 
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module S = Simplify_simple
 module T = Flambda_type
@@ -37,10 +39,11 @@ let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
     Reachable.invalid (), env_extension, dacc
   in
 (*Format.eprintf "Reifying index type: %a\n%!" T.print index_ty;*)
-  match T. dacc index_ty with
-  | Bottom -> invalid ()
-  | Ok None -> unchanged ()
-  | Ok (Some index) ->
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  match T.prove_equals_single_tagged_immediate typing_env index_ty with
+  | Invalid -> invalid ()
+  | Unknown -> unchanged ()
+  | Proved index ->
 (*Format.eprintf "The block index is %a\n%!" Immediate.print index;*)
     let n =
       Targetint.OCaml.add (Immediate.to_targetint index) Targetint.OCaml.one
