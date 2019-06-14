@@ -56,14 +56,14 @@ let equal_or_alias ?bound_name equal_unknown_or_join env
     in
     let all_aliases1 =
       match canonical_simple1 with
-      | None -> Name.Set.empty
+      | None -> Simple.Set.empty
       | Some canonical_simple ->
         Typing_env.aliases_of_simple (Type_equality_env.typing_env_left env)
           canonical_simple
     in
     let all_aliases2 =
       match canonical_simple2 with
-      | None -> Name.Set.empty
+      | None -> Simple.Set.empty
       | Some canonical_simple ->
         Typing_env.aliases_of_simple (Type_equality_env.typing_env_right env)
           canonical_simple
@@ -71,14 +71,16 @@ let equal_or_alias ?bound_name equal_unknown_or_join env
     let all_aliases1 =
       match bound_name with
       | None -> all_aliases1
-      | Some bound_name -> Name.Set.remove bound_name all_aliases1
+      | Some bound_name ->
+        Simple.Set.remove (Simple.name bound_name) all_aliases1
     in
     let all_aliases2 =
       match bound_name with
       | None -> all_aliases2
-      | Some bound_name -> Name.Set.remove bound_name all_aliases2
+      | Some bound_name ->
+        Simple.Set.remove (Simple.name bound_name) all_aliases2
     in
-    if not (Name.Set.equal all_aliases1 all_aliases2) then
+    if not (Simple.Set.equal all_aliases1 all_aliases2) then
       false
     else
       equal_unknown_or_join env unknown_or_join1 unknown_or_join2
