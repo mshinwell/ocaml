@@ -53,6 +53,15 @@ val this_naked_int32 : Int32.t -> Flambda_types.t
 val this_naked_int64 : Int64.t -> Flambda_types.t
 val this_naked_nativeint : Targetint.t -> Flambda_types.t
 
+val this_tagged_immediate_without_alias : Immediate.t -> Flambda_types.t
+val this_naked_immediate_without_alias : Immediate.t -> Flambda_types.t
+val this_naked_float_without_alias
+   : Numbers.Float_by_bit_pattern.t
+  -> Flambda_types.t
+val this_naked_int32_without_alias : Int32.t -> Flambda_types.t
+val this_naked_int64_without_alias : Int64.t -> Flambda_types.t
+val this_naked_nativeint_without_alias : Targetint.t -> Flambda_types.t
+
 val boxed_int32_alias_to : naked_int32:Variable.t -> Flambda_types.t
 val boxed_int64_alias_to : naked_int64:Variable.t -> Flambda_types.t
 
@@ -60,6 +69,7 @@ val box_int32 : Flambda_types.t -> Flambda_types.t
 val box_int64 : Flambda_types.t -> Flambda_types.t
 
 val this_discriminant : Discriminant.t -> Flambda_types.t
+val this_discriminant_without_alias : Discriminant.t -> Flambda_types.t
 
 val immutable_block
    : Tag.t
@@ -84,6 +94,7 @@ val unknown_like : Flambda_types.t -> Flambda_types.t
 val unknown_as_ty_fabricated : unit -> Flambda_types.ty_fabricated
 
 val type_for_const : Simple.Const.t -> Flambda_types.t
+val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t

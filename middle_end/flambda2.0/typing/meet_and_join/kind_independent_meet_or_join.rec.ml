@@ -45,7 +45,7 @@ struct
 
   let all_aliases_of env simple_opt =
     match simple_opt with
-    | None -> Name.Set.empty
+    | None -> Simple.Set.empty
     | Some simple -> Typing_env.aliases_of_simple env simple
 
   let meet_on_unknown_or_join env
@@ -79,15 +79,15 @@ struct
   let meet_ty env
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty * TEE.t =
-    let unknown_or_join1, alias1 =
+    let unknown_or_join1, canonical_simple1 =
       Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
         ~force_to_kind:S.force_to_kind ~print_ty or_alias1
     in
-    let unknown_or_join2, alias2 =
+    let unknown_or_join2, canonical_simple2 =
       Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
         ~force_to_kind:S.force_to_kind ~print_ty or_alias2
     in
-    match alias1, alias2 with
+    match canonical_simple1, canonical_simple2 with
     | None, None ->
       let unknown_or_join, env_extension =
         meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
@@ -151,13 +151,13 @@ Format.eprintf "TEE from meeting simples (2): %a\n%!"
     in
     (* CR mshinwell: Think further about this "bound name" stuff. *)
     let shared_aliases_not_aliasing_bound_name =
-      Name.Set.diff
-        (Name.Set.inter (all_aliases_of env canonical_simple1)
+      Simple.Set.diff
+        (Simple.Set.inter (all_aliases_of env canonical_simple1)
           (all_aliases_of env canonical_simple2))
         (all_aliases_of env (Option.map Simple.name bound_name))
     in
-    match Name.Set.choose_opt shared_aliases_not_aliasing_bound_name with
-    | Some name -> Equals (Simple.name name)
+    match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
+    | Some simple -> Equals simple
     | None ->
       No_alias (join_on_unknown_or_join env unknown_or_join1 unknown_or_join2)
 

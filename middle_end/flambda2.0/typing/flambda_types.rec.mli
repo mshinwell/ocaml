@@ -39,10 +39,10 @@ and 'a ty = 'a unknown_or_join or_alias
  *)
 and 'a unknown_or_join = 'a Or_unknown_or_bottom.t
 
-and 'a resolved =
+and resolved =
   | Const of Simple.Const.t
   | Discriminant of Discriminant.t
-  | Resolved of 'a
+  | Resolved of resolved_t
 
 (* CR mshinwell: Put this in its own submodule *)
 and resolved_t =
