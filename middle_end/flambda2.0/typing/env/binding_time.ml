@@ -19,8 +19,9 @@ include Numbers.Int
 let strictly_earlier t ~than =
   t < than
 
-let symbols = 0
-let earliest_var = 1
+let consts_and_discriminants = 0
+let symbols = 1
+let earliest_var = 2
 
 let succ t =
   if t < earliest_var then

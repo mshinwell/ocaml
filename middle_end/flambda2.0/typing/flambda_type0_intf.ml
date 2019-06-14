@@ -315,13 +315,10 @@ module type S = sig
     | Boxed_nativeint of Targetint.t
 
   type reification_result = private
-    | Term of Simple.t * t
     | Lift of to_lift
     | Cannot_reify
     | Invalid
 
-  (** Try to produce a canonical Flambda term that has the given Flambda type.
-      The resulting term will always be a constant. *)
   val reify : (t -> reification_result) type_accessor
 
   type 'a proof = private

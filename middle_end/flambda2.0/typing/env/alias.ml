@@ -55,11 +55,14 @@ include Identifiable.Make (struct
   let output _ _ = Misc.fatal_error "Not yet implemented"
 end)
 
-let create_name kind name binding_time =
-  { simple = Simple.name name;
+let create kind simple binding_time =
+  { simple;
     kind;
     binding_time;
   }
+
+let create_name kind name binding_time =
+  create kind (Simple.name name) binding_time
 
 let defined_earlier t ~than =
   match Simple.descr t.simple, Simple.descr than.simple with

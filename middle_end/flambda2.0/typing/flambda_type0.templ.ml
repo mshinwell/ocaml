@@ -78,41 +78,117 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   type 'a type_accessor = Typing_env.t -> 'a
 
-  let unknown_types_from_arity t =
-    List.map (fun kind -> unknown kind) t
+  let unknown_types_from_arity arity =
+    List.map (fun kind -> unknown kind) arity
 
   let is_bottom env t =
-    let t, _simple = Typing_env.resolve_any_toplevel_alias env t in
-    is_obviously_bottom t
+    match Typing_env.resolve_type env t with
+    | Resolved (Resolved_value Bottom)
+    | Resolved (Resolved_naked_number Bottom)
+    | Resolved (Resolved_fabricated Bottom) -> true
+    | Const _ | Discriminant _
+    | Resolved (Resolved_value _)
+    | Resolved (Resolved_naked_number _)
+    | Resolved (Resolved_fabricated _) -> false
 
   type 'a proof =
     | Proved of 'a
     | Unknown
     | Invalid
 
+  (* CR mshinwell: These next two functions could maybe share some code *)
+
+  let prove_equals_single_tagged_immediate env t : _ proof =
+    let original_kind = kind t in
+    if not (K.equal original_kind K.value) then begin
+      Misc.fatal_errorf "Type %a is not of kind value"
+        Type_printers.print t
+    end;
+    match get_alias t with
+    | None -> Unknown
+    | Some simple ->
+      match Simple.descr simple with
+      | Const (Tagged_immediate imm) -> Proved imm
+      | Const _ | Discriminant _ ->
+        Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
+            different from that returned by [kind] (%a):@ %a"
+          Simple.print simple
+          K.print original_kind
+          Type_printers.print t
+      | Name name ->
+        let kind, simple = Typing_env.get_canonical_simple env name in
+        if not (K.equal kind K.value) then begin
+          Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
+              different from that returned by [kind] (%a):@ %a"
+            Simple.print simple
+            K.print kind
+            K.print original_kind
+        end;
+        match Simple.descr simple with
+        | Const (Tagged_immediate imm) -> Proved imm
+        | Name _ -> Unknown
+        | Const _ | Discriminant _ ->
+          Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
+              doesn't match the kind of the returned [Simple] %a"
+            K.print kind
+            Simple.print simple
+
+  let prove_equals_to_symbol env t : _ proof =
+    let original_kind = kind t in
+    if not (K.equal original_kind K.value) then begin
+      Misc.fatal_errorf "Type %a is not of kind value"
+        Type_printers.print t
+    end;
+    (* CR mshinwell: The [get_alias] thing should presumably return the
+       canonical one *)
+    match get_alias t with
+    | None -> Unknown
+    | Some simple ->
+      match Simple.descr simple with
+      | Const _ | Discriminant _ ->
+        Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
+            different from that returned by [kind] (%a):@ %a"
+          Simple.print simple
+          K.print original_kind
+          Type_printers.print t
+      | Name name ->
+        let kind, simple = Typing_env.get_canonical_simple env name in
+        if not (K.equal kind K.value) then begin
+          Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
+              different from that returned by [kind] (%a):@ %a"
+            Simple.print simple
+            K.print kind
+            K.print original_kind
+        end;
+        match Simple.descr simple with
+        | Name (Symbol sym) -> Proved sym
+        | Name (Var _) -> Unknown
+        | Const _ | Discriminant _ ->
+          Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
+              doesn't match the kind of the returned [Simple] %a"
+            K.print kind
+            Simple.print simple
+
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
-    let resolved, _simple = Typing_env.resolve_type env t in
-    match resolved with
-    | Resolved_value Unknown -> Unknown
-    | Resolved_value (Ok (Closures closures)) ->
-      begin
-        match Closures_entry_by_closure_id.get_singleton closures.by_closure_id
-      with
-      | None -> Unknown
-      | Some ((closure_id, _var_within_closures), closures_entry) ->
-        Proved (closure_id, closures_entry.function_decl)
-      end
-    | Resolved_value (Ok _) -> Invalid
-    | Resolved_value Bottom -> Invalid
-    | Resolved_naked_number _ -> wrong_kind ()
-    | Resolved_fabricated _ -> wrong_kind ()
-
-  let prove_equals_to_symbol env t =
-    let _resolved, simple = Typing_env.resolve_type env t in
-    match Option.map Simple.descr simple with
-    | Some (Name (Symbol sym)) -> Some sym
-    | _ -> None
+    match Typing_env.resolve_type env t with
+    | Const _ | Discriminant _ -> Invalid
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value (Ok (Closures closures)) ->
+        begin
+          match Closures_entry_by_closure_id.get_singleton
+            closures.by_closure_id
+        with
+        | None -> Unknown
+        | Some ((closure_id, _var_within_closures), closures_entry) ->
+          Proved (closure_id, closures_entry.function_decl)
+        end
+      | Resolved_value (Ok _) -> Invalid
+      | Resolved_value Bottom -> Invalid
+      | Resolved_naked_number _ -> wrong_kind ()
+      | Resolved_fabricated _ -> wrong_kind ()
 
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (Symbol.t list)
@@ -122,122 +198,69 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Boxed_nativeint of Targetint.t
 
   type reification_result =
-    | Term of Simple.t * t
     | Lift of to_lift
     | Cannot_reify
     | Invalid
 
-  (* CR mshinwell: Move into submodule *)
-  let resolved_type_is_bottom (resolved_t : resolved_t) =
-    match resolved_t with
-    | Resolved_value Bottom -> true
-    | Resolved_naked_number (Bottom, _) -> true
-    | Resolved_fabricated Bottom -> true
-    | Resolved_value _ -> false
-    | Resolved_naked_number _ -> false
-    | Resolved_fabricated _ -> false
-
-  let reify env ~allow_free_variables:_ t : reification_result =
-    let resolved, canonical_simple = Typing_env.resolve_type env t in
-    (* CR mshinwell: We should probably also resolve aliases throughout the
-       type to try to get them to symbols. *)
-    let _can_lift =
-      Name_occurrences.only_contains_symbols (Type_free_names.free_names t)
-    in
-(*
-Format.eprintf "reify %a\n%!" Type_printers.print t;
-*)
-    if resolved_type_is_bottom resolved then Invalid
-    else
-      let result =
-        match canonical_simple with
-        | None -> None
-        | Some simple ->
-          match Simple.descr simple with
-          | Name (Symbol _) | Const _ | Discriminant _ ->
-            Some (Term (simple, alias_type_of (kind t) simple))
-          | Name (Var _) ->
-            let all_aliases = Typing_env.aliases_of_simple env simple in
-  (*Format.eprintf "all_aliases %a\n%!" Name.Set.print all_aliases;*)
-            let all_symbol_aliases = Name.set_to_symbol_set all_aliases in
-            begin match Symbol.Set.get_singleton all_symbol_aliases with
-            | Some symbol ->
-              (* CR mshinwell: I'm not sure this should ever happen, since the
-                 symbol should always be the canonical, in preference to a
-                 variable. *)
-  (*Format.eprintf "using symbol %a\n%!" Symbol.print symbol;*)
-              let simple = Simple.symbol symbol in
-              Some (Term (simple, alias_type_of (kind t) simple))
-            | None -> None
-            end
-      in
-      match result with
-      | Some result -> result
-      | None ->
-        match resolved with
-        | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
-          begin match blocks_imms.blocks, blocks_imms.immediates with
-          | Known blocks, Known imms ->
-            if Immediates.is_bottom imms then
-              match Blocks.get_singleton blocks with
-              | None -> Cannot_reify
-              | Some ((tag, size), field_types) ->
-                assert (Targetint.OCaml.equal size
-                  (Blocks.Int_indexed_product.width field_types));
-                (* CR mshinwell: Could recognise other things, e.g. tagged
-                   immediates and float arrays, supported by [Static_part]. *)
-                let field_types =
-                  Blocks.Int_indexed_product.components field_types
-                in
-                let symbols =
-                  List.filter_map (fun field_type ->
-                      prove_equals_to_symbol env field_type)
-                    field_types
-                in
-                if List.compare_lengths field_types symbols = 0 then
-                  match Tag.Scannable.of_tag tag with
-                  | Some tag -> Lift (Immutable_block (tag, symbols))
-                  | None -> Cannot_reify
-                else
-                  Cannot_reify
-            else if Blocks.is_bottom blocks then
-              match Immediates.get_singleton imms with
-              | None -> Cannot_reify
-              | Some imm ->
-                let simple = Simple.const (Tagged_immediate imm) in
-                Term (simple, alias_type_of K.value simple)
-            else
-              Cannot_reify
-          | _, _ -> Cannot_reify
-          end
-        | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
-          let unknown_or_join, _canonical_simple =
-            Typing_env.resolve_any_toplevel_alias_on_ty0 env
-              ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
-              ~print_ty:Type_printers.print_ty_naked_int64
-              ty_naked_int64
-          in
-          begin match unknown_or_join with
-          | Ok (Int64 ints) ->
-            begin match Int64.Set.get_singleton ints with
-            | Some i -> Lift (Boxed_int64 i)
+  let reify env t : reification_result =
+    match Typing_env.resolve_type env t with
+    | Const _ | Discriminant _ -> Cannot_reify
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        begin match blocks_imms.blocks, blocks_imms.immediates with
+        | Known blocks, Known imms ->
+          if Immediates.is_bottom imms then
+            match Blocks.get_singleton blocks with
             | None -> Cannot_reify
-            end
-          | _ -> Cannot_reify
-          end
-        | Resolved_naked_number (Ok (Int32 ints), Naked_int32) ->
-          begin match Int32.Set.get_singleton ints with
-          | Some i ->
-            Term (Simple.const (Naked_int32 i),
-              Flambda_type0_core.this_naked_int32 i)
-          | None -> Cannot_reify
-          end
-        | Resolved_naked_number (Ok (Int64 ints), Naked_int64) ->
+            | Some ((tag, size), field_types) ->
+              assert (Targetint.OCaml.equal size
+                (Blocks.Int_indexed_product.width field_types));
+              (* CR mshinwell: Could recognise other things, e.g. tagged
+                 immediates and float arrays, supported by [Static_part]. *)
+              let field_types =
+                Blocks.Int_indexed_product.components field_types
+              in
+              let symbols =
+                List.filter_map (fun field_type ->
+                    prove_equals_to_symbol env field_type)
+                  field_types
+              in
+              if List.compare_lengths field_types symbols = 0 then
+                match Tag.Scannable.of_tag tag with
+                | Some tag -> Lift (Immutable_block (tag, symbols))
+                | None -> Cannot_reify
+              else
+                Cannot_reify
+          else if Blocks.is_bottom blocks then
+            match Immediates.get_singleton imms with
+            | None -> Cannot_reify
+            | Some imm ->
+              let simple = Simple.const (Tagged_immediate imm) in
+              Term (simple, alias_type_of K.value simple)
+          else
+            Cannot_reify
+        | _, _ -> Cannot_reify
+        end
+(*
+      | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
+        let unknown_or_join, _canonical_simple =
+          Typing_env.resolve_any_toplevel_alias_on_ty0 env
+            ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
+            ~print_ty:Type_printers.print_ty_naked_int64
+            ty_naked_int64
+        in
+        begin match unknown_or_join with
+        | Ok (Int64 ints) ->
           begin match Int64.Set.get_singleton ints with
-          | Some i ->
-            Term (Simple.const (Naked_int64 i),
-              Flambda_type0_core.this_naked_int64 i)
+          | Some i -> Lift (Boxed_int64 i)
           | None -> Cannot_reify
           end
         | _ -> Cannot_reify
+        end
+*)
+      | Resolved_value Bottom
+      | Resolved_naked_number Bottom
+      | Resolved_fabricated Bottom -> Invalid
+      | _ -> Cannot_reify
 end
