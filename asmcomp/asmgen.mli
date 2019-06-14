@@ -35,6 +35,31 @@ val compile_implementation
   -> Lambda.program
   -> unit
 
+(** The type of converters from Lambda to Flambda2 programs *)
+type middle_end2 =
+     ppf_dump:Format.formatter
+  -> prefixname:string
+  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> size:int
+  -> filename:string
+  -> module_ident:Ident.t
+  -> module_initializer:Lambda.lambda
+  -> Flambda2.Flambda_static.Program.t
+
+(** Compile an implementation from Lambda using the given middle end. *)
+val compile_implementation2
+   : ?toplevel:(string -> bool)
+  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> filename:string
+  -> prefixname:string
+  -> size:int
+  -> module_ident:Ident.t
+  -> module_initializer:Lambda.lambda
+  -> middle_end:middle_end2
+  -> ppf_dump:Format.formatter
+  -> Ident.Set.t
+  -> unit
+
 val compile_phrase :
     ppf_dump:Format.formatter -> Cmm.phrase -> unit
 
