@@ -172,7 +172,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
       funs
       (Closure_id.Map.empty, Closure_id.Map.empty, r)
   in
-  let dacc = DA.with_r dacc r in
+  let result_dacc = DA.with_r result_dacc r in
   let function_decls = Function_declarations.create funs in
   let set_of_closures =
     Set_of_closures.create ~function_decls ~closure_elements
@@ -244,8 +244,8 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
     Symbol.Map.add set_of_closures_symbol set_of_closures_type
       static_structure_types
   in
-  let dacc = DA.with_denv dacc denv in
-  set_of_closures, dacc, set_of_closures_type, static_structure_types,
+  let result_dacc = DA.with_denv result_dacc denv in
+  set_of_closures, result_dacc, set_of_closures_type, static_structure_types,
     static_structure
 
 let simplify_static_part_of_kind_value dacc
@@ -361,6 +361,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
     | Some computation ->
       let return_cont_arity = KP.List.arity computation.computed_values in
       let denv = DA.denv dacc in
+      let definition_denv = denv in
       assert (Scope.equal (DE.get_continuation_scope_level denv)
         Scope.initial);
       let wrapper_cont_scope = Scope.initial in
@@ -410,17 +411,24 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           dummy_cont_handler
           ~body:computation.expr
           (fun cont_uses_env r ->
-            let dacc =
-              DA.map_denv dacc
-                ~f:(fun denv -> DE.add_lifted_constants_from_r denv r)
+            let definition_denv =
+              DE.increment_continuation_scope_level definition_denv
+            in
+            let definition_denv =
+              DE.add_lifted_constants definition_denv
+                (R.get_lifted_constants r)
             in
             let typing_env, arg_types =
               CUE.continuation_env_and_arg_types cont_uses_env
-                ~definition_typing_env:(DE.typing_env (DA.denv dacc))
+                ~definition_typing_env:(DE.typing_env definition_denv)
                 computation.return_continuation
             in
             assert (List.compare_lengths arg_types
               computation.computed_values = 0);
+            let definition_denv =
+              DE.with_typing_environment definition_denv typing_env
+            in
+            let dacc = DA.create definition_denv cont_uses_env r in
             let dacc =
               DA.map_denv dacc ~f:(fun denv ->
                 List.fold_left2 (fun denv ty param ->
