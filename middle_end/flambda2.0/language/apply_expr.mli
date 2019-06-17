@@ -62,6 +62,8 @@ val inline : t -> Inline_attribute.t
 (** Change the return continuation of an application. *)
 val with_continuation : t -> Continuation.t -> t
 
+val with_continuations : t -> Continuation.t -> Exn_continuation.t -> t
+
 (** Change the call kind of an application. *)
 val with_call_kind : t -> Call_kind.t -> t
 
