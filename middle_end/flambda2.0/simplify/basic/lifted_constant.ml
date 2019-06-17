@@ -71,6 +71,7 @@ let create_from_static_structure types
     pieces
 
 let introduce (T { types; _ }) typing_env =
+  let orig_typing_env = typing_env in
   let allowed = TE.var_domain typing_env in
   let typing_env =
     Symbol.Map.fold (fun sym typ typing_env ->
@@ -85,7 +86,8 @@ let introduce (T { types; _ }) typing_env =
   Symbol.Map.fold (fun sym typ typing_env ->
       let sym = Name.symbol sym in
       if not (TE.mem typing_env sym) then
-        TE.add_equation typing_env sym (T.erase_aliases typ ~allowed)
+        TE.add_equation typing_env sym
+          (T.erase_aliases orig_typing_env ~allowed typ)
       else
         typing_env)
     types

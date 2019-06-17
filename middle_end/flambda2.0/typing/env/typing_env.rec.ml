@@ -84,8 +84,13 @@ module One_level = struct
   }
 
   let print_with_cache ~cache:_ ppf
-        { scope = _; level; just_after_level = _; } =
-    Typing_env_level.print ppf level
+        { scope; level; just_after_level = _; } =
+    Format.fprintf ppf "@[<hov 1>\
+        @[<hov 1>(scope@ %a)@]@ \
+        @[<hov 1>(level@ %a)@]\
+        @]"
+      Scope.print scope
+      Typing_env_level.print level
 
   let create scope level ~just_after_level =
     { scope;
@@ -353,9 +358,10 @@ let invariant_for_new_equation t name ty =
 
 let add_equation t name ty =
   if not (mem t name) then begin
-    Misc.fatal_errorf "Cannot add equation on unbound name %a in \
+    Misc.fatal_errorf "Cannot add equation on unbound name@ %a@ =@ %a@ in \
         environment:@ %a"
       Name.print name
+      Type_printers.print ty
       print t
   end;
 (*
@@ -455,6 +461,7 @@ let (* rec *) add_env_extension starting_t level : t =
 
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
+  let original_t = t in
   if Scope.(>) min_scope current_scope then
     Typing_env_level.empty, var_domain t
   else
@@ -491,7 +498,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
 (*
 Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   Scope.print min_scope
-  print orig_t
+  print original_t
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
 *)
     let meet_env = Meet_env.create t in
@@ -507,8 +514,10 @@ Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_l
                the moment, any [Equals] aliases to names not in scope at the cut
                point have to be squashed to "Unknown". *)
             One_level.level one_level
-            |> Typing_env_level.remove_definitions_and_equations_thereon
-            |> Typing_env_level.erase_aliases ~allowed:vars_in_scope_at_cut
+            |> Typing_env_level.remove_definitions_and_equations
+                 ~allowed:vars_in_scope_at_cut
+            |> Typing_env_level.erase_aliases original_t
+                 ~allowed:vars_in_scope_at_cut
           in
 (*
 Format.eprintf "Level for meet:@ %a\n%!" Typing_env_level.print level;
@@ -649,7 +658,7 @@ let create_using_resolver_and_symbol_bindings_from t =
         | Var _ -> None
         | Symbol _ ->
           let typ =
-            Type_erase_aliases.erase_aliases typ ~allowed:Variable.Set.empty
+            Type_erase_aliases.erase_aliases t ~allowed:Variable.Set.empty typ
           in
           Some (typ, binding_time))
   in

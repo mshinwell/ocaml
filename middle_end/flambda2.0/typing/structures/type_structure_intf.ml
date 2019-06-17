@@ -40,7 +40,7 @@ module type S = sig
      that we're trying to propagate bottom upwards? *)
   val join : typing_env -> t -> t -> t
 
-  val erase_aliases : t -> allowed:Variable.Set.t -> t
+  val erase_aliases : t -> typing_env -> allowed:Variable.Set.t -> t
 
   val free_names : t -> Name_occurrences.t
 

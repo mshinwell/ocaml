@@ -24,17 +24,19 @@ module UA = Upwards_acc
 module UE = Simplify_env_and_result.Upwards_env
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
-      exn_continuation scope =
+      exn_continuation ~return_cont_scope ~exn_cont_scope =
   DA.check_continuation_is_bound dacc return_continuation;
   DA.check_exn_continuation_is_bound dacc exn_continuation;
   let expr, cont_uses_env, uacc =
     try
       Simplify_expr.simplify_expr dacc expr (fun cont_uses_env r ->
         let uenv =
-          UE.add_continuation UE.empty return_continuation scope return_arity
+          UE.add_continuation UE.empty return_continuation
+            return_cont_scope return_arity
         in
         let uenv =
-          UE.add_exn_continuation uenv exn_continuation scope
+          UE.add_exn_continuation uenv exn_continuation
+            exn_cont_scope
         in
         cont_uses_env, UA.create uenv r)
     with Misc.Fatal_error -> begin

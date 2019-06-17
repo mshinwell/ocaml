@@ -57,11 +57,13 @@ let join env t1 t2 =
   | Bottom -> create_bottom ()
 
 let erase_aliases ({ function_decl; closure_elements; set_of_closures; } : t)
-      ~allowed : t =
+      env ~allowed : t =
   { function_decl;
-    closure_elements = Closure_elements.erase_aliases closure_elements ~allowed;
+    closure_elements =
+      Closure_elements.erase_aliases closure_elements env ~allowed;
     set_of_closures =
-      Type_erase_aliases.erase_aliases_ty_fabricated set_of_closures ~allowed;
+      Type_erase_aliases.erase_aliases_ty_fabricated env ~allowed
+        set_of_closures;
   }
 
 let free_names ({ function_decl = _; closure_elements; set_of_closures; } : t) =
