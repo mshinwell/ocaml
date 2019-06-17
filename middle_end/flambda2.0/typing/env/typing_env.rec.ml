@@ -115,7 +115,7 @@ end
 
 type t = {
   resolver : (Export_id.t -> Flambda_types.t option);
-  defined_symbols : Symbol.Set.t;
+  defined_symbols : Flambda_kind.t Symbol.Map.t;
   prev_levels : One_level.t Scope.Map.t;
   (* CR mshinwell: hold list of symbol definitions, then change defined_names
      to variables, then remove artificial symbol precedence *)
@@ -126,7 +126,7 @@ type t = {
 let is_empty t =
   One_level.is_empty t.current_level
     && Scope.Map.is_empty t.prev_levels
-    && Symbol.Set.is_empty t.defined_symbols
+    && Symbol.Map.is_empty t.defined_symbols
 
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
@@ -144,7 +144,7 @@ let print_with_cache ~cache ppf
             )@]"
         (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
         (One_level.print_with_cache ~cache) current_level
-        Symbol.Set.print defined_symbols)
+        (Symbol.Map.print K.print) defined_symbols)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -199,7 +199,7 @@ let create ~resolver =
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
     next_binding_time = Binding_time.earliest_var;
-    defined_symbols = Symbol.Set.empty;
+    defined_symbols = Symbol.Map.empty;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
@@ -324,7 +324,10 @@ let add_symbol_definition t sym kind =
     One_level.create (current_scope t) (One_level.level t.current_level)
       ~just_after_level
   in
-  with_current_level t ~current_level
+  let t = with_current_level t ~current_level in
+  { t with
+    defined_symbols = Symbol.Map.add sym kind t.defined_symbols;
+  }
 
 let alias_of_simple t simple =
   let kind, binding_time =
@@ -360,6 +363,14 @@ let add_equation t name ty =
   if not (mem t name) then begin
     Misc.fatal_errorf "Cannot add equation on unbound name@ %a@ =@ %a@ in \
         environment:@ %a"
+      Name.print name
+      Type_printers.print ty
+      print t
+  end;
+  let free_names = Type_free_names.free_names ty in
+  if not (Name_occurrences.subset free_names (domain t)) then begin
+    Misc.fatal_errorf "Cannot add equation, involving unbound names, on \
+        name@ %a@ =@ %a@ in environment:@ %a"
       Name.print name
       Type_printers.print ty
       print t
@@ -479,7 +490,11 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
     in
     let t =
       if Scope.Map.is_empty strictly_less then
-        create ~resolver:t.resolver
+        let t = create ~resolver:t.resolver in
+        Symbol.Map.fold (fun symbol kind t ->
+            add_symbol_definition t symbol kind)
+          original_t.defined_symbols
+          t
       else
         let current_scope, current_level =
           Scope.Map.max_binding strictly_less
@@ -487,12 +502,21 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
         let prev_levels =
           Scope.Map.remove current_scope strictly_less
         in
-        { resolver = t.resolver;
-          prev_levels;
-          current_level;
-          next_binding_time = t.next_binding_time;
-          defined_symbols = t.defined_symbols;
-        }
+        let t =
+          { resolver = t.resolver;
+            prev_levels;
+            current_level;
+            next_binding_time = t.next_binding_time;
+            defined_symbols = t.defined_symbols;
+          }
+        in
+        Symbol.Map.fold (fun symbol kind t ->
+            if not (mem t (Name.symbol symbol)) then
+              add_symbol_definition t symbol kind
+            else
+              t)
+          original_t.defined_symbols
+          t
     in
     invariant t;
 (*
@@ -631,7 +655,9 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
         ty_naked_number
     in
     begin match Option.map Simple.descr canonical_simple with
-    | Some (Const _)
+    | Some (Const ((Naked_immediate _ | Naked_float _ | Naked_int32 _
+        | Naked_int64 _ | Naked_nativeint _) as const)) -> Const const
+    | Some (Const (Tagged_immediate _))
     | Some (Discriminant _) -> Misc.fatal_error "Kind error"
     | Some (Name _)
     | None -> Resolved (Resolved_naked_number (unknown_or_join, kind))
