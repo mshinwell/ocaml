@@ -101,3 +101,6 @@ let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
 let arity t =
   let extra_args = List.map (fun (_simple, kind) -> kind) t.extra_args in
   Flambda_kind.value :: extra_args
+
+let with_exn_handler t exn_handler =
+  { t with exn_handler; }

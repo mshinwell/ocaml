@@ -165,6 +165,11 @@ module type Upwards_env = sig
 
   val resolve_continuation_aliases : t -> Continuation.t -> Continuation.t
 
+  val resolve_exn_continuation_aliases
+     : t
+    -> Exn_continuation.t
+    -> Exn_continuation.t
+
   val continuation_arity : t -> Continuation.t -> Flambda_arity.t
 
   val check_continuation_is_bound : t -> Continuation.t -> unit
