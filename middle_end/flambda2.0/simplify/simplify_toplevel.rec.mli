@@ -22,7 +22,8 @@ val simplify_toplevel
   -> return_continuation:Continuation.t
   -> return_arity:Flambda_arity.t
   -> Exn_continuation.t
-  -> Scope.t
+  -> return_cont_scope:Scope.t
+  -> exn_cont_scope:Scope.t
   -> Flambda.Expr.t
        * Continuation_uses_env.t
        * Simplify_env_and_result.Result.t

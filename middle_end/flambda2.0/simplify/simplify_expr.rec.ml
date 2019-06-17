@@ -112,21 +112,26 @@ and simplify_body_of_non_recursive_let_cont
          * 'a * UA.t
 = fun dacc cont cont_handler ~body k ->
   let definition_denv = DA.denv dacc in
-  let definition_scope_level =
-    DE.get_continuation_scope_level definition_denv
-  in
   let body, (cont_handler, additional_cont_handler, uenv', user_data),
       uacc =
     let arity = Continuation_handler.arity cont_handler in
+    (* CR mshinwell: the following two names might be misleading *)
+    let wrapper_scope_level =
+      (* A gap in the levels is always left for a potential wrapper. *)
+      DE.get_continuation_scope_level definition_denv
+    in
+    let original_cont_scope_level = Scope.next wrapper_scope_level in
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
-        (* The level is incremented by two to leave a gap in case a
-           wrapper is generated for this continuation handler. *)
         DE.increment_continuation_scope_level
           (DE.increment_continuation_scope_level denv))
     in
     let dacc =
-      DA.add_continuation dacc cont ~definition_scope_level arity
+      (* CR mshinwell: Can we stop scope levels being stored in both upwards
+         and downwards environments, to avoid any potential for
+         disagreement? *)
+      DA.add_continuation dacc cont
+        ~definition_scope_level:original_cont_scope_level arity
     in
     simplify_expr dacc body (fun cont_uses_env r ->
       (* The environment currently in [dacc] is not the correct environment
@@ -138,6 +143,9 @@ and simplify_body_of_non_recursive_let_cont
          The environment in [dacc] does, however, contain the usage
          information for the continuation.  This will be used to
          compute the types of the continuation's parameter(s). *)
+      let definition_denv =
+        DE.increment_continuation_scope_level definition_denv
+      in
       let definition_denv =
         DE.add_lifted_constants definition_denv
           (R.get_lifted_constants r)
@@ -167,18 +175,13 @@ and simplify_body_of_non_recursive_let_cont
       let uenv = UA.uenv uacc in
       let uenv' = uenv in
       let uenv =
-        let definition_scope_level =
-          match additional_cont_handler with
-          | None -> definition_scope_level
-          | Some _ -> Scope.next definition_scope_level
-        in
         if Continuation_handler.is_exn_handler cont_handler then
-          UE.add_continuation uenv cont definition_scope_level arity
+          UE.add_continuation uenv cont original_cont_scope_level arity
         else
           match Continuation_handler.behaviour cont_handler with
           | Unreachable { arity; } ->
             UE.add_unreachable_continuation uenv cont
-              definition_scope_level arity
+              original_cont_scope_level arity
           | Alias_for { arity; alias_for; } ->
             UE.add_continuation_alias uenv cont arity ~alias_for
           | Unknown { arity; } ->
@@ -189,21 +192,21 @@ and simplify_body_of_non_recursive_let_cont
                 | None -> None
                 | Some (cont, cont_handler) ->
                   let arity = Continuation_handler.arity cont_handler in
-                  Some (cont, definition_scope_level, arity)
+                  Some (cont, original_cont_scope_level, arity)
               in
               UE.add_continuation_to_inline uenv cont
-                definition_scope_level arity
+                original_cont_scope_level arity
                 cont_handler
                 ~wrapper_with_scope_and_arity
             else
-              UE.add_continuation uenv cont definition_scope_level arity
+              UE.add_continuation uenv cont original_cont_scope_level arity
       in
       let uenv =
         match additional_cont_handler with
         | None -> uenv
         | Some (cont, cont_handler) ->
           let arity = Continuation_handler.arity cont_handler in
-          UE.add_continuation uenv cont definition_scope_level arity
+          UE.add_continuation uenv cont wrapper_scope_level arity
       in
       let uacc = UA.with_uenv uacc uenv in
       (cont_handler, additional_cont_handler, uenv', user_data), uacc)

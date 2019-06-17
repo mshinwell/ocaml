@@ -18,14 +18,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val erase_aliases : allowed:Variable.Set.t -> Flambda_types.t -> Flambda_types.t
+val erase_aliases
+   : Typing_env.t
+  -> allowed:Variable.Set.t
+  -> Flambda_types.t
+  -> Flambda_types.t
 
 val erase_aliases_ty_value
-   : allowed:Variable.Set.t
+   : Typing_env.t
+  -> allowed:Variable.Set.t
   -> Flambda_types.ty_value
   -> Flambda_types.ty_value
 
 val erase_aliases_ty_fabricated
-   : allowed:Variable.Set.t
+   : Typing_env.t
+  -> allowed:Variable.Set.t
   -> Flambda_types.ty_fabricated
   -> Flambda_types.ty_fabricated

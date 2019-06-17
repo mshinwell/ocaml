@@ -46,21 +46,28 @@ let simplify_function dacc closure_id function_decl
 Format.eprintf "Closure ID %a, entering closure\n%!"
   Closure_id.print closure_id;
 *)
-        let scope = Scope.initial in
+        let denv = DE.enter_closure denv in
+        let return_cont_scope = Scope.initial in
+        let exn_cont_scope = Scope.next return_cont_scope in
+        assert (Scope.equal return_cont_scope
+          (DE.get_continuation_scope_level denv));
         let dacc =
           DA.add_continuation dacc return_continuation
-            ~definition_scope_level:scope
+            ~definition_scope_level:return_cont_scope
             result_arity
         in
         let dacc =
           DA.add_exn_continuation dacc exn_continuation
-            ~definition_scope_level:scope
+            ~definition_scope_level:exn_cont_scope
         in
-        let denv = DE.enter_closure denv in
 (*
 Format.eprintf "Closure ID %a, done entering closure\n%!"
   Closure_id.print closure_id;
 *)
+        let denv =
+          DE.increment_continuation_scope_level
+            (DE.increment_continuation_scope_level denv)
+        in
         let denv = DE.add_parameters_with_unknown_types denv params in
 (*
 Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
@@ -91,7 +98,6 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
           | Some (set_of_closures, set_of_closures_type) ->
             DE.add_equation_on_name denv set_of_closures set_of_closures_type
         in
-        let denv = DE.increment_continuation_scope_level denv in
         let dacc = DA.with_denv dacc denv in
 (*
 Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
@@ -111,7 +117,8 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
               ~return_continuation
               ~return_arity:result_arity
               exn_continuation
-              scope
+              ~return_cont_scope
+              ~exn_cont_scope
           with Misc.Fatal_error -> begin
             Format.eprintf "\n%sContext is:%s simplifying function \
                 with closure ID %a,@ params %a,@ return continuation %a,@ \
@@ -200,7 +207,8 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
   in
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
-        T.erase_aliases_ty_value ty_value ~allowed:Variable.Set.empty)
+        T.erase_aliases_ty_value (DE.typing_env denv)
+          ~allowed:Variable.Set.empty ty_value)
       closure_element_types
   in
   let closure_types =

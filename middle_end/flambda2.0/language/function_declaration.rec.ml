@@ -78,7 +78,7 @@ let print_with_cache0 ~compact ~cache ppf
           @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
           @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
           @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-          @[<hov 1>@<0>%s(recursive@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
           @[<hov 1>(closure_origin@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ \
@@ -110,11 +110,7 @@ let print_with_cache0 ~compact ~cache ppf
         (match recursive with
          | Non_recursive -> Flambda_colours.elide ()
          | Recursive -> Flambda_colours.normal ())
-        (Flambda_colours.normal ())
         Recursive.print recursive
-        (match recursive with
-         | Non_recursive -> Flambda_colours.elide ()
-         | Recursive -> Flambda_colours.normal ())
         (Flambda_colours.normal ())
         Closure_origin.print closure_origin
         Continuation.print return_continuation

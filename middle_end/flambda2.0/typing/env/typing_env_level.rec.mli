@@ -50,8 +50,8 @@ val meet : Meet_env.t -> t -> t -> t
 
 val join : Typing_env.t -> t -> t -> t
 
-val erase_aliases : t -> allowed:Variable.Set.t -> t
+val erase_aliases : Typing_env.t -> allowed:Variable.Set.t -> t -> t
 
-val remove_definitions_and_equations_thereon : t -> t
+val remove_definitions_and_equations : t -> allowed:Variable.Set.t -> t
 
 val mem : t -> Name.t -> bool
