@@ -113,14 +113,18 @@ let make_decision_for_call_site denv ~function_decl_rec_info
     | None ->
       if apply_inlining_depth >= max_inlining_depth then
         Max_inlining_depth_exceeded
-      else if Rec_info.depth function_decl_rec_info >= max_rec_depth then
-        Recursion_depth_exceeded
       else
         match inline with
         | Never_inline -> Never_inline_attribute
         | Default_inline ->
-          Inline { attribute = None; unroll_to = None; }
+          if Rec_info.depth function_decl_rec_info >= max_rec_depth then
+            Recursion_depth_exceeded
+          else
+            Inline { attribute = None; unroll_to = None; }
         | Unroll unroll_to ->
+          let unroll_to =
+            Rec_info.depth function_decl_rec_info + unroll_to
+          in
           Inline { attribute = Some Unroll; unroll_to = Some unroll_to; }
         | Always_inline ->
           Inline { attribute = Some Always; unroll_to = None; }
