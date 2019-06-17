@@ -58,15 +58,21 @@ let equal_or_alias ?bound_name equal_unknown_or_join env
       match canonical_simple1 with
       | None -> Simple.Set.empty
       | Some canonical_simple ->
-        Typing_env.aliases_of_simple (Type_equality_env.typing_env_left env)
-          canonical_simple
+        match Simple.descr canonical_simple with
+        | Const _ | Discriminant _ -> Simple.Set.empty
+        | Name name ->
+          Typing_env.aliases_of_name (Type_equality_env.typing_env_left env)
+            name
     in
     let all_aliases2 =
       match canonical_simple2 with
       | None -> Simple.Set.empty
       | Some canonical_simple ->
-        Typing_env.aliases_of_simple (Type_equality_env.typing_env_right env)
-          canonical_simple
+        match Simple.descr canonical_simple with
+        | Const _ | Discriminant _ -> Simple.Set.empty
+        | Name name ->
+          Typing_env.aliases_of_name (Type_equality_env.typing_env_right env)
+            name
     in
     let all_aliases1 =
       match bound_name with

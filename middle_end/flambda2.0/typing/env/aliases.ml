@@ -19,6 +19,7 @@ module Make (E : sig
   include Identifiable.S with type t := t
 
   val defined_earlier : t -> than:t -> bool
+  val implicitly_bound_and_canonical : t -> bool
 end) = struct
   type t = {
     canonical_elements : E.t E.Map.t;
@@ -219,15 +220,6 @@ end) = struct
       in
       Some add_result, t
 
-  let add t simple1 simple2 =
-    let original_t = t in
-    let add_result, t = add_alias t simple1 simple2 in
-    invariant t;
-    Option.iter (fun add_result ->
-        invariant_add_result t ~original_t add_result)
-      add_result;
-    add_result, t
-
   let add_canonical_element t element =
     if E.Map.mem element t.canonical_elements then begin
       Misc.fatal_errorf "Element %a already in alias tracker:@ %a"
@@ -241,6 +233,23 @@ end) = struct
     { canonical_elements;
       aliases_of_canonical_elements;
     }
+
+  let add_implicitly_bound_canonical_element t element =
+    if E.implicitly_bound_and_canonical element then
+      add_canonical_element t element
+    else
+      t
+
+  let add t element1 element2 =
+    let original_t = t in
+    let t = add_implicitly_bound_canonical_element t element1 in
+    let t = add_implicitly_bound_canonical_element t element2 in
+    let add_result, t = add_alias t element1 element2 in
+    invariant t;
+    Option.iter (fun add_result ->
+        invariant_add_result t ~original_t add_result)
+      add_result;
+    add_result, t
 
   let get_canonical_element t element =
     match E.Map.find element t.canonical_elements with

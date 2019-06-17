@@ -26,6 +26,8 @@ include Identifiable.Make (struct
   let compare
         { simple = simple1; kind = kind1; binding_time = binding_time1; }
         { simple = simple2; kind = kind2; binding_time = binding_time2; } =
+    let simple1 = Simple.without_rec_info simple1 in
+    let simple2 = Simple.without_rec_info simple2 in
     let c = Simple.compare simple1 simple2 in
     if c <> 0 then c
     else
@@ -77,12 +79,17 @@ let defined_earlier t ~than =
       let time1 = t.binding_time in
       let time2 = than.binding_time in
       if Binding_time.equal time1 time2 then begin
-          Misc.fatal_errorf "Unequal [Alias]es with same binding time: \
-              %a and %a"
-            print t
-            print than
-        end;
+        Misc.fatal_errorf "Unequal [Alias]es with same binding time: \
+            %a and %a"
+          print t
+          print than
+      end;
       Binding_time.strictly_earlier time1 ~than:time2
 
 let simple t = t.simple
 let kind t = t.kind
+
+let implicitly_bound_and_canonical t =
+  match Simple.descr t.simple with
+  | Const _ | Discriminant _ -> true
+  | Name _ -> false
