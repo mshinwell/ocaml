@@ -109,12 +109,14 @@ let meet env (t1 : t) (t2 : t) =
   end else if is_empty t2 then begin
     t1
   end else begin
-    (* CR mshinwell: There may be a more efficient way of doing this. *)
+    (* CR mshinwell: There may be a more efficient way of doing this.
+       Are we wasting time doing meets again when we've already got the
+       best types? *)
     let env = Meet_env.env env in
     let env = Typing_env.increment_scope env in
+    let level = Typing_env.current_scope env in
     let env = Typing_env.add_env_extension env t1 in
     let env = Typing_env.add_env_extension env t2 in
-    let level = Typing_env.current_scope env in
     let env_extension, _names_in_scope_at_cut =
       Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
     in
@@ -143,9 +145,10 @@ let join env (t1 : t) (t2 : t) : t =
     names_with_equations_in_join
     empty
 
-let erase_aliases t ~allowed =
+let erase_aliases env ~allowed t =
   let equations =
-    Name.Map.map (fun ty -> Type_erase_aliases.erase_aliases ty ~allowed)
+    Name.Map.map (fun ty ->
+        Type_erase_aliases.erase_aliases env ~allowed ty)
       t.equations
   in
   { t with
@@ -162,11 +165,16 @@ let meet_equation t1 env name ty =
   meet env t1 t2
 *)
 
-let remove_definitions_and_equations_thereon t =
+let remove_definitions_and_equations t ~allowed =
+  if not (Variable.Set.is_empty
+    (Variable.Set.inter allowed (Variable.Map.keys t.defined_vars)))
+  then begin
+    Misc.fatal_error "[allowed] set must not include any [defined_vars]"
+  end;
   let equations =
     Name.Map.filter (fun (name : Name.t) _ty ->
         match name with
-        | Var var -> not (Variable.Map.mem var t.defined_vars)
+        | Var var -> Variable.Set.mem var allowed
         | Symbol _ -> true)
       t.equations
   in

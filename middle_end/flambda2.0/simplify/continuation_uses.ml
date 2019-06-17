@@ -45,47 +45,69 @@ module Use = struct
 end
 
 type t = {
+  continuation : Continuation.t;
   definition_scope_level : Scope.t;
   arity : Flambda_arity.t;
   uses : Use.t list;
 }
 
-let create arity ~definition_scope_level =
-  { definition_scope_level;
+let create continuation arity ~definition_scope_level =
+  { continuation;
+    definition_scope_level;
     arity;
     uses = [];
   }
 
-let print ppf { definition_scope_level; arity; uses; } =
+let print ppf { continuation; definition_scope_level; arity; uses; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(definition_scope_level %a)@]@ \
-      @[<hov 1>(arity %a)@]@ \
-      @[<hov 1>(uses %a)@]\
+      @[<hov 1>(continuation@ %a)@]@ \
+      @[<hov 1>(definition_scope_level@ %a)@]@ \
+      @[<hov 1>(arity@ %a)@]@ \
+      @[<hov 1>(uses@ %a)@]\
       )@]"
+    Continuation.print continuation
     Scope.print definition_scope_level
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
 let add_use t typing_env ~arg_types =
-  let arity = T.arity_of_list arg_types in
-  if not (Flambda_arity.equal arity t.arity) then begin
-    Misc.fatal_errorf "Arity of use (%a) doesn't match continuation's \
-        arity (%a)"
-      Flambda_arity.print arity
-      Flambda_arity.print t.arity
-  end;
-  let cut_point = Scope.next t.definition_scope_level in
-  let env_extension, vars_in_scope_at_cut =
-    TE.cut typing_env ~unknown_if_defined_at_or_later_than:cut_point
-  in
-  let arg_types =
-    List.map (fun ty -> T.erase_aliases ty ~allowed:vars_in_scope_at_cut)
-      arg_types
-  in
-  let use = Use.create env_extension ~arg_types in
-  { t with
-    uses = use :: t.uses;
-  }
+  try
+    let arity = T.arity_of_list arg_types in
+    if not (Flambda_arity.equal arity t.arity) then begin
+      Misc.fatal_errorf "Arity of use (%a) doesn't match continuation's \
+          arity (%a)"
+        Flambda_arity.print arity
+        Flambda_arity.print t.arity
+    end;
+    let cut_point = Scope.next t.definition_scope_level in
+(*
+  Format.eprintf "**** Unknown >= %a, env:@ %a\n%!"
+    Scope.print cut_point
+    TE.print typing_env;
+*)
+    let env_extension, vars_in_scope_at_cut =
+      TE.cut typing_env ~unknown_if_defined_at_or_later_than:cut_point
+    in
+    let arg_types =
+      List.map (fun ty ->
+          T.erase_aliases typing_env ~allowed:vars_in_scope_at_cut ty)
+        arg_types
+    in
+    let use = Use.create env_extension ~arg_types in
+    { t with
+      uses = use :: t.uses;
+    }
+  with Misc.Fatal_error -> begin
+    Format.eprintf "\n%sContext is:%s adding use of %a with arg types@ (%a);@ \
+          existing uses:@ %a; environment:@ %a"
+      (Flambda_colours.error ())
+      (Flambda_colours.normal ())
+      Continuation.print t.continuation
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
+      print t
+      TE.print typing_env;
+    raise Misc.Fatal_error
+  end
 
 let env_and_arg_types t env =
   match t.uses with
