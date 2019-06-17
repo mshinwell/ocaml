@@ -299,6 +299,12 @@ end = struct
     | exception Not_found -> cont
     | alias_for -> alias_for
 
+  let resolve_exn_continuation_aliases t exn_cont =
+    let cont = Exn_continuation.exn_handler exn_cont in
+    match Continuation.Map.find cont t.continuation_aliases with
+    | exception Not_found -> exn_cont
+    | alias_for -> Exn_continuation.with_exn_handler exn_cont alias_for
+
   let continuation_arity t cont =
     match find_continuation t cont with
     | Unknown { arity; }

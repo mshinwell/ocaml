@@ -176,7 +176,13 @@ and simplify_body_of_non_recursive_let_cont
       let uenv' = uenv in
       let uenv =
         if Continuation_handler.is_exn_handler cont_handler then
-          UE.add_continuation uenv cont original_cont_scope_level arity
+          match Continuation_handler.behaviour cont_handler with
+          | Alias_for { arity; alias_for; } ->
+            (* CR mshinwell: More checks here?  e.g. on the arity and
+               ensuring the aliased continuation is an exn handler too *)
+            UE.add_continuation_alias uenv cont arity ~alias_for
+          | Unreachable _ | Unknown _ ->
+            UE.add_continuation uenv cont original_cont_scope_level arity
         else
           match Continuation_handler.behaviour cont_handler with
           | Unreachable { arity; } ->
@@ -332,6 +338,14 @@ and simplify_direct_full_application
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
   | None ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    let return_cont =
+      UE.resolve_continuation_aliases (UA.uenv uacc) (Apply.continuation apply)
+    in
+    let exn_cont =
+      UE.resolve_exn_continuation_aliases (UA.uenv uacc)
+        (Apply.exn_continuation apply)
+    in
+    let apply = Apply.with_continuations apply return_cont exn_cont in
     Expr.create_apply apply, user_data, uacc
 
 and simplify_direct_partial_application
