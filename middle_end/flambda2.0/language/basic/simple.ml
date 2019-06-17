@@ -164,6 +164,11 @@ let rec_info t =
   | Rec_name (_, rec_info) -> Some rec_info
   | Name _ | Const _ | Discriminant _ -> None
 
+let without_rec_info t =
+  match t with
+  | Rec_name (name, _rec_info) -> Name name
+  | Name _ | Const _ | Discriminant _ -> t
+
 let must_be_var t =
   match t with
   | Name (Var var) | Rec_name (Var var, _) -> Some var
@@ -262,7 +267,7 @@ module T0 = Identifiable.Make (struct
     match t with
     | Name name -> Name.print ppf name
     | Rec_name (name, rec_info) ->
-      Format.fprintf ppf "%a%a"
+      Format.fprintf ppf "%a@ %a"
         Name.print name
         Rec_info.print rec_info
     | Const c -> Const.print ppf c

@@ -523,21 +523,18 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
     env_extension, vars_in_scope_at_cut
 
 (* CR mshinwell: Think about [Rec_info] in the context of this one *)
-let get_canonical_simple0 t simple =
-  let alias = alias_of_simple t simple in
+let get_canonical_simple t name =
+  let alias = alias_of_simple t (Simple.name name) in
   match Aliases.get_canonical_element (aliases t) alias with
   | None ->
-    Misc.fatal_errorf "Cannot get canonical [Simple] for unbound \
-        [Simple] %a:@ %a"
-      Simple.print simple
+    Misc.fatal_errorf "Cannot get canonical [Simple] for unbound name \
+        %a:@ %a"
+      Name.print name
       print t
   | Some alias -> Alias.kind alias, Alias.simple alias
 
-let get_canonical_simple t name =
-  get_canonical_simple0 t (Simple.name name)
-
-let aliases_of_simple t simple =
-  let alias = alias_of_simple t simple in
+let aliases_of_name t name =
+  let alias = alias_of_simple t (Simple.name name) in
   Alias.Set.fold (fun alias simples ->
       Simple.Set.add (Alias.simple alias) simples)
     (Aliases.get_aliases (aliases t) alias)
@@ -558,7 +555,11 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
-    let _kind, simple = get_canonical_simple0 t simple in
+    let simple =
+      match Simple.descr simple with
+      | Const _ | Discriminant _ -> simple
+      | Name name -> snd (get_canonical_simple t name)
+    in
     match Simple.descr simple with
     (* CR mshinwell: Could check kinds against [S.kind] here. *)
     | Const const ->

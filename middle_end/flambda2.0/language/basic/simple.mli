@@ -54,6 +54,8 @@ val const : Const.t -> t
 
 val rec_info : t -> Rec_info.t option
 
+val without_rec_info : t -> t
+
 val merge_rec_info : t -> newer_rec_info:Rec_info.t option -> t option
 
 val must_be_var : t -> Variable.t option
