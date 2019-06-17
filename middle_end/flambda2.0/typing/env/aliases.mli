@@ -22,6 +22,7 @@ module Make (E : sig
   include Identifiable.S with type t := t
 
   val defined_earlier : t -> than:t -> bool
+  val implicitly_bound_and_canonical : t -> bool
 end) : sig
   type t
 

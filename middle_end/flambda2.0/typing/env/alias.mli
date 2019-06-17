@@ -27,3 +27,5 @@ val defined_earlier : t -> than:t -> bool
 val simple : t -> Simple.t
 
 val kind : t -> Flambda_kind.t
+
+val implicitly_bound_and_canonical : t -> bool

@@ -57,7 +57,7 @@ val add_env_extension
 
 val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
 
-val aliases_of_simple : t -> Simple.t -> Simple.Set.t
+val aliases_of_name : t -> Name.t -> Simple.Set.t
 
 val cut
    : t

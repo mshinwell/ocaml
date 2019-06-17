@@ -108,8 +108,6 @@ module type S = sig
 
     val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
 
-    val aliases_of_simple : t -> Simple.t -> Simple.Set.t
-
     val cut
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
