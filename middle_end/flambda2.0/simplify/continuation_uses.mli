@@ -24,7 +24,8 @@
 type t
 
 val create
-   : Flambda_arity.t
+   : Continuation.t
+  -> Flambda_arity.t
   -> definition_scope_level:Scope.t
   -> t
 

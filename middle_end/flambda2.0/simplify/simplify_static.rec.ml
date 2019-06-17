@@ -360,17 +360,28 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       dacc, None, static_structure
     | Some computation ->
       let return_cont_arity = KP.List.arity computation.computed_values in
-      let scope = Scope.initial in
+      let denv = DA.denv dacc in
+      assert (Scope.equal (DE.get_continuation_scope_level denv)
+        Scope.initial);
+      let wrapper_cont_scope = Scope.initial in
+      let dummy_cont_scope = Scope.next wrapper_cont_scope in
+      let exn_cont_scope = Scope.next dummy_cont_scope in
       let dacc =
         DA.add_exn_continuation dacc computation.exn_continuation
-          ~definition_scope_level:scope
+          ~definition_scope_level:exn_cont_scope
       in
       let dummy_cont = Continuation.create () in
       let dacc =
         DA.add_continuation dacc dummy_cont
-          ~definition_scope_level:scope
+          ~definition_scope_level:dummy_cont_scope
           return_cont_arity
       in
+      let denv =
+        DE.increment_continuation_scope_level
+          (DE.increment_continuation_scope_level
+            (DE.increment_continuation_scope_level denv))
+      in
+      let dacc = DA.with_denv dacc denv in
       let dummy_cont_handler =
         (* The handler will never be executed.  It just needs to be an
            expression that cannot be simplified away and must have the
@@ -432,7 +443,12 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
                 computation.computed_values
             in
             let uenv =
-              UE.add_continuation UE.empty dummy_cont scope return_cont_arity
+              UE.add_continuation UE.empty dummy_cont dummy_cont_scope
+                return_cont_arity
+            in
+            let uenv =
+              UE.add_exn_continuation uenv computation.exn_continuation
+                exn_cont_scope
             in
             let uacc = UA.create uenv r in
             (used_computed_values, static_structure, dacc), uacc)

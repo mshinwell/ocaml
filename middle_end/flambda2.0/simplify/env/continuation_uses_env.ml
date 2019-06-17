@@ -34,7 +34,7 @@ let add_continuation t cont ~definition_scope_level arity =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found ->
     let uses =
-      Continuation_uses.create arity ~definition_scope_level
+      Continuation_uses.create cont arity ~definition_scope_level
     in
     { continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
     }
@@ -49,7 +49,7 @@ let add_exn_continuation t exn_cont ~definition_scope_level =
   | exception Not_found ->
     let arity = Exn_continuation.arity exn_cont in
     let uses =
-      Continuation_uses.create arity ~definition_scope_level
+      Continuation_uses.create cont arity ~definition_scope_level
     in
     { continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
     }
