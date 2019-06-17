@@ -239,6 +239,12 @@ let apply_name_permutation
 let with_continuation t continuation =
   { t with continuation; }
 
+let with_continuations t continuation exn_continuation =
+  { t with
+    continuation;
+    exn_continuation;
+  }
+
 let with_call_kind t call_kind =
   { t with call_kind; }
 
