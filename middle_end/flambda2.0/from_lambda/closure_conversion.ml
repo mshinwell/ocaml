@@ -51,7 +51,7 @@ let symbol_for_ident t id =
 let tupled_function_call_stub
       (original_params : (Variable.t * Lambda.value_kind) list)
       (unboxed_version : Closure_id.t)
-      ~(closure_bound_var : Closure_id.t)
+      ~(closure_id : Closure_id.t)
       recursive =
   let dbg = Debuginfo.none in
   let return_continuation = Continuation.create () in
@@ -88,12 +88,11 @@ let tupled_function_call_stub
   let body_with_closure_bound =
     let move : Flambda_primitive.unary_primitive =
       Move_within_set_of_closures {
-        move_from = closure_bound_var;
+        move_from = closure_id;
         move_to = unboxed_version;
       }
     in
-    Expr.create_let unboxed_version_var
-      K.value
+    Expr.create_let (Singleton unboxed_version_var)
       (Named.create_prim (Unary (move, Simple.var my_closure)) dbg)
       call
   in
@@ -108,7 +107,7 @@ let tupled_function_call_stub
               Simple.const (Tagged_immediate pos)))
             dbg
         in
-        let expr = Expr.create_let param K.value defining_expr body in
+        let expr = Expr.create_let (Singleton param) defining_expr body in
         pos + 1, expr)
       (0, body_with_closure_bound)
       params
@@ -125,7 +124,7 @@ let tupled_function_call_stub
       ~my_closure
   in
   Flambda.Function_declaration.create
-    ~closure_origin:(Closure_origin.create closure_bound_var)
+    ~closure_origin:(Closure_origin.create closure_id)
     ~params_and_body
     ~result_arity:[K.value]
     ~stub:true
@@ -254,8 +253,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
         | Some named ->
           (fun args ->
              let unboxed_arg = Variable.create "unboxed" in
-             Expr.create_let unboxed_arg
-               (LC.kind_of_primitive_native_repr arg_repr)
+             Expr.create_let (Singleton unboxed_arg)
                (Named.create_prim (Unary (named, arg)) dbg)
                (call ((Simple.var unboxed_arg) :: args))))
       args
@@ -282,7 +280,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     | Some box_return_value ->
       let boxed_value = Variable.rename let_bound_var in
       let body =
-        Flambda.Expr.create_let boxed_value K.value
+        Flambda.Expr.create_let (Singleton boxed_value)
           (Named.create_prim
             (Unary (box_return_value, Simple.var let_bound_var))
             dbg)
@@ -363,29 +361,10 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind prim ~args dbg k
 
-let infer_let_kind (defining_expr : Named.t)
-      ~(lambda_kind : Lambda.value_kind) =
-  (* The Lambda language kinds don't wholly coincide with the Flambda kinds. We
-     pass through Lambda kinds as the Flambda equivalents when we can; these
-     will be verified by invariant checks. In other cases, we infer the Flambda
-     kind. *)
-  match defining_expr with
-  | Prim (Unary (Discriminant_of_int, _), _dbg)
-  | Prim (Unary ((Is_int | Get_tag _), _), _dbg) -> K.fabricated
-  | Set_of_closures _ ->
-    begin match lambda_kind with
-    | Pgenval -> K.fabricated
-    | _ ->
-      Misc.fatal_errorf "Wrong Lambda kind %a for binding of the following \
-          set of closures:@ %a"
-        Printlambda.value_kind' lambda_kind
-        Named.print defining_expr
-    end
-  | Simple _ | Prim _ -> LC.value_kind lambda_kind
-
 let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
-  | Let (id, kind, defining_expr, body) ->
+  | Let (id, _kind, defining_expr, body) ->
+    (* CR mshinwell: Remove [kind] on the Ilambda terms? *)
     let body_env, var = Env.add_var_like env id in
     let cont (defining_expr : Named.t option) =
       let body_env =
@@ -398,11 +377,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       let body = close t body_env body in
       match defining_expr with
       | None -> body
-      | Some defining_expr ->
-        let kind =
-          infer_let_kind defining_expr ~lambda_kind:kind
-        in
-        Expr.create_let var kind defining_expr body
+      | Some defining_expr -> Expr.create_let (Singleton var) defining_expr body
     in
     close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
@@ -534,7 +509,7 @@ and close_let_rec t env ~defs ~body =
                params; return; body; free_idents_of_body;
                attr; loc; stub;
              } : Ilambda.function_declaration)) ->
-        let closure_bound_var =
+        let closure_id =
           Closure_id.wrap
             (Variable.create_with_same_name_as_ident let_rec_ident)
         in
@@ -546,47 +521,28 @@ and close_let_rec t env ~defs ~body =
         in
         let function_declaration =
           Function_decl.create ~let_rec_ident:(Some let_rec_ident)
-            ~closure_bound_var ~kind ~params ~return ~return_continuation
+            ~closure_id ~kind ~params ~return ~return_continuation
             ~exn_continuation ~body ~attr ~loc ~free_idents_of_body ~stub
             recursive
         in
         function_declaration)
       defs
   in
-  let name =
-    (* The Microsoft assembler has a 247-character limit on symbol
-       names, so we keep them shorter to try not to hit this. *)
-    (* CR-soon mshinwell: We should work out how to shorten symbol names
-       anyway, to help avoid enormous ELF string tables. *)
-    if Sys.win32 then begin
-      match defs with
-      | (id, _)::_ -> (Ident.unique_name id) ^ "_let_rec"
-      | _ -> "let_rec"
-    end else begin
-      String.concat "_and_"
-        (List.map (fun (id, _) -> Ident.unique_name id) defs)
-    end
+  let closure_vars =
+    List.fold_left (fun closure_vars decl ->
+        let closure_var =
+          Env.find_var env (Function_decl.let_rec_ident decl)
+        in
+        let closure_id = Function_decl.closure_id decl in
+        Closure_id.Map.add closure_id closure_var closure_vars)
+      Closure_id.Map.empty
+      function_declarations
   in
-  let set_of_closures_var = Variable.create name in
   let set_of_closures =
     close_functions t env (Function_decls.create function_declarations)
   in
-  let body =
-    let set_of_closures_var = Simple.var set_of_closures_var in
-    List.fold_left (fun body decl ->
-        let let_rec_ident = Function_decl.let_rec_ident decl in
-        let closure_bound_var = Function_decl.closure_bound_var decl in
-        let let_bound_var = Env.find_var env let_rec_ident in
-        let project_closure : Flambda_primitive.t =
-          Unary (Project_closure closure_bound_var, set_of_closures_var)
-        in
-        Expr.create_let let_bound_var
-          K.value (Named.create_prim project_closure Debuginfo.none)
-          body)
-      (close t env body)
-      function_declarations
-  in
-  Expr.create_let set_of_closures_var K.fabricated set_of_closures body
+  let body = close t env body in
+  Expr.create_let (Set_of_closures { closure_vars; }) set_of_closures body
 
 and close_functions t external_env function_declarations =
   let all_free_idents =
@@ -605,7 +561,7 @@ and close_functions t external_env function_declarations =
   let closure_ids_from_idents =
     List.fold_left (fun map decl ->
         let id = Function_decl.let_rec_ident decl in
-        let closure_id = Function_decl.closure_bound_var decl in
+        let closure_id = Function_decl.closure_id decl in
         Ident.Map.add id closure_id map)
       Ident.Map.empty
       (Function_decls.to_list function_declarations)
@@ -641,7 +597,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   let return = Function_decl.return decl in
   let recursive = Function_decl.recursive decl in
   let my_closure = Variable.create "my_closure" in
-  let closure_bound_var = Function_decl.closure_bound_var decl in
+  let closure_id = Function_decl.closure_id decl in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
   let unboxed_version =
     Closure_id.wrap (Variable.create (
@@ -649,7 +605,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let my_closure_id =
     match Function_decl.kind decl with
-    | Curried -> closure_bound_var
+    | Curried -> closure_id
     | Tupled -> unboxed_version
   in
   (* The free variables are:
@@ -727,7 +683,7 @@ and close_one_function t ~external_env ~by_closure_id decl
               move_to = closure_id;
             }
           in
-          Expr.create_let var K.value
+          Expr.create_let (Singleton var)
             (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
             body)
       project_closure_to_bind
@@ -737,8 +693,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     Variable.Map.fold (fun var var_within_closure body ->
         if not (Variable.Set.mem var free_vars_of_body) then body
         else
-          Expr.create_let var
-            K.value
+          Expr.create_let (Singleton var)
             (Named.create_prim
               (Unary (Project_var var_within_closure, my_closure'))
               Debuginfo.none)
@@ -770,11 +725,11 @@ and close_one_function t ~external_env ~by_closure_id decl
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
     let generic_function_stub =
-      tupled_function_call_stub param_vars unboxed_version ~closure_bound_var
+      tupled_function_call_stub param_vars unboxed_version ~closure_id
         recursive
     in
     Closure_id.Map.add unboxed_version fun_decl
-      (Closure_id.Map.add closure_bound_var generic_function_stub by_closure_id)
+      (Closure_id.Map.add closure_id generic_function_stub by_closure_id)
 
 let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       (ilam : Ilambda.program) : Flambda_static.Program.t =
@@ -812,7 +767,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     List.fold_left (fun body (pos, var) ->
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-        Expr.create_let var K.value
+        Expr.create_let (Singleton var)
           (Named.create_prim
             (Binary (
               Block_load (Block (Value Anything), Immutable),

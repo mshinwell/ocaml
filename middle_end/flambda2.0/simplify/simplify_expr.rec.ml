@@ -40,26 +40,18 @@ let rec simplify_let
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
-  L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let (defining_expr : Reachable.t), dacc, ty =
+  L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
+    let (defining_expr : Reachable.t), dacc =
       Simplify_named.simplify_named dacc (L.defining_expr let_expr)
-        ~result_var:bound_var
+        ~result_vars:bound_vars
     in
-    let kind = L.kind let_expr in
-    let new_kind = T.kind ty in
-    if not (K.equal new_kind kind) then begin
-      Misc.fatal_errorf "Kind changed during simplification of [Let] \
-          binding (new kind %a):@ %a"
-        K.print new_kind
-        L.print let_expr
-    end;
     match defining_expr with
     | Invalid _ ->
       let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
       Expr.create_invalid (), user_data, uacc
     | Reachable defining_expr ->
       let body, user_data, uacc = simplify_expr dacc body k in
-      let expr = Expr.create_let bound_var kind defining_expr body in
+      let expr = Expr.create_let bound_vars defining_expr body in
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
@@ -426,7 +418,7 @@ and simplify_direct_partial_application
           match Simple.must_be_var applied_arg with
           | None -> expr
           | Some applied_arg ->
-            Expr.create_let applied_arg K.value
+            Expr.create_let (Singleton applied_arg)
               (Named.create_prim
                 (Unary (Project_var closure_var, Simple.var my_closure))
                 dbg)
@@ -467,7 +459,7 @@ and simplify_direct_partial_application
       ~args:[Simple.var wrapper_var]
   in
   let expr =
-    Expr.create_let wrapper_var K.value
+    Expr.create_let (Singleton wrapper_var)
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in

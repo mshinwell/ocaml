@@ -16,46 +16,42 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Bound_var_and_body =
-  Name_abstraction.Make (Bindable_variable_in_terms) (Expr)
+module T = Flambda_type
+
+module Bound_vars_and_body = Name_abstraction.Make (Bindable_let_bound) (Expr)
 
 type t = {
-  bound_var_and_body : Bound_var_and_body.t;
-  kind : Flambda_kind.t;
+  bound_vars_and_body : Bound_vars_and_body.t;
   defining_expr : Named.t;
 }
 
 let pattern_match t ~f =
-  Bound_var_and_body.pattern_match t.bound_var_and_body
-    ~f:(fun bound_var body -> f ~bound_var ~body)
+  Bound_vars_and_body.pattern_match t.bound_vars_and_body
+    ~f:(fun bound_vars body -> f ~bound_vars ~body)
 
 let print_with_cache ~cache ppf
-      ({ bound_var_and_body = _; kind; defining_expr; } as t) =
+      ({ bound_vars_and_body = _; defining_expr; } as t) =
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with
-    | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
-      pattern_match t ~f:(fun ~bound_var ~body ->
+    | Let ({ bound_vars_and_body = _; defining_expr; } as t) ->
+      pattern_match t ~f:(fun ~bound_vars ~body ->
         fprintf ppf
-          "@ @[<hov 1>@<0>%s%a@<0>%s@[@ \u{2237}@ %a@] @<0>%s=@<0>%s@ %a@]"
+          "@ @[<hov 1>@<0>%s%a @<0>%s=@<0>%s@ %a@]"
           (Flambda_colours.let_bound_var ())
-          Variable.print bound_var
-          (Flambda_colours.normal ())
-          Flambda_kind.print kind
+          Bindable_let_bound.print bound_vars
           (Flambda_colours.elide ())
           (Flambda_colours.normal ())
           (Named.print_with_cache ~cache) defining_expr;
         let_body body)
     | _ -> expr
   in
-  pattern_match t ~f:(fun ~bound_var ~body ->
+  pattern_match t ~f:(fun ~bound_vars ~body ->
     fprintf ppf "@[<hov 1>(@<0>%slet@<0>%s@ @[<hv 1>(\
-        @<0>%s%a@<0>%s@[@ \u{2237}@ %a@] @<0>%s=@<0>%s@ %a"
+        @<0>%s%a @<0>%s=@<0>%s@ %a"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (Flambda_colours.let_bound_var ())
-      Variable.print bound_var
-      (Flambda_colours.normal ())
-      Flambda_kind.print kind
+      Bindable_let_bound.print bound_vars
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())
       (Named.print_with_cache ~cache) defining_expr;
@@ -65,58 +61,63 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create ~bound_var ~kind ~defining_expr ~body =
-  let bound_var_and_body = Bound_var_and_body.create bound_var body in
-  { bound_var_and_body;
-    kind;
+let create ~bound_vars ~defining_expr ~body =
+  let bound_vars_and_body = Bound_vars_and_body.create bound_vars body in
+  { bound_vars_and_body;
     defining_expr;
   }
 
 let invariant env t =
   let module E = Invariant_env in
-  pattern_match t ~f:(fun ~bound_var ~body ->
-    let named_kind =
-      match Named.invariant_returning_kind env t.defining_expr with
-      | Singleton kind -> Some kind
-      | Unit -> Some K.value
-    in
-    begin match named_kind with
-    | None -> ()
-    | Some named_kind ->
-      if not (K.equal named_kind t.kind) then begin
-        Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
-            equal to the annotated kind (%a);@ [Let] expression is:@ %a"
-          K.print named_kind
-          K.print t.kind
+  Named.invariant env t.defining_expr;
+  pattern_match t ~f:(fun ~bound_vars ~body ->
+    let env =
+      match t.defining_expr, bound_vars with
+      | Set_of_closures _, Set_of_closures { closure_vars; } ->
+        Closure_id.Map.fold (fun _closure_id closure_var env ->
+            E.add_variable env closure_var K.value)
+          closure_vars
+          env
+      | Set_of_closures _, Singleton _ ->
+        Misc.fatal_errorf "Cannot bind a [Set_of_closures] to a \
+            [Singleton]:@ %a"
           print t
-      end
-    end;
-    let env = E.add_variable env bound_var t.kind in
+      | _, Set_of_closures _ ->
+        Misc.fatal_errorf "Cannot bind a non-[Set_of_closures] to a \
+            [Set_of_closures]:@ %a"
+          print t
+      | Prim (prim, _dbg), Singleton var ->
+        E.add_variable env var (Flambda_primitive.result_kind' prim)
+      | Simple simple, Singleton var ->
+        match Simple.descr simple with
+        | Const const -> E.add_variable env var (T.kind_for_const const)
+        | Discriminant _ -> E.add_variable env var K.fabricated
+        | Name name -> E.add_variable env var (E.kind_of_name env name)
+    in
     Expr.invariant env body)
 
-let kind t = t.kind
 let defining_expr t = t.defining_expr
 
-let free_names ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
-  pattern_match t ~f:(fun ~bound_var ~body ->
+let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
+  pattern_match t ~f:(fun ~bound_vars ~body ->
     let from_defining_expr = Named.free_names defining_expr in
     let from_body = Expr.free_names body in
     Name_occurrences.union from_defining_expr
-      (Name_occurrences.remove_var from_body bound_var))
+      (Name_occurrences.diff from_body
+        (Bindable_let_bound.free_names bound_vars)))
 
-let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
+let apply_name_permutation ({ bound_vars_and_body; defining_expr; } as t)
       perm =
-  let bound_var_and_body' =
-    Bound_var_and_body.apply_name_permutation bound_var_and_body perm
+  let bound_vars_and_body' =
+    Bound_vars_and_body.apply_name_permutation bound_vars_and_body perm
   in
   let defining_expr' =
     Named.apply_name_permutation defining_expr perm
   in
-  if bound_var_and_body == bound_var_and_body'
+  if bound_vars_and_body == bound_vars_and_body'
     && defining_expr == defining_expr'
   then t
   else
-    { bound_var_and_body = bound_var_and_body';
-      kind;
+    { bound_vars_and_body = bound_vars_and_body';
       defining_expr = defining_expr';
     }

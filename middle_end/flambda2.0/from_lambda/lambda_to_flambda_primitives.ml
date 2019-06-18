@@ -198,28 +198,6 @@ let print_list_of_simple_or_prim ppf simple_or_prim_list =
     (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_or_prim)
     simple_or_prim_list
 
-let rec result_kind_of_expr_primitive (prim : expr_primitive) =
-  let translate_result_kind (result_kind : Flambda_primitive.result_kind) =
-    match result_kind with
-    | Singleton kind -> kind
-    | Unit -> Flambda_kind.unit
-  in
-  match prim with
-  | Unary (prim, _) ->
-    translate_result_kind (
-      Flambda_primitive.result_kind_of_unary_primitive prim)
-  | Binary (prim, _, _) ->
-    translate_result_kind (
-      Flambda_primitive.result_kind_of_binary_primitive prim)
-  | Ternary (prim, _, _, _) ->
-    translate_result_kind (
-      Flambda_primitive.result_kind_of_ternary_primitive prim)
-  | Variadic (prim, _) ->
-    translate_result_kind (
-      Flambda_primitive.result_kind_of_variadic_primitive prim)
-  | Checked { primitive; _ } ->
-    result_kind_of_expr_primitive primitive
-
 let rec bind_rec
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
@@ -277,9 +255,8 @@ and bind_rec_primitive
     cont s
   | Prim p ->
     let var = Variable.create "prim" in
-    let result_kind = result_kind_of_expr_primitive p in
     let cont named =
-      Flambda.Expr.create_let var result_kind named (cont (Simple.var var))
+      Flambda.Expr.create_let (Singleton var) named (cont (Simple.var var))
     in
     bind_rec p dbg cont
 

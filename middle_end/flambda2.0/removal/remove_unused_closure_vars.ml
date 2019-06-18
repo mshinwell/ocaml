@@ -22,7 +22,7 @@ let rec collect_vars_expr used_closure_vars expr =
   match Expr.descr expr with
   | Let let_expr ->
     collect_vars_named used_closure_vars (Let.defining_expr let_expr);
-    Let.pattern_match let_expr ~f:(fun ~bound_var:_ ~body ->
+    Let.pattern_match let_expr ~f:(fun ~bound_vars:_ ~body ->
       collect_vars_expr used_closure_vars body)
   | Let_cont let_cont ->
     begin match let_cont with
@@ -70,9 +70,9 @@ let rec remove_vars_expr used_closure_vars expr =
     let defining_expr =
       remove_vars_named used_closure_vars (Let.defining_expr let_expr)
     in
-    Let.pattern_match let_expr ~f:(fun ~bound_var ~body ->
+    Let.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
       let body = remove_vars_expr used_closure_vars body in
-      Expr.create_let bound_var (Let.kind let_expr) defining_expr body)
+      Expr.create_let bound_vars defining_expr body)
   | Let_cont let_cont ->
     begin match let_cont with
     | Non_recursive { handler; _ } ->

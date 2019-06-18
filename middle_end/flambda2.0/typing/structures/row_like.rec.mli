@@ -23,6 +23,7 @@ module Make
     (** These values will not contain any names. *)
     type t = Tag.t * Index.t
     include Identifiable.S with type t := t
+    val is_subset : t -> t -> bool
   end)
   (Maps_to : Row_like_maps_to_intf.S
     with type flambda_type := Flambda_types.t

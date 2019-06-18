@@ -112,7 +112,7 @@ module Function_decls = struct
   module Function_decl = struct
     type t = {
       let_rec_ident : Ident.t;
-      closure_bound_var : Closure_id.t;
+      closure_id : Closure_id.t;
       kind : Lambda.function_kind;
       params : (Ident.t * Lambda.value_kind) list;
       return : Lambda.value_kind;
@@ -126,7 +126,7 @@ module Function_decls = struct
       recursive : Recursive.t;
     }
 
-    let create ~let_rec_ident ~closure_bound_var ~kind ~params ~return
+    let create ~let_rec_ident ~closure_id ~kind ~params ~return
         ~return_continuation ~exn_continuation ~body ~attr
         ~loc ~free_idents_of_body ~stub recursive =
       let let_rec_ident =
@@ -135,7 +135,7 @@ module Function_decls = struct
         | Some let_rec_ident -> let_rec_ident
       in
       { let_rec_ident;
-        closure_bound_var;
+        closure_id;
         kind;
         params;
         return;
@@ -150,7 +150,7 @@ module Function_decls = struct
       }
 
     let let_rec_ident t = t.let_rec_ident
-    let closure_bound_var t = t.closure_bound_var
+    let closure_id t = t.closure_id
     let kind t = t.kind
     let params t = t.params
     let return t = t.return
@@ -175,7 +175,7 @@ module Function_decls = struct
      indexed by the identifiers corresponding to the functions themselves. *)
   let free_idents_by_function function_decls =
     List.fold_right (fun decl map ->
-        Closure_id.Map.add (Function_decl.closure_bound_var decl)
+        Closure_id.Map.add (Function_decl.closure_id decl)
           (Function_decl.free_idents decl) map)
       function_decls Closure_id.Map.empty
 

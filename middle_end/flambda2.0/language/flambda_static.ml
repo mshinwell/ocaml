@@ -105,11 +105,14 @@ module Static_part = struct
                        -> K.value t
     | Immutable_string : string or_variable -> K.value t
 
-  let needs_gc_root (type k) (t : k t) =
+  let _needs_gc_root (type k) (t : k t) =
     match t with
     | Block (_tag, mut, fields) ->
       begin match mut with
-      | Mutable -> true
+      | Mutable ->
+        (* CR mshinwell: The GC does not support this case yet.  There is an
+           old unfinished patch from Damien. *)
+        true
       | Immutable -> List.exists Of_kind_value.needs_gc_root fields
       end
     | Fabricated_block _ -> true
@@ -335,7 +338,6 @@ module Program_body = struct
     type 'k t =
       | Singleton : Symbol.t -> K.value t
       | Set_of_closures : {
-          set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> K.fabricated t
 
@@ -345,35 +347,31 @@ module Program_body = struct
         Format.fprintf ppf "@[<hov 1>(singleton@ @[(%a@ \u{2237}@ %a)@])@]"
           Symbol.print sym
           K.print K.value
-      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+      | Set_of_closures { closure_symbols; } ->
         Format.fprintf ppf "@[<hov 1>(\
-            @[<hov 1>(set_of_closures_symbol@ %a)@]@ \
             @[<hov 1>(closure_symbol@ %a)@]\
             )@]"
-          Symbol.print set_of_closures_symbol
           (Closure_id.Map.print Symbol.print) closure_symbols
 
     (* CR mshinwell: This should have an [invariant] function.  One thing to
-       check is that the [closure_symbols] are all distinct (and presumably
-       different from the set of closure symbol too, even though one will
-       eventually end up the same).
-    *)
+       check is that the [closure_symbols] are all distinct. *)
 
     let being_defined (type k) (t : k t) =
       match t with
       | Singleton sym -> Symbol.Set.singleton sym
-      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-        Symbol.Set.add set_of_closures_symbol
-          (Symbol.Set.of_list (Closure_id.Map.data closure_symbols))
+      | Set_of_closures { closure_symbols; } ->
+        Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
 
+(* CR mshinwell: Move to Flambda_to_Cmm
     let gc_roots (type k) (t : k t) =
       match t with
       | Singleton sym -> Symbol.Set.singleton sym
-      | Set_of_closures { set_of_closures_symbol; closure_symbols = _; } ->
+      | Set_of_closures { closure_symbols = _; } ->
         (* Since all of the closures will be within the set of closures
            value, using [Infix_tag], the individual closure symbols do not
            need to be registered as roots. *)
         Symbol.Set.singleton set_of_closures_symbol
+*)
   end
 
   module Static_structure = struct
@@ -547,6 +545,7 @@ module Program_body = struct
 
   let root sym = Root sym
 
+(*
   let gc_roots t =
     let rec gc_roots t roots =
       match t with
@@ -568,6 +567,7 @@ module Program_body = struct
         gc_roots body roots
     in
     gc_roots t Symbol.Set.empty
+*)
 
   let rec iter_definitions t ~f =
     match t with
@@ -605,6 +605,7 @@ module Program = struct
       (Symbol.Map.print K.print) t.imported_symbols
       Program_body.print t.body
 
+(*
   let gc_roots t =
     let syms = Program_body.gc_roots t.body in
     if !Clflags.flambda_invariant_checks then begin
@@ -619,6 +620,7 @@ module Program = struct
         syms;
     end;
     syms
+*)
 
   let free_symbols t =
     (* N.B. [imported_symbols] are not treated as free. *)
