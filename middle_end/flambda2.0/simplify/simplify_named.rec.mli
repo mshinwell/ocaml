@@ -19,8 +19,8 @@
 val simplify_named
    : Downwards_acc.t
   -> Flambda.Named.t
-  -> result_var:Variable.t
-  -> Reachable.t * Downwards_acc.t * Flambda_type.t
+  -> result_vars:Bindable_let_bound.t
+  -> Reachable.t * Downwards_acc.t
 
 type pre_simplification_types_of_my_closures = {
   set_of_closures : (Name.t * Flambda_type.t) option;

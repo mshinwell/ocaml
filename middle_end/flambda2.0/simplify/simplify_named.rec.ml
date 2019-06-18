@@ -161,11 +161,7 @@ Format.eprintf "Closure ID %a env:@ %a@ function body:@ %a\n%!"
   function_decl, function_decl_type, r
 
 let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
-      ~result_var =
-  let set_of_closures_symbol =
-    Symbol.create (Compilation_unit.get_current_exn ())
-      (Linkage_name.create (Variable.unique_name result_var))
-  in
+      ~(result_vars : Bindable_let_bound.t) =
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
   let closure_symbols =
@@ -190,13 +186,12 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
       r
       lifted_constants
   in
-  let set_of_closures_symbol = Simple.symbol set_of_closures_symbol in
   let term = Named.create_simple set_of_closures_symbol in
   let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
   let dacc =
     DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
   in
-  Reachable.reachable term, DA.with_r dacc r, ty
+  Reachable.reachable term, DA.with_r dacc r
 
 let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
   (* CR mshinwell: This variable is problematic; we must not let it appear
@@ -242,7 +237,8 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
     closure_types;
   }
 
-let simplify_set_of_closures dacc set_of_closures ~result_var =
+let simplify_set_of_closures dacc set_of_closures
+      ~(result_vars : Bindable_let_bound.t) =
   (* By simplifying the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated. *)
   let closure_elements, closure_element_types =
@@ -282,7 +278,7 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
     lift_set_of_closures dacc set_of_closures
       ~closure_elements_and_types:
         (Some (closure_elements, closure_element_types))
-      ~result_var
+      ~result_vars
   else
     let function_decls = Set_of_closures.function_decls set_of_closures in
     let funs = Function_declarations.funs function_decls in
@@ -318,24 +314,21 @@ Format.eprintf "Environment outside functions:\n%a\n%!"
     let set_of_closures =
       Set_of_closures.create ~function_decls ~closure_elements
     in
-    let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
-    in
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
           T.closure closure_id function_decl_type closure_element_types
             ~set_of_closures:set_of_closures_ty_fabricated)
         fun_types
     in
-    let set_of_closures_type = T.set_of_closures ~closures:closure_types in
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         DE.add_variable denv result_var set_of_closures_type)
     in
     let term = Named.create_set_of_closures set_of_closures in
-    Reachable.reachable term, dacc, set_of_closures_type
+    Reachable.reachable term, dacc
 
-let simplify_named0 dacc (named : Named.t) ~result_var =
+let simplify_named0 dacc (named : Named.t)
+      ~(result_vars : Bindable_let_bound.t) =
 (*Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;*)
   match named with
   | Simple simple ->
@@ -348,11 +341,23 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
   Simple.print simple
   T.print ty;*)
       let dacc =
-        DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
+        DA.map_denv dacc ~f:(fun denv ->
+          match result_vars with
+          | Singleton result_var -> DE.add_variable denv result_var ty
+          | Set_of_closures _ ->
+            Misc.fatal_errorf "[Simple]s can only be bound to [Singleton]s:@ %a"
+              print named)
       in
-      Reachable.reachable (Named.create_simple simple), dacc, ty
+      Reachable.reachable (Named.create_simple simple), dacc
     end
   | Prim (prim, dbg) ->
+    let result_var =
+      match result_vars with
+      | Singleton result_var -> result_var
+      | Set_of_closures _ ->
+        Misc.fatal_errorf "[Prim]s can only be bound to [Singleton]s:@ %a"
+          print named
+    in
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
     in
@@ -370,10 +375,10 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
     in
     Reification.try_to_reify dacc term ~bound_to:result_var ~cannot_lift
   | Set_of_closures set_of_closures ->
-    simplify_set_of_closures dacc set_of_closures ~result_var
+    simplify_set_of_closures dacc set_of_closures ~result_vars
 
-let simplify_named dacc named ~result_var =
-  let named, dacc, ty = simplify_named0 dacc named ~result_var in
+let simplify_named dacc named result_vars =
+  let named, dacc, ty = simplify_named0 dacc named ~result_vars in
   let named : Reachable.t =
     match named with
     | Invalid _ -> named
@@ -382,4 +387,4 @@ let simplify_named dacc named ~result_var =
       if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
       else named
   in
-  named, dacc, ty
+  named, dacc

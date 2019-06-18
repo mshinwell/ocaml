@@ -128,7 +128,9 @@ type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_let0 bound_var kind defining_expr body : t * let_creation_result =
+let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
+      : t * let_creation_result =
+(*
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -136,21 +138,32 @@ let create_let0 bound_var kind defining_expr body : t * let_creation_result =
       Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
         stamp
         (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
-  end;
+end;
+*)
   let free_names_of_body = free_names body in
-  (* If the [Let]-binding is redundant, don't even create it. *)
-  if (not (Name_occurrences.mem_var free_names_of_body bound_var))
-    && Named.at_most_generative_effects defining_expr
-  then
+  (* If the [Let]-binding is redundant, don't even create it.  Closure
+     bindings are never redundant as their closures may be referenced
+     (via closure IDs) out of scope.  A global analysis is required to
+     remove them. *)
+  let redundant =
+    match bound_vars with
+    | Singleton var ->
+      (not (Name_occurrences.mem_var free_names_of_body var))
+        && Named.at_most_generative_effects defining_expr
+    | Set_of_closures _ -> false
+  in
+  if redundant then
     body, Have_deleted defining_expr
   else
     (* To save space, only keep free names on the outer term. *)
+    (* CR mshinwell: Assess whether sharing in the maps is good enough to
+       remove this special case *)
     let body =
       { body with
         free_names = Not_computed;
       }
     in
-    let let_expr = Let_expr.create ~bound_var ~kind ~defining_expr ~body in
+    let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
     let free_names = Let_expr.free_names let_expr in
     let t =
       { descr = Let let_expr;
@@ -160,8 +173,8 @@ let create_let0 bound_var kind defining_expr body : t * let_creation_result =
     in
     t, Nothing_deleted
 
-let create_let bound_var kind defining_expr body : t =
-  let expr, _ = create_let0 bound_var kind defining_expr body in
+let create_let bound_vars defining_expr body : t =
+  let expr, _ = create_let0 bound_vars defining_expr body in
   expr
 
 let create_let_cont let_cont = create (Let_cont let_cont)
@@ -215,8 +228,8 @@ let create_if_then_else ~scrutinee ~if_true ~if_false =
   create_switch ~scrutinee ~arms
 
 let bind ~bindings ~body =
-  List.fold_left (fun expr (bound_var, kind, defining_expr) ->
-      create_let bound_var kind defining_expr expr)
+  List.fold_left (fun expr (bound_vars, defining_expr) ->
+      create_let bound_vars defining_expr expr)
     body bindings
 
 let bind_parameters_to_simples ~bind ~target t =
@@ -227,8 +240,7 @@ let bind_parameters_to_simples ~bind ~target t =
   end;
   List.fold_left2 (fun expr bind target ->
       let var = KP.var bind in
-      let kind = KP.kind bind in
-      create_let var kind (Named.create_simple target) expr)
+      create_let (Singleton var) (Named.create_simple target) expr)
     t
     (List.rev bind) (List.rev target)
 

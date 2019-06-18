@@ -23,4 +23,4 @@ val try_to_reify
   -> Reachable.t
   -> bound_to:Variable.t
   -> cannot_lift:bool
-  -> Reachable.t * Downwards_acc.t * Flambda_type.t
+  -> Reachable.t * Downwards_acc.t

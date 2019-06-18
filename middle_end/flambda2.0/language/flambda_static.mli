@@ -103,12 +103,10 @@ module Program_body : sig
       | Singleton : Symbol.t -> Flambda_kind.value t
         (** A binding of a single symbol of kind [Value]. *)
       | Set_of_closures : {
-          set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> Flambda_kind.fabricated t
-        (** A binding of a single symbol to a set of closures together with
-            the binding of possibly multiple symbols to the individual closures
-            within such set of closures. *)
+        (** A binding of possibly multiple symbols to the individual closures
+            within a set of closures. *)
 
     val print : Format.formatter -> _ t -> unit
 
@@ -194,9 +192,11 @@ module Program : sig
   (** Print a program to a formatter. *)
   val print : Format.formatter -> t -> unit
 
+(*
   (** All symbols from the given program which must be registered as roots
       with the GC.  (This does not count any imported symbols.) *)
   val gc_roots : t -> Symbol.Set.t
+*)
 
   (** All free symbols in the given program.  Imported symbols are not treated
       as free. *)

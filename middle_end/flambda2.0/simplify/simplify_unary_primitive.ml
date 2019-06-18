@@ -22,14 +22,6 @@ module K = Flambda_kind
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
-let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
-      ~result_var =
-  Simplify_primitive_common.simplify_projection
-    dacc ~original_term ~deconstructing:set_of_closures_ty
-    ~shape:(T.set_of_closures_containing_at_least closure_id
-      ~closure_var:result_var)
-    ~result_var ~result_kind:K.value
-
 let simplify_project_var dacc ~original_term ~closure_ty closure_element
       ~result_var =
   Simplify_primitive_common.simplify_projection
@@ -87,9 +79,6 @@ end;
   | Ok (arg, arg_ty) ->
     let original_term = Named.create_prim (Unary (prim, arg)) dbg in
     match prim with
-    | Project_closure closure_id ->
-      simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
-        closure_id ~result_var
     | Project_var closure_element ->
       simplify_project_var dacc ~original_term ~closure_ty:arg_ty
         closure_element ~result_var

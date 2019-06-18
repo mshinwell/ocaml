@@ -24,6 +24,7 @@ module Make
   (Tag_and_index : sig
     type t = Tag.t * Index.t
     include Identifiable.S with type t := t
+    val is_subset : t -> t -> bool
   end)
   (Maps_to : Row_like_maps_to_intf.S
     with type flambda_type := Flambda_types.t
@@ -112,10 +113,9 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
       let one_side_only index1 maps_to1 at_least2 =
         let from_at_least2 =
           Index.Map.find_last_opt
-            (fun index -> Index.compare index index1 <= 0)
+            (fun index -> Index.is_subset index index1)
             at_least2
         in
-        (* XXX This should widen the products as required *)
         begin match from_at_least2 with
         | None ->
           begin match E.op () with

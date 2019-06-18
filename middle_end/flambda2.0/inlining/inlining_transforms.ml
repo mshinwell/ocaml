@@ -20,7 +20,6 @@ open! Flambda.Import
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
 
 let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
@@ -48,7 +47,7 @@ let inline dacc ~callee ~args function_decl
                 ~target:(Exn_continuation.exn_handler apply_exn_continuation)
                 ~arity:(Exn_continuation.arity exn_continuation)
                 (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                  (Expr.create_let my_closure K.value
+                  (Expr.create_let (Singleton my_closure)
                     (Named.create_simple callee_with_rec_info)
                     body)))
           in
