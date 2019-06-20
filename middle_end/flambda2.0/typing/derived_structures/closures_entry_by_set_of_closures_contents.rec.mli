@@ -16,41 +16,25 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Set_of_closures_entry.t
+type t
 
-let create_bottom () : t =
-  { by_closure_id = Types_by_closure_id.bottom;
-  }
+val create_exactly_multiple
+   : Flambda_types.closures_entry Set_of_closures_contents.Map.t
+  -> t
 
-let print_with_cache ~cache ppf ({ by_closure_id; } : t) =
-  Format.fprintf ppf
-    "@[<hov 1>(\
-       @[<hov 1>(by_closure_id@ %a)@]\
-       )@]"
-    (Types_by_closure_id.print_with_cache ~cache) by_closure_id
+val create_at_least_multiple
+   : Flambda_types.closures_entry Set_of_closures_contents.Map.t
+  -> t
 
-let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+val get_singleton
+   : t
+  -> ((Closure_id.t * Set_of_closures_contents.t)
+       * Flambda_types.closures_entry) option
 
-let equal = Type_equality.equal_set_of_closures_entry
-
-let widen t ~to_match:_ = t  (* XXX Think about this *)
-
-module Meet_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_meet)
-module Join_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_join)
-
-let meet env t1 t2 =
-  Meet_fabricated.meet_or_join_set_of_closures_entry env t1 t2
-
-let join env t1 t2 =
-  let env = Meet_env.create env in
-  match Join_fabricated.meet_or_join_set_of_closures_entry env t1 t2 with
-  | Ok (t, _env_extension) -> t
-  | Bottom -> create_bottom ()
-
-let erase_aliases ({ by_closure_id; } : t) env ~allowed : t =
-  { by_closure_id =
-      Types_by_closure_id.erase_aliases by_closure_id env ~allowed;
-  }
-
-let free_names ({ by_closure_id; } : t) =
-  Types_by_closure_id.free_names by_closure_id
+include Type_structure_intf.S
+  with type t := t
+  with type flambda_type := Flambda_types.t
+  with type type_equality_env := Type_equality_env.t
+  with type meet_env := Meet_env.t
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t

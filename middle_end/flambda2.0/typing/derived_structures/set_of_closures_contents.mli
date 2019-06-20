@@ -16,16 +16,22 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Flambda_types.set_of_closures_entry
+(** Descriptions of the entities inside sets of closures:
+    - closures;
+    - closure variables.
+    These descriptions do not necessarily describe the entire contents of any
+    particular set of closures. *)
 
-val create_bottom : unit -> t
+type t
 
-val widen : t -> to_match:t -> t
+val create : Closure_id.Set.t -> Var_within_closure.Set.t -> t
 
-include Type_structure_intf.S
-  with type t := t
-  with type flambda_type := Flambda_types.t
-  with type typing_env := Typing_env.t
-  with type meet_env := Meet_env.t
-  with type type_equality_env := Type_equality_env.t
-  with type typing_env_extension := Typing_env_extension.t
+include Identifiable.S with type t := t
+
+val subset : t -> t -> bool
+
+module With_closure_id : sig
+  type nonrec t = Closure_id.t * t
+
+  include Identifiable.S with type t := t
+end

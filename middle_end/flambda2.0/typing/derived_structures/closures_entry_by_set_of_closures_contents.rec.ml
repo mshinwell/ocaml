@@ -17,6 +17,6 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include
-  Row_like.Make (Closure_id) (Var_within_closure_set)
-    (Closure_id_and_var_within_closure_set)
+  Row_like.Make (Closure_id) (Set_of_closures_contents)
+    (Set_of_closures_contents.With_closure_id)
     (Closures_entry)

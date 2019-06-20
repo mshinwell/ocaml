@@ -25,6 +25,7 @@ type result = private
 val simplify_simple
    : Downwards_acc.t
   -> Simple.t
+  -> result_occurrence_kind:Name_occurrences.Kind.t
   -> result
 
 val simplify_simples

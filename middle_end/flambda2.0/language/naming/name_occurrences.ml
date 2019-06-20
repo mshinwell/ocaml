@@ -16,6 +16,47 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Occurrence_kind = struct
+  type t = {
+    irrelevant : bool;
+  }
+
+  let normal = {
+    irrelevant = false;
+  }
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let print ppf t =
+      Format.fprintf ppf "@[<hov 1>\
+          @[<hov 1>(irrelevant@ %b)@]\
+          @]"
+        irrelevant
+
+    let output _ _ = Misc.fatal_error "Not yet implemented"
+
+    let hash _ = Misc.fatal_error "Not yet implemented"
+
+    (* Lattice:
+
+         Normal
+            ^
+            |
+            |
+        Irrelevant
+    *)
+    let compare { irrelevant = irrelevant1; } { irrelevant = irrelevant2; } =
+      match irrelevant1, irrelevant2 with
+      | true, true | false, false -> true
+      | true, false -> -1
+      | false, true -> 1
+
+    let equal t1 t2 =
+      compare t1 t2 = 0
+  end)
+end
+
 (*
   type occurrence_kind =
     | In_terms

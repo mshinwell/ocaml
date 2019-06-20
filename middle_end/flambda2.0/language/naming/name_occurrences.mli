@@ -19,6 +19,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Kind : sig
+  type t
+
+  val normal : t
+
+  val irrelevant : t -> t
+
+  include Identifiable.S with type t := t
+end
+
 type t
 
 val empty : t

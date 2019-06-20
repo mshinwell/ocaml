@@ -81,22 +81,26 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
   Reachable.reachable term, dacc
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
-  let denv = DA.denv dacc in
-  let ty = DE.find_variable denv bound_to in
-  match term with
-  | Invalid _ -> 
-    let ty = T.bottom_like ty in
-    let denv = DE.add_equation_on_variable denv bound_to ty in
-    term, (DA.with_denv dacc denv)
-  | Reachable _ ->
-    match T.reify (DE.typing_env denv) ty with
-    | Lift to_lift ->
-      if cannot_lift then term, dacc
-      else
-        let static_part = create_static_part to_lift in
-        lift dacc ty ~bound_to static_part
-    | Cannot_reify -> term, dacc
-    | Invalid ->
+  let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
+  if not (Name_occurrences.Kind.is_normal occ_kind) then
+    term, dacc
+  else
+    let denv = DA.denv dacc in
+    let ty = DE.find_variable denv bound_to in
+    match term with
+    | Invalid _ -> 
       let ty = T.bottom_like ty in
       let denv = DE.add_equation_on_variable denv bound_to ty in
-      Reachable.invalid (), DA.with_denv dacc denv
+      term, (DA.with_denv dacc denv)
+    | Reachable _ ->
+      match T.reify (DE.typing_env denv) ty with
+      | Lift to_lift ->
+        if cannot_lift then term, dacc
+        else
+          let static_part = create_static_part to_lift in
+          lift dacc ty ~bound_to static_part
+      | Cannot_reify -> term, dacc
+      | Invalid ->
+        let ty = T.bottom_like ty in
+        let denv = DE.add_equation_on_variable denv bound_to ty in
+        Reachable.invalid (), DA.with_denv dacc denv

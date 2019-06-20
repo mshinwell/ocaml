@@ -23,7 +23,7 @@ module Make (E : sig
 end) = struct
   type t = {
     canonical_elements : E.t E.Map.t;
-    aliases_of_canonical_elements : E.Set.t E.Map.t;
+    aliases_of_canonical_elements : E.t E.Order_for_canonicals.t Map.t E.Map.t;
   }
 
   let print ppf { canonical_elements; aliases_of_canonical_elements; } =
@@ -251,10 +251,17 @@ end) = struct
       add_result;
     add_result, t
 
-  let get_canonical_element t element =
+  let get_canonical_element t element ~min_order_for_canonicals =
     match E.Map.find element t.canonical_elements with
     | exception Not_found -> None
-    | canonical_element -> Some canonical_element
+    | canonical_elements ->
+      if E.Order_for_canonicals.compare
+          (E.order_for_canonicals canonical_element)
+          min_order_for_canonicals
+        >= 0
+      then Some canonical_element
+      else
+
 
   let get_aliases t element =
     match canonical t element with

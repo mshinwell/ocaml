@@ -22,6 +22,7 @@ module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
+module S = Simplify_simple
 module T = Flambda_type
 module TE = T.Typing_env
 module UA = Upwards_acc
@@ -248,7 +249,7 @@ let simplify_set_of_closures dacc set_of_closures
         (* CR mshinwell: This should probably be handled differently, but
            will require some threading through *)
         let simple, ty =
-          match Simplify_simple.simplify_simple dacc simple with
+          match S.simplify_simple dacc simple with
           | Bottom kind ->
             assert (K.equal kind K.value);
             simple, T.bottom kind
@@ -333,21 +334,23 @@ let simplify_named0 dacc (named : Named.t)
   match named with
   | Simple simple ->
 (*let orig_simple = simple in*)
-    begin match Simplify_simple.simplify_simple dacc simple with
+    let dacc, result_occurrence_kind =
+      DA.map_denv dacc ~f:(fun denv ->
+        match result_vars with
+        | Singleton result_var ->
+          DE.add_variable denv result_var ty,
+            Var_in_binding_pos.occurrence_kind result_var
+        | Set_of_closures _ ->
+          Misc.fatal_errorf "[Simple]s can only be bound to [Singleton]s:@ %a"
+            print named)
+    in
+    begin match S.simplify_simple dacc simple ~result_occurrence_kind with
     | Bottom kind -> Reachable.invalid (), dacc, T.bottom kind
     | Ok (simple, ty) ->
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
   Simple.print orig_simple
   Simple.print simple
   T.print ty;*)
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          match result_vars with
-          | Singleton result_var -> DE.add_variable denv result_var ty
-          | Set_of_closures _ ->
-            Misc.fatal_errorf "[Simple]s can only be bound to [Singleton]s:@ %a"
-              print named)
-      in
       Reachable.reachable (Named.create_simple simple), dacc
     end
   | Prim (prim, dbg) ->
