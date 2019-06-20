@@ -555,10 +555,12 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
 *)
     env_extension, vars_in_scope_at_cut
 
-(* CR mshinwell: Think about [Rec_info] in the context of this one *)
-let get_canonical_simple t name =
+let get_canonical_simple t name ~min_occurrence_kind =
   let alias = alias_of_simple t (Simple.name name) in
-  match Aliases.get_canonical_element (aliases t) alias with
+  match
+    Aliases.get_canonical_element (aliases t) alias
+      ~min_order_for_canonicals:min_occurrence_kind
+  with
   | None ->
     Misc.fatal_errorf "Cannot get canonical [Simple] for unbound name \
         %a:@ %a"

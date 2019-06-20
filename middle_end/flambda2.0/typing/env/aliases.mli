@@ -19,10 +19,18 @@
 
 module Make (E : sig
   type t
+  type elt = t
   include Identifiable.S with type t := t
 
   val defined_earlier : t -> than:t -> bool
   val implicitly_bound_and_canonical : t -> bool
+
+  module Order_for_canonicals : sig
+    type t
+    include Identifiable.S with type t := t
+  end
+
+  val order_for_canonicals : t -> Order_for_canonicals.t
 end) : sig
   type t
 
@@ -45,7 +53,13 @@ end) : sig
     -> E.t
     -> add_result option * t
 
-  val get_canonical_element : t -> E.t -> E.t option
+  val get_canonical_element
+     : t
+    -> E.t
+    -> min_order_for_canonicals:E.Order_for_canonicals.t
+    -> E.t option
+
+  val get_normal_canonical_element : t -> E.t -> E.t option
 
   val get_aliases : t -> E.t -> E.Set.t
 

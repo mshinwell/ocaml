@@ -17,9 +17,9 @@
 (** Things that a [Let]-expression binds. *)
 
 type t =
-  | Singleton of Variable.t
+  | Singleton of Var_in_binding_pos.t
   | Set_of_closures of {
-      closure_vars : Variable.t Closure_id.Map.t;
+      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
     }
 
 include Bindable.S with type t := t

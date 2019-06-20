@@ -117,14 +117,14 @@ and closures_entry = {
       declaration associated with the closure (call it [C]) described by a
       [closures_entry]. *)
   closure_types : Types_by_closure_id.t;
-  (** Product, indexed by individual closure IDs, that describes the makeup
-      of a set of closures. *)
+  (** Product, indexed by individual closure IDs, that describes the closures
+      within a set of closures. *)
   closure_var_types : Types_by_var_within_closure.t;
   (** Product describing the variables within a closure. *)
 }
 
 and closures = {
-  by_closure_id : Closures_entry_by_closure_contents.t;
+  by_closure_id : Closures_entry_by_set_of_closures_contents.t;
   (** Row-like structure that selects [closures_entry] structures based
       on closure ID and the set of variables and closures in the corresponding
       set of closures. *)

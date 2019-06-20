@@ -16,26 +16,15 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Unit_and_closure_id_set = struct
-  type t = unit * Closure_id.Set.t
-  include Identifiable.Make_pair (Unit) (Closure_id_set)
-end
+(** A [Name] equipped with extra information that arises from the name
+    occurring in binding position. *)
 
-include Row_like.Make (Unit) (Closure_id_set) (Unit_and_closure_id_set)
-  (Set_of_closures_entry)
+type t
 
-type open_or_closed = Open | Closed
+val create : Name.t -> Name_occurrences.Kind.t -> t
 
-let create closure_ids_map open_or_closed : t =
-  match open_or_closed with
-  | Open -> create_at_least_multiple closure_ids_map
-  | Closed ->
-    let closure_ids_map =
-      Closure_id_set.Map.fold
-        (fun closure_ids set_of_closures_entry result ->
-          Unit_and_closure_id_set.Map.add ((), closure_ids)
-            set_of_closures_entry result)
-        closure_ids_map
-        Unit_and_closure_id_set.Map.empty
-    in
-    create_exactly_multiple closure_ids_map
+val name : t -> Name.t
+
+val occurrence_kind : t -> Name_occurrences.Kind.t
+
+include Identifiable.S with type t := t

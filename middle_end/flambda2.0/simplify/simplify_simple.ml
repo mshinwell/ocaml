@@ -26,11 +26,13 @@ type result =
   | Ok of Simple.t * T.t
   | Bottom of K.t
 
-let simplify_simple dacc simple : result =
+let simplify_simple dacc simple ~result_occurrence_kind : result =
   let newer_rec_info = Simple.rec_info simple in
   let kind, simple =
     match Simple.descr simple with
-    | Name name -> TE.get_canonical_simple (DE.typing_env (DA.denv dacc)) name
+    | Name name ->
+      TE.get_canonical_simple (DE.typing_env (DA.denv dacc)) name
+        ~min_occurrence_kind:result_occurrence_kind
     | Const const -> T.kind_for_const const, simple
     | Discriminant _ -> K.fabricated, simple
   in
@@ -41,8 +43,9 @@ let simplify_simple dacc simple : result =
   | None -> Bottom kind
 
 let simplify_simples dacc simples =
+  let result_occurrence_kind = Name_occurrences.Kind.normal in
   Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
-      match simplify_simple dacc simple with
+      match simplify_simple dacc simple ~result_occurrence_kind with
       | Ok (simple, ty) -> Ok (simple, ty)
       | Bottom _kind -> Bottom)
     simples)
