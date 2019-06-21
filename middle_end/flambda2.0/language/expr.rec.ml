@@ -145,16 +145,61 @@ end;
      bindings are never redundant as their closures may be referenced
      (via closure IDs) out of scope.  A global analysis is required to
      remove them. *)
-  let redundant =
+  let bound_vars, let_creation_result =
     match bound_vars with
     | Singleton var ->
-      (not (Name_occurrences.mem_var free_names_of_body var))
-        && Named.at_most_generative_effects defining_expr
-    | Set_of_closures _ -> false
+      let least_occurrence_kind =
+        Name_occurrences.least_occurrence_kind free_names_of_body
+          (Var_in_binding_pos.var var)
+      in
+      let declared_occurrence_kind = Var_in_binding_pos.occurrence_kind var in
+      if Name_occurrences.Kind.Or_absent.compare
+           least_occurrence_kind (Some declared_occurrence_kind)
+           < 0
+      then begin
+        Misc.fatal_error "[Let]-binding declares variable %a, but this \
+            variable has occurrences at a lower kind@ (>= %a)@ in body:@ %a"
+          Var_in_binding_pos.print var
+          Name_occurrences.Kind.Or_absent.print least_occurrence_kind
+          print body
+      end;
+      if not (Named.at_most_generative_effects defining_expr) then begin
+        if not (Name_occurrences.Kind.equal declared_occurrence_kind) Normal
+        then begin
+          Misc.fatal_errorf "Cannot [Let]-bind non-[Normal] variable to \
+              a primitive that has more than generative effects:@ %a@ =@ %a"
+            Var_in_binding_pos.print var
+            Named.print defining_expr
+        end;
+        bound_vars, Nothing_deleted
+      end else begin
+        let can_delete_binding =
+          not !Clflags.debug
+            && Name_occurrences.Kind.Or_absent.compare
+                 least_occurrence_kind (Present Phantom) <= 0
+        in
+        if can_delete_binding then
+          bound_vars, Have_deleted defining_expr
+        else
+          let occurrence_kind =
+            match least_occurrence_kind with
+            | Absent -> declared_occurrence_kind
+            | Present occurrence_kind -> occurrence_kind
+          in
+          let bound_vars : Bindable_let_bound.t =
+            Singleton (Var_in_binding_pos.with_occurrence_kind var
+              occurrence_kind)
+          in
+          if Name_occurrences.Kind.equal occurrence_kind Normal then
+            bound_vars, Nothing_deleted
+          else
+            bound_vars, Have_deleted defining_expr
+      end
+    | Set_of_closures _ -> bound_vars, Nothing_deleted
   in
-  if redundant then
-    body, Have_deleted defining_expr
-  else
+  match let_creation_result with
+  | Have_deleted _ -> body, let_creation_result
+  | Nothing_deleted ->
     (* To save space, only keep free names on the outer term. *)
     (* CR mshinwell: Assess whether sharing in the maps is good enough to
        remove this special case *)
