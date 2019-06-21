@@ -141,6 +141,8 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
 end;
 *)
   let free_names_of_body = free_names body in
+  (* CR mshinwell: [let_creation_result] should really be some kind of
+     "benefit" type. *)
   let bound_vars, keep_binding, let_creation_result =
     match bound_vars with
     | Singleton var ->
@@ -170,6 +172,10 @@ end;
         bound_vars, true, Nothing_deleted
       end else begin
         let can_delete_binding =
+          (* CR mshinwell: This should detect whether there is any
+             provenance info associated with the variable.  If there isn't, the
+             [Let] can be deleted even if debugging information is being
+             generated. *)
           not !Clflags.debug
             && Name_occurrences.Kind.Or_absent.compare
                  greatest_occurrence_kind (Present Phantom) <= 0

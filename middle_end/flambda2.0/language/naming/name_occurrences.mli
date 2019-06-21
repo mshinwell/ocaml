@@ -25,7 +25,13 @@ module Kind : sig
 
   val normal : t
 
-  val irrelevant : t -> t
+  (** A name that does not occur in terms (but may be required for the
+      generation of debugging information), but does occur in types. *)
+  val in_types : t
+
+  (** A name that neither occurs in names nor types, but is required for the
+      generation of debugging information. *)
+  val phantom : t
 
   include Identifiable.S with type t := t
 
