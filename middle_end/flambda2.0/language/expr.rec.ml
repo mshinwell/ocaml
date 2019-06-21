@@ -148,19 +148,19 @@ end;
   let bound_vars, let_creation_result =
     match bound_vars with
     | Singleton var ->
-      let least_occurrence_kind =
-        Name_occurrences.least_occurrence_kind free_names_of_body
+      let greatest_occurrence_kind =
+        Name_occurrences.greatest_occurrence_kind free_names_of_body
           (Var_in_binding_pos.var var)
       in
       let declared_occurrence_kind = Var_in_binding_pos.occurrence_kind var in
       if Name_occurrences.Kind.Or_absent.compare
-           least_occurrence_kind (Some declared_occurrence_kind)
+           greatest_occurrence_kind (Some declared_occurrence_kind)
            < 0
       then begin
         Misc.fatal_error "[Let]-binding declares variable %a, but this \
             variable has occurrences at a lower kind@ (>= %a)@ in body:@ %a"
           Var_in_binding_pos.print var
-          Name_occurrences.Kind.Or_absent.print least_occurrence_kind
+          Name_occurrences.Kind.Or_absent.print greatest_occurrence_kind
           print body
       end;
       if not (Named.at_most_generative_effects defining_expr) then begin
@@ -176,13 +176,13 @@ end;
         let can_delete_binding =
           not !Clflags.debug
             && Name_occurrences.Kind.Or_absent.compare
-                 least_occurrence_kind (Present Phantom) <= 0
+                 greatest_occurrence_kind (Present Phantom) <= 0
         in
         if can_delete_binding then
           bound_vars, Have_deleted defining_expr
         else
           let occurrence_kind =
-            match least_occurrence_kind with
+            match greatest_occurrence_kind with
             | Absent -> declared_occurrence_kind
             | Present occurrence_kind -> occurrence_kind
           in
