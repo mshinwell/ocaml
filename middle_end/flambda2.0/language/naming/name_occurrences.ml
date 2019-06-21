@@ -22,6 +22,8 @@ module Kind = struct
     | In_types
     | Phantom
 
+  type kind = t
+
   let normal = Normal
   let in_types = In_types
   let phantom = Phantom
@@ -51,6 +53,39 @@ module Kind = struct
     let equal t1 t2 =
       compare t1 t2 = 0
   end)
+
+  module Or_absent : sig
+    type t =
+      | Absent
+      | Present of kind
+
+    let absent = Absent
+    let present kind = Present kind
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let print ppf t =
+        match t with
+        | Absent -> Format.pp_print_string ppf "Absent"
+        | Present kind ->
+          Format.fprintf ppf "@[<hov 1>(Present@ %a)@]" print kind
+
+      let output _ _ = Misc.fatal_error "Not yet implemented"
+
+      let hash _ = Misc.fatal_error "Not yet implemented"
+
+      let compare t1 t2 =
+        match t1, t2 with
+        | Absent, Absent -> 0
+        | Absent, Present _ -> -1
+        | Present _, Absent -> 1
+        | Present kind1, Present kind2 -> compare kind1 kind2
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
+    end)
+  end
 end
 
 module For_one_variety_of_names (N : sig
@@ -266,12 +301,9 @@ let binary_predicate ~for_variables ~for_continuations ~for_symbols
         continuations = continuations2;
         symbols = symbols2;
       } =
-  let variables = for_variables variables1 variables2 in
-  let continuations = for_continuations continuations1 continuations2 in
-  let symbols = for_symbols symbols1 symbols2 in
-  variables
-    && continuations
-    && symbols
+  for_variables variables1 variables2
+    && for_continuations continuations1 continuations2
+    && for_symbols symbols1 symbols2
 
 let binary_op ~for_variables ~for_continuations ~for_symbols
       { variables = variables1;
