@@ -18,7 +18,7 @@
 
 type t = {
   var : Variable.t;
-  occurrence_kind : Name_occurrences.Kind.t;
+  occurrence_kind : Name_occurrence_kind.t;
 }
 
 let create var occurrence_kind =
@@ -38,14 +38,14 @@ include Identifiable.Make (struct
         @[<hov 1>(occurrence_kind@ %a)@]\
         @]"
       Variable.print var
-      Name_occurrences.Kind.print occurrence_kind
+      Name_occurrence_kind.print occurrence_kind
 
   let compare
         { var = var1; occurrence_kind = occurrence_kind1; }
         { var = var2; occurrence_kind = occurrence_kind2; } =
     let c = Variable.compare var1 var2 in
     if c <> 0 then c
-    else Name_occurrences.Kind.compare occurrence_kind1 occurrence_kind2
+    else Name_occurrence_kind.compare occurrence_kind1 occurrence_kind2
 
   let equal t1 t2 =
     compare t1 t2 = 0

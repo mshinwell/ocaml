@@ -21,10 +21,10 @@
 
 type t
 
-val create : Name.t -> Name_occurrences.Kind.t -> t
+val create : Name.t -> Name_occurrence_kind.t -> t
 
 val name : t -> Name.t
 
-val occurrence_kind : t -> Name_occurrences.Kind.t
+val occurrence_kind : t -> Name_occurrence_kind.t
 
 include Identifiable.S with type t := t

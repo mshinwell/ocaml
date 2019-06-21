@@ -58,7 +58,7 @@ val add_env_extension
 val get_canonical_simple
    : t
   -> Name.t
-  -> min_occurrence_kind:Name_occurrences.Kind.t
+  -> min_occurrence_kind:Name_occurrence_kind.t
   -> Flambda_kind.t * Simple.t
 
 val aliases_of_name : t -> Name.t -> Simple.Set.t
