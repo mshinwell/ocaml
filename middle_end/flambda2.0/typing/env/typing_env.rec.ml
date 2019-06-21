@@ -559,7 +559,7 @@ let get_canonical_simple t name ~min_occurrence_kind =
   let alias = alias_of_simple t (Simple.name name) in
   match
     Aliases.get_canonical_element (aliases t) alias
-      ~min_order_for_canonicals:min_occurrence_kind
+      ~min_order_within_equiv_class:min_occurrence_kind
   with
   | None ->
     Misc.fatal_errorf "Cannot get canonical [Simple] for unbound name \
