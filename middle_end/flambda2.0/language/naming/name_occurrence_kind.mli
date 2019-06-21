@@ -14,56 +14,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A structure for counting name-like entities that occur free in terms
-    or types. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(** A description of the different contexts in which names may occur. *)
+
 type t
+type kind = t
 
-val empty : t
+val normal : t
 
-val print : Format.formatter -> t -> unit
+(** A name that does not occur in terms (but may be required for the
+    generation of debugging information), but does occur in types. *)
+val in_types : t
 
-val apply_name_permutation : t -> Name_permutation.t -> t
+(** A name that neither occurs in names nor types, but is required for the
+    generation of debugging information. *)
+val phantom : t
 
-val singleton_continuation : Continuation.t -> t
+include Identifiable.S with type t := t
 
-val add_continuation : t -> Continuation.t -> t
+module Or_absent : sig
+  type t = private
+    | Absent
+    | Present of kind
 
-val count_continuation : t -> Continuation.t -> int
+  val absent : t
+  val present : kind -> t
 
-val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
-
-val add_variable : t -> Variable.t -> Name_occurrence_kind.t -> t
-
-val singleton_name : Name.t -> Name_occurrence_kind.t -> t
-
-val singleton_symbol : Symbol.t -> Name_occurrence_kind.t -> t
-
-val create_names : Name.Set.t -> Name_occurrence_kind.t -> t
-
-val diff : t -> t -> t
-
-val union : t -> t -> t
-
-val union_list : t list -> t
-
-val subset : t -> t -> bool
-
-val variables : t -> Variable.Set.t
-
-val symbols : t -> Symbol.Set.t
-
-val mem_var : t -> Variable.t -> bool
-
-val mem_name : t -> Name.t -> bool
-
-val remove_var : t -> Variable.t -> t
-
-val only_contains_symbols : t -> bool
-
-val greatest_occurrence_kind_var
-   : t
-  -> Variable.t
-  -> Name_occurrence_kind.Or_absent.t
+  include Identifiable.S with type t := t
+end

@@ -16,77 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Kind = struct
-  type t =
-    | Normal
-    | In_types
-    | Phantom
-
-  type kind = t
-
-  let normal = Normal
-  let in_types = In_types
-  let phantom = Phantom
-
-  include Identifiable.Make (struct
-    type nonrec t = t
-
-    let print ppf t =
-      match t with
-      | Normal -> Format.pp_print_string ppf "Normal"
-      | In_types -> Format.pp_print_string ppf "In_types"
-      | Phantom -> Format.pp_print_string ppf "Phantom"
-
-    let output _ _ = Misc.fatal_error "Not yet implemented"
-
-    let hash _ = Misc.fatal_error "Not yet implemented"
-
-    let number t =
-      match t with
-      | Normal -> 0
-      | In_types -> 1
-      | Phantom -> 2
-
-    let compare t1 t2 =
-      Stdlib.compare (number t1) (number t2)
-
-    let equal t1 t2 =
-      compare t1 t2 = 0
-  end)
-
-  module Or_absent : sig
-    type t =
-      | Absent
-      | Present of kind
-
-    let absent = Absent
-    let present kind = Present kind
-
-    include Identifiable.Make (struct
-      type nonrec t = t
-
-      let print ppf t =
-        match t with
-        | Absent -> Format.pp_print_string ppf "Absent"
-        | Present kind ->
-          Format.fprintf ppf "@[<hov 1>(Present@ %a)@]" print kind
-
-      let output _ _ = Misc.fatal_error "Not yet implemented"
-
-      let hash _ = Misc.fatal_error "Not yet implemented"
-
-      let compare t1 t2 =
-        match t1, t2 with
-        | Absent, Absent -> 0
-        | Absent, Present _ -> -1
-        | Present _, Absent -> 1
-        | Present kind1, Present kind2 -> compare kind1 kind2
-
-      let equal t1 t2 =
-        compare t1 t2 = 0
-    end)
-  end
-end
+module Kind = Name_occurrence_kind
 
 module For_one_variety_of_names (N : sig
   include Identifiable.S
