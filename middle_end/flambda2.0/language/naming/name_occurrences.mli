@@ -21,12 +21,24 @@
 
 module Kind : sig
   type t
+  type kind = t
 
   val normal : t
 
   val irrelevant : t -> t
 
   include Identifiable.S with type t := t
+
+  module Or_absent : sig
+    type t = private
+      | Absent
+      | Present of kind
+
+    val absent : t
+    val present : kind -> t
+
+    include Identifiable.S with type t := t
+  end
 end
 
 type t
@@ -137,3 +149,5 @@ val mem_name : t -> Name.t -> bool
 val remove_var : t -> Variable.t -> t
 
 val only_contains_symbols : t -> bool
+
+val greatest_occurrence_kind_var : t -> Variable.t -> Kind.Or_absent.t
