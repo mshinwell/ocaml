@@ -141,15 +141,11 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
 end;
 *)
   let free_names_of_body = free_names body in
-  (* If the [Let]-binding is redundant, don't even create it.  Closure
-     bindings are never redundant as their closures may be referenced
-     (via closure IDs) out of scope.  A global analysis is required to
-     remove them. *)
-  let bound_vars, let_creation_result =
+  let bound_vars, keep_binding, let_creation_result =
     match bound_vars with
     | Singleton var ->
       let greatest_occurrence_kind =
-        Name_occurrences.greatest_occurrence_kind free_names_of_body
+        Name_occurrences.greatest_occurrence_kind_var free_names_of_body
           (Var_in_binding_pos.var var)
       in
       let declared_occurrence_kind = Var_in_binding_pos.occurrence_kind var in
@@ -171,7 +167,7 @@ end;
             Var_in_binding_pos.print var
             Named.print defining_expr
         end;
-        bound_vars, Nothing_deleted
+        bound_vars, true, Nothing_deleted
       end else begin
         let can_delete_binding =
           not !Clflags.debug
@@ -179,7 +175,7 @@ end;
                  greatest_occurrence_kind (Present Phantom) <= 0
         in
         if can_delete_binding then
-          bound_vars, Have_deleted defining_expr
+          bound_vars, false, Have_deleted defining_expr
         else
           let occurrence_kind =
             match greatest_occurrence_kind with
@@ -191,15 +187,18 @@ end;
               occurrence_kind)
           in
           if Name_occurrences.Kind.equal occurrence_kind Normal then
-            bound_vars, Nothing_deleted
+            bound_vars, true, Nothing_deleted
           else
-            bound_vars, Have_deleted defining_expr
+            bound_vars, true, Have_deleted defining_expr
       end
-    | Set_of_closures _ -> bound_vars, Nothing_deleted
+    | Set_of_closures _ ->
+      (* Closure bindings are never redundant as their closures may be
+         referenced (via closure IDs) out of scope. A global analysis is
+         required to remove them. *)
+      bound_vars, true, Nothing_deleted
   in
-  match let_creation_result with
-  | Have_deleted _ -> body, let_creation_result
-  | Nothing_deleted ->
+  if not keep_binding then body, let_creation_result
+  else
     (* To save space, only keep free names on the outer term. *)
     (* CR mshinwell: Assess whether sharing in the maps is good enough to
        remove this special case *)
