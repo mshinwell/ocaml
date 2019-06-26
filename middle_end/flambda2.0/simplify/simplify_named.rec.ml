@@ -28,8 +28,7 @@ module TE = T.Typing_env
 module UA = Upwards_acc
 
 type pre_simplification_types_of_my_closures = {
-  set_of_closures : (Name.t * Flambda_type.t) option;
-  closure_types : T.t Closure_id.Map.t;
+  closure_types : (Variable.t * T.t) Closure_id.Map.t;
 }
 
 let simplify_function dacc closure_id function_decl
@@ -70,34 +69,22 @@ Format.eprintf "Closure ID %a, done entering closure\n%!"
             (DE.increment_continuation_scope_level denv)
         in
         let denv = DE.add_parameters_with_unknown_types denv params in
-(*
-Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
-  Closure_id.print closure_id
-  T.print (type_of_my_closure closure_id);
-*)
         let denv =
-          match pre_simplification_types_of_my_closures.set_of_closures with
-          | None -> denv
-          | Some (set_of_closures, set_of_closures_type) ->
-            assert (K.equal (T.kind set_of_closures_type) K.fabricated);
-            DE.define_name denv set_of_closures K.fabricated
-        in
-        let type_of_my_closure =
-          match
-            Closure_id.Map.find closure_id
-              pre_simplification_types_of_my_closures.closure_types
-          with
-          | exception Not_found ->
-            Misc.fatal_errorf "No type given for [my_closure] for closure ID %a"
-              Closure_id.print closure_id
-          | ty -> ty
-        in
-        let denv = DE.add_variable denv my_closure type_of_my_closure in
-        let denv =
-          match pre_simplification_types_of_my_closures.set_of_closures with
-          | None -> denv
-          | Some (set_of_closures, set_of_closures_type) ->
-            DE.add_equation_on_name denv set_of_closures set_of_closures_type
+          Closure_id.Map.fold (fun closure_id' (my_closure, typ) denv ->
+              let name_occurrence_kind =
+                (* The only [my_closure] variable that may be referenced in
+                   a term is that for the current closure. *)
+                if Closure_id.equal closure_id closure_id' then
+                  Name_occurrence_kind.Normal
+                else
+                  Name_occurrence_kind.In_types
+              in
+              let my_closure =
+                Variable_in_binding_pos.create my_closure name_occurrence_kind
+              in
+              DE.add_variable denv my_closure typ)
+            pre_simplification_types_of_my_closures.closure_types
+            denv
         in
         let dacc = DA.with_denv dacc denv in
 (*
@@ -195,12 +182,6 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   Reachable.reachable term, DA.with_r dacc r
 
 let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
-  (* CR mshinwell: This variable is problematic; we must not let it appear
-     in any term (e.g. by introducing a [Project_closure]). *)
-  let set_of_closures_var = Variable.create "set_of_closures" in
-  let set_of_closures_ty_fabricated =
-    T.alias_type_of_as_ty_fabricated (Simple.var set_of_closures_var)
-  in
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
         T.erase_aliases_ty_value (DE.typing_env denv)
@@ -233,9 +214,7 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
           ~set_of_closures:set_of_closures_ty_fabricated)
       funs
   in
-  let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-  { set_of_closures = Some (Name.var set_of_closures_var, set_of_closures_type);
-    closure_types;
+  { closure_types;
   }
 
 let simplify_set_of_closures dacc set_of_closures

@@ -30,6 +30,9 @@ include Identifiable.S with type t := t
 
 val subset : t -> t -> bool
 
+val closures : t -> Closure_id.Set.t
+val closure_vars : t -> Var_within_closure.Set.t
+
 module With_closure_id : sig
   type nonrec t = Closure_id.t * t
 
