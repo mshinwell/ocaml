@@ -74,6 +74,13 @@ let rec deadcode i =
         exits = Array.fold_left
                   (fun acc c -> IntSet.union acc c.exits) s.exits dc;
       }
+  | Iloop(body) ->
+      let body' = deadcode body in
+      let s = deadcode i.next in
+      { i = {i with desc = Iloop body'.i; next = s.i};
+        regs = i.live;
+        exits = IntSet.union body'.exits s.exits;
+      }
   | Icatch(rec_flag, handlers, body) ->
     let body' = deadcode body in
     let s = deadcode i.next in
@@ -109,8 +116,13 @@ let rec deadcode i =
            Thus, all Iexits in handlers refer to an enclosing Icatch. *)
     in
     (* A handler is "used" if and only if its index is in exits_in_scope .*)
+    let original_num = List.length handlers' in
     let used_handlers =
       List.filter (fun (n,_)-> IntSet.mem n exits_in_scope) handlers' in
+    let new_num = List.length used_handlers in
+    let deleted = original_num - new_num in
+    assert (deleted >= 0);
+    Clflags.dc_count := deleted + !Clflags.dc_count;
     let used_handler_indexes =
       IntSet.of_list (fst (List.split used_handlers)) in
     (* Exits that do not have a used handler with the same index

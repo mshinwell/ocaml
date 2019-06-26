@@ -114,6 +114,7 @@ let implementation ~backend ppf sourcefile outputprefix =
                   ~module_initializer:lam)
             ++ Asmgen.compile_implementation_flambda
               outputprefix ~required_globals ~backend ppf;
+            Printf.printf "Dead handlers deleted: %d\n%!" !Clflags.dc_count;
             Compilenv.save_unit_info cmxfile)
         end
         else begin
