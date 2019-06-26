@@ -20,6 +20,7 @@ open! Flambda.Import
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
+module VB = Var_in_binding_pos
 
 let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
@@ -30,25 +31,25 @@ let inline dacc ~callee ~args function_decl
   | Some callee_with_rec_info ->
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~return_continuation exn_continuation params ~body
-              ~my_closure ->
-          let denv =
-            DE.set_inlining_depth_increment
-              (DE.add_inlined_debuginfo (DA.denv dacc) dbg)
-              apply_inlining_depth
-          in
-          let expr =
-            Expr.link_continuations
-              ~bind:return_continuation
-              ~target:apply_return_continuation
-              ~arity:(Function_declaration.result_arity function_decl)
-              (Expr.link_continuations
-                ~bind:(Exn_continuation.exn_handler exn_continuation)
-                ~target:(Exn_continuation.exn_handler apply_exn_continuation)
-                ~arity:(Exn_continuation.arity exn_continuation)
-                (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                  (Expr.create_let (Singleton my_closure)
-                    (Named.create_simple callee_with_rec_info)
-                    body)))
-          in
-          DA.with_denv dacc denv, expr)
+      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+        let denv =
+          DE.set_inlining_depth_increment
+            (DE.add_inlined_debuginfo (DA.denv dacc) dbg)
+            apply_inlining_depth
+        in
+        let expr =
+          Expr.link_continuations
+            ~bind:return_continuation
+            ~target:apply_return_continuation
+            ~arity:(Function_declaration.result_arity function_decl)
+            (Expr.link_continuations
+              ~bind:(Exn_continuation.exn_handler exn_continuation)
+              ~target:(Exn_continuation.exn_handler apply_exn_continuation)
+              ~arity:(Exn_continuation.arity exn_continuation)
+              (Expr.bind_parameters_to_simples ~bind:params ~target:args
+                (Expr.create_let
+                  (Singleton (Var_in_binding_pos.create my_closure Normal))
+                  (Named.create_simple callee_with_rec_info)
+                  body)))
+        in
+        DA.with_denv dacc denv, expr)

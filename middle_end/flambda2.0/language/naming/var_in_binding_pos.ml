@@ -16,12 +16,41 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+type t = {
+  var : Variable.t;
+  occurrence_kind : Name_occurrence_kind.t;
+}
 
-val create : Variable.t -> Name_occurrences.Kind.t -> t
+let create var occurrence_kind =
+  { var;
+    occurrence_kind;
+  }
 
-val var : t -> Variable.t
+let var t = t.var
+let occurrence_kind t = t.occurrence_kind
 
-val occurrence_kind : t -> Name_occurrences.Kind.t
+include Identifiable.Make (struct
+  type nonrec t = t
 
-include Identifiable.S with type t := t
+  let print ppf { var; occurrence_kind; } =
+    Format.fprintf ppf "@[<hov 1>\
+        @[<hov 1>(var@ %a)@]@ \
+        @[<hov 1>(occurrence_kind@ %a)@]\
+        @]"
+      Variable.print var
+      Name_occurrence_kind.print occurrence_kind
+
+  let compare
+        { var = var1; occurrence_kind = occurrence_kind1; }
+        { var = var2; occurrence_kind = occurrence_kind2; } =
+    let c = Variable.compare var1 var2 in
+    if c <> 0 then c
+    else Name_occurrence_kind.compare occurrence_kind1 occurrence_kind2
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
+
+  let hash _ = Misc.fatal_error "Not yet implemented"
+
+  let output _ _ = Misc.fatal_error "Not yet implemented"
+end)

@@ -15,9 +15,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Singleton of Variable.t
+  | Singleton of Var_in_binding_pos.t
   | Set_of_closures of {
-      closure_vars : Variable.t Closure_id.Map.t;
+      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
     }
 
 include Identifiable.Make (struct
@@ -25,18 +25,19 @@ include Identifiable.Make (struct
 
   let print ppf t =
     match t with
-    | Singleton var -> Variable.print ppf var
+    | Singleton var -> Var_in_binding_pos.print ppf var
     | Set_of_closures { closure_vars; } ->
-      Closure_id.Map.print Variable.print ppf closure_vars
+      Closure_id.Map.print Var_in_binding_pos.print ppf closure_vars
 
   let compare t1 t2 =
     match t1, t2 with
-    | Singleton var1, Singleton var2 -> Variable.compare var1 var2
+    | Singleton var1, Singleton var2 -> Var_in_binding_pos.compare var1 var2
     | Singleton _, Set_of_closures _ -> -1
     | Set_of_closures _, Singleton _ -> 1
     | Set_of_closures { closure_vars = closure_vars1; },
         Set_of_closures { closure_vars = closure_vars2; } ->
-      Closure_id.Map.compare Variable.compare closure_vars1 closure_vars2
+      Closure_id.Map.compare Var_in_binding_pos.compare
+        closure_vars1 closure_vars2
 
   let equal t1 t2 =
     compare t1 t2 = 0
@@ -50,23 +51,27 @@ let print_with_cache ~cache:_ ppf t = print ppf t
 
 let free_names t =
   match t with
-  | Singleton var -> Name_occurrences.singleton_variable_in_terms var
+  | Singleton var ->
+    let var = Var_in_binding_pos.var var in
+    Name_occurrences.singleton_variable var Name_occurrence_kind.normal
   | Set_of_closures { closure_vars; } ->
     Closure_id.Map.fold (fun _closure_id var free_names ->
-        Name_occurrences.add_variable_in_terms free_names var)
+        let var = Var_in_binding_pos.var var in
+        Name_occurrences.add_variable free_names var
+          Name_occurrence_kind.normal)
       closure_vars
       Name_occurrences.empty
 
 let apply_name_permutation t perm =
   match t with
   | Singleton var ->
-    let var' = Name_permutation.apply_variable perm var in
+    let var' = Var_in_binding_pos.apply_name_permutation var perm in
     if var == var' then t
     else Singleton var'
   | Set_of_closures { closure_vars; } ->
     let closure_vars' =
       Closure_id.Map.map_sharing (fun var ->
-          Name_permutation.apply_variable perm var)
+          Var_in_binding_pos.apply_name_permutation var perm)
         closure_vars
     in
     if closure_vars == closure_vars' then t
@@ -74,23 +79,27 @@ let apply_name_permutation t perm =
 
 let rename t =
   match t with
-  | Singleton var -> Singleton (Variable.rename var)
+  | Singleton var -> Singleton (Var_in_binding_pos.rename var)
   | Set_of_closures { closure_vars; } ->
     let closure_vars =
-      Closure_id.Map.map (fun var -> Variable.rename var) closure_vars
+      Closure_id.Map.map (fun var -> Var_in_binding_pos.rename var) closure_vars
     in
     Set_of_closures { closure_vars; }
 
 let add_to_name_permutation t1 t2 perm =
   match t1, t2 with
   | Singleton var1, Singleton var2 ->
-    Name_permutation.add_variable perm var1 var2
+    Name_permutation.add_variable perm
+      (Var_in_binding_pos.var var1)
+      (Var_in_binding_pos.var var2)
   | Set_of_closures { closure_vars = closure_vars1; },
       Set_of_closures { closure_vars = closure_vars2; } ->
     let perm =
       Closure_id.Map.fold2_stop_on_key_mismatch
         (fun _closure_var var1 var2 perm ->
-          Name_permutation.add_variable perm var1 var2)
+          Name_permutation.add_variable perm
+            (Var_in_binding_pos.var var1)
+            (Var_in_binding_pos.var var2))
         closure_vars1
         closure_vars2
         perm

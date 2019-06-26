@@ -100,7 +100,7 @@ let free_names { scrutinee; arms; } =
       (Name_occurrences.empty)
   in
   Name_occurrences.union_list [
-    Name_occurrences.singleton_name_in_terms scrutinee;
+    Name_occurrences.singleton_name scrutinee Name_occurrence_kind.normal;
     free_names_in_arms;
   ]
 

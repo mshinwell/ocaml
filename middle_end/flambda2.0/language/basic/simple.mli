@@ -17,7 +17,7 @@
 (** A value that is known to fit into a register (of the appropriate kind)
     on the target machine.  We do not require such values to be [Let]-bound. *)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Const : sig
   type t =

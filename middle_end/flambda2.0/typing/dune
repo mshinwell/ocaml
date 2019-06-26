@@ -10,7 +10,7 @@
     type_printers.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closures_entry.rec.ml
-    derived_structures/closures_entry_by_closure_contents.rec.ml
+    derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
     derived_structures/discriminants.rec.ml
     derived_structures/immediates.rec.ml
     derived_structures/types_by_closure_id.rec.ml
@@ -42,7 +42,7 @@
     type_printers.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closures_entry.rec.mli
-    derived_structures/closures_entry_by_closure_contents.rec.mli
+    derived_structures/closures_entry_by_set_of_closures_contents.rec.mli
     derived_structures/discriminants.rec.mli
     derived_structures/immediates.rec.mli
     derived_structures/types_by_closure_id.rec.mli
