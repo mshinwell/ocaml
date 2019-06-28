@@ -28,6 +28,7 @@ module S = Simplify_simple
 module T = Flambda_type
 module UA = Upwards_acc
 module UE = Simplify_env_and_result.Upwards_env
+module VB = Var_in_binding_pos
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 (* CR mshinwell: Consider defunctionalising to remove the [k]. *)
@@ -418,6 +419,9 @@ and simplify_direct_partial_application
           match Simple.must_be_var applied_arg with
           | None -> expr
           | Some applied_arg ->
+            let applied_arg =
+              VB.create applied_arg Name_occurrence_kind.normal
+            in
             Expr.create_let (Singleton applied_arg)
               (Named.create_prim
                 (Unary (Project_var closure_var, Simple.var my_closure))
@@ -459,6 +463,7 @@ and simplify_direct_partial_application
       ~args:[Simple.var wrapper_var]
   in
   let expr =
+    let wrapper_var = VB.create wrapper_var Name_occurrence_kind.normal in
     Expr.create_let (Singleton wrapper_var)
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
@@ -690,10 +695,11 @@ and simplify_function_call
 and simplify_apply_shared dacc apply : _ Or_bottom.t =
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
-  match S.simplify_simple dacc (Apply.callee apply) with
+  let min_occurrence_kind = Name_occurrence_kind.normal in
+  match S.simplify_simple dacc (Apply.callee apply) ~min_occurrence_kind with
   | Bottom _kind -> Bottom
   | Ok (callee, callee_ty) ->
-    match S.simplify_simples dacc (Apply.args apply) with
+    match S.simplify_simples dacc (Apply.args apply) ~min_occurrence_kind with
     | Bottom -> Bottom
     | Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
@@ -804,7 +810,8 @@ and simplify_apply_cont
   : 'a. DA.t -> Apply_cont.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply_cont k ->
   let module AC = Apply_cont in
-  match S.simplify_simples dacc (AC.args apply_cont) with
+  let min_occurrence_kind = Name_occurrence_kind.normal in
+  match S.simplify_simples dacc (AC.args apply_cont) ~min_occurrence_kind with
   | Bottom ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc

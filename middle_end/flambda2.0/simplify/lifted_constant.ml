@@ -77,6 +77,9 @@ let introduce (T { types; _ }) typing_env =
     Symbol.Map.fold (fun sym typ typing_env ->
         let sym = Name.symbol sym in
         if not (TE.mem typing_env sym) then
+          let sym =
+            Name_in_binding_pos.create sym Name_occurrence_kind.normal
+          in
           TE.add_definition typing_env sym (T.kind typ)
         else
           typing_env)

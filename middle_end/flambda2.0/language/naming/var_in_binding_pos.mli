@@ -26,5 +26,7 @@ val occurrence_kind : t -> Name_occurrence_kind.t
 
 val rename : t -> t
 
+val with_occurrence_kind : t -> Name_occurrence_kind.t -> t
+
 include Identifiable.S with type t := t
 include Contains_names.S with type t := t

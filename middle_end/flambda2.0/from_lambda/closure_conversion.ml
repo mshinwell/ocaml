@@ -30,6 +30,7 @@ module K = Flambda_kind
 module KP = Kinded_parameter
 module LC = Lambda_conversions
 module P = Flambda_primitive
+module VB = Var_in_binding_pos
 
 type t = {
   current_unit_id : Ident.t;
@@ -110,6 +111,7 @@ let tupled_function_call_stub
               Simple.const (Tagged_immediate pos)))
             dbg
         in
+        let param = VB.create param Name_occurrence_kind.normal in
         let expr = Expr.create_let (Singleton param) defining_expr body in
         pos + 1, expr)
       (0, body_with_closure_bound)
@@ -256,7 +258,10 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
         | Some named ->
           (fun args ->
              let unboxed_arg = Variable.create "unboxed" in
-             Expr.create_let (Singleton unboxed_arg)
+             let unboxed_arg' =
+               VB.create unboxed_arg Name_occurrence_kind.normal
+             in
+             Expr.create_let (Singleton unboxed_arg')
                (Named.create_prim (Unary (named, arg)) dbg)
                (call ((Simple.var unboxed_arg) :: args))))
       args
@@ -282,8 +287,9 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     | None -> body, let_bound_var
     | Some box_return_value ->
       let boxed_value = Variable.rename let_bound_var in
+      let boxed_value' = VB.create boxed_value Name_occurrence_kind.normal in
       let body =
-        Flambda.Expr.create_let (Singleton boxed_value)
+        Flambda.Expr.create_let (Singleton boxed_value')
           (Named.create_prim
             (Unary (box_return_value, Simple.var let_bound_var))
             dbg)
@@ -380,7 +386,9 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       let body = close t body_env body in
       match defining_expr with
       | None -> body
-      | Some defining_expr -> Expr.create_let (Singleton var) defining_expr body
+      | Some defining_expr ->
+        let var = VB.create var Name_occurrence_kind.normal in
+        Expr.create_let (Singleton var) defining_expr body
     in
     close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
@@ -534,7 +542,8 @@ and close_let_rec t env ~defs ~body =
   let closure_vars =
     List.fold_left (fun closure_vars decl ->
         let closure_var =
-          Env.find_var env (Function_decl.let_rec_ident decl)
+          VB.create (Env.find_var env (Function_decl.let_rec_ident decl))
+            Name_occurrence_kind.normal
         in
         let closure_id = Function_decl.closure_id decl in
         Closure_id.Map.add closure_id closure_var closure_vars)
@@ -686,6 +695,7 @@ and close_one_function t ~external_env ~by_closure_id decl
               move_to = closure_id;
             }
           in
+          let var = VB.create var Name_occurrence_kind.normal in
           Expr.create_let (Singleton var)
             (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
             body)
@@ -696,6 +706,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     Variable.Map.fold (fun var var_within_closure body ->
         if not (Variable.Set.mem var free_vars_of_body) then body
         else
+          let var = VB.create var Name_occurrence_kind.normal in
           Expr.create_let (Singleton var)
             (Named.create_prim
               (Unary (Project_var var_within_closure, my_closure'))
@@ -769,6 +780,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       Flambda.Expr.create_apply_cont apply_cont
     in
     List.fold_left (fun body (pos, var) ->
+        let var = VB.create var Name_occurrence_kind.normal in
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
         Expr.create_let (Singleton var)
           (Named.create_prim

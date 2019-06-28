@@ -36,9 +36,3 @@ val equal_closures_entry
   -> Flambda_types.closures_entry
   -> Flambda_types.closures_entry
   -> bool
-
-val equal_set_of_closures_entry
-   : Type_equality_env.t
-  -> Flambda_types.set_of_closures_entry
-  -> Flambda_types.set_of_closures_entry
-  -> bool

@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T = Flambda_type
+module VB = Var_in_binding_pos
 
 module Bound_vars_and_body = Name_abstraction.Make (Bindable_let_bound) (Expr)
 
@@ -75,6 +76,7 @@ let invariant env t =
       match t.defining_expr, bound_vars with
       | Set_of_closures _, Set_of_closures { closure_vars; } ->
         Closure_id.Map.fold (fun _closure_id closure_var env ->
+            let closure_var = VB.var closure_var in
             E.add_variable env closure_var K.value)
           closure_vars
           env
@@ -87,8 +89,10 @@ let invariant env t =
             [Set_of_closures]:@ %a"
           print t
       | Prim (prim, _dbg), Singleton var ->
+        let var = VB.var var in
         E.add_variable env var (Flambda_primitive.result_kind' prim)
       | Simple simple, Singleton var ->
+        let var = VB.var var in
         match Simple.descr simple with
         | Const const -> E.add_variable env var (T.kind_for_const const)
         | Discriminant _ -> E.add_variable env var K.fabricated

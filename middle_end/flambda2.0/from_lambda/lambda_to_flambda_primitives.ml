@@ -22,6 +22,7 @@ module I_or_f = Flambda_kind.Standard_int_or_float
 module Named = Flambda.Named
 module Expr = Flambda.Expr
 module K = Flambda_kind
+module VB = Var_in_binding_pos
 
 (* May be useful for compiling out bounds checks:
 type bounds_check_result =
@@ -255,8 +256,9 @@ and bind_rec_primitive
     cont s
   | Prim p ->
     let var = Variable.create "prim" in
+    let var' = VB.create var Name_occurrence_kind.normal in
     let cont named =
-      Flambda.Expr.create_let (Singleton var) named (cont (Simple.var var))
+      Flambda.Expr.create_let (Singleton var') named (cont (Simple.var var))
     in
     bind_rec p dbg cont
 

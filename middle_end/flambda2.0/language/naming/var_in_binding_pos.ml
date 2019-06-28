@@ -30,6 +30,7 @@ let var t = t.var
 let occurrence_kind t = t.occurrence_kind
 
 let with_var t var = { t with var; }
+let with_occurrence_kind t occurrence_kind = { t with occurrence_kind; }
 
 let rename t = with_var t (Variable.rename t.var)
 
