@@ -58,14 +58,16 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       arg1 arg2 dbg ~result_var =
   let invalid kind =
     let env_extension =
-      TEE.one_equation (Name.var result_var) (T.bottom kind)
+      TEE.one_equation (Name_in_binding_pos.var result_var) (T.bottom kind)
     in
     Reachable.invalid (), env_extension, dacc
   in
-  match S.simplify_simple dacc arg1 with
+  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let result_var = Var_in_binding_pos.var result_var in
+  match S.simplify_simple dacc arg1 ~min_occurrence_kind with
   | Bottom kind -> invalid kind
   | Ok (arg1, arg1_ty) ->
-    match S.simplify_simple dacc arg2 with
+    match S.simplify_simple dacc arg2 ~min_occurrence_kind with
     | Bottom kind -> invalid kind
     | Ok (arg2, arg2_ty) ->
       match prim with

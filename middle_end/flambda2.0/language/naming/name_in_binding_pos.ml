@@ -18,7 +18,7 @@
 
 type t = {
   name : Name.t;
-  occurrence_kind : Name_occurrences.Kind.t;
+  occurrence_kind : Name_occurrence_kind.t;
 }
 
 let create name occurrence_kind =
@@ -29,6 +29,11 @@ let create name occurrence_kind =
 let name t = t.name
 let occurrence_kind t = t.occurrence_kind
 
+let var v =
+  { name = Name.var (Var_in_binding_pos.var v);
+    occurrence_kind = Var_in_binding_pos.occurrence_kind v;
+  }
+
 include Identifiable.Make (struct
   type nonrec t = t
 
@@ -38,14 +43,14 @@ include Identifiable.Make (struct
         @[<hov 1>(occurrence_kind@ %a)@]\
         @]"
       Name.print name
-      Name_occurrences.Kind.print occurrence_kind
+      Name_occurrence_kind.print occurrence_kind
 
   let compare
         { name = name1; occurrence_kind = occurrence_kind1; }
         { name = name2; occurrence_kind = occurrence_kind2; } =
     let c = Name.compare name1 name2 in
     if c <> 0 then c
-    else Name_occurrences.Kind.compare occurrence_kind1 occurrence_kind2
+    else Name_occurrence_kind.compare occurrence_kind1 occurrence_kind2
 
   let equal t1 t2 =
     compare t1 t2 = 0

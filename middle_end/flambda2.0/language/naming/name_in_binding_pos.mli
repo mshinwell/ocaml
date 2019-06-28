@@ -24,7 +24,8 @@ type t
 val create : Name.t -> Name_occurrence_kind.t -> t
 
 val name : t -> Name.t
-
 val occurrence_kind : t -> Name_occurrence_kind.t
+
+val var : Var_in_binding_pos.t -> t
 
 include Identifiable.S with type t := t
