@@ -68,7 +68,7 @@ val cut
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t * Variable.Set.t
 
-val resolve_any_toplevel_alias_on_ty0
+val resolve_ty
    : t
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)

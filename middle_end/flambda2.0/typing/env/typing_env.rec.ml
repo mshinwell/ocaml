@@ -575,7 +575,7 @@ let aliases_of_name t name =
     (Aliases.get_aliases (aliases t) alias)
     Simple.Set.empty
 
-let resolve_any_toplevel_alias_on_ty0 (type a) t
+let resolve_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
       ~(apply_rec_info : a Flambda_types.ty -> Rec_info.t -> a Flambda_types.ty)
       ~print_ty (ty : a Flambda_types.ty)
@@ -644,7 +644,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
   match ty with
   | Value ty_value ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_value
         ~print_ty:Type_printers.print_ty_value
@@ -659,7 +659,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     end
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ty_naked_number
@@ -674,7 +674,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     end
   | Fabricated ty_fabricated ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ty_fabricated
