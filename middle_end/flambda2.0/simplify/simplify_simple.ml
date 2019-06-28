@@ -32,7 +32,7 @@ let simplify_simple dacc simple ~min_occurrence_kind : result =
     match Simple.descr simple with
     | Name name ->
       TE.get_canonical_simple (DE.typing_env (DA.denv dacc)) name
-        ~min_occurrence_kind:result_occurrence_kind
+        ~min_occurrence_kind
     | Const const -> T.kind_for_const const, simple
     | Discriminant _ -> K.fabricated, simple
   in

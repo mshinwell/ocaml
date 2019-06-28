@@ -82,7 +82,8 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
   let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
-  if not (Name_occurrences.Kind.is_normal occ_kind) then
+  let bound_to = Var_in_binding_pos.var bound_to in
+  if not (Name_occurrence_kind.is_normal occ_kind) then
     term, dacc
   else
     let denv = DA.denv dacc in

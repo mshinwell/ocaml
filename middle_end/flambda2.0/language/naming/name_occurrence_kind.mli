@@ -31,6 +31,8 @@ val in_types : t
     generation of debugging information. *)
 val phantom : t
 
+val is_normal : t -> bool
+
 include Identifiable.S with type t := t
 
 module Or_absent : sig

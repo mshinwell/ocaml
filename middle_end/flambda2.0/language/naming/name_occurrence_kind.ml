@@ -27,6 +27,11 @@ let normal = Normal
 let in_types = In_types
 let phantom = Phantom
 
+let is_normal t =
+  match t with
+  | Normal -> true
+  | In_types | Phantom -> false
+
 include Identifiable.Make (struct
   type nonrec t = t
 
