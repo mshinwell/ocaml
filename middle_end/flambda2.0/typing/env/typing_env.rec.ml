@@ -622,7 +622,9 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     | Name name ->
       let ty = force_to_kind (find t name) in
       match ty with
-      | No_alias unknown_or_join -> unknown_or_join, Some simple
+      | No_alias unknown_or_join ->
+        (* XXX This should push any [rec_info] from [simple] down *)
+        unknown_or_join, Some simple
       | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
       | Equals _ ->
         Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
@@ -647,7 +649,9 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     | Some (Const const) -> Const const
     | Some (Discriminant _) -> Misc.fatal_error "Kind error"
     | Some (Name _)
-    | None -> Resolved (Resolved_value unknown_or_join)
+    | None ->
+      (* XXX This should push any [rec_info] from [canonical_simple] down *)
+      Resolved (Resolved_value unknown_or_join)
     end
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join, canonical_simple =

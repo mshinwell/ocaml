@@ -26,9 +26,17 @@ let simplify_project_var dacc ~original_term ~closure_ty closure_element
       ~result_var =
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.closure_containing_at_least closure_element
+    ~shape:(T.closure_containing_at_least_this_closure_var closure_element
       ~closure_element_var:result_var)
     ~result_var ~result_kind:K.value
+
+let simplify_move_within_set_of_closures dacc ~original_term ~closure_ty
+      ~move_from ~move_to ~result_var =
+(* Create:
+   - row with tag set to move_from, and in the extensible part have both
+   move_from and move_to, mapping to the appropriate rhs.
+   - one of the rhs entries has the same type as the result ("=result_var").
+   - then as usual. *)
 
 let simplify_unbox_number dacc ~original_term ~boxed_number_ty
       (boxable_number_kind : K.Boxable_number.t) ~result_var =
@@ -84,6 +92,9 @@ end;
     | Project_var closure_element ->
       simplify_project_var dacc ~original_term ~closure_ty:arg_ty
         closure_element ~result_var
+    | Move_within_set_of_closures { move_from; move_to; } ->
+      simplify_move_within_set_of_closures dacc ~original_term
+        ~closure_ty:arg_ty ~move_from ~move_to ~result_var
     | Unbox_number boxable_number_kind ->
       simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
         boxable_number_kind ~result_var
