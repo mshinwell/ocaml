@@ -162,3 +162,8 @@ val force_to_kind_naked_immediate
   -> Flambda_kind.naked_immediate Flambda_types.ty_naked_number
 
 val force_to_kind_fabricated : Flambda_types.t -> Flambda_types.ty_fabricated
+
+val apply_rec_info_ty_value
+   : Flambda_types.ty_value
+  -> Rec_info.t
+  -> Flambda_types.ty_value Or_bottom.t

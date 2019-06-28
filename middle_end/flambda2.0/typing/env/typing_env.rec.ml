@@ -577,6 +577,7 @@ let aliases_of_name t name =
 
 let resolve_any_toplevel_alias_on_ty0 (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
+      ~(apply_rec_info : a Flambda_types.ty -> Rec_info.t -> a Flambda_types.ty)
       ~print_ty (ty : a Flambda_types.ty)
       : a Flambda_types.unknown_or_join * (Simple.t option) =
   ignore print_ty;  (* CR mshinwell: remove *)
@@ -622,9 +623,13 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     | Name name ->
       let ty = force_to_kind (find t name) in
       match ty with
-      | No_alias unknown_or_join ->
-        (* XXX This should push any [rec_info] from [simple] down *)
+      | No_alias Bottom | No_alias Unknown ->
         unknown_or_join, Some simple
+      | No_alias (Ok ty) ->
+        begin match apply_rec_info ty (Simple.rec_info simple) with
+        | Ok ty -> No_alias (Ok ty), Some simple
+        | Bottom -> No_alias Bottom, Some simple
+        end
       | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
       | Equals _ ->
         Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
@@ -641,6 +646,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     let unknown_or_join, canonical_simple =
       resolve_any_toplevel_alias_on_ty0 t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
@@ -649,9 +655,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     | Some (Const const) -> Const const
     | Some (Discriminant _) -> Misc.fatal_error "Kind error"
     | Some (Name _)
-    | None ->
-      (* XXX This should push any [rec_info] from [canonical_simple] down *)
-      Resolved (Resolved_value unknown_or_join)
+    | None -> Resolved (Resolved_value unknown_or_join)
     end
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join, canonical_simple =

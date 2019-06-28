@@ -509,6 +509,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
   | Pfield field, [arg] ->
+    (* CR mshinwell: Cause fatal error if the field value is < 0.
+       We can't do this once we convert to Flambda *)
     (* CR pchambart: every load is annotated as mutable we must be
        careful to update that when we know it is not. This should not
        be an error.
