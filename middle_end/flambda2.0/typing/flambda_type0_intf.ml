@@ -91,7 +91,7 @@ module type S = sig
 
     val var_domain : t -> Variable.Set.t
 
-    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+    val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
     val add_equation : t -> Name.t -> flambda_type -> t
 
@@ -104,7 +104,11 @@ module type S = sig
       -> Typing_env_extension.t
       -> t
 
-    val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
+    val get_canonical_simple
+       : t
+      -> Name.t
+      -> min_occurrence_kind:Name_occurrence_kind.t
+      -> Flambda_kind.t * Simple.t
 
     val cut
        : t

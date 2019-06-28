@@ -92,6 +92,9 @@ let tupled_function_call_stub
         move_to = unboxed_version;
       }
     in
+    let unboxed_version_var =
+      Var_in_binding_pos.create unboxed_version_var Name_occurrence_kind.normal
+    in
     Expr.create_let (Singleton unboxed_version_var)
       (Named.create_prim (Unary (move, Simple.var my_closure)) dbg)
       call

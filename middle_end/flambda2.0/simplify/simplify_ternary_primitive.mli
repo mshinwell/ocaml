@@ -16,12 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Simplification of primitives taking variable numbers of arguments. *)
+(** Simplification of primitives taking three arguments. *)
 
-val simplify_variadic_primitive
+val simplify_ternary_primitive
    : Downwards_acc.t
-  -> Flambda_primitive.variadic_primitive
-  -> Simple.t list
+  -> Flambda_primitive.ternary_primitive
+  -> Simple.t
+  -> Simple.t
+  -> Simple.t
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t

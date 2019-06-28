@@ -26,7 +26,7 @@ end) = struct
   type t = int Kind.Map.t N.Map.t
 
   let print ppf t =
-    N.Map.print Format.pp_print_int ppf t
+    N.Map.print (Kind.Map.print Format.pp_print_int) ppf t
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
@@ -53,10 +53,13 @@ end) = struct
     N.Map.update name (function
         | None -> Some (Kind.Map.singleton kind 1)
         | Some by_kind ->
-          Kind.Map.update by_kind (function
-              | None -> Some 1
-              | Some count -> Some (count + 1))
-            by_kind)
+          let by_kind =
+            Kind.Map.update kind (function
+                | None -> Some 1
+                | Some count -> Some (count + 1))
+              by_kind
+          in
+          Some by_kind)
       t
 
   let apply_name_permutation t perm =
@@ -69,13 +72,18 @@ end) = struct
   let diff t1 t2 =
     let t =
       N.Map.merge (fun _name by_kind1 by_kind2 ->
-          Kind.Map.merge (fun _kind count1 count2 ->
-              let count1 = Option.value count1 ~default:0 in
-              let count2 = Option.value count2 ~default:0 in
-              let count = count1 - count2 in
-              if count < 1 then None
-              else Some count)
-            by_kind1 by_kind2)
+          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
+          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+          let by_kind =
+            Kind.Map.merge (fun _kind count1 count2 ->
+                let count1 = Option.value count1 ~default:0 in
+                let count2 = Option.value count2 ~default:0 in
+                let count = count1 - count2 in
+                if count < 1 then None
+                else Some count)
+              by_kind1 by_kind2
+          in
+          Some by_kind)
         t1 t2
     in
     invariant t;
@@ -83,14 +91,19 @@ end) = struct
 
   let union t1 t2 =
     let t =
-      N.Map.merge (fun _name count1 count2 ->
-          Kind.Map.merge (fun _kind count1 count2 ->
-              let count1 = Option.value count1 ~default:0 in
-              let count2 = Option.value count2 ~default:0 in
-              let count = count1 + count2 in
-              if count < 1 then None
-              else Some count)
-            by_kind1 by_kind2)
+      N.Map.merge (fun _name by_kind1 by_kind2 ->
+          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
+          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+          let by_kind =
+            Kind.Map.merge (fun _kind count1 count2 ->
+                let count1 = Option.value count1 ~default:0 in
+                let count2 = Option.value count2 ~default:0 in
+                let count = count1 + count2 in
+                if count < 1 then None
+                else Some count)
+              by_kind1 by_kind2
+          in
+          Some by_kind)
         t1 t2
     in
     invariant t;
@@ -114,10 +127,10 @@ end) = struct
 
   let greatest_occurrence_kind t name : Kind.Or_absent.t =
     match N.Map.find name t with
-    | exception Not_found -> Absent
+    | exception Not_found -> Kind.Or_absent.absent
     | by_kind ->
       match Kind.Map.max_binding_opt by_kind with
-      | Some (kind, _count) -> Present kind
+      | Some (kind, _count) -> Kind.Or_absent.present kind
       | None ->
         invariant t;
         assert false
@@ -145,7 +158,7 @@ type t = {
   symbols : For_symbols.t;
 }
 
-let print ppf { variables continuations; symbols; } =
+let print ppf { variables; continuations; symbols; } =
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(variables %a)@]@ \
       @[<hov 1>(continuations %a)@]@ \
@@ -163,12 +176,12 @@ let empty = {
 
 let singleton_continuation cont =
   { empty with
-    continuations = For_continuations.singleton cont Normal;
+    continuations = For_continuations.singleton cont Kind.normal;
   }
 
 let add_continuation t cont =
   { t with
-    continuations = For_continuations.add t.continuations cont Normal;
+    continuations = For_continuations.add t.continuations cont Kind.normal;
   }
 
 let count_continuation t cont =
@@ -194,7 +207,7 @@ let singleton_symbol sym kind =
     symbols = For_symbols.singleton sym kind;
   }
 
-let singleton_name_in_terms (name : Name.t) kind =
+let singleton_name (name : Name.t) kind =
   match name with
   | Var var -> singleton_variable var kind
   | Symbol sym -> singleton_symbol sym kind

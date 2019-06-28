@@ -70,7 +70,9 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
 | _ -> ()
 end;
 *)
-  match Simplify_simple.simplify_simple dacc arg with
+  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let result_var = Var_in_binding_pos.var result_var in
+  match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
   | Bottom kind ->
     let env_extension =
       TEE.one_equation (Name.var result_var) (T.bottom kind)
