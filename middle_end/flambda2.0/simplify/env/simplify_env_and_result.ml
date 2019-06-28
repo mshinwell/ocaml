@@ -105,17 +105,17 @@ end = struct
 
   let define_variable t var kind =
     let typing_env =
-      let var = Name.var var in
+      let var = Name_in_binding_pos.var var in
       TE.add_definition t.typing_env var kind
     in
     { t with typing_env; }
 
   let add_variable t var ty =
     let typing_env =
-      let var = Name.var var in
+      let var' = Name_in_binding_pos.var var in
       TE.add_equation
-        (TE.add_definition t.typing_env var (T.kind ty))
-        var ty
+        (TE.add_definition t.typing_env var' (T.kind ty))
+        (Name.var (Var_in_binding_pos.var var)) ty
     in
     { t with typing_env; }
 
@@ -135,7 +135,10 @@ end = struct
 
   let define_symbol t sym kind =
     let typing_env =
-      let sym = Name.symbol sym in
+      let sym =
+        Name_in_binding_pos.create (Name.symbol sym)
+          Name_occurrence_kind.normal
+      in
       TE.add_definition t.typing_env sym kind
     in
     { t with typing_env; }
@@ -143,8 +146,9 @@ end = struct
   let add_symbol t sym ty =
     let typing_env =
       let sym = Name.symbol sym in
+      let sym' = Name_in_binding_pos.create sym Name_occurrence_kind.normal in
       TE.add_equation
-        (TE.add_definition t.typing_env sym (T.kind ty))
+        (TE.add_definition t.typing_env sym' (T.kind ty))
         sym ty
     in
     { t with typing_env; }
@@ -175,7 +179,10 @@ end = struct
 
   let add_parameters t params ~arg_types =
     List.fold_left2 (fun t param arg_type ->
-        add_variable t (KP.var param) arg_type)
+        let var =
+          Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
+        in
+        add_variable t var arg_type)
       t
       params arg_types
 
