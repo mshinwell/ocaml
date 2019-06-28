@@ -59,8 +59,8 @@ end) = struct
 
     let invariant _t = ()
 
-    let print ppf t =
-      E.Order_within_equiv_class.Map.print E.Set.print ppf t
+    let print ppf { aliases; all = _; } =
+      E.Order_within_equiv_class.Map.print E.Set.print ppf aliases
 
     let empty = {
       aliases = E.Order_within_equiv_class.Map.empty;
@@ -79,10 +79,11 @@ end) = struct
       let aliases =
         E.Order_within_equiv_class.Map.update (E.order_within_equiv_class elt)
           (function
-            | None -> E.Set.singleton elt
+            | None -> Some (E.Set.singleton elt)
             | Some elts ->
               assert (not (E.Set.mem elt elts));
-              E.Set.add elt elts)
+              Some (E.Set.add elt elts))
+          t.aliases
       in
       let all = E.Set.add elt t.all in
       { aliases;
@@ -97,7 +98,7 @@ end) = struct
           t.aliases
       with
       | exception Not_found -> None
-      | Some elts -> E.Set.min_elt_opt elts
+      | (_order, elts) -> E.Set.min_elt_opt elts
 
     let mem t elt =
       E.Set.mem elt t.all
@@ -106,7 +107,8 @@ end) = struct
 
     let union t1 t2 =
       let aliases =
-        E.Order_within_equiv_class.Map.merge (function
+        E.Order_within_equiv_class.Map.merge (fun _order elts1 elts2 ->
+            match elts1, elts2 with
             | None, None -> None
             | Some elts, None | None, Some elts -> Some elts
             | Some elts1, Some elts2 -> Some (E.Set.union elts1 elts2))
@@ -122,10 +124,11 @@ end) = struct
 
     let inter t1 t2 =
       let aliases =
-        E.Order_within_equiv_class.Map.merge (function
+        E.Order_within_equiv_class.Map.merge (fun _order elts1 elts2 ->
+            match elts1, elts2 with
             | None, None | Some _, None | None, Some _ -> None
             | Some elts1, Some elts2 -> Some (E.Set.inter elts1 elts2))
-          t1 t2
+          t1.aliases t2.aliases
       in
       let t =
         { aliases;
@@ -358,7 +361,8 @@ end) = struct
     end;
     let canonical_elements = E.Map.add element element t.canonical_elements in
     let aliases_of_canonical_elements =
-      E.Map.add element E.Set.empty t.aliases_of_canonical_elements
+      E.Map.add element Aliases_of_canonical_element.empty
+        t.aliases_of_canonical_elements
     in
     { canonical_elements;
       aliases_of_canonical_elements;
@@ -391,14 +395,15 @@ end) = struct
         >= 0
       then Some canonical_element
       else
-        let aliases = E.get_aliases_of_canonical_element t ~canonical_element in
+        let aliases = get_aliases_of_canonical_element t ~canonical_element in
         Aliases_of_canonical_element.find_earliest aliases
           ~min_order_within_equiv_class
 
   let get_aliases t element =
     match canonical t element with
     | Is_canonical canonical_element ->
-      get_aliases_of_canonical_element t ~canonical_element
+      Aliases_of_canonical_element.all
+        (get_aliases_of_canonical_element t ~canonical_element)
     | Alias_of_canonical { element = _; canonical_element; } ->
       assert (not (E.equal element canonical_element));
       let aliases =
