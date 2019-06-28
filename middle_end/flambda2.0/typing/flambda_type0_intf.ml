@@ -256,32 +256,35 @@ module type S = sig
     -> recursive:Recursive.t
     -> function_declaration
 
-  (** Create a closure type given full information about the closure. *)
-  val closure
+  (** The type of a set of closures that contains a single closure of the
+      given form. *)
+  val set_of_closures_containing_exactly_this_closure
      : Closure_id.t
     -> function_declaration
     -> ty_value Var_within_closure.Map.t
-    -> set_of_closures:ty_fabricated
+    -> bound_to:Variable.t
     -> t
 
-  (** The type of a closure (of kind [Value]) containing at least one
-      closure that holds the given closure variable with the given type. *)
-  val closure_containing_at_least
-     : Var_within_closure.t
-    -> closure_element_var:Variable.t
-    -> flambda_type
-
-  (** The type of a set of closures containing exactly those closure IDs
-      with the given types. *)
-  val set_of_closures
-     : closures:t Closure_id.Map.t
+  (** The type of a set of closures that contains closures of the given
+      form and no other closures (or closure variables). *)
+  val set_of_closures_containing_exactly_these_closures
+     : Closure_id.t
+    -> function_declaration
+    -> (Variable.t * t) Closure_id.Map.t
     -> t
 
-  (** The type of a set of closures containing at least one closure,
-      whose type should be "Equals closure_var", with the given closure ID. *)
-  val set_of_closures_containing_at_least
+  (** The type of a set of closures containing a closure with the given
+      closure ID and possibly other closures (and closure variables) too. *)
+  val set_of_closures_containing_at_least_this_closure
      : Closure_id.t
     -> closure_var:Variable.t
+    -> flambda_type
+
+  (** The type of a closure containing at least one closure that holds the
+      given closure variable with the given type. *)
+  val closure_containing_at_least_this_closure_var
+     : Var_within_closure.t
+    -> closure_element_var:Variable.t
     -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
