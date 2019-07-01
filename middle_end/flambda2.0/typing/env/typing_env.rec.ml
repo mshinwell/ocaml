@@ -151,7 +151,7 @@ let print_with_cache ~cache ppf
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let invariant0 ?force t =
+let invariant0 ?force _t =
   if !Clflags.flambda_invariant_checks || Option.is_some (force : unit option)
   then begin
 (* CR mshinwell: Fix things so this check passes, or delete it.
@@ -164,7 +164,6 @@ let invariant0 ?force t =
           empty:@ %a"
         print t
     end;
-*)
     let current_scope = One_level.scope t.current_level in
     let max_prev_scope =
       Scope.Map.fold (fun scope _level max_prev_scope ->
@@ -172,12 +171,17 @@ let invariant0 ?force t =
         t.prev_levels
         Scope.initial
     in
-    if Scope.(<=) current_scope max_prev_scope then begin
+    if (not (is_empty t))
+      && Scope.(<=) current_scope max_prev_scope
+    then begin
       Misc.fatal_errorf "Typing environment contains a [current_level] with a \
-          scope that is not strictly greater than all scopes in \
-          [prev_levels]:@ %a"
+          scope (%a) that is not strictly greater than all scopes in \
+          [prev_levels] (%a):@ %a"
+        Scope.print current_scope
+        Scope.print max_prev_scope
         print t
     end
+*)
   end
 
 let invariant_should_fail t =
@@ -375,9 +379,11 @@ let invariant_for_new_equation t name ty =
   let defined_names = domain t in
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset free_names defined_names) then begin
-    Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names:@ %a"
+    let unbound_names = Name_occurrences.diff free_names (domain t) in
+    Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names@ (%a):@ %a"
       Name.print name
       Type_printers.print ty
+      Name_occurrences.print unbound_names
       print t
   end
 
@@ -385,8 +391,10 @@ let add_equation t name ty =
   let name_occurrence_kind = find_name_occurrence_kind t name in
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset free_names (domain t)) then begin
-    Misc.fatal_errorf "Cannot add equation, involving unbound names, on \
+    let unbound_names = Name_occurrences.diff free_names (domain t) in
+    Misc.fatal_errorf "Cannot add equation, involving unbound names@ (%a),@ on \
         name@ %a =@ %a@ in environment:@ %a"
+      Name_occurrences.print unbound_names
       Name.print name
       Type_printers.print ty
       print t

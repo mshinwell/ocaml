@@ -46,7 +46,7 @@ end) = struct
           t
       in
       if not by_name_map_ok then begin
-        Misc.fatal_errorf "Invariant failed:@ %a" print t
+        Misc.fatal_errorf "[Name_occurrences] invariant failed:@ %a" print t
       end
     end
 
@@ -98,7 +98,8 @@ end) = struct
                 else Some count)
               by_kind1 by_kind2
           in
-          Some by_kind)
+          if Kind.Map.is_empty by_kind then None
+          else Some by_kind)
         t1 t2
     in
     invariant t;
@@ -118,6 +119,7 @@ end) = struct
                 else Some count)
               by_kind1 by_kind2
           in
+          assert (not (Kind.Map.is_empty by_kind));
           Some by_kind)
         t1 t2
     in
