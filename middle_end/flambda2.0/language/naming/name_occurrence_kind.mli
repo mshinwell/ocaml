@@ -35,6 +35,8 @@ val is_normal : t -> bool
 
 include Identifiable.S with type t := t
 
+val all_less_than_or_equal_to : t -> Set.t
+
 type descr = private
   | Normal
   | In_types

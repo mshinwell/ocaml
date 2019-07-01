@@ -19,7 +19,7 @@
 type t =
   | Non_recursive of {
       handler : Non_recursive_let_cont_handler.t;
-      num_free_occurrences : int;
+      num_free_occurrences : Name_occurrences.Num_occurrences.t;
     }
   | Recursive of Recursive_let_cont_handlers.t
 
@@ -93,9 +93,9 @@ let create_non_recursive cont handler ~body =
   (* We don't inline out linear uses of continuations here, as it could
      result in quadratic behaviour.  However we can safely avoid creating
      a completely unused continuation binding. *)
-  if num_free_occurrences < 1 then
-    body
-  else
+  match num_free_occurrences with
+  | Zero -> body
+  | One | More_than_one ->
     match Expr.descr body with
     | Apply_cont apply_cont when Apply_cont.is_goto apply_cont cont ->
       (* CR mshinwell: This could work for the >0 arity-case too, to handle
