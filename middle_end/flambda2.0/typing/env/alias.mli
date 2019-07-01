@@ -16,9 +16,19 @@
 
 type t
 
-val create : Flambda_kind.t -> Simple.t -> Binding_time.t -> t
+val create
+   : Flambda_kind.t
+  -> Simple.t
+  -> Binding_time.t
+  -> Name_occurrence_kind.t
+  -> t
 
-val create_name : Flambda_kind.t -> Name.t -> Binding_time.t -> t
+val create_name
+   : Flambda_kind.t
+  -> Name.t
+  -> Binding_time.t
+  -> Name_occurrence_kind.t
+  -> t
 
 include Identifiable.S with type t := t
 
@@ -29,3 +39,9 @@ val simple : t -> Simple.t
 val kind : t -> Flambda_kind.t
 
 val implicitly_bound_and_canonical : t -> bool
+
+val name_occurrence_kind : t -> Name_occurrence_kind.t
+
+module Order_within_equiv_class : Identifiable.S 
+
+val order_within_equiv_class : t -> Order_within_equiv_class.t

@@ -18,15 +18,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type result = private
-  | Ok of Simple.t * Flambda_type.t
-  | Bottom of Flambda_kind.t
-
 val simplify_simple
    : Downwards_acc.t
   -> Simple.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> result
+  -> Simple.t Or_bottom.t * Flambda_type.t
 
 val simplify_simples
    : Downwards_acc.t

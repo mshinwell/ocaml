@@ -16,22 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let erase_aliases_or_alias env ~allowed erase_aliases_contents
-      (or_alias : _ Flambda_types.or_alias)
-      : _ Flambda_types.unknown_or_join Flambda_types.or_alias =
-  match or_alias with
-  | No_alias contents -> No_alias (erase_aliases_contents env ~allowed contents)
-  | Type _export_id -> or_alias
-  | Equals simple ->
-    match Simple.descr simple with
-    | Const _ | Discriminant _ | Name (Symbol _) -> or_alias
-    | Name (Var var) ->
-      let _kind, simple = Typing_env.get_canonical_simple env (Name.var var) in
-      match Simple.descr simple with
-      | Const _ | Discriminant _ | Name (Symbol _) -> or_alias
-      | Name (Var var) ->
-        if Variable.Set.mem var allowed then or_alias
-        else No_alias Unknown
+let simple_is_eligible ~allowed simple =
+  match Simple.descr simple with
+  | Const _ | Discriminant _ | Name (Symbol _) -> true
+  | Name (Var _) -> Variable.Set.mem var allowed
 
 let erase_aliases_unknown_or_join erase_aliases_contents env ~allowed
       (o : _ Flambda_types.unknown_or_join) : _ Flambda_types.unknown_or_join =
@@ -39,10 +27,33 @@ let erase_aliases_unknown_or_join erase_aliases_contents env ~allowed
   | Unknown | Bottom -> o
   | Ok contents -> Ok (erase_aliases_contents env ~allowed contents)
 
-let erase_aliases_ty env ~allowed erase_aliases_contents ty =
-  erase_aliases_or_alias env ~allowed
-    (erase_aliases_unknown_or_join erase_aliases_contents)
-    ty
+let erase_aliases_ty env ~allowed erase_aliases_of_kind_foo
+      ~force_to_kind ~print_ty ty : _ Flambda_types.ty =
+  match ty with
+  | No_alias unknown_or_join ->
+    No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
+      ~allowed unknown_or_join)
+  | Type _export_id -> ty
+  | Equals simple ->
+    (* First of all try to find an alias that's in the [allowed] set and
+       is eligible to appear in types.
+       If that fails, expand the head of the type, and then recursively erase
+       aliases on the result (returning a non-alias type). *)
+    let all_aliases =
+      Typing_env.aliases_of_simple_allowable_in_types env simple
+    in
+    let eligible_aliases =
+      Simple.Set.filter (fun simple -> simple_is_eligible ~allowed simple)
+        all_aliases
+    in
+    match Simple.Set.choose_opt eligible_aliases with
+    | Some alias -> Equals alias
+    | None ->
+      let unknown_or_join, _ =
+        Typing_env.resolve_ty env ~force_to_kind ~print_ty ty
+      in
+      No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
+        ~allowed unknown_or_join)
 
 let erase_aliases_of_kind_naked_number (type n) _env ~allowed:_
       (ty : n Flambda_types.of_kind_naked_number) = ty
@@ -50,14 +61,26 @@ let erase_aliases_of_kind_naked_number (type n) _env ~allowed:_
 let rec erase_aliases env ~allowed (t : Flambda_types.t) : Flambda_types.t =
   match t with
   | Value ty ->
-    Value (erase_aliases_ty env ~allowed erase_aliases_of_kind_value ty)
-  | Naked_number (ty, kind) ->
+    Value (
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:Flambda_type0_core.force_to_kind_value
+        ~print_ty:Type_printers.print_ty_value
+        erase_aliases_of_kind_value
+        ty)
     Naked_number (
-      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number ty,
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_number
+        ~print_ty:Type_printers.print_ty_naked_number
+        erase_aliases_of_kind_naked_number
+        ty,
       kind)
   | Fabricated ty ->
-    Fabricated (erase_aliases_ty env ~allowed
-      erase_aliases_of_kind_fabricated ty)
+    Fabricated (
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+        ~print_ty:Type_printers.print_ty_fabricated
+        erase_aliases_of_kind_fabricated
+        ty)
 
 and erase_aliases_of_kind_value env ~allowed
       (of_kind : Flambda_types.of_kind_value)

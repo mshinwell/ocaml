@@ -169,3 +169,13 @@ val apply_rec_info_ty_value
    : Flambda_types.ty_value
   -> Rec_info.t
   -> Flambda_types.ty_value Or_bottom.t
+
+val apply_rec_info_ty_naked_number
+   : 'a Flambda_types.ty_naked_number
+  -> Rec_info.t
+  -> 'a Flambda_types.ty_naked_number Or_bottom.t
+
+val apply_rec_info_ty_fabricated
+   : Flambda_types.ty_fabricated
+  -> Rec_info.t
+  -> Flambda_types.ty_fabricated Or_bottom.t

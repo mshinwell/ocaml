@@ -106,9 +106,9 @@ module type S = sig
 
     val get_canonical_simple
        : t
-      -> Name.t
+      -> Simple.t
       -> min_occurrence_kind:Name_occurrence_kind.t
-      -> Flambda_kind.t * Simple.t
+      -> Simple.t Or_bottom.t * Flambda_type.t
 
     val cut
        : t

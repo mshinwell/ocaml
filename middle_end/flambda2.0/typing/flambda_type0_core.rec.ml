@@ -573,7 +573,14 @@ let rec apply_rec_info (t : Flambda_types.t) rec_info : t Or_bottom.t =
     | Ok ty_value -> Ok (Value ty_value)
     | Bottom -> Bottom
     end
-  | Naked_number _ | Fabricated _ -> Bottom
+  | Naked_number (ty_naked_number, kind) ->
+    begin match apply_rec_info_ty_naked_number rec_info with
+    | Ok ty_naked_number -> Ok (Naked_number (ty_naked_number, kind))
+  | Fabricated ty_fabricated ->
+    begin match apply_rec_info_ty_fabricated ty_fabricated rec_info with
+    | Ok ty_fabricated -> Ok (Fabricated ty_fabricated)
+    | Bottom -> Bottom
+    end
 
 and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
       : Flambda_types.ty_value Or_bottom.t =
@@ -604,3 +611,14 @@ and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
       | String _ -> Bottom
     in
     Ok (No_alias of_kind_value)
+
+and apply_rec_info_ty_naked_number (type k)
+      (ty_naked_number : k Flambda_types.ty_naked_number) rec_info
+      : k Flambda_types.ty_naked_number Or_bottom.t =
+  if Rec_info.is_default rec_info then Ok ty_naked_number
+  else Bottom
+
+and apply_rec_info_ty_fabricated (ty_fabricated : Flambda_types.ty_fabricated)
+      rec_info : Flambda_types.ty_fabricated Or_bottom.t =
+  if Rec_info.is_default rec_info then Ok ty_fabricated
+  else Bottom
