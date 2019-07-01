@@ -35,6 +35,7 @@ module Make (Index : Identifiable.S) = struct
 
   let print_with_cache ~cache:_ ppf t = print ppf t
 
+(*
   let equal env
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } =
@@ -51,6 +52,9 @@ module Make (Index : Identifiable.S) = struct
     match equal with
     | None | Some false -> false
     | Some true -> true
+*)
+
+  let equal _ _ = Misc.fatal_error "To implement"
 
   let create components_by_index =
     { components_by_index;

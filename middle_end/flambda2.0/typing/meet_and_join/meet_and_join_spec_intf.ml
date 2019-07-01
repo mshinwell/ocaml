@@ -39,6 +39,8 @@ module type S = sig
     -> of_kind_foo ty
     -> unit
 
+  val apply_rec_info : of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t
+
   val meet_or_join_of_kind_foo
      : meet_env
     -> of_kind_foo

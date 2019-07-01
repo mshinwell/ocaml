@@ -384,11 +384,18 @@ let this_boxed_int32 f = box_int32 (this_naked_int32 f)
 let this_boxed_int64 f = box_int64 (this_naked_int64 f)
 let this_boxed_nativeint f = box_nativeint (this_naked_nativeint f)
 
+let boxed_float_alias_to ~naked_float =
+  box_float (Naked_number (Equals (Simple.var naked_float), Naked_float))
+
 let boxed_int32_alias_to ~naked_int32 =
   box_int32 (Naked_number (Equals (Simple.var naked_int32), Naked_int32))
 
 let boxed_int64_alias_to ~naked_int64 =
   box_int64 (Naked_number (Equals (Simple.var naked_int64), Naked_int64))
+
+let boxed_nativeint_alias_to ~naked_nativeint =
+  box_nativeint (Naked_number (Equals (Simple.var naked_nativeint),
+    Naked_nativeint))
 
 let this_discriminant_as_ty_fabricated discr : ty_fabricated =
   Equals (Simple.discriminant discr)
@@ -566,38 +573,24 @@ let get_alias t =
   | Fabricated (Equals simple) -> Some simple
   | Fabricated _ -> None
 
-let apply_rec_info_ty_naked_number (type k)
-      (ty_naked_number : k Flambda_types.ty_naked_number) rec_info
-      : k Flambda_types.ty_naked_number Or_bottom.t =
-  if Rec_info.is_initial rec_info then Ok ty_naked_number
+let apply_rec_info_of_kind_naked_number (type k)
+      (of_kind_naked_number : k Flambda_types.of_kind_naked_number) rec_info
+      : k Flambda_types.of_kind_naked_number Or_bottom.t =
+  if Rec_info.is_initial rec_info then Ok of_kind_naked_number
   else Bottom
 
-let apply_rec_info_ty_fabricated (ty_fabricated : Flambda_types.ty_fabricated)
-      rec_info : Flambda_types.ty_fabricated Or_bottom.t =
-  if Rec_info.is_initial rec_info then Ok ty_fabricated
+let apply_rec_info_of_kind_fabricated
+      (of_kind_fabricated : Flambda_types.of_kind_fabricated)
+      rec_info : Flambda_types.of_kind_fabricated Or_bottom.t =
+  if Rec_info.is_initial rec_info then Ok of_kind_fabricated
   else Bottom
 
-let rec apply_rec_info (t : Flambda_types.t) rec_info : t Or_bottom.t =
-  match t with
-  | Value ty_value ->
-    begin match apply_rec_info_ty_value ty_value rec_info with
-    | Ok ty_value -> Ok (Value ty_value)
-    | Bottom -> Bottom
-    end
-  | Naked_number (ty_naked_number, kind) ->
-    begin match apply_rec_info_ty_naked_number ty_naked_number rec_info with
-    | Ok ty_naked_number -> Ok (Naked_number (ty_naked_number, kind))
-    | Bottom -> Bottom
-    end
-  | Fabricated ty_fabricated ->
-    begin match apply_rec_info_ty_fabricated ty_fabricated rec_info with
-    | Ok ty_fabricated -> Ok (Fabricated ty_fabricated)
-    | Bottom -> Bottom
-    end
-
-and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
-      : Flambda_types.ty_value Or_bottom.t =
-  match ty_value with
+let apply_rec_info_ty (type of_kind_foo)
+      (apply_rec_info_of_kind_foo :
+        (of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t))
+      (ty : of_kind_foo Flambda_types.ty)
+      rec_info : of_kind_foo Flambda_types.ty Or_bottom.t =
+  match ty with
   | Equals simple ->
     let newer_rec_info = Some rec_info in
     begin match Simple.merge_rec_info simple ~newer_rec_info with
@@ -605,23 +598,54 @@ and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
     | Some simple -> Ok (Equals simple)
     end
   | Type _ -> Misc.fatal_error "Not yet implemented"
-  | No_alias Unknown -> Ok ty_value
+  | No_alias Unknown -> Ok ty
   | No_alias Bottom -> Bottom
-  | No_alias (Ok of_kind_value) ->
-    let of_kind_value : _ Or_unknown_or_bottom.t =
-      match of_kind_value with
-      | Closures { by_closure_id; } ->
-        let by_closure_id =
-          Closures_entry_by_closure_id.map_closure_types by_closure_id
-            ~f:(fun (closure_type : Flambda_types.t) ->
-              apply_rec_info closure_type rec_info)
-        in
-        begin match by_closure_id with
-        | Ok by_closure_id -> Ok (Closures { by_closure_id; })
-        | Bottom -> Bottom
-        end
-      | Blocks_and_tagged_immediates _
-      | Boxed_number _
-      | String _ -> Bottom
+  | No_alias (Ok of_kind_foo) ->
+    match apply_rec_info_of_kind_foo of_kind_foo rec_info with
+    | Bottom -> Bottom
+    | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
+
+let rec apply_rec_info (t : Flambda_types.t) rec_info
+      : Flambda_types.t Or_bottom.t =
+  match t with
+  | Value ty_value ->
+    begin match
+      apply_rec_info_ty apply_rec_info_of_kind_value
+        ty_value rec_info
+    with
+    | Ok ty_value -> Ok (Value ty_value)
+    | Bottom -> Bottom
+    end
+  | Naked_number (ty_naked_number, kind) ->
+    begin match
+      apply_rec_info_ty apply_rec_info_of_kind_naked_number
+        ty_naked_number rec_info
+    with
+    | Ok ty_naked_number -> Ok (Naked_number (ty_naked_number, kind))
+    | Bottom -> Bottom
+    end
+  | Fabricated ty_fabricated ->
+    begin match
+      apply_rec_info_ty apply_rec_info_of_kind_fabricated
+        ty_fabricated rec_info
+    with
+    | Ok ty_fabricated -> Ok (Fabricated ty_fabricated)
+    | Bottom -> Bottom
+    end
+
+and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
+      rec_info : Flambda_types.of_kind_value Or_bottom.t =
+  match of_kind_value with
+  | Closures { by_closure_id; } ->
+    let by_closure_id =
+      Closures_entry_by_closure_id.map_closure_types by_closure_id
+        ~f:(fun (closure_type : Flambda_types.t) ->
+          apply_rec_info closure_type rec_info)
     in
-    Ok (No_alias of_kind_value)
+    begin match by_closure_id with
+    | Ok by_closure_id -> Ok (Closures { by_closure_id; })
+    | Bottom -> Bottom
+    end
+  | Blocks_and_tagged_immediates _
+  | Boxed_number _
+  | String _ -> Bottom

@@ -28,6 +28,7 @@ struct
   let to_type ty : Flambda_types.t = Naked_number (ty, Naked_immediate)
   let force_to_kind = Flambda_type0_core.force_to_kind_naked_immediate
   let print_ty = Type_printers.print_ty_naked_immediate_with_cache
+  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_naked_number
 
   let meet_or_join_of_kind_foo _meet_or_join_env
         (of_kind1 : K.naked_immediate Flambda_types.of_kind_naked_number)
