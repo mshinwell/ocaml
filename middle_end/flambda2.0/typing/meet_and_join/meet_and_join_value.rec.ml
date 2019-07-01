@@ -46,6 +46,7 @@ struct
   let to_type ty : T.t = Value ty
   let force_to_kind = Flambda_type0_core.force_to_kind_value
   let print_ty = Type_printers.print_ty_value_with_cache
+  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_value
 
   (* CR mshinwell: These next two could go in a separate file. *)
   let meet_unknown meet_contents env

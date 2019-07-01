@@ -81,12 +81,16 @@ struct
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty * TEE.t =
     let unknown_or_join1, canonical_simple1 =
-      Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
-        ~force_to_kind:S.force_to_kind ~print_ty or_alias1
+      Typing_env.resolve_ty (Meet_env.env env)
+        ~force_to_kind:S.force_to_kind ~print_ty
+        ~apply_rec_info:S.apply_rec_info
+        or_alias1
     in
     let unknown_or_join2, canonical_simple2 =
-      Typing_env.resolve_any_toplevel_alias_on_ty0 (Meet_env.env env)
-        ~force_to_kind:S.force_to_kind ~print_ty or_alias2
+      Typing_env.resolve_ty (Meet_env.env env)
+        ~force_to_kind:S.force_to_kind
+        ~apply_rec_info:S.apply_rec_info
+        ~print_ty or_alias2
     in
     match canonical_simple1, canonical_simple2 with
     | None, None ->
@@ -143,12 +147,18 @@ Format.eprintf "TEE from meeting simples (2): %a\n%!"
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty =
     let unknown_or_join1, canonical_simple1 =
-      Typing_env.resolve_any_toplevel_alias_on_ty0 env
-        ~force_to_kind:S.force_to_kind ~print_ty or_alias1
+      Typing_env.resolve_ty env
+        ~force_to_kind:S.force_to_kind
+        ~apply_rec_info:S.apply_rec_info
+        ~print_ty
+        or_alias1
     in
     let unknown_or_join2, canonical_simple2 =
-      Typing_env.resolve_any_toplevel_alias_on_ty0 env
-        ~force_to_kind:S.force_to_kind ~print_ty or_alias2
+      Typing_env.resolve_ty env
+        ~force_to_kind:S.force_to_kind
+        ~apply_rec_info:S.apply_rec_info
+        ~print_ty
+        or_alias2
     in
     (* CR mshinwell: Think further about this "bound name" stuff. *)
     let shared_aliases_not_aliasing_bound_name =

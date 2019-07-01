@@ -30,6 +30,7 @@ struct
   let to_type ty : T.t = Fabricated ty
   let force_to_kind = Flambda_type0_core.force_to_kind_fabricated
   let print_ty = Type_printers.print_ty_fabricated_with_cache
+  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_fabricated
 
   let meet_or_join_set_of_closures_entry env
           ({ by_closure_id = by_closure_id1; } : T.set_of_closures_entry)

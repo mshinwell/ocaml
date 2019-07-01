@@ -59,11 +59,12 @@ val get_canonical_simple
    : t
   -> Simple.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t Or_bottom.t * Flambda_types.t * Rec_info.t option
+  -> Simple.t Or_bottom.t * Flambda_types.t
 
 val resolve_ty
    : t
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+  -> apply_rec_info:('a -> Rec_info.t -> 'a Or_bottom.t)
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)

@@ -28,7 +28,8 @@ let erase_aliases_unknown_or_join erase_aliases_contents env ~allowed
   | Ok contents -> Ok (erase_aliases_contents env ~allowed contents)
 
 let erase_aliases_ty env ~allowed erase_aliases_of_kind_foo
-      ~force_to_kind ~print_ty (ty : _ Flambda_types.ty) : _ Flambda_types.ty =
+      ~force_to_kind ~print_ty ~apply_rec_info
+      (ty : _ Flambda_types.ty) : _ Flambda_types.ty =
   match ty with
   | No_alias unknown_or_join ->
     No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
@@ -50,7 +51,8 @@ let erase_aliases_ty env ~allowed erase_aliases_of_kind_foo
     | Some alias -> Equals alias
     | None ->
       let unknown_or_join, _ =
-        Typing_env.resolve_ty env ~force_to_kind ~print_ty ty
+        Typing_env.resolve_ty env ~force_to_kind ~print_ty ~apply_rec_info
+          ty
       in
       No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
         ~allowed unknown_or_join)
@@ -65,6 +67,7 @@ let rec erase_aliases env ~allowed (t : Flambda_types.t) : Flambda_types.t =
       erase_aliases_ty env ~allowed
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~print_ty:Type_printers.print_ty_value
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_value
         erase_aliases_of_kind_value
         ty)
   | Naked_number (ty, kind) ->
@@ -72,6 +75,7 @@ let rec erase_aliases env ~allowed (t : Flambda_types.t) : Flambda_types.t =
       erase_aliases_ty env ~allowed
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         erase_aliases_of_kind_naked_number
         ty,
       kind)
@@ -80,6 +84,7 @@ let rec erase_aliases env ~allowed (t : Flambda_types.t) : Flambda_types.t =
       erase_aliases_ty env ~allowed
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
         erase_aliases_of_kind_fabricated
         ty)
 
@@ -105,24 +110,28 @@ and erase_aliases_of_kind_value env ~allowed
       erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
         ~force_to_kind:Flambda_type0_core.force_to_kind_naked_float
         ~print_ty:Type_printers.print_ty_naked_float
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty))
   | Boxed_number (Boxed_int32 ty) ->
     Boxed_number (Boxed_int32 (
       erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
         ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int32
         ~print_ty:Type_printers.print_ty_naked_int32
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty))
   | Boxed_number (Boxed_int64 ty) ->
     Boxed_number (Boxed_int64 (
       erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
         ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
         ~print_ty:Type_printers.print_ty_naked_int64
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty))
   | Boxed_number (Boxed_nativeint ty) ->
     Boxed_number (Boxed_nativeint (
       erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
         ~force_to_kind:Flambda_type0_core.force_to_kind_naked_nativeint
         ~print_ty:Type_printers.print_ty_naked_nativeint
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty))
   | Closures { by_closure_id; } ->
     Closures {
@@ -143,7 +152,15 @@ and erase_aliases_of_kind_fabricated env ~allowed
     }
 
 let erase_aliases_ty_value env ~allowed ty =
-  erase_aliases_ty env ~allowed erase_aliases_of_kind_value ty
+  erase_aliases_ty env ~allowed erase_aliases_of_kind_value
+    ~force_to_kind:Flambda_type0_core.force_to_kind_value
+    ~print_ty:Type_printers.print_ty_value
+    ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_value
+    ty
 
 let erase_aliases_ty_fabricated env ~allowed ty =
-  erase_aliases_ty env ~allowed erase_aliases_of_kind_fabricated ty
+  erase_aliases_ty env ~allowed erase_aliases_of_kind_fabricated
+    ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+    ~print_ty:Type_printers.print_ty_fabricated
+    ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
+    ty
