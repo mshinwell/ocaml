@@ -57,16 +57,9 @@ val add_env_extension
 
 val get_canonical_simple
    : t
-  -> Name.t
+  -> Simple.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Flambda_kind.t * Simple.t
-
-val aliases_of_name : t -> Name.t -> Simple.Set.t
-
-val cut
-   : t
-  -> unknown_if_defined_at_or_later_than:Scope.t
-  -> Typing_env_extension.t * Variable.Set.t
+  -> Simple.t Or_bottom.t * Flambda_type.t
 
 val resolve_ty
    : t
@@ -75,6 +68,16 @@ val resolve_ty
   -> 'a Flambda_types.ty
   -> 'a Flambda_types.unknown_or_join * (Simple.t option)
 
-val resolve_type : t -> Flambda_types.t -> Flambda_types.resolved
+val resolve_type
+   : t
+  -> Flambda_types.t
+  -> Flambda_types.resolved
+
+val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
+
+val cut
+   : t
+  -> unknown_if_defined_at_or_later_than:Scope.t
+  -> Typing_env_extension.t * Variable.Set.t
 
 val defined_earlier : t -> Simple.t -> than:Simple.t -> bool

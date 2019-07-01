@@ -19,6 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make (E : sig
+  (* CR mshinwell: Add _intf.ml file. *)
   type t
   type elt = t
   include Identifiable.S with type t := t

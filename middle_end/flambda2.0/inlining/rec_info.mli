@@ -25,3 +25,7 @@ val depth : t -> int
 val unroll_to : t -> int option
 
 val merge : t -> newer:t -> t
+
+val initial : t
+
+val is_initial : t -> bool

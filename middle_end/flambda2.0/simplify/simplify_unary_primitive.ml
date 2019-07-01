@@ -107,12 +107,10 @@ end;
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var = Var_in_binding_pos.var result_var in
   match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
-  | Bottom kind ->
-    let env_extension =
-      TEE.one_equation (Name.var result_var) (T.bottom kind)
-    in
+  | Bottom, ty ->
+    let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.invalid (), env_extension, dacc
-  | Ok (arg, arg_ty) ->
+  | Ok arg, arg_ty ->
     let original_term = Named.create_prim (Unary (prim, arg)) dbg in
     match prim with
     | Project_closure closure_id ->
