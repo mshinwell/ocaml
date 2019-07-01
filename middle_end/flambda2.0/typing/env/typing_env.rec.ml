@@ -776,8 +776,8 @@ let create_using_resolver_and_symbol_bindings_from t =
   in
   let t =
     Name.Map.fold (fun name (typ, _binding_time, occurrence_kind) t ->
-        add_definition t name (Flambda_type0_core.kind typ)
-          occurrence_kind)
+        let name = Name_in_binding_pos.create name occurrence_kind in
+        add_definition t name (Flambda_type0_core.kind typ))
       names_to_types
       (create_using_resolver_from t)
   in

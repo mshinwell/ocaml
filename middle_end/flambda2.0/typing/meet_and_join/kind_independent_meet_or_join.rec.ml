@@ -46,7 +46,8 @@ struct
   let all_aliases_of env simple_opt =
     match simple_opt with
     | None -> Simple.Set.empty
-    | Some simple -> Typing_env.aliases_of_simple env simple
+    | Some simple ->
+      Typing_env.aliases_of_simple_allowable_in_types env simple
 
   let meet_on_unknown_or_join env
         (ou1 : S.of_kind_foo T.unknown_or_join)
