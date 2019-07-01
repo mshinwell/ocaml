@@ -61,6 +61,6 @@ let merge { depth = depth1; unroll_to = older_unroll_to; } ~newer =
     unroll_to;
   }
 
-let default = create ~depth:0 ~unroll_to:None
+let initial = create ~depth:0 ~unroll_to:None
 
-let is_default t = equal t default
+let is_initial t = equal t initial

@@ -16,41 +16,22 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Set_of_closures_entry.t
+type t
 
-let create_bottom () : t =
-  { by_closure_id = Types_by_closure_id.bottom;
-  }
+val create
+   : typing_env_left:Typing_env.t
+  -> typing_env_right:Typing_env.t
+  -> t
 
-let print_with_cache ~cache ppf ({ by_closure_id; } : t) =
-  Format.fprintf ppf
-    "@[<hov 1>(\
-       @[<hov 1>(by_closure_id@ %a)@]\
-       )@]"
-    (Types_by_closure_id.print_with_cache ~cache) by_closure_id
+val typing_env_left : t -> Typing_env.t
 
-let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+val typing_env_right : t -> Typing_env.t
 
-let equal _ _ = Misc.fatal_error "Not yet implemented"
+(** Note that we are now in the process of comparing the given two
+    [Simple]s for equality. *)
+val now_comparing : t -> Simple.t -> Simple.t -> t
 
-let widen t ~to_match:_ = t  (* XXX Think about this *)
-
-module Meet_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_meet)
-module Join_fabricated = Meet_and_join_fabricated.Make (Lattice_ops.For_join)
-
-let meet env t1 t2 =
-  Meet_fabricated.meet_or_join_set_of_closures_entry env t1 t2
-
-let join env t1 t2 =
-  let env = Meet_env.create env in
-  match Join_fabricated.meet_or_join_set_of_closures_entry env t1 t2 with
-  | Ok (t, _env_extension) -> t
-  | Bottom -> create_bottom ()
-
-let erase_aliases ({ by_closure_id; } : t) env ~allowed : t =
-  { by_closure_id =
-      Types_by_closure_id.erase_aliases by_closure_id env ~allowed;
-  }
-
-let free_names ({ by_closure_id; } : t) =
-  Types_by_closure_id.free_names by_closure_id
+(** Determine whether we are now in the process of comparing the given two
+    [Simple]s for equality. The arguments do not have to be provided in the same
+    order as when [now_comparing] was called. *)
+val already_comparing : t -> Simple.t -> Simple.t -> bool

@@ -108,7 +108,7 @@ module type S = sig
        : t
       -> Simple.t
       -> min_occurrence_kind:Name_occurrence_kind.t
-      -> Simple.t Or_bottom.t * Flambda_type.t
+      -> Simple.t Or_bottom.t * flambda_type * Rec_info.t option
 
     val cut
        : t

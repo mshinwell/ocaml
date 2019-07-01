@@ -72,7 +72,7 @@ module Cached = struct
     match Name.Map.find name t.names_to_types with
     | exception Not_found ->
       Misc.fatal_errorf "Unbound name %a" Name.print name
-    | (_ty, time) -> time
+    | (_ty, time, _name_occurrence_kind) -> time
 
   let domain t = Name.Map.keys t.names_to_types
 end
@@ -233,7 +233,7 @@ let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
 
 let domain t =
-  Name_occurrences.create_names_in_types (domain0 t)
+  Name_occurrences.create_names (domain0 t) Name_occurrence_kind.in_types
 
 let var_domain t = Name.set_to_var_set (domain0 t)
 
@@ -302,8 +302,8 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
 *)
     let names_to_types =
       Name.Map.add name
-        (Flambda_type0_core.unknown kind, name_occurrence_kind,
-          t.next_binding_time)
+        (Flambda_type0_core.unknown kind, t.next_binding_time,
+          name_occurrence_kind)
         (names_to_types t)
     in
     Cached.create ~names_to_types aliases
@@ -314,7 +314,8 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
   with_current_level_and_next_binding_time t ~current_level
     (Binding_time.succ t.next_binding_time)
 
-let add_symbol_definition t sym kind name_occurrence_kind =
+let add_symbol_definition t sym kind =
+  let name_occurrence_kind = Name_occurrence_kind.normal in
   let name = Name.symbol sym in
   let just_after_level =
     let aliases =
@@ -326,8 +327,8 @@ let add_symbol_definition t sym kind name_occurrence_kind =
     in
     let names_to_types =
       Name.Map.add name
-        (Flambda_type0_core.unknown kind, name_occurrence_kind,
-          Binding_time.symbols)
+        (Flambda_type0_core.unknown kind, Binding_time.symbols,
+          name_occurrence_kind)
         (names_to_types t)
     in
     Cached.create ~names_to_types aliases
@@ -359,7 +360,15 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
   let occurrence_kind = Name_in_binding_pos.occurrence_kind name in
   match Name_in_binding_pos.name name with
   | Var var -> add_variable_definition t var kind occurrence_kind
-  | Symbol sym -> add_symbol_definition t sym kind occurrence_kind
+  | Symbol sym ->
+    if not (Name_occurrence_kind.equal occurrence_kind
+      Name_occurrence_kind.normal)
+    then begin
+      Misc.fatal_errorf "Cannot define symbol %a with occurrence kind that \
+          is not `normal'"
+        Name_in_binding_pos.print name
+    end;
+    add_symbol_definition t sym kind
 
 (* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation t name ty =
@@ -373,13 +382,7 @@ let invariant_for_new_equation t name ty =
   end
 
 let add_equation t name ty =
-  if not (mem t name) then begin
-    Misc.fatal_errorf "Cannot add equation on unbound name@ %a@ =@ %a@ in \
-        environment:@ %a"
-      Name.print name
-      Type_printers.print ty
-      print t
-  end;
+  let name_occurrence_kind = find_name_occurrence_kind t name in
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset free_names (domain t)) then begin
     Misc.fatal_errorf "Cannot add equation, involving unbound names, on \
@@ -401,9 +404,16 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
       let kind = Flambda_type0_core.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
-        Alias.create_name kind name binding_time
+        Alias.create_name kind name binding_time name_occurrence_kind
       in
-      let alias_of = alias_of_simple t alias_of in
+      let alias_of =
+        let name_occurrence_kind =
+          match Simple.descr alias_of with
+          | Const _ | Discriminant _ -> Name_occurrence_kind.normal
+          | Name alias_of -> find_name_occurrence_kind t alias_of
+        in
+        alias_of_simple t alias_of name_occurrence_kind
+      in
       match Aliases.add aliases alias alias_of with
       | None, aliases -> aliases, Alias.simple alias_of, ty
       | (Some { canonical_element; alias_of; }), aliases ->
@@ -438,7 +448,8 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
     let binding_time = Cached.binding_time (cached t) name in
     let just_after_level =
       let names_to_types =
-        Name.Map.add name (ty, binding_time) (names_to_types t)
+        Name.Map.add name (ty, binding_time, name_occurrence_kind)
+          (names_to_types t)
       in
       Cached.create ~names_to_types aliases
     in
@@ -565,44 +576,50 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
 *)
     env_extension, vars_in_scope_at_cut
 
+let find_name_occurrence_kind_of_simple t simple =
+  match Simple.descr simple with
+  | Const _ | Discriminant _ -> Name_occurrence_kind.normal
+  | Name name -> find_name_occurrence_kind t name
+
 let get_canonical_simple0 t simple ~min_occurrence_kind
-      : Simple.t Or_bottom.t * Flambda_types.t * Rec_info.t =
+      : Simple.t Or_bottom.t * Flambda_types.t * Rec_info.t option =
   let newer_rec_info = Simple.rec_info simple in
-  let alias = alias_of_simple t (Simple.name name) in
+  let occurrence_kind = find_name_occurrence_kind_of_simple t simple in
+  let alias = alias_of_simple t simple occurrence_kind in
   let kind, simple =
     match
       Aliases.get_canonical_element (aliases t) alias
         ~min_order_within_equiv_class:min_occurrence_kind
     with
     | None ->
-      Misc.fatal_errorf "Cannot get canonical [Simple] for unbound name \
+      Misc.fatal_errorf "Cannot get canonical [Simple] for unbound [Simple] \
           %a:@ %a"
-        Name.print name
+        Simple.print simple
         print t
     | Some alias -> Alias.kind alias, Alias.simple alias
   in
-  match Simple.merge_rec_info simple ~newer_rec_info with
-  | None -> Bottom kind, T.bottom kind, newer_rec_info
+  match Simple.merge_rec_info simple ~newer_rec_info:newer_rec_info with
+  | None -> Bottom, Flambda_type0_core.bottom kind, newer_rec_info
   | Some simple ->
     match Simple.descr simple with
     | Const _ | Discriminant _ ->
-      Ok simple, T.alias_type_of kind simple, newer_rec_info
+      Ok simple, Flambda_type0_core.alias_type_of kind simple, newer_rec_info
     | Name name ->
       let ty = find t name in
-      if Flambda_type0_core.is_bottom ty then
-        Bottom kind, T.bottom kind, newer_rec_info
+      if Flambda_type0_core.is_obviously_bottom ty then
+        Bottom, Flambda_type0_core.bottom kind, newer_rec_info
       else
-        Ok simple, T.alias_type_of kind simple, newer_rec_info
+        Ok simple, Flambda_type0_core.alias_type_of kind simple, newer_rec_info
 
 let get_canonical_simple t simple ~min_occurrence_kind =
   let simple, typ, _rec_info =
-    get_canonical_simple t simple ~min_occurrence_kind
+    get_canonical_simple0 t simple ~min_occurrence_kind
   in
   simple, typ
 
 let resolve_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
-      ~(apply_rec_info : a Flambda_types.ty -> Rec_info.t -> a Flambda_types.ty)
+      ~(apply_rec_info : a -> Rec_info.t -> a Or_bottom.t)
       ~print_ty
       (ty : a Flambda_types.ty)
       : a Flambda_types.unknown_or_join * (Simple.t option) =
@@ -648,15 +665,19 @@ let resolve_ty (type a) t
       | Name name ->
         let ty = force_to_kind (find t name) in
         match ty with
-        | No_alias Bottom | No_alias Unknown ->
-          unknown_or_join, Some simple
-        | No_alias (Ok ty) ->
-          (* [simple] already has [rec_info] applied to it (see
-             [get_canonical_simple], above).  However we also need to apply it
-             to the expanded head of the type. *)
-          begin match apply_rec_info ty rec_info with
-          | Ok ty -> No_alias (Ok ty), Some simple
-          | Bottom -> No_alias Bottom, Some simple
+        | No_alias Bottom -> Bottom, Some simple
+        | No_alias Unknown -> Unknown, Some simple
+        | No_alias (Ok of_kind_foo) ->
+          begin match rec_info with
+          | None -> Ok of_kind_foo, Some simple
+          | Some rec_info ->
+            (* [simple] already has [rec_info] applied to it (see
+               [get_canonical_simple], above).  However we also need to apply it
+               to the expanded head of the type. *)
+            begin match apply_rec_info of_kind_foo rec_info with
+            | Ok of_kind_foo -> Ok of_kind_foo, Some simple
+            | Bottom -> Bottom, Some simple
+            end
           end
         | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
         | Equals _ ->
@@ -674,7 +695,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     let unknown_or_join, canonical_simple =
       resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_value
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
@@ -690,7 +711,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
       resolve_ty t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_naked_number
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty_naked_number
     in
     begin match Option.map Simple.descr canonical_simple with
@@ -706,7 +727,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
       resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_fabricated
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
         ty_fabricated
     in
     begin match Option.map Simple.descr canonical_simple with
@@ -717,7 +738,8 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     end
 
 let aliases_of_simple_allowable_in_types t simple =
-  let alias = alias_of_simple t simple in
+  let name_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
+  let alias = alias_of_simple t simple name_occurrence_kind in
   let newer_rec_info = Simple.rec_info simple in
   Alias.Set.fold (fun alias simples ->
       let name_occurrence_kind = Alias.name_occurrence_kind alias in
@@ -734,28 +756,32 @@ let aliases_of_simple_allowable_in_types t simple =
     Simple.Set.empty
 
 let defined_earlier t simple ~than =
-  Alias.defined_earlier (alias_of_simple t simple)
-    ~than:(alias_of_simple t than)
+  Alias.defined_earlier
+    (alias_of_simple t simple
+      (find_name_occurrence_kind_of_simple t simple))
+    ~than:(alias_of_simple t than
+      (find_name_occurrence_kind_of_simple t than))
 
 let create_using_resolver_and_symbol_bindings_from t =
   let names_to_types =
     Name.Map.filter_map (names_to_types t)
-      ~f:(fun (name : Name.t) (typ, binding_time) ->
+      ~f:(fun (name : Name.t) (typ, binding_time, occurrence_kind) ->
         match name with
         | Var _ -> None
         | Symbol _ ->
           let typ =
             Type_erase_aliases.erase_aliases t ~allowed:Variable.Set.empty typ
           in
-          Some (typ, binding_time))
+          Some (typ, binding_time, occurrence_kind))
   in
   let t =
-    Name.Map.fold (fun name (typ, _binding_time) t ->
-        add_definition t name (Flambda_type0_core.kind typ))
+    Name.Map.fold (fun name (typ, _binding_time, occurrence_kind) t ->
+        add_definition t name (Flambda_type0_core.kind typ)
+          occurrence_kind)
       names_to_types
       (create_using_resolver_from t)
   in
-  Name.Map.fold (fun name (typ, _binding_time) t ->
+  Name.Map.fold (fun name (typ, _binding_time, _occurrence_kind) t ->
       add_equation t name typ)
     names_to_types
     t
