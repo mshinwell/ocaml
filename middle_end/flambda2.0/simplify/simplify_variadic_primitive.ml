@@ -84,7 +84,9 @@ let simplify_make_block dacc _prim dbg
 
 let simplify_variadic_primitive dacc
       (prim : Flambda_primitive.variadic_primitive) args dbg ~result_var =
-  match S.simplify_simples dacc args with
+  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let result_var = Var_in_binding_pos.var result_var in
+  match S.simplify_simples dacc args ~min_occurrence_kind with
   | Bottom ->
     let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
     let env_extension =

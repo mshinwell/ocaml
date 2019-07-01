@@ -555,10 +555,12 @@ Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extensi
 *)
     env_extension, vars_in_scope_at_cut
 
-(* CR mshinwell: Think about [Rec_info] in the context of this one *)
-let get_canonical_simple t name =
+let get_canonical_simple t name ~min_occurrence_kind =
   let alias = alias_of_simple t (Simple.name name) in
-  match Aliases.get_canonical_element (aliases t) alias with
+  match
+    Aliases.get_canonical_element (aliases t) alias
+      ~min_order_within_equiv_class:min_occurrence_kind
+  with
   | None ->
     Misc.fatal_errorf "Cannot get canonical [Simple] for unbound name \
         %a:@ %a"
@@ -573,8 +575,9 @@ let aliases_of_name t name =
     (Aliases.get_aliases (aliases t) alias)
     Simple.Set.empty
 
-let resolve_any_toplevel_alias_on_ty0 (type a) t
+let resolve_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
+      ~(apply_rec_info : a Flambda_types.ty -> Rec_info.t -> a Flambda_types.ty)
       ~print_ty (ty : a Flambda_types.ty)
       : a Flambda_types.unknown_or_join * (Simple.t option) =
   ignore print_ty;  (* CR mshinwell: remove *)
@@ -620,7 +623,13 @@ let resolve_any_toplevel_alias_on_ty0 (type a) t
     | Name name ->
       let ty = force_to_kind (find t name) in
       match ty with
-      | No_alias unknown_or_join -> unknown_or_join, Some simple
+      | No_alias Bottom | No_alias Unknown ->
+        unknown_or_join, Some simple
+      | No_alias (Ok ty) ->
+        begin match apply_rec_info ty (Simple.rec_info simple) with
+        | Ok ty -> No_alias (Ok ty), Some simple
+        | Bottom -> No_alias Bottom, Some simple
+        end
       | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
       | Equals _ ->
         Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
@@ -635,8 +644,9 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
   match ty with
   | Value ty_value ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
+        ~apply_rec_info:Flambda_type0_core.apply_rec_info_ty_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
@@ -649,7 +659,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     end
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ty_naked_number
@@ -664,7 +674,7 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     end
   | Fabricated ty_fabricated ->
     let unknown_or_join, canonical_simple =
-      resolve_any_toplevel_alias_on_ty0 t
+      resolve_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ty_fabricated

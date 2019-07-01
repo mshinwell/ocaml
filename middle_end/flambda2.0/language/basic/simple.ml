@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Const = struct
   type t =
@@ -213,13 +213,13 @@ let map_symbol t ~f =
 let free_names t =
   match t with
   | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name_in_terms name
+    Name_occurrences.singleton_name name Name_occurrence_kind.normal
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
   | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name_in_types name
+    Name_occurrences.singleton_name name Name_occurrence_kind.in_types
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =

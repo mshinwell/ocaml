@@ -42,7 +42,7 @@ val domain : t -> Name_occurrences.t
 
 val var_domain : t -> Variable.Set.t
 
-val add_definition : t -> Name.t -> Flambda_kind.t -> t
+val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
 val add_equation : t -> Name.t -> Flambda_types.t -> t
 
@@ -55,7 +55,11 @@ val add_env_extension
   -> Typing_env_extension.t
   -> t
 
-val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
+val get_canonical_simple
+   : t
+  -> Name.t
+  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> Flambda_kind.t * Simple.t
 
 val aliases_of_name : t -> Name.t -> Simple.Set.t
 
@@ -64,7 +68,7 @@ val cut
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t * Variable.Set.t
 
-val resolve_any_toplevel_alias_on_ty0
+val resolve_ty
    : t
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)

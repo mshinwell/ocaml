@@ -27,7 +27,7 @@ module TE = T.Typing_env
 module UA = Upwards_acc
 
 type pre_simplification_types_of_my_closures = {
-  set_of_closures : (Name.t * Flambda_type.t) option;
+  set_of_closures : (Name_in_binding_pos.t * Flambda_type.t) option;
   closure_types : T.t Closure_id.Map.t;
 }
 
@@ -91,12 +91,18 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
               Closure_id.print closure_id
           | ty -> ty
         in
-        let denv = DE.add_variable denv my_closure type_of_my_closure in
+        let denv =
+          DE.add_variable denv
+            (Var_in_binding_pos.create my_closure Name_occurrence_kind.normal)
+            type_of_my_closure
+        in
         let denv =
           match pre_simplification_types_of_my_closures.set_of_closures with
           | None -> denv
           | Some (set_of_closures, set_of_closures_type) ->
-            DE.add_equation_on_name denv set_of_closures set_of_closures_type
+            DE.add_equation_on_name denv
+              (Name_in_binding_pos.name set_of_closures)
+              set_of_closures_type
         in
         let dacc = DA.with_denv dacc denv in
 (*
@@ -164,7 +170,8 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
       ~result_var =
   let set_of_closures_symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
-      (Linkage_name.create (Variable.unique_name result_var))
+      (Linkage_name.create (Variable.unique_name (
+        Var_in_binding_pos.var result_var)))
   in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let funs = Function_declarations.funs function_decls in
@@ -199,8 +206,6 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   Reachable.reachable term, DA.with_r dacc r, ty
 
 let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
-  (* CR mshinwell: This variable is problematic; we must not let it appear
-     in any term (e.g. by introducing a [Project_closure]). *)
   let set_of_closures_var = Variable.create "set_of_closures" in
   let set_of_closures_ty_fabricated =
     T.alias_type_of_as_ty_fabricated (Simple.var set_of_closures_var)
@@ -237,12 +242,17 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
           ~set_of_closures:set_of_closures_ty_fabricated)
       funs
   in
+  let set_of_closures_name =
+    Name_in_binding_pos.create (Name.var set_of_closures_var)
+      Name_occurrence_kind.in_types
+  in
   let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-  { set_of_closures = Some (Name.var set_of_closures_var, set_of_closures_type);
+  { set_of_closures = Some (set_of_closures_name, set_of_closures_type);
     closure_types;
   }
 
-let simplify_set_of_closures dacc set_of_closures ~result_var =
+let simplify_set_of_closures dacc set_of_closures
+      ~(result_var : Var_in_binding_pos.t) =
   (* By simplifying the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated. *)
   let closure_elements, closure_element_types =
@@ -251,8 +261,13 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
            (closure_elements, closure_element_types) ->
         (* CR mshinwell: This should probably be handled differently, but
            will require some threading through *)
+        let min_occurrence_kind =
+          Var_in_binding_pos.occurrence_kind result_var
+        in
         let simple, ty =
-          match Simplify_simple.simplify_simple dacc simple with
+          match
+            Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
+          with
           | Bottom kind ->
             assert (K.equal kind K.value);
             simple, T.bottom kind
@@ -288,9 +303,9 @@ let simplify_set_of_closures dacc set_of_closures ~result_var =
     let funs = Function_declarations.funs function_decls in
     (* Note that simplifying the bodies of the functions won't change the
        set-of-closures' eligibility for lifting.  That this is so follows
-       from the fact that closure elements (at least in the presence of
-       out-of-scope inlining, which will be implemented in due course) cannot
-       be deleted without a global analysis. *)
+       from the fact that closure elements cannot be deleted without a global
+       analysis, as an inlined function's body may reference them out of
+       scope of the closure declaration. *)
 (*
 Format.eprintf "Environment outside functions:\n%a\n%!"
   T.Typing_env.print (DE.typing_env env);
@@ -319,7 +334,8 @@ Format.eprintf "Environment outside functions:\n%a\n%!"
       Set_of_closures.create ~function_decls ~closure_elements
     in
     let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated (Simple.var result_var)
+      T.alias_type_of_as_ty_fabricated
+        (Simple.var (Var_in_binding_pos.var result_var))
     in
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
@@ -340,7 +356,10 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
   match named with
   | Simple simple ->
 (*let orig_simple = simple in*)
-    begin match Simplify_simple.simplify_simple dacc simple with
+    let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+    begin match
+      Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
+    with
     | Bottom kind -> Reachable.invalid (), dacc, T.bottom kind
     | Ok (simple, ty) ->
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
@@ -382,4 +401,4 @@ let simplify_named dacc named ~result_var =
       if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
       else named
   in
-  named, dacc, ty
+  named, dacc

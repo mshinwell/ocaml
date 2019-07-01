@@ -69,8 +69,9 @@ module Of_kind_value = struct
   let free_names t =
     match t with
     | Dynamically_computed var ->
-      Name_occurrences.singleton_variable_in_terms var
-    | Symbol sym -> Name_occurrences.singleton_symbol_in_terms sym
+      Name_occurrences.singleton_variable var Name_occurrence_kind.normal
+    | Symbol sym ->
+      Name_occurrences.singleton_symbol sym Name_occurrence_kind.normal
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =
@@ -105,11 +106,14 @@ module Static_part = struct
                        -> K.value t
     | Immutable_string : string or_variable -> K.value t
 
-  let needs_gc_root (type k) (t : k t) =
+  let _needs_gc_root (type k) (t : k t) =
     match t with
     | Block (_tag, mut, fields) ->
       begin match mut with
-      | Mutable -> true
+      | Mutable ->
+        (* CR mshinwell: The GC does not support this case yet.  There is an
+           old unfinished patch from Damien. *)
+        true
       | Immutable -> List.exists Of_kind_value.needs_gc_root fields
       end
     | Fabricated_block _ -> true
@@ -131,7 +135,7 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
     | Fabricated_block v ->
-      Name_occurrences.singleton_variable_in_terms v
+      Name_occurrences.singleton_variable v Name_occurrence_kind.normal
     | Set_of_closures set -> Flambda.Set_of_closures.free_names set
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
@@ -139,7 +143,7 @@ module Static_part = struct
     | Boxed_nativeint (Var v)
     | Mutable_string { initial_value = Var v; }
     | Immutable_string (Var v) ->
-      Name_occurrences.singleton_variable_in_terms v
+      Name_occurrences.singleton_variable v Name_occurrence_kind.normal
     | Boxed_float (Const _)
     | Boxed_int32 (Const _)
     | Boxed_int64 (Const _)
@@ -149,7 +153,8 @@ module Static_part = struct
     | Immutable_float_array fields ->
       List.fold_left (fun fns (field : _ or_variable) ->
           match field with
-          | Var v -> Name_occurrences.add_variable_in_terms fns v
+          | Var v ->
+            Name_occurrences.add_variable fns v Name_occurrence_kind.normal
           | Const _ -> fns)
         (Name_occurrences.empty)
         fields
@@ -366,7 +371,7 @@ module Program_body = struct
         Symbol.Set.add set_of_closures_symbol
           (Symbol.Set.of_list (Closure_id.Map.data closure_symbols))
 
-    let gc_roots (type k) (t : k t) =
+    let _gc_roots (type k) (t : k t) =
       match t with
       | Singleton sym -> Symbol.Set.singleton sym
       | Set_of_closures { set_of_closures_symbol; closure_symbols = _; } ->
@@ -547,6 +552,7 @@ module Program_body = struct
 
   let root sym = Root sym
 
+(*
   let gc_roots t =
     let rec gc_roots t roots =
       match t with
@@ -568,6 +574,7 @@ module Program_body = struct
         gc_roots body roots
     in
     gc_roots t Symbol.Set.empty
+*)
 
   let rec iter_definitions t ~f =
     match t with
@@ -605,6 +612,7 @@ module Program = struct
       (Symbol.Map.print K.print) t.imported_symbols
       Program_body.print t.body
 
+(*
   let gc_roots t =
     let syms = Program_body.gc_roots t.body in
     if !Clflags.flambda_invariant_checks then begin
@@ -619,6 +627,7 @@ module Program = struct
         syms;
     end;
     syms
+*)
 
   let free_symbols t =
     (* N.B. [imported_symbols] are not treated as free. *)

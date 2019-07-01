@@ -16,70 +16,100 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(*
-  type occurrence_kind =
-    | In_terms
-    | In_types
-    | Debug_only
-*)
+module Kind = Name_occurrence_kind
 
 module For_one_variety_of_names (N : sig
   include Identifiable.S
   val apply_name_permutation : t -> Name_permutation.t -> t
 end) = struct
-
-(*
-  type t = {
-    in_terms : int N.Map.t;
-    in_types : int N.Map.t;
-    in_debug_only : int N.Map.t;
-  }
-
-*)
-
-  (* The integers gives the counts of free occurrences. *)
-  type t = int N.Map.t
+  (* The integers give the number of occurrences. *)
+  type t = int Kind.Map.t N.Map.t
 
   let print ppf t =
-    N.Map.print Format.pp_print_int ppf t
+    N.Map.print (Kind.Map.print Format.pp_print_int) ppf t
+
+  let invariant t =
+    if !Clflags.flambda_invariant_checks then begin
+      let kind_map_ok by_kind =
+        Kind.Map.for_all (fun _kind count -> count > 0) by_kind
+      in
+      let by_name_map_ok =
+        N.Map.for_all (fun _name by_kind ->
+            (not (Kind.Map.is_empty by_kind)) && kind_map_ok by_kind)
+          t
+      in
+      if not by_name_map_ok then begin
+        Misc.fatal_errorf "Invariant failed:@ %a" print t
+      end
+    end
 
   let empty = N.Map.empty
 
   let is_empty = N.Map.is_empty
 
-  let singleton name = N.Map.singleton name 1
+  let singleton name kind = N.Map.singleton name (Kind.Map.singleton kind 1)
 
-  let add t name =
-    N.Map.update name
-      (function None -> Some 1 | Some count -> Some (count + 1))
+  let add t name kind =
+    N.Map.update name (function
+        | None -> Some (Kind.Map.singleton kind 1)
+        | Some by_kind ->
+          let by_kind =
+            Kind.Map.update kind (function
+                | None -> Some 1
+                | Some count -> Some (count + 1))
+              by_kind
+          in
+          Some by_kind)
       t
 
   let apply_name_permutation t perm =
-    N.Map.fold (fun name count result ->
+    N.Map.fold (fun name counts_by_kind result ->
         let name = N.apply_name_permutation name perm in
-        N.Map.add name count result)
+        N.Map.add name counts_by_kind result)
       t
       N.Map.empty
 
   let diff t1 t2 =
-    N.Map.merge (fun _name count1 count2 ->
-        let count1 = Option.value count1 ~default:0 in
-        let count2 = Option.value count2 ~default:0 in
-        let count = count1 - count2 in
-        if count < 1 then None
-        else Some count)
-      t1 t2
+    let t =
+      N.Map.merge (fun _name by_kind1 by_kind2 ->
+          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
+          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+          let by_kind =
+            Kind.Map.merge (fun _kind count1 count2 ->
+                let count1 = Option.value count1 ~default:0 in
+                let count2 = Option.value count2 ~default:0 in
+                let count = count1 - count2 in
+                if count < 1 then None
+                else Some count)
+              by_kind1 by_kind2
+          in
+          Some by_kind)
+        t1 t2
+    in
+    invariant t;
+    t
 
   let union t1 t2 =
-    N.Map.merge (fun _name count1 count2 ->
-        let count1 = Option.value count1 ~default:0 in
-        let count2 = Option.value count2 ~default:0 in
-        let count = count1 + count2 in
-        if count < 1 then None
-        else Some count)
-      t1 t2
+    let t =
+      N.Map.merge (fun _name by_kind1 by_kind2 ->
+          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
+          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+          let by_kind =
+            Kind.Map.merge (fun _kind count1 count2 ->
+                let count1 = Option.value count1 ~default:0 in
+                let count2 = Option.value count2 ~default:0 in
+                let count = count1 + count2 in
+                if count < 1 then None
+                else Some count)
+              by_kind1 by_kind2
+          in
+          Some by_kind)
+        t1 t2
+    in
+    invariant t;
+    t
 
-  let subset t1 t2 = N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
+  let subset t1 t2 = is_empty (diff t1 t2)
 
   let keys t = N.Map.keys t
 
@@ -87,229 +117,23 @@ end) = struct
 
   let remove t name = N.Map.remove name t
 
-(*
-  let create_from_set_in_terms in_terms =
-    { in_terms;
-      in_types = N.Map.empty;
-      in_debug_only = N.Map.empty;
-    }
-
-  let create_from_name_set_in_terms in_terms =
-    let in_terms =
-      Name.Set.fold (fun name result ->
-          N.Map.add (Name name) result)
-        in_terms
-        N.Map.empty
-    in
-    create_from_set_in_terms in_terms
-
-  let create_from_set_in_types in_types =
-    { in_terms = N.Map.empty;
-      in_types;
-      in_debug_only = N.Map.empty;
-    }
-
-  let create_from_name_set_in_types in_types =
-    let in_types =
-      Name.Set.fold (fun name result ->
-          N.Map.add (Name name) result)
-        in_types
-        N.Map.empty
-    in
-    create_from_set_in_types in_types
-
-  let is_empty { in_terms; in_types; in_debug_only; } =
-    N.Map.is_empty in_terms
-      && N.Map.is_empty in_types
-      && N.Map.is_empty in_debug_only
-*)
-(*
-  let singleton_in_terms name =
-    create_from_set_in_terms (N.Map.singleton name)
-*)
-
-(*
-  let singleton_in_types name =
-    create_from_set_in_types (N.Map.singleton name)
-
-  let of_list_in_terms names =
-    create_from_set_in_terms (N.Map.of_list names)
-
-
-  let add { in_terms; in_types; debug_only; } name kind =
-    match kind with
-    | In_terms ->
-      { t with in_terms = add0 name in_terms; }
-    | In_types ->
-      { t with in_types = add0 name in_types; }
-    | Debug_only ->
-      { t with in_debug_only = add0 name in_debug_only; }
-
-  let add_set t names kind =
-    N.Map.fold (fun name t -> add t name kind) names t
-
-  let in_terms t = t.in_terms
-  let in_types t = t.in_types
-  let in_debug_only t = t.in_debug_only
-
-  let mem_in_terms t name = N.Map.mem name t.in_terms
-  let mem_in_types t name = N.Map.mem name t.in_types
-  let mem_in_debug_only t name = N.Map.mem name t.in_debug_only
-
-  let mem t name =
-    mem_in_terms t name || mem_in_types t name || mem_in_debug_only t name
-
-  let mem_var t var =
-    mem t (N.Name (Name.var var))
-
-  let everything t =
-    N.Map.union t.in_terms
-      (N.Map.union t.in_types t.in_debug_only)
-
-  let everything_must_only_be_names t =
-    N.Map.fold (fun (name : N.t) result ->
-        match name with
-        | Name name -> Name.Set.add name result
-        | _ -> Misc.fatal_errorf "Only [Name]s allowed: %a " print t)
-      (everything t)
-      Name.Set.empty
-
-  let remove t name =
-    { in_terms = N.Map.remove name t.in_terms;
-      in_types = N.Map.remove name t.in_types;
-      in_debug_only = N.Map.remove name t.in_debug_only;
-    }
-
-  let remove_var t var =
-    remove t (N.Name (Name.var var))
-
-  (* CR mshinwell: Rename to "diff_free_and_bound" or something?
-     Also double-check the semantics are correct here *)
-  let diff t1 t2 =
-    { in_terms = N.Map.diff t1.in_terms t2.in_terms;
-      in_types = N.Map.diff t1.in_types
-        (N.Map.union t2.in_terms t2.in_types);
-      in_debug_only = N.Map.diff t1.in_debug_only
-        (N.Map.union t2.in_terms t2.in_debug_only);
-    }
-
-  let union t1 t2 =
-    { in_terms = N.Map.union t1.in_terms t2.in_terms;
-      in_types = N.Map.union t1.in_types t2.in_types;
-      in_debug_only = N.Map.union t1.in_debug_only t2.in_debug_only;
-    }
-
-  let rec union_list ts =
-    match  ts with
-    | [] -> empty
-    | t::ts -> union t (union_list ts)
-
-  let inter t1 t2 =
-    { in_terms = N.Map.inter t1.in_terms t2.in_terms;
-      in_types = N.Map.inter t1.in_types t2.in_types;
-      in_debug_only = N.Map.inter t1.in_debug_only t2.in_debug_only;
-    }
-
-  let subset
-        { in_terms = in_terms1; in_types = in_types1;
-          in_debug_only = in_debug_only1; }
-        { in_terms = in_terms2; in_types = in_types2;
-          in_debug_only = in_debug_only2; } =
-    N.Map.subset in_terms1 in_terms2
-      && N.Map.subset in_types1 in_types2
-      && N.Map.subset in_debug_only1 in_debug_only2
-
-  let promote_to_in_types t =
-    if not (N.Map.is_empty t.in_debug_only) then begin
-      Misc.fatal_errorf "Cannot promote set of names including one or more \
-          marked as ``debug only'' to a set of names ``only occurring in \
-          types''"
-        print t
-    end;
-    let in_types = N.Map.union t.in_terms t.in_types in
-    { in_terms = N.Map.empty;
-      in_types;
-      in_debug_only = N.Map.empty;
-    }
-
-  let promote_to_debug_only t =
-    { in_terms = N.Map.empty;
-      in_types = N.Map.empty;
-      in_debug_only = everything t;
-    }
-
-  let variables_only _t = Misc.fatal_error "NYI"
-  (*
-    { in_terms = N.variables_only t.in_terms;
-      in_types = N.variables_only t.in_types;
-      in_debug_only = N.variables_only t.in_debug_only;
-    }
-  *)
-
-  let equal
-        { in_terms = in_terms1; in_types = in_types1;
-          in_debug_only = in_debug_only1; }
-        { in_terms = in_terms2; in_types = in_types2;
-          in_debug_only = in_debug_only2; } =
-    N.Map.equal in_terms1 in_terms2
-      && N.Map.equal in_types1 in_types2
-      && N.Map.equal in_debug_only1 in_debug_only2
-
-  let fold_everything t ~init ~f =
-    let acc =
-      N.Map.fold (fun name acc -> f acc name)
-        t.in_terms
-        init
-    in
-    let acc =
-      N.Map.fold (fun name acc -> f acc name)
-        t.in_types
-        acc
-    in
-    N.Map.fold (fun name acc -> f acc name)
-      t.in_debug_only
-      acc
-
-  let choose_and_remove_amongst_everything t =
-    match N.Map.get_singleton t.in_terms with
-    | Some name ->
-      let t =
-        { t with
-          in_terms = N.Map.remove name t.in_terms;
-        }
-      in
-      Some (name, t)
-    | None ->
-      match N.Map.get_singleton t.in_types with
-      | Some name ->
-        let t =
-          { t with
-            in_types = N.Map.remove name t.in_types;
-          }
-        in
-        Some (name, t)
-      | None ->
-        match N.Map.get_singleton t.in_debug_only with
-        | Some name ->
-          let t =
-            { t with
-              in_debug_only = N.Map.remove name t.in_debug_only;
-            }
-          in
-          Some (name, t)
-        | None -> None
-
-  let apply_name_permutation { in_terms; in_types; in_debug_only; } perm =
-    { in_terms = Name_permutation.apply_name_name_set perm in_terms;
-      in_types = Name_permutation.apply_name_name_set perm in_types;
-      in_debug_only = Name_permutation.apply_name_name_set perm in_debug_only;
-    }
-*)
-
   let count t name =
+    (* CR-someday mshinwell: We could consider keeping the total count
+       separately. *)
     match N.Map.find name t with
     | exception Not_found -> 0
-    | count -> count
+    | by_kind ->
+      Kind.Map.fold (fun _kind count total -> count + total) by_kind 0
+
+  let greatest_occurrence_kind t name : Kind.Or_absent.t =
+    match N.Map.find name t with
+    | exception Not_found -> Kind.Or_absent.absent
+    | by_kind ->
+      match Kind.Map.max_binding_opt by_kind with
+      | Some (kind, _count) -> Kind.Or_absent.present kind
+      | None ->
+        invariant t;
+        assert false
 end
 
 module For_variables = For_one_variety_of_names (struct
@@ -329,214 +153,116 @@ module For_symbols = For_one_variety_of_names (struct
 end)
 
 type t = {
-  variables_in_terms : For_variables.t;
-  variables_in_types : For_variables.t;
-  variables_debug_only : For_variables.t;
+  variables : For_variables.t;
   continuations : For_continuations.t;
-  symbols_in_terms : For_symbols.t;
-  symbols_in_types : For_symbols.t;
+  symbols : For_symbols.t;
 }
 
-let print ppf { variables_in_terms; variables_in_types; variables_debug_only;
-      continuations; symbols_in_terms; symbols_in_types; } =
-  Format.fprintf ppf "@[\
-      (variables_in_terms %a)@ \
-      (variables_in_types %a)@ \
-      (variables_debug_only %a)@ \
-      (continuations %a)\
-      (symbols_in_terms %a)\
-      (symbols_in_types %a)\
+let print ppf { variables; continuations; symbols; } =
+  Format.fprintf ppf "@[<hov 1>\
+      @[<hov 1>(variables %a)@]@ \
+      @[<hov 1>(continuations %a)@]@ \
+      @[<hov 1>(symbols %a)@]\
       @]"
-    For_variables.print variables_in_terms
-    For_variables.print variables_in_types
-    For_variables.print variables_debug_only
+    For_variables.print variables
     For_continuations.print continuations
-    For_symbols.print symbols_in_terms
-    For_symbols.print symbols_in_types
+    For_symbols.print symbols
 
 let empty = {
-  variables_in_terms = For_variables.empty;
-  variables_in_types = For_variables.empty;
-  variables_debug_only = For_variables.empty;
+  variables = For_variables.empty;
   continuations = For_continuations.empty;
-  symbols_in_terms = For_symbols.empty;
-  symbols_in_types = For_symbols.empty;
+  symbols = For_symbols.empty;
 }
 
 let singleton_continuation cont =
   { empty with
-    continuations = For_continuations.singleton cont;
+    continuations = For_continuations.singleton cont Kind.normal;
   }
 
 let add_continuation t cont =
   { t with
-    continuations = For_continuations.add t.continuations cont;
+    continuations = For_continuations.add t.continuations cont Kind.normal;
   }
 
 let count_continuation t cont =
   For_continuations.count t.continuations cont
 
-let singleton_variable_in_terms var =
+let singleton_variable var kind =
   { empty with
-    variables_in_terms = For_variables.singleton var;
+    variables = For_variables.singleton var kind;
   }
 
-let singleton_variable_in_types var =
-  { empty with
-    variables_in_types = For_variables.singleton var;
-  }
-
-let add_variable_in_terms t var =
+let add_variable t var kind =
   { t with
-    variables_in_terms = For_variables.add t.variables_in_terms var;
+    variables = For_variables.add t.variables var kind;
   }
 
-let add_variable_in_types t var =
+let add_symbol t sym kind =
   { t with
-    variables_in_types = For_variables.add t.variables_in_types var;
+    symbols = For_symbols.add t.symbols sym kind;
   }
 
-let add_symbol_in_types t var =
-  { t with
-    symbols_in_types = For_symbols.add t.symbols_in_types var;
-  }
-
-let singleton_symbol_in_terms sym =
+let singleton_symbol sym kind =
   { empty with
-    symbols_in_terms = For_symbols.singleton sym;
+    symbols = For_symbols.singleton sym kind;
   }
 
-let singleton_symbol_in_types sym =
-  { empty with
-    symbols_in_types = For_symbols.singleton sym;
-  }
-
-let singleton_name_in_terms (name : Name.t) =
+let singleton_name (name : Name.t) kind =
   match name with
-  | Var var -> singleton_variable_in_terms var
-  | Symbol sym -> singleton_symbol_in_terms sym
+  | Var var -> singleton_variable var kind
+  | Symbol sym -> singleton_symbol sym kind
 
-let singleton_name_in_types (name : Name.t) =
-  match name with
-  | Var var -> singleton_variable_in_types var
-  | Symbol sym -> singleton_symbol_in_types sym
-
-let create_names_in_types names =
+let create_names names kind =
   Name.Set.fold (fun (name : Name.t) t ->
       match name with
-      | Var var -> add_variable_in_types t var
-      | Symbol sym -> add_symbol_in_types t sym)
+      | Var var -> add_variable t var kind
+      | Symbol sym -> add_symbol t sym kind)
     names
     empty
 
-let apply_name_permutation { variables_in_terms; variables_in_types;
-      variables_debug_only; continuations; symbols_in_terms;
-      symbols_in_types; } perm =
-  let variables_in_terms =
-    For_variables.apply_name_permutation variables_in_terms perm
-  in
-  let variables_in_types =
-    For_variables.apply_name_permutation variables_in_types perm
-  in
-  let variables_debug_only =
-    For_variables.apply_name_permutation variables_debug_only perm
+let apply_name_permutation { variables; continuations; symbols; } perm =
+  let variables =
+    For_variables.apply_name_permutation variables perm
   in
   let continuations =
     For_continuations.apply_name_permutation continuations perm
   in
-  let symbols_in_terms =
-    For_symbols.apply_name_permutation symbols_in_terms perm
+  let symbols =
+    For_symbols.apply_name_permutation symbols perm
   in
-  let symbols_in_types =
-    For_symbols.apply_name_permutation symbols_in_types perm
-  in
-  { variables_in_terms;
-    variables_in_types;
-    variables_debug_only;
+  { variables;
     continuations;
-    symbols_in_terms;
-    symbols_in_types;
+    symbols;
   }
 
 let binary_predicate ~for_variables ~for_continuations ~for_symbols
-      { variables_in_terms = variables_in_terms1;
-        variables_in_types = variables_in_types1;
-        variables_debug_only = variables_debug_only1;
+      { variables = variables1;
         continuations = continuations1;
-        symbols_in_terms = symbols_in_terms1;
-        symbols_in_types = symbols_in_types1;
+        symbols = symbols1;
       }
-      { variables_in_terms = variables_in_terms2;
-        variables_in_types = variables_in_types2;
-        variables_debug_only = variables_debug_only2;
+      { variables = variables2;
         continuations = continuations2;
-        symbols_in_terms = symbols_in_terms2;
-        symbols_in_types = symbols_in_types2;
+        symbols = symbols2;
       } =
-  let variables_in_terms =
-    for_variables variables_in_terms1 variables_in_terms2
-  in
-  let variables_in_types =
-    for_variables variables_in_types1 variables_in_types2
-  in
-  let variables_debug_only =
-    for_variables variables_debug_only1 variables_debug_only2
-  in
-  let continuations =
-    for_continuations continuations1 continuations2
-  in
-  let symbols_in_terms =
-    for_symbols symbols_in_terms1 symbols_in_terms2
-  in
-  let symbols_in_types =
-    for_symbols symbols_in_types1 symbols_in_types2
-  in
-  variables_in_terms
-    && variables_in_types
-    && variables_debug_only
-    && continuations
-    && symbols_in_terms
-    && symbols_in_types
+  for_variables variables1 variables2
+    && for_continuations continuations1 continuations2
+    && for_symbols symbols1 symbols2
 
 let binary_op ~for_variables ~for_continuations ~for_symbols
-      { variables_in_terms = variables_in_terms1;
-        variables_in_types = variables_in_types1;
-        variables_debug_only = variables_debug_only1;
+      { variables = variables1;
         continuations = continuations1;
-        symbols_in_terms = symbols_in_terms1;
-        symbols_in_types = symbols_in_types1;
+        symbols = symbols1;
       }
-      { variables_in_terms = variables_in_terms2;
-        variables_in_types = variables_in_types2;
-        variables_debug_only = variables_debug_only2;
+      { variables = variables2;
         continuations = continuations2;
-        symbols_in_terms = symbols_in_terms2;
-        symbols_in_types = symbols_in_types2;
+        symbols = symbols2;
       } =
-  let variables_in_terms =
-    for_variables variables_in_terms1 variables_in_terms2
-  in
-  let variables_in_types =
-    for_variables variables_in_types1 variables_in_types2
-  in
-  let variables_debug_only =
-    for_variables variables_debug_only1 variables_debug_only2
-  in
-  let continuations =
-    for_continuations continuations1 continuations2
-  in
-  let symbols_in_terms =
-    for_symbols symbols_in_terms1 symbols_in_terms2
-  in
-  let symbols_in_types =
-    for_symbols symbols_in_types1 symbols_in_types2
-  in
-  { variables_in_terms;
-    variables_in_types;
-    variables_debug_only;
+  let variables = for_variables variables1 variables2 in
+  let continuations = for_continuations continuations1 continuations2 in
+  let symbols = for_symbols symbols1 symbols2 in
+  { variables;
     continuations;
-    symbols_in_terms;
-    symbols_in_types;
+    symbols;
   }
 
 let diff t1 t2 =
@@ -562,25 +288,11 @@ let rec union_list ts =
   | [] -> empty
   | t::ts -> union t (union_list ts)
 
-let variables t =
-  let in_terms = For_variables.keys t.variables_in_terms in
-  let in_types = For_variables.keys t.variables_in_types in
-  let debug_only = For_variables.keys t.variables_debug_only in
-  Variable.Set.union in_terms (Variable.Set.union in_types debug_only)
+let variables t = For_variables.keys t.variables
+let symbols t = For_symbols.keys t.symbols
 
-let symbols t =
-  let in_terms = For_symbols.keys t.symbols_in_terms in
-  let in_types = For_symbols.keys t.symbols_in_types in
-  Symbol.Set.union in_terms in_types
-
-let mem_var t var =
-  For_variables.mem t.variables_in_terms var
-    || For_variables.mem t.variables_in_types var
-    || For_variables.mem t.variables_debug_only var
-
-let mem_symbol t symbol =
-  For_symbols.mem t.symbols_in_terms symbol
-  || For_symbols.mem t.symbols_in_types symbol
+let mem_var t var = For_variables.mem t.variables var
+let mem_symbol t symbol = For_symbols.mem t.symbols symbol
 
 let mem_name t (name : Name.t) =
   match name with
@@ -588,26 +300,15 @@ let mem_name t (name : Name.t) =
   | Symbol symbol -> mem_symbol t symbol
 
 let remove_var t var =
-  let variables_in_terms = For_variables.remove t.variables_in_terms var in
-  let variables_in_types = For_variables.remove t.variables_in_types var in
-  let variables_debug_only = For_variables.remove t.variables_debug_only var in
+  let variables = For_variables.remove t.variables var in
   { t with
-    variables_in_terms;
-    variables_in_types;
-    variables_debug_only;
+    variables;
   }
 
-let only_contains_symbols
-      { variables_in_terms;
-        variables_in_types;
-        variables_debug_only;
-        continuations;
-        symbols_in_terms;
-        symbols_in_types;
-      } =
-  For_variables.is_empty variables_in_terms
-    && For_variables.is_empty variables_in_types
-    && For_variables.is_empty variables_debug_only
+let only_contains_symbols { variables; continuations; symbols; } =
+  For_variables.is_empty variables
     && For_continuations.is_empty continuations
-    && For_symbols.is_empty symbols_in_terms
-    && For_symbols.is_empty symbols_in_types
+    && For_symbols.is_empty symbols
+
+let greatest_occurrence_kind_var t var =
+  For_variables.greatest_occurrence_kind t.variables var
