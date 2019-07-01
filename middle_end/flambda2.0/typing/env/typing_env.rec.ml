@@ -386,7 +386,7 @@ let add_equation t name ty =
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset free_names (domain t)) then begin
     Misc.fatal_errorf "Cannot add equation, involving unbound names, on \
-        name@ %a@ =@ %a@ in environment:@ %a"
+        name@ %a =@ %a@ in environment:@ %a"
       Name.print name
       Type_printers.print ty
       print t

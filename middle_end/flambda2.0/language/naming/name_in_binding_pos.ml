@@ -38,10 +38,10 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let print ppf { name; occurrence_kind; } =
-    Format.fprintf ppf "@[<hov 1>\
+    Format.fprintf ppf "@[<hov 1>)\
         @[<hov 1>(name@ %a)@]@ \
         @[<hov 1>(occurrence_kind@ %a)@]\
-        @]"
+        )@]"
       Name.print name
       Name_occurrence_kind.print occurrence_kind
 

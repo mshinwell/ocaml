@@ -155,7 +155,7 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
          (Name_occurrence_kind.Or_absent.present declared_occurrence_kind)
          < 0
     then begin
-      Misc.fatal_errorf "[Let]-binding declares variable %a, but this \
+      Misc.fatal_errorf "[Let]-binding declares variable %a,@ but this \
           variable has occurrences at a lower kind@ (>= %a)@ in body:@ %a"
         Var_in_binding_pos.print bound_var
         Name_occurrence_kind.Or_absent.print greatest_occurrence_kind

@@ -43,13 +43,21 @@ let free_names t =
 include Identifiable.Make (struct
   type nonrec t = t
 
+(*
   let print ppf { var; occurrence_kind; } =
-    Format.fprintf ppf "@[<hov 1>\
+    Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(var@ %a)@]@ \
         @[<hov 1>(occurrence_kind@ %a)@]\
-        @]"
+        )@]"
       Variable.print var
       Name_occurrence_kind.print occurrence_kind
+*)
+
+  let print ppf { var; occurrence_kind; } =
+    match Name_occurrence_kind.descr occurrence_kind with
+    | Normal -> Variable.print ppf var
+    | In_types -> Format.fprintf ppf "@[%a\u{1d749}@]" Variable.print var
+    | Phantom -> Format.fprintf ppf "@[%a\u{1f47b}@]" Variable.print var
 
   let compare
         { var = var1; occurrence_kind = occurrence_kind1; }

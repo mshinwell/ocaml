@@ -35,6 +35,13 @@ val is_normal : t -> bool
 
 include Identifiable.S with type t := t
 
+type descr = private
+  | Normal
+  | In_types
+  | Phantom
+
+val descr : t -> descr
+
 module Or_absent : sig
   type t = private
     | Absent
