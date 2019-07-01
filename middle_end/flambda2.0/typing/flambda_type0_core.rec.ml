@@ -568,15 +568,9 @@ let get_alias t =
 
 let rec apply_rec_info (t : Flambda_types.t) rec_info : t Or_bottom.t =
   match t with
-  | Value (Equals simple) ->
-    let simple = Simple.merge_rec_info simple ~newer_rec_info:rec_info in
-    Ok (Value (Equals simple))
-  | Value (Type _) -> Misc.fatal_error "Not yet implemented"
-  | Value (No_alias Unknown) -> Ok t
-  | Value (No_alias Bottom) -> Bottom
-  | Value (No_alias ty_value) ->
+  | Value ty_value ->
     begin match apply_rec_info_ty_value ty_value rec_info with
-    | Ok ty_value -> Ok (Value (No_alias ty_value))
+    | Ok ty_value -> Ok (Value ty_value)
     | Bottom -> Bottom
     end
   | Naked_number _ | Fabricated _ -> Bottom
@@ -584,16 +578,29 @@ let rec apply_rec_info (t : Flambda_types.t) rec_info : t Or_bottom.t =
 and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
       : Flambda_types.ty_value Or_bottom.t =
   match ty_value with
-  | Closures closures ->
-    let by_closure_id =
-      Closures_entry_by_closure_id.map_closure_types by_closure_id
-        ~f:(fun (closure_type : Flambda_types.t) ->
-          apply_rec_info closure_type rec_info)
-    in
-    begin match by_closure_id with
-    | Ok by_closure_id -> Ok (Closures { by_closure_id; })
-    | Bottom -> Bottom
+  | Equals simple ->
+    begin match Simple.merge_rec_info simple ~newer_rec_info:rec_info with
+    | None -> Bottom
+    | Some simple -> Ok (Equals simple)
     end
-  | Blocks_and_tagged_immediates _
-  | Boxed_number _
-  | String _ -> Bottom
+  | Type _ -> Misc.fatal_error "Not yet implemented"
+  | No_alias Unknown -> Ok ty_value
+  | No_alias Bottom -> Bottom
+  | No_alias (Ok of_kind_value) ->
+    let of_kind_value : _ Or_unknown_or_bottom.t =
+      match of_kind_value with
+      | Closures { by_closure_id; } ->
+        let by_closure_id =
+          Closures_entry_by_closure_id.map_closure_types by_closure_id
+            ~f:(fun (closure_type : Flambda_types.t) ->
+              apply_rec_info closure_type rec_info)
+        in
+        begin match by_closure_id with
+        | Ok by_closure_id -> Ok (Closures { by_closure_id; })
+        | Bottom -> Bottom
+        end
+      | Blocks_and_tagged_immediates _
+      | Boxed_number _
+      | String _ -> Bottom
+    in
+    Ok (No_alias of_kind_value)
