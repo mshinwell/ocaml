@@ -600,9 +600,10 @@ let get_canonical_simple0 t simple ~min_occurrence_kind
         ~min_order_within_equiv_class:min_occurrence_kind
     with
     | None ->
-      Misc.fatal_errorf "Cannot get canonical [Simple] for unbound [Simple] \
-          %a:@ %a"
-        Simple.print simple
+      Misc.fatal_errorf "Cannot get canonical [Simple] for unbound [Alias]@ \
+          %a.@ Alias tracker:@ %a.@ Environment:@ %a"
+        Alias.print alias
+        Aliases.print (aliases t)
         print t
     | Some alias -> Alias.kind alias, Alias.simple alias
   in
