@@ -18,7 +18,6 @@
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
 module T = Flambda_type
 module TE = T.Typing_env
 
@@ -29,6 +28,6 @@ let simplify_simple dacc simple ~min_occurrence_kind =
 let simplify_simples dacc simples ~min_occurrence_kind =
   Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
       match simplify_simple dacc simple ~min_occurrence_kind with
-      | Ok (simple, ty) -> Ok (simple, ty)
-      | Bottom _kind -> Bottom)
+      | Ok simple, ty -> Ok (simple, ty)
+      | Bottom, _ty -> Bottom)
     simples)

@@ -22,6 +22,7 @@ type t = {
   already_comparing : Simple.Pair.Set.t;
 }
 
+(*
 let print ppf { typing_env_left; typing_env_right; already_comparing; } =
   Format.fprintf ppf
     "@[<hov 1>(\
@@ -59,3 +60,4 @@ let now_comparing t simple1 simple2 =
   { t with
     already_comparing;
   }
+*)

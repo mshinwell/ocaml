@@ -18,6 +18,8 @@
 
 type t
 
+(*
+
 val create
    : typing_env_left:Typing_env.t
   -> typing_env_right:Typing_env.t
@@ -35,3 +37,5 @@ val now_comparing : t -> Simple.t -> Simple.t -> t
     [Simple]s for equality. The arguments do not have to be provided in the same
     order as when [now_comparing] was called. *)
 val already_comparing : t -> Simple.t -> Simple.t -> bool
+
+*)

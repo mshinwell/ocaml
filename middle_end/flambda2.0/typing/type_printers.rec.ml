@@ -108,7 +108,7 @@ let print_ty_naked_float ppf ty =
   print_ty_naked_float_with_cache ~cache:(Printing_cache.create ())
     ppf ty
 
-let print_ty_naked_immediate ppf ty =
+let _print_ty_naked_immediate ppf ty =
   print_ty_naked_immediate_with_cache ~cache:(Printing_cache.create ())
     ppf ty
 

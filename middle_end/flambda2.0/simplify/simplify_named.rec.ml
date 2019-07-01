@@ -267,10 +267,10 @@ let simplify_set_of_closures dacc set_of_closures
           match
             Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
           with
-          | Bottom kind ->
-            assert (K.equal kind K.value);
-            simple, T.bottom kind
-          | Ok (simple, ty) -> simple, ty
+          | Bottom, ty ->
+            assert (K.equal (T.kind ty) K.value);
+            simple, ty
+          | Ok simple, ty -> simple, ty
         in
         let closure_elements =
           Var_within_closure.Map.add var_within_closure simple
@@ -359,8 +359,8 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
     begin match
       Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
     with
-    | Bottom kind -> Reachable.invalid (), dacc, T.bottom kind
-    | Ok (simple, ty) ->
+    | Bottom, ty -> Reachable.invalid (), dacc, ty
+    | Ok simple, ty ->
 (*Format.eprintf "Simplified %a --> %a, type %a\n%!"
   Simple.print orig_simple
   Simple.print simple

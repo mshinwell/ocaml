@@ -122,7 +122,7 @@ module type S = sig
      : Typing_env.t
     -> flambda_type
     -> shape:flambda_type
-    -> result_var:Variable.t
+    -> result_var:Var_in_binding_pos.t
     -> result_kind:Flambda_kind.t
     -> Typing_env_extension.t Or_bottom.t
 

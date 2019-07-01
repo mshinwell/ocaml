@@ -21,6 +21,6 @@ val simplify_projection
   -> original_term:Flambda.Named.t
   -> deconstructing:Flambda_type.t
   -> shape:Flambda_type.t
-  -> result_var:Variable.t
+  -> result_var:Var_in_binding_pos.t
   -> result_kind:Flambda_kind.t
   -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
