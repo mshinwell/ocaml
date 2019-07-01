@@ -82,11 +82,22 @@ module Or_absent = struct
     let compare t1 t2 =
       match t1, t2 with
       | Absent, Absent -> 0
-      | Absent, Present _ -> -1
-      | Present _, Absent -> 1
+      | Absent, Present _ -> 1
+      | Present _, Absent -> -1
       | Present kind1, Present kind2 -> compare kind1 kind2
 
     let equal t1 t2 =
       compare t1 t2 = 0
   end)
 end
+
+type descr =
+  | Normal
+  | In_types
+  | Phantom
+
+let descr (t : t) : descr =
+  match t with
+  | Normal -> Normal
+  | In_types -> In_types
+  | Phantom -> Phantom

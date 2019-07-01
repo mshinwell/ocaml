@@ -267,7 +267,7 @@ module T0 = Identifiable.Make (struct
     match t with
     | Name name -> Name.print ppf name
     | Rec_name (name, rec_info) ->
-      Format.fprintf ppf "%a@ %a"
+      Format.fprintf ppf "@[%a@ %a@]"
         Name.print name
         Rec_info.print rec_info
     | Const c -> Const.print ppf c
