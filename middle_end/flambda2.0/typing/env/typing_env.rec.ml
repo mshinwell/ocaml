@@ -636,7 +636,7 @@ let resolve_ty (type a) t
   | Equals simple ->
     let min_occurrence_kind = Name_occurrence_kind.in_types in
     match get_canonical_simple0 t simple ~min_occurrence_kind with
-    | Bottom, _typ, rec_info -> Bottom, None
+    | Bottom, _typ, _rec_info -> Bottom, None
     | Ok simple, _typ, rec_info ->
       match Simple.descr simple with
       (* CR mshinwell: Could check kinds against [S.kind] here. *)
@@ -751,7 +751,7 @@ let aliases_of_simple_allowable_in_types t simple =
         let simple = Alias.simple alias in
         match Simple.merge_rec_info simple ~newer_rec_info with
         | None -> simples
-        | Some simple -> Simple.Set.add (Alias.simple alias) simples)
+        | Some simple -> Simple.Set.add simple simples)
     (Aliases.get_aliases (aliases t) alias)
     Simple.Set.empty
 

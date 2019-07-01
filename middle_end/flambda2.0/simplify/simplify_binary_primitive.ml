@@ -28,14 +28,15 @@ module TEE = Flambda_type.Typing_env_extension
 let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
       dbg ~result_var =
   let original_term = Named.create_prim (Binary (prim, block, index)) dbg in
+  let result_var' = Var_in_binding_pos.var result_var in
   let unchanged () =
     let ty = T.any_value () in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.reachable original_term, env_extension, dacc
   in
   let invalid () =
     let ty = T.bottom K.value in
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
 (*Format.eprintf "Reifying index type: %a\n%!" T.print index_ty;*)
@@ -51,25 +52,23 @@ let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
     Simplify_primitive_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
       ~shape:(T.immutable_block_with_size_at_least ~n
-        ~field_n_minus_one:result_var)
+        ~field_n_minus_one:result_var')
       ~result_var ~result_kind:K.value
 
 let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       arg1 arg2 dbg ~result_var =
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
-  let result_var = Var_in_binding_pos.var result_var in
-  let invalid kind =
-    let env_extension =
-      TEE.one_equation (Name.var result_var) (T.bottom kind)
-    in
+  let result_var' = Var_in_binding_pos.var result_var in
+  let invalid ty =
+    let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
   match S.simplify_simple dacc arg1 ~min_occurrence_kind with
-  | Bottom kind -> invalid kind
-  | Ok (arg1, arg1_ty) ->
+  | Bottom, ty -> invalid ty
+  | Ok arg1, arg1_ty ->
     match S.simplify_simple dacc arg2 ~min_occurrence_kind with
-    | Bottom kind -> invalid kind
-    | Ok (arg2, arg2_ty) ->
+    | Bottom, ty -> invalid ty
+    | Ok arg2, arg2_ty ->
       match prim with
       | Block_load (Block (Value Anything), Immutable) ->
         (* CR mshinwell: extend to other block access kinds *)
@@ -80,5 +79,5 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
         let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
         let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
         let ty = T.unknown kind in
-        let env_extension = TEE.one_equation (Name.var result_var) ty in
+        let env_extension = TEE.one_equation (Name.var result_var') ty in
         Reachable.reachable named, env_extension, dacc

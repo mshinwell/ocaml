@@ -67,8 +67,10 @@ val boxed_int32_alias_to : naked_int32:Variable.t -> Flambda_types.t
 val boxed_int64_alias_to : naked_int64:Variable.t -> Flambda_types.t
 val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> Flambda_types.t
 
+val box_float : Flambda_types.t -> Flambda_types.t
 val box_int32 : Flambda_types.t -> Flambda_types.t
 val box_int64 : Flambda_types.t -> Flambda_types.t
+val box_nativeint : Flambda_types.t -> Flambda_types.t
 
 val this_discriminant : Discriminant.t -> Flambda_types.t
 val this_discriminant_without_alias : Discriminant.t -> Flambda_types.t
@@ -126,8 +128,7 @@ val set_of_closures
   -> Flambda_types.t
 
 val set_of_closures_containing_at_least
-   : Closure_id.t
-  -> closure_var:Variable.t
+   : Flambda_types.t Closure_id.Map.t
   -> Flambda_types.t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t

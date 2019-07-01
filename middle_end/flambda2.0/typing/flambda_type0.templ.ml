@@ -45,7 +45,7 @@ module Make
   let join env t1 t2 = Api_meet_and_join.join env t1 t2
 
   let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
-    let result = Name.var result_var in
+    let result = Name_in_binding_pos.var result_var in
     let env = Typing_env.add_definition env result result_kind in
     let env = Meet_env.create env in
 (*
@@ -115,25 +115,31 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
           Simple.print simple
           K.print original_kind
           Type_printers.print t
-      | Name name ->
-        let kind, simple = Typing_env.get_canonical_simple env name in
-        if not (K.equal kind K.value) then begin
-          Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
-              different from that returned by [kind] (%a):@ %a"
-            Simple.print simple
-            K.print kind
-            K.print original_kind
-            Type_printers.print t
-        end;
-        match Simple.descr simple with
-        | Const (Tagged_immediate imm) -> Proved imm
-        | Name _ -> Unknown
-        | Const _ | Discriminant _ ->
-          Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-              doesn't match the kind of the returned [Simple] %a:@ %a"
-            K.print kind
-            Simple.print simple
-            Type_printers.print t
+      | Name _ ->
+        match
+          Typing_env.get_canonical_simple env simple
+            ~min_occurrence_kind:Name_occurrence_kind.normal
+        with
+        | Bottom, _ -> Invalid
+        | Ok simple, ty ->
+          let kind = Flambda_type0_core.kind ty in
+          if not (K.equal kind K.value) then begin
+            Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
+                different from that returned by [kind] (%a):@ %a"
+              Simple.print simple
+              K.print kind
+              K.print original_kind
+              Type_printers.print t
+          end;
+          match Simple.descr simple with
+          | Const (Tagged_immediate imm) -> Proved imm
+          | Name _ -> Unknown
+          | Const _ | Discriminant _ ->
+            Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
+                doesn't match the kind of the returned [Simple] %a:@ %a"
+              K.print kind
+              Simple.print simple
+              Type_printers.print t
 
   let prove_equals_to_symbol env t : _ proof =
     let original_kind = kind t in
@@ -153,25 +159,31 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
           Simple.print simple
           K.print original_kind
           Type_printers.print t
-      | Name name ->
-        let kind, simple = Typing_env.get_canonical_simple env name in
-        if not (K.equal kind K.value) then begin
-          Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
-              different from that returned by [kind] (%a):@ %a"
-            Simple.print simple
-            K.print kind
-            K.print original_kind
-            Type_printers.print t
-        end;
-        match Simple.descr simple with
-        | Name (Symbol sym) -> Proved sym
-        | Name (Var _) -> Unknown
-        | Const _ | Discriminant _ ->
-          Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-              doesn't match the kind of the returned [Simple] %a:@ %a"
-            K.print kind
-            Simple.print simple
-            Type_printers.print t
+      | Name _ ->
+        match
+          Typing_env.get_canonical_simple env simple
+            ~min_occurrence_kind:Name_occurrence_kind.normal
+        with
+        | Bottom, _ -> Invalid
+        | Ok simple, ty ->
+          let kind = Flambda_type0_core.kind ty in
+          if not (K.equal kind K.value) then begin
+            Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
+                different from that returned by [kind] (%a):@ %a"
+              Simple.print simple
+              K.print kind
+              K.print original_kind
+              Type_printers.print t
+          end;
+          match Simple.descr simple with
+          | Name (Symbol sym) -> Proved sym
+          | Name (Var _) -> Unknown
+          | Const _ | Discriminant _ ->
+            Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
+                doesn't match the kind of the returned [Simple] %a:@ %a"
+              K.print kind
+              Simple.print simple
+              Type_printers.print t
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in

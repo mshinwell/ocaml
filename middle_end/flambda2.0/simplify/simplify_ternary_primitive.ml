@@ -26,21 +26,19 @@ let simplify_ternary_primitive dacc (prim : Flambda_primitive.ternary_primitive)
       arg1 arg2 arg3 dbg ~result_var =
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var = Var_in_binding_pos.var result_var in
-  let invalid kind =
-    let env_extension =
-      TEE.one_equation (Name.var result_var) (T.bottom kind)
-    in
+  let invalid ty =
+    let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.invalid (), env_extension, dacc
   in
   match S.simplify_simple dacc arg1 ~min_occurrence_kind with
-  | Bottom kind -> invalid kind
-  | Ok (arg1, _arg1_ty) ->
+  | Bottom, ty -> invalid ty
+  | Ok arg1, _arg1_ty ->
     match S.simplify_simple dacc arg2 ~min_occurrence_kind with
-    | Bottom kind -> invalid kind
-    | Ok (arg2, _arg2_ty) ->
+    | Bottom, ty -> invalid ty
+    | Ok arg2, _arg2_ty ->
       match S.simplify_simple dacc arg3 ~min_occurrence_kind with
-      | Bottom kind -> invalid kind
-      | Ok (arg3, _arg3_ty) ->
+      | Bottom, ty -> invalid ty
+      | Ok arg3, _arg3_ty ->
         match prim with
         | _ ->
           (* temporary code *)

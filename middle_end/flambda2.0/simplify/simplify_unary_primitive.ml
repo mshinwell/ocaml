@@ -24,7 +24,7 @@ module TEE = Flambda_type.Typing_env_extension
 
 let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
       ~result_var =
-  let result = Simple.var result_var in
+  let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
     Closure_id.Map.empty
     |> Closure_id.Map.add closure_id (T.alias_type_of K.value result)
@@ -43,7 +43,7 @@ let simplify_move_within_set_of_closures dacc ~original_term ~closure
      specified in the "at least" cases.  In this case we would set the tag
      to [move_from].  Think again as to whether we really need this, as it
      will complicate [Row_like]. *)
-  let result = Simple.var result_var in
+  let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
     Closure_id.Map.empty
     |> Closure_id.Map.add move_from (T.alias_type_of K.value closure)
@@ -59,12 +59,13 @@ let simplify_project_var dacc ~original_term ~closure_ty closure_element
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.closure_containing_at_least closure_element
-      ~closure_element_var:result_var)
+      ~closure_element_var:(Var_in_binding_pos.var result_var))
     ~result_var ~result_kind:K.value
 
 let simplify_unbox_number dacc ~original_term ~boxed_number_ty
       (boxable_number_kind : K.Boxable_number.t) ~result_var =
   let shape, result_kind =
+    let result_var = Var_in_binding_pos.var result_var in
     match boxable_number_kind with
     | Naked_float ->
       T.boxed_float_alias_to ~naked_float:result_var, K.naked_float
@@ -89,7 +90,7 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
     | Naked_nativeint -> T.box_nativeint naked_number_ty
   in
   Reachable.reachable original_term,
-    TEE.one_equation (Name.var result_var) ty,
+    TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
     dacc
 
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
@@ -105,10 +106,10 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
 end;
 *)
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
-  let result_var = Var_in_binding_pos.var result_var in
+  let result_var' = Var_in_binding_pos.var result_var in
   match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
   | Bottom, ty ->
-    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   | Ok arg, arg_ty ->
     let original_term = Named.create_prim (Unary (prim, arg)) dbg in
@@ -133,5 +134,5 @@ end;
       let named = Named.create_prim (Unary (prim, arg)) dbg in
       let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
       let ty = T.unknown kind in
-      let env_extension = TEE.one_equation (Name.var result_var) ty in
+      let env_extension = TEE.one_equation (Name.var result_var') ty in
       Reachable.reachable named, env_extension, dacc

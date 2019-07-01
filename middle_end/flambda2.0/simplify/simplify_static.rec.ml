@@ -48,11 +48,11 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
   | Dynamically_computed var ->
     let min_occurrence_kind = Name_occurrence_kind.normal in
     match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
-    | Bottom kind ->
-      assert (K.equal kind K.value);
+    | Bottom, ty ->
+      assert (K.equal (T.kind ty) K.value);
       (* CR mshinwell: Work out what should happen here *)
       of_kind_value
-    | Ok (simple, _ty) ->
+    | Ok simple, _ty ->
       match Simple.descr simple with
       | Name (Symbol sym) -> Of_kind_value.Symbol sym
       | Name (Var _) | Const _ | Discriminant _ -> of_kind_value
@@ -80,11 +80,11 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
           match
             Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
           with
-          | Bottom kind ->
-            assert (K.equal kind K.value);
+          | Bottom, ty ->
+            assert (K.equal (T.kind ty) K.value);
             (* CR mshinwell: Work out what should happen here *)
             closure_elements, closure_element_types
-          | Ok (simple, ty) ->
+          | Ok simple, ty ->
             let closure_elements =
               Var_within_closure.Map.add var_within_closure simple
                 closure_elements

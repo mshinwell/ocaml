@@ -34,11 +34,6 @@ val print_ty_naked_number
   -> _ Flambda_types.ty_naked_number
   -> unit
 
-val print_ty_naked_immediate
-   : Format.formatter
-  -> Flambda_kind.naked_immediate Flambda_types.ty_naked_number
-  -> unit
-
 val print_ty_naked_float
    : Format.formatter
   -> Flambda_kind.naked_float Flambda_types.ty_naked_number

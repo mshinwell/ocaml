@@ -697,8 +697,8 @@ and simplify_apply_shared dacc apply : _ Or_bottom.t =
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
   let min_occurrence_kind = Name_occurrence_kind.normal in
   match S.simplify_simple dacc (Apply.callee apply) ~min_occurrence_kind with
-  | Bottom _kind -> Bottom
-  | Ok (callee, callee_ty) ->
+  | Bottom, _ty -> Bottom
+  | Ok callee, callee_ty ->
     match S.simplify_simples dacc (Apply.args apply) ~min_occurrence_kind with
     | Bottom -> Bottom
     | Ok args_with_types ->
