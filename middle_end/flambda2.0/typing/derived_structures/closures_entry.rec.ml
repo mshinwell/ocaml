@@ -40,7 +40,7 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let equal = Type_equality.equal_closures_entry
+let equal _ _ = Misc.fatal_error "Not yet implemented"
 
 let widen t ~to_match:_ = t  (* XXX Think about this *)
 

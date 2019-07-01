@@ -15,6 +15,7 @@ derived_structures/types_by_closure_id.rec.ml
 env/typing_env_extension.rec.ml
 env/typing_env_level.rec.ml
 env/typing_env.rec.ml
+equality/type_equality_env.rec.ml
 meet_and_join/api_meet_and_join.rec.ml
 meet_and_join/lattice_ops.rec.ml
 meet_and_join/kind_independent_meet_or_join.rec.ml

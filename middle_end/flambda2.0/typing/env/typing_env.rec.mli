@@ -59,7 +59,7 @@ val get_canonical_simple
    : t
   -> Simple.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t Or_bottom.t * Flambda_type.t
+  -> Simple.t Or_bottom.t * Flambda_types.t * Rec_info.t option
 
 val resolve_ty
    : t

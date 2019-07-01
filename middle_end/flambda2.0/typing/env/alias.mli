@@ -15,6 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
+type elt = t
 
 val create
    : Flambda_kind.t
@@ -42,6 +43,7 @@ val implicitly_bound_and_canonical : t -> bool
 
 val name_occurrence_kind : t -> Name_occurrence_kind.t
 
-module Order_within_equiv_class : Identifiable.S 
+module Order_within_equiv_class
+  : module type of struct include Name_occurrence_kind end
 
 val order_within_equiv_class : t -> Order_within_equiv_class.t

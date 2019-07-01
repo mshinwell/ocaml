@@ -21,6 +21,8 @@ type t = {
   name_occurrence_kind : Name_occurrence_kind.t;
 }
 
+type elt = t
+
 include Identifiable.Make (struct
   type nonrec t = t
 

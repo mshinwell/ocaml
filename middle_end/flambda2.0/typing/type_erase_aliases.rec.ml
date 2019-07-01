@@ -19,7 +19,7 @@
 let simple_is_eligible ~allowed simple =
   match Simple.descr simple with
   | Const _ | Discriminant _ | Name (Symbol _) -> true
-  | Name (Var _) -> Variable.Set.mem var allowed
+  | Name (Var var) -> Variable.Set.mem var allowed
 
 let erase_aliases_unknown_or_join erase_aliases_contents env ~allowed
       (o : _ Flambda_types.unknown_or_join) : _ Flambda_types.unknown_or_join =
@@ -28,7 +28,7 @@ let erase_aliases_unknown_or_join erase_aliases_contents env ~allowed
   | Ok contents -> Ok (erase_aliases_contents env ~allowed contents)
 
 let erase_aliases_ty env ~allowed erase_aliases_of_kind_foo
-      ~force_to_kind ~print_ty ty : _ Flambda_types.ty =
+      ~force_to_kind ~print_ty (ty : _ Flambda_types.ty) : _ Flambda_types.ty =
   match ty with
   | No_alias unknown_or_join ->
     No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
@@ -67,9 +67,10 @@ let rec erase_aliases env ~allowed (t : Flambda_types.t) : Flambda_types.t =
         ~print_ty:Type_printers.print_ty_value
         erase_aliases_of_kind_value
         ty)
+  | Naked_number (ty, kind) ->
     Naked_number (
       erase_aliases_ty env ~allowed
-        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_number
+        ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         erase_aliases_of_kind_naked_number
         ty,
@@ -101,16 +102,28 @@ and erase_aliases_of_kind_value env ~allowed
     }
   | Boxed_number (Boxed_float ty) ->
     Boxed_number (Boxed_float (
-      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number ty))
+      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
+        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_float
+        ~print_ty:Type_printers.print_ty_naked_float
+        ty))
   | Boxed_number (Boxed_int32 ty) ->
     Boxed_number (Boxed_int32 (
-      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number ty))
+      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
+        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int32
+        ~print_ty:Type_printers.print_ty_naked_int32
+        ty))
   | Boxed_number (Boxed_int64 ty) ->
     Boxed_number (Boxed_int64 (
-      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number ty))
+      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
+        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
+        ~print_ty:Type_printers.print_ty_naked_int64
+        ty))
   | Boxed_number (Boxed_nativeint ty) ->
     Boxed_number (Boxed_nativeint (
-      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number ty))
+      erase_aliases_ty env ~allowed erase_aliases_of_kind_naked_number
+        ~force_to_kind:Flambda_type0_core.force_to_kind_naked_nativeint
+        ~print_ty:Type_printers.print_ty_naked_nativeint
+        ty))
   | Closures { by_closure_id; } ->
     Closures {
       by_closure_id =
