@@ -65,7 +65,7 @@ let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
     or_variable
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
-      ~set_of_closures_symbol ~closure_symbols ~closure_elements_and_types =
+      ~closure_symbols ~closure_elements_and_types =
   let closure_elements, closure_element_types =
     match closure_elements_and_types with
     | Some (closure_elements, closure_element_types) ->

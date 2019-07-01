@@ -26,6 +26,10 @@ module Make
     include Identifiable.S with type t := t
     val subset : t -> t -> bool
   end)
+  (Tag_or_unknown_and_index : sig
+    type t = Tag.t * Index.t
+    include Identifiable.S with type t := t
+  end)
   (Maps_to : Row_like_maps_to_intf.S
     with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
@@ -35,7 +39,7 @@ module Make
 struct
   type t = {
     known : Maps_to.t Tag_and_index.Map.t;
-    at_least : Maps_to.t Index.Map.t;
+    at_least : Maps_to.t Tag_or_unknown_and_index.Map.t;
   }
 
   let print_with_cache ~cache ppf ({ known; at_least } : t) =

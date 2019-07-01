@@ -27,6 +27,10 @@ module T = Flambda_type
 module TE = T.Typing_env
 module UA = Upwards_acc
 
+type simplify_named_result =
+  | Keep_binding of Reachable.t
+  | Replace_binding of (Bindable_let_bound.t * Named.t) list
+
 type pre_simplification_types_of_my_closures = {
   closure_types : (Variable.t * T.t) Closure_id.Map.t;
 }
@@ -75,12 +79,12 @@ Format.eprintf "Closure ID %a, done entering closure\n%!"
                 (* The only [my_closure] variable that may be referenced in
                    a term is that for the current closure. *)
                 if Closure_id.equal closure_id closure_id' then
-                  Name_occurrence_kind.Normal
+                  Name_occurrence_kind.normal
                 else
-                  Name_occurrence_kind.In_types
+                  Name_occurrence_kind.in_types
               in
               let my_closure =
-                Variable_in_binding_pos.create my_closure name_occurrence_kind
+                Var_in_binding_pos.create my_closure name_occurrence_kind
               in
               DE.add_variable denv my_closure typ)
             pre_simplification_types_of_my_closures.closure_types
@@ -160,8 +164,7 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   in
   let _set_of_closures, dacc, ty, static_structure_types, static_structure =
     Simplify_static.simplify_set_of_closures dacc ~result_dacc:dacc
-      set_of_closures ~set_of_closures_symbol ~closure_symbols
-      ~closure_elements_and_types
+      set_of_closures ~closure_symbols ~closure_elements_and_types
   in
   let r = DA.r dacc in
   let r =
@@ -174,14 +177,45 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
       r
       lifted_constants
   in
-  let term = Named.create_simple set_of_closures_symbol in
-  let ty = T.alias_type_of (T.kind ty) set_of_closures_symbol in
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
+  let result_vars =
+    match result_vars with
+    | Set_of_closures { closure_vars; } -> closure_vars
+    | Singleton _ ->
+      Misc.fatal_error "Cannot bind set of closures to [Singleton]"
   in
-  Reachable.reachable term, DA.with_r dacc r
+  (* The single [Set_of_closures] binding to a non-lifted set of closures
+     is transformed into multiple [Singleton] bindings to the various
+     closure symbols.  The new bindings replace the old one. *)
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      Closure_id.Map.fold (fun closure_id result_var denv ->
+          match Closure_id.Map.find closure_id closure_symbols with
+          | exception Not_found ->
+            Misc.fatal_errorf "No closure symbol for %a"
+              Closure_id.print closure_id
+          | closure_symbol ->
+            let closure_symbol = Simple.symbol closure_symbol in
+            let ty = T.alias_type_of K.value closure_symbol in
+            DE.add_variable denv result_var ty)
+        result_vars
+        denv)
+  in
+  let result_vars = Closure_id.Map.bindings result_vars in
+  let closure_symbols = Closure_id.Map.bindings closure_symbols in
+  assert (List.compare_lengths result_vars closure_symbols = 0);
+  let new_bindings =
+    List.map2 (fun (closure_id, result_var) (closure_id', closure_symbol) ->
+        assert (Closure_id.equal closure_id closure_id');
+        let result_var : Bindable_let_bound.t = Singleton result_var in
+        let closure_symbol = Simple.symbol closure_symbol in
+        result_var, Named.create_simple closure_symbol)
+      result_vars
+      closure_symbols
+  in
+  Replace_binding new_bindings, DA.with_r dacc r
 
-let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
+let pre_simplification_types_of_non_lifted_my_closures denv ~funs
+      ~closure_element_types =
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
         T.erase_aliases_ty_value (DE.typing_env denv)
@@ -264,15 +298,15 @@ let simplify_set_of_closures dacc set_of_closures
     let funs = Function_declarations.funs function_decls in
     (* Note that simplifying the bodies of the functions won't change the
        set-of-closures' eligibility for lifting.  That this is so follows
-       from the fact that closure elements (at least in the presence of
-       out-of-scope inlining, which will be implemented in due course) cannot
-       be deleted without a global analysis. *)
+       from the fact that closure elements cannot be deleted without a global
+       analysis, as an inlined function's body may reference them out of
+       scope of the closure declaration. *)
 (*
 Format.eprintf "Environment outside functions:\n%a\n%!"
   T.Typing_env.print (DE.typing_env env);
 *)
     let pre_simplification_types_of_my_closures =
-      pre_simplification_types_of_my_closures (DA.denv dacc)
+      pre_simplification_types_of_non_lifted_my_closures (DA.denv dacc)
         ~funs ~closure_element_types
     in
     let funs, fun_types, r =

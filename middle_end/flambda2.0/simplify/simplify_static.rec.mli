@@ -22,7 +22,6 @@ val simplify_set_of_closures
     : Downwards_acc.t
    -> result_dacc:Downwards_acc.t
    -> Flambda.Set_of_closures.t
-   -> set_of_closures_symbol:Symbol.t
    -> closure_symbols:Symbol.t Closure_id.Map.t
    -> closure_elements_and_types:
         (Simple.t Var_within_closure.Map.t

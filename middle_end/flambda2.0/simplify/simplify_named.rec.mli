@@ -16,6 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type simplify_named_result = private
+  | Keep_binding of Reachable.t
+  | Replace_binding of (Bindable_let_bound.t * Flambda.Named.t) list
+
 val simplify_named
    : Downwards_acc.t
   -> Flambda.Named.t
@@ -23,7 +27,6 @@ val simplify_named
   -> Reachable.t * Downwards_acc.t
 
 type pre_simplification_types_of_my_closures = {
-  set_of_closures : (Name.t * Flambda_type.t) option;
   closure_types : Flambda_type.t Closure_id.Map.t;
 }
 
