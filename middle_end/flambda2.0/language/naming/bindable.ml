@@ -38,6 +38,7 @@ module type S = sig
     -> Name_permutation.t
     -> Name_permutation.t
 
+  (* CR mshinwell: Check why this and [free_names] are here *)
   val singleton_occurrence_in_terms : t -> Name_occurrences.t
   val add_occurrence_in_terms : t -> Name_occurrences.t -> Name_occurrences.t
 end

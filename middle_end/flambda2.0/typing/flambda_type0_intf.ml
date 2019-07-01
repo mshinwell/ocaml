@@ -91,7 +91,7 @@ module type S = sig
 
     val var_domain : t -> Variable.Set.t
 
-    val add_definition : t -> Name.t -> Flambda_kind.t -> t
+    val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
     val add_equation : t -> Name.t -> flambda_type -> t
 
@@ -104,7 +104,11 @@ module type S = sig
       -> Typing_env_extension.t
       -> t
 
-    val get_canonical_simple : t -> Name.t -> Flambda_kind.t * Simple.t
+    val get_canonical_simple
+       : t
+      -> Name.t
+      -> min_occurrence_kind:Name_occurrence_kind.t
+      -> Flambda_kind.t * Simple.t
 
     val cut
        : t
@@ -193,11 +197,15 @@ module type S = sig
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
 
+  val boxed_float_alias_to : naked_float:Variable.t -> t
   val boxed_int32_alias_to : naked_int32:Variable.t -> t
   val boxed_int64_alias_to : naked_int64:Variable.t -> t
+  val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> t
 
+  val box_float : t -> t
   val box_int32 : t -> t
   val box_int64 : t -> t
+  val box_nativeint : t -> t
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
@@ -273,11 +281,8 @@ module type S = sig
      : closures:t Closure_id.Map.t
     -> t
 
-  (** The type of a set of closures containing at least one closure,
-      whose type should be "Equals closure_var", with the given closure ID. *)
   val set_of_closures_containing_at_least
-     : Closure_id.t
-    -> closure_var:Variable.t
+     : flambda_type Closure_id.Map.t
     -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name

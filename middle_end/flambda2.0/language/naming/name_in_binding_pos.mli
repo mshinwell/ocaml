@@ -14,36 +14,18 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR mshinwell: Rename file to indicate plurality *)
-
-(** Description of a lifted constant emitted from [Simplify_named].  This
-    comprises not only the definition of the constant but also its type, to
-    avoid having to re-infer the type once the constant is added to some
-    outer environmnent. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+
+(** A [Name] equipped with extra information that arises from the name
+    occurring in binding position. *)
 
 type t
 
-val print : Format.formatter -> t -> unit
+val create : Name.t -> Name_occurrence_kind.t -> t
 
-val create
-   : Flambda_type.t Symbol.Map.t
-  -> 'k Flambda_static.Program_body.Bound_symbols.t
-  -> 'k Flambda_static.Static_part.t
-  -> t
+val name : t -> Name.t
+val occurrence_kind : t -> Name_occurrence_kind.t
 
-val create_from_static_structure
-   : Flambda_type.t Symbol.Map.t
-  -> Flambda_static.Program_body.Static_structure.t
-  -> t list
+val var : Var_in_binding_pos.t -> t
 
-(* CR mshinwell: Add comment that this doesn't introduce anything if the
-   symbols are defined.  Is this the best semantics?  It comes from not wanting
-   to diff lifted constants in [r] *)
-val introduce
-   : t
-  -> Flambda_type.Typing_env.t
-  -> Flambda_type.Typing_env.t
-
-val static_structure : t -> Flambda_static.Program_body.Static_structure.t
+include Identifiable.S with type t := t

@@ -16,31 +16,37 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Maybe make a version of [Var_in_binding_pos] that
+   implements [Bindable]? *)
 module Bound_var_and_body =
   Name_abstraction.Make (Bindable_variable_in_terms) (Expr)
 
 type t = {
   bound_var_and_body : Bound_var_and_body.t;
-  kind : Flambda_kind.t;
+  name_occurrence_kind : Name_occurrence_kind.t;
   defining_expr : Named.t;
 }
 
 let pattern_match t ~f =
   Bound_var_and_body.pattern_match t.bound_var_and_body
-    ~f:(fun bound_var body -> f ~bound_var ~body)
+    ~f:(fun bound_var body ->
+      let bound_var =
+        Var_in_binding_pos.create bound_var t.name_occurrence_kind
+      in
+      f ~bound_var ~body)
 
 let print_with_cache ~cache ppf
-      ({ bound_var_and_body = _; kind; defining_expr; } as t) =
+      ({ bound_var_and_body = _; name_occurrence_kind = _;
+         defining_expr; } as t) =
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with
-    | Let ({ bound_var_and_body = _; kind; defining_expr; } as t) ->
+    | Let ({ bound_var_and_body = _; name_occurrence_kind = _;
+             defining_expr; } as t) ->
       pattern_match t ~f:(fun ~bound_var ~body ->
         fprintf ppf
-          "@ @[<hov 1>@<0>%s%a@<0>%s@[@ \u{2237}@ %a@] @<0>%s=@<0>%s@ %a@]"
+          "@ @[<hov 1>@<0>%s%a@<0>%s =@<0>%s@ %a@]"
           (Flambda_colours.let_bound_var ())
-          Variable.print bound_var
-          (Flambda_colours.normal ())
-          Flambda_kind.print kind
+          Var_in_binding_pos.print bound_var
           (Flambda_colours.elide ())
           (Flambda_colours.normal ())
           (Named.print_with_cache ~cache) defining_expr;
@@ -49,13 +55,11 @@ let print_with_cache ~cache ppf
   in
   pattern_match t ~f:(fun ~bound_var ~body ->
     fprintf ppf "@[<hov 1>(@<0>%slet@<0>%s@ @[<hv 1>(\
-        @<0>%s%a@<0>%s@[@ \u{2237}@ %a@] @<0>%s=@<0>%s@ %a"
+        @<0>%s%a@<0>%s =@<0>%s@ %a"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (Flambda_colours.let_bound_var ())
-      Variable.print bound_var
-      (Flambda_colours.normal ())
-      Flambda_kind.print kind
+      Variable.print (Var_in_binding_pos.var bound_var)
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())
       (Named.print_with_cache ~cache) defining_expr;
@@ -65,47 +69,32 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create ~bound_var ~kind ~defining_expr ~body =
+let create ~bound_var ~defining_expr ~body =
+  let name_occurrence_kind = Var_in_binding_pos.occurrence_kind bound_var in
+  let bound_var = Var_in_binding_pos.var bound_var in
   let bound_var_and_body = Bound_var_and_body.create bound_var body in
   { bound_var_and_body;
-    kind;
+    name_occurrence_kind;
     defining_expr;
   }
 
 let invariant env t =
   let module E = Invariant_env in
-  pattern_match t ~f:(fun ~bound_var ~body ->
-    let named_kind =
-      match Named.invariant_returning_kind env t.defining_expr with
-      | Singleton kind -> Some kind
-      | Unit -> Some K.value
-    in
-    begin match named_kind with
-    | None -> ()
-    | Some named_kind ->
-      if not (K.equal named_kind t.kind) then begin
-        Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
-            equal to the annotated kind (%a);@ [Let] expression is:@ %a"
-          K.print named_kind
-          K.print t.kind
-          print t
-      end
-    end;
-    let env = E.add_variable env bound_var t.kind in
-    Expr.invariant env body)
+  pattern_match t ~f:(fun ~bound_var:_ ~body -> Expr.invariant env body)
 
-let kind t = t.kind
 let defining_expr t = t.defining_expr
 
-let free_names ({ bound_var_and_body = _; kind = _; defining_expr; } as t) =
+let free_names ({ bound_var_and_body = _; name_occurrence_kind = _;
+                  defining_expr; } as t) =
   pattern_match t ~f:(fun ~bound_var ~body ->
+    let bound_var = Var_in_binding_pos.var bound_var in
     let from_defining_expr = Named.free_names defining_expr in
     let from_body = Expr.free_names body in
     Name_occurrences.union from_defining_expr
       (Name_occurrences.remove_var from_body bound_var))
 
-let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
-      perm =
+let apply_name_permutation ({ bound_var_and_body; name_occurrence_kind;
+                              defining_expr; } as t) perm =
   let bound_var_and_body' =
     Bound_var_and_body.apply_name_permutation bound_var_and_body perm
   in
@@ -117,6 +106,6 @@ let apply_name_permutation ({ bound_var_and_body; kind; defining_expr; } as t)
   then t
   else
     { bound_var_and_body = bound_var_and_body';
-      kind;
+      name_occurrence_kind;
       defining_expr = defining_expr';
     }

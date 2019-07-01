@@ -23,69 +23,6 @@ type t
 
 val empty : t
 
-(*
-
-val create_from_set_in_terms : Bindable_name.Set.t -> t
-
-val create_from_name_set_in_terms : Name.Set.t -> t
-
-val create_from_set_in_types : Bindable_name.Set.t -> t
-
-val create_from_name_set_in_types : Name.Set.t -> t
-
-val singleton_in_terms : Bindable_name.t -> t
-
-val singleton_in_types : Bindable_name.t -> t
-
-val is_empty : t -> bool
-
-val of_list_in_terms : Bindable_name.t list -> t
-
-val add : t -> Bindable_name.t -> occurrence_kind -> t
-
-val add_set : t -> Bindable_name.Set.t -> occurrence_kind -> t
-
-val remove : t -> Bindable_name.t -> t
-
-val remove_var : t -> Variable.t -> t
-
-val mem : t -> Bindable_name.t -> bool
-
-val mem_in_terms : t -> Bindable_name.t -> bool
-
-val mem_in_types : t -> Bindable_name.t -> bool
-
-val mem_in_debug_only : t -> Bindable_name.t -> bool
-
-val in_terms : t -> Bindable_name.Set.t
-
-val in_types : t -> Bindable_name.Set.t
-
-val in_debug_only : t -> Bindable_name.Set.t
-
-val everything : t -> Bindable_name.Set.t
-
-(* CR mshinwell: rename to [everything_must_be_a_name] *)
-val everything_must_only_be_names : t -> Name.Set.t
-
-val inter : t -> t -> t
-
-val subset : t -> t -> bool
-
-val promote_to_in_types : t -> t
-
-val promote_to_debug_only : t -> t
-
-val variables_only : t -> t
-
-val fold_everything : t -> init:'a -> f:('a -> Bindable_name.t -> 'a) -> 'a
-
-val choose_and_remove_amongst_everything : t -> (Bindable_name.t * t) option
-
-val equal : t -> t -> bool
-
-*)
-
 val print : Format.formatter -> t -> unit
 
 val apply_name_permutation : t -> Name_permutation.t -> t
@@ -96,17 +33,15 @@ val add_continuation : t -> Continuation.t -> t
 
 val count_continuation : t -> Continuation.t -> int
 
-val singleton_variable_in_terms : Variable.t -> t
+val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
 
-val add_variable_in_terms : t -> Variable.t -> t
+val add_variable : t -> Variable.t -> Name_occurrence_kind.t -> t
 
-val singleton_name_in_terms : Name.t -> t
+val singleton_name : Name.t -> Name_occurrence_kind.t -> t
 
-val singleton_name_in_types : Name.t -> t
+val singleton_symbol : Symbol.t -> Name_occurrence_kind.t -> t
 
-val singleton_symbol_in_terms : Symbol.t -> t
-
-val create_names_in_types : Name.Set.t -> t
+val create_names : Name.Set.t -> Name_occurrence_kind.t -> t
 
 val diff : t -> t -> t
 
@@ -127,3 +62,8 @@ val mem_name : t -> Name.t -> bool
 val remove_var : t -> Variable.t -> t
 
 val only_contains_symbols : t -> bool
+
+val greatest_occurrence_kind_var
+   : t
+  -> Variable.t
+  -> Name_occurrence_kind.Or_absent.t

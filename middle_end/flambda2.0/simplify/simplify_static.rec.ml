@@ -46,7 +46,8 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     of_kind_value
   | Tagged_immediate _ -> of_kind_value
   | Dynamically_computed var ->
-    match S.simplify_simple dacc (Simple.var var) with
+    let min_occurrence_kind = Name_occurrence_kind.normal in
+    match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
     | Bottom kind ->
       assert (K.equal kind K.value);
       (* CR mshinwell: Work out what should happen here *)
@@ -65,7 +66,8 @@ let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
     or_variable
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
-      ~set_of_closures_symbol ~closure_symbols ~closure_elements_and_types =
+      ~set_of_closures_symbol
+      ~closure_symbols ~closure_elements_and_types =
   let closure_elements, closure_element_types =
     match closure_elements_and_types with
     | Some (closure_elements, closure_element_types) ->
@@ -74,7 +76,10 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
       Var_within_closure.Map.fold
         (fun var_within_closure simple
              (closure_elements, closure_element_types) ->
-          match Simplify_simple.simplify_simple dacc simple with
+          let min_occurrence_kind = Name_occurrence_kind.normal in
+          match
+            Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
+          with
           | Bottom kind ->
             assert (K.equal kind K.value);
             (* CR mshinwell: Work out what should happen here *)
@@ -432,7 +437,10 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             let dacc =
               DA.map_denv dacc ~f:(fun denv ->
                 List.fold_left2 (fun denv ty param ->
-                    let var = KP.var param in
+                    let var =
+                      Var_in_binding_pos.create (KP.var param)
+                        Name_occurrence_kind.normal
+                    in
                     let kind = KP.kind param in
                     assert (Flambda_kind.equal (T.kind ty) kind);
                     DE.add_variable denv var ty)

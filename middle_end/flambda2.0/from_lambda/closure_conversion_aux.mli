@@ -65,7 +65,7 @@ module Function_decls : sig
 
     val create
        : let_rec_ident:Ident.t option
-      -> closure_bound_var:Closure_id.t
+      -> closure_id:Closure_id.t
       -> kind:Lambda.function_kind
       -> params:(Ident.t * Lambda.value_kind) list
       -> return:Lambda.value_kind
@@ -80,8 +80,7 @@ module Function_decls : sig
       -> t
 
     val let_rec_ident : t -> Ident.t
-    (* CR pchambart: should be renamed *)
-    val closure_bound_var : t -> Closure_id.t
+    val closure_id : t -> Closure_id.t
     val kind : t -> Lambda.function_kind
     val params : t -> (Ident.t * Lambda.value_kind) list
     val return : t -> Lambda.value_kind

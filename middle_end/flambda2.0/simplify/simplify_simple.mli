@@ -25,9 +25,11 @@ type result = private
 val simplify_simple
    : Downwards_acc.t
   -> Simple.t
+  -> min_occurrence_kind:Name_occurrence_kind.t
   -> result
 
 val simplify_simples
    : Downwards_acc.t
   -> Simple.t list
+  -> min_occurrence_kind:Name_occurrence_kind.t
   -> (Simple.t * Flambda_type.t) list Or_bottom.t

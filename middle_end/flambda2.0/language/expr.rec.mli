@@ -51,15 +51,14 @@ type let_creation_result = private
     created and their associated defining expressions will be reported as
     [Have_deleted]. *)
 val create_let0
-   : Variable.t
-  -> Flambda_kind.t
+   : Var_in_binding_pos.t
   -> Named.t
   -> t
   -> t * let_creation_result
 
 (** Like [create_let0], but for use when the caller isn't interested in
     whether something got deleted. *)
-val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
+val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
 
 (** Create an application expression. *)
 val create_apply : Apply.t -> t
@@ -100,7 +99,7 @@ val create_invalid : unit -> t
     [Immutable] [Let] expressions the given [(var, expr)] pairs around the
     body. *)
 val bind
-   : bindings:(Variable.t * Flambda_kind.t * Named.t) list
+   : bindings:(Var_in_binding_pos.t * Named.t) list
   -> body:t
   -> t
 

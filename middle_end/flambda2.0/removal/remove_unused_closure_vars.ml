@@ -72,7 +72,7 @@ let rec remove_vars_expr used_closure_vars expr =
     in
     Let.pattern_match let_expr ~f:(fun ~bound_var ~body ->
       let body = remove_vars_expr used_closure_vars body in
-      Expr.create_let bound_var (Let.kind let_expr) defining_expr body)
+      Expr.create_let bound_var defining_expr body)
   | Let_cont let_cont ->
     begin match let_cont with
     | Non_recursive { handler; _ } ->

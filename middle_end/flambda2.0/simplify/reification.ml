@@ -65,10 +65,10 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
   in
   let symbol' = Simple.symbol symbol in
   let term = Named.create_simple symbol' in
+  let ty = T.alias_type_of (T.kind ty) symbol' in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.add_symbol denv symbol ty in
-      let ty = T.alias_type_of (T.kind ty) symbol' in
 (*
 Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
@@ -81,22 +81,27 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
   Reachable.reachable term, dacc, ty
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
+  let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
+  let bound_to = Var_in_binding_pos.var bound_to in
   let denv = DA.denv dacc in
   let ty = DE.find_variable denv bound_to in
-  match term with
-  | Invalid _ -> 
-    let ty = T.bottom_like ty in
-    let denv = DE.add_equation_on_variable denv bound_to ty in
-    term, (DA.with_denv dacc denv), ty
-  | Reachable _ ->
-    match T.reify (DE.typing_env denv) ty with
-    | Lift to_lift ->
-      if cannot_lift then term, dacc, ty
-      else
-        let static_part = create_static_part to_lift in
-        lift dacc ty ~bound_to static_part
-    | Cannot_reify -> term, dacc, ty
-    | Invalid ->
+  if not (Name_occurrence_kind.is_normal occ_kind) then
+    term, dacc, ty
+  else
+    match term with
+    | Invalid _ -> 
       let ty = T.bottom_like ty in
       let denv = DE.add_equation_on_variable denv bound_to ty in
-      Reachable.invalid (), DA.with_denv dacc denv, ty
+      term, (DA.with_denv dacc denv), ty
+    | Reachable _ ->
+      match T.reify (DE.typing_env denv) ty with
+      | Lift to_lift ->
+        if cannot_lift then term, dacc, ty
+        else
+          let static_part = create_static_part to_lift in
+          lift dacc ty ~bound_to static_part
+      | Cannot_reify -> term, dacc, ty
+      | Invalid ->
+        let ty = T.bottom_like ty in
+        let denv = DE.add_equation_on_variable denv bound_to ty in
+        Reachable.invalid (), DA.with_denv dacc denv, ty

@@ -22,9 +22,6 @@ type t
 (** Printing, invariant checks, name manipulation, etc. *)
 include Expr_std.S with type t := t
 
-(** The kind of the bound variable. *)
-val kind : t -> Flambda_kind.t
-
 (** The defining expression of the [Let]. *)
 val defining_expr : t -> Named.t
 
@@ -32,12 +29,11 @@ val defining_expr : t -> Named.t
     class. *)
 val pattern_match
    : t
-  -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
+  -> f:(bound_var:Var_in_binding_pos.t -> body:Expr.t -> 'a)
   -> 'a
 
 val create
-   : bound_var:Variable.t
-  -> kind:Flambda_kind.t
+   : bound_var:Var_in_binding_pos.t
   -> defining_expr:Named.t
   -> body:Expr.t
   -> t

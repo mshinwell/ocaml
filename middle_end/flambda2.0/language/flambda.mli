@@ -66,19 +66,18 @@ module rec Expr : sig
     | Have_deleted of Named.t
     | Nothing_deleted
 
-  (** Create a variable binding.  Unnecessary variable bindings will not be
+  (** Create a [Let]-expression.  Unnecessary variable bindings will not be
       created and their associated defining expressions will be reported as
       [Have_deleted]. *)
   val create_let0
-     : Variable.t
-    -> Flambda_kind.t
+     : Var_in_binding_pos.t
     -> Named.t
     -> t
     -> t * let_creation_result
 
   (** Like [create_let0], but for use when the caller isn't interested in
       whether something got deleted. *)
-  val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
+  val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
 
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
@@ -119,7 +118,7 @@ module rec Expr : sig
       [Immutable] [Let] expressions the given [(var, expr)] pairs around the
       body. *)
   val bind
-     : bindings:(Variable.t * Flambda_kind.t * Named.t) list
+     : bindings:(Var_in_binding_pos.t * Named.t) list
     -> body:t
     -> t
 
@@ -194,9 +193,6 @@ end and Let_expr : sig
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
 
-  (** The kind of the bound variable. *)
-  val kind : t -> Flambda_kind.t
-
   (** The defining expression of the [Let]. *)
   val defining_expr : t -> Named.t
 
@@ -204,7 +200,7 @@ end and Let_expr : sig
       class. *)
   val pattern_match
      : t
-    -> f:(bound_var:Variable.t -> body:Expr.t -> 'a)
+    -> f:(bound_var:Var_in_binding_pos.t -> body:Expr.t -> 'a)
     -> 'a
 end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions

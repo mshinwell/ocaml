@@ -62,8 +62,10 @@ val this_naked_int32_without_alias : Int32.t -> Flambda_types.t
 val this_naked_int64_without_alias : Int64.t -> Flambda_types.t
 val this_naked_nativeint_without_alias : Targetint.t -> Flambda_types.t
 
+val boxed_float_alias_to : naked_float:Variable.t -> Flambda_types.t
 val boxed_int32_alias_to : naked_int32:Variable.t -> Flambda_types.t
 val boxed_int64_alias_to : naked_int64:Variable.t -> Flambda_types.t
+val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> Flambda_types.t
 
 val box_int32 : Flambda_types.t -> Flambda_types.t
 val box_int64 : Flambda_types.t -> Flambda_types.t
@@ -162,3 +164,8 @@ val force_to_kind_naked_immediate
   -> Flambda_kind.naked_immediate Flambda_types.ty_naked_number
 
 val force_to_kind_fabricated : Flambda_types.t -> Flambda_types.ty_fabricated
+
+val apply_rec_info_ty_value
+   : Flambda_types.ty_value
+  -> Rec_info.t
+  -> Flambda_types.ty_value Or_bottom.t

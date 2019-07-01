@@ -24,10 +24,34 @@ module TEE = Flambda_type.Typing_env_extension
 
 let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
       ~result_var =
+  let result = Simple.var result_var in
+  let closures =
+    Closure_id.Map.empty
+    |> Closure_id.Map.add closure_id (T.alias_type_of K.value result)
+  in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:set_of_closures_ty
-    ~shape:(T.set_of_closures_containing_at_least closure_id
-      ~closure_var:result_var)
+    ~shape:(T.set_of_closures_containing_at_least closures)
+    ~result_var ~result_kind:K.value
+
+let simplify_move_within_set_of_closures dacc ~original_term ~closure
+      ~closure_ty ~move_from ~move_to ~result_var =
+  (* CR mshinwell: We're assuming here that the argument to the move is
+     always the closure whose ID is [move_from].  We should document this
+     somewhere most probably, e.g. flambda_primitive.mli. *)
+  (* CR mshinwell: We talked about enhancing [Row_like] so a tag could be
+     specified in the "at least" cases.  In this case we would set the tag
+     to [move_from].  Think again as to whether we really need this, as it
+     will complicate [Row_like]. *)
+  let result = Simple.var result_var in
+  let closures =
+    Closure_id.Map.empty
+    |> Closure_id.Map.add move_from (T.alias_type_of K.value closure)
+    |> Closure_id.Map.add move_to (T.alias_type_of K.value result)
+  in
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:closure_ty
+    ~shape:(T.set_of_closures_containing_at_least closures)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var dacc ~original_term ~closure_ty closure_element
@@ -42,12 +66,14 @@ let simplify_unbox_number dacc ~original_term ~boxed_number_ty
       (boxable_number_kind : K.Boxable_number.t) ~result_var =
   let shape, result_kind =
     match boxable_number_kind with
-    | Naked_float -> Misc.fatal_error "Not yet implemented"
+    | Naked_float ->
+      T.boxed_float_alias_to ~naked_float:result_var, K.naked_float
     | Naked_int32 ->
       T.boxed_int32_alias_to ~naked_int32:result_var, K.naked_int32
     | Naked_int64 ->
       T.boxed_int64_alias_to ~naked_int64:result_var, K.naked_int64
-    | Naked_nativeint -> Misc.fatal_error "Not yet implemented"
+    | Naked_nativeint ->
+      T.boxed_nativeint_alias_to ~naked_nativeint:result_var, K.naked_nativeint
   in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:boxed_number_ty
@@ -57,10 +83,10 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
       (boxable_number_kind : K.Boxable_number.t) ~result_var =
   let ty =
     match boxable_number_kind with
-    | Naked_float -> Misc.fatal_error "Not yet implemented"
+    | Naked_float -> T.box_float naked_number_ty
     | Naked_int32 -> T.box_int32 naked_number_ty
     | Naked_int64 -> T.box_int64 naked_number_ty
-    | Naked_nativeint -> Misc.fatal_error "Not yet implemented"
+    | Naked_nativeint -> T.box_nativeint naked_number_ty
   in
   Reachable.reachable original_term,
     TEE.one_equation (Name.var result_var) ty,
@@ -78,7 +104,9 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
 | _ -> ()
 end;
 *)
-  match Simplify_simple.simplify_simple dacc arg with
+  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let result_var = Var_in_binding_pos.var result_var in
+  match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
   | Bottom kind ->
     let env_extension =
       TEE.one_equation (Name.var result_var) (T.bottom kind)
@@ -93,6 +121,9 @@ end;
     | Project_var closure_element ->
       simplify_project_var dacc ~original_term ~closure_ty:arg_ty
         closure_element ~result_var
+    | Move_within_set_of_closures { move_from; move_to; } ->
+      simplify_move_within_set_of_closures dacc ~original_term ~closure:arg
+        ~closure_ty:arg_ty ~move_from ~move_to ~result_var
     | Unbox_number boxable_number_kind ->
       simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
         boxable_number_kind ~result_var

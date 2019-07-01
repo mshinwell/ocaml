@@ -22,5 +22,5 @@ val simplify_primitive
    : Downwards_acc.t
   -> Flambda_primitive.t
   -> Debuginfo.t
-  -> result_var:Variable.t
+  -> result_var:Var_in_binding_pos.t
   -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t

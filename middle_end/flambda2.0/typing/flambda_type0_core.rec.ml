@@ -565,3 +565,35 @@ let get_alias t =
   | Naked_number _ -> None
   | Fabricated (Equals simple) -> Some simple
   | Fabricated _ -> None
+
+let rec apply_rec_info (t : Flambda_types.t) rec_info : t Or_bottom.t =
+  match t with
+  | Value (Equals simple) ->
+    let simple = Simple.merge_rec_info simple ~newer_rec_info:rec_info in
+    Ok (Value (Equals simple))
+  | Value (Type _) -> Misc.fatal_error "Not yet implemented"
+  | Value (No_alias Unknown) -> Ok t
+  | Value (No_alias Bottom) -> Bottom
+  | Value (No_alias ty_value) ->
+    begin match apply_rec_info_ty_value ty_value rec_info with
+    | Ok ty_value -> Ok (Value (No_alias ty_value))
+    | Bottom -> Bottom
+    end
+  | Naked_number _ | Fabricated _ -> Bottom
+
+and apply_rec_info_ty_value (ty_value : Flambda_types.ty_value) rec_info
+      : Flambda_types.ty_value Or_bottom.t =
+  match ty_value with
+  | Closures closures ->
+    let by_closure_id =
+      Closures_entry_by_closure_id.map_closure_types by_closure_id
+        ~f:(fun (closure_type : Flambda_types.t) ->
+          apply_rec_info closure_type rec_info)
+    in
+    begin match by_closure_id with
+    | Ok by_closure_id -> Ok (Closures { by_closure_id; })
+    | Bottom -> Bottom
+    end
+  | Blocks_and_tagged_immediates _
+  | Boxed_number _
+  | String _ -> Bottom

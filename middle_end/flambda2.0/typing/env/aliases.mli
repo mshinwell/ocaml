@@ -13,16 +13,25 @@
 (**************************************************************************)
 
 (** Union-find-like structure for keeping track of equivalence classes,
-    used for alias resolution in the typing environment. *)
+    used for alias resolution in the typing environment, with support for
+    associating orderings to aliases of canonical elements. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Make (E : sig
   type t
+  type elt = t
   include Identifiable.S with type t := t
 
   val defined_earlier : t -> than:t -> bool
   val implicitly_bound_and_canonical : t -> bool
+
+  module Order_within_equiv_class : sig
+    type t
+    include Identifiable.S with type t := t
+  end
+
+  val order_within_equiv_class : t -> Order_within_equiv_class.t
 end) : sig
   type t
 
@@ -45,7 +54,11 @@ end) : sig
     -> E.t
     -> add_result option * t
 
-  val get_canonical_element : t -> E.t -> E.t option
+  val get_canonical_element
+     : t
+    -> E.t
+    -> min_order_within_equiv_class:E.Order_within_equiv_class.t
+    -> E.t option
 
   val get_aliases : t -> E.t -> E.Set.t
 

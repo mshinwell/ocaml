@@ -28,6 +28,7 @@ module S = Simplify_simple
 module T = Flambda_type
 module UA = Upwards_acc
 module UE = Simplify_env_and_result.Upwards_env
+module VB = Var_in_binding_pos
 
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 (* CR mshinwell: Consider defunctionalising to remove the [k]. *)
@@ -41,25 +42,17 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let (defining_expr : Reachable.t), dacc, ty =
+    let (defining_expr : Reachable.t), dacc =
       Simplify_named.simplify_named dacc (L.defining_expr let_expr)
         ~result_var:bound_var
     in
-    let kind = L.kind let_expr in
-    let new_kind = T.kind ty in
-    if not (K.equal new_kind kind) then begin
-      Misc.fatal_errorf "Kind changed during simplification of [Let] \
-          binding (new kind %a):@ %a"
-        K.print new_kind
-        L.print let_expr
-    end;
     match defining_expr with
     | Invalid _ ->
       let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
       Expr.create_invalid (), user_data, uacc
     | Reachable defining_expr ->
       let body, user_data, uacc = simplify_expr dacc body k in
-      let expr = Expr.create_let bound_var kind defining_expr body in
+      let expr = Expr.create_let bound_var defining_expr body in
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
@@ -426,7 +419,10 @@ and simplify_direct_partial_application
           match Simple.must_be_var applied_arg with
           | None -> expr
           | Some applied_arg ->
-            Expr.create_let applied_arg K.value
+            let applied_arg =
+              VB.create applied_arg Name_occurrence_kind.normal
+            in
+            Expr.create_let applied_arg
               (Named.create_prim
                 (Unary (Project_var closure_var, Simple.var my_closure))
                 dbg)
@@ -467,7 +463,8 @@ and simplify_direct_partial_application
       ~args:[Simple.var wrapper_var]
   in
   let expr =
-    Expr.create_let wrapper_var K.value
+    let wrapper_var = VB.create wrapper_var Name_occurrence_kind.normal in
+    Expr.create_let wrapper_var
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
@@ -698,10 +695,11 @@ and simplify_function_call
 and simplify_apply_shared dacc apply : _ Or_bottom.t =
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
-  match S.simplify_simple dacc (Apply.callee apply) with
+  let min_occurrence_kind = Name_occurrence_kind.normal in
+  match S.simplify_simple dacc (Apply.callee apply) ~min_occurrence_kind with
   | Bottom _kind -> Bottom
   | Ok (callee, callee_ty) ->
-    match S.simplify_simples dacc (Apply.args apply) with
+    match S.simplify_simples dacc (Apply.args apply) ~min_occurrence_kind with
     | Bottom -> Bottom
     | Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
@@ -812,7 +810,8 @@ and simplify_apply_cont
   : 'a. DA.t -> Apply_cont.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply_cont k ->
   let module AC = Apply_cont in
-  match S.simplify_simples dacc (AC.args apply_cont) with
+  let min_occurrence_kind = Name_occurrence_kind.normal in
+  match S.simplify_simples dacc (AC.args apply_cont) ~min_occurrence_kind with
   | Bottom ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
