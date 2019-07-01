@@ -18,6 +18,13 @@
 
 module Kind = Name_occurrence_kind
 
+module Num_occurrences = struct
+  type t =
+    | Zero
+    | One
+    | More_than_one
+end
+
 module For_one_variety_of_names (N : sig
   include Identifiable.S
   val apply_name_permutation : t -> Name_permutation.t -> t
@@ -49,7 +56,7 @@ end) = struct
 
   let singleton name kind = N.Map.singleton name (Kind.Map.singleton kind 1)
 
-  let add t name kind =
+  let add0 t name kind =
     N.Map.update name (function
         | None -> Some (Kind.Map.singleton kind 1)
         | Some by_kind ->
@@ -60,6 +67,14 @@ end) = struct
               by_kind
           in
           Some by_kind)
+      t
+
+  (* CR mshinwell: Document downwards-closed property.  There is probably
+     a better data structure to use, too. *)
+
+  let add t name kind =
+    Kind.Set.fold (fun kind t -> add0 t name kind)
+      (Kind.all_less_than_or_equal_to kind)
       t
 
   let apply_name_permutation t perm =
@@ -117,13 +132,16 @@ end) = struct
 
   let remove t name = N.Map.remove name t
 
-  let count t name =
-    (* CR-someday mshinwell: We could consider keeping the total count
-       separately. *)
+  let count t name : Num_occurrences.t =
     match N.Map.find name t with
-    | exception Not_found -> 0
+    | exception Not_found -> Zero
     | by_kind ->
-      Kind.Map.fold (fun _kind count total -> count + total) by_kind 0
+      match Kind.Map.bindings by_kind with
+      | [_] -> One
+      | _::_::_ -> More_than_one
+      | [] ->
+        invariant t;
+        Misc.fatal_error "[invariant] should have failed"
 
   let greatest_occurrence_kind t name : Kind.Or_absent.t =
     match N.Map.find name t with

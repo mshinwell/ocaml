@@ -58,6 +58,12 @@ include Identifiable.Make (struct
     compare t1 t2 = 0
 end)
 
+let all_less_than_or_equal_to t =
+  match t with
+  | Normal -> Set.of_list [Normal; In_types; Phantom]
+  | In_types -> Set.of_list [In_types; Phantom]
+  | Phantom -> Set.of_list [Phantom]
+
 module Or_absent = struct
   type t =
     | Absent

@@ -19,6 +19,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Num_occurrences : sig
+  type t = private
+    | Zero
+    | One
+    | More_than_one
+end
+
 type t
 
 val empty : t
@@ -31,7 +38,7 @@ val singleton_continuation : Continuation.t -> t
 
 val add_continuation : t -> Continuation.t -> t
 
-val count_continuation : t -> Continuation.t -> int
+val count_continuation : t -> Continuation.t -> Num_occurrences.t
 
 val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
 
