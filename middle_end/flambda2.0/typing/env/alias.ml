@@ -31,8 +31,6 @@ include Identifiable.Make (struct
           name_occurrence_kind = name_occurrence_kind1; }
         { simple = simple2; kind = kind2; binding_time = binding_time2;
           name_occurrence_kind = name_occurrence_kind2; } =
-    let simple1 = Simple.without_rec_info simple1 in
-    let simple2 = Simple.without_rec_info simple2 in
     let c = Simple.compare simple1 simple2 in
     if c <> 0 then c
     else
@@ -55,12 +53,12 @@ include Identifiable.Make (struct
       Name_occurrence_kind.hash name_occurrence_kind)
 
   let print ppf { simple; kind; binding_time; name_occurrence_kind; } =
-    Format.fprintf ppf "@[<hov 1>\
+    Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(simple@ %a)@]@ \
         @[<hov 1>(kind@ %a)@]@ \
         @[<hov 1>(binding_time@ %a)@]@ \
         @[<hov 1>(name_occurrence_kind@ %a)@]\
-        @]"
+        )@]"
       Simple.print simple
       Flambda_kind.print kind
       Binding_time.print binding_time
@@ -70,6 +68,7 @@ include Identifiable.Make (struct
 end)
 
 let create kind simple binding_time name_occurrence_kind =
+  let simple = Simple.without_rec_info simple in
   { simple;
     kind;
     binding_time;
@@ -82,7 +81,7 @@ let create_name kind name binding_time name_occurrence_kind =
 let defined_earlier t ~than =
   match Simple.descr t.simple, Simple.descr than.simple with
   | (Const _ | Discriminant _), (Const _ | Discriminant _) ->
-    Simple.compare t.simple than.simple <= 0
+    Simple.compare t.simple than.simple < 0
   | (Const _ | Discriminant _), Name _ -> true
   | Name _, (Const _ | Discriminant _) -> false
   | Name name1, Name name2 ->

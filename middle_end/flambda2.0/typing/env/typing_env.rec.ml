@@ -399,6 +399,20 @@ let add_equation t name ty =
       Type_printers.print ty
       print t
   end;
+  begin match Flambda_type0_core.get_alias ty with
+  | None -> ()
+  | Some simple ->
+    match Simple.descr simple with
+    | Name name' ->
+      if Name.equal name name' then begin
+        Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
+            disallowed:@ %a"
+          Name.print name
+          Type_printers.print ty
+          print t
+      end
+    | _ -> ()
+  end;
 (*
 Format.eprintf "Trying to add equation %a = %a\n%!"
   Name.print name
@@ -428,8 +442,8 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
 (*
 Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
   Name.print name
-  Name.print canonical_name
-  Name.print alias_of;
+  Alias.print canonical_element
+  Alias.print alias_of;
 *)
         let kind = Flambda_type0_core.kind ty in
         let ty =
@@ -439,6 +453,9 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
         aliases, Alias.simple alias_of, ty
   in
 (*
+Format.eprintf "Now really adding equation %a = %a\n%!"
+  Simple.print simple
+  Type_printers.print ty;
 Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
   Simple.print simple
   Type_printers.print ty
@@ -779,7 +796,9 @@ let create_using_resolver_and_symbol_bindings_from t =
         | Var _ -> None
         | Symbol _ ->
           let typ =
-            Type_erase_aliases.erase_aliases t ~allowed:Variable.Set.empty typ
+            let bound_name = Some name in
+            Type_erase_aliases.erase_aliases t ~bound_name
+              ~allowed:Variable.Set.empty typ
           in
           Some (typ, binding_time, occurrence_kind))
   in

@@ -90,7 +90,8 @@ let add_use t typing_env ~arg_types =
     in
     let arg_types =
       List.map (fun ty ->
-          T.erase_aliases typing_env ~allowed:vars_in_scope_at_cut ty)
+          T.erase_aliases typing_env ~bound_name:None
+            ~allowed:vars_in_scope_at_cut ty)
         arg_types
     in
     let use = Use.create env_extension ~arg_types in

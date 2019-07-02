@@ -47,9 +47,9 @@ include Identifiable.Make (struct
 
   let number t =
     match t with
-    | Normal -> 0
+    | Normal -> 2
     | In_types -> 1
-    | Phantom -> 2
+    | Phantom -> 0
 
   let compare t1 t2 =
     Stdlib.compare (number t1) (number t2)

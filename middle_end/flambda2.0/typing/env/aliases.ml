@@ -156,11 +156,13 @@ end) = struct
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
-      let canonical_elements1 = E.Map.keys t.canonical_elements in
+      let canonical_elements1 =
+        E.Set.of_list (E.Map.data t.canonical_elements)
+      in
       let canonical_elements2 = E.Map.keys t.aliases_of_canonical_elements in
-      if not (E.Set.equal canonical_elements1 canonical_elements2) then begin
-        Misc.fatal_errorf "Keys of [canonical_elements] and \
-            [aliases_of_canonical_elements] differ:@ %a"
+      if not (E.Set.subset canonical_elements1 canonical_elements2) then begin
+        Misc.fatal_errorf "Range of [canonical_elements] is not a subset of \
+            the domain of [aliases_of_canonical_elements]:@ %a"
           print t
       end;
       let _all_aliases : E.Set.t =
@@ -355,18 +357,22 @@ end) = struct
 
   let add_canonical_element t element =
     if E.Map.mem element t.canonical_elements then begin
-      Misc.fatal_errorf "Element %a already in alias tracker:@ %a"
-        E.print element
-        print t
-    end;
-    let canonical_elements = E.Map.add element element t.canonical_elements in
-    let aliases_of_canonical_elements =
-      E.Map.add element Aliases_of_canonical_element.empty
-        t.aliases_of_canonical_elements
-    in
-    { canonical_elements;
-      aliases_of_canonical_elements;
-    }
+      if E.implicitly_bound_and_canonical element then
+        t
+      else
+        Misc.fatal_errorf "Element %a already in alias tracker:@ %a"
+          E.print element
+          print t
+    end else begin
+      let canonical_elements = E.Map.add element element t.canonical_elements in
+      let aliases_of_canonical_elements =
+        E.Map.add element Aliases_of_canonical_element.empty
+          t.aliases_of_canonical_elements
+      in
+      { canonical_elements;
+        aliases_of_canonical_elements;
+      }
+    end
 
   let add_implicitly_bound_canonical_element t element =
     if E.implicitly_bound_and_canonical element then
@@ -386,8 +392,9 @@ end) = struct
     add_result, t
 
   let get_canonical_element t element ~min_order_within_equiv_class =
+    let t = add_implicitly_bound_canonical_element t element in
     match E.Map.find element t.canonical_elements with
-    | exception Not_found -> None
+    | exception Not_found -> Format.eprintf "not found\n%!"; None
     | canonical_element ->
       if E.Order_within_equiv_class.compare
           (E.order_within_equiv_class canonical_element)
@@ -400,6 +407,7 @@ end) = struct
           ~min_order_within_equiv_class
 
   let get_aliases t element =
+    let t = add_implicitly_bound_canonical_element t element in
     match canonical t element with
     | Is_canonical canonical_element ->
       Aliases_of_canonical_element.all

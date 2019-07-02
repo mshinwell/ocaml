@@ -125,7 +125,7 @@ module Make (Index : Identifiable.S) = struct
   let erase_aliases { components_by_index; } env ~allowed =
     let components_by_index =
       Index.Map.map (fun typ ->
-          Type_erase_aliases.erase_aliases env ~allowed typ)
+          Type_erase_aliases.erase_aliases env ~bound_name:None ~allowed typ)
         components_by_index
     in
     { components_by_index; }
