@@ -205,7 +205,10 @@ and simplify_body_of_non_recursive_let_cont
         | None -> uenv
         | Some (cont, cont_handler) ->
           let arity = Continuation_handler.arity cont_handler in
-          UE.add_continuation uenv cont wrapper_scope_level arity
+          UE.add_continuation_to_inline uenv cont
+            wrapper_scope_level arity
+            cont_handler
+            ~wrapper_with_scope_and_arity:None
       in
       let uacc = UA.with_uenv uacc uenv in
       (cont_handler, additional_cont_handler, uenv', user_data), uacc)
@@ -854,7 +857,8 @@ and simplify_apply_cont
     | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
       (* CR mshinwell: With -g, we can end up with continuations that are
          just a sequence of phantom lets then "goto".  These would normally
-         be treated as aliases, but of course aren't... *)
+         be treated as aliases, but of course aren't in this scenario,
+         unless the continuations are used linearly. *)
       (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
          or "stub" -- could avoid resimplification of linearly used ones maybe,
          although this wouldn't remove any parameter-to-argument [Let]s.
@@ -879,12 +883,17 @@ and simplify_apply_cont
             let expr =
               Expr.bind_parameters_to_simples ~bind:params ~target:args handler
             in
-            let dacc = DA.with_r dacc (UA.r uacc) in
+            let r = UA.r uacc in
+            let dacc = DA.with_r dacc r in
             let dacc =
               match wrapper_with_scope_and_arity with
               | None -> dacc
               | Some (wrapper, definition_scope_level, arity) ->
                 DA.add_continuation dacc wrapper ~definition_scope_level arity
+            in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.add_lifted_constants denv (R.get_lifted_constants r))
             in
             try
               simplify_expr dacc expr (fun _cont_uses_env r ->

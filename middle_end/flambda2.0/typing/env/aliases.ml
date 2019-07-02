@@ -394,8 +394,16 @@ end) = struct
   let get_canonical_element t element ~min_order_within_equiv_class =
     let t = add_implicitly_bound_canonical_element t element in
     match E.Map.find element t.canonical_elements with
-    | exception Not_found -> Format.eprintf "not found\n%!"; None
+    | exception Not_found ->
+      (* CR mshinwell: Shouldn't this be a fatal error, as above? *)
+      None
     | canonical_element ->
+(*
+Format.eprintf "looking for canonical for %a, candidate canonical %a, min order %a\n%!"
+  E.print element
+  E.print canonical_element
+  E.Order_within_equiv_class.print min_order_within_equiv_class;
+*)
       if E.Order_within_equiv_class.compare
           (E.order_within_equiv_class canonical_element)
           min_order_within_equiv_class
