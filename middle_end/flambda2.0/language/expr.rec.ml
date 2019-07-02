@@ -200,6 +200,11 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
           bound_var, true, Have_deleted defining_expr
     end
   in
+  (* CR mshinwell: When leaving behind phantom lets, maybe we should turn
+     the defining expressions into simpler ones by using the type, if possible.
+     For example an Unbox_naked_int64 or something could potentially turn
+     into a variable.  This defining expression usually never exists as
+     the types propagate the information forward. *)
   (* CR mshinwell: Shouldn't this remove the bound variable from the
      free names of [body]? *)
   if not keep_binding then body, let_creation_result
