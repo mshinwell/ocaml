@@ -23,6 +23,12 @@ module Num_occurrences = struct
     | Zero
     | One
     | More_than_one
+
+  let print ppf t =
+    match t with
+    | Zero -> Format.fprintf ppf "Zero"
+    | One -> Format.fprintf ppf "One"
+    | More_than_one -> Format.fprintf ppf "More_than_one"
 end
 
 module For_one_variety_of_names (N : sig
@@ -78,16 +84,25 @@ end) = struct
 
   let is_empty = N.Map.is_empty
 
-  let add0 t name kind =
+  let add0 t name kind ~update_num_occurrences =
     N.Map.update name (function
         | None ->
+          let num_occurrences =
+            if update_num_occurrences then 1 else 0
+          in
           let for_one_name : For_one_name.t =
-            { num_occurrences = 1;
+            { num_occurrences;
               by_kind = Kind.Map.singleton kind 1;
             }
           in
           Some for_one_name
         | Some for_one_name ->
+          let num_occurrences =
+            if update_num_occurrences then
+               For_one_name.num_occurrences for_one_name + 1
+            else
+               For_one_name.num_occurrences for_one_name
+          in
           let by_kind =
             Kind.Map.update kind (function
                 | None -> Some 1
@@ -95,7 +110,7 @@ end) = struct
               (For_one_name.by_kind for_one_name)
           in
           let for_one_name : For_one_name.t =
-            { num_occurrences = For_one_name.num_occurrences for_one_name + 1;
+            { num_occurrences;
               by_kind;
             }
           in
@@ -103,7 +118,9 @@ end) = struct
       t
 
   let add t name kind =
-    Kind.Set.fold (fun kind t -> add0 t name kind)
+    Kind.Set.fold (fun kind' t ->
+        let update_num_occurrences = Name_occurrence_kind.equal kind kind' in
+        add0 t name kind' ~update_num_occurrences)
       (Kind.all_less_than_or_equal_to kind)
       t
 

@@ -24,6 +24,8 @@ module Num_occurrences : sig
     | Zero
     | One
     | More_than_one
+
+  val print : Format.formatter -> t -> unit
 end
 
 type t

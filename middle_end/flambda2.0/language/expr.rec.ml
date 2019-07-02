@@ -200,6 +200,8 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
           bound_var, true, Have_deleted defining_expr
     end
   in
+  (* CR mshinwell: Shouldn't this remove the bound variable from the
+     free names of [body]? *)
   if not keep_binding then body, let_creation_result
   else
     (* To save space, only keep free names on the outer term. *)

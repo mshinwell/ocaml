@@ -660,7 +660,7 @@ let resolve_ty (type a) t
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
-    let min_occurrence_kind = Name_occurrence_kind.in_types in
+    let min_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
     match get_canonical_simple0 t simple ~min_occurrence_kind with
     | Bottom, _typ, _rec_info -> Bottom, None
     | Ok simple, _typ, rec_info ->
