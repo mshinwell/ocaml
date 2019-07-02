@@ -38,6 +38,13 @@ let pattern_match t ~f =
 let print_with_cache ~cache ppf
       ({ bound_var_and_body = _; name_occurrence_kind = _;
          defining_expr; } as t) =
+  let let_bound_var_colour var =
+    let kind = Var_in_binding_pos.occurrence_kind var in
+    if Name_occurrence_kind.is_phantom kind then
+      Flambda_colours.elide ()
+    else
+      Flambda_colours.let_bound_var ()
+  in
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with
     | Let ({ bound_var_and_body = _; name_occurrence_kind = _;
@@ -45,7 +52,7 @@ let print_with_cache ~cache ppf
       pattern_match t ~f:(fun ~bound_var ~body ->
         fprintf ppf
           "@ @[<hov 1>@<0>%s%a@<0>%s =@<0>%s@ %a@]"
-          (Flambda_colours.let_bound_var ())
+          (let_bound_var_colour bound_var)
           Var_in_binding_pos.print bound_var
           (Flambda_colours.elide ())
           (Flambda_colours.normal ())
@@ -58,7 +65,7 @@ let print_with_cache ~cache ppf
         @<0>%s%a@<0>%s =@<0>%s@ %a"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
-      (Flambda_colours.let_bound_var ())
+      (let_bound_var_colour bound_var)
       Var_in_binding_pos.print bound_var
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())

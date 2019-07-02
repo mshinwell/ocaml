@@ -57,7 +57,10 @@ include Identifiable.Make (struct
     match Name_occurrence_kind.descr occurrence_kind with
     | Normal -> Variable.print ppf var
     | In_types -> Format.fprintf ppf "@[%a\u{1d749}@]" Variable.print var
+    | Phantom -> Variable.print ppf var
+(*
     | Phantom -> Format.fprintf ppf "@[%a\u{1f47b}@]" Variable.print var
+*)
 
   let compare
         { var = var1; occurrence_kind = occurrence_kind1; }

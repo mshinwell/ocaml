@@ -852,6 +852,9 @@ and simplify_apply_cont
          backtrace, even if the [Apply_cont] were compiled as "raise". *)
       Expr.create_invalid (), user_data, uacc
     | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
+      (* CR mshinwell: With -g, we can end up with continuations that are
+         just a sequence of phantom lets then "goto".  These would normally
+         be treated as aliases, but of course aren't... *)
       (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
          or "stub" -- could avoid resimplification of linearly used ones maybe,
          although this wouldn't remove any parameter-to-argument [Let]s.
