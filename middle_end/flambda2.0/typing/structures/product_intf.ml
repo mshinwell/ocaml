@@ -41,6 +41,11 @@ module type S = sig
 
   val components : t -> flambda_type list
 
+  val map_types
+     : t
+    -> f:(flambda_type -> flambda_type Or_bottom.t)
+    -> t Or_bottom.t
+
   include Type_structure_intf.S
     with type t := t
     with type flambda_type := flambda_type

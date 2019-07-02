@@ -21,4 +21,6 @@ include
     (Closure_id_and_var_within_closure_set)
     (Closures_entry)
 
-let map_closure_types _t ~f:_ = Misc.fatal_error "To implement"
+let map_closure_types t ~f =
+  map_maps_to t ~f:(fun closures_entry ->
+    Closures_entry.map_closure_types closures_entry ~f)

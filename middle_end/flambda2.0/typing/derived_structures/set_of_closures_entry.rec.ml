@@ -54,3 +54,7 @@ let erase_aliases ({ by_closure_id; } : t) env ~allowed : t =
 
 let free_names ({ by_closure_id; } : t) =
   Types_by_closure_id.free_names by_closure_id
+
+let map_closure_types ({ by_closure_id; } : t) ~f : _ Or_bottom.t =
+  Or_bottom.map (Types_by_closure_id.map_closure_types by_closure_id ~f)
+    ~f:(fun by_closure_id : t -> { by_closure_id; })

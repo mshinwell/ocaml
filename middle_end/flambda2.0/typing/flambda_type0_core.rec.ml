@@ -575,12 +575,6 @@ let apply_rec_info_of_kind_naked_number (type k)
   if Rec_info.is_initial rec_info then Ok of_kind_naked_number
   else Bottom
 
-let apply_rec_info_of_kind_fabricated
-      (of_kind_fabricated : Flambda_types.of_kind_fabricated)
-      rec_info : Flambda_types.of_kind_fabricated Or_bottom.t =
-  if Rec_info.is_initial rec_info then Ok of_kind_fabricated
-  else Bottom
-
 let apply_rec_info_ty (type of_kind_foo)
       (apply_rec_info_of_kind_foo :
         (of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t))
@@ -633,15 +627,27 @@ and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
       rec_info : Flambda_types.of_kind_value Or_bottom.t =
   match of_kind_value with
   | Closures { by_closure_id; } ->
-    let by_closure_id =
-      Closures_entry_by_closure_id.map_closure_types by_closure_id
+    Or_bottom.map
+      (Closures_entry_by_closure_id.map_closure_types by_closure_id
         ~f:(fun (closure_type : Flambda_types.t) ->
-          apply_rec_info closure_type rec_info)
-    in
-    begin match by_closure_id with
-    | Ok by_closure_id -> Ok (Closures { by_closure_id; })
-    | Bottom -> Bottom
-    end
+          apply_rec_info closure_type rec_info))
+      ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Blocks_and_tagged_immediates _
   | Boxed_number _
-  | String _ -> Bottom
+  | String _ ->
+    if Rec_info.is_initial rec_info then Ok of_kind_value
+    else Bottom
+
+and apply_rec_info_of_kind_fabricated
+      (of_kind_fabricated : Flambda_types.of_kind_fabricated)
+      rec_info : Flambda_types.of_kind_fabricated Or_bottom.t =
+  match of_kind_fabricated with
+  | Discriminants _ ->
+    if Rec_info.is_initial rec_info then Ok of_kind_fabricated
+    else Bottom
+  | Set_of_closures { closures; } ->
+    Or_bottom.map
+      (Closure_ids.map_closure_types closures 
+        ~f:(fun (closure_type : Flambda_types.t) ->
+          apply_rec_info closure_type rec_info))
+      ~f:(fun closures -> Set_of_closures { closures; })
