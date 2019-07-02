@@ -212,6 +212,7 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
         T.erase_aliases_ty_value (DE.typing_env denv)
+          ~bound_name:None
           ~allowed:Variable.Set.empty ty_value)
       closure_element_types
   in
@@ -371,9 +372,15 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
       Reachable.reachable (Named.create_simple simple), dacc, ty
     end
   | Prim (prim, dbg) ->
+(*
+Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;
+*)
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
     in
+(*
+Format.eprintf "SP env_extension:@ %a\n%!" T.Typing_env_extension.print env_extension;
+*)
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let kind = Flambda_primitive.result_kind' prim in

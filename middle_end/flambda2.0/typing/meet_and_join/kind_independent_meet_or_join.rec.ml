@@ -47,7 +47,8 @@ struct
     match simple_opt with
     | None -> Simple.Set.empty
     | Some simple ->
-      Typing_env.aliases_of_simple_allowable_in_types env simple
+      Simple.Set.add simple
+        (Typing_env.aliases_of_simple_allowable_in_types env simple)
 
   let meet_on_unknown_or_join env
         (ou1 : S.of_kind_foo T.unknown_or_join)
@@ -132,6 +133,9 @@ Format.eprintf "TEE from meeting simples (2): %a\n%!"
   Typing_env_extension.print env_extension;
 *)
       (* It doesn't matter whether [simple1] or [simple2] is returned here. *)
+(*
+Format.eprintf "Returning =%a\n%!" Simple.print simple1;
+*)
       Equals simple1, env_extension
     | Some simple, None | None, Some simple ->
       let unknown_or_join, env_extension =

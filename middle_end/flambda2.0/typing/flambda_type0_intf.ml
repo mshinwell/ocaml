@@ -116,8 +116,6 @@ module type S = sig
       -> Typing_env_extension.t * Variable.Set.t
   end
 
-  val erase_aliases : Typing_env.t -> allowed:Variable.Set.t -> t -> t
-
   val meet_shape
      : Typing_env.t
     -> flambda_type
@@ -153,8 +151,16 @@ module type S = sig
       }
     | Inlinable of inlinable_function_declaration
 
+  val erase_aliases
+     : Typing_env.t
+    -> bound_name:Name.t option
+    -> allowed:Variable.Set.t
+    -> t
+    -> t
+
   val erase_aliases_ty_value
      : Typing_env.t
+    -> bound_name:Name.t option
     -> allowed:Variable.Set.t
     -> ty_value
     -> ty_value

@@ -90,7 +90,8 @@ let introduce (T { types; _ }) typing_env =
       let sym = Name.symbol sym in
       if not (TE.mem typing_env sym) then
         TE.add_equation typing_env sym
-          (T.erase_aliases orig_typing_env ~allowed typ)
+          (T.erase_aliases orig_typing_env ~bound_name:(Some sym)
+            ~allowed typ)
       else
         typing_env)
     types

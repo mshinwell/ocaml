@@ -80,12 +80,29 @@ let add_definition t var kind =
     defined_vars = Variable.Map.add var kind t.defined_vars
   }
 
+let check_equation t name ty =
+  match Flambda_type0_core.get_alias ty with
+  | None -> ()
+  | Some simple ->
+    match Simple.descr simple with
+    | Name name' ->
+      if Name.equal name name' then begin
+        Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
+            disallowed (Typing_env_level):@ %a"
+          Name.print name
+          Type_printers.print ty
+          print t
+      end
+    | _ -> ()
+
 let one_equation name ty =
+  check_equation empty name ty;
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.singleton name ty;
   }
 
 let add_or_replace_equation t name ty =
+  check_equation t name ty;
   { t with
     equations = Name.Map.add name ty t.equations;
   }
@@ -147,8 +164,9 @@ let join env (t1 : t) (t2 : t) : t =
 
 let erase_aliases env ~allowed t =
   let equations =
-    Name.Map.map (fun ty ->
-        Type_erase_aliases.erase_aliases env ~allowed ty)
+    Name.Map.mapi (fun name ty ->
+        let bound_name = Some name in
+        Type_erase_aliases.erase_aliases env ~bound_name ~allowed ty)
       t.equations
   in
   { t with
