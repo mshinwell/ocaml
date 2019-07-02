@@ -32,6 +32,11 @@ let is_normal t =
   | Normal -> true
   | In_types | Phantom -> false
 
+let is_phantom t =
+  match t with
+  | Phantom -> true
+  | In_types | Normal -> false
+
 include Identifiable.Make (struct
   type nonrec t = t
 
@@ -88,8 +93,8 @@ module Or_absent = struct
     let compare t1 t2 =
       match t1, t2 with
       | Absent, Absent -> 0
-      | Absent, Present _ -> 1
-      | Present _, Absent -> -1
+      | Absent, Present _ -> -1
+      | Present _, Absent -> 1
       | Present kind1, Present kind2 -> compare kind1 kind2
 
     let equal t1 t2 =

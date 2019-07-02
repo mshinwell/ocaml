@@ -153,10 +153,10 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
     if Name_occurrence_kind.Or_absent.compare
          greatest_occurrence_kind
          (Name_occurrence_kind.Or_absent.present declared_occurrence_kind)
-         < 0
+         > 0
     then begin
       Misc.fatal_errorf "[Let]-binding declares variable %a,@ but this \
-          variable has occurrences at a lower kind@ (>= %a)@ in body:@ %a"
+          variable has occurrences at a higher kind@ (>= %a)@ in body:@ %a"
         Var_in_binding_pos.print bound_var
         Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
         print body
@@ -188,7 +188,7 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
       else
         let occurrence_kind =
           match greatest_occurrence_kind with
-          | Absent -> declared_occurrence_kind
+          | Absent -> Name_occurrence_kind.phantom
           | Present occurrence_kind -> occurrence_kind
         in
         let bound_var =

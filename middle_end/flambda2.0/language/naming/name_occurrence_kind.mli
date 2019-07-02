@@ -33,6 +33,8 @@ val phantom : t
 
 val is_normal : t -> bool
 
+val is_phantom : t -> bool
+
 include Identifiable.S with type t := t
 
 val all_less_than_or_equal_to : t -> Set.t

@@ -29,66 +29,105 @@ module For_one_variety_of_names (N : sig
   include Identifiable.S
   val apply_name_permutation : t -> Name_permutation.t -> t
 end) = struct
-  (* The integers give the number of occurrences. *)
-  type t = int Kind.Map.t N.Map.t
+  module For_one_name = struct
+    type t = {
+      num_occurrences : int;
+      by_kind : int Kind.Map.t;
+      (* [by_kind] is closed in the following sense: if there is an
+         occurrence at some particular kind, that occurrence is counted in
+         [by_kind] at that kind and all kinds lower than it. *)
+    }
+
+    let print ppf { num_occurrences; by_kind; } =
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(num_occurrences %d)@]@ \
+          @[<hov 1>(by_kind %a)@]\
+          )@]"
+        num_occurrences
+        (Kind.Map.print Format.pp_print_int) by_kind
+
+    let invariant ({ num_occurrences = _; by_kind; } as t) =
+      if Kind.Map.is_empty by_kind
+        || Kind.Map.exists (fun _kind count -> count <= 0) by_kind
+      then begin
+        Misc.fatal_errorf "[For_one_name] invariant failed:@ %a" print t
+      end
+
+    let num_occurrences t = t.num_occurrences
+    let by_kind t = t.by_kind
+
+    let empty = {
+      num_occurrences = 0;
+      by_kind = Kind.Map.empty;
+    }
+  end
+
+  type t = For_one_name.t N.Map.t
 
   let print ppf t =
-    N.Map.print (Kind.Map.print Format.pp_print_int) ppf t
+    N.Map.print For_one_name.print ppf t
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
-      let kind_map_ok by_kind =
-        Kind.Map.for_all (fun _kind count -> count > 0) by_kind
-      in
-      let by_name_map_ok =
-        N.Map.for_all (fun _name by_kind ->
-            (not (Kind.Map.is_empty by_kind)) && kind_map_ok by_kind)
-          t
-      in
-      if not by_name_map_ok then begin
-        Misc.fatal_errorf "[Name_occurrences] invariant failed:@ %a" print t
-      end
+      N.Map.iter (fun _name for_one_name ->
+          For_one_name.invariant for_one_name)
+        t
     end
 
   let empty = N.Map.empty
 
   let is_empty = N.Map.is_empty
 
-  let singleton name kind = N.Map.singleton name (Kind.Map.singleton kind 1)
-
   let add0 t name kind =
     N.Map.update name (function
-        | None -> Some (Kind.Map.singleton kind 1)
-        | Some by_kind ->
+        | None ->
+          let for_one_name : For_one_name.t =
+            { num_occurrences = 1;
+              by_kind = Kind.Map.singleton kind 1;
+            }
+          in
+          Some for_one_name
+        | Some for_one_name ->
           let by_kind =
             Kind.Map.update kind (function
                 | None -> Some 1
                 | Some count -> Some (count + 1))
-              by_kind
+              (For_one_name.by_kind for_one_name)
           in
-          Some by_kind)
+          let for_one_name : For_one_name.t =
+            { num_occurrences = For_one_name.num_occurrences for_one_name + 1;
+              by_kind;
+            }
+          in
+          Some for_one_name)
       t
-
-  (* CR mshinwell: Document downwards-closed property.  There is probably
-     a better data structure to use, too. *)
 
   let add t name kind =
     Kind.Set.fold (fun kind t -> add0 t name kind)
       (Kind.all_less_than_or_equal_to kind)
       t
 
+  let singleton name kind =
+    add empty name kind
+
   let apply_name_permutation t perm =
-    N.Map.fold (fun name counts_by_kind result ->
+    N.Map.fold (fun name for_one_name result ->
         let name = N.apply_name_permutation name perm in
-        N.Map.add name counts_by_kind result)
+        N.Map.add name for_one_name result)
       t
       N.Map.empty
 
   let diff t1 t2 =
     let t =
-      N.Map.merge (fun _name by_kind1 by_kind2 ->
-          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
-          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+      N.Map.merge (fun _name for_one_name1 for_one_name2 ->
+          let for_one_name1 =
+            Option.value for_one_name1 ~default:For_one_name.empty
+          in
+          let for_one_name2 =
+            Option.value for_one_name2 ~default:For_one_name.empty
+          in
+          let by_kind1 = For_one_name.by_kind for_one_name1 in
+          let by_kind2 = For_one_name.by_kind for_one_name2 in
           let by_kind =
             Kind.Map.merge (fun _kind count1 count2 ->
                 let count1 = Option.value count1 ~default:0 in
@@ -98,8 +137,21 @@ end) = struct
                 else Some count)
               by_kind1 by_kind2
           in
-          if Kind.Map.is_empty by_kind then None
-          else Some by_kind)
+          if Kind.Map.is_empty by_kind then begin
+            None
+          end else begin
+            let num_occurrences =
+              For_one_name.num_occurrences for_one_name1
+                - For_one_name.num_occurrences for_one_name2
+            in
+            assert (num_occurrences > 0);
+            let for_one_name : For_one_name.t =
+              { num_occurrences;
+                by_kind;
+              }
+            in
+            Some for_one_name
+          end)
         t1 t2
     in
     invariant t;
@@ -107,9 +159,15 @@ end) = struct
 
   let union t1 t2 =
     let t =
-      N.Map.merge (fun _name by_kind1 by_kind2 ->
-          let by_kind1 = Option.value by_kind1 ~default:Kind.Map.empty in
-          let by_kind2 = Option.value by_kind2 ~default:Kind.Map.empty in
+      N.Map.merge (fun _name for_one_name1 for_one_name2 ->
+          let for_one_name1 =
+            Option.value for_one_name1 ~default:For_one_name.empty
+          in
+          let for_one_name2 =
+            Option.value for_one_name2 ~default:For_one_name.empty
+          in
+          let by_kind1 = For_one_name.by_kind for_one_name1 in
+          let by_kind2 = For_one_name.by_kind for_one_name2 in
           let by_kind =
             Kind.Map.merge (fun _kind count1 count2 ->
                 let count1 = Option.value count1 ~default:0 in
@@ -120,7 +178,16 @@ end) = struct
               by_kind1 by_kind2
           in
           assert (not (Kind.Map.is_empty by_kind));
-          Some by_kind)
+          let num_occurrences =
+            For_one_name.num_occurrences for_one_name1
+              + For_one_name.num_occurrences for_one_name2
+          in
+          let for_one_name : For_one_name.t =
+            { num_occurrences;
+              by_kind;
+            }
+          in
+          Some for_one_name)
         t1 t2
     in
     invariant t;
@@ -137,19 +204,18 @@ end) = struct
   let count t name : Num_occurrences.t =
     match N.Map.find name t with
     | exception Not_found -> Zero
-    | by_kind ->
-      match Kind.Map.bindings by_kind with
-      | [_] -> One
-      | _::_::_ -> More_than_one
-      | [] ->
-        invariant t;
-        Misc.fatal_error "[invariant] should have failed"
+    | for_one_name ->
+      let num_occurrences = For_one_name.num_occurrences for_one_name in
+      assert (num_occurrences >= 0);
+      if num_occurrences = 0 then Zero
+      else if num_occurrences = 1 then One
+      else More_than_one
 
   let greatest_occurrence_kind t name : Kind.Or_absent.t =
     match N.Map.find name t with
     | exception Not_found -> Kind.Or_absent.absent
-    | by_kind ->
-      match Kind.Map.max_binding_opt by_kind with
+    | for_one_name ->
+      match Kind.Map.max_binding_opt (For_one_name.by_kind for_one_name) with
       | Some (kind, _count) -> Kind.Or_absent.present kind
       | None ->
         invariant t;
