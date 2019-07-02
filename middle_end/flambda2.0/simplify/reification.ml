@@ -65,7 +65,7 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
   in
   let symbol' = Simple.symbol symbol in
   let term = Named.create_simple symbol' in
-  let ty = T.alias_type_of (T.kind ty) symbol' in
+  let var_ty = T.alias_type_of (T.kind ty) symbol' in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.add_symbol denv symbol ty in
@@ -73,12 +73,12 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
 Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
 *)
-      DE.add_equation_on_variable denv bound_to ty)
+      DE.add_equation_on_variable denv bound_to var_ty)
   in
 (*
 Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
 *)
-  Reachable.reachable term, dacc, ty
+  Reachable.reachable term, dacc, var_ty
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
   let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
