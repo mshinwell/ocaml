@@ -135,4 +135,21 @@ module Make (Index : Identifiable.S) = struct
         Name_occurrences.union (Type_free_names.free_names ty) free_names)
       components_by_index
       Name_occurrences.empty
+
+  let map_types ({ components_by_index; } as t)
+        ~(f : Flambda_types.t -> Flambda_types.t Or_bottom.t)
+        : _ Or_bottom.t =
+    let found_bottom = ref false in
+    let components_by_index' =
+      Index.Map.map_sharing (fun ty ->
+          match f ty with
+          | Bottom ->
+            found_bottom := true;
+            ty
+          | Ok ty -> ty)
+        components_by_index
+    in
+    if !found_bottom then Bottom
+    else if components_by_index == components_by_index' then Ok t
+    else Ok { components_by_index = components_by_index'; }
 end

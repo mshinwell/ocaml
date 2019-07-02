@@ -39,3 +39,7 @@ let create closure_ids_map open_or_closed : t =
         Unit_and_closure_id_set.Map.empty
     in
     create_exactly_multiple closure_ids_map
+
+let map_closure_types t ~f =
+  map_maps_to t ~f:(fun closures_entry ->
+    Set_of_closures_entry.map_closure_types closures_entry ~f)

@@ -51,6 +51,11 @@ sig
 
   val is_bottom : t -> bool
 
+  val map_maps_to
+     : t
+    -> f:(Maps_to.t -> Maps_to.t Or_bottom.t)
+    -> t Or_bottom.t
+
   (** The [Maps_to] value which [meet] returns contains the join of all
       [Maps_to] values in the range of the row-like structure after the meet
       operation has been completed. *)

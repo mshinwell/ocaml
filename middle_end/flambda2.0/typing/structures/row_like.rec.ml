@@ -246,4 +246,33 @@ Format.eprintf "RL meet is returning bottom\n%!";
         Name_occurrences.empty
     in
     Name_occurrences.union from_known from_at_least
+
+  let map_maps_to { known; at_least; }
+        ~(f : Maps_to.t -> Maps_to.t Or_bottom.t)
+        : _ Or_bottom.t =
+    let found_bottom = ref false in
+    let known =
+      Tag_and_index.Map.map (fun maps_to ->
+          match f maps_to with
+          | Bottom ->
+            found_bottom := true;
+            maps_to
+          | Ok maps_to -> maps_to)
+        known
+    in
+    let at_least =
+      Index.Map.map (fun maps_to ->
+          match f maps_to with
+          | Bottom ->
+            found_bottom := true;
+            maps_to
+          | Ok maps_to -> maps_to)
+        at_least
+    in
+    if !found_bottom then Bottom
+    else
+      Ok { 
+        known;
+        at_least;
+      }
 end

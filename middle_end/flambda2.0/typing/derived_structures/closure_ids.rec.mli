@@ -25,6 +25,11 @@ val create
   -> open_or_closed
   -> t
 
+val map_closure_types
+   : t
+  -> f:(Flambda_types.t -> Flambda_types.t Or_bottom.t)
+  -> t Or_bottom.t
+
 include Type_structure_intf.S
   with type t := t
   with type flambda_type := Flambda_types.t
