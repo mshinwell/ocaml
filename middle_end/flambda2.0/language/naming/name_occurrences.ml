@@ -66,6 +66,33 @@ end) = struct
       num_occurrences = 0;
       by_kind = Kind.Map.empty;
     }
+
+    let downgrade_occurrences_at_strictly_greater_kind t max_kind =
+Format.eprintf "Before downgrade to <= %a:@ %a\n" Kind.print max_kind print t;
+      let strictly_less, at_max_kind, strictly_greater =
+        Kind.Map.split max_kind t.by_kind
+      in
+      let less_than_or_at_max_kind =
+        match at_max_kind with
+        | None -> strictly_less
+        | Some at_max_kind -> Kind.Map.add max_kind at_max_kind strictly_less
+      in
+      let num_occurrences_above_max_kind =
+        match Kind.Map.min_binding_opt strictly_greater with
+        | None -> 0
+        | Some (_kind, num) -> num
+      in
+      let by_kind =
+        Kind.Map.map (fun num -> num + num_occurrences_above_max_kind)
+          less_than_or_at_max_kind
+      in
+let t =
+      { num_occurrences = t.num_occurrences;
+        by_kind;
+      }
+in
+Format.eprintf "After downgrade:@ %a\n" print t;
+t
   end
 
   type t = For_one_name.t N.Map.t
@@ -237,6 +264,12 @@ end) = struct
       | None ->
         invariant t;
         assert false
+
+  let downgrade_occurrences_at_strictly_greater_kind t max_kind =
+    N.Map.map (fun for_one_name ->
+        For_one_name.downgrade_occurrences_at_strictly_greater_kind for_one_name
+          max_kind)
+      t
 end
 
 module For_variables = For_one_variety_of_names (struct
@@ -415,3 +448,22 @@ let only_contains_symbols { variables; continuations; symbols; } =
 
 let greatest_occurrence_kind_var t var =
   For_variables.greatest_occurrence_kind t.variables var
+
+let downgrade_occurrences_at_strictly_greater_kind
+      { variables; continuations; symbols; } max_kind =
+  let variables =
+    For_variables.downgrade_occurrences_at_strictly_greater_kind
+      variables max_kind
+  in
+  let continuations =
+    For_continuations.downgrade_occurrences_at_strictly_greater_kind
+      continuations max_kind
+  in
+  let symbols =
+    For_symbols.downgrade_occurrences_at_strictly_greater_kind
+      symbols max_kind
+  in
+  { variables;
+    continuations;
+    symbols;
+  }
