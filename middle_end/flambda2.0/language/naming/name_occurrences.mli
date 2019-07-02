@@ -76,3 +76,8 @@ val greatest_occurrence_kind_var
    : t
   -> Variable.t
   -> Name_occurrence_kind.Or_absent.t
+
+val downgrade_occurrences_at_strictly_greater_kind
+   : t
+  -> Name_occurrence_kind.t
+  -> t

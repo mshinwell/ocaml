@@ -91,11 +91,15 @@ let invariant env t =
 
 let defining_expr t = t.defining_expr
 
-let free_names ({ bound_var_and_body = _; name_occurrence_kind = _;
+let free_names ({ bound_var_and_body = _; name_occurrence_kind;
                   defining_expr; } as t) =
   pattern_match t ~f:(fun ~bound_var ~body ->
     let bound_var = Var_in_binding_pos.var bound_var in
-    let from_defining_expr = Named.free_names defining_expr in
+    let from_defining_expr =
+      Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+        (Named.free_names defining_expr)
+        name_occurrence_kind
+    in
     let from_body = Expr.free_names body in
     Name_occurrences.union from_defining_expr
       (Name_occurrences.remove_var from_body bound_var))
