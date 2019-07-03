@@ -151,6 +151,7 @@ and simplify_body_of_non_recursive_let_cont
         DE.with_typing_environment definition_denv typing_env
       in
       let dacc = DA.create definition_denv cont_uses_env r in
+      let original_cont_num_uses = DA.num_continuation_uses dacc cont in
       let cont_handler, additional_cont_handler, user_data, uacc =
         try
           simplify_one_continuation_handler dacc ~arg_types cont_handler k
@@ -167,48 +168,61 @@ and simplify_body_of_non_recursive_let_cont
       in
       let uenv = UA.uenv uacc in
       let uenv' = uenv in
-      let uenv =
+      (* If no wrapper was added, [cont_handler] is the original handler and
+         [additional_cont_handler] will be [None].
+         If a wrapper was added, [cont_handler] will be the wrapper and
+         [additional_cont_handler] will be [Some], the latter holding the
+         original handler (now bound to a fresh continuation). *)
+      let add_original_handler uenv cont cont_handler =
         if Continuation_handler.is_exn_handler cont_handler then
           match Continuation_handler.behaviour cont_handler with
           | Alias_for { arity; alias_for; } ->
             (* CR mshinwell: More checks here?  e.g. on the arity and
                ensuring the aliased continuation is an exn handler too *)
-            UE.add_continuation_alias uenv cont arity ~alias_for
-          | Unreachable _ | Unknown _ ->
-            UE.add_continuation uenv cont original_cont_scope_level arity
+            UE.add_continuation_alias uenv cont arity ~alias_for, arity
+          | Unreachable { arity; } | Unknown { arity; } ->
+            UE.add_continuation uenv cont original_cont_scope_level arity, arity
         else
           match Continuation_handler.behaviour cont_handler with
           | Unreachable { arity; } ->
             UE.add_unreachable_continuation uenv cont
-              original_cont_scope_level arity
+              original_cont_scope_level arity, arity
           | Alias_for { arity; alias_for; } ->
-            UE.add_continuation_alias uenv cont arity ~alias_for
+            UE.add_continuation_alias uenv cont arity ~alias_for, arity
           | Unknown { arity; } ->
-            let num_uses = DA.num_continuation_uses dacc cont in
-            if num_uses = 1 || Continuation_handler.stub cont_handler then
-              let wrapper_with_scope_and_arity =
-                match additional_cont_handler with
-                | None -> None
-                | Some (cont, cont_handler) ->
-                  let arity = Continuation_handler.arity cont_handler in
-                  Some (cont, original_cont_scope_level, arity)
-              in
-              UE.add_continuation_to_inline uenv cont
-                original_cont_scope_level arity
-                cont_handler
-                ~wrapper_with_scope_and_arity
-            else
-              UE.add_continuation uenv cont original_cont_scope_level arity
+            let can_inline =
+              original_cont_num_uses = 1
+                || Continuation_handler.stub cont_handler
+            in
+            let uenv =
+              if can_inline then
+                UE.add_continuation_to_inline uenv cont
+                  original_cont_scope_level arity
+                  cont_handler
+                  ~wrapped_cont_with_scope_and_arity:None
+              else
+                UE.add_continuation uenv cont original_cont_scope_level arity
+            in
+            uenv, arity
       in
       let uenv =
         match additional_cont_handler with
-        | None -> uenv
-        | Some (cont, cont_handler) ->
-          let arity = Continuation_handler.arity cont_handler in
+        | None ->
+          let uenv, _arity = add_original_handler uenv cont cont_handler in
+          uenv
+        | Some (fresh_cont, original_cont_handler) ->
+          let uenv, original_cont_arity =
+            add_original_handler uenv fresh_cont original_cont_handler
+          in
+          let wrapper_handler = cont_handler in
+          let wrapper_arity = Continuation_handler.arity wrapper_handler in
+          let wrapped_cont_with_scope_and_arity =
+            Some (fresh_cont, original_cont_scope_level, original_cont_arity)
+          in
           UE.add_continuation_to_inline uenv cont
-            wrapper_scope_level arity
-            cont_handler
-            ~wrapper_with_scope_and_arity:None
+            wrapper_scope_level wrapper_arity
+            wrapper_handler
+            ~wrapped_cont_with_scope_and_arity
       in
       let uacc = UA.with_uenv uacc uenv in
       (cont_handler, additional_cont_handler, uenv', user_data), uacc)
@@ -244,7 +258,7 @@ and simplify_non_recursive_let_cont_handler
 and simplify_recursive_let_cont_handlers
   : 'a. DA.t -> Recursive_let_cont_handlers.t -> 'a k -> Expr.t * 'a * UA.t
 = fun _dacc _rec_handlers _k ->
-  Misc.fatal_error "Temporarily disabled pending environment reorganisation"
+  Misc.fatal_error "Needs reworking to match non-recursive case"
 (*
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body cont_handlers ->
@@ -854,7 +868,7 @@ and simplify_apply_cont
          on the basis that there wouldn't be any opportunity to collect any
          backtrace, even if the [Apply_cont] were compiled as "raise". *)
       Expr.create_invalid (), user_data, uacc
-    | Inline { arity; handler; wrapper_with_scope_and_arity; } ->
+    | Inline { arity; handler; wrapped_cont_with_scope_and_arity; } ->
       (* CR mshinwell: With -g, we can end up with continuations that are
          just a sequence of phantom lets then "goto".  These would normally
          be treated as aliases, but of course aren't in this scenario,
@@ -886,10 +900,17 @@ and simplify_apply_cont
             let r = UA.r uacc in
             let dacc = DA.with_r dacc r in
             let dacc =
-              match wrapper_with_scope_and_arity with
+              (* When the continuation being applied has been wrapped, it will
+                 have been bound to a fresh continuation, with the wrapper
+                 taking the place of the original.  As such that fresh
+                 continuation must be added to the downwards accumulator. *)
+              match wrapped_cont_with_scope_and_arity with
               | None -> dacc
-              | Some (wrapper, definition_scope_level, arity) ->
-                DA.add_continuation dacc wrapper ~definition_scope_level arity
+              | Some (original_cont, original_cont_scope_level,
+                  original_arity) ->
+                DA.add_continuation dacc original_cont
+                  ~definition_scope_level:original_cont_scope_level
+                  original_arity
             in
             let dacc =
               DA.map_denv dacc ~f:(fun denv ->
