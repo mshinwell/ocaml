@@ -409,8 +409,13 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
         in
         Continuation_handler.create ~params_and_handler
           ~stub:false
-          ~is_exn_handler:true
+          ~is_exn_handler:false
       in
+(*
+Format.eprintf "dummy cont %a, return cont %a\n%!"
+  Continuation.print dummy_cont
+  Continuation.print computation.return_continuation;
+*)
       let expr, _dummy_cont_handler, additional_cont_handler,
           (used_computed_values, static_structure, dacc), uacc =
         Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
