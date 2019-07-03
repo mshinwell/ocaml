@@ -56,11 +56,11 @@ let rec simplify_let
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> arg_types:T.t list -> Continuation_handler.t
+  : 'a. DA.t -> arg_types:T.t list -> Continuation.t -> Continuation_handler.t
     -> 'a k 
     -> Continuation_handler.t
          * ((Continuation.t * Continuation_handler.t) option) * 'a * UA.t
-= fun dacc ~arg_types cont_handler k ->
+= fun dacc ~arg_types _cont cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
@@ -84,6 +84,11 @@ and simplify_one_continuation_handler
       | [] -> cont_handler, None, user_data, uacc
       | _::_ ->
         let original_cont = Continuation.create () in
+(*
+Format.eprintf "Fresh cont for original %a is %a\n%!"
+  Continuation.print cont
+  Continuation.print original_cont;
+*)
         let wrapper_cont_handler =
           Continuation_handler.create
             ~params_and_handler:
@@ -154,7 +159,7 @@ and simplify_body_of_non_recursive_let_cont
       let original_cont_num_uses = DA.num_continuation_uses dacc cont in
       let cont_handler, additional_cont_handler, user_data, uacc =
         try
-          simplify_one_continuation_handler dacc ~arg_types cont_handler k
+          simplify_one_continuation_handler dacc ~arg_types cont cont_handler k
         with Misc.Fatal_error -> begin
           Format.eprintf "\n%sContext is:%s simplifying continuation \
               handler@ %a@ \
