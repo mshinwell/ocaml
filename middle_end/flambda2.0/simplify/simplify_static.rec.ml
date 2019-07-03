@@ -36,13 +36,19 @@ module Static_part = Flambda_static.Static_part
 module Static_structure = Flambda_static.Program_body.Static_structure
 
 module Return_continuation_handler = struct
-  type t = ...
+  type t = {
+    computed_values : Kinded_parameter.t list;
+    static_structure : Static_structure.t;
+  }
+
+  let free_names { computed_values; static_structure; } =
+    Name_occurrences.union (Kinded_parameter.List.free_names computed_values)
+      (Static_structure.free_names static_structure)
 
   let is_exn_handler _t = false
   let stub _t = false
 
-  let arity t =
-    ...
+  let arity t = Kinded_parameter.List.arity t.computed_values
 
   type behaviour =
     | Unreachable of { arity : Flambda_arity.t; }
@@ -377,25 +383,21 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler ... =
-  let definition_denv =
-    DE.increment_continuation_scope_level definition_denv
-  in
-  let definition_denv =
-    DE.add_lifted_constants definition_denv
-      (R.get_lifted_constants r)
-  in
+let simplify_return_continuation_handler dacc ~arg_types cont
+      (return_cont_handler : Return_cont_handler.t) k
+      : Return_cont_handler.t Generic_simplify_let_cont.result * _ * _ =
+  let denv = DA.denv dacc in
+  let denv = DE.increment_continuation_scope_level denv in
+  let denv = DE.add_lifted_constants denv (R.get_lifted_constants r) in
   let typing_env, arg_types =
     CUE.continuation_env_and_arg_types cont_uses_env
-      ~definition_typing_env:(DE.typing_env definition_denv)
+      ~definition_typing_env:(DE.typing_env denv)
       computation.return_continuation
   in
   assert (List.compare_lengths arg_types
-    computation.computed_values = 0);
-  let definition_denv =
-    DE.with_typing_environment definition_denv typing_env
-  in
-  let dacc = DA.create definition_denv cont_uses_env r in
+    return_cont_handler.computed_values = 0);
+  let denv = DE.with_typing_environment denv typing_env in
+  let dacc = DA.create denv cont_uses_env r in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       List.fold_left2 (fun denv ty param ->
@@ -406,30 +408,30 @@ let simplify_return_continuation_handler ... =
           let kind = KP.kind param in
           assert (Flambda_kind.equal (T.kind ty) kind);
           DE.add_variable denv var ty)
-        (DE.with_typing_environment denv typing_env)
+        (DA.denv dacc)
         arg_types computation.computed_values)
   in
   let dacc, static_structure =
     simplify_static_structure dacc defn.static_structure
   in
-  let free_variables =
-    Static_structure.free_variables static_structure
-  in
+  let free_variables = Static_structure.free_variables static_structure in
   let used_computed_values =
     List.map (fun param ->
         Variable.Set.mem (KP.var param) free_variables)
       computation.computed_values
   in
-  let uenv =
-    UE.add_continuation UE.empty dummy_cont dummy_cont_scope
-      return_cont_arity
+  let return_cont_handler : Return_cont_handler.t =
+    { computed_values = used_computed_values;
+      static_structure;
+    }
   in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let uenv =
     UE.add_exn_continuation uenv computation.exn_continuation
       exn_cont_scope
   in
   let uacc = UA.create uenv r in
-  (used_computed_values, static_structure, dacc), uacc)
+  No_wrapper return_cont_handler, user_data, uacc
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
@@ -440,18 +442,19 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       dacc, None, static_structure
     | Some computation ->
-      let return_continuation_handler =
-        Return_continuation_handler.create computation
-          ...
+      let return_cont_handler : Return_cont_handler.t =
+        { computed_values = computation.computed_values;
+          static_structure = defn.static_structure;
+        }
       in
       let expr, _dummy_cont_handler, additional_cont_handler,
           (used_computed_values, static_structure, dacc), uacc =
         Simplify_return_cont.simplify_body_of_non_recursive_let_cont dacc
           computation.return_continuation
-          return_continuation_handler
+          return_cont_handler
           ~body:computation.expr
           simplify_return_continuation_handler
-          (fun cont_uses_env r -> ...)
+          (fun _cont_uses_env r -> (), (UA.with_r uacc r))
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
       let computed_values =

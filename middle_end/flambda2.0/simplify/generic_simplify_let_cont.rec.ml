@@ -40,6 +40,8 @@ type 'a result =
 module Make (Continuation_handler_like : sig
   type t
 
+  val free_names : t -> Name_occurrences.t
+
   val is_exn_handler : t -> bool
 
   val stub : t -> bool
