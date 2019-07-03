@@ -72,7 +72,7 @@ val resolve_ty
 val resolve_type
    : t
   -> Flambda_types.t
-  -> Flambda_types.resolved
+  -> Simple.t option * Flambda_types.resolved
 
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
 

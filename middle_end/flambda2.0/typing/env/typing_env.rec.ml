@@ -715,7 +715,8 @@ let resolve_ty (type a) t
             print t;
           invariant_should_fail t
 
-let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
+let resolve_type t (ty : Flambda_types.t)
+      : Simple.t option * Flambda_types.resolved =
   match ty with
   | Value ty_value ->
     let unknown_or_join, canonical_simple =
@@ -727,10 +728,10 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     in
     begin match Option.map Simple.descr canonical_simple with
     (* CR mshinwell: add more kind checking & improve error messages *)
-    | Some (Const const) -> Const const
+    | Some (Const const) -> canonical_simple, Const const
     | Some (Discriminant _) -> Misc.fatal_error "Kind error"
     | Some (Name _)
-    | None -> Resolved (Resolved_value unknown_or_join)
+    | None -> canonical_simple, Resolved (Resolved_value unknown_or_join)
     end
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join, canonical_simple =
@@ -742,11 +743,13 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     in
     begin match Option.map Simple.descr canonical_simple with
     | Some (Const ((Naked_immediate _ | Naked_float _ | Naked_int32 _
-        | Naked_int64 _ | Naked_nativeint _) as const)) -> Const const
+        | Naked_int64 _ | Naked_nativeint _) as const)) ->
+      canonical_simple, Const const
     | Some (Const (Tagged_immediate _))
     | Some (Discriminant _) -> Misc.fatal_error "Kind error"
     | Some (Name _)
-    | None -> Resolved (Resolved_naked_number (unknown_or_join, kind))
+    | None ->
+      canonical_simple, Resolved (Resolved_naked_number (unknown_or_join, kind))
     end
   | Fabricated ty_fabricated ->
     let unknown_or_join, canonical_simple =
@@ -758,9 +761,10 @@ let resolve_type t (ty : Flambda_types.t) : Flambda_types.resolved =
     in
     begin match Option.map Simple.descr canonical_simple with
     | Some (Const _) -> Misc.fatal_error "Kind error"
-    | Some (Discriminant discr) -> Discriminant discr
+    | Some (Discriminant discr) -> canonical_simple, Discriminant discr
     | Some (Name _)
-    | None -> Resolved (Resolved_fabricated unknown_or_join)
+    | None ->
+      canonical_simple, Resolved (Resolved_fabricated unknown_or_join)
     end
 
 let aliases_of_simple_allowable_in_types t simple =

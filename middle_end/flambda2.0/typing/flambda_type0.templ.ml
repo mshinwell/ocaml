@@ -82,7 +82,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     List.map (fun kind -> unknown kind) arity
 
   let is_bottom env t =
-    match Typing_env.resolve_type env t with
+    match snd (Typing_env.resolve_type env t) with
     | Resolved (Resolved_value Bottom)
     | Resolved (Resolved_naked_number (Bottom, _))
     | Resolved (Resolved_fabricated Bottom) -> true
@@ -187,7 +187,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
-    match Typing_env.resolve_type env t with
+    match snd (Typing_env.resolve_type env t) with
     | Const _ | Discriminant _ -> Invalid
     | Resolved resolved ->
       match resolved with
@@ -215,20 +215,28 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   type reification_result =
     | Lift of to_lift
+    | Simple of Simple.t
     | Cannot_reify
     | Invalid
 
   let reify env t : reification_result =
     match Typing_env.resolve_type env t with
-    | Const _ | Discriminant _ -> Cannot_reify
-    | Resolved resolved ->
+    | None, (Const _ | Discriminant _) -> Cannot_reify
+    | Some canonical_simple, (Const _ | Discriminant _) ->
+      Simple canonical_simple
+    | canonical_simple, Resolved resolved ->
+      let try_canonical_simple () =
+        match canonical_simple with
+        | None -> Cannot_reify
+        | Some canonical_simple -> Simple canonical_simple
+      in
       match resolved with
       | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Known blocks, Known imms ->
           if Immediates.is_bottom imms then
             begin match Blocks.get_singleton blocks with
-            | None -> Cannot_reify
+            | None -> try_canonical_simple ()
             | Some ((tag, size), field_types) ->
               assert (Targetint.OCaml.equal size
                 (Blocks.Int_indexed_product.width field_types));
@@ -248,13 +256,13 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
               if List.compare_lengths field_types symbols = 0 then
                 match Tag.Scannable.of_tag tag with
                 | Some tag -> Lift (Immutable_block (tag, symbols))
-                | None -> Cannot_reify
+                | None -> try_canonical_simple ()
               else
-                Cannot_reify
+                try_canonical_simple ()
             end
           else
-            Cannot_reify
-        | _, _ -> Cannot_reify
+            try_canonical_simple ()
+        | _, _ -> try_canonical_simple ()
         end
 (*
       | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
@@ -276,5 +284,5 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value Bottom
       | Resolved_naked_number (Bottom, _)
       | Resolved_fabricated Bottom -> Invalid
-      | _ -> Cannot_reify
+      | _ -> try_canonical_simple ()
 end
