@@ -409,7 +409,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
         in
         Continuation_handler.create ~params_and_handler
           ~stub:false
-          ~is_exn_handler:false
+          ~is_exn_handler:true
       in
       let expr, _dummy_cont_handler, additional_cont_handler,
           (used_computed_values, static_structure, dacc), uacc =
