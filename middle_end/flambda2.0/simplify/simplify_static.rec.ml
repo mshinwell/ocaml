@@ -389,6 +389,9 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       let dacc = DA.with_denv dacc denv in
       let dummy_cont_handler =
+        (* CR mshinwell: Try to rework this so the dummy stuff isn't
+           necessary.  Then we can remove [never_inline] on
+           [Continuation_handler], too. *)
         (* The handler will never be executed.  It just needs to be an
            expression that cannot be simplified away and must have the
            [computed_values] as free variables.  This will then enable the

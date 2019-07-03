@@ -326,6 +326,7 @@ module type S = sig
 
   type reification_result = private
     | Lift of to_lift
+    | Simple of Simple.t
     | Cannot_reify
     | Invalid
 

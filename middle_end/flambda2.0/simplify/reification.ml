@@ -92,7 +92,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
     | Invalid _ -> 
       let ty = T.bottom_like ty in
       let denv = DE.add_equation_on_variable denv bound_to ty in
-      term, (DA.with_denv dacc denv), ty
+      term, DA.with_denv dacc denv, ty
     | Reachable _ ->
       match T.reify (DE.typing_env denv) ty with
       | Lift to_lift ->
@@ -100,6 +100,9 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~cannot_lift =
         else
           let static_part = create_static_part to_lift in
           lift dacc ty ~bound_to static_part
+      | Simple simple ->
+        let term = Named.create_simple simple in
+        Reachable.reachable term, dacc, ty
       | Cannot_reify -> term, dacc, ty
       | Invalid ->
         let ty = T.bottom_like ty in
