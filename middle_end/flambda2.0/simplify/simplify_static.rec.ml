@@ -35,6 +35,28 @@ module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
 module Static_structure = Flambda_static.Program_body.Static_structure
 
+module Return_continuation_handler = struct
+  type t = ...
+
+  let is_exn_handler _t = false
+  let stub _t = false
+
+  let arity t =
+    ...
+
+  type behaviour =
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
+
+  let behaviour t = Unknown { arity = arity t; }
+
+  let real_handler _t = None
+end
+
+module Simplify_return_cont =
+  Generic_simplify_let_cont.Make (Return_continuation_handler)
+
 (* CR-someday mshinwell: Add improved simplification using types (we have
    prototype code to do this). *)
 
@@ -355,6 +377,60 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
+let simplify_return_continuation_handler ... =
+  let definition_denv =
+    DE.increment_continuation_scope_level definition_denv
+  in
+  let definition_denv =
+    DE.add_lifted_constants definition_denv
+      (R.get_lifted_constants r)
+  in
+  let typing_env, arg_types =
+    CUE.continuation_env_and_arg_types cont_uses_env
+      ~definition_typing_env:(DE.typing_env definition_denv)
+      computation.return_continuation
+  in
+  assert (List.compare_lengths arg_types
+    computation.computed_values = 0);
+  let definition_denv =
+    DE.with_typing_environment definition_denv typing_env
+  in
+  let dacc = DA.create definition_denv cont_uses_env r in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      List.fold_left2 (fun denv ty param ->
+          let var =
+            Var_in_binding_pos.create (KP.var param)
+              Name_occurrence_kind.normal
+          in
+          let kind = KP.kind param in
+          assert (Flambda_kind.equal (T.kind ty) kind);
+          DE.add_variable denv var ty)
+        (DE.with_typing_environment denv typing_env)
+        arg_types computation.computed_values)
+  in
+  let dacc, static_structure =
+    simplify_static_structure dacc defn.static_structure
+  in
+  let free_variables =
+    Static_structure.free_variables static_structure
+  in
+  let used_computed_values =
+    List.map (fun param ->
+        Variable.Set.mem (KP.var param) free_variables)
+      computation.computed_values
+  in
+  let uenv =
+    UE.add_continuation UE.empty dummy_cont dummy_cont_scope
+      return_cont_arity
+  in
+  let uenv =
+    UE.add_exn_continuation uenv computation.exn_continuation
+      exn_cont_scope
+  in
+  let uacc = UA.create uenv r in
+  (used_computed_values, static_structure, dacc), uacc)
+
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
     match defn.computation with
@@ -364,117 +440,18 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       dacc, None, static_structure
     | Some computation ->
-      let return_cont_arity = KP.List.arity computation.computed_values in
-      let denv = DA.denv dacc in
-      let definition_denv = denv in
-      assert (Scope.equal (DE.get_continuation_scope_level denv)
-        Scope.initial);
-      let wrapper_cont_scope = Scope.initial in
-      let dummy_cont_scope = Scope.next wrapper_cont_scope in
-      let exn_cont_scope = Scope.next dummy_cont_scope in
-      let dacc =
-        DA.add_exn_continuation dacc computation.exn_continuation
-          ~definition_scope_level:exn_cont_scope
+      let return_continuation_handler =
+        Return_continuation_handler.create computation
+          ...
       in
-      let dummy_cont = Continuation.create () in
-      let dacc =
-        DA.add_continuation dacc dummy_cont
-          ~definition_scope_level:dummy_cont_scope
-          return_cont_arity
-      in
-      let denv =
-        DE.increment_continuation_scope_level
-          (DE.increment_continuation_scope_level
-            (DE.increment_continuation_scope_level denv))
-      in
-      let dacc = DA.with_denv dacc denv in
-      let dummy_cont_handler =
-        (* CR mshinwell: Try to rework this so the dummy stuff isn't
-           necessary. *)
-        (* The handler will never be executed.  It just needs to be an
-           expression that cannot be simplified away and must have the
-           [computed_values] as free variables.  This will then enable the
-           usual unused continuation parameter removal algorithm to work
-           automatically on the return continuation. *)
-        let handler =
-          let apply_cont =
-            Apply_cont.create dummy_cont
-              ~args:(KP.List.simples computation.computed_values)
-          in
-          Expr.create_apply_cont apply_cont
-        in
-        let params_and_handler =
-          Continuation_params_and_handler.create computation.computed_values
-            ~handler
-        in
-        Continuation_handler.create ~params_and_handler
-          ~stub:false
-          ~is_exn_handler:false
-      in
-(*
-Format.eprintf "dummy cont %a, return cont %a\n%!"
-  Continuation.print dummy_cont
-  Continuation.print computation.return_continuation;
-*)
       let expr, _dummy_cont_handler, additional_cont_handler,
           (used_computed_values, static_structure, dacc), uacc =
-        Simplify_expr.simplify_body_of_non_recursive_let_cont dacc
+        Simplify_return_cont.simplify_body_of_non_recursive_let_cont dacc
           computation.return_continuation
-          dummy_cont_handler
+          return_continuation_handler
           ~body:computation.expr
-          (fun cont_uses_env r ->
-            let definition_denv =
-              DE.increment_continuation_scope_level definition_denv
-            in
-            let definition_denv =
-              DE.add_lifted_constants definition_denv
-                (R.get_lifted_constants r)
-            in
-            let typing_env, arg_types =
-              CUE.continuation_env_and_arg_types cont_uses_env
-                ~definition_typing_env:(DE.typing_env definition_denv)
-                computation.return_continuation
-            in
-            assert (List.compare_lengths arg_types
-              computation.computed_values = 0);
-            let definition_denv =
-              DE.with_typing_environment definition_denv typing_env
-            in
-            let dacc = DA.create definition_denv cont_uses_env r in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
-                List.fold_left2 (fun denv ty param ->
-                    let var =
-                      Var_in_binding_pos.create (KP.var param)
-                        Name_occurrence_kind.normal
-                    in
-                    let kind = KP.kind param in
-                    assert (Flambda_kind.equal (T.kind ty) kind);
-                    DE.add_variable denv var ty)
-                  (DE.with_typing_environment denv typing_env)
-                  arg_types computation.computed_values)
-            in
-            let dacc, static_structure =
-              simplify_static_structure dacc defn.static_structure
-            in
-            let free_variables =
-              Static_structure.free_variables static_structure
-            in
-            let used_computed_values =
-              List.map (fun param ->
-                  Variable.Set.mem (KP.var param) free_variables)
-                computation.computed_values
-            in
-            let uenv =
-              UE.add_continuation UE.empty dummy_cont dummy_cont_scope
-                return_cont_arity
-            in
-            let uenv =
-              UE.add_exn_continuation uenv computation.exn_continuation
-                exn_cont_scope
-            in
-            let uacc = UA.create uenv r in
-            (used_computed_values, static_structure, dacc), uacc)
+          simplify_return_continuation_handler
+          (fun cont_uses_env r -> ...)
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
       let computed_values =
