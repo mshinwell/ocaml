@@ -129,6 +129,8 @@ module Program_body : sig
 
     val free_variables : t -> Variable.Set.t
 
+    val free_names : t -> Name_occurrences.t
+
     val delete_bindings : t -> allowed:Symbol.Set.t -> t
   end
 
