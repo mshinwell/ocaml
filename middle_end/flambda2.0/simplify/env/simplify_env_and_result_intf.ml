@@ -151,7 +151,7 @@ module type Upwards_env = sig
     -> Scope.t
     -> Flambda_arity.t
     -> Continuation_handler.t
-    -> wrapper_with_scope_and_arity:
+    -> wrapped_cont_with_scope_and_arity:
          (Continuation.t * Scope.t * Flambda_arity.t) option
     -> t
 

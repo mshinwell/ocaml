@@ -357,9 +357,9 @@ end = struct
     }
 
   let add_continuation_to_inline t cont scope arity handler
-        ~wrapper_with_scope_and_arity =
+        ~wrapped_cont_with_scope_and_arity =
     add_continuation0 t cont scope 
-      (Inline { arity; handler; wrapper_with_scope_and_arity; })
+      (Inline { arity; handler; wrapped_cont_with_scope_and_arity; })
 
   let add_exn_continuation t exn_cont scope =
     (* CR mshinwell: Think more about keeping these in both maps *)
