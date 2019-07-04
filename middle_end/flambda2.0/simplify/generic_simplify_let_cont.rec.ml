@@ -27,8 +27,6 @@ module UA = Upwards_acc
 module UE = Simplify_env_and_result.Upwards_env
 module VB = Var_in_binding_pos
 
-type 'a k = CUE.t -> R.t -> ('a * UA.t)
-
 type 'a result =
   | No_wrapper of 'a
   | With_wrapper of {
@@ -40,7 +38,7 @@ type 'a result =
 module Make (Continuation_handler_like : sig
   type t
 
-  val free_names : t -> Name_occurrences.t
+  val print : Format.formatter -> t -> unit
 
   val is_exn_handler : t -> bool
 
@@ -58,18 +56,7 @@ module Make (Continuation_handler_like : sig
   val real_handler : t -> Continuation_handler.t option
 end) = struct
   let simplify_body_of_non_recursive_let_cont
-    : 'a. DA.t -> Continuation.t -> Continuation_handler_like.t
-      -> body:Expr.t
-      -> (Downwards_acc.t
-        -> arg_types:Flambda_type.t list
-        -> Continuation.t
-        -> Continuation_handler_like.t
-        -> (Continuation_uses_env.t
-          -> Simplify_env_and_result.Result.t
-          -> ('a * Upwards_acc.t))
-        -> Continuation_handler_like.t result * 'a * Upwards_acc.t)
-      -> Expr.t * result * 'a * UA.t
-  = fun dacc cont cont_handler ~body simplify_continuation_handler_like k ->
+        dacc cont cont_handler ~body simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
     let body, (result, uenv', user_data), uacc =
       let arity = Continuation_handler_like.arity cont_handler in
@@ -91,7 +78,7 @@ end) = struct
         DA.add_continuation dacc cont
           ~definition_scope_level:original_cont_scope_level arity
       in
-      simplify_expr dacc body (fun cont_uses_env r ->
+      Simplify_expr.simplify_expr dacc body (fun cont_uses_env r ->
         (* The environment currently in [dacc] is not the correct environment
            for simplifying the handler. Instead, we must use the environment
            of the [Let_cont] definition itself, augmented with any lifted
@@ -177,11 +164,12 @@ end) = struct
             uenv
           | With_wrapper { wrapper; renamed_original_cont; original; } ->
             let uenv, original_cont_arity =
-              add_original_handler uenv fresh_cont original
+              add_original_handler uenv renamed_original_cont original
             in
             let wrapper_arity = Continuation_handler.arity wrapper in
             let wrapped_cont_with_scope_and_arity =
-              Some (fresh_cont, original_cont_scope_level, original_cont_arity)
+              Some (renamed_original_cont, original_cont_scope_level,
+                original_cont_arity)
             in
             UE.add_continuation_to_inline uenv cont
               wrapper_scope_level wrapper_arity wrapper

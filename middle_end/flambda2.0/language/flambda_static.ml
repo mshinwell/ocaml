@@ -397,6 +397,9 @@ module Program_body = struct
             (Static_part.print_with_cache ~cache) static_part)
         ppf pieces
 
+    let print ppf t =
+      print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
     let is_empty (S pieces) =
       match pieces with
       | [] -> true

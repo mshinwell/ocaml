@@ -2,6 +2,8 @@
   (targets simplify.ml)
   (deps
     rec_modules
+    generic_simplify_let_cont.rec.ml
+    generic_simplify_let_cont.rec.mli
     simplify.templ.ml
     simplify_expr.rec.ml
     simplify_named.rec.ml
