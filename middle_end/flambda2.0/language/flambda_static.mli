@@ -123,13 +123,13 @@ module Program_body : sig
     (* CR mshinwell: Add a creation function *)
     (* CR mshinwell: make [t] abstract *)
 
+    val print : Format.formatter -> t -> unit
+
     val is_empty : t -> bool
 
     val being_defined : t -> Symbol.Set.t
 
     val free_variables : t -> Variable.Set.t
-
-    val free_names : t -> Name_occurrences.t
 
     val delete_bindings : t -> allowed:Symbol.Set.t -> t
   end

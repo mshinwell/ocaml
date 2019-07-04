@@ -23,7 +23,7 @@
     a return continuation, in addition to normal [Let_cont] constructs.
 *)
 
-type 'a result = private
+type 'a result =
   | No_wrapper of 'a
   | With_wrapper of {
       wrapper : Flambda.Continuation_handler.t;
@@ -34,7 +34,7 @@ type 'a result = private
 module Make (Continuation_handler_like : sig
   type t
 
-  val free_names : t -> Name_occurrences.t
+  val print : Format.formatter -> t -> unit
 
   val is_exn_handler : t -> bool
 

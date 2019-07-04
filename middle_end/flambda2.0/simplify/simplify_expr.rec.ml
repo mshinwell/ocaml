@@ -38,7 +38,7 @@ type 'a k = CUE.t -> R.t -> ('a * UA.t)
 
 module Continuation_handler = struct
   include Continuation_handler
-  let real_handler t = t
+  let real_handler t = Some t
 end
 
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
@@ -65,13 +65,12 @@ let rec simplify_let
 and simplify_one_continuation_handler
   : 'a. DA.t -> arg_types:T.t list -> Continuation.t -> Continuation_handler.t
     -> 'a k 
-    -> Continuation_handler.t
-         * ((Continuation.t * Continuation_handler.t) option) * 'a * UA.t
+    -> Continuation_handler.t Generic_simplify_let_cont.result * 'a * UA.t
 = fun dacc ~arg_types _cont cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
-    ~f:(fun params ~handler ->
+    ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
@@ -83,31 +82,34 @@ and simplify_one_continuation_handler
             Name_occurrences.mem_var free_names (KP.var param))
           params
       in
-      let cont_handler =
+      let original =
         CH.with_params_and_handler cont_handler
           (CPH.create used_params ~handler)
       in
       match unused_params with
-      | [] -> cont_handler, None, user_data, uacc
+      | [] -> No_wrapper original, user_data, uacc
       | _::_ ->
-        let original_cont = Continuation.create () in
+        let renamed_original_cont = Continuation.create () in
 (*
 Format.eprintf "Fresh cont for original %a is %a\n%!"
   Continuation.print cont
   Continuation.print original_cont;
 *)
-        let wrapper_cont_handler =
+        let wrapper =
           Continuation_handler.create
             ~params_and_handler:
               (Continuation_params_and_handler.create params ~handler:
                 (Expr.create_apply_cont (
-                  Apply_cont.create original_cont
+                  Apply_cont.create renamed_original_cont
                     ~args:(KP.List.simples used_params))))
             ~stub:true
             ~is_exn_handler:false
         in
-        wrapper_cont_handler, Some (original_cont, cont_handler),
-          user_data, uacc)
+        With_wrapper {
+          wrapper;
+          renamed_original_cont;
+          original;
+        }, user_data, uacc)
 
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
@@ -115,19 +117,19 @@ and simplify_non_recursive_let_cont_handler
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let body, cont_handler, additional_cont_handler, user_data, uacc =
+      let body, result, user_data, uacc =
         Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
-          cont cont_handler ~body k
+          cont cont_handler ~body simplify_one_continuation_handler k
       in
-      match additional_cont_handler with
-      | None ->
-        Let_cont.create_non_recursive cont cont_handler ~body,
+      match result with
+      | No_wrapper original ->
+        Let_cont.create_non_recursive cont original ~body,
           user_data, uacc
-      | Some (additional_cont, additional_cont_handler) ->
-        (* CR mshinwell: Isn't [additional_cont] always unused, since the
+      | With_wrapper { wrapper; renamed_original_cont; original; } ->
+        (* CR mshinwell: Isn't [cont] always unused, since the
            inlining-out of the wrapper has been performed already? *)
-        Let_cont.create_non_recursive additional_cont additional_cont_handler
-            ~body:(Let_cont.create_non_recursive cont cont_handler ~body),
+        Let_cont.create_non_recursive renamed_original_cont original
+            ~body:(Let_cont.create_non_recursive cont wrapper ~body),
           user_data, uacc)
 
 (* CR mshinwell: We should not simplify recursive continuations with no
