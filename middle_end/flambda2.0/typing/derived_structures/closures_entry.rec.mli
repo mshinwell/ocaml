@@ -22,9 +22,10 @@ val create_bottom : unit -> t
 
 val widen : t -> to_match:t -> t
 
-val map_closure_types
+val map_function_decl_types
    : t
-  -> f:(Flambda_types.t -> Flambda_types.t Or_bottom.t)
+  -> f:(Flambda_types.function_declaration
+    -> Flambda_types.function_declaration Or_bottom.t)
   -> t Or_bottom.t
 
 include Type_structure_intf.S

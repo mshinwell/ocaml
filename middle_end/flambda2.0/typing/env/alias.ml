@@ -102,6 +102,11 @@ let simple t = t.simple
 let kind t = t.kind
 let name_occurrence_kind t = t.name_occurrence_kind
 
+let name t =
+  match Simple.descr t.simple with
+  | Name name -> Some name
+  | _ -> None
+
 let implicitly_bound_and_canonical t =
   match Simple.descr t.simple with
   | Const _ | Discriminant _ -> true

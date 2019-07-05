@@ -199,8 +199,9 @@ and simplify_let_cont
 
 and simplify_direct_full_application
   : 'a. DA.t -> Apply.t -> (Function_declaration.t * Rec_info.t) option
+    -> result_arity:Flambda_arity.t
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply function_decl_opt k ->
+= fun dacc apply function_decl_opt ~result_arity k ->
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
@@ -230,6 +231,18 @@ and simplify_direct_full_application
   match inlined with
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
   | None ->
+    let dacc =
+      DA.record_continuation_use dacc (Apply.continuation apply)
+        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~arg_types:(T.unknown_types_from_arity result_arity)
+    in
+    let dacc =
+      DA.record_continuation_use dacc
+        (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~arg_types:(T.unknown_types_from_arity (
+          Exn_continuation.arity (Apply.exn_continuation apply)))
+    in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let return_cont =
       UE.resolve_continuation_aliases (UA.uenv uacc) (Apply.continuation apply)
@@ -447,16 +460,12 @@ and simplify_direct_function_call
       ~return_arity:result_arity
   in
   let apply = Apply.with_call_kind apply call_kind in
-  let dacc =
-    DA.record_continuation_use dacc (Apply.continuation apply)
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
-      ~arg_types:(T.unknown_types_from_arity result_arity)
-  in
   let args = Apply.args apply in
   let provided_num_args = List.length args in
   let num_params = List.length param_arity in
   if provided_num_args = num_params then
-    simplify_direct_full_application dacc apply function_decl_opt k
+    simplify_direct_full_application dacc apply function_decl_opt
+      ~result_arity k
   else if provided_num_args > num_params then
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
@@ -476,6 +485,13 @@ and simplify_function_call_where_callee's_type_unavailable
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
+  let dacc =
+    DA.record_continuation_use dacc
+      (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~arg_types:(T.unknown_types_from_arity (
+        Exn_continuation.arity (Apply.exn_continuation apply)))
+  in
   let check_return_arity_and_record_return_cont_use ~return_arity =
 (*
     let cont_arity = DA.continuation_arity dacc cont in
@@ -494,18 +510,8 @@ and simplify_function_call_where_callee's_type_unavailable
     match call with
     | Indirect_unknown_arity ->
       let dacc =
-        try
-          DA.record_continuation_use dacc (Apply.continuation apply)
-            ~typing_env_at_use ~arg_types:[T.any_value ()]
-        with Misc.Fatal_error -> begin
-          Format.eprintf "\n%sContext is:%s simplifying [Apply]@ %a@ \
-              with downwards accumulator:@ %a\n"
-            (Flambda_colours.error ())
-            (Flambda_colours.normal ())
-            Apply.print apply
-            DA.print dacc;
-          raise Misc.Fatal_error
-        end
+        DA.record_continuation_use dacc (Apply.continuation apply)
+          ~typing_env_at_use ~arg_types:[T.any_value ()]
       in
       Call_kind.indirect_function_call_unknown_arity (), dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
@@ -576,6 +582,12 @@ and simplify_function_call
         | None -> rec_info
         | Some newer -> Rec_info.merge rec_info ~newer
       in
+(*
+Format.eprintf "For call to %a: callee's rec info is %a, rec info from type of function is %a\n%!"
+  Simple.print (Apply.callee apply)
+  (Misc.Stdlib.Option.print Rec_info.print) (Simple.rec_info (Apply.callee apply))
+  Rec_info.print function_decl_rec_info;
+*)
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
         ~param_arity:(Function_declaration.params_arity function_decl)
@@ -650,6 +662,13 @@ and simplify_method_call
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
   in
+  let dacc =
+    DA.record_continuation_use dacc
+      (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~arg_types:(T.unknown_types_from_arity (
+        Exn_continuation.arity (Apply.exn_continuation apply)))
+  in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
@@ -690,6 +709,14 @@ and simplify_c_call
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
+  in
+  let dacc =
+    (* CR mshinwell: Try to factor out these stanzas, here and above. *)
+    DA.record_continuation_use dacc
+      (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~arg_types:(T.unknown_types_from_arity (
+        Exn_continuation.arity (Apply.exn_continuation apply)))
   in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been

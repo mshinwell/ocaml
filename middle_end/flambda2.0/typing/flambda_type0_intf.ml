@@ -114,6 +114,12 @@ module type S = sig
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Variable.Set.t
+
+    (*val merge_rec_info_for_simple_and_all_aliases
+       : t
+      -> Simple.descr
+      -> newer_rec_info:Rec_info.t
+      -> t*)
   end
 
   val meet_shape
@@ -350,4 +356,9 @@ module type S = sig
      : Typing_env.t
     -> t
     -> (Closure_id.t * function_declaration Or_unknown.t) proof
+
+  val apply_rec_info
+     : flambda_type
+    -> Rec_info.t
+    -> flambda_type Or_bottom.t
 end

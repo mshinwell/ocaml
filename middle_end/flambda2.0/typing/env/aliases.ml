@@ -418,8 +418,11 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
     let t = add_implicitly_bound_canonical_element t element in
     match canonical t element with
     | Is_canonical canonical_element ->
-      Aliases_of_canonical_element.all
-        (get_aliases_of_canonical_element t ~canonical_element)
+      let aliases =
+        Aliases_of_canonical_element.all
+          (get_aliases_of_canonical_element t ~canonical_element)
+      in
+      E.Set.add element aliases
     | Alias_of_canonical { element = _; canonical_element; } ->
       assert (not (E.equal element canonical_element));
       let aliases =
