@@ -71,26 +71,10 @@ let with_continuation_uses_env t continuation_uses_env =
     continuation_uses_env;
   }
 
-let add_continuation t cont ~definition_scope_level arity =
-  with_continuation_uses_env t (
-    CUE.add_continuation t.continuation_uses_env cont ~definition_scope_level
-      arity)
-
-let add_exn_continuation t exn_cont ~definition_scope_level =
-  with_continuation_uses_env t (
-    CUE.add_exn_continuation t.continuation_uses_env ~definition_scope_level
-      exn_cont)
-
 let record_continuation_use t cont ~typing_env_at_use ~arg_types =
   with_continuation_uses_env t (
     CUE.record_continuation_use t.continuation_uses_env cont
       ~typing_env_at_use ~arg_types)
-
-let continuation_scope_level t cont =
-  CUE.continuation_scope_level t.continuation_uses_env cont
-
-let exn_continuation_scope_level t exn_cont =
-  CUE.exn_continuation_scope_level t.continuation_uses_env exn_cont
 
 let continuation_env_and_arg_types t ~definition_typing_env cont =
   CUE.continuation_env_and_arg_types t.continuation_uses_env
@@ -100,12 +84,3 @@ let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont
 
 let continuation_uses_env t = t.continuation_uses_env
-
-let check_continuation_is_bound t cont =
-  CUE.check_continuation_is_bound t.continuation_uses_env cont
-
-let check_exn_continuation_is_bound t exn_cont =
-  CUE.check_exn_continuation_is_bound t.continuation_uses_env exn_cont
-
-let continuation_arity t cont =
-  CUE.continuation_arity t.continuation_uses_env cont
