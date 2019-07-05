@@ -178,6 +178,7 @@ end = struct
 *)
 
   let add_parameters t params ~arg_types =
+    (* CR mshinwell: Cause a fatal error if the lengths don't match *)
     List.fold_left2 (fun t param arg_type ->
         let var =
           Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
@@ -356,10 +357,8 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_to_inline t cont scope arity handler
-        ~wrapped_cont_with_scope_and_arity =
-    add_continuation0 t cont scope 
-      (Inline { arity; handler; wrapped_cont_with_scope_and_arity; })
+  let add_continuation_to_inline t cont scope arity handler =
+    add_continuation0 t cont scope (Inline { arity; handler; })
 
   let add_exn_continuation t exn_cont scope =
     (* CR mshinwell: Think more about keeping these in both maps *)

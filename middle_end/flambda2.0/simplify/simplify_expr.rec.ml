@@ -87,13 +87,17 @@ and simplify_one_continuation_handler
           (CPH.create used_params ~handler)
       in
       match unused_params with
-      | [] -> No_wrapper original, user_data, uacc
+      | [] ->
+(*
+Format.eprintf "No wrapper for %a\n%!" Continuation.print _cont;
+*)
+        No_wrapper original, user_data, uacc
       | _::_ ->
         let renamed_original_cont = Continuation.create () in
 (*
 Format.eprintf "Fresh cont for original %a is %a\n%!"
-  Continuation.print cont
-  Continuation.print original_cont;
+  Continuation.print _cont
+  Continuation.print renamed_original_cont;
 *)
         let wrapper =
           Continuation_handler.create
@@ -473,6 +477,7 @@ and simplify_function_call_where_callee's_type_unavailable
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
   let check_return_arity_and_record_return_cont_use ~return_arity =
+(*
     let cont_arity = DA.continuation_arity dacc cont in
     if not (Flambda_arity.equal return_arity cont_arity) then begin
       Misc.fatal_errorf "Return arity (%a) on application's continuation@ \
@@ -481,6 +486,7 @@ and simplify_function_call_where_callee's_type_unavailable
         Flambda_arity.print return_arity
         Apply.print apply
     end;
+*)
     DA.record_continuation_use dacc cont ~typing_env_at_use
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
@@ -589,8 +595,10 @@ and simplify_function_call
     Expr.create_invalid (), user_data, uacc
 
 and simplify_apply_shared dacc apply : _ Or_bottom.t =
+(*
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
+*)
   let min_occurrence_kind = Name_occurrence_kind.normal in
   match S.simplify_simple dacc (Apply.callee apply) ~min_occurrence_kind with
   | Bottom, _ty -> Bottom
@@ -666,6 +674,8 @@ and simplify_c_call
       Flambda_arity.print param_arity
       Apply.print apply
   end;
+(* CR mshinwell: We can't do these checks (here and elsewhere) on [DA]
+   any more.  Maybe we can check on [UA] after calling [k] instead.
   let cont = Apply.continuation apply in
   let cont_arity = DA.continuation_arity dacc cont in
   if not (Flambda_arity.equal cont_arity return_arity) then begin
@@ -675,6 +685,7 @@ and simplify_c_call
       Flambda_arity.print return_arity
       Apply.print apply
   end;
+*)
   let dacc =
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
@@ -726,8 +737,9 @@ and simplify_apply_cont
     in
     let check_arity_against_args ~arity =
       if not (Flambda_arity.equal args_arity arity) then begin
-        Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+        Misc.fatal_errorf "Arity of arguments in [Apply_cont] (%a) does not \
             match continuation's arity from the environment (%a):@ %a"
+          Flambda_arity.print args_arity
           Flambda_arity.print arity
           AC.print apply_cont
       end
@@ -747,7 +759,7 @@ and simplify_apply_cont
          on the basis that there wouldn't be any opportunity to collect any
          backtrace, even if the [Apply_cont] were compiled as "raise". *)
       Expr.create_invalid (), user_data, uacc
-    | Inline { arity; handler; wrapped_cont_with_scope_and_arity; } ->
+    | Inline { arity; handler; } ->
       (* CR mshinwell: With -g, we can end up with continuations that are
          just a sequence of phantom lets then "goto".  These would normally
          be treated as aliases, but of course aren't in this scenario,
@@ -778,19 +790,6 @@ and simplify_apply_cont
             in
             let r = UA.r uacc in
             let dacc = DA.with_r dacc r in
-            let dacc =
-              (* When the continuation being applied has been wrapped, it will
-                 have been bound to a fresh continuation, with the wrapper
-                 taking the place of the original.  As such that fresh
-                 continuation must be added to the downwards accumulator. *)
-              match wrapped_cont_with_scope_and_arity with
-              | None -> dacc
-              | Some (original_cont, original_cont_scope_level,
-                  original_arity) ->
-                DA.add_continuation dacc original_cont
-                  ~definition_scope_level:original_cont_scope_level
-                  original_arity
-            in
             let dacc =
               DA.map_denv dacc ~f:(fun denv ->
                 DE.add_lifted_constants denv (R.get_lifted_constants r))
