@@ -26,23 +26,20 @@ type t
 val create
    : Continuation.t
   -> Flambda_arity.t
-  -> definition_scope_level:Scope.t
   -> t
 
 val print : Format.formatter -> t -> unit
 
 val add_use
    : t
-  -> Flambda_type.Typing_env.t
+  -> typing_env_at_use:Flambda_type.Typing_env.t
   -> arg_types:Flambda_type.t list
   -> t
 
 val env_and_arg_types
    : t
-  -> Flambda_type.Typing_env.t
+  -> definition_typing_env:Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t * (Flambda_type.t list)
-
-val definition_scope_level : t -> Scope.t
 
 val number_of_uses : t -> int
 

@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module T = Flambda_type
+
 type t = {
   continuation_uses : Continuation_uses.t Continuation.Map.t;
 }
@@ -30,58 +32,31 @@ let empty = {
   continuation_uses = Continuation.Map.empty;
 }
 
-let add_continuation t cont ~definition_scope_level arity =
-  match Continuation.Map.find cont t.continuation_uses with
-  | exception Not_found ->
-    let uses =
-      Continuation_uses.create cont arity ~definition_scope_level
-    in
-    { continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-    }
-  | _uses ->
-    Misc.fatal_errorf "Cannot redefine continuation %a:@ %a"
-      Continuation.print cont
-      print t
-
-let add_exn_continuation t exn_cont ~definition_scope_level =
-  let cont = Exn_continuation.exn_handler exn_cont in
-  match Continuation.Map.find cont t.continuation_uses with
-  | exception Not_found ->
-    let arity = Exn_continuation.arity exn_cont in
-    let uses =
-      Continuation_uses.create cont arity ~definition_scope_level
-    in
-    { continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-    }
-  | _uses ->
-    Misc.fatal_errorf "Cannot redefine exn continuation %a:@ %a"
-      Exn_continuation.print exn_cont
-      print t
-
 let record_continuation_use t cont ~typing_env_at_use ~arg_types =
-  match Continuation.Map.find cont t.continuation_uses with
-  | exception Not_found ->
-    Misc.fatal_errorf "[record_continuation_use]:@ \
-        Continuation %a not in uses environment:@ %a"
-      Continuation.print cont
-      print t
-  | uses ->
-    (* XXX This needs to deal with exn continuation extra-args *)
-    let uses =
-      Continuation_uses.add_use uses typing_env_at_use ~arg_types
-    in
-    { continuation_uses = Continuation.Map.add cont uses t.continuation_uses;
-    }
+  (* XXX This needs to deal with exn continuation extra-args *)
+  let continuation_uses =
+    Continuation.Map.update cont (function
+        | None ->
+          let arity = T.arity_of_list arg_types in
+          let uses = Continuation_uses.create cont arity in
+          Some (Continuation_uses.add_use uses ~typing_env_at_use ~arg_types)
+        | Some uses ->
+          Some (Continuation_uses.add_use uses ~typing_env_at_use ~arg_types))
+      t.continuation_uses
+  in
+  { continuation_uses;
+  }
 
-let continuation_env_and_arg_types t ~definition_typing_env cont =
+let continuation_env_and_arg_types t ~definition_typing_env cont arity =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found ->
-    Misc.fatal_errorf "[continuation_env_and_arg_types]:@ \
-        Continuation %a not in uses environment:@ %a"
-      Continuation.print cont
-      print t
+    let arg_types =
+      (* CR mshinwell: Move to [Flambda_type] *)
+      List.map (fun kind -> T.bottom kind) arity
+    in
+    definition_typing_env, arg_types
   | uses ->
-    Continuation_uses.env_and_arg_types uses definition_typing_env
+    Continuation_uses.env_and_arg_types uses ~definition_typing_env
 
 let continuation_scope_level t cont =
   match Continuation.Map.find cont t.continuation_uses with
