@@ -22,8 +22,6 @@ type t =
   | Inline of {
       arity : Flambda_arity.t;
       handler : Flambda.Continuation_handler.t;
-      wrapped_cont_with_scope_and_arity
-        : (Continuation.t * Scope.t * Flambda_arity.t) option;
     }
 
 val print : Format.formatter -> t -> unit

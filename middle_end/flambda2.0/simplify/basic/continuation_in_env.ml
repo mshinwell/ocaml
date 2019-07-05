@@ -22,8 +22,6 @@ type t =
   | Inline of {
       arity : Flambda_arity.t;
       handler : Flambda.Continuation_handler.t;
-      wrapped_cont_with_scope_and_arity
-        : (Continuation.t * Scope.t * Flambda_arity.t) option;
     }
 
 (* CR mshinwell: Write a proper printer *)
@@ -31,12 +29,11 @@ let print ppf t =
   match t with
   | Unknown { arity = _; } -> Format.pp_print_string ppf "Unknown"
   | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
-  | Inline { arity = _; handler = _; wrapped_cont_with_scope_and_arity = _; } ->
+  | Inline { arity = _; handler = _; } ->
     Format.pp_print_string ppf "Inline _"
 
 let arity t =
   match t with
   | Unknown { arity; }
   | Unreachable { arity; }
-  | Inline { arity; handler = _; wrapped_cont_with_scope_and_arity = _; } ->
-    arity
+  | Inline { arity; handler = _; } -> arity
