@@ -37,37 +37,33 @@ module Use = struct
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Flambda_type.print)
       arg_types
 
-  let env_extension t = t.env_extension
   let arg_types t = t.arg_types
+  let typing_env_at_use t = t.typing_env
 end
 
 type t = {
   continuation : Continuation.t;
-  definition_scope_level : Scope.t;
   arity : Flambda_arity.t;
   uses : Use.t list;
 }
 
-let create continuation arity ~definition_scope_level =
+let create continuation arity =
   { continuation;
-    definition_scope_level;
     arity;
     uses = [];
   }
 
-let print ppf { continuation; definition_scope_level; arity; uses; } =
+let print ppf { continuation; arity; uses; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuation@ %a)@]@ \
-      @[<hov 1>(definition_scope_level@ %a)@]@ \
       @[<hov 1>(arity@ %a)@]@ \
       @[<hov 1>(uses@ %a)@]\
       )@]"
     Continuation.print continuation
-    Scope.print definition_scope_level
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
-let add_use t typing_env ~arg_types =
+let add_use t ~typing_env_at_use ~arg_types =
   try
     let arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal arity t.arity) then begin
@@ -76,22 +72,7 @@ let add_use t typing_env ~arg_types =
         Flambda_arity.print arity
         Flambda_arity.print t.arity
     end;
-    let cut_point = Scope.next t.definition_scope_level in
-(*
-  Format.eprintf "**** Unknown >= %a, env:@ %a\n%!"
-    Scope.print cut_point
-    TE.print typing_env;
-*)
-    let env_extension, vars_in_scope_at_cut =
-      TE.cut typing_env ~unknown_if_defined_at_or_later_than:cut_point
-    in
-    let arg_types =
-      List.map (fun ty ->
-          T.erase_aliases typing_env ~bound_name:None
-            ~allowed:vars_in_scope_at_cut ty)
-        arg_types
-    in
-    let use = Use.create env_extension ~arg_types in
+    let use = Use.create ~typing_env_at_use ~arg_types in
     { t with
       uses = use :: t.uses;
     }
@@ -103,29 +84,49 @@ let add_use t typing_env ~arg_types =
       Continuation.print t.continuation
       (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
       print t
-      TE.print typing_env;
+      TE.print typing_env_at_use;
     raise Misc.Fatal_error
   end
 
-let env_and_arg_types t env =
-  match t.uses with
-  | [] -> env, List.map (fun kind -> T.unknown kind) t.arity
-  | [use] ->
-    let env_extension = Use.env_extension use in
+let env_and_arg_types t ~definition_typing_env =
+  let definition_scope_level =
+    T.Typing_env.current_scope definition_typing_env
+  in
+  let cut_point = Scope.next definition_scope_level in
+  let process_use use =
+    let env = Use.typing_env_at_use use in
+    let env_extension, vars_in_scope_at_cut =
+      TE.cut env ~unknown_if_defined_at_or_later_than:cut_point
+    in
     let arg_types = Use.arg_types use in
-    let env = TE.add_env_extension env env_extension in
-    env, arg_types
+    let arg_types =
+      List.map (fun ty ->
+          T.erase_aliases env ~bound_name:None
+            ~allowed:vars_in_scope_at_cut ty)
+        arg_types
+    in
+    env_extension, arg_types
+  in
+  match t.uses with
+  | [] -> definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity
+  | [use] ->
+    let env_extension, use_arg_types = process_use use in
+    let env = TE.add_env_extension definition_typing_env env_extension in
+    env, use_arg_types
   | use::uses ->
+    let env_extension, use_arg_types = process_use use in
     List.fold_left (fun (env, arg_types) use ->
+        let env_extension, use_arg_types = process_use use in
         let arg_types =
           List.map2 (fun arg_type arg_type' ->
               (* CR mshinwell: Which environment should be used here? *)
               T.join env arg_type arg_type')
-            arg_types (Use.arg_types use)
+            arg_types
+            use_arg_types
         in
-        let env = TE.add_env_extension env (Use.env_extension use) in
+        let env = TE.add_env_extension definition_typing_env env_extension in
         env, arg_types)
-      (TE.add_env_extension env (Use.env_extension use), Use.arg_types use)
+      (TE.add_env_extension definition_typing_env env_extension, use_arg_types)
       uses
 
 let definition_scope_level t = t.definition_scope_level
