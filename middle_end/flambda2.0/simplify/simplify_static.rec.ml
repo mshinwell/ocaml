@@ -199,7 +199,8 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
   let pre_simplification_types_of_my_closures
         : Simplify_named.pre_simplification_types_of_my_closures =
     let closure_types =
-      Closure_id.Map.map (fun (_closure_symbol, closure_type) -> closure_type)
+      Closure_id.Map.map (fun (closure_symbol, _closure_type) ->
+          T.alias_type_of K.fabricated (Simple.symbol closure_symbol))
         closure_symbols_and_types
     in
     { set_of_closures = None;
@@ -444,18 +445,11 @@ let simplify_return_continuation_handler dacc ~arg_types _cont
     List.compare_lengths used_computed_values original_computed_values <> 0
   in
   if not need_wrapper then begin
-Format.eprintf "Return continuation %a not wrapped, computed values (%a), fvs %a\n%!"
-  Continuation.print _cont
-  KP.List.print used_computed_values
-  Variable.Set.print free_variables;
     No_wrapper return_cont_handler,
       (used_computed_values, static_structure, dacc),
       uacc
   end else begin
     let renamed_original_cont = Continuation.create () in
-Format.eprintf "Return continuation %a renamed to %a\n%!"
-  Continuation.print _cont
-  Continuation.print renamed_original_cont;
     let wrapper =
       Continuation_handler.create
         ~params_and_handler:
