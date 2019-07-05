@@ -59,7 +59,6 @@ end) = struct
         dacc cont cont_handler ~body simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
     let body, (result, uenv', user_data), uacc =
-      let arity = Continuation_handler_like.arity cont_handler in
       (* CR mshinwell: the following two names might be misleading *)
       let wrapper_scope_level =
         (* A gap in the levels is always left for a potential wrapper. *)
@@ -70,13 +69,6 @@ end) = struct
         DA.map_denv dacc ~f:(fun denv ->
           DE.increment_continuation_scope_level
             (DE.increment_continuation_scope_level denv))
-      in
-      let dacc =
-        (* CR mshinwell: Can we stop scope levels being stored in both upwards
-           and downwards environments, to avoid any potential for
-           disagreement? *)
-        DA.add_continuation dacc cont
-          ~definition_scope_level:original_cont_scope_level arity
       in
       Simplify_expr.simplify_expr dacc body (fun cont_uses_env r ->
         (* The environment currently in [dacc] is not the correct environment
@@ -95,9 +87,11 @@ end) = struct
           DE.add_lifted_constants definition_denv
             (R.get_lifted_constants r)
         in
+        let arity = Continuation_handler_like.arity cont_handler in
         let typing_env, arg_types =
-          CUE.continuation_env_and_arg_types cont_uses_env 
-            ~definition_typing_env:(DE.typing_env definition_denv) cont
+          CUE.continuation_env_and_arg_types cont_uses_env
+            ~definition_typing_env:(DE.typing_env definition_denv)
+            cont arity
         in
         let definition_denv =
           DE.with_typing_environment definition_denv typing_env
@@ -127,17 +121,16 @@ end) = struct
             | Alias_for { arity; alias_for; } ->
               (* CR mshinwell: More checks here?  e.g. on the arity and
                  ensuring the aliased continuation is an exn handler too *)
-              UE.add_continuation_alias uenv cont arity ~alias_for, arity
+              UE.add_continuation_alias uenv cont arity ~alias_for
             | Unreachable { arity; } | Unknown { arity; } ->
-              UE.add_continuation uenv cont original_cont_scope_level arity,
-                arity
+              UE.add_continuation uenv cont original_cont_scope_level arity
           else
             match Continuation_handler_like.behaviour cont_handler with
             | Unreachable { arity; } ->
               UE.add_unreachable_continuation uenv cont
-                original_cont_scope_level arity, arity
+                original_cont_scope_level arity
             | Alias_for { arity; alias_for; } ->
-              UE.add_continuation_alias uenv cont arity ~alias_for, arity
+              UE.add_continuation_alias uenv cont arity ~alias_for
             | Unknown { arity; } ->
               let can_inline =
                 if original_cont_num_uses <> 1
@@ -145,35 +138,32 @@ end) = struct
                 then None
                 else Continuation_handler_like.real_handler cont_handler
               in
-              let uenv =
-                match can_inline with
-                | None ->
-                  UE.add_continuation uenv cont original_cont_scope_level arity
-                | Some real_handler ->
-                  UE.add_continuation_to_inline uenv cont
-                    original_cont_scope_level arity
-                    real_handler
-                    ~wrapped_cont_with_scope_and_arity:None
-              in
-              uenv, arity
+              match can_inline with
+              | None ->
+                UE.add_continuation uenv cont original_cont_scope_level arity
+              | Some real_handler ->
+                UE.add_continuation_to_inline uenv cont
+                  original_cont_scope_level arity
+                  real_handler
         in
         let uenv =
           match result with
           | No_wrapper original ->
-            let uenv, _arity = add_original_handler uenv cont original in
+            let uenv = add_original_handler uenv cont original in
             uenv
           | With_wrapper { wrapper; renamed_original_cont; original; } ->
-            let uenv, original_cont_arity =
+            let uenv =
               add_original_handler uenv renamed_original_cont original
             in
             let wrapper_arity = Continuation_handler.arity wrapper in
-            let wrapped_cont_with_scope_and_arity =
-              Some (renamed_original_cont, original_cont_scope_level,
-                original_cont_arity)
-            in
+(*
+Format.eprintf "%a --> renamed_original_cont %a, renamed original cont arity %a\n%!"
+  Continuation.print cont
+  Continuation.print renamed_original_cont
+  Flambda_arity.print original_cont_arity;
+*)
             UE.add_continuation_to_inline uenv cont
               wrapper_scope_level wrapper_arity wrapper
-              ~wrapped_cont_with_scope_and_arity
         in
         let uacc = UA.with_uenv uacc uenv in
         (result, uenv', user_data), uacc)

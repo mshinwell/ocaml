@@ -51,15 +51,6 @@ Format.eprintf "Closure ID %a, entering closure\n%!"
         let exn_cont_scope = Scope.next return_cont_scope in
         assert (Scope.equal return_cont_scope
           (DE.get_continuation_scope_level denv));
-        let dacc =
-          DA.add_continuation dacc return_continuation
-            ~definition_scope_level:return_cont_scope
-            result_arity
-        in
-        let dacc =
-          DA.add_exn_continuation dacc exn_continuation
-            ~definition_scope_level:exn_cont_scope
-        in
 (*
 Format.eprintf "Closure ID %a, done entering closure\n%!"
   Closure_id.print closure_id;
