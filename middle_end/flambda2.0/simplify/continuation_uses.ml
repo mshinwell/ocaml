@@ -129,8 +129,6 @@ let env_and_arg_types t ~definition_typing_env =
       (TE.add_env_extension definition_typing_env env_extension, use_arg_types)
       uses
 
-let definition_scope_level t = t.definition_scope_level
-
 let number_of_uses t = List.length t.uses
 
 let arity t = t.arity
