@@ -59,8 +59,6 @@ module Return_cont_handler = struct
   let is_exn_handler _t = false
   let stub _t = false
 
-  let arity t = Kinded_parameter.List.arity t.computed_values
-
   type behaviour =
     | Unreachable of { arity : Flambda_arity.t; }
     | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
@@ -69,6 +67,8 @@ module Return_cont_handler = struct
   (* Silence warning 37. *)
   let _ = Unreachable { arity = []; }
   let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
+
+  let arity t = Kinded_parameter.List.arity t.computed_values
 
   let behaviour t = Unknown { arity = arity t; }
 
@@ -420,17 +420,11 @@ let simplify_return_continuation_handler dacc ~arg_types _cont
     simplify_static_structure dacc return_cont_handler.static_structure
   in
   let free_variables = Static_structure.free_variables static_structure in
+  let original_computed_values = return_cont_handler.computed_values in
   let used_computed_values =
     List.filter (fun param ->
         Variable.Set.mem (KP.var param) free_variables)
-      return_cont_handler.computed_values
-  in
-  let return_cont_handler : Return_cont_handler.t =
-    { exn_continuation = return_cont_handler.exn_continuation;
-      exn_cont_scope = return_cont_handler.exn_cont_scope;
-      computed_values = used_computed_values;
-      static_structure;
-    }
+      original_computed_values
   in
   let uenv =
     (* CR mshinwell: This is a bit of a wart.  Maybe there should be an
@@ -439,9 +433,46 @@ let simplify_return_continuation_handler dacc ~arg_types _cont
       return_cont_handler.exn_cont_scope
   in
   let uacc = UA.create uenv (DA.r dacc) in
-  No_wrapper return_cont_handler,
-    (used_computed_values, static_structure, dacc),
-    uacc
+  let return_cont_handler : Return_cont_handler.t =
+    { exn_continuation = return_cont_handler.exn_continuation;
+      exn_cont_scope = return_cont_handler.exn_cont_scope;
+      computed_values = used_computed_values;
+      static_structure;
+    }
+  in
+  let need_wrapper =
+    List.compare_lengths used_computed_values original_computed_values <> 0
+  in
+  if not need_wrapper then begin
+Format.eprintf "Return continuation %a not wrapped, computed values (%a), fvs %a\n%!"
+  Continuation.print _cont
+  KP.List.print used_computed_values
+  Variable.Set.print free_variables;
+    No_wrapper return_cont_handler,
+      (used_computed_values, static_structure, dacc),
+      uacc
+  end else begin
+    let renamed_original_cont = Continuation.create () in
+Format.eprintf "Return continuation %a renamed to %a\n%!"
+  Continuation.print _cont
+  Continuation.print renamed_original_cont;
+    let wrapper =
+      Continuation_handler.create
+        ~params_and_handler:
+          (Continuation_params_and_handler.create
+            original_computed_values
+            ~handler:(Expr.create_apply_cont (
+              Apply_cont.create renamed_original_cont
+                ~args:(KP.List.simples used_computed_values))))
+        ~stub:true
+        ~is_exn_handler:false
+    in
+    With_wrapper {
+      wrapper;
+      renamed_original_cont;
+      original = return_cont_handler;
+    }, (used_computed_values, static_structure, dacc), uacc
+  end
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
