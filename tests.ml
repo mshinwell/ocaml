@@ -1,6 +1,6 @@
 external ( + ) : int -> int -> int = "%addint"
 external ( < ) : 'a -> 'a -> bool = "%lessthan"
-
+(*
 let [@inline always] to_inline _x _y = 42
 
 let f c m n x' y' =
@@ -13,15 +13,16 @@ let f c m n x' y' =
     | None -> 1
     | Some b ->
       to_inline (x + y) (a + b)
+*)
 
-(*
 let rec length_aux len = function
     [] -> len
   | _::l -> length_aux (len + 1) l
 
 
+
+(*
 let length l = (length_aux [@unrolled 3]) 0 l
-*)
 
 module Int32 = struct
   external add : int32 -> int32 -> int32 = "%int32_add"
@@ -37,3 +38,4 @@ module Int64 = struct
   let succ x = mul (add x 1L) 2L
 end
 
+*)
