@@ -628,9 +628,14 @@ and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
   match of_kind_value with
   | Closures { by_closure_id; } ->
     Or_bottom.map
-      (Closures_entry_by_closure_id.map_closure_types by_closure_id
-        ~f:(fun (closure_type : Flambda_types.t) ->
-          apply_rec_info closure_type rec_info))
+      (Closures_entry_by_closure_id.map_function_decl_types by_closure_id
+        ~f:(fun (decl : Flambda_types.function_declaration)
+              : Flambda_types.function_declaration Or_bottom.t ->
+          match decl with
+          | Non_inlinable _ -> Ok decl
+          | Inlinable { function_decl; rec_info = old_rec_info; } ->
+            let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
+            Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Blocks_and_tagged_immediates _
   | Boxed_number _

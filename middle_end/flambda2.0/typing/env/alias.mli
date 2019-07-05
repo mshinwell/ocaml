@@ -47,3 +47,5 @@ module Order_within_equiv_class
   : module type of struct include Name_occurrence_kind end
 
 val order_within_equiv_class : t -> Order_within_equiv_class.t
+
+val name : t -> Name.t option

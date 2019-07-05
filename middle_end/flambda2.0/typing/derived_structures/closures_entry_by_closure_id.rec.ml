@@ -21,6 +21,6 @@ include
     (Closure_id_and_var_within_closure_set)
     (Closures_entry)
 
-let map_closure_types t ~f =
+let map_function_decl_types t ~f =
   map_maps_to t ~f:(fun closures_entry ->
-    Closures_entry.map_closure_types closures_entry ~f)
+    Closures_entry.map_function_decl_types closures_entry ~f)

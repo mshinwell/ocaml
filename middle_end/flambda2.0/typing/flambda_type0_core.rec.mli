@@ -180,3 +180,8 @@ val apply_rec_info_of_kind_fabricated
    : Flambda_types.of_kind_fabricated
   -> Rec_info.t
   -> Flambda_types.of_kind_fabricated Or_bottom.t
+
+val apply_rec_info
+   : Flambda_types.t
+  -> Rec_info.t
+  -> Flambda_types.t Or_bottom.t

@@ -250,6 +250,15 @@ let find t name =
   (* CR mshinwell: Should this resolve aliases? *)
   | ty, _binding_time, _name_occurrence_kind -> ty
 
+let _find_with_occurrence_kind t name =
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found ->
+    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+      Name.print name
+      print t
+  (* CR mshinwell: Should this resolve aliases? *)
+  | ty, _binding_time, name_occurrence_kind -> ty, name_occurrence_kind
+
 let find_with_binding_time t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
@@ -387,7 +396,32 @@ let invariant_for_new_equation t name ty =
       print t
   end
 
+let add_equation0 t aliases name name_occurrence_kind ty =
+  invariant_for_new_equation t name ty;
+  let level =
+    Typing_env_level.add_or_replace_equation
+      (One_level.level t.current_level) name ty
+  in
+  (* CR mshinwell: remove second lookup *)
+  let binding_time = Cached.binding_time (cached t) name in
+  let just_after_level =
+    let names_to_types =
+      Name.Map.add name (ty, binding_time, name_occurrence_kind)
+        (names_to_types t)
+    in
+    Cached.create ~names_to_types aliases
+  in
+  let current_level =
+    One_level.create (current_scope t) level ~just_after_level
+  in
+  with_current_level t ~current_level
+
 let add_equation t name ty =
+(*
+Format.eprintf "Adding equation %a : %a\n%!"
+  Name.print name
+  Type_printers.print ty;
+*)
   let name_occurrence_kind = find_name_occurrence_kind t name in
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset free_names (domain t)) then begin
@@ -464,24 +498,7 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
   match Simple.descr simple with
   | Const _ | Discriminant _ -> t
   | Name name ->
-    invariant_for_new_equation t name ty;
-    let level =
-      Typing_env_level.add_or_replace_equation
-        (One_level.level t.current_level) name ty
-    in
-    (* CR mshinwell: remove second lookup *)
-    let binding_time = Cached.binding_time (cached t) name in
-    let just_after_level =
-      let names_to_types =
-        Name.Map.add name (ty, binding_time, name_occurrence_kind)
-          (names_to_types t)
-      in
-      Cached.create ~names_to_types aliases
-    in
-    let current_level =
-      One_level.create (current_scope t) level ~just_after_level
-    in
-    with_current_level t ~current_level
+    add_equation0 t aliases name name_occurrence_kind ty
 
 let (* rec *) add_env_extension starting_t level : t =
   if not (Variable.Map.is_empty (Typing_env_level.defined_vars level)) then
@@ -624,18 +641,19 @@ let get_canonical_simple0 t simple ~min_occurrence_kind
         print t
     | Some alias -> Alias.kind alias, Alias.simple alias
   in
-  match Simple.merge_rec_info simple ~newer_rec_info:newer_rec_info with
+  match Simple.merge_rec_info simple ~newer_rec_info with
   | None -> Bottom, Flambda_type0_core.bottom kind, newer_rec_info
   | Some simple ->
+    let rec_info = Simple.rec_info simple in
     match Simple.descr simple with
     | Const _ | Discriminant _ ->
-      Ok simple, Flambda_type0_core.alias_type_of kind simple, newer_rec_info
+      Ok simple, Flambda_type0_core.alias_type_of kind simple, rec_info
     | Name name ->
       let ty = find t name in
       if Flambda_type0_core.is_obviously_bottom ty then
-        Bottom, Flambda_type0_core.bottom kind, newer_rec_info
+        Bottom, Flambda_type0_core.bottom kind, rec_info
       else
-        Ok simple, Flambda_type0_core.alias_type_of kind simple, newer_rec_info
+        Ok simple, Flambda_type0_core.alias_type_of kind simple, rec_info
 
 let get_canonical_simple t simple ~min_occurrence_kind =
   let simple, typ, _rec_info =
@@ -817,3 +835,33 @@ let create_using_resolver_and_symbol_bindings_from t =
       add_equation t name typ)
     names_to_types
     t
+
+(*
+let merge_rec_info_for_simple_and_all_aliases t descr ~newer_rec_info =
+  let simple = Simple.of_descr descr in
+  let alias = alias_of_simple t simple Name_occurrence_kind.normal in
+  let aliases = aliases t in
+  let all_aliases = Aliases.get_aliases aliases alias in
+Format.eprintf "Aliases of %a are %a\n%!"
+  Simple.print simple
+  Alias.Set.print all_aliases;
+  Alias.Set.fold (fun alias t ->
+      match Alias.name alias with
+      | None -> t
+      | Some name ->
+        let typ, name_occurrence_kind = find_with_occurrence_kind t name in
+Format.eprintf "Adding rec_info %a to %a : %a\n%!"
+  Rec_info.print newer_rec_info
+  Name.print name
+  Type_printers.print typ;
+        let typ =
+          match Flambda_type0_core.apply_rec_info typ newer_rec_info with
+          | Bottom -> Flambda_type0_core.bottom (Flambda_type0_core.kind typ)
+          | Ok typ -> typ
+        in
+Format.eprintf "New type is: %a\n%!"
+  Type_printers.print typ;
+        add_equation0 t aliases name name_occurrence_kind typ)
+    all_aliases
+    t
+*)

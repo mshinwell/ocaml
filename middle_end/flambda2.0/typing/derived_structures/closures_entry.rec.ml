@@ -71,15 +71,16 @@ let free_names ({ function_decl = _; closure_elements; set_of_closures; } : t) =
     (Closure_elements.free_names closure_elements)
     (Type_free_names.free_names_of_ty_fabricated set_of_closures)
 
-let map_closure_types
-      ({ function_decl; closure_elements; set_of_closures; } : t)
-      ~(f : Flambda_types.t -> Flambda_types.t Or_bottom.t) =
-  Or_bottom.map (f (Fabricated set_of_closures))
-    ~f:(fun (set_of_closures_ty : Flambda_types.t) : t ->
-      match set_of_closures_ty with
-      | Value _ | Naked_number _ -> Misc.fatal_error "Wrong kind"
-      | Fabricated set_of_closures ->
-        { function_decl;
-          closure_elements;
-          set_of_closures;
-        })
+let map_function_decl_types
+      (({ function_decl; closure_elements; set_of_closures; } : t) as t)
+      ~(f : Flambda_types.function_declaration
+        -> Flambda_types.function_declaration Or_bottom.t)
+      : _ Or_bottom.t =
+  match function_decl with
+  | Unknown -> Ok t
+  | Known function_decl ->
+    Or_bottom.map (f function_decl) ~f:(fun function_decl : t ->
+      { function_decl = Known function_decl;
+        closure_elements;
+        set_of_closures;
+      })

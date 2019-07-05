@@ -34,9 +34,10 @@ val get_singleton
   -> ((Closure_id.t * Var_within_closure.Set.t)
        * Flambda_types.closures_entry) option
 
-val map_closure_types
+val map_function_decl_types
    : t
-  -> f:(Flambda_types.t -> Flambda_types.t Or_bottom.t)
+  -> f:(Flambda_types.function_declaration
+    -> Flambda_types.function_declaration Or_bottom.t)
   -> t Or_bottom.t
 
 include Type_structure_intf.S

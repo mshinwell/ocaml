@@ -174,6 +174,12 @@ let must_be_var t =
   | Name (Var var) | Rec_name (Var var, _) -> Some var
   | Name _ | Rec_name (_, _) | Const _ | Discriminant _ -> None
 
+let to_name t =
+  match t with
+  | Name name -> Some (None, name)
+  | Rec_name (name, rec_info) -> Some (Some rec_info, name)
+  | _ -> None
+
 let map_name t ~f =
   match t with
   | Name name ->
@@ -370,5 +376,11 @@ type descr =
 let descr (t : t) : descr =
   match t with
   | Name name | Rec_name (name, _) -> Name name
+  | Const const -> Const const
+  | Discriminant discr -> Discriminant discr
+
+let of_descr (descr : descr) : t =
+  match descr with
+  | Name name -> Name name
   | Const const -> Const const
   | Discriminant discr -> Discriminant discr

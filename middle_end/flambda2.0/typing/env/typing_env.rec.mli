@@ -55,6 +55,9 @@ val add_env_extension
   -> Typing_env_extension.t
   -> t
 
+(* CR mshinwell: Document that the returned type isn't necessarily what
+   [find] would return; this one (if the result is non-bottom) always
+   returns an [Alias]. *)
 val get_canonical_simple
    : t
   -> Simple.t
@@ -82,3 +85,11 @@ val cut
   -> Typing_env_extension.t * Variable.Set.t
 
 val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
+
+(*
+val merge_rec_info_for_simple_and_all_aliases
+   : t
+  -> Simple.descr
+  -> newer_rec_info:Rec_info.t
+  -> t
+*)

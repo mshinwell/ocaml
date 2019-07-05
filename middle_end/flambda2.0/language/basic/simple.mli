@@ -42,6 +42,8 @@ type descr = private
 
 val descr : t -> descr
 
+val of_descr : descr -> t
+
 val name : Name.t -> t
 
 val var : Variable.t -> t
@@ -82,6 +84,8 @@ val unit : t
 val discriminant : Discriminant.t -> t
 
 val map_name : t -> f:(Name.t -> Name.t) -> t
+
+val to_name : t -> (Rec_info.t option * Name.t) option
 
 (* CR mshinwell: remove these next two? *)
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
