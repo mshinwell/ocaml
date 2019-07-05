@@ -25,8 +25,6 @@ module UE = Simplify_env_and_result.Upwards_env
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
-  DA.check_continuation_is_bound dacc return_continuation;
-  DA.check_exn_continuation_is_bound dacc exn_continuation;
   let expr, cont_uses_env, uacc =
     try
       Simplify_expr.simplify_expr dacc expr (fun cont_uses_env r ->
