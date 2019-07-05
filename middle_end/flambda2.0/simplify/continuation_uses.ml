@@ -18,25 +18,22 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
-module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   type t = {
-    env_extension : TEE.t;
     arg_types : T.t list;
+    typing_env : TE.t;
   }
 
-  let create env_extension ~arg_types =
-    { env_extension;
-      arg_types;
+  let create ~typing_env_at_use:typing_env ~arg_types =
+    { arg_types;
+      typing_env;
     }
 
-  let print ppf { env_extension; arg_types; } =
+  let print ppf { typing_env = _; arg_types; } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(env_extension@ %a)@]@ \
         @[<hov 1>(arg_types@ %a)@]@ \
         )@]"
-      TEE.print env_extension
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Flambda_type.print)
       arg_types
 

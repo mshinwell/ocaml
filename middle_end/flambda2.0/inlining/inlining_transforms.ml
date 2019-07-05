@@ -30,6 +30,7 @@ Format.eprintf "Inlining callee %a\n%!" Simple.print callee;
   match Simple.merge_rec_info callee ~newer_rec_info with
   | None -> dacc, Expr.create_invalid ()
   | Some callee_with_rec_info ->
+Format.eprintf "Callee's rec info now %a\n%!" Simple.print callee_with_rec_info;
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
       ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
