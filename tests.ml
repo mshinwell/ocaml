@@ -19,11 +19,9 @@ let rec length_aux len = function
     [] -> len
   | _::l -> length_aux (len + 1) l
 
-
-
-(*
 let length l = (length_aux [@unrolled 3]) 0 l
 
+(*
 module Int32 = struct
   external add : int32 -> int32 -> int32 = "%int32_add"
   external mul : int32 -> int32 -> int32 = "%int32_mul"
