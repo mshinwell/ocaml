@@ -215,6 +215,10 @@ Format.eprintf "RL meet is returning bottom\n%!";
     if not (Index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
 
+  let all_tags_and_indexes { known; at_least; } : _ Or_unknown.t =
+    if not (Index.Map.is_empty at_least) then Unknown
+    else Known (Tag_and_index.Map.keys known)
+
   let erase_aliases { known; at_least; } env ~allowed =
     let known =
       Tag_and_index.Map.map (fun maps_to ->
