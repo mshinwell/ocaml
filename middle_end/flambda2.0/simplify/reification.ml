@@ -69,8 +69,10 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.add_symbol denv symbol ty in
+(*
 Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
+*)
       DE.add_equation_on_variable denv bound_to var_ty)
   in
 (*
