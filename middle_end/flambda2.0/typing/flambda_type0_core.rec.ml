@@ -372,6 +372,29 @@ let these_tagged_immediates imms =
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
+let this_discriminant_as_ty_fabricated discr : ty_fabricated =
+  Equals (Simple.discriminant discr)
+
+let this_discriminant discr : t =
+  Fabricated (this_discriminant_as_ty_fabricated discr)
+
+(* CR mshinwell: Same code pattern as the tagged immediates cases above,
+   factor out. *)
+let these_discriminants0 ~no_alias discrs : t =
+  match Discriminant.Set.get_singleton discrs with
+  | Some discr when not no_alias -> this_discriminant discr
+  | _ ->
+    if Discriminant.Set.is_empty discrs then bottom K.fabricated
+    else
+      let discrs = Discriminants.create discrs in
+      Fabricated (No_alias (Ok (Discriminants discrs)))
+
+let these_discriminants discrs =
+  these_discriminants0 ~no_alias:false discrs
+
+let this_discriminant_without_alias discr : t =
+  these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
+
 let any_tagged_bool () =
   let bools =
     Immediate.Set.add Immediate.bool_false
@@ -396,19 +419,6 @@ let boxed_int64_alias_to ~naked_int64 =
 let boxed_nativeint_alias_to ~naked_nativeint =
   box_nativeint (Naked_number (Equals (Simple.var naked_nativeint),
     Naked_nativeint))
-
-let this_discriminant_as_ty_fabricated discr : ty_fabricated =
-  Equals (Simple.discriminant discr)
-
-let this_discriminant discr : t =
-  Fabricated (this_discriminant_as_ty_fabricated discr)
-
-let these_discriminants discrs : t =
-  let discrs = Discriminants.create discrs in
-  Fabricated (No_alias (Ok (Discriminants discrs)))
-
-let this_discriminant_without_alias discr : t =
-  these_discriminants (Discriminant.Set.singleton discr)
 
 let kind (t : t) =
   match t with

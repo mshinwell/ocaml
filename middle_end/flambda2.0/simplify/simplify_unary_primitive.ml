@@ -98,15 +98,15 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
 let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let typing_env = DE.typing_env (DA.denv dacc) in
-  let proof = T.prove_is_tagged_immediate typing_env scrutinee_ty in
+  let proof = T.prove_is_int typing_env scrutinee_ty in
   let proved discriminant =
     let ty = T.this_discriminant discriminant in
     let env_extension = TEE.one_equation name ty in
     Reachable.reachable original_term, env_extension, dacc
   in
   match proof with
-  | Proved Always_a_tagged_immediate -> proved Discriminant.bool_true
-  | Proved Never_a_tagged_immediate -> proved Discriminant.bool_false
+  | Proved true -> proved Discriminant.bool_true
+  | Proved false -> proved Discriminant.bool_false
   | Unknown ->
     let ty = T.these_discriminants Discriminant.all_bools_set in
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
@@ -132,6 +132,8 @@ let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
   | Proved inferred_tags ->
     let tags =
       Tag.Map.merge (fun tag claimed inferred ->
+          (* CR mshinwell: Maybe one or both of these fatal error cases
+             should actually just be [Invalid]. *)
           match claimed, inferred with
           | None, None
           | Some _, None -> None
@@ -167,18 +169,40 @@ let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
     let ty = T.bottom K.fabricated in
     Reachable.invalid (), TEE.one_equation name ty, dacc
 
+let simplify_discriminant_of_int dacc ~original_term ~int_ty ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  let invalid () =
+    let ty = T.bottom K.fabricated in
+    Reachable.invalid (), TEE.one_equation name ty, dacc
+  in
+  let proof = T.prove_equals_tagged_immediates typing_env int_ty in
+  match proof with
+  | Proved imms ->
+    let discrs =
+      Immediate.Set.fold (fun imm discrs ->
+          let as_int = Immediate.to_targetint imm in
+          match Discriminant.create as_int with
+          | Some discr -> Discriminant.Set.add discr discrs
+          | None -> discrs)
+        imms
+        Discriminant.Set.empty
+    in
+    if Discriminant.Set.cardinal discrs <> Immediate.Set.cardinal imms then
+      invalid ()
+    else
+      let ty = T.these_discriminants discrs in
+      let env_extension = TEE.one_equation name ty in
+      Reachable.reachable original_term, env_extension, dacc
+  | Unknown ->
+    let ty = T.unknown K.fabricated in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Invalid -> invalid ()
+
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
-(*
-begin match (arg : Simple.t) with
-| Name (Var arg) ->
-Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a@ Env:@ %a%!"
-  Variable.print arg
-  T.print (E.find_variable env arg)
-  E.print env
-| _ -> ()
-end;
-*)
+Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
+  ((Flambda_primitive.Unary (prim, arg)) : Flambda_primitive.t);
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
@@ -186,6 +210,9 @@ end;
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   | Ok arg, arg_ty ->
+Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
+  Simple.print arg
+  T.print arg_ty;
     let original_term = Named.create_prim (Unary (prim, arg)) dbg in
     match prim with
     | Project_closure closure_id ->
@@ -207,6 +234,9 @@ end;
       simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
     | Get_tag { tags_to_sizes; } ->
       simplify_get_tag dacc ~original_term ~tags_to_sizes ~block_ty:arg_ty
+        ~result_var
+    | Discriminant_of_int ->
+      simplify_discriminant_of_int dacc ~original_term ~int_ty:arg_ty
         ~result_var
     | _ ->
       (* CR mshinwell: temporary code *)

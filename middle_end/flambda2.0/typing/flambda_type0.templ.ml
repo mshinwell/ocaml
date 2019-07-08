@@ -96,51 +96,6 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Unknown
     | Invalid
 
-  (* CR mshinwell: These next two functions could maybe share some code *)
-
-  let prove_equals_single_tagged_immediate env t : _ proof =
-    let original_kind = kind t in
-    if not (K.equal original_kind K.value) then begin
-      Misc.fatal_errorf "Type %a is not of kind value"
-        Type_printers.print t
-    end;
-    match get_alias t with
-    | None -> Unknown
-    | Some simple ->
-      match Simple.descr simple with
-      | Const (Tagged_immediate imm) -> Proved imm
-      | Const _ | Discriminant _ ->
-        Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
-            different from that returned by [kind] (%a):@ %a"
-          Simple.print simple
-          K.print original_kind
-          Type_printers.print t
-      | Name _ ->
-        match
-          Typing_env.get_canonical_simple env simple
-            ~min_occurrence_kind:Name_occurrence_kind.normal
-        with
-        | Bottom, _ -> Invalid
-        | Ok simple, ty ->
-          let kind = Flambda_type0_core.kind ty in
-          if not (K.equal kind K.value) then begin
-            Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
-                different from that returned by [kind] (%a):@ %a"
-              Simple.print simple
-              K.print kind
-              K.print original_kind
-              Type_printers.print t
-          end;
-          match Simple.descr simple with
-          | Const (Tagged_immediate imm) -> Proved imm
-          | Name _ -> Unknown
-          | Const _ | Discriminant _ ->
-            Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-                doesn't match the kind of the returned [Simple] %a:@ %a"
-              K.print kind
-              Simple.print simple
-              Type_printers.print t
-
   let prove_equals_to_symbol env t : _ proof =
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
@@ -206,18 +161,51 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_naked_number _ -> wrong_kind ()
       | Resolved_fabricated _ -> wrong_kind ()
 
-  type is_tagged_immediate =
-    | Always_a_tagged_immediate
-    | Never_a_tagged_immediate
-
-  let prove_is_tagged_immediate env t : is_tagged_immediate proof =
+  let prove_equals_tagged_immediates env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
     match Typing_env.resolve_type env t with
-    | _, Const (Tagged_immediate _) -> Proved Always_a_tagged_immediate
+    | _, Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
     | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
-        | Naked_int64 _ | Naked_nativeint _)
+      | Naked_int64 _ | Naked_nativeint _)
+    | _, Discriminant _ -> wrong_kind ()
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        begin match blocks_imms.blocks, blocks_imms.immediates with
+        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+        | Known blocks, Known imms ->
+          if Blocks.is_bottom blocks then
+            match Immediates.all imms with
+            | Known imms -> Proved imms
+            | Unknown -> Unknown
+          else
+            Invalid
+        end
+      | Resolved_value (Ok _) -> Invalid
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value Bottom -> Invalid
+      | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_equals_single_tagged_immediate env t : _ proof =
+    match prove_equals_tagged_immediates env t with
+    | Proved imms ->
+      begin match Immediate.Set.get_singleton imms with
+      | Some imm -> Proved imm
+      | None -> Unknown
+      end
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+
+  let prove_is_int env t : bool proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match Typing_env.resolve_type env t with
+    | _, Const (Tagged_immediate _) -> Proved true
+    | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+      | Naked_int64 _ | Naked_nativeint _)
     | _, Discriminant _ -> wrong_kind ()
     | _, Resolved resolved ->
       match resolved with
@@ -227,9 +215,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
         | Known blocks, Known imms ->
           (* CR mshinwell: Should we tighten things up by causing fatal errors
              in cases such as [blocks] and [imms] both being bottom? *)
-          if Blocks.is_bottom blocks then Proved Always_a_tagged_immediate
-          else if Immediates.is_bottom imms then Proved Never_a_tagged_immediate
-          else Unknown
+          if Blocks.is_bottom blocks then
+            if Immediates.is_bottom imms then Invalid
+            else Proved true
+          else
+            if Immediates.is_bottom imms then Proved false
+            else Unknown
         end
       | Resolved_value (Ok _) -> Invalid
       | Resolved_value Unknown -> Unknown
@@ -243,7 +234,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     match Typing_env.resolve_type env t with
     | _, Const (Tagged_immediate _) -> Unknown
     | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
-        | Naked_int64 _ | Naked_nativeint _)
+      | Naked_int64 _ | Naked_nativeint _)
     | _, Discriminant _ -> wrong_kind ()
     | _, Resolved resolved ->
       match resolved with
@@ -296,10 +287,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Invalid
 
   let reify env t : reification_result =
+(*
+Format.eprintf "reifying %a\n%!" Type_printers.print t;
+*)
     match Typing_env.resolve_type env t with
-    | None, (Const _ | Discriminant _) -> Cannot_reify
-    | Some canonical_simple, (Const _ | Discriminant _) ->
-      Simple canonical_simple
+    | _, Const const -> Simple (Simple.const const)
+    | _, Discriminant discr -> Simple (Simple.discriminant discr)
     | canonical_simple, Resolved resolved ->
       let try_canonical_simple () =
         match canonical_simple with

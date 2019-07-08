@@ -345,6 +345,12 @@ module type S = sig
     | Unknown
     | Invalid
 
+  (* CR mshinwell: Should remove "_equals_" from these names *)
+  val prove_equals_tagged_immediates
+     : Typing_env.t
+    -> t
+    -> Immediate.Set.t proof
+
   val prove_equals_single_tagged_immediate
      : Typing_env.t
     -> t
@@ -360,17 +366,10 @@ module type S = sig
     -> t
     -> Targetint.OCaml.t Tag.Map.t proof
 
-  type is_tagged_immediate = private
-    | Always_a_tagged_immediate
-    | Never_a_tagged_immediate
-
-  (* CR mshinwell: Adjust function name perhaps?  We need to note that this
-     is for use in a context where only a tagged immediate or a block is
-     allowed. *)
-  val prove_is_tagged_immediate
+  val prove_is_int
      : Typing_env.t
     -> t
-    -> is_tagged_immediate proof
+    -> bool proof
 
   (** Prove that the given type, of kind [Value], is a closures type
       describing exactly one closure.  The function declaration corresponding

@@ -378,13 +378,10 @@ Format.eprintf "SP env_extension:@ %a\n%!" T.Typing_env_extension.print env_exte
         let denv = DE.add_variable denv result_var (T.unknown kind) in
         DE.extend_typing_environment denv env_extension)
     in
-    (* CR mshinwell: Think about whether [cannot_lift] is actually needed.
-       It seems like maybe not: if we don't know the result of the primitive
-       then the type should be Unknown. *)
-    let cannot_lift =
-      not (Flambda_primitive.With_fixed_value.eligible prim)
-    in
-    Reification.try_to_reify dacc term ~bound_to:result_var ~cannot_lift
+    (* CR mshinwell: Add check along the lines of: types are unknown
+       whenever [not (Flambda_primitive.With_fixed_value.eligible prim)]
+       holds. *)
+    Reification.try_to_reify dacc term ~bound_to:result_var
   | Set_of_closures set_of_closures ->
     simplify_set_of_closures dacc set_of_closures ~result_var
 
