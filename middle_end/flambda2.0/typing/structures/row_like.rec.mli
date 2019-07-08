@@ -49,6 +49,8 @@ sig
 
   val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
 
+  val all_tags_and_indexes : t -> Tag_and_index.Set.t Or_unknown.t
+
   val is_bottom : t -> bool
 
   val map_maps_to

@@ -16,11 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: This should say "size" somewhere in the name for the
-   Targetint portion *)
-module Tag_and_targetint_ocaml : Identifiable.S
-  with type t = Tag.t * Targetint.OCaml.t
-
 module Int_indexed_product
   : Product_intf.S
     with module Index := Numbers.Int
@@ -38,9 +33,9 @@ val create : field_tys:Flambda_types.t list -> open_or_closed -> t
 
 val create_bottom : unit -> t
 
-val get_singleton
-   : t
-  -> (Tag_and_targetint_ocaml.t * Int_indexed_product.t) option
+val all_tags_and_sizes : t -> Targetint.OCaml.t Tag.Map.t Or_unknown.t
+
+val get_singleton : t -> (Tag_and_size.t * Int_indexed_product.t) option
 
 val is_bottom : t -> bool
 

@@ -114,6 +114,59 @@ let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
     let ty = T.bottom K.fabricated in
     Reachable.invalid (), TEE.one_equation name ty, dacc
 
+let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
+      ~block_ty ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  let type_for_tags tags_to_sizes =
+    let discrs =
+      Tag.Map.fold (fun tag _size discrs ->
+          let discr = Discriminant.of_tag tag in
+          Discriminant.Set.add discr discrs)
+        tags_to_sizes
+        Discriminant.Set.empty
+    in
+    T.these_discriminants discrs
+  in
+  match T.prove_tags_and_sizes typing_env block_ty with
+  | Proved inferred_tags ->
+    let tags =
+      Tag.Map.merge (fun tag claimed inferred ->
+          match claimed, inferred with
+          | None, None
+          | Some _, None -> None
+          | Some claimed_size, Some inferred_size ->
+            if Targetint.OCaml.equal claimed_size inferred_size then
+              Some claimed_size
+            else
+              Misc.fatal_errorf "Binding of [Get_tag] to %a: primitive \
+                  mentions tag %a with size %a, but inferred type has \
+                  size %a:@ %a"
+                Var_in_binding_pos.print result_var
+                Tag.print tag
+                Targetint.OCaml.print claimed_size
+                Targetint.OCaml.print inferred_size
+                T.print block_ty
+          | None, Some size ->
+            Misc.fatal_errorf "Binding of [Get_tag] to %a: primitive does \
+                not mention tag %a / size %a combination, but inferred \
+                type does:@ %a"
+              Var_in_binding_pos.print result_var
+              Tag.print tag
+              Targetint.OCaml.print size
+              T.print block_ty)
+        claimed_tags
+        inferred_tags
+    in
+    let ty = type_for_tags tags in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Unknown ->
+    let ty = type_for_tags claimed_tags in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Invalid ->
+    let ty = T.bottom K.fabricated in
+    Reachable.invalid (), TEE.one_equation name ty, dacc
+
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
 (*
@@ -152,6 +205,9 @@ end;
         boxable_number_kind ~result_var
     | Is_int ->
       simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
+    | Get_tag { tags_to_sizes; } ->
+      simplify_get_tag dacc ~original_term ~tags_to_sizes ~block_ty:arg_ty
+        ~result_var
     | _ ->
       (* CR mshinwell: temporary code *)
       let named = Named.create_prim (Unary (prim, arg)) dbg in
