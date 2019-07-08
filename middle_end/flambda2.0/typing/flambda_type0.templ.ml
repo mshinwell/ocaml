@@ -62,8 +62,13 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     if is_obviously_bottom meet_ty then Bottom
     else Ok env_extension
 
-  let erase_aliases = Type_erase_aliases.erase_aliases
-  let erase_aliases_ty_value = Type_erase_aliases.erase_aliases_ty_value
+  let erase_aliases env ~bound_name ~allowed t =
+    Type_erase_aliases.erase_aliases env ~bound_name
+      ~already_seen:Simple.Set.empty ~allowed t
+
+  let erase_aliases_ty_value env ~bound_name ~allowed ty_value =
+    Type_erase_aliases.erase_aliases_ty_value env ~bound_name
+      ~already_seen:Simple.Set.empty ~allowed ty_value
 
   let arity_of_list ts =
     Flambda_arity.create (List.map Flambda_type0_core.kind ts)
@@ -102,12 +107,11 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       Misc.fatal_errorf "Type %a is not of kind value"
         Type_printers.print t
     end;
-    (* CR mshinwell: The [get_alias] thing should presumably return the
-       canonical one *)
     match get_alias t with
     | None -> Unknown
     | Some simple ->
       match Simple.descr simple with
+      | Const (Tagged_immediate _) -> Unknown
       | Const _ | Discriminant _ ->
         Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
             different from that returned by [kind] (%a):@ %a"
@@ -130,9 +134,13 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
               K.print original_kind
               Type_printers.print t
           end;
+          (* CR mshinwell: Instead, get all aliases and find a Symbol,
+             to avoid relying on the fact that if there is a Symbol alias then
+             it will be canonical *)
           match Simple.descr simple with
           | Name (Symbol sym) -> Proved sym
           | Name (Var _) -> Unknown
+          | Const (Tagged_immediate _) -> Unknown
           | Const _ | Discriminant _ ->
             Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
                 doesn't match the kind of the returned [Simple] %a:@ %a"
@@ -293,6 +301,15 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
     match Typing_env.resolve_type env t with
     | _, Const const -> Simple (Simple.const const)
     | _, Discriminant discr -> Simple (Simple.discriminant discr)
+    | Some canonical_simple, _
+        when begin match Simple.descr canonical_simple with
+        | Name (Symbol _) -> true
+        | _ -> false
+        end ->
+      (* Don't lift things that are already bound to symbols.  Apart from
+         anything else, this could cause aliases between symbols, which are
+         currently forbidden (every symbol has the same binding time). *)
+      Cannot_reify
     | canonical_simple, Resolved resolved ->
       let try_canonical_simple () =
         match canonical_simple with

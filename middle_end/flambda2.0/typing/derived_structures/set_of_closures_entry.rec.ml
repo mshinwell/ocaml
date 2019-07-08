@@ -47,9 +47,10 @@ let join env t1 t2 =
   | Ok (t, _env_extension) -> t
   | Bottom -> create_bottom ()
 
-let erase_aliases ({ by_closure_id; } : t) env ~allowed : t =
+let erase_aliases ({ by_closure_id; } : t) env ~already_seen ~allowed : t =
   { by_closure_id =
-      Types_by_closure_id.erase_aliases by_closure_id env ~allowed;
+      Types_by_closure_id.erase_aliases by_closure_id env
+        ~already_seen ~allowed;
   }
 
 let free_names ({ by_closure_id; } : t) =

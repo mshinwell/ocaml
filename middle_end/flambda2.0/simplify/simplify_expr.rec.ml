@@ -71,6 +71,10 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
+Format.eprintf "About to simplify handler %a: params %a, param types %a\n%!"
+  Continuation.print _cont
+  KP.List.print params
+  (Format.pp_print_list T.print) arg_types;
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
@@ -751,6 +755,10 @@ and simplify_apply_cont
     Expr.create_invalid (), user_data, uacc
   | Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
+Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
+  Continuation.print (AC.continuation apply_cont)
+  (Format.pp_print_list T.print) arg_types
+  DA.print dacc;
     let args_arity = T.arity_of_list arg_types in
     let dacc =
       DA.record_continuation_use dacc (AC.continuation apply_cont)
@@ -858,19 +866,31 @@ and simplify_switch
           T.print scrutinee_ty
           Switch.print switch
     in
+    let reachable_arms =
+      Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
+        match known_values_of_scrutinee with
+        | Unknown -> Some cont
+        | Known known_values ->
+          if Discriminant.Set.mem arm known_values then Some cont
+          else None)
+    in
+    let dacc =
+      let typing_env_at_use = DE.typing_env (DA.denv dacc) in
+      Discriminant.Map.fold (fun _arm cont dacc ->
+          DA.record_continuation_use dacc cont
+            ~typing_env_at_use
+            ~arg_types:[])
+        reachable_arms
+        dacc
+    in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let reachable_arms =
-      Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
+      Discriminant.Map.filter_map reachable_arms ~f:(fun _arm cont ->
         let cont = UE.resolve_continuation_aliases uenv cont in
         match UE.find_continuation uenv cont with
         | Unreachable _ -> None
-        | Unknown _ | Inline _ ->
-          match known_values_of_scrutinee with
-          | Unknown -> Some cont
-          | Known known_values ->
-            if Discriminant.Set.mem arm known_values then Some cont
-            else None)
+        | Unknown _ | Inline _ -> Some cont)
     in
     let expr = Expr.create_switch ~scrutinee ~arms:reachable_arms in
     expr, user_data, uacc

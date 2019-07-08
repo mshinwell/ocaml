@@ -201,8 +201,10 @@ let simplify_discriminant_of_int dacc ~original_term ~int_ty ~result_var =
 
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
+(*
 Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
   ((Flambda_primitive.Unary (prim, arg)) : Flambda_primitive.t);
+*)
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   match Simplify_simple.simplify_simple dacc arg ~min_occurrence_kind with
@@ -210,9 +212,11 @@ Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   | Ok arg, arg_ty ->
+(*
 Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
   Simple.print arg
   T.print arg_ty;
+*)
     let original_term = Named.create_prim (Unary (prim, arg)) dbg in
     match prim with
     | Project_closure closure_id ->

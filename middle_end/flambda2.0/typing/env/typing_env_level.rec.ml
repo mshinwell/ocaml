@@ -166,7 +166,8 @@ let erase_aliases env ~allowed t =
   let equations =
     Name.Map.mapi (fun name ty ->
         let bound_name = Some name in
-        Type_erase_aliases.erase_aliases env ~bound_name ~allowed ty)
+        Type_erase_aliases.erase_aliases env ~bound_name
+          ~already_seen:Simple.Set.empty ~allowed ty)
       t.equations
   in
   { t with

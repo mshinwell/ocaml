@@ -99,19 +99,29 @@ end) = struct
         let dacc = DA.create definition_denv cont_uses_env r in
         let original_cont_num_uses = DA.num_continuation_uses dacc cont in
         let result, user_data, uacc =
-          try
-            simplify_continuation_handler_like dacc ~arg_types cont
-              cont_handler k
-          with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is:%s simplifying continuation \
-                handler@ %a@ \
-                with downwards accumulator:@ %a\n"
-              (Flambda_colours.error ())
-              (Flambda_colours.normal ())
-              Continuation_handler_like.print cont_handler
-              DA.print dacc;
-            raise Misc.Fatal_error
-          end
+          (* Don't simplify the handler if there aren't any uses: otherwise,
+             its code will be deleted but any continuation usage information
+             collected during its simplification will remain. *)
+          if original_cont_num_uses < 1 then
+let () = Format.eprintf "Continuation %a being deleted\n%!" Continuation.print cont in
+            let user_data, uacc =
+              k (DA.continuation_uses_env dacc) (DA.r dacc)
+            in
+            No_wrapper cont_handler, user_data, uacc
+          else
+            try
+              simplify_continuation_handler_like dacc ~arg_types cont
+                cont_handler k
+            with Misc.Fatal_error -> begin
+              Format.eprintf "\n%sContext is:%s simplifying continuation \
+                  handler@ %a@ \
+                  with downwards accumulator:@ %a\n"
+                (Flambda_colours.error ())
+                (Flambda_colours.normal ())
+                Continuation_handler_like.print cont_handler
+                DA.print dacc;
+              raise Misc.Fatal_error
+            end
         in
         let uenv = UA.uenv uacc in
         let uenv' = uenv in
