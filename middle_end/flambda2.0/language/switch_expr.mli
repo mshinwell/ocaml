@@ -28,12 +28,12 @@ type t
 include Expr_std.S with type t := t
 
 val create
-   : scrutinee:Name.t
+   : scrutinee:Simple.t
   -> arms:Continuation.t Discriminant.Map.t
   -> t
 
 (** The scrutinee of the switch. *)
-val scrutinee : t -> Name.t
+val scrutinee : t -> Simple.t
 
 (** Call the given function [f] on each (discriminant, destination) pair
     in the switch. *)

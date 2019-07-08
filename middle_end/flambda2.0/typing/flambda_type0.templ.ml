@@ -206,6 +206,46 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_naked_number _ -> wrong_kind ()
       | Resolved_fabricated _ -> wrong_kind ()
 
+  type is_tagged_immediate =
+    | Always_a_tagged_immediate
+    | Never_a_tagged_immediate
+
+  let prove_is_tagged_immediate env t : is_tagged_immediate proof =
+    match Typing_env.resolve_type env t with
+    | _, Const (Tagged_immediate _) -> Proved Always_a_tagged_immediate
+    | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+        | Naked_int64 _ | Naked_nativeint _) -> Invalid
+    | _, Discriminant _ -> Invalid
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        begin match blocks_imms.blocks, blocks_imms.immediates with
+        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+        | Known blocks, Known _imms ->
+          (* CR mshinwell: Should we tighten things up by causing fatal errors
+             in cases such as [blocks] and [_imms] both being bottom? *)
+          if Blocks.is_bottom blocks then Proved Always_a_tagged_immediate
+          else Unknown
+        end
+      | Resolved_value (Ok _ | Unknown) -> Proved Never_a_tagged_immediate
+      | Resolved_value Bottom -> Invalid
+      | Resolved_naked_number _ | Resolved_fabricated _ -> Invalid
+
+  let prove_equals_discriminants env t : Discriminant.Set.t proof =
+    match Typing_env.resolve_type env t with
+    | _, Const _ -> Invalid
+    | _, Discriminant discr -> Proved (Discriminant.Set.singleton discr)
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_value _ | Resolved_naked_number _ -> Invalid
+      | Resolved_fabricated (Ok (Discriminants discrs)) ->
+        begin match Discriminants.all discrs with
+        | Known discrs -> Proved discrs
+        | Unknown -> Unknown
+        end
+      | Resolved_fabricated Bottom -> Invalid
+      | Resolved_fabricated (Ok _ | Unknown) -> Unknown
+
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (Symbol.t list)
     | Boxed_float of Float.t

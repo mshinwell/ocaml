@@ -838,20 +838,42 @@ and simplify_apply_cont
 and simplify_switch
   : 'a. DA.t -> Switch.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc switch k ->
-  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-  let uenv = UA.uenv uacc in
-  let reachable_arms =
-    Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun _arm cont ->
-      let cont = UE.resolve_continuation_aliases uenv cont in
-      match UE.find_continuation uenv cont with
-      | Unreachable _ -> None
-      | Unknown _ | Inline _ -> Some cont)
-  in
-  let expr =
-    Expr.create_switch ~scrutinee:(Switch.scrutinee switch)
-      ~arms:reachable_arms
-  in
-  expr, user_data, uacc
+  let min_occurrence_kind = Name_occurrence_kind.normal in
+  let scrutinee = Switch.scrutinee switch in
+  match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
+  | Bottom, _ty ->
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    Expr.create_invalid (), user_data, uacc
+  | Ok scrutinee, scrutinee_ty ->
+    let known_values_of_scrutinee : _ Or_unknown.t =
+      match
+        T.prove_equals_discriminants (DE.typing_env (DA.denv dacc))
+          scrutinee_ty
+      with
+      | Proved discrs -> Known discrs
+      | Unknown -> Unknown
+      | Invalid ->
+        Misc.fatal_errorf "Simplification of [Switch] scrutinee did not \
+            yield [Bottom] even though type (%a) is bottom:@ %a"
+          T.print scrutinee_ty
+          Switch.print switch
+    in
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    let uenv = UA.uenv uacc in
+    let reachable_arms =
+      Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
+        let cont = UE.resolve_continuation_aliases uenv cont in
+        match UE.find_continuation uenv cont with
+        | Unreachable _ -> None
+        | Unknown _ | Inline _ ->
+          match known_values_of_scrutinee with
+          | Unknown -> Some cont
+          | Known known_values ->
+            if Discriminant.Set.mem arm known_values then Some cont
+            else None)
+    in
+    let expr = Expr.create_switch ~scrutinee ~arms:reachable_arms in
+    expr, user_data, uacc
 
 and simplify_expr
   : 'a. DA.t -> Expr.t -> 'a k -> Expr.t * 'a * UA.t

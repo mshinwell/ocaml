@@ -403,11 +403,12 @@ let this_discriminant_as_ty_fabricated discr : ty_fabricated =
 let this_discriminant discr : t =
   Fabricated (this_discriminant_as_ty_fabricated discr)
 
+let these_discriminants discrs : t =
+  let discrs = Discriminants.create discrs in
+  Fabricated (No_alias (Ok (Discriminants discrs)))
+
 let this_discriminant_without_alias discr : t =
-  let discriminants =
-    Discriminants.create (Discriminant.Set.singleton discr)
-  in
-  Fabricated (No_alias (Ok (Discriminants discriminants)))
+  these_discriminants (Discriminant.Set.singleton discr)
 
 let kind (t : t) =
   match t with

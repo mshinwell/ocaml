@@ -19,7 +19,7 @@
 module K = Flambda_kind
 
 type t = {
-  scrutinee : Name.t;
+  scrutinee : Simple.t;
   arms : Continuation.t Discriminant.Map.t;
 }
 
@@ -41,7 +41,7 @@ let print ppf { scrutinee; arms; } =
     "@[<hov 1>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
     (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
-    Name.print scrutinee
+    Simple.print scrutinee
     print_arms arms
 
 let print_with_cache ~cache:_ ppf t = print ppf t
@@ -54,7 +54,7 @@ let invariant env ({ scrutinee; arms; } as t) =
       reason
       print t
   in
-  E.check_name_is_bound_and_of_kind env scrutinee K.fabricated;
+  E.check_simple_is_bound_and_of_kind env scrutinee K.fabricated;
   assert (Discriminant.Map.cardinal arms >= 2);
   let check discr k =
     ignore (discr : Discriminant.t);
@@ -99,13 +99,10 @@ let free_names { scrutinee; arms; } =
       arms
       (Name_occurrences.empty)
   in
-  Name_occurrences.union_list [
-    Name_occurrences.singleton_name scrutinee Name_occurrence_kind.normal;
-    free_names_in_arms;
-  ]
+  Name_occurrences.union (Simple.free_names scrutinee) free_names_in_arms
 
 let apply_name_permutation ({ scrutinee; arms; } as t) perm =
-  let scrutinee' = Name_permutation.apply_name perm scrutinee in
+  let scrutinee' = Simple.apply_name_permutation scrutinee perm in
   let arms' =
     Discriminant.Map.map_sharing (fun k ->
         Name_permutation.apply_continuation perm k)

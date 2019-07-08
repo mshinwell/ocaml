@@ -74,6 +74,7 @@ val box_nativeint : Flambda_types.t -> Flambda_types.t
 
 val this_discriminant : Discriminant.t -> Flambda_types.t
 val this_discriminant_without_alias : Discriminant.t -> Flambda_types.t
+val these_discriminants : Discriminant.Set.t -> Flambda_types.t
 
 val immutable_block
    : Tag.t

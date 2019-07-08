@@ -93,20 +93,20 @@ module rec Expr : sig
   (** Create a [Switch] expression, save that zero-arm switches are converted
       to [Invalid], and one-arm switches to [Apply_cont]. *)
   val create_switch0
-     : scrutinee:Name.t
+     : scrutinee:Simple.t
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t * switch_creation_result
 
   (** Like [create_switch0], but for use when the caller isn't interested in
       whether something got deleted. *)
   val create_switch
-     : scrutinee:Name.t
+     : scrutinee:Simple.t
     -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t
 
   (** Build a [Switch] corresponding to a traditional if-then-else. *)
   val create_if_then_else
-     : scrutinee:Name.t
+     : scrutinee:Simple.t
     -> if_true:Continuation.t
     -> if_false:Continuation.t
     -> t
