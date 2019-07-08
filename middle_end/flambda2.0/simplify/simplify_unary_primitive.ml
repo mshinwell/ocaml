@@ -18,6 +18,8 @@
 
 open! Flambda.Import
 
+module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
@@ -93,6 +95,25 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
     TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
     dacc
 
+let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  let proof = T.prove_is_tagged_immediate typing_env scrutinee_ty in
+  let proved discriminant =
+    let ty = T.this_discriminant discriminant in
+    let env_extension = TEE.one_equation name ty in
+    Reachable.reachable original_term, env_extension, dacc
+  in
+  match proof with
+  | Proved Always_a_tagged_immediate -> proved Discriminant.bool_true
+  | Proved Never_a_tagged_immediate -> proved Discriminant.bool_false
+  | Unknown ->
+    let ty = T.these_discriminants Discriminant.all_bools_set in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Invalid ->
+    let ty = T.bottom K.fabricated in
+    Reachable.invalid (), TEE.one_equation name ty, dacc
+
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
 (*
@@ -129,6 +150,8 @@ end;
     | Box_number boxable_number_kind ->
       simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
         boxable_number_kind ~result_var
+    | Is_int ->
+      simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
     | _ ->
       (* CR mshinwell: temporary code *)
       let named = Named.create_prim (Unary (prim, arg)) dbg in

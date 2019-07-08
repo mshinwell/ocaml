@@ -38,6 +38,8 @@ Format.eprintf "Inlining callee %a\n%!" Simple.print callee;
         T.Typing_env.get_canonical_simple typing_env callee
           ~min_occurrence_kind:Name_occurrence_kind.normal
       in
+      (* CR mshinwell: Shouldn't need this---instead set the type during
+         lifting of the closure symbol to have [Rec_info] on it *)
       match canonical_callee with
       | Bottom -> dacc, Expr.create_invalid ()
       | Ok canonical_callee ->

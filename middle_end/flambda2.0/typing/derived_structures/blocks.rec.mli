@@ -42,6 +42,8 @@ val get_singleton
    : t
   -> (Tag_and_targetint_ocaml.t * Int_indexed_product.t) option
 
+val is_bottom : t -> bool
+
 include Type_structure_intf.S
   with type t := t
   with type flambda_type := Flambda_types.t

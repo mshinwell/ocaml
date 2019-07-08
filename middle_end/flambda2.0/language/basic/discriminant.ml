@@ -65,3 +65,5 @@ include Identifiable.Make (struct
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
 end)
+
+let all_bools_set = Set.of_list [bool_false; bool_true]

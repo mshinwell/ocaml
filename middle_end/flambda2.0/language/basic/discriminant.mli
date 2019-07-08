@@ -36,3 +36,5 @@ val zero : t
 
 val bool_false : t
 val bool_true : t
+
+val all_bools_set : Set.t

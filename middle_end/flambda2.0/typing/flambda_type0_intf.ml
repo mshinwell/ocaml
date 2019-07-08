@@ -225,6 +225,8 @@ module type S = sig
   (** The given discriminant. *)
   val this_discriminant : Discriminant.t -> t
 
+  val these_discriminants : Discriminant.Set.t -> t
+
   (* CR mshinwell: decide on exact strategy for mutable blocks *)
 
   (** The type of an immutable block with a known tag, size and field types. *)
@@ -347,6 +349,20 @@ module type S = sig
      : Typing_env.t
     -> t
     -> Immediate.t proof
+
+  val prove_equals_discriminants
+     : Typing_env.t
+    -> t
+    -> Discriminant.Set.t proof
+
+  type is_tagged_immediate = private
+    | Always_a_tagged_immediate
+    | Never_a_tagged_immediate
+
+  val prove_is_tagged_immediate
+     : Typing_env.t
+    -> t
+    -> is_tagged_immediate proof
 
   (** Prove that the given type, of kind [Value], is a closures type
       describing exactly one closure.  The function declaration corresponding

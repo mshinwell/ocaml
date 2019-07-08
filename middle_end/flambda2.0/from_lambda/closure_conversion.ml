@@ -484,7 +484,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
           (Numbers.Int.zero_to_n (sw.numconsts - 1))
           (D.Map.of_list arms)
     in
-    let scrutinee = Env.find_name env scrutinee in
+    let scrutinee = Simple.name (Env.find_name env scrutinee) in
     Expr.create_switch ~scrutinee ~arms
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
