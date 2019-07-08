@@ -101,7 +101,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Unknown
     | Invalid
 
-  let prove_equals_to_symbol env t : _ proof =
+  type symbol_or_tagged_immediate =
+    | Symbol of Symbol.t
+    | Tagged_immediate of Immediate.t
+
+  let prove_equals_to_symbol_or_tagged_immediate env t
+        : symbol_or_tagged_immediate proof =
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
       Misc.fatal_errorf "Type %a is not of kind value"
@@ -111,7 +116,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | None -> Unknown
     | Some simple ->
       match Simple.descr simple with
-      | Const (Tagged_immediate _) -> Unknown
+      | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
       | Const _ | Discriminant _ ->
         Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
             different from that returned by [kind] (%a):@ %a"
@@ -138,9 +143,9 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
              to avoid relying on the fact that if there is a Symbol alias then
              it will be canonical *)
           match Simple.descr simple with
-          | Name (Symbol sym) -> Proved sym
+          | Name (Symbol sym) -> Proved (Symbol sym)
           | Name (Var _) -> Unknown
-          | Const (Tagged_immediate _) -> Unknown
+          | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
           | Const _ | Discriminant _ ->
             Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
                 doesn't match the kind of the returned [Simple] %a:@ %a"
@@ -282,7 +287,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_fabricated Bottom -> Invalid
 
   type to_lift =
-    | Immutable_block of Tag.Scannable.t * (Symbol.t list)
+    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
@@ -331,17 +336,25 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
               let field_types =
                 Blocks.Int_indexed_product.components field_types
               in
-              let symbols =
-                List.filter_map (fun field_type ->
-                    match prove_equals_to_symbol env field_type with
-                    | Proved sym -> Some sym
+              let symbols_or_tagged_immediates =
+                List.filter_map
+                  (fun field_type : symbol_or_tagged_immediate option ->
+                    match
+                      prove_equals_to_symbol_or_tagged_immediate env field_type
+                    with
+                    | Proved (Symbol sym) -> Some (Symbol sym)
+                    | Proved (Tagged_immediate sym) ->
+                      Some (Tagged_immediate sym)
                     (* CR mshinwell: [Invalid] should propagate up *)
                     | Unknown | Invalid -> None)
                   field_types
               in
-              if List.compare_lengths field_types symbols = 0 then
+              if List.compare_lengths field_types symbols_or_tagged_immediates
+                = 0
+              then
                 match Tag.Scannable.of_tag tag with
-                | Some tag -> Lift (Immutable_block (tag, symbols))
+                | Some tag ->
+                  Lift (Immutable_block (tag, symbols_or_tagged_immediates))
                 | None -> try_canonical_simple ()
               else
                 try_canonical_simple ()

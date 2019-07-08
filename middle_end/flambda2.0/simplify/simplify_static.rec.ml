@@ -92,12 +92,16 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
     | Bottom, ty ->
       assert (K.equal (T.kind ty) K.value);
-      (* CR mshinwell: Work out what should happen here *)
+      (* CR mshinwell: This should be "invalid" and propagate up *)
       of_kind_value, T.bottom K.value
     | Ok simple, ty ->
       match Simple.descr simple with
       | Name (Symbol sym) -> Of_kind_value.Symbol sym, ty
-      | Name (Var _) | Const _ | Discriminant _ -> of_kind_value, ty
+      | Name (Var _) -> of_kind_value, ty
+      | Const (Tagged_immediate imm) -> Of_kind_value.Tagged_immediate imm, ty
+      | Const _ | Discriminant _ ->
+        (* CR mshinwell: This should be "invalid" and propagate up *)
+        of_kind_value, ty
 
 let simplify_or_variable dacc type_for_const
       (or_variable : _ Static_part.or_variable) =
@@ -316,6 +320,7 @@ let simplify_static_part_of_kind_value dacc
     DE.check_variable_is_bound (DA.denv dacc) var;
     let dacc = bind_result_sym (T.any_fabricated ()) in
     static_part, dacc
+  (* CR mshinwell: Need to reify to change Equals types into new terms *)
   | Boxed_float or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_float f) or_var
