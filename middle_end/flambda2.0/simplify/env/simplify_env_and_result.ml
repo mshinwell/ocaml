@@ -160,6 +160,8 @@ end = struct
     in
     { t with typing_env; }
 
+  let find_symbol t sym = find_name t (Name.symbol sym)
+
   let define_name t name kind =
     let typing_env =
       TE.add_definition t.typing_env name kind

@@ -78,35 +78,33 @@ end
 module Simplify_return_cont =
   Generic_simplify_let_cont.Make (Return_cont_handler)
 
-(* CR-someday mshinwell: Add improved simplification using types (we have
-   prototype code to do this). *)
+(* CR-someday mshinwell: Finish improved simplification using types *)
 
 let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
   let denv = DA.denv dacc in
   match of_kind_value with
   | Symbol sym ->
-    DE.check_symbol_is_bound denv sym;
-    of_kind_value
-  | Tagged_immediate _ -> of_kind_value
+    let ty = DE.find_symbol denv sym in
+    of_kind_value, ty
+  | Tagged_immediate i -> of_kind_value, T.this_tagged_immediate i
   | Dynamically_computed var ->
     let min_occurrence_kind = Name_occurrence_kind.normal in
     match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
     | Bottom, ty ->
       assert (K.equal (T.kind ty) K.value);
       (* CR mshinwell: Work out what should happen here *)
-      of_kind_value
-    | Ok simple, _ty ->
+      of_kind_value, T.bottom K.value
+    | Ok simple, ty ->
       match Simple.descr simple with
-      | Name (Symbol sym) -> Of_kind_value.Symbol sym
-      | Name (Var _) | Const _ | Discriminant _ -> of_kind_value
+      | Name (Symbol sym) -> Of_kind_value.Symbol sym, ty
+      | Name (Var _) | Const _ | Discriminant _ -> of_kind_value, ty
 
-let simplify_or_variable dacc (or_variable : _ Static_part.or_variable) =
+let simplify_or_variable dacc type_for_const
+      (or_variable : _ Static_part.or_variable) =
   let denv = DA.denv dacc in
   match or_variable with
-  | Const _ -> or_variable
-  | Var var ->
-    DE.check_variable_is_bound denv var;
-    or_variable
+  | Const const -> or_variable, type_for_const const
+  | Var var -> or_variable, DE.find_variable denv var
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
       ~set_of_closures_symbol
@@ -305,54 +303,71 @@ let simplify_static_part_of_kind_value dacc
   in
   match static_part with
   | Block (tag, is_mutable, fields) ->
-    let fields =
+    let fields_with_tys =
       List.map (fun of_kind_value ->
           simplify_of_kind_value dacc of_kind_value)
         fields
     in
-    let dacc = bind_result_sym (T.any_value ()) in
+    let fields, field_tys = List.split fields_with_tys in
+    let ty = T.immutable_block (Tag.Scannable.to_tag tag) ~fields:field_tys in
+    let dacc = bind_result_sym ty in
     Block (tag, is_mutable, fields), dacc
   | Fabricated_block var ->
     DE.check_variable_is_bound (DA.denv dacc) var;
     let dacc = bind_result_sym (T.any_fabricated ()) in
     static_part, dacc
   | Boxed_float or_var ->
-    let dacc = bind_result_sym (T.any_boxed_float ()) in
-    Boxed_float (simplify_or_variable dacc or_var), dacc
-  | Boxed_int32 (Const i) ->
-    let ty = T.this_boxed_int32 i in
-    let dacc = bind_result_sym ty in
-    static_part, dacc
-  | Boxed_int32 or_var ->
-    let dacc = bind_result_sym (T.any_boxed_int32 ()) in
-    Boxed_int32 (simplify_or_variable dacc or_var), dacc
-  | Boxed_int64 (Const i) ->
-    let ty = T.this_boxed_int64 i in
-    let dacc = bind_result_sym ty in
-    static_part, dacc
-  | Boxed_int64 or_var ->
-    let dacc = bind_result_sym (T.any_boxed_int64 ()) in
-    Boxed_int64 (simplify_or_variable dacc or_var), dacc
-  | Boxed_nativeint or_var ->
-    let dacc = bind_result_sym (T.any_boxed_nativeint ()) in
-    Boxed_nativeint (simplify_or_variable dacc or_var), dacc
-  | Immutable_float_array fields ->
-    let fields =
-      List.map (fun field -> simplify_or_variable dacc field) fields
+    let or_var, ty =
+      simplify_or_variable dacc (fun f -> T.this_boxed_float f) or_var
     in
+    let dacc = bind_result_sym ty in
+    Boxed_float or_var, dacc
+  | Boxed_int32 or_var ->
+    let or_var, ty =
+      simplify_or_variable dacc (fun f -> T.this_boxed_int32 f) or_var
+    in
+    let dacc = bind_result_sym ty in
+    Boxed_int32 or_var, dacc
+  | Boxed_int64 or_var ->
+    let or_var, ty =
+      simplify_or_variable dacc (fun f -> T.this_boxed_int64 f) or_var
+    in
+    let dacc = bind_result_sym ty in
+    Boxed_int64 or_var, dacc
+  | Boxed_nativeint or_var ->
+    let or_var, ty =
+      simplify_or_variable dacc (fun f -> T.this_boxed_nativeint f) or_var
+    in
+    let dacc = bind_result_sym ty in
+    Boxed_nativeint or_var, dacc
+  | Immutable_float_array fields ->
+    let fields_with_tys =
+      List.map (fun field ->
+          simplify_or_variable dacc
+            (fun f -> T.this_naked_float f)
+            field)
+        fields
+    in
+    let fields, _field_tys = List.split fields_with_tys in
     let dacc = bind_result_sym (T.any_value ()) in
     Immutable_float_array fields, dacc
   | Mutable_string { initial_value; } ->
+    let initial_value, _initial_value_ty =
+      simplify_or_variable dacc (fun _str -> T.any_value ()) initial_value
+    in
     let static_part : K.value Static_part.t =
       Mutable_string {
-        initial_value = simplify_or_variable dacc initial_value;
+        initial_value;
       }
     in
     let dacc = bind_result_sym (T.any_value ()) in
     static_part, dacc
   | Immutable_string or_var ->
-    let dacc = bind_result_sym (T.any_value ()) in
-    Immutable_string (simplify_or_variable dacc or_var), dacc
+    let or_var, ty =
+      simplify_or_variable dacc (fun _str -> T.any_value ()) or_var
+    in
+    let dacc = bind_result_sym ty in
+    Immutable_string or_var, dacc
 
 let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
