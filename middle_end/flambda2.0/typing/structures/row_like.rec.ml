@@ -219,15 +219,15 @@ Format.eprintf "RL meet is returning bottom\n%!";
     if not (Index.Map.is_empty at_least) then Unknown
     else Known (Tag_and_index.Map.keys known)
 
-  let erase_aliases { known; at_least; } env ~allowed =
+  let erase_aliases { known; at_least; } env ~already_seen ~allowed =
     let known =
       Tag_and_index.Map.map (fun maps_to ->
-          Maps_to.erase_aliases maps_to env ~allowed)
+          Maps_to.erase_aliases maps_to env ~already_seen ~allowed)
         known
     in
     let at_least =
       Index.Map.map (fun maps_to ->
-          Maps_to.erase_aliases maps_to env ~allowed)
+          Maps_to.erase_aliases maps_to env ~already_seen ~allowed)
         at_least
     in
     { known;

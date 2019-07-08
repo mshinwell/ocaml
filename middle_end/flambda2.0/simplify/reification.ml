@@ -68,11 +68,11 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
   let var_ty = T.alias_type_of (T.kind ty) symbol' in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
-      let denv = DE.add_symbol denv symbol ty in
 (*
 Format.eprintf "Equation for lifted constant: %a = %a\n%!"
   Variable.print bound_to T.print ty;
 *)
+      let denv = DE.add_symbol denv symbol ty in
       DE.add_equation_on_variable denv bound_to var_ty)
   in
 (*
@@ -80,20 +80,24 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
 *)
   Reachable.reachable term, dacc, var_ty
 
-let try_to_reify dacc (term : Reachable.t) ~bound_to =
-  let bound_to = Var_in_binding_pos.var bound_to in
+let try_to_reify dacc (term : Reachable.t) ~bound_to:bound_to' =
+  let bound_to = Var_in_binding_pos.var bound_to' in
   let denv = DA.denv dacc in
   let ty = DE.find_variable denv bound_to in
   match term with
-  | Invalid _ -> 
+  | Invalid _ ->
     let ty = T.bottom_like ty in
     let denv = DE.add_equation_on_variable denv bound_to ty in
     Reachable.invalid (), DA.with_denv dacc denv, ty
   | Reachable _ ->
     match T.reify (DE.typing_env denv) ty with
     | Lift to_lift ->
-      let static_part = create_static_part to_lift in
-      lift dacc ty ~bound_to static_part
+      let occ_kind = Var_in_binding_pos.occurrence_kind bound_to' in
+      if Name_occurrence_kind.is_normal occ_kind then
+        let static_part = create_static_part to_lift in
+        lift dacc ty ~bound_to static_part
+      else
+        term, dacc, ty
     | Simple simple ->
       let term = Named.create_simple simple in
       Reachable.reachable term, dacc, ty

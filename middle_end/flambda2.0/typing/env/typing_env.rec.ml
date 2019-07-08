@@ -820,6 +820,7 @@ let create_using_resolver_and_symbol_bindings_from t =
           let typ =
             let bound_name = Some name in
             Type_erase_aliases.erase_aliases t ~bound_name
+              ~already_seen:Simple.Set.empty
               ~allowed:Variable.Set.empty typ
           in
           Some (typ, binding_time, occurrence_kind))

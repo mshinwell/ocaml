@@ -419,6 +419,9 @@ let simplify_return_continuation_handler dacc ~arg_types _cont
       : Return_cont_handler.t Generic_simplify_let_cont.result * _ * _ =
   assert (List.compare_lengths arg_types
     return_cont_handler.computed_values = 0);
+Format.eprintf "Return cont %a: arg types %a\n%!"
+  Continuation.print _cont
+  (Format.pp_print_list T.print) arg_types;
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       List.fold_left2 (fun denv ty param ->
@@ -510,7 +513,10 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           return_cont_handler
           ~body:computation.expr
           simplify_return_continuation_handler
-          (fun _ _ -> Misc.fatal_error "Should never be called")
+          (fun _cont_uses_env r ->
+            let uacc = UA.create UE.empty r in
+            (* CR mshinwell: This should return an "invalid" node. *)
+            (computation.computed_values, defn.static_structure, dacc), uacc)
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
       let return_continuation =
