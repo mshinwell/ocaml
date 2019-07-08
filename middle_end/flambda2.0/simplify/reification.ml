@@ -27,10 +27,14 @@ module T = Flambda_type
 let create_static_part (to_lift : T.to_lift)
     : K.value Flambda_static.Static_part.t =
   match to_lift with
-  | Immutable_block (tag, symbols) ->
+  | Immutable_block (tag, fields) ->
     let of_kind_values =
-      List.map (fun sym : Flambda_static.Of_kind_value.t -> Symbol sym)
-        symbols
+      List.map (fun (field : T.symbol_or_tagged_immediate)
+              : Flambda_static.Of_kind_value.t ->
+          match field with
+          | Symbol sym -> Symbol sym
+          | Tagged_immediate imm -> Tagged_immediate imm)
+        fields
     in
     Block (tag, Immutable, of_kind_values)
   | Boxed_float f -> Boxed_float (Const f)

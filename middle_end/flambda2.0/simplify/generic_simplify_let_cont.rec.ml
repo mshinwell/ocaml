@@ -103,7 +103,6 @@ end) = struct
              its code will be deleted but any continuation usage information
              collected during its simplification will remain. *)
           if original_cont_num_uses < 1 then
-let () = Format.eprintf "Continuation %a being deleted\n%!" Continuation.print cont in
             let user_data, uacc =
               k (DA.continuation_uses_env dacc) (DA.r dacc)
             in

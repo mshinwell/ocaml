@@ -325,8 +325,12 @@ module type S = sig
   val type_for_const : Simple.Const.t -> t
   val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
-  type to_lift =
-    | Immutable_block of Tag.Scannable.t * (Symbol.t list)
+  type symbol_or_tagged_immediate = private
+    | Symbol of Symbol.t
+    | Tagged_immediate of Immediate.t
+
+  type to_lift = (* private *) (* CR mshinwell: resurrect *)
+    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
