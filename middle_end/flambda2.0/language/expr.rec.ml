@@ -209,14 +209,6 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
      free names of [body]? *)
   if not keep_binding then body, let_creation_result
   else
-    (* To save space, only keep free names on the outer term. *)
-    (* CR mshinwell: Assess whether sharing in the maps is good enough to
-       remove this special case *)
-    let body =
-      { body with
-        free_names = Not_computed;
-      }
-    in
     let let_expr = Let_expr.create ~bound_var ~defining_expr ~body in
     let free_names = Let_expr.free_names let_expr in
     let t =
