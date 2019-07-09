@@ -27,8 +27,6 @@ module T = Flambda_type
 module TEE = Flambda_type.Typing_env_extension
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
 
 type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a
@@ -76,6 +74,7 @@ module Binary_arith_like (N : Binary_arith_like_sig) : sig
   val simplify
      : DA.t
     -> original_term:Named.t
+    -> Debuginfo.t
     -> N.op
     -> arg1:Simple.t
     -> arg1_ty:Flambda_type.t
@@ -112,7 +111,7 @@ end = struct
     end)
   end
 
-  let simplify dacc ~original_term op ~arg1 ~arg1_ty ~arg2 ~arg2_ty
+  let simplify dacc ~original_term dbg op ~arg1 ~arg1_ty ~arg2 ~arg2_ty
         ~result_var =
     let module P = Possible_result in
     let result = Name.var (Var_in_binding_pos.var result_var) in
@@ -139,7 +138,7 @@ end = struct
         let named =
           match P.Set.get_singleton possible_results with
           | Some (Exactly i) -> N.term i
-          | Some (Prim prim) -> original_term
+          | Some (Prim prim) -> Named.create_prim prim dbg
           | Some (Simple simple) -> Named.create_simple simple
           | None -> original_term
         in
@@ -383,7 +382,7 @@ end = struct
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
-  let prover_rhs = T.prove_tagged_immediate
+  let prover_rhs = T.prove_equals_tagged_immediates
 
   let these = I.these_unboxed
 
@@ -486,7 +485,7 @@ end = struct
   let these = T.these_tagged_immediates
 
   let term imm : Named.t =
-    Simple (Simple.const (Tagged_immediate imm))
+    Named.create_simple (Simple.const (Tagged_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -593,15 +592,15 @@ end = struct
 
   let kind = K.Standard_int_or_float.Naked_float
 
-  let ok_to_evaluate env = E.const_float_prop env
+  let ok_to_evaluate denv = DE.float_const_prop denv
 
-  let prover_lhs = T.prove_naked_float
-  let prover_rhs = T.prove_naked_float
+  let prover_lhs = T.prove_naked_floats
+  let prover_rhs = T.prove_naked_floats
 
   let these = T.these_naked_floats
 
-  let term f : Named.t =
-    Simple (Simple.const (Naked_float f))
+  let term f =
+    Named.create_simple (Simple.const (Naked_float f))
 
   module Pair = F.Pair
   let cross_product = F.cross_product
@@ -680,10 +679,10 @@ end = struct
 
   let kind = K.Standard_int_or_float.Naked_float
 
-  let ok_to_evaluate env = E.const_float_prop env
+  let ok_to_evaluate denv = DE.float_const_prop denv
 
-  let prover_lhs = T.prove_naked_float
-  let prover_rhs = T.prove_naked_float
+  let prover_lhs = T.prove_naked_floats
+  let prover_rhs = T.prove_naked_floats
 
   let these = T.these_tagged_immediates
 
@@ -772,6 +771,81 @@ module Binary_int_eq_comp_int64 =
 module Binary_int_eq_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
 
+let simplify_phys_equal dacc ~original_term dbg (kind : K.t)
+      (op : Flambda_primitive.equality_comparison)
+      ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var =
+  let result = Name.var (Var_in_binding_pos.var result_var) in
+  begin match kind with
+  | Value ->
+    let typing_env = DE.typing_env (DA.denv dacc) in
+    let proof1 = T.prove_equals_tagged_immediates typing_env arg1_ty in
+    let proof2 = T.prove_equals_tagged_immediates typing_env arg2_ty in
+    begin match proof1, proof2 with
+    | Proved _, Proved _ ->
+      Binary_int_eq_comp_tagged_immediate.simplify dacc ~original_term dbg
+        op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+    | _, _ ->
+      let physically_equal =
+        false
+        (* CR mshinwell: Resurrect this -- see cps_types branch.
+        T.values_physically_equal arg1_ty arg2_ty
+        *)
+      in
+      let physically_distinct =
+        false
+        (* CR mshinwell: Resurrect this -- see cps_types branch.
+        (* Structural inequality implies physical inequality. *)
+        let env = E.get_typing_environment env in
+        T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
+        *)
+      in
+      let const bool =
+        let env_extension =
+          TEE.one_equation result
+            (T.this_tagged_immediate (Immediate.bool bool))
+        in
+        Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
+          env_extension, dacc
+      in
+      begin match op, physically_equal, physically_distinct with
+      | Eq, true, _ -> const true
+      | Neq, true, _ -> const false
+      | Eq, _, true -> const false
+      | Neq, _, true -> const true
+      | _, _, _ ->
+        let env_extension =
+          TEE.one_equation result
+            (T.these_tagged_immediates Immediate.all_bools)
+        in
+        Reachable.reachable original_term, env_extension, dacc
+      end
+    end
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
+  | Naked_number Naked_float ->
+    (* CR mshinwell: Should this case be statically disallowed in the type,
+       to force people to use [Float_comp]? *)
+    let op : Flambda_primitive.comparison =
+      match op with
+      | Eq -> Eq
+      | Neq -> Neq
+    in
+    Binary_float_comp.simplify dacc ~original_term dbg
+      op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+  | Naked_number Naked_int32 ->
+    Binary_int_eq_comp_int32.simplify dacc ~original_term dbg
+      op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+  | Naked_number Naked_int64 ->
+    Binary_int_eq_comp_int64.simplify dacc ~original_term dbg
+      op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+  | Naked_number Naked_nativeint ->
+    Binary_int_eq_comp_nativeint.simplify dacc ~original_term dbg
+      op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+  | Fabricated ->
+    Misc.fatal_errorf "Bad kind for equality comparison: %a"
+      K.print kind
+  end
+
 let simplify_block_load dacc prim ~block ~block_ty ~index ~index_ty
       dbg ~result_var =
   let original_term = Named.create_prim (Binary (prim, block, index)) dbg in
@@ -825,68 +899,71 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       | Int_arith (kind, op) ->
         begin match kind with
         | Tagged_immediate ->
-          Binary_int_arith_tagged_immediate.simplify env r ~original_term
+          Binary_int_arith_tagged_immediate.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int32 ->
-          Binary_int_arith_int32.simplify env r ~original_term
+          Binary_int_arith_int32.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int64 ->
-          Binary_int_arith_int64.simplify env r ~original_term
+          Binary_int_arith_int64.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_nativeint ->
-          Binary_int_arith_nativeint.simplify env r ~original_term
+          Binary_int_arith_nativeint.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         end
       | Int_shift (kind, op) ->
         begin match kind with
         | Tagged_immediate ->
-          Binary_int_shift_tagged_immediate.simplify env r ~original_term
+          Binary_int_shift_tagged_immediate.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int32 ->
-          Binary_int_shift_int32.simplify env r ~original_term
+          Binary_int_shift_int32.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int64 ->
-          Binary_int_shift_int64.simplify env r ~original_term
+          Binary_int_shift_int64.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_nativeint ->
-          Binary_int_shift_nativeint.simplify env r ~original_term
+          Binary_int_shift_nativeint.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         end
       | Int_comp (kind, Signed, op) ->
         begin match kind with
         | Tagged_immediate ->
-          Binary_int_comp_tagged_immediate.simplify env r ~original_term
+          Binary_int_comp_tagged_immediate.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int32 ->
-          Binary_int_comp_int32.simplify env r ~original_term
+          Binary_int_comp_int32.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int64 ->
-          Binary_int_comp_int64.simplify env r ~original_term
+          Binary_int_comp_int64.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_nativeint ->
-          Binary_int_comp_nativeint.simplify env r ~original_term
+          Binary_int_comp_nativeint.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         end
       | Int_comp (kind, Unsigned, op) ->
         begin match kind with
         | Tagged_immediate ->
-          Binary_int_comp_unsigned_tagged_immediate.simplify env r
-            ~original_term op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          Binary_int_comp_unsigned_tagged_immediate.simplify dacc
+            ~original_term dbg op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int32 ->
-          Binary_int_comp_unsigned_int32.simplify env r ~original_term
+          Binary_int_comp_unsigned_int32.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_int64 ->
-          Binary_int_comp_unsigned_int64.simplify env r ~original_term
+          Binary_int_comp_unsigned_int64.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         | Naked_nativeint ->
-          Binary_int_comp_unsigned_nativeint.simplify env r ~original_term
+          Binary_int_comp_unsigned_nativeint.simplify dacc ~original_term dbg
             op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
         end
       | Float_arith op ->
-        Binary_float_arith.simplify env r ~original_term
+        Binary_float_arith.simplify dacc ~original_term dbg
           op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
       | Float_comp op ->
-        Binary_float_comp.simplify env r ~original_term
+        Binary_float_comp.simplify dacc ~original_term dbg
+          op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+      | Phys_equal (kind, op) ->
+        simplify_phys_equal dacc ~original_term dbg kind
           op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
       | _ ->
         (* temporary code *)

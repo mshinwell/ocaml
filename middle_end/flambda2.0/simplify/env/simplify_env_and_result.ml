@@ -32,11 +32,12 @@ end = struct
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
     inlining_depth_increment : int;
+    float_const_prop : bool;
   }
 
   let print ppf { backend = _; round; typing_env;
                   continuation_scope_level; inlined_debuginfo; can_inline;
-                  inlining_depth_increment;
+                  inlining_depth_increment; float_const_prop;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -44,7 +45,8 @@ end = struct
         @[<hov 1>(continuation_scope_level@ %a)@]@ \
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]@ \
-        @[<hov 1>(inlining_depth_increment@ %d)@]\
+        @[<hov 1>(inlining_depth_increment@ %d)@]@ \
+        @[<hov 1>(float_const_prop@ %b)@]\
         )@]"
       round
       TE.print typing_env
@@ -52,10 +54,11 @@ end = struct
       Debuginfo.print inlined_debuginfo
       can_inline
       inlining_depth_increment
+      float_const_prop
 
   let invariant _t = ()
 
-  let create ~round ~backend =
+  let create ~round ~backend ~float_const_prop =
     (* CR mshinwell: [resolver] should come from [backend] *)
     let resolver _export_id = None in
     { backend;
@@ -65,6 +68,7 @@ end = struct
       inlined_debuginfo = Debuginfo.none;
       can_inline = true;
       inlining_depth_increment = 0;
+      float_const_prop;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -73,6 +77,7 @@ end = struct
   let round t = t.round
   let get_continuation_scope_level t = t.continuation_scope_level
   let can_inline t = t.can_inline
+  let float_const_prop t = t.float_const_prop
   let get_inlining_depth_increment t = t.inlining_depth_increment
 
   let set_inlining_depth_increment t inlining_depth_increment =
@@ -93,6 +98,7 @@ end = struct
                       inlined_debuginfo = _; can_inline;
                       continuation_scope_level = _;
                       inlining_depth_increment = _;
+                      float_const_prop;
                     } =
     { backend;
       round;
@@ -101,6 +107,7 @@ end = struct
       inlined_debuginfo = Debuginfo.none;
       can_inline;
       inlining_depth_increment = 0;
+      float_const_prop;
     }
 
   let define_variable t var kind =

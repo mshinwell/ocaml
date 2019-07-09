@@ -37,7 +37,6 @@ module type Set = sig
   module T : Set.OrderedType
   include Set.S
     with type elt = T.t
-     and type t = Set.Make (T).t
 
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
@@ -49,9 +48,9 @@ end
 
 module type Map = sig
   module T : Map.OrderedType
-  include Map.S
-    with type key = T.t
-     and type 'a t = 'a Map.Make (T).t
+  include Map.S with type key = T.t
+
+  module Set : Set with module T := T
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
@@ -80,11 +79,11 @@ module type Map = sig
   val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
-  val keys : 'a t -> Set.Make(T).t
+  val keys : 'a t -> Set.t
   val data : 'a t -> 'a list
-  val of_set : (key -> 'a) -> Set.Make(T).t -> 'a t
+  val of_set : (key -> 'a) -> Set.t -> 'a t
   val transpose_keys_and_data : key t -> key t
-  val transpose_keys_and_data_set : key t -> Set.Make(T).t t
+  val transpose_keys_and_data_set : key t -> Set.t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 
@@ -103,15 +102,15 @@ module type Tbl = sig
     include Map.OrderedType with type t := t
     include Hashtbl.HashedType with type t := t
   end
-  include Hashtbl.S
-    with type key = T.t
-     and type 'a t = 'a Hashtbl.Make (T).t
+  include Hashtbl.S with type key = T.t
+
+  module Map : Map with module T := T
 
   val to_list : 'a t -> (T.t * 'a) list
   val of_list : (T.t * 'a) list -> 'a t
 
-  val to_map : 'a t -> 'a Map.Make(T).t
-  val of_map : 'a Map.Make(T).t -> 'a t
+  val to_map : 'a t -> 'a Map.t
+  val of_map : 'a Map.t -> 'a t
   val memoize : 'a t -> (key -> 'a) -> key -> 'a
   val map : 'a t -> ('a -> 'b) -> 'b t
 end
@@ -123,8 +122,8 @@ module type S = sig
   include Thing with type t := T.t
 
   module Set : Set with module T := T
-  module Map : Map with module T := T
-  module Tbl : Tbl with module T := T
+  module Map : Map with module T := T with module Set = Set
+  module Tbl : Tbl with module T := T with module Map = Map
 end
 
 module Make (T : Thing) : S with type t := T.t
