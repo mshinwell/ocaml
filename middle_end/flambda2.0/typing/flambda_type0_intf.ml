@@ -405,22 +405,22 @@ module type S = sig
   val prove_boxed_floats
      : Typing_env.t
     -> t
-    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number proof
+    -> Float.Set.t proof
 
   val prove_boxed_int32s
      : Typing_env.t
     -> t
-    -> Numbers.Int32.Set.t ty_naked_number proof
+    -> Numbers.Int32.Set.t proof
 
   val prove_boxed_int64s
      : Typing_env.t
     -> t
-    -> Numbers.Int64.Set.t ty_naked_number proof
+    -> Numbers.Int64.Set.t proof
 
   val prove_boxed_nativeints
      : Typing_env.t
     -> t
-    -> Targetint.Set.t ty_naked_number proof
+    -> Targetint.Set.t proof
 
   val prove_tags_and_sizes
      : Typing_env.t

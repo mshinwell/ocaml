@@ -86,6 +86,9 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
   let unknown_types_from_arity arity =
     List.map (fun kind -> unknown kind) arity
 
+  let of_ty_naked_number ty_naked_number kind : t =
+    Naked_number (ty_naked_number, kind)
+
   let is_bottom env t =
     match snd (Typing_env.resolve_type env t) with
     | Resolved (Resolved_value Bottom)
@@ -264,7 +267,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value _ | Resolved_naked_number _
       | Resolved_fabricated _ -> wrong_kind ()
 
-  let prove_naked_int64s env t : _ proof =
+  let prove_naked_nativeints env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
     in
@@ -336,6 +339,70 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value Unknown -> Unknown
       | Resolved_value Bottom -> Invalid
       | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_boxed_floats env t : _ proof =
+    let result_var = Variable.create "result" in
+    let result_var' =
+      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+    in
+    let result_simple = Simple.var result_var in
+    let result_kind = K.naked_float in
+    let shape = box_float (alias_type_of result_kind result_simple) in
+Format.eprintf "shape for boxed float proof:@ %a\n%!"
+  Type_printers.print shape;
+    match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
+    | Bottom -> Invalid
+    | Ok env_extension ->
+      let env = Typing_env.add_env_extension env env_extension in
+      let t = Typing_env.find env (Name.var result_var) in
+Format.eprintf "result type for boxed float proof:@ %a\n%!"
+  Type_printers.print t;
+      prove_naked_floats env t
+
+  let prove_boxed_int32s env t : _ proof =
+    let result_var = Variable.create "result" in
+    let result_var' =
+      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+    in
+    let result_simple = Simple.var result_var in
+    let result_kind = K.naked_int32 in
+    let shape = box_int32 (alias_type_of result_kind result_simple) in
+    match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
+    | Bottom -> Invalid
+    | Ok env_extension ->
+      let env = Typing_env.add_env_extension env env_extension in
+      let t = Typing_env.find env (Name.var result_var) in
+      prove_naked_int32s env t
+
+  let prove_boxed_int64s env t : _ proof =
+    let result_var = Variable.create "result" in
+    let result_var' =
+      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+    in
+    let result_simple = Simple.var result_var in
+    let result_kind = K.naked_int64 in
+    let shape = box_int64 (alias_type_of result_kind result_simple) in
+    match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
+    | Bottom -> Invalid
+    | Ok env_extension ->
+      let env = Typing_env.add_env_extension env env_extension in
+      let t = Typing_env.find env (Name.var result_var) in
+      prove_naked_int64s env t
+
+  let prove_boxed_nativeints env t : _ proof =
+    let result_var = Variable.create "result" in
+    let result_var' =
+      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+    in
+    let result_simple = Simple.var result_var in
+    let result_kind = K.naked_nativeint in
+    let shape = box_nativeint (alias_type_of result_kind result_simple) in
+    match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
+    | Bottom -> Invalid
+    | Ok env_extension ->
+      let env = Typing_env.add_env_extension env env_extension in
+      let t = Typing_env.find env (Name.var result_var) in
+      prove_naked_nativeints env t
 
   let prove_equals_discriminants env t : Discriminant.Set.t proof =
     let wrong_kind () =

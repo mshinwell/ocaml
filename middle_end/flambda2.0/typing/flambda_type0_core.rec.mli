@@ -47,6 +47,12 @@ val this_boxed_int32 : Int32.t -> Flambda_types.t
 val this_boxed_int64 : Int64.t -> Flambda_types.t
 val this_boxed_nativeint : Targetint.t -> Flambda_types.t
 
+val these_tagged_immediates : Immediate.Set.t -> Flambda_types.t
+val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> Flambda_types.t
+val these_boxed_int32s : Int32.Set.t -> Flambda_types.t
+val these_boxed_int64s : Int64.Set.t -> Flambda_types.t
+val these_boxed_nativeints : Targetint.Set.t -> Flambda_types.t
+
 val this_naked_immediate : Immediate.t -> Flambda_types.t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> Flambda_types.t
 val this_naked_int32 : Int32.t -> Flambda_types.t
@@ -61,6 +67,12 @@ val this_naked_float_without_alias
 val this_naked_int32_without_alias : Int32.t -> Flambda_types.t
 val this_naked_int64_without_alias : Int64.t -> Flambda_types.t
 val this_naked_nativeint_without_alias : Targetint.t -> Flambda_types.t
+
+val these_naked_immediates : Immediate.Set.t -> Flambda_types.t
+val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> Flambda_types.t
+val these_naked_int32s : Int32.Set.t -> Flambda_types.t
+val these_naked_int64s : Int64.Set.t -> Flambda_types.t
+val these_naked_nativeints : Targetint.Set.t -> Flambda_types.t
 
 val boxed_float_alias_to : naked_float:Variable.t -> Flambda_types.t
 val boxed_int32_alias_to : naked_int32:Variable.t -> Flambda_types.t

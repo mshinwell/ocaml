@@ -248,7 +248,7 @@ let this_naked_nativeint i : t =
   Naked_number (Equals (Simple.const (Naked_nativeint i)),
     K.Naked_number.Naked_nativeint)
 
-let these_naked_immediates ~no_alias (is : Immediate.Set.t) : t =
+let these_naked_immediates0 ~no_alias (is : Immediate.Set.t) : t =
   match Immediate.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_immediate i
   | _ ->
@@ -257,7 +257,7 @@ let these_naked_immediates ~no_alias (is : Immediate.Set.t) : t =
       let of_kind : _ of_kind_naked_number = Immediate is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
 
-let these_naked_floats ~no_alias (fs : Float.Set.t) : t =
+let these_naked_floats0 ~no_alias (fs : Float.Set.t) : t =
   match Float.Set.get_singleton fs with
   | Some f when not no_alias -> this_naked_float f
   | _ ->
@@ -266,7 +266,7 @@ let these_naked_floats ~no_alias (fs : Float.Set.t) : t =
       let of_kind : _ of_kind_naked_number = Float fs in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
 
-let these_naked_int32s ~no_alias (is : Int32.Set.t) : t =
+let these_naked_int32s0 ~no_alias (is : Int32.Set.t) : t =
   match Int32.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int32 i
   | _ ->
@@ -275,7 +275,7 @@ let these_naked_int32s ~no_alias (is : Int32.Set.t) : t =
       let of_kind : _ of_kind_naked_number = Int32 is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
 
-let these_naked_int64s ~no_alias (is : Int64.Set.t) : t =
+let these_naked_int64s0 ~no_alias (is : Int64.Set.t) : t =
   match Int64.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int64 i
   | _ ->
@@ -284,7 +284,7 @@ let these_naked_int64s ~no_alias (is : Int64.Set.t) : t =
       let of_kind : _ of_kind_naked_number = Int64 is in
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
 
-let these_naked_nativeints ~no_alias (is : Targetint.Set.t) : t =
+let these_naked_nativeints0 ~no_alias (is : Targetint.Set.t) : t =
   match Targetint.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
@@ -294,19 +294,34 @@ let these_naked_nativeints ~no_alias (is : Targetint.Set.t) : t =
       Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
 
 let this_naked_immediate_without_alias i =
-  these_naked_immediates ~no_alias:true (Immediate.Set.singleton i)
+  these_naked_immediates0 ~no_alias:true (Immediate.Set.singleton i)
 
 let this_naked_float_without_alias f =
-  these_naked_floats ~no_alias:true (Float.Set.singleton f)
+  these_naked_floats0 ~no_alias:true (Float.Set.singleton f)
 
 let this_naked_int32_without_alias i =
-  these_naked_int32s ~no_alias:true (Int32.Set.singleton i)
+  these_naked_int32s0 ~no_alias:true (Int32.Set.singleton i)
 
 let this_naked_int64_without_alias i =
-  these_naked_int64s ~no_alias:true (Int64.Set.singleton i)
+  these_naked_int64s0 ~no_alias:true (Int64.Set.singleton i)
 
 let this_naked_nativeint_without_alias i =
-  these_naked_nativeints ~no_alias:true (Targetint.Set.singleton i)
+  these_naked_nativeints0 ~no_alias:true (Targetint.Set.singleton i)
+
+let these_naked_immediates is =
+  these_naked_immediates0 ~no_alias:false is
+
+let these_naked_floats fs =
+  these_naked_floats0 ~no_alias:false fs
+
+let these_naked_int32s is =
+  these_naked_int32s0 ~no_alias:false is
+
+let these_naked_int64s is =
+  these_naked_int64s0 ~no_alias:false is
+
+let these_naked_nativeints is =
+  these_naked_nativeints0 ~no_alias:false is
 
 let box_float (t : t) : t =
   match t with
@@ -403,9 +418,14 @@ let any_tagged_bool () =
   these_tagged_immediates bools
 
 let this_boxed_float f = box_float (this_naked_float f)
-let this_boxed_int32 f = box_int32 (this_naked_int32 f)
-let this_boxed_int64 f = box_int64 (this_naked_int64 f)
-let this_boxed_nativeint f = box_nativeint (this_naked_nativeint f)
+let this_boxed_int32 i = box_int32 (this_naked_int32 i)
+let this_boxed_int64 i = box_int64 (this_naked_int64 i)
+let this_boxed_nativeint i = box_nativeint (this_naked_nativeint i)
+
+let these_boxed_floats fs = box_float (these_naked_floats fs)
+let these_boxed_int32s is = box_int32 (these_naked_int32s is)
+let these_boxed_int64s is = box_int64 (these_naked_int64s is)
+let these_boxed_nativeints is = box_nativeint (these_naked_nativeints is)
 
 let boxed_float_alias_to ~naked_float =
   box_float (Naked_number (Equals (Simple.var naked_float), Naked_float))
