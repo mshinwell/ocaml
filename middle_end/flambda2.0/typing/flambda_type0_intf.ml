@@ -201,6 +201,12 @@ module type S = sig
   val this_boxed_int64 : Int64.t -> t
   val this_boxed_nativeint : Targetint.t -> t
 
+  val these_tagged_immediates : Immediate.Set.t -> t
+  val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
+  val these_boxed_int32s : Int32.Set.t -> t
+  val these_boxed_int64s : Int64.Set.t -> t
+  val these_boxed_nativeints : Targetint.Set.t -> t
+
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
   val this_naked_immediate : Immediate.t -> t
@@ -208,6 +214,12 @@ module type S = sig
   val this_naked_int32 : Int32.t -> t
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
+
+  val these_naked_immediates : Immediate.Set.t -> t
+  val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
+  val these_naked_int32s : Int32.Set.t -> t
+  val these_naked_int64s : Int64.Set.t -> t
+  val these_naked_nativeints : Targetint.Set.t -> t
 
   val boxed_float_alias_to : naked_float:Variable.t -> t
   val boxed_int32_alias_to : naked_int32:Variable.t -> t
@@ -325,6 +337,11 @@ module type S = sig
   val type_for_const : Simple.Const.t -> t
   val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
+  val of_ty_naked_number
+     : 'a ty_naked_number
+    -> 'a Flambda_kind.Naked_number.t
+    -> t
+
   type symbol_or_tagged_immediate = private
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
@@ -364,6 +381,46 @@ module type S = sig
      : Typing_env.t
     -> t
     -> Discriminant.Set.t proof
+
+  val prove_naked_floats
+     : Typing_env.t
+    -> t
+    -> Numbers.Float_by_bit_pattern.Set.t proof
+
+  val prove_naked_int32s
+     : Typing_env.t
+    -> t
+    -> Numbers.Int32.Set.t proof
+
+  val prove_naked_int64s
+     : Typing_env.t
+    -> t
+    -> Numbers.Int64.Set.t proof
+
+  val prove_naked_nativeints
+     : Typing_env.t
+    -> t
+    -> Targetint.Set.t proof
+
+  val prove_boxed_floats
+     : Typing_env.t
+    -> t
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number proof
+
+  val prove_boxed_int32s
+     : Typing_env.t
+    -> t
+    -> Numbers.Int32.Set.t ty_naked_number proof
+
+  val prove_boxed_int64s
+     : Typing_env.t
+    -> t
+    -> Numbers.Int64.Set.t ty_naked_number proof
+
+  val prove_boxed_nativeints
+     : Typing_env.t
+    -> t
+    -> Targetint.Set.t ty_naked_number proof
 
   val prove_tags_and_sizes
      : Typing_env.t
