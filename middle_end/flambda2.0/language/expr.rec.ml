@@ -205,8 +205,6 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
      For example an Unbox_naked_int64 or something could potentially turn
      into a variable.  This defining expression usually never exists as
      the types propagate the information forward. *)
-  (* CR mshinwell: Shouldn't this remove the bound variable from the
-     free names of [body]? *)
   if not keep_binding then body, let_creation_result
   else
     let let_expr = Let_expr.create ~bound_var ~defining_expr ~body in
