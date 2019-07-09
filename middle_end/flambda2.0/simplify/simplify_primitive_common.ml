@@ -19,6 +19,7 @@
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module T = Flambda_type
+module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
@@ -37,3 +38,9 @@ Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructin
 Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
 *)
     Reachable.reachable original_term, env_extension, dacc
+
+let apply_cse dacc ~original_prim =
+  match Flambda_primitive.With_fixed_value.create original_prim with
+  | None -> None
+  | Some with_fixed_value ->
+    TE.find_cse (DE.typing_env (DA.denv dacc)) with_fixed_value

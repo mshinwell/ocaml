@@ -42,9 +42,11 @@ val add_definition : t -> Variable.t -> Flambda_kind.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
-(*
-val meet_equation : t -> Meet_env.t -> Name.t -> Flambda_types.t -> t
-*)
+val add_cse
+   : t
+  -> Flambda_primitive.With_fixed_value.t
+  -> bound_to:Simple.t
+  -> t
 
 val meet : Meet_env.t -> t -> t -> t
 
@@ -55,3 +57,5 @@ val erase_aliases : Typing_env.t -> allowed:Variable.Set.t -> t -> t
 val remove_definitions_and_equations : t -> allowed:Variable.Set.t -> t
 
 val mem : t -> Name.t -> bool
+
+val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t

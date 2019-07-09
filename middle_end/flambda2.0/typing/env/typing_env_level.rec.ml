@@ -19,9 +19,10 @@
 type t = {
   defined_vars : Flambda_kind.t Variable.Map.t;
   equations : Flambda_types.t Name.Map.t;
+  cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
 }
 
-let print_with_cache ~cache ppf ({ defined_vars; equations; } : t) =
+let print_with_cache ~cache ppf ({ defined_vars; equations; cse; } : t) =
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -40,17 +41,21 @@ let print_with_cache ~cache ppf ({ defined_vars; equations; } : t) =
   if Variable.Map.is_empty defined_vars then
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(equations@ @[<hov 1>%a@])@])\
+        @[<hov 1>(equations@ @[<hov 1>%a@])@])@ \
+        @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         @]"
       print_equations equations
+      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
   else
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@;\
-        @[<hov 1>(equations@ @[<hov 1>%a@])@]\
+        @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(equations@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         )@]"
       Variable.Set.print (Variable.Map.keys defined_vars)
       print_equations equations
+      (Flambda_primitive.With_fixed_value.Map.print Simple.print) cse
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -60,15 +65,19 @@ let invariant _t = ()
 let empty =
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.empty;
+    cse = Flambda_primitive.With_fixed_value.Map.empty;
   }
 
-let is_empty { defined_vars; equations; } =
+let is_empty { defined_vars; equations; cse; } =
   Variable.Map.is_empty defined_vars
     && Name.Map.is_empty equations
+    && Flambda_primitive.With_fixed_value.Map.is_empty cse
 
 let equations t = t.equations
 
 let defined_vars t = t.defined_vars
+
+let cse t = t.cse
 
 let add_definition t var kind =
   if Variable.Map.mem var t.defined_vars then begin
@@ -99,6 +108,7 @@ let one_equation name ty =
   check_equation empty name ty;
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.singleton name ty;
+    cse = Flambda_primitive.With_fixed_value.Map.empty;
   }
 
 let add_or_replace_equation t name ty =
@@ -114,6 +124,15 @@ let find_equation t name =
       Name.print name
       print t
   | ty -> ty
+
+let add_cse t prim ~bound_to =
+  match Flambda_primitive.With_fixed_value.Map.find prim t.cse with
+  | exception Not_found ->
+    let cse =
+      Flambda_primitive.With_fixed_value.Map.add prim bound_to t.cse
+    in
+    { t with cse; }
+  | _bound_to -> t
 
 (* XXX Not sure this is correct yet *)
 let meet env (t1 : t) (t2 : t) =
@@ -153,14 +172,42 @@ let join env (t1 : t) (t2 : t) : t =
   let names_with_equations_in_join =
     Name.Set.inter (Name.Map.keys t1.equations) (Name.Map.keys t2.equations)
   in
-  Name.Set.fold (fun name t ->
-      assert (not (Name.Map.mem name t.equations));
-      let ty1 = find_equation t1 name in
-      let ty2 = find_equation t2 name in
-      let join_ty = Api_meet_and_join.join ~bound_name:name env ty1 ty2 in
-      add_or_replace_equation t name join_ty)
-    names_with_equations_in_join
-    empty
+  let t =
+    Name.Set.fold (fun name t ->
+        assert (not (Name.Map.mem name t.equations));
+        let ty1 = find_equation t1 name in
+        let ty2 = find_equation t2 name in
+        let join_ty = Api_meet_and_join.join ~bound_name:name env ty1 ty2 in
+        add_or_replace_equation t name join_ty)
+      names_with_equations_in_join
+      empty
+  in
+  let cse =
+    Flambda_primitive.With_fixed_value.Map.merge
+      (fun _prim bound_to1 bound_to2 ->
+        match bound_to1, bound_to2 with
+        | None, None | Some _, None | None, Some _ -> None
+        | Some bound_to1, Some bound_to2 ->
+          if Simple.equal bound_to1 bound_to2 then Some bound_to1
+          else None)
+      t1.cse t2.cse
+  in
+  { t with cse; }
+
+let filter_cse cse ~allowed =
+  Flambda_primitive.With_fixed_value.Map.filter_map cse
+    ~f:(fun prim bound_to ->
+      match Simple.descr bound_to with
+      | Name (Var var) ->
+        if Variable.Set.mem var allowed then Some bound_to
+        else None
+      | _ ->
+        let free_vars =
+          Name_occurrences.variables
+            (Flambda_primitive.With_fixed_value.free_names prim)
+        in
+        if Variable.Set.subset free_vars allowed then Some bound_to
+        else None)
 
 let erase_aliases env ~allowed t =
   let equations =
@@ -170,19 +217,11 @@ let erase_aliases env ~allowed t =
           ~already_seen:Simple.Set.empty ~allowed ty)
       t.equations
   in
+  let cse = filter_cse t.cse ~allowed in
   { t with
     equations;
+    cse;
   }
-
-(*
-let meet_equation t1 env name ty =
-  let t2 =
-    { defined_vars = Variable.Map.empty;
-      equations = Name.Map.singleton name ty;
-    }
-  in
-  meet env t1 t2
-*)
 
 let remove_definitions_and_equations t ~allowed =
   if not (Variable.Set.is_empty
@@ -197,8 +236,10 @@ let remove_definitions_and_equations t ~allowed =
         | Symbol _ -> true)
       t.equations
   in
+  let cse = filter_cse t.cse ~allowed in
   { defined_vars = Variable.Map.empty;
     equations;
+    cse;
   }
 
 let mem t name =

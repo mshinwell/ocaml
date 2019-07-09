@@ -24,3 +24,8 @@ val simplify_projection
   -> result_var:Var_in_binding_pos.t
   -> result_kind:Flambda_kind.t
   -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
+
+val apply_cse
+   : Downwards_acc.t
+  -> original_prim:Flambda_primitive.t
+  -> Simple.t option

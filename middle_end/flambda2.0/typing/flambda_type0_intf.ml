@@ -95,9 +95,17 @@ module type S = sig
 
     val add_equation : t -> Name.t -> flambda_type -> t
 
+    val mem : t -> Name.t -> bool
+
     val find : t -> Name.t -> flambda_type
 
-    val mem : t -> Name.t -> bool
+    val add_cse
+       : t
+      -> Flambda_primitive.With_fixed_value.t
+      -> bound_to:Simple.t
+      -> t
+
+    val find_cse : t -> Flambda_primitive.With_fixed_value.t -> Simple.t option
 
     val add_env_extension
        : t
