@@ -42,8 +42,9 @@ module Int64 = struct
   let succ x = mul (add x 1L) 2L
 end
 
-let rec f x =
-  if x > 0 then 1 + f (x - 1)
-  else 42
-
-let n = (f [@unrolled 10]) 5
+let n =
+  let rec f x =
+    if x > 0 then 1 + f (x - 1)
+    else 42
+  in
+  (f [@unrolled 10]) 5
