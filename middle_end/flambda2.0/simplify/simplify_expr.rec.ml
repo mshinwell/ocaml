@@ -757,10 +757,12 @@ and simplify_apply_cont
     Expr.create_invalid (), user_data, uacc
   | Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
+(*
 Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
   Continuation.print (AC.continuation apply_cont)
   (Format.pp_print_list T.print) arg_types
   DA.print dacc;
+*)
     let args_arity = T.arity_of_list arg_types in
     let dacc =
       DA.record_continuation_use dacc (AC.continuation apply_cont)
