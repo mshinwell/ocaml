@@ -836,33 +836,3 @@ let create_using_resolver_and_symbol_bindings_from t =
       add_equation t name typ)
     names_to_types
     t
-
-(*
-let merge_rec_info_for_simple_and_all_aliases t descr ~newer_rec_info =
-  let simple = Simple.of_descr descr in
-  let alias = alias_of_simple t simple Name_occurrence_kind.normal in
-  let aliases = aliases t in
-  let all_aliases = Aliases.get_aliases aliases alias in
-Format.eprintf "Aliases of %a are %a\n%!"
-  Simple.print simple
-  Alias.Set.print all_aliases;
-  Alias.Set.fold (fun alias t ->
-      match Alias.name alias with
-      | None -> t
-      | Some name ->
-        let typ, name_occurrence_kind = find_with_occurrence_kind t name in
-Format.eprintf "Adding rec_info %a to %a : %a\n%!"
-  Rec_info.print newer_rec_info
-  Name.print name
-  Type_printers.print typ;
-        let typ =
-          match Flambda_type0_core.apply_rec_info typ newer_rec_info with
-          | Bottom -> Flambda_type0_core.bottom (Flambda_type0_core.kind typ)
-          | Ok typ -> typ
-        in
-Format.eprintf "New type is: %a\n%!"
-  Type_printers.print typ;
-        add_equation0 t aliases name name_occurrence_kind typ)
-    all_aliases
-    t
-*)
