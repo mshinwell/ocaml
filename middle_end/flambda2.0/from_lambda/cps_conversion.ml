@@ -158,7 +158,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
         I.Let_cont {
           name = continuation;
           is_exn_handler = false;
-          params = [result_var, Pgenval];
+          params = [result_var, I.Not_user_visible, Pgenval];
           recursive = Nonrecursive;
           body = Apply apply;
           handler = after;
@@ -185,7 +185,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Let_cont {
       name = after_defining_expr;
       is_exn_handler = false;
-      params = [temp_id, value_kind];
+      params = [temp_id, I.Not_user_visible, value_kind];
       recursive = Nonrecursive;
       body = defining_expr;
       handler = Let_mutable let_mutable;
@@ -202,7 +202,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Let_cont {
       name = after_defining_expr;
       is_exn_handler = false;
-      params = [id, value_kind];
+      params = [id, I.User_visible, value_kind];
       recursive = Nonrecursive;
       body = defining_expr;
       handler = body;
@@ -225,6 +225,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     in
     cps_non_tail_list args (fun args ->
       I.Let (result_var,
+             Not_user_visible,
              Pgenval,
              Prim { prim; args; loc; exn_continuation; },
              k result_var))
@@ -249,7 +250,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Let_cont {
       name = after_switch;
       is_exn_handler = false;
-      params = [result_var, Pgenval];
+      params = [result_var, I.Not_user_visible, Pgenval];
       recursive = Nonrecursive;
       body;
       handler = after;
@@ -284,13 +285,13 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Let_cont {
       name = after_continuation;
       is_exn_handler = false;
-      params = [result_var, Pgenval];
+      params = [result_var, I.Not_user_visible, Pgenval];
       recursive = Nonrecursive;
       body =
         Let_cont {
           name = continuation;
           is_exn_handler = false;
-          params = args;
+          params = List.map (fun (arg, kind) -> arg, I.User_visible, kind) args;
           recursive;
           body;
           handler;
@@ -323,7 +324,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           I.Let_cont {
             name = continuation;
             is_exn_handler = false;
-            params = [result_var, Pgenval];
+            params = [result_var, Not_user_visible, Pgenval];
             recursive = Nonrecursive;
             body = Apply apply;
             handler = after;
@@ -345,19 +346,19 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Let_cont {
       name = after_continuation;
       is_exn_handler = false;
-      params = [result_var, Pgenval];
+      params = [result_var, Not_user_visible, Pgenval];
       recursive = Nonrecursive;
       body =
         Let_cont {
           name = handler_continuation;
           is_exn_handler = true;
-          params = [id, Pgenval];
+          params = [id, User_visible, Pgenval];
           recursive = Nonrecursive;
           body =
             Let_cont {
               name = poptrap_continuation;
               is_exn_handler = false;
-              params = [body_result, Pgenval];
+              params = [body_result, Not_user_visible, Pgenval];
               recursive = Nonrecursive;
               body =
                 Let_cont {
@@ -438,7 +439,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     Let_cont {
       name = after_defining_expr;
       is_exn_handler = false;
-      params = [temp_id, value_kind];
+      params = [temp_id, Not_user_visible, value_kind];
       recursive = Nonrecursive;
       body = defining_expr;
       handler = Let_mutable let_mutable;
@@ -455,7 +456,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     Let_cont {
       name = after_defining_expr;
       is_exn_handler = false;
-      params = [id, value_kind];
+      params = [id, User_visible, value_kind];
       recursive = Nonrecursive;
       body = defining_expr;
       handler = body;
@@ -478,7 +479,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       else None
     in
     cps_non_tail_list args (fun args ->
-      I.Let (result_var, Pgenval,
+      I.Let (result_var, Not_user_visible, Pgenval,
         Prim { prim; args; loc; exn_continuation; },
         Apply_cont (k, None, [result_var]))) k_exn
   | Lswitch (scrutinee,
@@ -523,7 +524,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     Let_cont {
       name = continuation;
       is_exn_handler = false;
-      params = args;
+      params = List.map (fun (arg, kind) -> arg, I.User_visible, kind) args;
       recursive;
       body;
       handler;
@@ -567,13 +568,13 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     Let_cont {
       name = handler_continuation;
       is_exn_handler = true;
-      params = [id, Pgenval];
+      params = [id, User_visible, Pgenval];
       recursive = Nonrecursive;
       body =
         Let_cont {
           name = poptrap_continuation;
           is_exn_handler = false;
-          params = [body_result, Pgenval];
+          params = [body_result, Not_user_visible, Pgenval];
           recursive = Nonrecursive;
           body =
             Let_cont {
@@ -600,11 +601,11 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
 and name_then_cps_non_tail name defining_expr k _k_exn : I.t =
   let id = Ident.create_local name in
   let body = k id in
-  Let (id, Pgenval, defining_expr, body)
+  Let (id, Not_user_visible, Pgenval, defining_expr, body)
 
 and name_then_cps_tail name defining_expr k _k_exn : I.t =
   let id = Ident.create_local name in
-  Let (id, Pgenval, defining_expr, Apply_cont (k, None, [id]))
+  Let (id, Not_user_visible, Pgenval, defining_expr, Apply_cont (k, None, [id]))
 
 and cps_non_tail_list lams k k_exn =
   let lams = List.rev lams in  (* Always evaluate right-to-left. *)

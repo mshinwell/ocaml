@@ -43,8 +43,12 @@ type trap_action =
   | Push of { exn_handler : Continuation.t; }
   | Pop of { exn_handler : Continuation.t; }
 
+type user_visible =
+  | User_visible
+  | Not_user_visible
+
 type t =
-  | Let of Ident.t * Lambda.value_kind * named * t
+  | Let of Ident.t * user_visible * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
   | Let_rec of function_declarations * t
     (** Value "let rec" has already been expanded by [Prepare_lambda]. *)
@@ -95,7 +99,7 @@ and let_cont = {
   is_exn_handler : bool;
   (** Continuations that are exception handlers must be [Non_recursive] and
       have exactly one parameter. *)
-  params : (Ident.t * Lambda.value_kind) list;
+  params : (Ident.t * user_visible * Lambda.value_kind) list;
   recursive : Asttypes.rec_flag;
   body : t;
   handler : t;

@@ -28,8 +28,12 @@ type trap_action =
   | Push of { exn_handler : Continuation.t; }
   | Pop of { exn_handler : Continuation.t; }
 
+type user_visible =
+  | User_visible
+  | Not_user_visible
+
 type t =
-  | Let of Ident.t * Lambda.value_kind * named * t
+  | Let of Ident.t * user_visible * Lambda.value_kind * named * t
   | Let_mutable of let_mutable
   | Let_rec of function_declarations * t
   | Let_cont of let_cont
@@ -75,7 +79,7 @@ and function_declarations = (Ident.t * function_declaration) list
 and let_cont = {
   name : Continuation.t;
   is_exn_handler : bool;
-  params : (Ident.t * Lambda.value_kind) list;
+  params : (Ident.t * user_visible * Lambda.value_kind) list;
   recursive : Asttypes.rec_flag;
   body : t;
   handler : t;
@@ -124,7 +128,8 @@ let rec print_function ppf
   let pr_params ppf params =
     match kind with
     | Curried ->
-      List.iter (fun (param, _) -> fprintf ppf "@ %a" Ident.print param) params
+      List.iter (fun (param, _) -> fprintf ppf "@ %a" Ident.print param)
+        params
     | Tupled ->
       fprintf ppf " (";
       let first = ref true in
@@ -180,9 +185,9 @@ and print ppf (t : t) =
       Printlambda.apply_tailcall_attribute ap.should_be_tailcall
       Printlambda.apply_inlined_attribute ap.inlined
       Printlambda.apply_specialised_attribute ap.specialised
-  | Let (id, kind, arg, body) ->
+  | Let (id, _user_visible, kind, arg, body) ->
     let rec let_body = function
-      | Let (id, kind, arg, body) ->
+      | Let (id, _user_visible, kind, arg, body) ->
         fprintf ppf "@ @[<2>%a@ \u{2237}@ %a =@ %a@]"
           Ident.print id
           Printlambda.value_kind' kind
@@ -246,7 +251,7 @@ and print ppf (t : t) =
         (if is_exn_handler then "<exn>" else "")
         (match params with [] -> "" | _ -> " (")
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          (fun ppf (ident, kind) ->
+          (fun ppf (ident, _user_visible, kind) ->
             Format.fprintf ppf "%a@ \u{2237}@ %a"
               Ident.print ident
               Printlambda.value_kind' kind)) params

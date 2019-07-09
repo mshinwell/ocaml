@@ -28,8 +28,13 @@
 
 include Identifiable.S
 
-val create : ?current_compilation_unit:Compilation_unit.t -> string -> t
-val create_with_same_name_as_ident : Ident.t -> t
+val create
+   : ?current_compilation_unit:Compilation_unit.t
+  -> ?user_visible:unit
+  -> string
+  -> t
+
+val create_with_same_name_as_ident : ?user_visible:unit -> Ident.t -> t
 
 val clambda_name : t -> string
 (* CR-someday pchambart: Should we propagate Variable.t into clambda ??? *)
@@ -41,6 +46,10 @@ val rename
   -> ?append:string
   -> t
   -> t
+
+val user_visible : t -> bool
+
+val with_user_visible : t -> user_visible:bool -> t
 
 val in_compilation_unit : t -> Compilation_unit.t -> bool
 
