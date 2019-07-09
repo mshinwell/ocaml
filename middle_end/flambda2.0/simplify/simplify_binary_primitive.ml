@@ -24,6 +24,7 @@ module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module S = Simplify_simple
 module T = Flambda_type
+module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
@@ -890,85 +891,103 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
     match S.simplify_simple dacc arg2 ~min_occurrence_kind with
     | Bottom, ty -> invalid ty
     | Ok arg2, arg2_ty ->
-      let original_term = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-      match prim with
-      | Block_load (Block (Value Anything), Immutable) ->
-        (* CR mshinwell: extend to other block access kinds *)
-        simplify_block_load dacc prim ~block:arg1 ~block_ty:arg1_ty
-          ~index:arg2 ~index_ty:arg2_ty dbg ~result_var
-      | Int_arith (kind, op) ->
-        begin match kind with
-        | Tagged_immediate ->
-          Binary_int_arith_tagged_immediate.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int32 ->
-          Binary_int_arith_int32.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int64 ->
-          Binary_int_arith_int64.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_nativeint ->
-          Binary_int_arith_nativeint.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        end
-      | Int_shift (kind, op) ->
-        begin match kind with
-        | Tagged_immediate ->
-          Binary_int_shift_tagged_immediate.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int32 ->
-          Binary_int_shift_int32.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int64 ->
-          Binary_int_shift_int64.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_nativeint ->
-          Binary_int_shift_nativeint.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        end
-      | Int_comp (kind, Signed, op) ->
-        begin match kind with
-        | Tagged_immediate ->
-          Binary_int_comp_tagged_immediate.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int32 ->
-          Binary_int_comp_int32.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int64 ->
-          Binary_int_comp_int64.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_nativeint ->
-          Binary_int_comp_nativeint.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        end
-      | Int_comp (kind, Unsigned, op) ->
-        begin match kind with
-        | Tagged_immediate ->
-          Binary_int_comp_unsigned_tagged_immediate.simplify dacc
-            ~original_term dbg op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int32 ->
-          Binary_int_comp_unsigned_int32.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_int64 ->
-          Binary_int_comp_unsigned_int64.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        | Naked_nativeint ->
-          Binary_int_comp_unsigned_nativeint.simplify dacc ~original_term dbg
-            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-        end
-      | Float_arith op ->
-        Binary_float_arith.simplify dacc ~original_term dbg
-          op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-      | Float_comp op ->
-        Binary_float_comp.simplify dacc ~original_term dbg
-          op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-      | Phys_equal (kind, op) ->
-        simplify_phys_equal dacc ~original_term dbg kind
-          op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-      | _ ->
-        (* temporary code *)
-        let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-        let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
-        let ty = T.unknown kind in
+      let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
+      let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
+      let original_term = Named.create_prim original_prim dbg in
+      (* CR mshinwell: Factor out this next part *)
+      match Simplify_primitive_common.apply_cse dacc ~original_prim with
+      | Some replace_with ->
+        let named = Named.create_simple replace_with in
+        let ty = T.alias_type_of kind replace_with in
         let env_extension = TEE.one_equation (Name.var result_var') ty in
         Reachable.reachable named, env_extension, dacc
+      | None ->
+        let dacc =
+          match Flambda_primitive.With_fixed_value.create original_prim with
+          | None -> dacc
+          | Some with_fixed_value ->
+            let bound_to = Simple.var result_var' in
+            DA.map_denv dacc ~f:(fun denv ->
+              DE.with_typing_environment denv
+               (TE.add_cse (DE.typing_env denv) with_fixed_value ~bound_to))
+        in
+        match prim with
+        | Block_load (Block (Value Anything), Immutable) ->
+          (* CR mshinwell: extend to other block access kinds *)
+          simplify_block_load dacc prim ~block:arg1 ~block_ty:arg1_ty
+            ~index:arg2 ~index_ty:arg2_ty dbg ~result_var
+        | Int_arith (kind, op) ->
+          begin match kind with
+          | Tagged_immediate ->
+            Binary_int_arith_tagged_immediate.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int32 ->
+            Binary_int_arith_int32.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int64 ->
+            Binary_int_arith_int64.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_nativeint ->
+            Binary_int_arith_nativeint.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          end
+        | Int_shift (kind, op) ->
+          begin match kind with
+          | Tagged_immediate ->
+            Binary_int_shift_tagged_immediate.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int32 ->
+            Binary_int_shift_int32.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int64 ->
+            Binary_int_shift_int64.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_nativeint ->
+            Binary_int_shift_nativeint.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          end
+        | Int_comp (kind, Signed, op) ->
+          begin match kind with
+          | Tagged_immediate ->
+            Binary_int_comp_tagged_immediate.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int32 ->
+            Binary_int_comp_int32.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int64 ->
+            Binary_int_comp_int64.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_nativeint ->
+            Binary_int_comp_nativeint.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          end
+        | Int_comp (kind, Unsigned, op) ->
+          begin match kind with
+          | Tagged_immediate ->
+            Binary_int_comp_unsigned_tagged_immediate.simplify dacc
+              ~original_term dbg op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int32 ->
+            Binary_int_comp_unsigned_int32.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_int64 ->
+            Binary_int_comp_unsigned_int64.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          | Naked_nativeint ->
+            Binary_int_comp_unsigned_nativeint.simplify dacc ~original_term dbg
+              op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+          end
+        | Float_arith op ->
+          Binary_float_arith.simplify dacc ~original_term dbg
+            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+        | Float_comp op ->
+          Binary_float_comp.simplify dacc ~original_term dbg
+            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+        | Phys_equal (kind, op) ->
+          simplify_phys_equal dacc ~original_term dbg kind
+            op ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+        | _ ->
+          (* temporary code *)
+          let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
+          let ty = T.unknown kind in
+          let env_extension = TEE.one_equation (Name.var result_var') ty in
+          Reachable.reachable named, env_extension, dacc

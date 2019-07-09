@@ -48,3 +48,40 @@ let n =
     else 42
   in
   (f [@unrolled 10]) 5
+
+type t =
+  | A
+  | B of int
+  | C of int
+
+let foo () =
+  let x = A in
+  match x with
+  | A -> 0
+  | B _ -> 1
+  | C _ -> 2
+
+let bar () =
+  let x = B 42 in
+  match x with
+  | A -> 0
+  | B _ -> 1
+  | C _ -> 2
+
+let foo x =
+  match x with
+  | A ->
+    begin match x with
+    | A -> 100
+    | B _ -> 500
+    | C _ -> 200
+    end
+  | B _ -> 1
+  | C _ -> 2
+
+let repeated_comparisons x =
+  if x < 10 then
+    if x < 10 then 42
+    else 0
+  else
+    2
