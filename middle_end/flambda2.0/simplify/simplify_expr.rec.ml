@@ -26,6 +26,7 @@ module KP = Kinded_parameter
 module R = Simplify_env_and_result.Result
 module S = Simplify_simple
 module T = Flambda_type
+module TE = Flambda_type.Typing_env
 module UA = Upwards_acc
 module UE = Simplify_env_and_result.Upwards_env
 module VB = Var_in_binding_pos
@@ -880,7 +881,14 @@ and simplify_switch
     in
     let dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
-      Discriminant.Map.fold (fun _arm cont dacc ->
+      Discriminant.Map.fold (fun arm cont dacc ->
+          let typing_env_at_use =
+            match Simple.descr scrutinee with
+            | Name name ->
+              let ty = T.alias_type_of K.fabricated (Simple.discriminant arm) in
+              TE.add_equation typing_env_at_use name ty
+            | Const _ | Discriminant _ -> typing_env_at_use
+          in
           DA.record_continuation_use dacc cont
             ~typing_env_at_use
             ~arg_types:[])
