@@ -142,6 +142,12 @@ module rec Expr : sig
     -> arity:Flambda_arity.t
     -> t
     -> t
+
+  val link_exn_continuations
+     : bind:Exn_continuation.t
+    -> target:Exn_continuation.t
+    -> t
+    -> t
 end and Named : sig
   (** The defining expressions of [Let] bindings. *)
   type t = private

@@ -79,10 +79,9 @@ let inline dacc ~callee ~args function_decl
               ~bind:return_continuation
               ~target:apply_return_continuation
               ~arity:(Function_declaration.result_arity function_decl)
-              (Expr.link_continuations
-                ~bind:(Exn_continuation.exn_handler exn_continuation)
-                ~target:(Exn_continuation.exn_handler apply_exn_continuation)
-                ~arity:(Exn_continuation.arity exn_continuation)
+              (Expr.link_exn_continuations
+                ~bind:exn_continuation
+                ~target:apply_exn_continuation
                 (Expr.bind_parameters_to_simples ~bind:params ~target:args
                   (Expr.create_let
                     (VB.create my_closure Name_occurrence_kind.normal)
