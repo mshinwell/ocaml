@@ -22,6 +22,7 @@ module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module K = Flambda_kind
 module T = Flambda_type
+module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
 let simplify_project_closure dacc ~original_term ~set_of_closures_ty closure_id
@@ -217,35 +218,52 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
   Simple.print arg
   T.print arg_ty;
 *)
-    let original_term = Named.create_prim (Unary (prim, arg)) dbg in
-    match prim with
-    | Project_closure closure_id ->
-      simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
-        closure_id ~result_var
-    | Project_var closure_element ->
-      simplify_project_var dacc ~original_term ~closure_ty:arg_ty
-        closure_element ~result_var
-    | Move_within_set_of_closures { move_from; move_to; } ->
-      simplify_move_within_set_of_closures dacc ~original_term ~closure:arg
-        ~closure_ty:arg_ty ~move_from ~move_to ~result_var
-    | Unbox_number boxable_number_kind ->
-      simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
-        boxable_number_kind ~result_var
-    | Box_number boxable_number_kind ->
-      simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
-        boxable_number_kind ~result_var
-    | Is_int ->
-      simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
-    | Get_tag { tags_to_sizes; } ->
-      simplify_get_tag dacc ~original_term ~tags_to_sizes ~block_ty:arg_ty
-        ~result_var
-    | Discriminant_of_int ->
-      simplify_discriminant_of_int dacc ~original_term ~int_ty:arg_ty
-        ~result_var
-    | _ ->
-      (* CR mshinwell: temporary code *)
-      let named = Named.create_prim (Unary (prim, arg)) dbg in
-      let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
-      let ty = T.unknown kind in
+    let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
+    let original_prim : Flambda_primitive.t = Unary (prim, arg) in
+    let original_term = Named.create_prim original_prim dbg in
+    match Simplify_primitive_common.apply_cse dacc ~original_prim with
+    | Some replace_with ->
+      let named = Named.create_simple replace_with in
+      let ty = T.alias_type_of kind replace_with in
       let env_extension = TEE.one_equation (Name.var result_var') ty in
       Reachable.reachable named, env_extension, dacc
+    | None ->
+      let dacc =
+        match Flambda_primitive.With_fixed_value.create original_prim with
+        | None -> dacc
+        | Some with_fixed_value ->
+          let bound_to = Simple.var result_var' in
+          DA.map_denv dacc ~f:(fun denv ->
+            DE.with_typing_environment denv
+             (TE.add_cse (DE.typing_env denv) with_fixed_value ~bound_to))
+      in
+      match prim with
+      | Project_closure closure_id ->
+        simplify_project_closure dacc ~original_term ~set_of_closures_ty:arg_ty
+          closure_id ~result_var
+      | Project_var closure_element ->
+        simplify_project_var dacc ~original_term ~closure_ty:arg_ty
+          closure_element ~result_var
+      | Move_within_set_of_closures { move_from; move_to; } ->
+        simplify_move_within_set_of_closures dacc ~original_term ~closure:arg
+          ~closure_ty:arg_ty ~move_from ~move_to ~result_var
+      | Unbox_number boxable_number_kind ->
+        simplify_unbox_number dacc ~original_term ~boxed_number_ty:arg_ty
+          boxable_number_kind ~result_var
+      | Box_number boxable_number_kind ->
+        simplify_box_number dacc ~original_term ~naked_number_ty:arg_ty
+          boxable_number_kind ~result_var
+      | Is_int ->
+        simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
+      | Get_tag { tags_to_sizes; } ->
+        simplify_get_tag dacc ~original_term ~tags_to_sizes ~block_ty:arg_ty
+          ~result_var
+      | Discriminant_of_int ->
+        simplify_discriminant_of_int dacc ~original_term ~int_ty:arg_ty
+          ~result_var
+      | _ ->
+        (* CR mshinwell: temporary code *)
+        let named = Named.create_prim (Unary (prim, arg)) dbg in
+        let ty = T.unknown kind in
+        let env_extension = TEE.one_equation (Name.var result_var') ty in
+        Reachable.reachable named, env_extension, dacc

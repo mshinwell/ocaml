@@ -50,6 +50,17 @@ val find : t -> Name.t -> Flambda_types.t
 
 val mem : t -> Name.t -> bool
 
+val add_cse
+   : t
+  -> Flambda_primitive.With_fixed_value.t
+  -> bound_to:Simple.t
+  -> t
+
+val find_cse
+   : t
+  -> Flambda_primitive.With_fixed_value.t
+  -> Simple.t option
+
 val add_env_extension
    : t
   -> Typing_env_extension.t

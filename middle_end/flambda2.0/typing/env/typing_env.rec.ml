@@ -24,6 +24,7 @@ module Cached = struct
     names_to_types :
       (Flambda_types.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
     aliases : Aliases.t;
+    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
   }
 
 (*
@@ -56,15 +57,18 @@ module Cached = struct
   let empty =
     { names_to_types = Name.Map.empty;
       aliases = Aliases.empty;
+      cse = Flambda_primitive.With_fixed_value.Map.empty;
     }
 
-  let create ~names_to_types aliases =
+  let create ~names_to_types aliases ~cse =
     { names_to_types;
       aliases;
+      cse;
     }
 
   let names_to_types t = t.names_to_types
   let aliases t = t.aliases
+  let cse t = t.cse
 
   (* CR mshinwell: Add type lookup function *)
 
@@ -75,6 +79,8 @@ module Cached = struct
     | (_ty, time, _name_occurrence_kind) -> time
 
   let domain t = Name.Map.keys t.names_to_types
+
+  let with_cse t ~cse = { t with cse; }
 end
 
 module One_level = struct
@@ -319,7 +325,7 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
           name_occurrence_kind)
         (names_to_types t)
     in
-    Cached.create ~names_to_types aliases
+    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -344,7 +350,7 @@ let add_symbol_definition t sym kind =
           name_occurrence_kind)
         (names_to_types t)
     in
-    Cached.create ~names_to_types aliases
+    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
   in
   let current_level =
     One_level.create (current_scope t) (One_level.level t.current_level)
@@ -409,7 +415,7 @@ let add_equation0 t aliases name name_occurrence_kind ty =
       Name.Map.add name (ty, binding_time, name_occurrence_kind)
         (names_to_types t)
     in
-    Cached.create ~names_to_types aliases
+    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -500,6 +506,30 @@ Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
   | Name name ->
     add_equation0 t aliases name name_occurrence_kind ty
 
+let add_cse t prim ~bound_to =
+  let level =
+    Typing_env_level.add_cse (One_level.level t.current_level) prim ~bound_to
+  in
+  let cached = cached t in
+  let cse =
+    let cse = Cached.cse cached in
+    match Flambda_primitive.With_fixed_value.Map.find prim cse with
+    | exception Not_found ->
+      Flambda_primitive.With_fixed_value.Map.add prim bound_to cse
+    | _bound_to -> cse
+  in
+  let just_after_level = Cached.with_cse cached ~cse in
+  let current_level =
+    One_level.create (current_scope t) level ~just_after_level
+  in
+  with_current_level t ~current_level
+
+let find_cse t prim =
+  let cse = Cached.cse (cached t) in
+  match Flambda_primitive.With_fixed_value.Map.find prim cse with
+  | exception Not_found -> None
+  | bound_to -> Some bound_to
+
 let (* rec *) add_env_extension starting_t level : t =
   if not (Variable.Map.is_empty (Typing_env_level.defined_vars level)) then
   begin
@@ -508,30 +538,36 @@ let (* rec *) add_env_extension starting_t level : t =
         @ %a"
       Typing_env_level.print level
   end;
-  Name.Map.fold (fun name ty t ->
-      (* CR mshinwell: Do we actually need the "more precise" check here?
-         Shouldn't the extensions always be as or more precise? *)
-      add_equation t name ty)
+  let t =
+    Name.Map.fold (fun name ty t ->
+        (* CR mshinwell: Do we actually need the "more precise" check here?
+           Shouldn't the extensions always be as or more precise? *)
+        add_equation t name ty)
+      (Typing_env_level.equations level)
+      starting_t
 (*
-      match find_opt t name with
-      | None -> add_equation t name ty
-      | Some existing_ty ->
-        let meet_ty, meet_env_extension =
-          let meet_env = Meet_env.create t in
-          Api_meet_and_join.meet meet_env ty existing_ty
-        in
-        let t = add_env_extension t meet_env_extension in
-        let as_or_strictly_less_precise =
-          Type_equality.equal ~bound_name:(Some name)
-            starting_t starting_t
-            meet_ty existing_ty
-        in
-        let strictly_more_precise = not as_or_strictly_less_precise in
-        if strictly_more_precise then add_equation t name meet_ty
-        else t)
+        match find_opt t name with
+        | None -> add_equation t name ty
+        | Some existing_ty ->
+          let meet_ty, meet_env_extension =
+            let meet_env = Meet_env.create t in
+            Api_meet_and_join.meet meet_env ty existing_ty
+          in
+          let t = add_env_extension t meet_env_extension in
+          let as_or_strictly_less_precise =
+            Type_equality.equal ~bound_name:(Some name)
+              starting_t starting_t
+              meet_ty existing_ty
+          in
+          let strictly_more_precise = not as_or_strictly_less_precise in
+          if strictly_more_precise then add_equation t name meet_ty
+          else t)
 *)
-    (Typing_env_level.equations level)
-    starting_t
+  in
+  Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
+      add_cse t prim ~bound_to)
+    (Typing_env_level.cse level)
+    t
 
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
