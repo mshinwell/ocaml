@@ -32,6 +32,7 @@ module type Downwards_env = sig
   val create
      : round:int
     -> backend:(module Flambda2_backend_intf.S)
+    -> float_const_prop:bool
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -39,6 +40,8 @@ module type Downwards_env = sig
   val backend : t -> (module Flambda2_backend_intf.S)
 
   val resolver : t -> (Export_id.t -> Flambda_type.t option)
+
+  val float_const_prop : t -> bool
 
   val enter_closure : t -> t
 
