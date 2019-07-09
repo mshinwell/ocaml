@@ -182,13 +182,13 @@
 
 (executable
  (name optmain)
- (modes byte)
+ (modes native)
  (flags (:standard -principal -nostdlib))
- (libraries ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
+ (libraries ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
  (modules optmain))
 
 (rule
- (copy optmain.exe ocamlopt.byte))
+ (copy optmain.exe ocamlopt.opt))
 
 ;;;;;;;;;;;;;;;
 ;;; aliases ;;;
@@ -199,7 +199,7 @@
 (alias
  (name world)
  (deps ocamlc.byte
-       ocamlopt.byte
+       ocamlopt.opt
 ;       debugger/ocamldebug.byte
 ;       ocamldoc/ocamldoc.byte
        ocamltest/ocamltest.byte
