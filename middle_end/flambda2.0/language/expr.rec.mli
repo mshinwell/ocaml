@@ -124,4 +124,10 @@ val link_continuations
   -> t
   -> t
 
+val link_exn_continuations
+   : bind:Exn_continuation.t
+  -> target:Exn_continuation.t
+  -> t
+  -> t
+
 val create_let_cont : Let_cont_expr.t -> t
