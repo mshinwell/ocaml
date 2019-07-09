@@ -26,7 +26,6 @@ module VB = Var_in_binding_pos
 let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
-Format.eprintf "Inlining callee %a\n%!" Simple.print callee;
   Function_params_and_body.pattern_match
     (Function_declaration.params_and_body function_decl)
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
@@ -90,6 +89,4 @@ Format.eprintf "Inlining callee %a\n%!" Simple.print callee;
                     (Named.create_simple callee)
                     body)))
           in
-    Format.eprintf "Inlined body to be simplified:@ %a\n%!"
-    Expr.print expr;
           DA.with_denv dacc denv, expr)

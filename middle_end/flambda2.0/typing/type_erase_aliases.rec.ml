@@ -83,8 +83,6 @@ let erase_aliases_of_kind_naked_number (type n) _env ~bound_name:_
 
 let rec erase_aliases env ~bound_name ~already_seen ~allowed
       (t : Flambda_types.t) : Flambda_types.t =
-Format.eprintf "Before erasure:@ %a\n%!" Type_printers.print t;
-let t : Flambda_types.t =
   match t with
   | Value ty ->
     Value (
@@ -111,9 +109,6 @@ let t : Flambda_types.t =
         ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
         erase_aliases_of_kind_fabricated
         ty)
-in
-Format.eprintf "After erasure:@ %a\n%!" Type_printers.print t;
-t
 
 and erase_aliases_of_kind_value env ~bound_name ~already_seen ~allowed
       (of_kind : Flambda_types.of_kind_value)
