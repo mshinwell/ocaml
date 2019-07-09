@@ -85,11 +85,3 @@ val cut
   -> Typing_env_extension.t * Variable.Set.t
 
 val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
-
-(*
-val merge_rec_info_for_simple_and_all_aliases
-   : t
-  -> Simple.descr
-  -> newer_rec_info:Rec_info.t
-  -> t
-*)
