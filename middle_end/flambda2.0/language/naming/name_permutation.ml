@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let check_invariants = true
+let check_invariants = false
 
 module Make (N : Identifiable.S) = struct
   type t = {
