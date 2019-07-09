@@ -176,14 +176,24 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
            provenance info associated with the variable.  If there isn't, the
            [Let] can be deleted even if debugging information is being
            generated. *)
-        not !Clflags.debug
-          && Name_occurrence_kind.Or_absent.compare
-               greatest_occurrence_kind
-               (Name_occurrence_kind.Or_absent.present
-                 Name_occurrence_kind.phantom)
-             <= 0
+        Name_occurrence_kind.Or_absent.compare
+            greatest_occurrence_kind
+            (Name_occurrence_kind.Or_absent.present
+              Name_occurrence_kind.phantom)
+          <= 0
       in
-      if can_delete_binding then
+      let user_visible =
+        Variable.user_visible (Var_in_binding_pos.var bound_var)
+      in
+      let will_delete_binding =
+        (* CR mshinwell: This should detect whether there is any
+           provenance info associated with the variable.  If there isn't, the
+           [Let] can be deleted even if debugging information is being
+           generated. *)
+        can_delete_binding
+          && (not (!Clflags.debug && user_visible))
+      in
+      if will_delete_binding then
         bound_var, false, Have_deleted defining_expr
       else
         let occurrence_kind =

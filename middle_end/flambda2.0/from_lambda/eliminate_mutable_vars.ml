@@ -174,10 +174,10 @@ let transform_exn_continuation env
 
 let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
   match expr with
-  | Let (id, kind, named, body) ->
-    transform_named env id kind named (fun env : Ilambda.t ->
+  | Let (id, user_visible, kind, named, body) ->
+    transform_named env id user_visible kind named (fun env : Ilambda.t ->
       let body = transform_expr env body in
-      Let (id, kind, named, body))
+      Let (id, user_visible, kind, named, body))
   | Let_mutable let_mutable -> transform_let_mutable env let_mutable
   | Let_rec (func_decls, body) ->
     let func_decls =
@@ -200,8 +200,11 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     let id = Env.rename_variable env id in
     Switch (id, switch)
 
-and transform_named env id kind (named : Ilambda.named) k : Ilambda.t =
-  let normal_case named : Ilambda.t = Let (id, kind, named, k env) in
+and transform_named env id user_visible kind (named : Ilambda.named) k
+      : Ilambda.t =
+  let normal_case named : Ilambda.t =
+    Let (id, user_visible, kind, named, k env)
+  in
   match named with
   | Var id -> normal_case (Var (Env.rename_variable env id))
   | Const _ -> normal_case named
@@ -213,15 +216,15 @@ and transform_named env id kind (named : Ilambda.named) k : Ilambda.t =
     normal_case (Prim { prim; args; loc; exn_continuation; })
   | Assign { being_assigned; new_value; } ->
     let env, new_id, new_kind = Env.new_id_for_mutable env being_assigned in
-    Let (new_id, new_kind, Var new_value,
-      Let (id, kind, Const (Const_base (Const_int 0)), k env))
+    Let (new_id, User_visible, new_kind, Var new_value,
+      Let (id, Not_user_visible, kind, Const (Const_base (Const_int 0)), k env))
 
 and transform_let_mutable env
       ({ id; initial_value; contents_kind; body; } : Ilambda.let_mutable)
       : Ilambda.t =
   let env, new_id = Env.add_mutable_and_make_new_id env id contents_kind in
   let body = transform_expr env body in
-  Let (new_id, contents_kind, Var initial_value, body)
+  Let (new_id, User_visible, contents_kind, Var initial_value, body)
 
 and transform_let_cont env
       ({ name; is_exn_handler; params; recursive; body; handler; }
@@ -235,6 +238,9 @@ and transform_let_cont env
       match extra_params with
       | [] -> true
       | _ -> false
+  in
+  let extra_params =
+    List.map (fun (id, kind) -> id, Ilambda.User_visible, kind) extra_params
   in
   { name; 
     is_exn_handler;

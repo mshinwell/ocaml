@@ -21,6 +21,7 @@ type t = {
   name : string;
   name_stamp : int;
   (** [name_stamp]s are unique within any given compilation unit. *)
+  user_visible : bool;
 }
 
 module Self = Identifiable.Make (struct
@@ -57,7 +58,7 @@ include Self
 
 let previous_name_stamp = ref (-1)
 
-let create ?current_compilation_unit name =
+let create ?current_compilation_unit ?user_visible name =
   let compilation_unit =
     match current_compilation_unit with
     | Some compilation_unit -> compilation_unit
@@ -76,9 +77,11 @@ end;
   { compilation_unit;
     name;
     name_stamp;
+    user_visible = Option.is_some user_visible;
   }
 
-let create_with_same_name_as_ident ident = create (Ident.name ident)
+let create_with_same_name_as_ident ?user_visible ident : t =
+  create ?user_visible (Ident.name ident)
 
 let clambda_name t =
   (Compilation_unit.string_for_printing t.compilation_unit) ^ "_" ^ t.name
@@ -94,7 +97,13 @@ let rename ?current_compilation_unit ?append t =
     | None -> t.name
     | Some s -> t.name ^ s
   in
-  create ~current_compilation_unit name
+  let user_visible = if t.user_visible then Some () else None in
+  create ~current_compilation_unit ?user_visible name
+
+let user_visible t = t.user_visible
+
+let with_user_visible t ~user_visible =
+  { t with user_visible; }
 
 let in_compilation_unit t cu =
   Compilation_unit.equal cu t.compilation_unit

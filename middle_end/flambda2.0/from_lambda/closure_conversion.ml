@@ -372,9 +372,9 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
 
 let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
-  | Let (id, _kind, defining_expr, body) ->
+  | Let (id, user_visible, _kind, defining_expr, body) ->
     (* CR mshinwell: Remove [kind] on the Ilambda terms? *)
-    let body_env, var = Env.add_var_like env id in
+    let body_env, var = Env.add_var_like env id user_visible in
     let cont (defining_expr : Named.t option) =
       let body_env =
         match defining_expr with
@@ -412,10 +412,20 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     end;
     let params_with_kinds = params in
     let handler_env, params =
-      Env.add_vars_like env (List.map (fun (param, _kind) -> param) params)
+      Env.add_vars_like env
+        (List.map (fun (param, user_visible, _kind) -> param, user_visible)
+          params)
     in
     let params =
-      List.map2 (fun param (_, kind) ->
+      List.map2 (fun param (_, (user_visible : Ilambda.user_visible), kind) ->
+          (* CR mshinwell: Maybe take [Ilambda.user_visible] into
+             [User_visible.t]? *)
+          let user_visible =
+            match user_visible with
+            | User_visible -> true
+            | Not_user_visible -> false
+          in
+          let param = Variable.with_user_visible param ~user_visible in
           Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
         params
         params_with_kinds
@@ -509,7 +519,7 @@ and close_named t env ~let_bound_var (named : Ilambda.named)
 and close_let_rec t env ~defs ~body =
   let env =
     List.fold_right (fun (id, _) env ->
-        let env, _var = Env.add_var_like env id in
+        let env, _var = Env.add_var_like env id User_visible in
         env)
       defs env
   in
@@ -690,7 +700,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let closure_env =
     List.fold_right (fun (id, _) env ->
-        let env, _var = Env.add_var_like env id in
+        let env, _var = Env.add_var_like env id User_visible in
         env)
       params
       closure_env_without_parameters

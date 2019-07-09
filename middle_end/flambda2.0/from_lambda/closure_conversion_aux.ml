@@ -39,13 +39,27 @@ module Env = struct
   let add_var_map t map =
     { t with variables = Ident.Map.union_right t.variables map }
 
-  let add_var_like t id =
-    let var = Variable.create_with_same_name_as_ident id in
+  let add_var_like t id (user_visible : Ilambda.user_visible) =
+    let user_visible =
+      match user_visible with
+      | Not_user_visible -> None
+      | User_visible -> Some ()
+    in
+    let var = Variable.create_with_same_name_as_ident ?user_visible id in
     add_var t id var, var
 
   let add_vars_like t ids =
-    let vars = List.map Variable.create_with_same_name_as_ident ids in
-    add_vars t ids vars, vars
+    let vars =
+      List.map (fun (id, (user_visible : Ilambda.user_visible)) ->
+          let user_visible =
+            match user_visible with
+            | Not_user_visible -> None
+            | User_visible -> Some ()
+          in
+          Variable.create_with_same_name_as_ident ?user_visible id)
+        ids
+    in
+    add_vars t (List.map fst ids) vars, vars
 
   (* CR mshinwell: Rethink the semantics of these re. fatal errors etc *)
 
