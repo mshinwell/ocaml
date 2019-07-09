@@ -211,6 +211,76 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Unknown -> Unknown
     | Invalid -> Invalid
 
+  (* CR mshinwell: Try to functorise or otherwise factor out across the
+     various number kinds. *)
+  let prove_naked_floats env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Naked_float]:@ %a" print t
+    in
+    match Typing_env.resolve_type env t with
+    | _, Const (Naked_float f) -> Proved (Float.Set.singleton f)
+    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_int32 _
+      | Naked_int64 _ | Naked_nativeint _)
+    | _, Discriminant _ -> wrong_kind ()
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_naked_number (Ok (Float fs), Naked_float) -> Proved fs
+      | Resolved_naked_number (Unknown, Naked_float) -> Unknown
+      | Resolved_naked_number (Bottom, Naked_float) -> Invalid
+      | Resolved_value _ | Resolved_naked_number _
+      | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_naked_int32s env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Naked_int32]:@ %a" print t
+    in
+    match Typing_env.resolve_type env t with
+    | _, Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
+    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+      | Naked_int64 _ | Naked_nativeint _)
+    | _, Discriminant _ -> wrong_kind ()
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_naked_number (Ok (Int32 is), Naked_int32) -> Proved is
+      | Resolved_naked_number (Unknown, Naked_int32) -> Unknown
+      | Resolved_naked_number (Bottom, Naked_int32) -> Invalid
+      | Resolved_value _ | Resolved_naked_number _
+      | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_naked_int64s env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
+    in
+    match Typing_env.resolve_type env t with
+    | _, Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
+    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+      | Naked_int32 _ | Naked_nativeint _)
+    | _, Discriminant _ -> wrong_kind ()
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_naked_number (Ok (Int64 is), Naked_int64) -> Proved is
+      | Resolved_naked_number (Unknown, Naked_int64) -> Unknown
+      | Resolved_naked_number (Bottom, Naked_int64) -> Invalid
+      | Resolved_value _ | Resolved_naked_number _
+      | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_naked_int64s env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
+    in
+    match Typing_env.resolve_type env t with
+    | _, Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
+    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+      | Naked_int32 _ | Naked_int64 _)
+    | _, Discriminant _ -> wrong_kind ()
+    | _, Resolved resolved ->
+      match resolved with
+      | Resolved_naked_number (Ok (Nativeint is), Naked_nativeint) -> Proved is
+      | Resolved_naked_number (Unknown, Naked_nativeint) -> Unknown
+      | Resolved_naked_number (Bottom, Naked_nativeint) -> Invalid
+      | Resolved_value _ | Resolved_naked_number _
+      | Resolved_fabricated _ -> wrong_kind ()
+
   let prove_is_int env t : bool proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
