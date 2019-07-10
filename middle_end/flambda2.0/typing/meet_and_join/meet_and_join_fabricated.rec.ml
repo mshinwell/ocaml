@@ -45,7 +45,7 @@ struct
       in
       set_of_closures_entry, env_extension)
 
-  let meet_or_join_of_kind_foo env
+  let meet_or_join_of_kind_foo env ~meet_or_join_ty:_
         (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =
     match of_kind1, of_kind2 with
     | Discriminants discrs1, Discriminants discrs2 ->

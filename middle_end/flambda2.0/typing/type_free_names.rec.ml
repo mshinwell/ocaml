@@ -61,6 +61,8 @@ and free_names_of_kind_value (of_kind : Flambda_types.of_kind_value)
   | Closures { by_closure_id; } ->
     Closures_entry_by_closure_id.free_names by_closure_id
   | String _ -> Name_occurrences.empty
+  | Array { length; } ->
+    free_names_ty free_names_of_kind_value length
 
 and free_names_of_kind_fabricated
       (of_kind : Flambda_types.of_kind_fabricated) =

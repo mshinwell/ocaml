@@ -142,12 +142,16 @@ let rec print_of_kind_value ~cache ppf
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
       (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
   | Boxed_number n ->
-    Format.fprintf ppf "@[(Boxed_number %a)@]"
+    Format.fprintf ppf "@[<hov 1>(Boxed_number@ %a)@]"
       print_of_kind_value_boxed_number n
   | Closures { by_closure_id; } ->
     Closures_entry_by_closure_id.print_with_cache ~cache ppf by_closure_id
   | String str_infos ->
-    Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
+    Format.fprintf ppf "@[<hov 1>(Strings@ (%a))@]"
+      String_info.Set.print str_infos
+  | Array { length; } ->
+    Format.fprintf ppf "@[<hov 1>(Array@ (length@ %a))@]"
+      (print_ty_value_with_cache ~cache) length
 
 and print_ty_value_with_cache ~cache ppf (ty : Flambda_types.ty_value) =
   print_ty_generic (print_of_kind_value ~cache) ppf ty
