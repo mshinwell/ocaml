@@ -16,7 +16,8 @@
 
 val convert_and_bind
    : backend:(module Flambda2_backend_intf.S)
-  -> Exn_continuation.t
+  -> Exn_continuation.t option
+  -> register_const_string:(string -> Symbol.t)
   -> Lambda.primitive
   -> args:Simple.t list
   -> Debuginfo.t

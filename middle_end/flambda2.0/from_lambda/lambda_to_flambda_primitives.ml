@@ -175,25 +175,11 @@ type failure =
   | Division_by_zero
   | Index_out_of_bounds
 
-let expression_for_failure ~backend exn_cont (failure : failure) =
-  let module B = (val backend : Flambda2_backend_intf.S) in
-  let exn_bucket =
-    match failure with
-    | Division_by_zero -> B.division_by_zero
-    | Index_out_of_bounds -> B.index_out_of_bounds
-  in
-  let exn_handler = Exn_continuation.exn_handler exn_cont in
-  let trap_action = Trap_action.Pop { exn_handler; raise_kind = Regular; } in
-  let args = [Simple.symbol exn_bucket] in
-  let apply_cont =
-    Flambda.Apply_cont.create ~trap_action exn_handler ~args
-  in
-  Flambda.Expr.create_apply_cont apply_cont
-
 type expr_primitive =
   | Unary of P.unary_primitive * simple_or_prim
   | Binary of P.binary_primitive * simple_or_prim * simple_or_prim
-  | Ternary of P.ternary_primitive * simple_or_prim * simple_or_prim * simple_or_prim
+  | Ternary of P.ternary_primitive * simple_or_prim * simple_or_prim
+      * simple_or_prim
   | Variadic of P.variadic_primitive * (simple_or_prim list)
   | Checked of { validity_conditions : expr_primitive list;
                  primitive : expr_primitive;
@@ -203,6 +189,17 @@ type expr_primitive =
 and simple_or_prim =
   | Simple of Simple.t
   | Prim of expr_primitive
+
+let rec print_expr_primitive ppf expr_primitive =
+  let module W = Flambda_primitive.Without_args in
+  match expr_primitive with
+  | Unary (prim, _) -> W.print ppf (Unary prim)
+  | Binary (prim, _, _) -> W.print ppf (Binary prim)
+  | Ternary (prim, _, _, _) -> W.print ppf (Ternary prim)
+  | Variadic (prim, _) -> W.print ppf (Variadic prim)
+  | Checked { primitive; _ } ->
+    Format.fprintf ppf "@[<hov 1>(Checked@ %a)@]"
+      print_expr_primitive primitive
 
 let print_simple_or_prim ppf simple_or_prim =
   match simple_or_prim with
@@ -214,7 +211,58 @@ let print_list_of_simple_or_prim ppf simple_or_prim_list =
     (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_or_prim)
     simple_or_prim_list
 
+let expression_for_failure ~backend exn_cont ~register_const_string
+      primitive dbg (failure : failure) =
+  let module B = (val backend : Flambda2_backend_intf.S) in
+  let exn_bucket, extra_let_binding =
+    match failure with
+    | Division_by_zero -> Simple.symbol B.division_by_zero, None
+    | Index_out_of_bounds ->
+      let exn_bucket = Variable.create "exn_bucket" in
+      (* CR mshinwell: Share this text with elsewhere. *)
+      let error_text = register_const_string "index out of bounds" in
+      let contents_of_exn_bucket = [
+        Simple.symbol B.invalid_argument;
+        Simple.symbol error_text;
+      ]
+      in
+      let extra_let_binding =
+        Var_in_binding_pos.create exn_bucket Name_occurrence_kind.normal,
+          Named.create_prim (Variadic (Make_block (
+              Full_of_values (Tag.Scannable.zero,
+                  [Definitely_pointer; Definitely_pointer]),
+                Immutable),
+              contents_of_exn_bucket))
+            dbg
+      in
+      Simple.var exn_bucket, Some extra_let_binding
+  in
+  let exn_cont =
+    match exn_cont with
+    | Some exn_cont -> exn_cont
+    | None ->
+      Misc.fatal_errorf "Validity checks for primitive %a may raise, but \
+          no exception continuation was supplied with the primitive"
+        print_expr_primitive primitive
+  in
+  let exn_handler = Exn_continuation.exn_handler exn_cont in
+  let trap_action =
+    Trap_action.Pop {
+      exn_handler;
+      raise_kind = Some Regular;
+    }
+  in
+  let args = [exn_bucket] in
+  let apply_cont =
+    Expr.create_apply_cont (Apply_cont.create ~trap_action exn_handler ~args)
+  in
+  match extra_let_binding with
+  | None -> apply_cont
+  | Some (bound_var, defining_expr) ->
+    Expr.create_let bound_var defining_expr apply_cont
+
 let rec bind_rec ~backend exn_cont
+          ~register_const_string
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
           (cont : Named.t -> Expr.t)
@@ -224,26 +272,27 @@ let rec bind_rec ~backend exn_cont
     let cont (arg : Simple.t) =
       cont (Named.create_prim (Unary (prim, arg)) dbg)
     in
-    bind_rec_primitive ~backend exn_cont arg dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg dbg cont
   | Binary (prim, arg1, arg2) ->
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Named.create_prim (Binary (prim, arg1, arg2)) dbg)
       in
-      bind_rec_primitive ~backend exn_cont arg1 dbg cont
+      bind_rec_primitive ~backend exn_cont ~register_const_string arg1 dbg cont
     in
-    bind_rec_primitive ~backend exn_cont arg2 dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg2 dbg cont
   | Ternary (prim, arg1, arg2, arg3) ->
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg)
         in
-        bind_rec_primitive ~backend exn_cont arg1 dbg cont
+        bind_rec_primitive ~backend exn_cont ~register_const_string arg1
+          dbg cont
       in
-      bind_rec_primitive ~backend exn_cont arg2 dbg cont
+      bind_rec_primitive ~backend exn_cont ~register_const_string arg2 dbg cont
     in
-    bind_rec_primitive ~backend exn_cont arg3 dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg3 dbg cont
   | Variadic (prim, args) ->
     let cont args =
       cont (Named.create_prim (Variadic (prim, args)) dbg)
@@ -256,7 +305,7 @@ let rec bind_rec ~backend exn_cont
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive ~backend exn_cont arg dbg cont
+        bind_rec_primitive ~backend exn_cont ~register_const_string arg dbg cont
     in
     build_cont (List.rev args) []
   | Checked { validity_conditions; primitive; failure; dbg; } ->
@@ -264,7 +313,8 @@ let rec bind_rec ~backend exn_cont
     let primitive_cont_handler =
       let params_and_handler =
         Continuation_params_and_handler.create []
-          ~handler:(bind_rec ~backend exn_cont primitive dbg cont)
+          ~handler:(bind_rec ~backend exn_cont ~register_const_string
+            primitive dbg cont)
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
@@ -274,14 +324,15 @@ let rec bind_rec ~backend exn_cont
     let failure_cont_handler =
       let params_and_handler =
         Continuation_params_and_handler.create []
-          ~handler:(expression_for_failure ~backend exn_cont failure)
+          ~handler:(expression_for_failure ~backend exn_cont
+            ~register_const_string primitive dbg failure)
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
         ~is_exn_handler:false
     in
     let check_validity_conditions =
-      List.fold_left (fun rest simple_or_prim ->
+      List.fold_left (fun rest expr_primitive ->
           let condition_passed_cont = Continuation.create () in
           let condition_passed_cont_handler =
             let params_and_handler =
@@ -293,24 +344,27 @@ let rec bind_rec ~backend exn_cont
           in
           Let_cont.create_non_recursive condition_passed_cont
             condition_passed_cont_handler
-            ~body:(bind_rec_primitive simple_or_prim dbg (fun prim_result ->
-              let check_if_condition_holds : Flambda_primitive.t =
-                Binary (Phys_equal (K.value, Neq),
-                  prim_result,
-                  Simple (Simple.const (Simple.Const.Tagged_immediate
-                    (Immediate.int (Targetint.OCaml.zero)))))
-              in
-              let condition_holds = Variable.create "condition_holds" in
-              Expr.create_let
-                (Var_in_binding_pos.create condition_holds
-                   Name_occurrence_kind.normal)
-                (Named.create_prim check_if_condition_holds dbg)
-                (Expr.create_switch ~scrutinee:(Simple.var condition_holds)
-                   ~arms:(Discriminant.Map.of_list [
-                     Discriminant.bool_true, condition_passed_cont;
-                     Discriminant.bool_false, failure_cont;
-                   ])))))
-        (Expr.create_apply_cont primitive_cont ~args:[])
+            ~body:(
+              bind_rec_primitive ~backend exn_cont ~register_const_string
+                (Prim expr_primitive) dbg
+                (fun prim_result ->
+                  let check_if_condition_holds : Flambda_primitive.t =
+                    Binary (Phys_equal (K.value, Neq),
+                      prim_result,
+                      Simple.const (Simple.Const.Tagged_immediate
+                        (Immediate.int (Targetint.OCaml.zero))))
+                  in
+                  let condition_holds = Variable.create "condition_holds" in
+                  Expr.create_let
+                    (Var_in_binding_pos.create condition_holds
+                       Name_occurrence_kind.normal)
+                    (Named.create_prim check_if_condition_holds dbg)
+                    (Expr.create_switch ~scrutinee:(Simple.var condition_holds)
+                      ~arms:(Discriminant.Map.of_list [
+                        Discriminant.bool_true, condition_passed_cont;
+                        Discriminant.bool_false, failure_cont;
+                      ])))))
+        (Expr.create_apply_cont (Apply_cont.create primitive_cont ~args:[]))
         validity_conditions
     in
     Let_cont.create_non_recursive primitive_cont
@@ -320,7 +374,7 @@ let rec bind_rec ~backend exn_cont
           failure_cont_handler
           ~body:check_validity_conditions)
 
-and bind_rec_primitive
+and bind_rec_primitive ~backend exn_cont ~register_const_string
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
       (cont : Simple.t -> Expr.t) : Expr.t =
@@ -333,7 +387,7 @@ and bind_rec_primitive
     let cont named =
       Flambda.Expr.create_let var' named (cont (Simple.var var))
     in
-    bind_rec p dbg cont
+    bind_rec ~backend exn_cont ~register_const_string p dbg cont
 
 let box_float (arg : expr_primitive) : expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
@@ -359,7 +413,8 @@ let bint_shift bi prim arg1 arg2 =
 let string_or_bytes_ref kind arg1 arg2 dbg =
   Checked {
     primitive = Binary (String_or_bigstring_load (kind, Eight), arg1, arg2);
-    validity_condition =
+    (* CR mshinwell: This should check >= 0 as well *)
+    validity_conditions = [
       Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
               (* CR pchambart:
                  Int_comp_unsigned assumes that the arguments are naked
@@ -368,7 +423,8 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
               tagged_immediate_as_naked_nativeint arg2,
               tagged_immediate_as_naked_nativeint
                 (Prim (Unary (String_length String, arg1))));
-    failure = Index_out_of_bound;
+    ];
+    failure = Index_out_of_bounds;
     dbg;
   }
 
@@ -614,12 +670,13 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
-      validity_condition =
+      validity_conditions = [
         Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
                         (Immediate.int (Targetint.OCaml.zero)))));
+      ];
       failure = Division_by_zero;
       dbg;
     }
@@ -628,28 +685,28 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
-      (* CR mshinwell: This isn't a validity condition, it's a condition for
-         invalidity... *)
-      validity_condition =
+      validity_conditions = [
         Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
                         (Immediate.int (Targetint.OCaml.zero)))));
+      ];
       failure = Division_by_zero;
       dbg;
     }
-  | Parrayrefs Pgenarray ->
+  | Parrayrefs Pgenarray, [array; index] ->
     Checked {
       primitive =
-        Binary (Block_load (Array (Value Anything), Mutable), arg1, arg2);
-      validity_condition =
-        Binary (Phys_equal (K.value, Eq), arg2,
-                Simple
-                  (Simple.const
-                     (Simple.Const.Tagged_immediate
-                        (Immediate.int (Targetint.OCaml.zero)))));
-      failure = Invalid_argument "index out of bounds";
+        Binary (Block_load (Array (Value Anything), Mutable), array, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Array_length (Array (Value Anything)), array)));
+      ];
+      failure = Index_out_of_bounds;
       dbg;
     }
 
@@ -806,10 +863,11 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     -> failwith "TODO"
 
 let convert_and_bind ~backend
-      exn_cont
+      exn_cont ~register_const_string
       (prim : Lambda.primitive)
       ~(args : Simple.t list)
       (dbg : Debuginfo.t)
       (cont : Named.t option -> Expr.t) : Expr.t =
   let expr = convert_lprim prim args dbg in
-  bind_rec ~backend exn_cont expr dbg (fun named -> cont (Some named))
+  bind_rec ~backend exn_cont ~register_const_string expr dbg
+    (fun named -> cont (Some named))

@@ -284,17 +284,17 @@ val invariant : Invariant_env.t -> t -> unit
 
 include Contains_names.S with type t := t
 
-(*
-val map_args : t -> f:(Simple.t -> Simple.t) -> t
-*)
-
 (** Simpler version (e.g. for [Inlining_cost]), where only the actual
     primitive matters, not the arguments. *)
-type without_args =
-  | Unary of unary_primitive
-  | Binary of binary_primitive
-  | Ternary of ternary_primitive
-  | Variadic of variadic_primitive
+module Without_args : sig
+  type t =
+    | Unary of unary_primitive
+    | Binary of binary_primitive
+    | Ternary of ternary_primitive
+    | Variadic of variadic_primitive
+
+  val print : Format.formatter -> t -> unit
+end
 
 (** A description of the kind of values which a unary primitive expects as
     its arguments. *)
