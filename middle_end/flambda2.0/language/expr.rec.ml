@@ -128,8 +128,8 @@ type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
-      : t * let_creation_result =
+let create_let0 (bound_var : Var_in_binding_pos.t) (defining_expr : Named.t)
+      body : t * let_creation_result =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -161,7 +161,17 @@ let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
         Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
         print body
     end;
-    if not (Named.at_most_generative_effects defining_expr) then begin
+    let is_set_of_closures =
+      (* Sets of closures cannot be deleted without a global analysis, as there
+         may be projections from them not in the scope of their definition,
+         consequentially to inlining. *)
+      match defining_expr with
+      | Set_of_closures _ -> true
+      | _ -> false
+    in
+    if (not (Named.at_most_generative_effects defining_expr))
+      || is_set_of_closures
+    then begin
       if not (Name_occurrence_kind.is_normal declared_occurrence_kind)
       then begin
         Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
