@@ -1347,8 +1347,17 @@ module With_fixed_value = struct
     compare t1 t2 = 0
 end
 
-type without_args =
-  | Unary of unary_primitive
-  | Binary of binary_primitive
-  | Ternary of ternary_primitive
-  | Variadic of variadic_primitive
+module Without_args = struct
+  type t =
+    | Unary of unary_primitive
+    | Binary of binary_primitive
+    | Ternary of ternary_primitive
+    | Variadic of variadic_primitive
+
+  let print ppf (t : t) =
+    match t with
+    | Unary prim -> print_unary_primitive ppf prim
+    | Binary prim -> print_binary_primitive ppf prim
+    | Ternary prim -> print_ternary_primitive ppf prim
+    | Variadic prim -> print_variadic_primitive ppf prim
+end

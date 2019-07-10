@@ -59,8 +59,8 @@ module Benefit : sig
   (* CR-soon mshinwell: [remove_alloc] should take the size of the block
      (to account for removal of initializing writes). *)
   val remove_alloc : t -> t
-  val add_primitive : Flambda_primitive.without_args -> t -> t
-  val remove_primitive : Flambda_primitive.without_args -> t -> t
+  val add_primitive : Flambda_primitive.Without_args.t -> t -> t
+  val remove_primitive : Flambda_primitive.Without_args.t -> t -> t
   val remove_primitive_application : Flambda_primitive.t -> t -> t
   val remove_branch : t -> t
   val direct_call_of_indirect_unknown_arity : t -> t

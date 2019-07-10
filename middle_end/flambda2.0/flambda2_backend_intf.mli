@@ -36,7 +36,7 @@ module type S = sig
 
   val division_by_zero : Symbol.t
 
-  val index_out_of_bounds : Symbol.t
+  val invalid_argument : Symbol.t
 
   val import_symbol : Symbol.t -> Simple_value_approx.t
 
