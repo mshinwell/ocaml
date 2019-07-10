@@ -50,7 +50,7 @@ struct
       Simple.Set.add simple
         (Typing_env.aliases_of_simple_allowable_in_types env simple)
 
-  let meet_on_unknown_or_join env
+  let meet_on_unknown_or_join env ~meet_or_join_ty
         (ou1 : S.of_kind_foo T.unknown_or_join)
         (ou2 : S.of_kind_foo T.unknown_or_join)
         : S.of_kind_foo T.unknown_or_join * TEE.t =
@@ -59,11 +59,14 @@ struct
     | ou1, Unknown -> ou1, TEE.empty
     | Bottom, _ | _, Bottom -> Bottom, TEE.empty
     | Ok of_kind_foo1, Ok of_kind_foo2 ->
-      match S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2 with
+      match
+        S.meet_or_join_of_kind_foo env ~meet_or_join_ty
+          of_kind_foo1 of_kind_foo2
+      with
       | Ok (of_kind_foo, env_extension) -> Ok of_kind_foo, env_extension
       | Absorbing | Bottom -> Bottom, TEE.empty
 
-  let join_on_unknown_or_join env
+  let join_on_unknown_or_join env ~meet_or_join_ty
         (uj1 : S.of_kind_foo T.unknown_or_join)
         (uj2 : S.of_kind_foo T.unknown_or_join)
         : S.of_kind_foo T.unknown_or_join =
@@ -73,12 +76,15 @@ struct
     | Unknown, _ | _, Unknown -> Unknown
     | Ok of_kind_foo1, Ok of_kind_foo2 ->
       let env = Meet_env.create env in
-      match S.meet_or_join_of_kind_foo env of_kind_foo1 of_kind_foo2 with
+      match
+        S.meet_or_join_of_kind_foo env ~meet_or_join_ty
+          of_kind_foo1 of_kind_foo2
+      with
       | Ok (of_kind_foo, _env_extension) -> Ok of_kind_foo
       | Bottom -> Bottom
       | Absorbing -> Unknown
 
-  let meet_ty env
+  let rec meet_ty env
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty * TEE.t =
     let unknown_or_join1, canonical_simple1 =
@@ -96,7 +102,8 @@ struct
     match canonical_simple1, canonical_simple2 with
     | None, None ->
       let unknown_or_join, env_extension =
-        meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+        meet_on_unknown_or_join env ~meet_or_join_ty
+          unknown_or_join1 unknown_or_join2
       in
       No_alias unknown_or_join, env_extension
     | Some simple1, Some simple2
@@ -111,7 +118,8 @@ Format.eprintf "Meeting simples: %a and %a\n%!"
 *)
       let unknown_or_join, env_extension =
         let env = Meet_env.now_meeting env simple1 simple2 in
-        meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+        meet_on_unknown_or_join env ~meet_or_join_ty
+          unknown_or_join1 unknown_or_join2
       in
 (*
 Format.eprintf "TEE from meeting simples (1): %a\n%!"
@@ -139,7 +147,8 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
       Equals simple1, env_extension
     | Some simple, None | None, Some simple ->
       let unknown_or_join, env_extension =
-        meet_on_unknown_or_join env unknown_or_join1 unknown_or_join2
+        meet_on_unknown_or_join env ~meet_or_join_ty
+          unknown_or_join1 unknown_or_join2
       in
       let env_extension =
         env_extension
@@ -147,7 +156,7 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
       in
       Equals simple, env_extension
 
-  let join_ty ?bound_name env
+  and join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty =
     let unknown_or_join1, canonical_simple1 =
@@ -174,9 +183,10 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
     match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
     | Some simple -> Equals simple
     | None ->
-      No_alias (join_on_unknown_or_join env unknown_or_join1 unknown_or_join2)
+      No_alias (join_on_unknown_or_join env ~meet_or_join_ty
+        unknown_or_join1 unknown_or_join2)
 
-  let meet_or_join_ty ?bound_name env
+  and meet_or_join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo T.ty)
         (or_alias2 : S.of_kind_foo T.ty) : _ Or_bottom.t =
     let ty, env_extension =

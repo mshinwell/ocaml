@@ -32,7 +32,7 @@ struct
   let print_ty = Type_printers.print_ty_naked_int64_with_cache
   let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_naked_number
 
-  let meet_or_join_of_kind_foo _meet_or_join_env
+  let meet_or_join_of_kind_foo _meet_or_join_env ~meet_or_join_ty:_
         (of_kind1 : K.naked_int64 Flambda_types.of_kind_naked_number)
         (of_kind2 : K.naked_int64 Flambda_types.of_kind_naked_number)
         : (K.naked_int64 Flambda_types.of_kind_naked_number * TEE.t)

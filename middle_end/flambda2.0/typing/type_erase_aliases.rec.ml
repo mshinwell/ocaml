@@ -166,6 +166,11 @@ and erase_aliases_of_kind_value env ~bound_name ~already_seen ~allowed
           ~already_seen ~allowed;
     }
   | String _ -> of_kind
+  | Array { length; } ->
+    let length =
+      erase_aliases_ty_value env ~bound_name ~already_seen ~allowed length
+    in
+    Array { length; }
 
 and erase_aliases_of_kind_fabricated env ~bound_name:_ ~already_seen ~allowed
       (of_kind : Flambda_types.of_kind_fabricated)
@@ -179,7 +184,7 @@ and erase_aliases_of_kind_fabricated env ~bound_name:_ ~already_seen ~allowed
       closures = Closure_ids.erase_aliases closures env ~already_seen ~allowed;
     }
 
-let erase_aliases_ty_value env ~bound_name ~already_seen ~allowed ty =
+and erase_aliases_ty_value env ~bound_name ~already_seen ~allowed ty =
   erase_aliases_ty env ~bound_name ~already_seen ~allowed
     erase_aliases_of_kind_value
     ~force_to_kind:Flambda_type0_core.force_to_kind_value
