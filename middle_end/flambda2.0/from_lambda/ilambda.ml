@@ -245,17 +245,17 @@ and print ppf (t : t) =
     let let_conts, body = gather_let_conts [] t in
     let print_let_cont ppf { name; params; recursive; handler;
           body = _; is_exn_handler; } =
-      fprintf ppf "@[<v 2>where %a%s%s%s%a%s =@ %a@]"
+      fprintf ppf "@[<v 2>where %a%s%s%(%)%a%(%) =@ %a@]"
         Continuation.print name
         (match recursive with Nonrecursive -> "" | Recursive -> "*")
         (if is_exn_handler then "<exn>" else "")
-        (match params with [] -> "" | _ -> " (")
+        ((match params with [] -> "" | _ -> " @[<h 2>(") : _ format6)
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           (fun ppf (ident, _user_visible, kind) ->
             Format.fprintf ppf "%a@ \u{2237}@ %a"
               Ident.print ident
               Printlambda.value_kind' kind)) params
-        (match params with [] -> "" | _ -> ")")
+        ((match params with [] -> "" | _ -> ")@]") : _ format6)
         print handler
     in
     let pp_sep ppf () = fprintf ppf "@ " in
