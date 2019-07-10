@@ -77,6 +77,10 @@ module Or_absent = struct
   let absent = Absent
   let present kind = Present kind
 
+  let is_present = function
+    | Absent -> false
+    | Present _ -> true
+
   include Identifiable.Make (struct
     type nonrec t = t
 

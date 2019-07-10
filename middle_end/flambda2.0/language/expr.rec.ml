@@ -128,8 +128,8 @@ type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_let0 (bound_var : Var_in_binding_pos.t) (defining_expr : Named.t)
-      body : t * let_creation_result =
+let create_let0 (bound_var : Var_in_binding_pos.t) defining_expr body
+      : t * let_creation_result =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -161,17 +161,7 @@ let create_let0 (bound_var : Var_in_binding_pos.t) (defining_expr : Named.t)
         Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
         print body
     end;
-    let is_set_of_closures =
-      (* Sets of closures cannot be deleted without a global analysis, as there
-         may be projections from them not in the scope of their definition,
-         consequentially to inlining. *)
-      match defining_expr with
-      | Set_of_closures _ -> true
-      | _ -> false
-    in
-    if (not (Named.at_most_generative_effects defining_expr))
-      || is_set_of_closures
-    then begin
+    if not (Named.at_most_generative_effects defining_expr) then begin
       if not (Name_occurrence_kind.is_normal declared_occurrence_kind)
       then begin
         Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
@@ -181,7 +171,10 @@ let create_let0 (bound_var : Var_in_binding_pos.t) (defining_expr : Named.t)
       end;
       bound_var, true, Nothing_deleted
     end else begin
-      let can_delete_binding =
+      let has_uses =
+        Name_occurrence_kind.Or_absent.is_present greatest_occurrence_kind
+      in
+      let uses_are_at_most_phantom =
         (* CR mshinwell: This should detect whether there is any
            provenance info associated with the variable.  If there isn't, the
            [Let] can be deleted even if debugging information is being
@@ -200,8 +193,8 @@ let create_let0 (bound_var : Var_in_binding_pos.t) (defining_expr : Named.t)
            provenance info associated with the variable.  If there isn't, the
            [Let] can be deleted even if debugging information is being
            generated. *)
-        can_delete_binding
-          && (not (!Clflags.debug && user_visible))
+        uses_are_at_most_phantom
+          && (not (!Clflags.debug && (has_uses || user_visible)))
       in
       if will_delete_binding then
         bound_var, false, Have_deleted defining_expr
