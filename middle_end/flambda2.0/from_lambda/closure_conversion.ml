@@ -488,20 +488,23 @@ let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
     let module D = Discriminant in
-    let arms = List.map (fun (case, arm) -> D.of_int_exn case, arm) sw.consts in
+    let kind = sw.kind in
+    let arms =
+      List.map (fun (case, arm) -> D.of_int_exn kind case, arm) sw.consts
+    in
     let arms =
       match sw.failaction with
       | None -> D.Map.of_list arms
       | Some default ->
         Numbers.Int.Set.fold (fun case cases ->
-            let case = D.of_int_exn case in
+            let case = D.of_int_exn kind case in
             if D.Map.mem case cases then cases
             else D.Map.add case default cases)
           (Numbers.Int.zero_to_n (sw.numconsts - 1))
           (D.Map.of_list arms)
     in
     let scrutinee = Simple.name (Env.find_name env scrutinee) in
-    Expr.create_switch ~scrutinee ~arms
+    Expr.create_switch kind ~scrutinee ~arms
 
 and close_named ~backend t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =

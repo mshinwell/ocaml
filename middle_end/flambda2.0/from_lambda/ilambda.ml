@@ -102,6 +102,7 @@ and apply_kind =
   | Method of { kind : Lambda.meth_kind; obj : Ident.t; }
 
 and switch = {
+  kind : Discriminant.Kind.t;
   numconsts : int;
   consts : (int * Continuation.t) list;
   failaction : Continuation.t option;

@@ -393,16 +393,22 @@ let this_discriminant_as_ty_fabricated discr : ty_fabricated =
 let this_discriminant discr : t =
   Fabricated (this_discriminant_as_ty_fabricated discr)
 
-(* CR mshinwell: Same code pattern as the tagged immediates cases above,
-   factor out. *)
 let these_discriminants0 ~no_alias discrs : t =
   match Discriminant.Set.get_singleton discrs with
   | Some discr when not no_alias -> this_discriminant discr
   | _ ->
-    if Discriminant.Set.is_empty discrs then bottom K.fabricated
-    else
-      let discrs = Discriminants.create discrs in
-      Fabricated (No_alias (Ok (Discriminants discrs)))
+    let ty_value =
+      match Discriminant.classify_set discrs with
+      | Empty -> bottom K.fabricated
+      | Ints ints ->
+        let imms = Immediate.set_of_targetint_set ints in
+        these_tagged_immediates imms
+      | Tags tags ->
+
+      | Is_ints bools ->
+
+    in
+    Fabricated (No_alias (Ok (Discriminants ty_value)))
 
 let these_discriminants discrs =
   these_discriminants0 ~no_alias:false discrs

@@ -19,6 +19,7 @@
 module K = Flambda_kind
 
 type t = {
+  discriminant_kind : Discriminant.Kind.t;
   scrutinee : Simple.t;
   arms : Continuation.t Discriminant.Map.t;
 }
@@ -36,9 +37,13 @@ let print_arms ppf arms =
         Continuation.print l)
     arms
 
-let print ppf { scrutinee; arms; } =
+let print ppf { discriminant_kind; scrutinee; arms; } =
+  let discriminant_kind =
+    Discriminant.Kind.to_lowercase_string discriminant_kind
+  in
   fprintf ppf
-    "@[<hov 1>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
+    "@[<hov 1>(@<0>%sswitch_%s@<0>%s %a@ @[<v 0>%a@])@]"
+    discriminant_kind
     (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
     Simple.print scrutinee
@@ -46,7 +51,7 @@ let print ppf { scrutinee; arms; } =
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
-let invariant env ({ scrutinee; arms; } as t) =
+let invariant env ({ discriminant_kind; scrutinee; arms; } as t) =
   let module E = Invariant_env in
   let unbound_continuation cont reason =
     Misc.fatal_errorf "Unbound continuation %a in %s: %a"
@@ -57,7 +62,12 @@ let invariant env ({ scrutinee; arms; } as t) =
   E.check_simple_is_bound_and_of_kind env scrutinee K.fabricated;
   assert (Discriminant.Map.cardinal arms >= 2);
   let check discr k =
-    ignore (discr : Discriminant.t);
+    let discr_kind = Discriminant.kind discr in
+    if not (Discriminant.Kind.equal discr_kind discriminant_kind) then begin
+      Misc.fatal_errorf "[Switch] has arm(s) whose discriminant kind does \
+          not match the discriminant kind of the whole [Switch]:@ %a"
+        print t
+    end;
     match E.find_continuation_opt env k with
     | None ->
       unbound_continuation k "[Switch] term"
@@ -83,16 +93,18 @@ let invariant env ({ scrutinee; arms; } as t) =
   in
   Discriminant.Map.iter check arms
 
-let create ~scrutinee ~arms = { scrutinee; arms; }
+let create discriminant_kind ~scrutinee ~arms =
+  { discriminant_kind; scrutinee; arms; }
 
 let iter t ~f = Discriminant.Map.iter f t.arms
 
 let num_arms t = Discriminant.Map.cardinal t.arms
 
+let discriminant_kind t = t.discriminant_kind
 let scrutinee t = t.scrutinee
 let arms t = t.arms
 
-let free_names { scrutinee; arms; } =
+let free_names { discriminant_kind = _; scrutinee; arms; } =
   let free_names_in_arms =
     Discriminant.Map.fold (fun _discr k free_names ->
         Name_occurrences.add_continuation free_names k)
@@ -101,7 +113,7 @@ let free_names { scrutinee; arms; } =
   in
   Name_occurrences.union (Simple.free_names scrutinee) free_names_in_arms
 
-let apply_name_permutation ({ scrutinee; arms; } as t) perm =
+let apply_name_permutation ({ discriminant_kind; scrutinee; arms; } as t) perm =
   let scrutinee' = Simple.apply_name_permutation scrutinee perm in
   let arms' =
     Discriminant.Map.map_sharing (fun k ->
@@ -109,4 +121,4 @@ let apply_name_permutation ({ scrutinee; arms; } as t) perm =
       arms
   in
   if scrutinee == scrutinee' && arms == arms' then t
-  else { scrutinee = scrutinee'; arms = arms'; }
+  else { discriminant_kind; scrutinee = scrutinee'; arms = arms'; }

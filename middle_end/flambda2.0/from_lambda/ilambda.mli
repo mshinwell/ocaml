@@ -121,9 +121,8 @@ and apply_kind =
   | Function
   | Method of { kind : Lambda.meth_kind; obj : Ident.t; }
 
-(** Tag block switches must be encoded as [Pgettag] followed by a [Tag] switch
-    on constants.  String switches must be expanded out. *)
 and switch = {
+  kind : Discriminant.Kind.t;
   numconsts : int;
   consts : (int * Continuation.t) list;
   failaction : Continuation.t option;

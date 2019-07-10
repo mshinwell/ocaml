@@ -860,8 +860,7 @@ and simplify_switch
   | Ok scrutinee, scrutinee_ty ->
     let known_values_of_scrutinee : _ Or_unknown.t =
       match
-        T.prove_equals_discriminants (DE.typing_env (DA.denv dacc))
-          scrutinee_ty
+        T.prove_discriminants (DE.typing_env (DA.denv dacc)) scrutinee_ty
       with
       | Proved discrs -> Known discrs
       | Unknown -> Unknown
@@ -871,11 +870,22 @@ and simplify_switch
           T.print scrutinee_ty
           Switch.print switch
     in
+    let switch_kind = Switch.discriminant_kind switch in
+    begin match known_values_of_scrutinee with
+    | Unknown -> ()
+    | Known (discr_kind, _) ->
+      if not (Discriminant.Kind.equal discr_kind switch_kind) then begin
+        Misc.fatal_errorf "Discriminant kind of scrutinee (%a) does not \
+            match discriminant kind of [Switch]:@ %a"
+          Discriminant.Kind.print discr_kind
+          Switch.print switch
+      end
+    end;
     let reachable_arms =
       Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
         match known_values_of_scrutinee with
         | Unknown -> Some cont
-        | Known known_values ->
+        | Known (_discr_kind, known_values) ->
           if Discriminant.Set.mem arm known_values then Some cont
           else None)
     in
@@ -904,7 +914,7 @@ and simplify_switch
         | Unreachable _ -> None
         | Unknown _ | Inline _ -> Some cont)
     in
-    let expr = Expr.create_switch ~scrutinee ~arms:reachable_arms in
+    let expr = Expr.create_switch switch_kind ~scrutinee ~arms:reachable_arms in
     expr, user_data, uacc
 
 and simplify_expr

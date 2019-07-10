@@ -13,7 +13,6 @@
     derived_structures/closure_ids.rec.ml
     derived_structures/closures_entry.rec.ml
     derived_structures/closures_entry_by_closure_id.rec.ml
-    derived_structures/discriminants.rec.ml
     derived_structures/immediates.rec.ml
     derived_structures/set_of_closures_entry.rec.ml
     derived_structures/types_by_closure_id.rec.ml
@@ -46,7 +45,6 @@
     derived_structures/closure_ids.rec.mli
     derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_closure_id.rec.mli
-    derived_structures/discriminants.rec.mli
     derived_structures/immediates.rec.mli
     derived_structures/set_of_closures_entry.rec.mli
     derived_structures/types_by_closure_id.rec.mli

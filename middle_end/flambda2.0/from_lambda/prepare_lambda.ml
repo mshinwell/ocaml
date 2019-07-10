@@ -20,6 +20,16 @@ module L = Lambda
 
 let stub_hack_prim_name = "*stub*"
 
+let sw_numblocks_int_switch = -1
+let sw_numblocks_tag_switch = -1
+let sw_numblocks_isint_switch = -1
+
+let classify_switch (switch : Lambda.switch) : Discriminant.Kind.t =
+  if switch.sw_numblocks = sw_numblocks_int_switch then Int
+  else if switch.sw_numblocks = sw_numblocks_tag_switch then Tag
+  else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
+  else Misc.fatal_error "Prepare_lambda.classify_switch %d" switch.sw_numblocks
+
 let add_default_argument_wrappers lam =
   (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
      as stubs.  Other possibilities:
@@ -545,7 +555,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let consts_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numconsts;
                 sw_consts = List.combine const_nums sw_consts;
-                sw_numblocks = -1;
+                sw_numblocks = sw_numblocks_int_switch;
                 sw_blocks = [];
                 sw_failaction;
               }
@@ -570,8 +580,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
-                (* XXX sw_numblocks is now irrelevant *)
-                sw_numblocks = -1;  (* indicates a tag switch *)
+                sw_numblocks = sw_numblocks_tag_switch;
                 sw_blocks = [];
                 sw_failaction;
               }
@@ -588,7 +597,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let isint_switch : L.lambda_switch =
               { sw_numconsts = 2;
                 sw_consts = [0, blocks_switch; 1, consts_switch];
-                sw_numblocks = -1;
+                sw_numblocks = sw_numblocks_isint_switch;
                 sw_blocks = [];
                 sw_failaction = None;
               }
@@ -622,7 +631,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
           let switch : Lambda.lambda_switch =
             { sw_numconsts = 2;
               sw_consts = [0, ifnot; 1, ifso];
-              sw_numblocks = -1;
+              sw_numblocks = sw_numblocks_int_switch;
               sw_blocks = [];
               sw_failaction = None;
             }

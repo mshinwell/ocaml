@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module KI = Kind_independent_meet_or_join
 module T = Flambda_types
 
 module Make
@@ -24,6 +25,9 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
+  module Of_kind_value = Meet_and_join_value.Make (E)
+  module Value = KI.Make (E) (Of_kind_value)
+
   type of_kind_foo = T.of_kind_fabricated
 
   let kind = K.fabricated
@@ -49,10 +53,7 @@ struct
         (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =
     match of_kind1, of_kind2 with
     | Discriminants discrs1, Discriminants discrs2 ->
-      Or_bottom_or_absorbing.of_or_bottom
-        (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
-        ~f:(fun (discrs, env_extension) : (T.of_kind_fabricated * _) ->
-          Discriminants discrs, env_extension)
+      Value.meet_or_join_ty ?bound_name:None env discrs1 discrs2
     | Set_of_closures { closures = closures1; },
         Set_of_closures { closures = closures2; } ->
       Or_bottom_or_absorbing.of_or_bottom

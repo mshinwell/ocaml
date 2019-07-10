@@ -99,6 +99,7 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
 let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let typing_env = DE.typing_env (DA.denv dacc) in
+  (* Probably won't be needed now *)
   let proof = T.prove_is_int typing_env scrutinee_ty in
   let proved discriminant =
     let ty = T.this_discriminant discriminant in
