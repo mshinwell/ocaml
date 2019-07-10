@@ -274,17 +274,17 @@ let print_ordered_comparison ppf signedness c =
   match signedness with
   | Unsigned ->
     begin match c with
-    | Lt -> fprintf ppf "<"
-    | Le -> fprintf ppf "<="
-    | Gt -> fprintf ppf ">"
-    | Ge -> fprintf ppf ">="
-    end
-  | Signed ->
-    begin match c with
     | Lt -> fprintf ppf "<u"
     | Le -> fprintf ppf "<=u"
     | Gt -> fprintf ppf ">u"
     | Ge -> fprintf ppf ">=u"
+    end
+  | Signed ->
+    begin match c with
+    | Lt -> fprintf ppf "<"
+    | Le -> fprintf ppf "<="
+    | Gt -> fprintf ppf ">"
+    | Ge -> fprintf ppf ">="
     end
 
 type equality_comparison = Eq | Neq

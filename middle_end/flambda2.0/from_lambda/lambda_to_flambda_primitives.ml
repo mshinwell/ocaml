@@ -241,8 +241,8 @@ let expression_for_failure ~backend exn_cont ~register_const_string
     match exn_cont with
     | Some exn_cont -> exn_cont
     | None ->
-      Misc.fatal_errorf "Validity checks for primitive %a may raise, but \
-          no exception continuation was supplied with the primitive"
+      Misc.fatal_errorf "Validity checks for primitive@ %a@ may raise, but \
+          no exception continuation was supplied with the Lambda primitive"
         print_expr_primitive primitive
   in
   let exn_handler = Exn_continuation.exn_handler exn_cont in
@@ -348,22 +348,31 @@ let rec bind_rec ~backend exn_cont
               bind_rec_primitive ~backend exn_cont ~register_const_string
                 (Prim expr_primitive) dbg
                 (fun prim_result ->
+                  let condition_holds0 = Variable.create "condition_holds0" in
                   let check_if_condition_holds : Flambda_primitive.t =
                     Binary (Phys_equal (K.value, Neq),
                       prim_result,
                       Simple.const (Simple.Const.Tagged_immediate
                         (Immediate.int (Targetint.OCaml.zero))))
                   in
+                  let cast_to_fabricated : Flambda_primitive.t =
+                    Unary (Discriminant_of_int, Simple.var condition_holds0)
+                  in
                   let condition_holds = Variable.create "condition_holds" in
                   Expr.create_let
-                    (Var_in_binding_pos.create condition_holds
+                    (Var_in_binding_pos.create condition_holds0
                        Name_occurrence_kind.normal)
                     (Named.create_prim check_if_condition_holds dbg)
-                    (Expr.create_switch ~scrutinee:(Simple.var condition_holds)
-                      ~arms:(Discriminant.Map.of_list [
-                        Discriminant.bool_true, condition_passed_cont;
-                        Discriminant.bool_false, failure_cont;
-                      ])))))
+                    (Expr.create_let
+                      (Var_in_binding_pos.create condition_holds
+                         Name_occurrence_kind.normal)
+                      (Named.create_prim cast_to_fabricated dbg)
+                      (Expr.create_switch
+                        ~scrutinee:(Simple.var condition_holds)
+                        ~arms:(Discriminant.Map.of_list [
+                          Discriminant.bool_true, condition_passed_cont;
+                          Discriminant.bool_false, failure_cont;
+                        ]))))))
         (Expr.create_apply_cont (Apply_cont.create primitive_cont ~args:[]))
         validity_conditions
     in
