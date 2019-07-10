@@ -361,10 +361,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
     let exn_handler = Exn_continuation.exn_handler exn_continuation in
     let raise_kind = Some (LC.raise_kind raise_kind) in
     let trap_action = Trap_action.Pop { exn_handler; raise_kind; } in
-    let apply_cont =
-      Flambda.Apply_cont.create ~trap_action
-        (Exn_continuation.exn_handler exn_continuation) ~args
-    in
+    let apply_cont = Flambda.Apply_cont.create ~trap_action exn_handler ~args in
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
     Flambda.Expr.create_apply_cont apply_cont
   | prim, args ->
