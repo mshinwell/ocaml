@@ -54,5 +54,7 @@ module Or_absent : sig
   val absent : t
   val present : kind -> t
 
+  val is_present : t -> bool
+
   include Identifiable.S with type t := t
 end
