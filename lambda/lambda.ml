@@ -208,7 +208,16 @@ let equal_value_kind x y =
 
 let primitive_can_raise = function
   | Pccall _
-  | Praise _ -> true
+  | Praise _
+  | Parrayrefs _
+  | Parraysets _
+  | Pmodint _
+  | Pdivint _
+  | Pstringrefs
+  | Pbytesrefs
+  | Pbytessets
+    (* CR mshinwell: some more need to go here too *)
+    -> true
   | Pidentity
   | Pbytes_to_string
   | Pbytes_of_string
@@ -227,7 +236,6 @@ let primitive_can_raise = function
   | Pduprecord _
   | Psequand | Psequor | Pnot
   | Pnegint | Paddint | Psubint | Pmulint
-  | Pmodint _ | Pdivint _
   | Pandint | Porint | Pxorint
   | Plslint | Plsrint | Pasrint
   | Pintcomp _
@@ -237,15 +245,13 @@ let primitive_can_raise = function
   | Pnegfloat | Pabsfloat
   | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
   | Pfloatcomp _
-  | Pstringlength | Pstringrefu  | Pstringrefs
-  | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
+  | Pstringlength | Pstringrefu
+  | Pbyteslength | Pbytesrefu | Pbytessetu
   | Pmakearray _
   | Pduparray _
   | Parraylength _
   | Parrayrefu _
   | Parraysetu _
-  | Parrayrefs _
-  | Parraysets _
   | Pisint
   | Pisout
   | Pbintofint _
