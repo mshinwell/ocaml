@@ -19,7 +19,7 @@
 module Env : sig
   type t
 
-  val empty : t
+  val empty : return_continuation:Continuation.t -> t
 
   val add_mutable_and_make_new_id
      : t
@@ -57,9 +57,10 @@ end = struct
     mutables_needed_by_continuations : Ident.Set.t Continuation.Map.t;
   }
 
-  let empty =
+  let empty ~return_continuation =
     { current_values_of_mutables_in_scope = Ident.Map.empty;
-      mutables_needed_by_continuations = Continuation.Map.empty;
+      mutables_needed_by_continuations =
+        Continuation.Map.singleton return_continuation Ident.Set.empty;
     }
 
   let add_mutable_and_make_new_id t id kind =
@@ -130,7 +131,8 @@ end = struct
       }
     in
     let extra_params =
-      List.map snd (Ident.Map.bindings t.current_values_of_mutables_in_scope)
+      List.map snd
+        (Ident.Map.bindings handler_env.current_values_of_mutables_in_scope)
     in
     { body_env;
       handler_env;
@@ -177,7 +179,7 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
   | Let (id, user_visible, kind, named, body) ->
     transform_named env id user_visible kind named (fun env : Ilambda.t ->
       let body = transform_expr env body in
-      Let (id, user_visible, kind, named, body))
+      body)
   | Let_mutable let_mutable -> transform_let_mutable env let_mutable
   | Let_rec (func_decls, body) ->
     let func_decls =
@@ -242,7 +244,7 @@ and transform_let_cont env
   let extra_params =
     List.map (fun (id, kind) -> id, Ilambda.User_visible, kind) extra_params
   in
-  { name; 
+  { name;
     is_exn_handler;
     params = params @ extra_params;
     recursive;
@@ -283,17 +285,21 @@ and transform_function_declaration _env
     exn_continuation;
     params;
     return;
-    body = transform_toplevel body;
+    body = transform_toplevel ~return_continuation body;
     free_idents_of_body;
     attr;
     loc;
     stub;
   }
 
-and transform_toplevel expr = transform_expr Env.empty expr
+and transform_toplevel ~return_continuation expr =
+  transform_expr (Env.empty ~return_continuation) expr
 
 let run (program : Ilambda.program) =
-  let expr = transform_toplevel program.expr in
+  let expr =
+    transform_toplevel
+      ~return_continuation:program.return_continuation program.expr
+  in
   { program with
     expr;
   }
