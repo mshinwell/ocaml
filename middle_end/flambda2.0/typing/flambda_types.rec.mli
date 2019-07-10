@@ -61,7 +61,7 @@ and of_kind_value =
   | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
   | Closures of closures
   | String of String_info.Set.t
-  (* CR mshinwell: Add [Array], but only record the length for the moment. *)
+  | Array of { length : ty_value; }
 
 (* CR mshinwell: Document why e.g. Blocks_and_immediates has Or_unknown yet
    the Discriminants constructor does not.  Also how Unknown and Bottom are

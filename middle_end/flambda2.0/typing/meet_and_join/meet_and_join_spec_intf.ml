@@ -43,6 +43,12 @@ module type S = sig
 
   val meet_or_join_of_kind_foo
      : meet_env
+    -> meet_or_join_ty:
+         (?bound_name:Name.t
+      -> meet_env
+      -> of_kind_foo ty
+      -> of_kind_foo ty
+      -> (of_kind_foo ty * typing_env_extension) Or_bottom.t)
     -> of_kind_foo
     -> of_kind_foo
     -> (of_kind_foo * typing_env_extension) Or_bottom_or_absorbing.t

@@ -670,7 +670,8 @@ and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Blocks_and_tagged_immediates _
   | Boxed_number _
-  | String _ ->
+  | String _
+  | Array _ ->
     if Rec_info.is_initial rec_info then Ok of_kind_value
     else Bottom
 

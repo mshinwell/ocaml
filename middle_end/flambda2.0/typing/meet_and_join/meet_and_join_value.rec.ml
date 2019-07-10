@@ -200,7 +200,7 @@ struct
     Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
       ~f:(fun (n, env_extension) -> T.Boxed_number (box n), env_extension)
 
-  let meet_or_join_of_kind_foo env
+  let meet_or_join_of_kind_foo env ~meet_or_join_ty
         (of_kind1 : T.of_kind_value) (of_kind2 : T.of_kind_value)
         : (T.of_kind_value * TEE.t) Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
@@ -239,8 +239,13 @@ struct
       let strs = E.String_info.Set.union_or_inter strs1 strs2 in
       if String_info.Set.is_empty strs then Bottom
       else Or_bottom_or_absorbing.Ok (String strs, TEE.empty)
+    | Array { length = length1; }, Array { length = length2; } ->
+      Or_bottom_or_absorbing.of_or_bottom
+        (meet_or_join_ty ?bound_name:None env length1 length2)
+        ~f:(fun (length, env_extension) -> T.Array { length }, env_extension)
     | (Blocks_and_tagged_immediates _
         | Boxed_number _
         | Closures _
-        | String _), _ -> Absorbing
+        | String _
+        | Array _), _ -> Absorbing
 end
