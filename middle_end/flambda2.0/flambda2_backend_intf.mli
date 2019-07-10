@@ -34,6 +34,10 @@ module type S = sig
 
   val all_predefined_exception_symbols : Symbol.Set.t
 
+  val division_by_zero : Symbol.t
+
+  val index_out_of_bounds : Symbol.t
+
   val import_symbol : Symbol.t -> Simple_value_approx.t
 
   val closure_symbol : Closure_id.t -> Symbol.t
