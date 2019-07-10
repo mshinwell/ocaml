@@ -23,12 +23,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Sort : sig
+  type t =
+    | Int
+    | Tags of { tags_to_sizes : Targetint.OCaml.t Tag.Map.t; }
+    | Is_int
+end
+
 type t
 
 include Expr_std.S with type t := t
 
 val create
-   : scrutinee:Simple.t
+   : Sort.t
+  -> scrutinee:Simple.t
   -> arms:Continuation.t Discriminant.Map.t
   -> t
 
@@ -46,3 +54,5 @@ val arms : t -> Continuation.t Discriminant.Map.t
 (** How many cases the switch has.  (Note that this is not the number of
     destinations reached by the switch, which may be a smaller number.) *)
 val num_arms : t -> int
+
+val sort : t -> Sort.t

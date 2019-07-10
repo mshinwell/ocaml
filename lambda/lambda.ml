@@ -92,7 +92,7 @@ type primitive =
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
   (* Extract a block's tag *)
-  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -293,7 +293,7 @@ let primitive_can_raise = function
   | Pbbswap _
   | Pint_as_pointer
   | Popaque
-  | Pgettag _
+  | Pgettag
   | Pdiscriminant_of_int -> false
 
 type structured_constant =
@@ -407,7 +407,9 @@ and lambda_switch =
     sw_consts: (int * lambda) list;
     sw_numblocks: int;
     sw_blocks: (lambda_switch_block_key * lambda) list;
-    sw_failaction : lambda option}
+    sw_failaction : lambda option;
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
+  }
 
 and lambda_switch_block_key =
   { sw_tag : int;

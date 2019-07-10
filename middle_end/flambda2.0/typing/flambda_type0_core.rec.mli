@@ -84,6 +84,11 @@ val box_int32 : Flambda_types.t -> Flambda_types.t
 val box_int64 : Flambda_types.t -> Flambda_types.t
 val box_nativeint : Flambda_types.t -> Flambda_types.t
 
+val discriminant_from_type
+   : Discriminant.Kind.t
+  -> Flambda_types.t
+  -> Flambda_types.t
+
 val this_discriminant : Discriminant.t -> Flambda_types.t
 val this_discriminant_without_alias : Discriminant.t -> Flambda_types.t
 val these_discriminants : Discriminant.Set.t -> Flambda_types.t

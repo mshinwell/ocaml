@@ -126,6 +126,7 @@ and switch = {
   numconsts : int;
   consts : (int * Continuation.t) list;
   failaction : Continuation.t option;
+  tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
 }
 
 type program = {

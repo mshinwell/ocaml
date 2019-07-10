@@ -49,4 +49,7 @@ val kind : t -> Kind.t
 val bool_false : t
 val bool_true : t
 
+val is_int_false : t
+val is_int_true : t
+
 val all_bools_set : Set.t

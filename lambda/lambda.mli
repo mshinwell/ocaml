@@ -99,8 +99,8 @@ type primitive =
   | Parraysets of array_kind
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
-  (* Extract a block's tag *)
-  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
+  (* Extract a block's tag (Flambda 2.0 only) *)
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -306,7 +306,9 @@ and lambda_switch =
     sw_consts: (int * lambda) list;     (* Integer cases *)
     sw_numblocks: int;                  (* Number of tag block cases *)
     sw_blocks: (lambda_switch_block_key * lambda) list;  (* Tag block cases *)
-    sw_failaction : lambda option}      (* Action to take if failure *)
+    sw_failaction : lambda option;      (* Action to take if failure *)
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
+  }
 
 and lambda_switch_block_key =
   { sw_tag : int;

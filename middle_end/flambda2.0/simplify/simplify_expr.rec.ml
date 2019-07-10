@@ -858,63 +858,85 @@ and simplify_switch
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
   | Ok scrutinee, scrutinee_ty ->
-    let known_values_of_scrutinee : _ Or_unknown.t =
-      match
-        T.prove_discriminants (DE.typing_env (DA.denv dacc)) scrutinee_ty
-      with
-      | Proved discrs -> Known discrs
-      | Unknown -> Unknown
-      | Invalid ->
-        Misc.fatal_errorf "Simplification of [Switch] scrutinee did not \
-            yield [Bottom] even though type (%a) is bottom:@ %a"
-          T.print scrutinee_ty
-          Switch.print switch
-    in
-    let switch_kind = Switch.discriminant_kind switch in
-    begin match known_values_of_scrutinee with
-    | Unknown -> ()
-    | Known (discr_kind, _) ->
-      if not (Discriminant.Kind.equal discr_kind switch_kind) then begin
-        Misc.fatal_errorf "Discriminant kind of scrutinee (%a) does not \
-            match discriminant kind of [Switch]:@ %a"
-          Discriminant.Kind.print discr_kind
-          Switch.print switch
-      end
-    end;
-    let reachable_arms =
-      Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
-        match known_values_of_scrutinee with
-        | Unknown -> Some cont
-        | Known (_discr_kind, known_values) ->
-          if Discriminant.Set.mem arm known_values then Some cont
-          else None)
-    in
-    let dacc =
+    let dacc, arms =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
-      Discriminant.Map.fold (fun arm cont dacc ->
-          let typing_env_at_use =
-            match Simple.descr scrutinee with
-            | Name name ->
-              let ty = T.alias_type_of K.fabricated (Simple.discriminant arm) in
-              TE.add_equation typing_env_at_use name ty
-            | Const _ | Discriminant _ -> typing_env_at_use
+      Discriminant.Map.fold (fun arm cont (dacc, arms) ->
+          let type_of_switch_arm =
+            match switch_sort with
+            | Int ->
+              (* Check that [arm] has the correct discriminant kind *)
+              T.alias_type_of K.fabricated (Simple.discriminant arm)
+            | Tag { tags_to_sizes; } ->
+              begin match Discriminant.to_tag arm with
+              | Some tag ->
+                begin match Tag.Map.find tag tags_to_sizes with
+                | exception Not_found ->
+                  Misc.fatal_errorf "[Switch] arm %a does not have an entry \
+                      in [tags_to_sizes]:@ %a"
+                    Discriminant.print arm
+                    print t
+                | size ->
+                  let fields =
+                    List.init (Targetint.to_int size)
+                      (fun _field -> T.any_value ())
+                  in
+                  T.immutable_block tag fields
+                end
+              | None ->
+                Misc.fatal_errorf "[Switch] arm %a cannot be converted to \
+                    a [Discriminant]:@ %a"
+                  Discriminant.print arm
+                  print t
+              end
+            | Is_int -> ...
           in
-          DA.record_continuation_use dacc cont
-            ~typing_env_at_use
-            ~arg_types:[])
-        reachable_arms
-        dacc
+          match T.meet typing_env_at_use shape scrutinee_ty with
+          | Bottom -> dacc, arms
+          | Ok (_meet_ty, env_extension) ->
+            let dacc =
+              let typing_env_at_use =
+                TE.add_env_extension typing_env_at_use env_extension
+              in
+              DA.record_continuation_use dacc cont
+                ~typing_env_at_use
+                ~arg_types:[]
+            in
+            let arms = Discriminant.Map.add arm cont arms in
+            dacc, arms)
+        arms
+        (dacc, Discriminant.Map.empty)
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
-    let reachable_arms =
-      Discriminant.Map.filter_map reachable_arms ~f:(fun _arm cont ->
+    let arms =
+      Discriminant.Map.filter_map arms ~f:(fun _arm cont ->
         let cont = UE.resolve_continuation_aliases uenv cont in
         match UE.find_continuation uenv cont with
         | Unreachable _ -> None
         | Unknown _ | Inline _ -> Some cont)
     in
-    let expr = Expr.create_switch switch_kind ~scrutinee ~arms:reachable_arms in
+    let switch_sort : Switch.Sort.t =
+      match switch_sort with
+      | Int -> Int
+      | Tag { tags_to_sizes; } ->
+        let tags_to_sizes =
+          Tag.Map.filter (fun tag ->
+              let discr = 
+                match Discriminant.to_tag arm with
+                | Some tag -> tag
+                | None ->
+                  Misc.fatal_errorf "[Switch] arm %a cannot be converted to \
+                      a [Discriminant]:@ %a"
+                    Discriminant.print arm
+                    print t
+              in
+              Discriminant.Map.mem discr arms)
+            tags_to_sizes
+        in
+        Tag { tags_to_sizes; }
+      | Is_int -> Is_int
+    in
+    let expr = Expr.create_switch switch_sort ~scrutinee ~arms in
     expr, user_data, uacc
 
 and simplify_expr

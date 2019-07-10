@@ -387,6 +387,10 @@ let these_tagged_immediates imms =
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
+let discriminant_from_type discr_kind ty =
+  let ty_value = force_to_kind_value ty in
+  Fabricated (No_alias (Ok (Discriminants (discr_kind, ty_value))))
+
 let this_discriminant_as_ty_fabricated discr : ty_fabricated =
   Equals (Simple.discriminant discr)
 

@@ -24,7 +24,7 @@ module I = Ilambda
 module L = Lambda
 
 type proto_switch = {
-  kind : Discriminant.Kind.t
+  kind : Switch.Kind.t;
   numconsts : int;
   consts : (int * L.lambda) list;
   failaction : L.lambda option;
@@ -670,6 +670,7 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
       numconsts = switch.numconsts;
       consts = List.combine const_nums const_conts;
       failaction = failaction_cont;
+      tags_to_sizes = switch.tags_to_sizes;
     }
   in
   let make_continuations desc ~init =

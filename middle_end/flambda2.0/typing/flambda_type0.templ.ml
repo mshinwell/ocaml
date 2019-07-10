@@ -41,7 +41,8 @@ module Make
   include Flambda_type0_core
   include Flambda_types
 
-  let meet env t1 t2 = Api_meet_and_join.meet env t1 t2
+  let meet env t1 t2 = Api_meet_and_join.meet (Meet_env.create env) t1 t2
+
   let join env t1 t2 = Api_meet_and_join.join env t1 t2
 
   let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
@@ -108,7 +109,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
 
-  let prove_equals_to_symbol_or_tagged_immediate env t
+  let prove_to_symbol_or_tagged_immediate env t
         : symbol_or_tagged_immediate proof =
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
@@ -177,7 +178,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_naked_number _ -> wrong_kind ()
       | Resolved_fabricated _ -> wrong_kind ()
 
-  let prove_equals_tagged_immediates env t : _ proof =
+  let prove_tagged_immediates env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
@@ -204,8 +205,8 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value Bottom -> Invalid
       | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
 
-  let prove_equals_single_tagged_immediate env t : _ proof =
-    match prove_equals_tagged_immediates env t with
+  let prove_single_tagged_immediate env t : _ proof =
+    match prove_tagged_immediates env t with
     | Proved imms ->
       begin match Immediate.Set.get_singleton imms with
       | Some imm -> Proved imm
@@ -404,7 +405,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
       let t = Typing_env.find env (Name.var result_var) in
       prove_naked_nativeints env t
 
-  let prove_equals_discriminants env t : Discriminant.Set.t proof =
+  let prove_discriminants env t : Discriminant.Set.t proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Fabricated]:@ %a" print t
     in
@@ -415,6 +416,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
       match resolved with
       | Resolved_value _ | Resolved_naked_number _ -> wrong_kind ()
       | Resolved_fabricated (Ok (Discriminants discrs)) ->
+        (* XXX *)
         begin match Discriminants.all discrs with
         | Known discrs -> Proved discrs
         | Unknown -> Unknown
@@ -477,7 +479,7 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
                 List.filter_map
                   (fun field_type : symbol_or_tagged_immediate option ->
                     match
-                      prove_equals_to_symbol_or_tagged_immediate env field_type
+                      prove_to_symbol_or_tagged_immediate env field_type
                     with
                     | Proved (Symbol sym) -> Some (Symbol sym)
                     | Proved (Tagged_immediate sym) ->
@@ -520,5 +522,40 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
       | Resolved_value Bottom
       | Resolved_naked_number (Bottom, _)
       | Resolved_fabricated Bottom -> Invalid
+      | Resolved_fabricated (Ok (Discriminant (discr_kind, ty_value))) ->
+        let typ : t = Value ty_value in
+        begin match discr_kind with
+        | Int ->
+          begin match prove_tagged_immediates env typ with
+          | Proved imms ->
+            begin match Immediate.Set.get_singleton imms with
+            | None -> try_canonical_simple ()
+            | Some imm ->
+              let discr = Discriminant.create Int (Immediate.to_int imm) in
+              Simple (Simple.discriminant discr)
+            end
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
+          end
+        | Tag ->
+          begin match prove_tags_and_sizes env typ with
+          | Proved tags_to_sizes ->
+            begin match Targetint.OCaml.Map.get_singleton tags_to_sizes with
+            | None -> try_canonical_simple ()
+            | Some (tag, _size) ->
+              let discr = Discriminant.tag tag in
+              Simple (Simple.discriminant discr)
+            end
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
+          end
+        | Is_int ->
+          begin match prove_is_int env typ with
+          | Proved true -> Simple Discriminant.is_int_true
+          | Proved false -> Simple Discriminant.is_int_false
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
+          end
+        end
       | _ -> try_canonical_simple ()
 end

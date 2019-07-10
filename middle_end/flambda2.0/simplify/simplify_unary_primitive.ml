@@ -98,27 +98,19 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
 
 let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  (* Probably won't be needed now *)
-  let proof = T.prove_is_int typing_env scrutinee_ty in
-  let proved discriminant =
-    let ty = T.this_discriminant discriminant in
-    let env_extension = TEE.one_equation name ty in
-    Reachable.reachable original_term, env_extension, dacc
-  in
-  match proof with
-  | Proved true -> proved Discriminant.bool_true
-  | Proved false -> proved Discriminant.bool_false
-  | Unknown ->
-    let ty = T.these_discriminants Discriminant.all_bools_set in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid ->
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+  let ty = T.discriminant_from_type Is_int scrutinee_ty in
+  let env_extension = TEE.one_equation name ty in
+  Reachable.reachable original_term, env_extension, dacc
+
+let simplify_get_tag dacc ~original_term ~block_ty ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let ty = T.discriminant_from_type Tag block_ty in
+  let env_extension = TEE.one_equation name ty in
+  Reachable.reachable original_term, env_extension, dacc
 
 let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
       ~block_ty ~result_var =
-  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let name = Name.var (Var_in_binding_pos.var result_var) i
   let typing_env = DE.typing_env (DA.denv dacc) in
   let type_for_tags tags_to_sizes =
     let discrs =
@@ -173,33 +165,9 @@ let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
 
 let simplify_discriminant_of_int dacc ~original_term ~int_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  let invalid () =
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
-  in
-  let proof = T.prove_equals_tagged_immediates typing_env int_ty in
-  match proof with
-  | Proved imms ->
-    let discrs =
-      Immediate.Set.fold (fun imm discrs ->
-          let as_int = Immediate.to_targetint imm in
-          match Discriminant.create as_int with
-          | Some discr -> Discriminant.Set.add discr discrs
-          | None -> discrs)
-        imms
-        Discriminant.Set.empty
-    in
-    if Discriminant.Set.cardinal discrs <> Immediate.Set.cardinal imms then
-      invalid ()
-    else
-      let ty = T.these_discriminants discrs in
-      let env_extension = TEE.one_equation name ty in
-      Reachable.reachable original_term, env_extension, dacc
-  | Unknown ->
-    let ty = T.unknown K.fabricated in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid -> invalid ()
+  let ty = T.discriminant_from_type Int int_ty in
+  let env_extension = TEE.one_equation name ty in
+  Reachable.reachable original_term, env_extension, dacc
 
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =

@@ -138,6 +138,8 @@ module type S = sig
     -> result_kind:Flambda_kind.t
     -> Typing_env_extension.t Or_bottom.t
 
+  val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+
   val join : Typing_env.t -> t -> t -> t
 
   (* CR mshinwell: Substitute out this alias once it's finalised *)
@@ -241,6 +243,8 @@ module type S = sig
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
+
+  val discriminant_from_type : Discriminant.Kind.t -> Flambda_type.t -> t
 
   (** The given discriminant. *)
   val this_discriminant : Discriminant.t -> t
@@ -375,17 +379,17 @@ module type S = sig
     | Invalid
 
   (* CR mshinwell: Should remove "_equals_" from these names *)
-  val prove_equals_tagged_immediates
+  val prove_tagged_immediates
      : Typing_env.t
     -> t
     -> Immediate.Set.t proof
 
-  val prove_equals_single_tagged_immediate
+  val prove_single_tagged_immediate
      : Typing_env.t
     -> t
     -> Immediate.t proof
 
-  val prove_equals_discriminants
+  val prove_discriminants
      : Typing_env.t
     -> t
     -> Discriminant.Set.t proof

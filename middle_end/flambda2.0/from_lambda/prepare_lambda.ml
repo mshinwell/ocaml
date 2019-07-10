@@ -558,6 +558,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 sw_numblocks = sw_numblocks_int_switch;
                 sw_blocks = [];
                 sw_failaction;
+                sw_tags_to_sizes = None;
               }
             in
             let tags_to_sizes =
@@ -583,6 +584,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 sw_numblocks = sw_numblocks_tag_switch;
                 sw_blocks = [];
                 sw_failaction;
+                sw_tags_to_sizes = tags_to_sizes;
               }
             in
             let consts_switch : L.lambda =
@@ -591,7 +593,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             in
             let blocks_switch : L.lambda =
               L.Lswitch (
-               Lprim (Pgettag { tags_to_sizes; }, [scrutinee], Location.none),
+               Lprim (Pgettag, [scrutinee], Location.none),
                blocks_switch, loc)
             in
             let isint_switch : L.lambda_switch =
@@ -600,6 +602,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 sw_numblocks = sw_numblocks_isint_switch;
                 sw_blocks = [];
                 sw_failaction = None;
+                sw_tags_to_sizes = None;
               }
             in
             let switch =
