@@ -43,7 +43,17 @@ module Flambda2_backend = struct
   let really_import_approx _ = failwith "Not yet implemented"
   let import_symbol _ = failwith "Not yet implemented"
 
-  let all_predefined_exception_symbols = Flambda2.Symbol.Set.empty (* XXX *)
+  let division_by_zero =
+    symbol_for_global' Predef.ident_division_by_zero
+
+  let invalid_argument =
+    symbol_for_global' Predef.ident_invalid_argument
+
+  let all_predefined_exception_symbols =
+    Flambda2.Symbol.Set.of_list [
+      division_by_zero;
+      invalid_argument;
+    ] (* CR mshinwell: and the rest... *)
 
   let size_int = Arch.size_int
   let big_endian = Arch.big_endian
