@@ -79,9 +79,14 @@ let foo x =
   | B _ -> 1
   | C _ -> 2
 
-let repeated_comparisons x =
+(*
+external array_get: 'a array -> int -> 'a = "%array_safe_get"
+*)
+
+let repeated_comparisons x _a =
+(*  let x = x + array_get a 3 in *)
   if x < 10 then
     if x < 10 then 42
-    else 0
+    else 1000
   else
     2
