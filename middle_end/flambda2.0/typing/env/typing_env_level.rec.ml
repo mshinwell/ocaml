@@ -66,7 +66,7 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
       perm =
   let defined_vars_changed = ref false in
   let defined_vars' =
-    Name.Map.fold (fun var kind defined_vars ->
+    Variable.Map.fold (fun var kind defined_vars ->
         let var' = Name_permutation.apply_variable perm var in
         if not (var == var') then begin
           defined_vars_changed := true
@@ -111,6 +111,36 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
       cse = cse';
     }
 
+let free_names { defined_vars; equations; cse; } =
+  let free_names_defined_vars =
+    Name_occurrences.create_variables (Variable.Map.keys defined_vars)
+      Name_occurrence_kind.in_types
+  in
+  let free_names_equations =
+    Name.Map.fold (fun name typ free_names ->
+        let free_names' = 
+          Name_occurrences.add_name (Type_free_names.free_names typ)
+            name Name_occurrence_kind.in_types
+        in
+        Name_occurrences.union free_names free_names')
+      equations
+      free_names_defined_vars
+  in
+  Flambda_primitive.Eligible_for_cse.Map.fold
+    (fun prim (bound_to : Simple.t) acc ->
+      match Simple.descr bound_to with
+      | Const _ | Discriminant _ -> acc
+      | Name name ->
+        let free_in_prim =
+          Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+            (Flambda_primitive.Eligible_for_cse.free_names prim)
+            Name_occurrence_kind.in_types
+        in
+        Name_occurrences.add_name free_in_prim
+          name Name_occurrence_kind.in_types)
+    cse
+    free_names_equations
+
 let empty () =
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.empty;
@@ -127,7 +157,7 @@ let equations t = t.equations
 let defined_vars t = t.defined_vars
 
 let defined_vars_in_order t =
-  Variable.Set.to_list (Variable.Map.keys t.defined_vars)
+  Variable.Set.elements (Variable.Map.keys t.defined_vars)
 
 let cse t = t.cse
 
@@ -215,8 +245,8 @@ let meet env (t1 : t) (t2 : t) =
   end
 
 let join env (t1 : t) (t2 : t) : t =
-  let t1_defined = Name.set_of_var_set (Variable.Map.keys t1.defined_names) in
-  let t2_defined = Name.set_of_var_set (Variable.Map.keys t2.defined_names) in
+  let t1_defined = Name.set_of_var_set (Variable.Map.keys t1.defined_vars) in
+  let t2_defined = Name.set_of_var_set (Variable.Map.keys t2.defined_vars) in
   let all_defined = Name.Set.union t1_defined t2_defined in
   let names_with_equations_in_join =
     Name.Set.diff
@@ -227,7 +257,7 @@ let join env (t1 : t) (t2 : t) : t =
   assert (Variable.Set.subset
     (Name.set_to_var_set names_with_equations_in_join) allowed);
   let get_type t name =
-    Type_erase_aliases.erase_aliases ~env ~bound_name:name
+    Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
       (find_equation t name)
   in

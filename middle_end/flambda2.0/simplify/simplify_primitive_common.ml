@@ -40,7 +40,7 @@ Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
     Reachable.reachable original_term, env_extension, dacc
 
 let apply_cse dacc ~original_prim =
-  match Flambda_primitive.With_fixed_value.create original_prim with
+  match Flambda_primitive.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
     TE.find_cse (DE.typing_env (DA.denv dacc)) with_fixed_value

@@ -689,105 +689,7 @@ and apply_rec_info_of_kind_fabricated
           apply_rec_info closure_type rec_info))
       ~f:(fun closures -> Set_of_closures { closures; })
 
-let rec apply_name_permutation_of_kind_value
-      (of_kind_value : Flambda_types.of_kind_value) perm
-      : Flambda_types.of_kind_value =
-  match of_kind_value with
-  | Blocks_and_tagged_immediates blocks_and_tagged_immediates ->
-    let blocks_and_tagged_immediates' =
-      apply_name_permutation_blocks_and_tagged_immediates
-        blocks_and_tagged_immediates perm
-    in
-    if blocks_and_tagged_immediates == blocks_and_tagged_immediates' then
-      of_kind_value
-    else
-      Blocks_and_tagged_immediates blocks_and_tagged_immediates'
-  | Boxed_number (Boxed_float ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number
-    in
-    if ty_naked_number == ty_naked_number' then
-      of_kind_value
-    else
-      Boxed_number (Boxed_float ty_naked_number')
-  | Boxed_number (Boxed_int32 ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number
-    in
-    if ty_naked_number == ty_naked_number' then
-      of_kind_value
-    else
-      Boxed_number (Boxed_int32 ty_naked_number')
-  | Boxed_number (Boxed_int64 ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number
-    in
-    if ty_naked_number == ty_naked_number' then
-      of_kind_value
-    else
-      Boxed_number (Boxed_int64 ty_naked_number')
-  | Boxed_number (Boxed_nativeint ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number
-    in
-    if ty_naked_number == ty_naked_number' then
-      of_kind_value
-    else
-      Boxed_number (Boxed_nativeint ty_naked_number')
-  | Closures { by_closure_id; } ->
-    let by_closure_id' =
-      Closures_entry_by_closure_id.apply_name_permutation by_closure_id perm
-    in
-    if by_closure_id == by_closure_id' then of_kind_value
-    else Closures by_closure_id'
-  | String _ -> of_kind_value
-  | Array { length; } ->
-    let length' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_value length
-    in
-    if length == length' then of_kind_value
-    else Array { length = length'; }
-
-and apply_name_permutation_of_kind_naked_number
-      (of_kind_naked_number : _ Flambda_types.of_kind_naked_number) _perm
-      : _ Flambda_types.of_kind_naked_number =
-  of_kind_naked_number
-
-and apply_name_permutation_of_kind_fabricated
-      (of_kind_fabricated : Flambda_types.of_kind_fabricated) _perm
-      : Flambda_types.of_kind_value =
-  match of_kind_fabricated with
-  | Discriminants discrs ->
-    let discrs' = Discriminants.apply_name_permutation discrs perm in
-    if discrs == discrs' then of_kind_fabricated
-    else Discriminants discrs'
-  | Set_of_closures { closure_ids; } ->
-    let closure_ids' = Closure_ids.apply_name_permutation closure_ids perm in
-    if closure_ids == closure_ids' then of_kind_fabricated
-    else Set_of_closures { closure_ids = closure_ids'; }
-
-and apply_name_permutation_blocks_and_tagged_immediates
-      ({ immediates; blocks; } as blocks_and_tagged_immediates) perm =
-  let immediates' =
-    Or_unknown.map immediates ~f:(fun immediates ->
-        Immediates.apply_name_permutation immediates perm)
-      immediates
-  in
-  let blocks' =
-    Or_unknown.map blocks ~f:(fun blocks ->
-        Blocks.apply_name_permutation blocks perm)
-      blocks
-  in
-  if immediates == immediates' && blocks == blocks' then
-    blocks_and_tagged_immediates
-  else
-    { immediates = immediates'; blocks = blocks'; }
-
-and apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
+let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
       (unknown_or_join : _ Flambda_types.unknown_or_join) perm
       : _ Flambda_types.unknown_or_join =
   match unknown_or_join with
@@ -797,7 +699,7 @@ and apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
     if of_kind_foo == of_kind_foo' then unknown_or_join
     else Ok of_kind_foo'
 
-and apply_name_permutation_ty apply_name_permutation_of_kind_foo
+let apply_name_permutation_ty apply_name_permutation_of_kind_foo
       (ty : _ Flambda_types.ty) perm
       : _ Flambda_types.ty =
   match ty with
@@ -814,7 +716,12 @@ and apply_name_permutation_ty apply_name_permutation_of_kind_foo
     if simple == simple' then ty
     else Equals simple'
 
-let apply_name_permutation (t : Flambda_types.t) perm : Flambda_types.t =
+let apply_name_permutation_of_kind_naked_number (type n)
+      (of_kind_naked_number : n Flambda_types.of_kind_naked_number) _perm
+      : n Flambda_types.of_kind_naked_number =
+  of_kind_naked_number
+
+let rec apply_name_permutation (t : Flambda_types.t) perm : Flambda_types.t =
   match t with
   | Value ty_value ->
     let ty_value' =
@@ -837,3 +744,87 @@ let apply_name_permutation (t : Flambda_types.t) perm : Flambda_types.t =
     in
     if ty_fabricated == ty_fabricated' then t
     else Fabricated ty_fabricated'
+
+and apply_name_permutation_of_kind_value
+      (of_kind_value : Flambda_types.of_kind_value) perm
+      : Flambda_types.of_kind_value =
+  match of_kind_value with
+  | Blocks_and_tagged_immediates blocks_and_tagged_immediates ->
+    let blocks_and_tagged_immediates' =
+      apply_name_permutation_blocks_and_tagged_immediates
+        blocks_and_tagged_immediates perm
+    in
+    if blocks_and_tagged_immediates == blocks_and_tagged_immediates' then
+      of_kind_value
+    else
+      Blocks_and_tagged_immediates blocks_and_tagged_immediates'
+  | Boxed_number (Boxed_float ty_naked_number) ->
+    let ty_naked_number' =
+      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
+        ty_naked_number perm
+    in
+    if ty_naked_number == ty_naked_number' then of_kind_value
+    else Boxed_number (Boxed_float ty_naked_number')
+  | Boxed_number (Boxed_int32 ty_naked_number) ->
+    let ty_naked_number' =
+      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
+        ty_naked_number perm
+    in
+    if ty_naked_number == ty_naked_number' then of_kind_value
+    else Boxed_number (Boxed_int32 ty_naked_number')
+  | Boxed_number (Boxed_int64 ty_naked_number) ->
+    let ty_naked_number' =
+      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
+        ty_naked_number perm
+    in
+    if ty_naked_number == ty_naked_number' then of_kind_value
+    else Boxed_number (Boxed_int64 ty_naked_number')
+  | Boxed_number (Boxed_nativeint ty_naked_number) ->
+    let ty_naked_number' =
+      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
+        ty_naked_number perm
+    in
+    if ty_naked_number == ty_naked_number' then of_kind_value
+    else Boxed_number (Boxed_nativeint ty_naked_number')
+  | Closures { by_closure_id; } ->
+    let by_closure_id' =
+      Closures_entry_by_closure_id.apply_name_permutation by_closure_id perm
+    in
+    if by_closure_id == by_closure_id' then of_kind_value
+    else Closures { by_closure_id = by_closure_id'; }
+  | String _ -> of_kind_value
+  | Array { length; } ->
+    let length' =
+      apply_name_permutation_ty apply_name_permutation_of_kind_value length
+        perm
+    in
+    if length == length' then of_kind_value
+    else Array { length = length'; }
+
+and apply_name_permutation_blocks_and_tagged_immediates
+      ({ immediates; blocks; } as blocks_and_tagged_immediates) perm =
+  let immediates' =
+    Or_unknown.map immediates ~f:(fun immediates ->
+        Immediates.apply_name_permutation immediates perm)
+  in
+  let blocks' =
+    Or_unknown.map blocks ~f:(fun blocks ->
+        Blocks.apply_name_permutation blocks perm)
+  in
+  if immediates == immediates' && blocks == blocks' then
+    blocks_and_tagged_immediates
+  else
+    { immediates = immediates'; blocks = blocks'; }
+
+and apply_name_permutation_of_kind_fabricated
+      (of_kind_fabricated : Flambda_types.of_kind_fabricated) perm
+      : Flambda_types.of_kind_fabricated =
+  match of_kind_fabricated with
+  | Discriminants discrs ->
+    let discrs' = Discriminants.apply_name_permutation discrs perm in
+    if discrs == discrs' then of_kind_fabricated
+    else Discriminants discrs'
+  | Set_of_closures { closures; } ->
+    let closures' = Closure_ids.apply_name_permutation closures perm in
+    if closures == closures' then of_kind_fabricated
+    else Set_of_closures { closures = closures'; }

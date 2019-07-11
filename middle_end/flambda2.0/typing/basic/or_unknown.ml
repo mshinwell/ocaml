@@ -34,10 +34,8 @@ let equal equal_contents t1 t2 =
 
 let map t ~f =
   match t with
-  | Known contents ->
-    let contents' = f contents in
-    if contents == contents' then t
-    else Known contents'
+  (* CR mshinwell: Add [map_sharing], same for [Or_bottom] *)
+  | Known contents -> Known (f contents)
   | Unknown -> Unknown
 
 let free_names free_names_contents t =

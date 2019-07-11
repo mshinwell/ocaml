@@ -555,7 +555,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
   let original_t = t in
   if Scope.(>) min_scope current_scope then
-    Typing_env_level.empty (), var_domain t
+    Typing_env_extension.empty, var_domain t
   else
     let all_levels =
       Scope.Map.add current_scope t.current_level t.prev_levels
@@ -607,33 +607,27 @@ Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
 *)
     let meet_env = Meet_env.create t in
-    let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     let env_extension =
       Scope.Map.fold (fun _scope one_level result ->
 (*
 Format.eprintf "Folding in scope %a\n%!" Scope.print scope;
 Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_level);
 *)
-          let level =
-            (* Since environment extensions are not allowed to define names at
-               the moment, any [Equals] aliases to names not in scope at the cut
-               point have to be squashed to "Unknown". *)
-            One_level.level one_level
-            |> Typing_env_level.remove_definitions_and_equations
-                 ~allowed:vars_in_scope_at_cut
-            |> Typing_env_level.erase_aliases original_t
-                 ~allowed:vars_in_scope_at_cut
+          let env_extension =
+            Typing_env_extension.create (One_level.level one_level)
           in
 (*
-Format.eprintf "Level for meet:@ %a\n%!" Typing_env_level.print level;
+Format.eprintf "Extension for meet:@ %a\n%!"
+  Typing_env_extension.print env_extension;
 *)
-          Typing_env_level.meet meet_env level result)
+          Typing_env_extension.meet meet_env env_extension result)
         at_or_after_cut
-        (Typing_env_level.empty ())
+        Typing_env_extension.empty
     in
 (*
 Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
 *)
+    let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     env_extension, vars_in_scope_at_cut
 
 let find_name_occurrence_kind_of_simple t simple =

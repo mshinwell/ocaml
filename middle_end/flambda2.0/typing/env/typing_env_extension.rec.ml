@@ -30,9 +30,12 @@ type t = {
 } [@@unboxed]
 
 let print_with_cache ~cache ppf { abst; } =
-  A.print_with_cache ~style:Existential ~cache ppf abst
+  Name_abstraction.with_printing_style Existential ~f:(fun () ->
+    A.print_with_cache ~cache ppf abst)
 
-let print ppf { abst; } = A.print ~style:Existential ppf abst
+let print ppf { abst; } =
+  Name_abstraction.with_printing_style Existential ~f:(fun () ->
+    A.print ppf abst)
 
 let invariant { abst; } =
   A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
@@ -53,10 +56,7 @@ let pattern_match { abst; } ~f =
   A.pattern_match abst ~f:(fun _ level -> f level)
 
 let one_equation { abst; } name ty =
-  let abst =
-    let level = Typing_env_level.one_equation level name ty in
-    A.create (Typing_env_level.defined_vars_in_order level)
-  in
+  let abst = A.create [] (Typing_env_level.one_equation name ty) in
   { abst; }
 
 let add_or_replace_equation { abst; } name ty =

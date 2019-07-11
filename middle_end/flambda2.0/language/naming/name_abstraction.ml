@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type Term = sig
+  include Contains_names.S
   val apply_name_permutation : t -> Name_permutation.t -> t
   val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
@@ -43,6 +44,12 @@ let printing_style = ref Brackets
 
 let set_printing_style new_style =
   printing_style := new_style
+
+let with_printing_style new_style ~f =
+  let old_style = !printing_style in
+  printing_style := new_style;
+  f ();
+  printing_style := old_style
 
 module type Common = sig
   type t

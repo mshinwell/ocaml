@@ -32,10 +32,7 @@ let both t1 t2 ~f =
 
 let map t ~f =
   match t with
-  | Ok contents ->
-    let contents' = f contents in
-    if contents == contents' then t
-    else Ok contents'
+  | Ok contents -> Ok (f contents)
   | Bottom -> Bottom
 
 let all ts =
