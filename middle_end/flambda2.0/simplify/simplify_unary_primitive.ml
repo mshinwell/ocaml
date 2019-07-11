@@ -200,6 +200,13 @@ let simplify_discriminant_of_int dacc ~original_term ~int_ty ~result_var =
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
   | Invalid -> invalid ()
 
+let simplify_array_length dacc ~original_term ~array_ty ~result_var =
+  let result = Simple.var (Var_in_binding_pos.var result_var) in
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:array_ty
+    ~shape:(T.array_of_length ~length:(T.alias_type_of_as_ty_value result))
+    ~result_var ~result_kind:K.value
+
 let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
       arg dbg ~result_var =
 (*
@@ -261,6 +268,8 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
       | Discriminant_of_int ->
         simplify_discriminant_of_int dacc ~original_term ~int_ty:arg_ty
           ~result_var
+      | Array_length (Array (Value _)) ->
+        simplify_array_length dacc ~original_term ~array_ty:arg_ty ~result_var
       | _ ->
         (* CR mshinwell: temporary code *)
         let named = Named.create_prim (Unary (prim, arg)) dbg in

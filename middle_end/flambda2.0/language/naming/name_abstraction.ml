@@ -32,7 +32,7 @@ let before_binding_position style =
   match style with
   | Normal -> "\u{0418}"
   | Brackets -> "["
-  | Existential -> "\u{2203}"
+  | Existential -> "\u{2203} "
 
 let after_binding_position style =
   match style with

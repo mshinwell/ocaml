@@ -313,6 +313,8 @@ module type S = sig
      : flambda_type Closure_id.Map.t
     -> flambda_type
 
+  val array_of_length : length:ty_value -> flambda_type
+
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
