@@ -17,3 +17,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Typing_env_level
+
+let create t = t
+
+let empty = empty ()
+
+let to_level t = t

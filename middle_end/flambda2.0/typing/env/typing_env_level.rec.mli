@@ -28,7 +28,7 @@ val print : Format.formatter -> t -> unit
 
 val invariant : t -> unit
 
-val empty : t
+val empty : unit -> t
 
 val is_empty : t -> bool
 

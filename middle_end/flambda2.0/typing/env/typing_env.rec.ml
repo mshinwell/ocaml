@@ -107,7 +107,7 @@ module One_level = struct
 
   let create_empty scope =
     { scope;
-      level = Typing_env_level.empty;
+      level = Typing_env_level.empty ();
       just_after_level = Cached.empty;
     }
 
@@ -228,7 +228,7 @@ let increment_scope_to t scope =
     Scope.Map.add current_scope t.current_level t.prev_levels
   in
   let current_level =
-    One_level.create scope Typing_env_level.empty
+    One_level.create scope (Typing_env_level.empty ())
       ~just_after_level:(One_level.just_after_level t.current_level)
   in
   { t with
@@ -573,7 +573,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
   let original_t = t in
   if Scope.(>) min_scope current_scope then
-    Typing_env_level.empty, var_domain t
+    Typing_env_level.empty (), var_domain t
   else
     let all_levels =
       Scope.Map.add current_scope t.current_level t.prev_levels
@@ -647,7 +647,7 @@ Format.eprintf "Level for meet:@ %a\n%!" Typing_env_level.print level;
 *)
           Typing_env_level.meet meet_env level result)
         at_or_after_cut
-        Typing_env_level.empty
+        (Typing_env_level.empty ())
     in
 (*
 Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
