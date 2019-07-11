@@ -19,6 +19,8 @@
 type t = {
   defined_vars : Flambda_kind.t Variable.Map.t;
   equations : Flambda_types.t Name.Map.t;
+  (* CR mshinwell: We should have [Flambda_primitive.Eligible_for_cse]
+     instead.  Things that are genuine projections shouldn't be CSEd. *)
   cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
 }
 
@@ -246,3 +248,52 @@ let remove_definitions_and_equations t ~allowed =
 
 let mem t name =
   Name.Map.mem name t.equations
+
+let apply_name_permutation ({ defined_vars; equations; cse; } as t)
+      perm =
+  let defined_vars_changed = ref false in
+  let defined_vars' =
+    Name.Map.fold (fun var kind defined_vars ->
+        let var' = Name_permutation.apply_variable perm var in
+        if not (var == var') then begin
+          defined_vars_changed := true
+        end;
+        Variable.Map.add var' kind defined_vars)
+      defined_vars
+      Variable.Map.empty
+  in
+  let equations_changed = ref false in
+  let equations' =
+    Name.Map.fold (fun name typ equations ->
+        let name' = Name_permutation.apply_name perm name in
+        let typ' = Flambda_type0_core.apply_name_permutation typ perm in
+        if not (name == name' && typ == typ') then begin
+          equations_changed := true
+        end;
+        Name.Map.add name' typ' equations)
+      equations
+      Name.Map.empty
+  in
+  let cse_changed = ref false in
+  let cse' =
+    Flambda_primitive.With_fixed_value.Map.fold (fun prim simple cse' ->
+        let simple' = Simple.apply_name_permutation simple perm in
+        let prim' =
+          Flambda_primitive.With_fixed_value.apply_name_permutation prim perm
+        in
+        if (not (simple == simple')) || (not (prim == prim')) then begin
+          cse_changed := true
+        end;
+        Flambda_primitive.With_fixed_value.Map.add prim' simple' cse')
+      cse
+      Flambda_primitive.With_fixed_value.Map.empty
+  in
+  if (not !defined_vars_changed)
+    && (not !equations_changed)
+    && (not !cse_changed)
+  then t
+  else 
+    { defined_vars = defined_vars';
+      equations = equations';
+      cse = cse';
+    }

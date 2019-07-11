@@ -530,14 +530,7 @@ let find_cse t prim =
   | exception Not_found -> None
   | bound_to -> Some bound_to
 
-let (* rec *) add_env_extension starting_t level : t =
-  if not (Variable.Map.is_empty (Typing_env_level.defined_vars level)) then
-  begin
-    (* The full type system will remove this restriction. *)
-    Misc.fatal_errorf "Typing environment extensions cannot define variables:\
-        @ %a"
-      Typing_env_level.print level
-  end;
+let add_env_extension starting_t env_extension : t =
   let t =
     Name.Map.fold (fun name ty t ->
         (* CR mshinwell: Do we actually need the "more precise" check here?
@@ -545,24 +538,6 @@ let (* rec *) add_env_extension starting_t level : t =
         add_equation t name ty)
       (Typing_env_level.equations level)
       starting_t
-(*
-        match find_opt t name with
-        | None -> add_equation t name ty
-        | Some existing_ty ->
-          let meet_ty, meet_env_extension =
-            let meet_env = Meet_env.create t in
-            Api_meet_and_join.meet meet_env ty existing_ty
-          in
-          let t = add_env_extension t meet_env_extension in
-          let as_or_strictly_less_precise =
-            Type_equality.equal ~bound_name:(Some name)
-              starting_t starting_t
-              meet_ty existing_ty
-          in
-          let strictly_more_precise = not as_or_strictly_less_precise in
-          if strictly_more_precise then add_equation t name meet_ty
-          else t)
-*)
   in
   Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
       add_cse t prim ~bound_to)

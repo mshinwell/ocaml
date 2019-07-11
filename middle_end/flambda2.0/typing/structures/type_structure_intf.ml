@@ -47,8 +47,5 @@ module type S = sig
     -> allowed:Variable.Set.t
     -> t
 
-  val free_names : t -> Name_occurrences.t
-
-  (** Type algebraic structures are never kept underneath object-language
-      binders at present, so we don't include [Contains_names.S]. *)
+  include Contains_names.S with type t := t
 end
