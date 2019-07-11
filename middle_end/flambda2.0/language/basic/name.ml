@@ -123,6 +123,12 @@ let symbols_only_map t =
       | Symbol _ -> true)
     t
 
+let set_of_var_set t =
+  Variable.Set.fold (fun var t ->
+      Set.add var t)
+    t
+    Set.empty
+
 let set_to_var_set t =
   Set.fold (fun name vars ->
       match to_var name with

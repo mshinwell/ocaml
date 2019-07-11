@@ -131,6 +131,15 @@ module Make (Index : Identifiable.S) = struct
     in
     { components_by_index; }
 
+  let apply_name_permutation ({ components_by_index; } as t) perm =
+    let components_by_index' =
+      Index.Map.map_sharing (fun typ ->
+          Flambda_type0_core.apply_name_permutation typ perm)
+        components_by_index
+    in
+    if components_by_index == components_by_index' then t
+    else { components_by_index = components_by_index'; }
+
   let free_names { components_by_index; } =
     Index.Map.fold (fun _index ty free_names ->
         Name_occurrences.union (Type_free_names.free_names ty) free_names)

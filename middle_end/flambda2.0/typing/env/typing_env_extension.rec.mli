@@ -14,6 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Typing environment extensions: typing environment levels that are
+    surrounded by a binder that captures defined names as existentials. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
@@ -34,7 +37,7 @@ val is_empty : t -> bool
 
 val create : Typing_env_level.t -> t
 
-val to_level : t -> Typing_env_level.t
+val pattern_match : t -> f:(Typing_env_level.t -> 'a) -> 'a
 
 val one_equation : Name.t -> Flambda_types.t -> t
 
