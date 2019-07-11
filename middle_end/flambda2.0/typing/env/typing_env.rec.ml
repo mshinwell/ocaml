@@ -24,7 +24,7 @@ module Cached = struct
     names_to_types :
       (Flambda_types.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
     aliases : Aliases.t;
-    cse : Simple.t Flambda_primitive.With_fixed_value.Map.t;
+    cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
 
 (*
@@ -57,7 +57,7 @@ module Cached = struct
   let empty =
     { names_to_types = Name.Map.empty;
       aliases = Aliases.empty;
-      cse = Flambda_primitive.With_fixed_value.Map.empty;
+      cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     }
 
   let create ~names_to_types aliases ~cse =
@@ -513,9 +513,9 @@ let add_cse t prim ~bound_to =
   let cached = cached t in
   let cse =
     let cse = Cached.cse cached in
-    match Flambda_primitive.With_fixed_value.Map.find prim cse with
+    match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
     | exception Not_found ->
-      Flambda_primitive.With_fixed_value.Map.add prim bound_to cse
+      Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse
     | _bound_to -> cse
   in
   let just_after_level = Cached.with_cse cached ~cse in
@@ -526,23 +526,30 @@ let add_cse t prim ~bound_to =
 
 let find_cse t prim =
   let cse = Cached.cse (cached t) in
-  match Flambda_primitive.With_fixed_value.Map.find prim cse with
+  match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
   | exception Not_found -> None
   | bound_to -> Some bound_to
 
-let add_env_extension starting_t env_extension : t =
-  let t =
-    Name.Map.fold (fun name ty t ->
-        (* CR mshinwell: Do we actually need the "more precise" check here?
-           Shouldn't the extensions always be as or more precise? *)
-        add_equation t name ty)
-      (Typing_env_level.equations level)
-      starting_t
-  in
-  Flambda_primitive.With_fixed_value.Map.fold (fun prim bound_to t ->
-      add_cse t prim ~bound_to)
-    (Typing_env_level.cse level)
-    t
+let add_env_extension t env_extension : t =
+  Typing_env_extension.pattern_match env_extension ~f:(fun level ->
+    let t =
+      Variable.Map.fold (fun var kind t ->
+          add_variable_definition t var kind Name_occurrence_kind.in_types)
+        (Typing_env_level.defined_vars level)
+        t
+    in
+    let t =
+      Name.Map.fold (fun name ty t ->
+          (* CR mshinwell: Do we actually need the "more precise" check here?
+             Shouldn't the extensions always be as or more precise? *)
+          add_equation t name ty)
+        (Typing_env_level.equations level)
+        t
+    in
+    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
+        add_cse t prim ~bound_to)
+      (Typing_env_level.cse level)
+      t)
 
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in

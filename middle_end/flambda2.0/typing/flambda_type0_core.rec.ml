@@ -738,10 +738,12 @@ let rec apply_name_permutation_of_kind_value
       of_kind_value
     else
       Boxed_number (Boxed_nativeint ty_naked_number')
-  | Closures closures ->
-    let closures' = apply_name_permutation_closures closures perm in
-    if closures == closures' then of_kind_value
-    else Closures closures'
+  | Closures { by_closure_id; } ->
+    let by_closure_id' =
+      Closures_entry_by_closure_id.apply_name_permutation by_closure_id perm
+    in
+    if by_closure_id == by_closure_id' then of_kind_value
+    else Closures by_closure_id'
   | String _ -> of_kind_value
   | Array { length; } ->
     let length' =
@@ -749,6 +751,41 @@ let rec apply_name_permutation_of_kind_value
     in
     if length == length' then of_kind_value
     else Array { length = length'; }
+
+and apply_name_permutation_of_kind_naked_number
+      (of_kind_naked_number : _ Flambda_types.of_kind_naked_number) _perm
+      : _ Flambda_types.of_kind_naked_number =
+  of_kind_naked_number
+
+and apply_name_permutation_of_kind_fabricated
+      (of_kind_fabricated : Flambda_types.of_kind_fabricated) _perm
+      : Flambda_types.of_kind_value =
+  match of_kind_fabricated with
+  | Discriminants discrs ->
+    let discrs' = Discriminants.apply_name_permutation discrs perm in
+    if discrs == discrs' then of_kind_fabricated
+    else Discriminants discrs'
+  | Set_of_closures { closure_ids; } ->
+    let closure_ids' = Closure_ids.apply_name_permutation closure_ids perm in
+    if closure_ids == closure_ids' then of_kind_fabricated
+    else Set_of_closures { closure_ids = closure_ids'; }
+
+and apply_name_permutation_blocks_and_tagged_immediates
+      ({ immediates; blocks; } as blocks_and_tagged_immediates) perm =
+  let immediates' =
+    Or_unknown.map immediates ~f:(fun immediates ->
+        Immediates.apply_name_permutation immediates perm)
+      immediates
+  in
+  let blocks' =
+    Or_unknown.map blocks ~f:(fun blocks ->
+        Blocks.apply_name_permutation blocks perm)
+      blocks
+  in
+  if immediates == immediates' && blocks == blocks' then
+    blocks_and_tagged_immediates
+  else
+    { immediates = immediates'; blocks = blocks'; }
 
 and apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
       (unknown_or_join : _ Flambda_types.unknown_or_join) perm

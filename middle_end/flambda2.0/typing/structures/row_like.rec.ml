@@ -279,4 +279,21 @@ Format.eprintf "RL meet is returning bottom\n%!";
         known;
         at_least;
       }
+
+    let apply_name_permutation ({ known; at_least; } as t) perm =
+      let known' =
+        Tag_and_index.Map.map_sharing (fun maps_to ->
+            Maps_to.apply_name_permutation maps_to perm)
+          known
+      in
+      let at_least' =
+        Index.Map.map_sharing (fun maps_to ->
+            Maps_to.apply_name_permutation maps_to perm)
+          at_least
+      in
+      if known == known' && at_least == at_least' then t
+      else
+        { known = known';
+          at_least = at_least';
+        }
 end

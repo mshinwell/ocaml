@@ -36,6 +36,8 @@ val is_empty : t -> bool
 
 val defined_vars : t -> Flambda_kind.t Variable.Map.t
 
+val defined_vars_in_order : t -> Variable.t list
+
 val equations : t -> Flambda_types.t Name.Map.t
 
 val one_equation : Name.t -> Flambda_types.t -> t
@@ -46,7 +48,7 @@ val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
 val add_cse
    : t
-  -> Flambda_primitive.With_fixed_value.t
+  -> Flambda_primitive.Eligible_for_cse.t
   -> bound_to:Simple.t
   -> t
 
@@ -60,4 +62,4 @@ val remove_definitions_and_equations : t -> allowed:Variable.Set.t -> t
 
 val mem : t -> Name.t -> bool
 
-val cse : t -> Simple.t Flambda_primitive.With_fixed_value.Map.t
+val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
