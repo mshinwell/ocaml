@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Typing_env_level.t
+type t
 
 val print_with_cache
    : cache:Printing_cache.t
@@ -32,13 +32,13 @@ val empty : t
 
 val is_empty : t -> bool
 
+val create : Typing_env_level.t -> t
+
+val to_level : t -> Typing_env_level.t
+
 val one_equation : Name.t -> Flambda_types.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
-
-(*
-val meet_equation : t -> Meet_env.t -> Name.t -> Flambda_types.t -> t
-*)
 
 val meet : Meet_env.t -> t -> t -> t
 

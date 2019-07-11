@@ -62,7 +62,7 @@ let print ppf t =
 
 let invariant _t = ()
 
-let empty =
+let empty () =
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.empty;
     cse = Flambda_primitive.With_fixed_value.Map.empty;
@@ -105,7 +105,7 @@ let check_equation t name ty =
     | _ -> ()
 
 let one_equation name ty =
-  check_equation empty name ty;
+  check_equation (empty ()) name ty;
   { defined_vars = Variable.Map.empty;
     equations = Name.Map.singleton name ty;
     cse = Flambda_primitive.With_fixed_value.Map.empty;
@@ -151,12 +151,14 @@ let meet env (t1 : t) (t2 : t) =
     let env = Meet_env.env env in
     let env = Typing_env.increment_scope env in
     let level = Typing_env.current_scope env in
+    let t1 = Typing_env_extension.create t1 in
+    let t2 = Typing_env_extension.create t2 in
     let env = Typing_env.add_env_extension env t1 in
     let env = Typing_env.add_env_extension env t2 in
     let env_extension, _names_in_scope_at_cut =
       Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
     in
-    env_extension
+    Typing_env_extension.to_level env_extension
   end
 
 let join env (t1 : t) (t2 : t) : t =
@@ -180,7 +182,7 @@ let join env (t1 : t) (t2 : t) : t =
         let join_ty = Api_meet_and_join.join ~bound_name:name env ty1 ty2 in
         add_or_replace_equation t name join_ty)
       names_with_equations_in_join
-      empty
+      (empty ())
   in
   let cse =
     Flambda_primitive.With_fixed_value.Map.merge
