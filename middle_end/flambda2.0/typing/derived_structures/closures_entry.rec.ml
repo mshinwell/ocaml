@@ -67,6 +67,16 @@ let erase_aliases ({ function_decl; closure_elements; set_of_closures; } : t)
         ~bound_name:None ~already_seen ~allowed set_of_closures;
   }
 
+let apply_name_permutation
+      ({ function_decl; closure_elements; set_of_closures; } : t) perm : t =
+  { function_decl;
+    closure_elements =
+      Closure_elements.apply_name_permutation closure_elements perm;
+    set_of_closures =
+      Flambda_type0_core.apply_name_permutation_ty_fabricated
+        set_of_closures perm;
+  }
+
 let free_names ({ function_decl = _; closure_elements; set_of_closures; } : t) =
   Name_occurrences.union
     (Closure_elements.free_names closure_elements)
