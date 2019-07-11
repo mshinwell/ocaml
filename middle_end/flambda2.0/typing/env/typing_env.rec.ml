@@ -600,33 +600,25 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
           t
     in
     invariant t;
-(*
 Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   Scope.print min_scope
   print original_t
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
-*)
     let meet_env = Meet_env.create t in
     let env_extension =
       Scope.Map.fold (fun _scope one_level result ->
-(*
-Format.eprintf "Folding in scope %a\n%!" Scope.print scope;
+Format.eprintf "Folding in scope %a\n%!" Scope.print _scope;
 Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_level);
-*)
           let env_extension =
             Typing_env_extension.create (One_level.level one_level)
           in
-(*
 Format.eprintf "Extension for meet:@ %a\n%!"
   Typing_env_extension.print env_extension;
-*)
           Typing_env_extension.meet meet_env env_extension result)
         at_or_after_cut
         (Typing_env_extension.empty ())
     in
-(*
 Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
-*)
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     env_extension, vars_in_scope_at_cut
 

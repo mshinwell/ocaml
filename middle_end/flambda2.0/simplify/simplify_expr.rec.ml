@@ -72,12 +72,14 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
+(*
 Format.eprintf "About to simplify handler %a: params %a, param types %a, \
     dacc:@ %a\n%!"
   Continuation.print _cont
   KP.List.print params
   (Format.pp_print_list T.print) arg_types
   DA.print dacc;
+*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)

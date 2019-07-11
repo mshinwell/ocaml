@@ -580,6 +580,9 @@ let set_of_closures_containing_at_least by_closure_id =
   in
   Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
+let array_of_length ~length =
+  Value (No_alias (Ok (Array { length; })))
+
 let type_for_const (const : Simple.Const.t) =
   match const with
   | Naked_immediate i -> this_naked_immediate i
