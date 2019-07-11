@@ -459,6 +459,34 @@ type unary_primitive =
     }
   | Project_var of Var_within_closure.t
 
+(* Here and below, operations that are genuine projections shouldn't be
+   eligible for CSE, since we deal with projections through types. *)
+let unary_primitive_eligible_for_cse p =
+  match p with
+  | Duplicate_block {
+      source_mutability = Immutable;
+      destination_mutability = Immutable;
+      _
+    } -> true
+  | Duplicate_block _ -> false
+  | Is_int
+  | Get_tag _
+  | Discriminant_of_int -> true
+  | Array_length _ -> false
+  | Bigarray_length _ -> false
+  | String_length _ -> false
+  | Int_as_pointer -> true
+  | Opaque_identity -> false
+  | Int_arith _
+  | Float_arith _
+  | Num_conv _
+  | Boolean_not -> true
+  | Unbox_number _ -> false
+  | Box_number _ -> true
+  | Project_closure _
+  | Move_within_set_of_closures _
+  | Project_var _ -> false
+
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
     match p with
@@ -745,6 +773,17 @@ type binary_primitive =
   | Float_arith of binary_float_arith_op
   | Float_comp of comparison
 
+let binary_primitive_eligible_for_cse p =
+  match p with
+  | Block_load _ -> false
+  | String_or_bigstring_load _ -> false  (* CR mshinwell: review *)
+  | Phys_equal _
+  | Int_arith _
+  | Int_shift _
+  | Int_comp _ 
+  | Float_arith _
+  | Float_comp _ -> true
+
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =
     match p with
@@ -888,6 +927,11 @@ type ternary_primitive =
   | Block_set of Block_access_kind.t * init_or_assign
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
 
+let ternary_primitive_eligible_for_cse p =
+  match p with
+  | Block_set _
+  | Bytes_or_bigstring_set _ -> false
+
 let compare_ternary_primitive p1 p2 =
   let ternary_primitive_numbering p =
     match p with
@@ -964,6 +1008,13 @@ type variadic_primitive =
   | Make_block of make_block_kind * mutable_or_immutable
   | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
   | Bigarray_load of num_dimensions * bigarray_kind * bigarray_layout
+
+let variadic_primitive_eligible_for_cse p =
+  match p with
+  | Make_block (_, Immutable) -> true
+  | Make_block (_, Mutable) -> false
+  | Bigarray_set _
+  | Bigarray_load _ -> false
 
 let compare_variadic_primitive p1 p2 =
   let variadic_primitive_numbering p =
@@ -1306,16 +1357,28 @@ let at_most_generative_effects t =
   | (No_effects | Only_generative_effects _), _ -> true
   | _, _ -> false
 
-module With_fixed_value = struct
+module Eligible_for_cse = struct
   type t = primitive_application
 
   let create t =
-    match effects_and_coeffects t with
-    | No_effects, No_coeffects -> Some t
-    | Only_generative_effects Immutable, No_coeffects ->
-      (* Allow constructions of immutable blocks to be shared. *)
-      Some t
-    | _, _ -> None
+    let eligible =
+      match t with
+      | Unary (prim, _) -> unary_primitive_eligible_for_cse prim
+      | Binary (prim, _, _) -> binary_primitive_eligible_for_cse prim
+      | Ternary (prim, _, _, _) -> ternary_primitive_eligible_for_cse prim
+      | Variadic (prim, _) -> variadic_primitive_eligible_for_cse prim
+    in
+    let effects_and_coeffects_ok =
+      match effects_and_coeffects t with
+      | No_effects, No_coeffects -> true
+      | Only_generative_effects Immutable, No_coeffects ->
+        (* Allow constructions of immutable blocks to be shared. *)
+        true
+      | _, _ -> false
+    in
+    assert ((not eligible) || effects_and_coeffects_ok);
+    if eligible then Some t
+    else None
 
   let create_is_int ~immediate_or_block =
     Unary (Is_int, Simple.name immediate_or_block)

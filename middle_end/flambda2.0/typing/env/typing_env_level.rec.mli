@@ -28,6 +28,8 @@ val print : Format.formatter -> t -> unit
 
 val invariant : t -> unit
 
+val apply_name_permutation : t -> Name_permutation.t -> t
+
 val empty : unit -> t
 
 val is_empty : t -> bool

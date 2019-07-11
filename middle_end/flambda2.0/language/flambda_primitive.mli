@@ -391,9 +391,11 @@ val no_effects_or_coeffects : t -> bool
 
 val at_most_generative_effects : t -> bool
 
-module With_fixed_value : sig
+module Eligible_for_cse : sig
   (** Primitive applications that may be replaced by a variable which is let
-      bound to a single instance of such application. *)
+      bound to a single instance of such application.  Primitives that are
+      genuine projections (e.g. [Block_load], etc.) are not eligible, since
+      the associated information is propagated through types, not CSE. *)
   type t
 
   include Contains_names.S with type t := t
