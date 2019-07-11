@@ -46,9 +46,13 @@ val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
 
 val add_variable : t -> Variable.t -> Name_occurrence_kind.t -> t
 
+val add_name : t -> Name.t -> Name_occurrence_kind.t -> t
+
 val singleton_name : Name.t -> Name_occurrence_kind.t -> t
 
 val singleton_symbol : Symbol.t -> Name_occurrence_kind.t -> t
+
+val create_variables : Variable.Set.t -> Name_occurrence_kind.t -> t
 
 val create_names : Name.Set.t -> Name_occurrence_kind.t -> t
 

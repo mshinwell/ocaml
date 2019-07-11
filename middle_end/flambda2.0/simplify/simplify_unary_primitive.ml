@@ -229,7 +229,7 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
       Reachable.reachable named, env_extension, dacc
     | None ->
       let dacc =
-        match Flambda_primitive.With_fixed_value.create original_prim with
+        match Flambda_primitive.Eligible_for_cse.create original_prim with
         | None -> dacc
         | Some with_fixed_value ->
           let bound_to = Simple.var result_var' in

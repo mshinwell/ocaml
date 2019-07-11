@@ -903,7 +903,7 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
         Reachable.reachable named, env_extension, dacc
       | None ->
         let dacc =
-          match Flambda_primitive.With_fixed_value.create original_prim with
+          match Flambda_primitive.Eligible_for_cse.create original_prim with
           | None -> dacc
           | Some with_fixed_value ->
             let bound_to = Simple.var result_var' in

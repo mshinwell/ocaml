@@ -101,11 +101,11 @@ module type S = sig
 
     val add_cse
        : t
-      -> Flambda_primitive.With_fixed_value.t
+      -> Flambda_primitive.Eligible_for_cse.t
       -> bound_to:Simple.t
       -> t
 
-    val find_cse : t -> Flambda_primitive.With_fixed_value.t -> Simple.t option
+    val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
 
     val add_env_extension
        : t
@@ -122,12 +122,6 @@ module type S = sig
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Variable.Set.t
-
-    (*val merge_rec_info_for_simple_and_all_aliases
-       : t
-      -> Simple.descr
-      -> newer_rec_info:Rec_info.t
-      -> t*)
   end
 
   val meet_shape

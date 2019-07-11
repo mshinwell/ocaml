@@ -52,13 +52,13 @@ val mem : t -> Name.t -> bool
 
 val add_cse
    : t
-  -> Flambda_primitive.With_fixed_value.t
+  -> Flambda_primitive.Eligible_for_cse.t
   -> bound_to:Simple.t
   -> t
 
 val find_cse
    : t
-  -> Flambda_primitive.With_fixed_value.t
+  -> Flambda_primitive.Eligible_for_cse.t
   -> Simple.t option
 
 val add_env_extension

@@ -28,8 +28,6 @@ val print : Format.formatter -> t -> unit
 
 val invariant : t -> unit
 
-val apply_name_permutation : t -> Name_permutation.t -> t
-
 val empty : unit -> t
 
 val is_empty : t -> bool
@@ -63,3 +61,5 @@ val remove_definitions_and_equations : t -> allowed:Variable.Set.t -> t
 val mem : t -> Name.t -> bool
 
 val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
+
+include Contains_names.S with type t := t

@@ -198,3 +198,8 @@ val apply_rec_info
    : Flambda_types.t
   -> Rec_info.t
   -> Flambda_types.t Or_bottom.t
+
+val apply_name_permutation
+   : Flambda_types.t
+  -> Name_permutation.t
+  -> Flambda_types.t

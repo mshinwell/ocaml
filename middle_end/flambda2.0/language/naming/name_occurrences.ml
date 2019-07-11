@@ -324,6 +324,11 @@ let add_symbol t sym kind =
     symbols = For_symbols.add t.symbols sym kind;
   }
 
+let add_name t (name : Name.t) kind =
+  match name with
+  | Var var -> add_variable t var kind
+  | Symbol sym -> add_symbol t sym kind
+
 let singleton_symbol sym kind =
   { empty with
     symbols = For_symbols.singleton sym kind;
@@ -333,6 +338,12 @@ let singleton_name (name : Name.t) kind =
   match name with
   | Var var -> singleton_variable var kind
   | Symbol sym -> singleton_symbol sym kind
+
+let create_variables vars kind =
+  Variable.Set.fold (fun (var : Variable.t) t ->
+      add_variable t var kind)
+    vars
+    empty
 
 let create_names names kind =
   Name.Set.fold (fun (name : Name.t) t ->
