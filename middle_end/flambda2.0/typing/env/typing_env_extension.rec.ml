@@ -48,7 +48,7 @@ let is_empty { abst; } =
 
 let create level =
   let abst =
-    A.create (Typing_env_level.defined_vars_in_order level) level
+    A.create (Typing_env_level.defined_vars_in_order' level) level
   in
   { abst; }
 
@@ -63,7 +63,7 @@ let add_or_replace_equation { abst; } name ty =
   let abst =
     A.pattern_match abst ~f:(fun _defined_names level ->
       let level = Typing_env_level.add_or_replace_equation level name ty in
-      A.create (Typing_env_level.defined_vars_in_order level) level)
+      A.create (Typing_env_level.defined_vars_in_order' level) level)
   in
   { abst; }
 
@@ -72,7 +72,7 @@ let meet env (t1 : t) (t2 : t) : t =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->
       A.pattern_match t2.abst ~f:(fun _ level_2 ->
         let level = Typing_env_level.meet env level_1 level_2 in
-        A.create (Typing_env_level.defined_vars_in_order level) level))
+        A.create (Typing_env_level.defined_vars_in_order' level) level))
   in
   { abst; }
 
@@ -81,7 +81,7 @@ let join env (t1 : t) (t2 : t) : t =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->
       A.pattern_match t2.abst ~f:(fun _ level_2 ->
         let level = Typing_env_level.join env level_1 level_2 in
-        A.create (Typing_env_level.defined_vars_in_order level) level))
+        A.create (Typing_env_level.defined_vars_in_order' level) level))
   in
   { abst; }
 
