@@ -28,7 +28,7 @@ module Make (Thing : Identifiable.S) = struct
     include Unit
 
     let print_with_cache ~cache:_ ppf () = print ppf ()
-    let meet _env () () = Or_bottom.Ok ((), TEE.empty)
+    let meet _env () () = Or_bottom.Ok ((), TEE.empty ())
     let join _env () () = ()
     let equal _env () () = true
     let erase_aliases () _env ~already_seen:_ ~allowed:_ = ()

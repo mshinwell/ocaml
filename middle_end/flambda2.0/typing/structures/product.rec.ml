@@ -77,7 +77,7 @@ module Make (Index : Identifiable.S) = struct
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } : _ Or_bottom.t =
     let all_bottom = ref true in
-    let env_extension = ref TEE.empty in
+    let env_extension = ref (TEE.empty ()) in
     let components_by_index =
       Index.Map.merge (fun _index ty1_opt ty2_opt ->
           match ty1_opt, ty2_opt with

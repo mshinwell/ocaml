@@ -108,7 +108,7 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
 *)
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
-      let env_extension = ref TEE.empty in
+      let env_extension = ref (TEE.empty ()) in
       let one_side_only index1 maps_to1 at_least2 =
         let from_at_least2 =
           Index.Map.find_last_opt

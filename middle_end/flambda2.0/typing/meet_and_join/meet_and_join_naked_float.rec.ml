@@ -41,5 +41,5 @@ struct
     | Float fs1, Float fs2 ->
       let fs = E.Float.Set.union_or_inter fs1 fs2 in
       if Float.Set.is_empty fs then Bottom
-      else Ok (Float fs, TEE.empty)
+      else Ok (Float fs, TEE.empty ())
 end

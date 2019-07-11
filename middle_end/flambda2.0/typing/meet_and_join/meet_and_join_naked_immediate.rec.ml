@@ -39,5 +39,5 @@ struct
     | Immediate fs1, Immediate fs2 ->
       let fs = E.Immediate.Set.union_or_inter fs1 fs2 in
       if Immediate.Set.is_empty fs then Bottom
-      else Ok (Immediate fs, Typing_env_extension.empty)
+      else Ok (Immediate fs, Typing_env_extension.empty ())
 end

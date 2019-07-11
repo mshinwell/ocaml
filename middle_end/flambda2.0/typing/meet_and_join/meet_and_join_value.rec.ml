@@ -53,9 +53,9 @@ struct
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
       : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
     match or_unknown1, or_unknown2 with
-    | Unknown, Unknown -> Ok (Unknown, TEE.empty)
-    | _, Unknown -> Ok (or_unknown1, TEE.empty)
-    | Unknown, _ -> Ok (or_unknown2, TEE.empty)
+    | Unknown, Unknown -> Ok (Unknown, TEE.empty ())
+    | _, Unknown -> Ok (or_unknown1, TEE.empty ())
+    | Unknown, _ -> Ok (or_unknown2, TEE.empty ())
     | Known contents1, Known contents2 ->
       Or_bottom.map (meet_contents env contents1 contents2)
         ~f:(fun (contents, env_extension) ->
@@ -238,7 +238,7 @@ struct
     | String strs1, String strs2 ->
       let strs = E.String_info.Set.union_or_inter strs1 strs2 in
       if String_info.Set.is_empty strs then Bottom
-      else Or_bottom_or_absorbing.Ok (String strs, TEE.empty)
+      else Or_bottom_or_absorbing.Ok (String strs, TEE.empty ())
     | Array { length = length1; }, Array { length = length2; } ->
       Or_bottom_or_absorbing.of_or_bottom
         (meet_or_join_ty ?bound_name:None env length1 length2)

@@ -55,16 +55,16 @@ struct
         (ou2 : S.of_kind_foo T.unknown_or_join)
         : S.of_kind_foo T.unknown_or_join * TEE.t =
     match ou1, ou2 with
-    | Unknown, ou2 -> ou2, TEE.empty
-    | ou1, Unknown -> ou1, TEE.empty
-    | Bottom, _ | _, Bottom -> Bottom, TEE.empty
+    | Unknown, ou2 -> ou2, TEE.empty ()
+    | ou1, Unknown -> ou1, TEE.empty ()
+    | Bottom, _ | _, Bottom -> Bottom, TEE.empty ()
     | Ok of_kind_foo1, Ok of_kind_foo2 ->
       match
         S.meet_or_join_of_kind_foo env ~meet_or_join_ty
           of_kind_foo1 of_kind_foo2
       with
       | Ok (of_kind_foo, env_extension) -> Ok of_kind_foo, env_extension
-      | Absorbing | Bottom -> Bottom, TEE.empty
+      | Absorbing | Bottom -> Bottom, TEE.empty ()
 
   let join_on_unknown_or_join env ~meet_or_join_ty
         (uj1 : S.of_kind_foo T.unknown_or_join)
@@ -109,7 +109,7 @@ struct
     | Some simple1, Some simple2
         when Simple.equal simple1 simple2
                || Meet_env.already_meeting env simple1 simple2 ->
-      Equals simple1, TEE.empty
+      Equals simple1, TEE.empty ()
     | Some simple1, Some simple2 ->
 (*
 Format.eprintf "Meeting simples: %a and %a\n%!"

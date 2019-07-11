@@ -40,7 +40,7 @@ let print ppf { abst; } =
 let invariant { abst; } =
   A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
 
-let empty =
+let empty () =
   { abst = A.create [] (Typing_env_level.empty ()); }
 
 let is_empty { abst; } =

@@ -41,5 +41,5 @@ struct
     | Nativeint fs1, Nativeint fs2 ->
       let fs = E.Targetint.Set.union_or_inter fs1 fs2 in
       if Targetint.Set.is_empty fs then Bottom
-      else Ok (Nativeint fs, TEE.empty)
+      else Ok (Nativeint fs, TEE.empty ())
 end
