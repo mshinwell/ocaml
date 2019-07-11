@@ -17,12 +17,23 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = {
-  defined_vars : Flambda_kind.t Variable.Map.t;
+  defined_vars : (Flambda_kind.t * Binding_time.t) Variable.Map.t;
   equations : Flambda_types.t Name.Map.t;
   cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
 }
 
-let print_with_cache ~cache ppf ({ defined_vars; equations; cse; } : t) =
+let defined_vars_in_order t =
+  let sorted =
+    List.sort
+      (fun (_var1, (_kind1, binding_time1)) (_var2, (_kind2, binding_time2)) ->
+        Binding_time.compare binding_time1 binding_time2)
+      (Variable.Map.bindings t.defined_vars)
+  in
+  List.map (fun (var, (kind, _binding_time)) -> var, kind) sorted
+
+let defined_vars_in_order' t = List.map fst (defined_vars_in_order t)
+
+let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -53,7 +64,8 @@ let print_with_cache ~cache ppf ({ defined_vars; equations; cse; } : t) =
         @[<hov 1>(equations@ @[<hov 1>%a@])@]@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         )@]"
-      Variable.Set.print (Variable.Map.keys defined_vars)
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space Variable.print)
+      (defined_vars_in_order' t)
       print_equations equations
       (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
 
@@ -66,12 +78,12 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
       perm =
   let defined_vars_changed = ref false in
   let defined_vars' =
-    Variable.Map.fold (fun var kind defined_vars ->
+    Variable.Map.fold (fun var (kind, binding_time) defined_vars ->
         let var' = Name_permutation.apply_variable perm var in
         if not (var == var') then begin
           defined_vars_changed := true
         end;
-        Variable.Map.add var' kind defined_vars)
+        Variable.Map.add var' (kind, binding_time) defined_vars)
       defined_vars
       Variable.Map.empty
   in
@@ -154,21 +166,16 @@ let is_empty { defined_vars; equations; cse; } =
 
 let equations t = t.equations
 
-let defined_vars t = t.defined_vars
-
-let defined_vars_in_order t =
-  Variable.Set.elements (Variable.Map.keys t.defined_vars)
-
 let cse t = t.cse
 
-let add_definition t var kind =
+let add_definition t var kind binding_time =
   if Variable.Map.mem var t.defined_vars then begin
     Misc.fatal_errorf "Environment extension already binds variable %a:@ %a"
       Variable.print var
       print t
   end;
   { t with
-    defined_vars = Variable.Map.add var kind t.defined_vars
+    defined_vars = Variable.Map.add var (kind, binding_time) t.defined_vars
   }
 
 let check_equation t name ty =

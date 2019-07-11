@@ -37,6 +37,8 @@ let is_phantom t =
   | Phantom -> true
   | In_types | Normal -> false
 
+let min = Phantom
+
 include Identifiable.Make (struct
   type nonrec t = t
 

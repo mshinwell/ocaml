@@ -307,6 +307,7 @@ let add_variable_definition t var kind name_occurrence_kind =
   end;
   let level =
     Typing_env_level.add_definition (One_level.level t.current_level) var kind
+      t.next_binding_time
   in
   let just_after_level =
     let aliases =
@@ -533,10 +534,10 @@ let find_cse t prim =
 let add_env_extension t env_extension : t =
   Typing_env_extension.pattern_match env_extension ~f:(fun level ->
     let t =
-      Variable.Map.fold (fun var kind t ->
+      List.fold_left (fun t (var, kind) ->
           add_variable_definition t var kind Name_occurrence_kind.in_types)
-        (Typing_env_level.defined_vars level)
         t
+        (Typing_env_level.defined_vars_in_order level)
     in
     let t =
       Name.Map.fold (fun name ty t ->
@@ -638,7 +639,7 @@ let get_canonical_simple0 t simple ~min_occurrence_kind
         ~min_order_within_equiv_class:min_occurrence_kind
     with
     | None ->
-      Misc.fatal_errorf "Cannot get canonical [Simple] for unbound [Alias]@ \
+      Misc.fatal_errorf "Cannot get canonical [Simple] for [Alias]@ \
           %a.@ Alias tracker:@ %a.@ Environment:@ %a"
         Alias.print alias
         Aliases.print (aliases t)
@@ -682,11 +683,19 @@ let resolve_ty (type a) t
   | No_alias unknown_or_join -> unknown_or_join, None
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
+    let orig_simple = simple in
     let min_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
-    match get_canonical_simple0 t simple ~min_occurrence_kind with
+    match get_canonical_simple0 t orig_simple ~min_occurrence_kind with
     | Bottom, _typ, _rec_info -> Bottom, None
     | Ok simple, _typ, rec_info ->
-      match Simple.descr simple with
+    (* CR mshinwell: [get_canonical_simple] etc. may be misnamed, since they
+       don't necessarily return the canonical one---the minimum name
+       occurrence kind might prohibit that. *)
+    (* XXX Should this function be taking the min occurrence kind? *)
+    match get_canonical_simple0 t orig_simple ~min_occurrence_kind:Name_occurrence_kind.min with
+    | Bottom, _typ, _rec_info -> Bottom, None
+    | Ok canonical_simple, _typ, _rec_info ->
+      match Simple.descr canonical_simple with
       (* CR mshinwell: Could check kinds against [S.kind] here. *)
       | Const const ->
         let typ =
@@ -732,7 +741,7 @@ let resolve_ty (type a) t
           Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
               [Equals] type:%s@ %a@]\n"
             (Flambda_colours.error ())
-            Simple.print simple
+            Simple.print canonical_simple
             (Flambda_colours.normal ())
             print t;
           invariant_should_fail t
