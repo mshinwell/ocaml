@@ -828,3 +828,6 @@ and apply_name_permutation_of_kind_fabricated
     let closures' = Closure_ids.apply_name_permutation closures perm in
     if closures == closures' then of_kind_fabricated
     else Set_of_closures { closures = closures'; }
+
+let apply_name_permutation_ty_fabricated ty perm =
+  apply_name_permutation_ty apply_name_permutation_of_kind_fabricated ty perm

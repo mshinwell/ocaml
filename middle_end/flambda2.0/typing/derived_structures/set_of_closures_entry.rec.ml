@@ -53,6 +53,13 @@ let erase_aliases ({ by_closure_id; } : t) env ~already_seen ~allowed : t =
         ~already_seen ~allowed;
   }
 
+let apply_name_permutation ({ by_closure_id; } : t) perm : t =
+  (* CR mshinwell: phys-equal checks *)
+  let by_closure_id =
+    Types_by_closure_id.apply_name_permutation by_closure_id perm
+  in
+  { by_closure_id; }
+
 let free_names ({ by_closure_id; } : t) =
   Types_by_closure_id.free_names by_closure_id
 

@@ -203,3 +203,8 @@ val apply_name_permutation
    : Flambda_types.t
   -> Name_permutation.t
   -> Flambda_types.t
+
+val apply_name_permutation_ty_fabricated
+   : Flambda_types.ty_fabricated
+  -> Name_permutation.t
+  -> Flambda_types.ty_fabricated

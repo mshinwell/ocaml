@@ -298,53 +298,5 @@ let join env (t1 : t) (t2 : t) : t =
   assert (Variable.Map.is_empty t.defined_vars);
   { t with cse; }
 
-let filter_cse cse ~allowed =
-  Flambda_primitive.Eligible_for_cse.Map.filter_map cse
-    ~f:(fun prim bound_to ->
-      match Simple.descr bound_to with
-      | Name (Var var) ->
-        if Variable.Set.mem var allowed then Some bound_to
-        else None
-      | _ ->
-        let free_vars =
-          Name_occurrences.variables
-            (Flambda_primitive.Eligible_for_cse.free_names prim)
-        in
-        if Variable.Set.subset free_vars allowed then Some bound_to
-        else None)
-
-let erase_aliases env ~allowed t =
-  let equations =
-    Name.Map.mapi (fun name ty ->
-        let bound_name = Some name in
-        Type_erase_aliases.erase_aliases env ~bound_name
-          ~already_seen:Simple.Set.empty ~allowed ty)
-      t.equations
-  in
-  let cse = filter_cse t.cse ~allowed in
-  { t with
-    equations;
-    cse;
-  }
-
-let remove_definitions_and_equations t ~allowed =
-  if not (Variable.Set.is_empty
-    (Variable.Set.inter allowed (Variable.Map.keys t.defined_vars)))
-  then begin
-    Misc.fatal_error "[allowed] set must not include any [defined_vars]"
-  end;
-  let equations =
-    Name.Map.filter (fun (name : Name.t) _ty ->
-        match name with
-        | Var var -> Variable.Set.mem var allowed
-        | Symbol _ -> true)
-      t.equations
-  in
-  let cse = filter_cse t.cse ~allowed in
-  { defined_vars = Variable.Map.empty;
-    equations;
-    cse;
-  }
-
 let mem t name =
   Name.Map.mem name t.equations

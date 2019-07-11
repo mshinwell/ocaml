@@ -40,7 +40,7 @@ let print ppf { abst; } =
 let invariant { abst; } =
   A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
 
-let empty () =
+let empty =
   { abst = A.create [] (Typing_env_level.empty ()); }
 
 let is_empty { abst; } =
@@ -55,7 +55,7 @@ let create level =
 let pattern_match { abst; } ~f =
   A.pattern_match abst ~f:(fun _ level -> f level)
 
-let one_equation { abst; } name ty =
+let one_equation name ty =
   let abst = A.create [] (Typing_env_level.one_equation name ty) in
   { abst; }
 
