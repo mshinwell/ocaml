@@ -41,5 +41,5 @@ struct
     | Int64 fs1, Int64 fs2 ->
       let fs = E.Int64.Set.union_or_inter fs1 fs2 in
       if Int64.Set.is_empty fs then Bottom
-      else Ok (Int64 fs, TEE.empty)
+      else Ok (Int64 fs, TEE.empty ())
 end

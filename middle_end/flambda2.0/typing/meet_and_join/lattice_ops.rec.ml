@@ -84,11 +84,11 @@ module For_join = struct
   module Discriminant = Make (Discriminant)
 
   let switch_no_bottom _meet join meet_env thing1 thing2 =
-    join (Meet_env.env meet_env) thing1 thing2, TEE.empty
+    join (Meet_env.env meet_env) thing1 thing2, TEE.empty ()
 
   let switch0 _meet join meet_env thing1 thing2 =
     join (Meet_env.env meet_env) thing1 thing2
 
   let switch _meet join meet_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join (Meet_env.env meet_env) thing1 thing2, TEE.empty)
+    Ok (join (Meet_env.env meet_env) thing1 thing2, TEE.empty ())
 end

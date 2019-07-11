@@ -57,7 +57,7 @@ module type S = sig
 
     val invariant : t -> unit
 
-    val empty : t
+    val empty : unit -> t
 
     val one_equation : Name.t -> flambda_type -> t
 

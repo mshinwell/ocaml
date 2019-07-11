@@ -32,7 +32,7 @@ Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructin
   T.print deconstructing;
 *)
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
-  | Bottom -> Reachable.invalid (), TEE.empty, dacc
+  | Bottom -> Reachable.invalid (), TEE.empty (), dacc
   | Ok env_extension ->
 (*
 Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
