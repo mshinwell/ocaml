@@ -67,6 +67,15 @@ let add_or_replace_equation { abst; } name ty =
   in
   { abst; }
 
+let concat (t1 : t) (t2 : t) : t =
+  let abst =
+    A.pattern_match t1.abst ~f:(fun _ level_1 ->
+      A.pattern_match t2.abst ~f:(fun _ level_2 ->
+        let level = Typing_env_level.concat level_1 level_2 in
+        A.create (Typing_env_level.defined_vars_in_order' level) level))
+  in
+  { abst; }
+
 let meet env (t1 : t) (t2 : t) : t =
   let abst =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->

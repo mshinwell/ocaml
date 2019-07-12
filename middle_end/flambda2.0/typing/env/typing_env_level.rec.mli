@@ -50,6 +50,8 @@ val add_cse
   -> bound_to:Simple.t
   -> t
 
+val concat : t -> t -> t
+
 val meet : Meet_env.t -> t -> t -> t
 
 val join : Typing_env.t -> t -> t -> t

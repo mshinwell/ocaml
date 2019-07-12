@@ -605,7 +605,6 @@ Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   Scope.print min_scope
   print original_t
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
-    let meet_env = Meet_env.create t in
     let env_extension =
       Scope.Map.fold (fun _scope one_level result ->
 Format.eprintf "Folding in scope %a\n%!" Scope.print _scope;
@@ -613,9 +612,9 @@ Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_l
           let env_extension =
             Typing_env_extension.create (One_level.level one_level)
           in
-Format.eprintf "Extension for meet:@ %a\n%!"
+Format.eprintf "Extension is:@ %a\n%!"
   Typing_env_extension.print env_extension;
-          Typing_env_extension.meet meet_env env_extension result)
+          Typing_env_extension.concat result env_extension)
         at_or_after_cut
         (Typing_env_extension.empty ())
     in
