@@ -386,13 +386,24 @@ Format.eprintf "SP env_extension:@ %a\n%!" T.Typing_env_extension.print env_exte
     simplify_set_of_closures dacc set_of_closures ~result_var
 
 let simplify_named dacc named ~result_var =
-  let named, dacc, ty = simplify_named0 dacc named ~result_var in
-  let named : Reachable.t =
-    match named with
-    | Invalid _ -> named
-    | Reachable _ ->
-      let denv = DA.denv dacc in
-      if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
-      else named
-  in
-  named, dacc
+  try
+    let named, dacc, ty = simplify_named0 dacc named ~result_var in
+    let named : Reachable.t =
+      match named with
+      | Invalid _ -> named
+      | Reachable _ ->
+        let denv = DA.denv dacc in
+        if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
+        else named
+    in
+    named, dacc
+  with Misc.Fatal_error -> begin
+    Format.eprintf "\n%sContext is:%s simplifying [Let] binding@  %a = %a@ \
+        with downwards accumulator:@ %a\n"
+      (Flambda_colours.error ())
+      (Flambda_colours.normal ())
+      Var_in_binding_pos.print result_var
+      Named.print named
+      DA.print dacc;
+    raise Misc.Fatal_error
+  end

@@ -895,7 +895,10 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
       let original_term = Named.create_prim original_prim dbg in
       (* CR mshinwell: Factor out this next part *)
-      match Simplify_primitive_common.apply_cse dacc ~original_prim with
+      match
+        Simplify_primitive_common.apply_cse dacc ~original_prim
+          ~min_occurrence_kind
+      with
       | Some replace_with ->
         let named = Named.create_simple replace_with in
         let ty = T.alias_type_of kind replace_with in

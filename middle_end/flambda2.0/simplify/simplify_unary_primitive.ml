@@ -228,7 +228,10 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
     let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
     let original_prim : Flambda_primitive.t = Unary (prim, arg) in
     let original_term = Named.create_prim original_prim dbg in
-    match Simplify_primitive_common.apply_cse dacc ~original_prim with
+    match
+      Simplify_primitive_common.apply_cse dacc ~original_prim
+        ~min_occurrence_kind
+    with
     | Some replace_with ->
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of kind replace_with in

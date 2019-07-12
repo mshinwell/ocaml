@@ -430,11 +430,13 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     | Cannot_reify
     | Invalid
 
-  let reify env t : reification_result =
+  let reify env ~min_occurrence_kind t : reification_result =
 (*
 Format.eprintf "reifying %a\n%!" Type_printers.print t;
 *)
-    match Typing_env.get_alias_then_canonical_simple env t with
+    match
+      Typing_env.get_alias_then_canonical_simple env ~min_occurrence_kind t
+    with
     | Bottom -> Invalid
     | Ok (Some canonical_simple)
         when begin match Simple.descr canonical_simple with
