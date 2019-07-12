@@ -223,6 +223,38 @@ let add_cse t prim ~bound_to =
     { t with cse; }
   | _bound_to -> t
 
+let concat (t1 : t) (t2 : t) =
+  let defined_vars =
+    Variable.Map.merge (fun var data1 data2 ->
+        match data1, data2 with
+        | None, None -> None
+        | Some data, None | None, Some data -> Some data
+        | Some _, _ ->
+          Misc.fatal_errorf "Cannot concatenate levels that have overlapping \
+              defined variables (e.g. %a):@ %a@ and@ %a"
+            Variable.print var
+            print t1
+            print t2)
+      t1.defined_vars
+      t2.defined_vars
+  in
+  let equations =
+    Name.Map.fold (fun name ty equations ->
+        Name.Map.add name ty equations)
+      t2.equations
+      t1.equations
+  in
+  let cse =
+    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to equations ->
+        Flambda_primitive.Eligible_for_cse.Map.add prim bound_to equations)
+      t2.cse
+      t1.cse
+  in
+  { defined_vars;
+    equations;
+    cse;
+  }
+
 (* XXX Not sure this is correct yet *)
 let meet env (t1 : t) (t2 : t) =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
