@@ -100,6 +100,12 @@ val expand_head_ty
 
 val expand_head : t -> Flambda_types.t -> Flambda_types.resolved
 
+val aliases_of_simple
+   : t
+  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> Simple.t
+  -> Simple.Set.t
+
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
 
 val cut

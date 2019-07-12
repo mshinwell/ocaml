@@ -532,6 +532,8 @@ let find_cse t prim =
   | bound_to -> Some bound_to
 
 let add_env_extension t env_extension : t =
+Format.eprintf "Adding env extension:@ %a\n%!"
+  Typing_env_extension.print env_extension;
   Typing_env_extension.pattern_match env_extension ~f:(fun level ->
     let t =
       List.fold_left (fun t (var, kind) ->
@@ -541,6 +543,18 @@ let add_env_extension t env_extension : t =
     in
     let t =
       Name.Map.fold (fun name ty t ->
+          if !Clflags.flambda_invariant_checks then begin
+            let free_names = Type_free_names.free_names ty in
+            let free_vars = Name_occurrences.variables free_names in
+            let defined = Name_occurrences.variables (domain t) in
+            if not (Variable.Set.subset free_vars defined) then begin
+              Misc.fatal_errorf "Cannot add equation %a = %a@ to typing \
+                  environment since some names are unbound:@ %a"
+                Name.print name
+                Type_printers.print ty
+                print t
+            end
+          end;
           (* CR mshinwell: Do we actually need the "more precise" check here?
              Shouldn't the extensions always be as or more precise? *)
           add_equation t name ty)
@@ -787,14 +801,14 @@ let expand_head t (ty : Flambda_types.t) : Flambda_types.resolved =
     in
     Resolved (Resolved_fabricated unknown_or_join)
 
-let aliases_of_simple_allowable_in_types t simple =
+let aliases_of_simple t ~min_occurrence_kind simple =
   let name_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
   let alias = alias_of_simple t simple name_occurrence_kind in
   let newer_rec_info = Simple.rec_info simple in
   Alias.Set.fold (fun alias simples ->
       let name_occurrence_kind = Alias.name_occurrence_kind alias in
       if Name_occurrence_kind.compare name_occurrence_kind
-        Name_occurrence_kind.in_types < 0
+        min_occurrence_kind < 0
       then
         simples
       else
@@ -804,6 +818,9 @@ let aliases_of_simple_allowable_in_types t simple =
         | Some simple -> Simple.Set.add simple simples)
     (Aliases.get_aliases (aliases t) alias)
     Simple.Set.empty
+
+let aliases_of_simple_allowable_in_types t simple =
+  aliases_of_simple t ~min_occurrence_kind:Name_occurrence_kind.in_types simple
 
 let defined_earlier t simple ~than =
   Alias.defined_earlier

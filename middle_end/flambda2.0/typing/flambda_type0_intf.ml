@@ -124,6 +124,12 @@ module type S = sig
       -> Simple.t
       -> Simple.t option Or_bottom.t * Flambda_kind.t
 
+    val aliases_of_simple
+       : t
+      -> min_occurrence_kind:Name_occurrence_kind.t
+      -> Simple.t
+      -> Simple.Set.t
+
     val cut
        : t
       -> unknown_if_defined_at_or_later_than:Scope.t
@@ -369,7 +375,11 @@ module type S = sig
     | Cannot_reify
     | Invalid
 
-  val reify : (t -> reification_result) type_accessor
+  val reify
+     : Typing_env.t
+    -> min_occurrence_kind:Name_occurrence_kind.t
+    -> t
+    -> reification_result
 
   type 'a proof = private
     | Proved of 'a

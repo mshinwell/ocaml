@@ -28,4 +28,5 @@ val simplify_projection
 val apply_cse
    : Downwards_acc.t
   -> original_prim:Flambda_primitive.t
+  -> min_occurrence_kind:Name_occurrence_kind.t
   -> Simple.t option

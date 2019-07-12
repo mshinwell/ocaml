@@ -84,8 +84,9 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
 *)
   Reachable.reachable term, dacc, var_ty
 
-let try_to_reify dacc (term : Reachable.t) ~bound_to:bound_to' =
-  let bound_to = Var_in_binding_pos.var bound_to' in
+let try_to_reify dacc (term : Reachable.t) ~bound_to =
+  let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
+  let bound_to = Var_in_binding_pos.var bound_to in
   let denv = DA.denv dacc in
   let ty = DE.find_variable denv bound_to in
   match term with
@@ -94,17 +95,21 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to:bound_to' =
     let denv = DE.add_equation_on_variable denv bound_to ty in
     Reachable.invalid (), DA.with_denv dacc denv, ty
   | Reachable _ ->
-    match T.reify (DE.typing_env denv) ty with
+    match T.reify (DE.typing_env denv) ~min_occurrence_kind:occ_kind ty with
     | Lift to_lift ->
-      let occ_kind = Var_in_binding_pos.occurrence_kind bound_to' in
       if Name_occurrence_kind.is_normal occ_kind then
         let static_part = create_static_part to_lift in
         lift dacc ty ~bound_to static_part
       else
         term, dacc, ty
     | Simple simple ->
-      let term = Named.create_simple simple in
-      Reachable.reachable term, dacc, ty
+      (* CR mshinwell: Think about whether this is the best way of handling
+         this. *)
+      (* It is possible that the only [Simple] that [reify] could return is
+         in fact [bound_to] -- for example when all other aliases are of
+         an unsuitable occurrence kind. *)
+      if Simple.equal (Simple.var bound_to) simple then term, dacc, ty
+      else Reachable.reachable (Named.create_simple simple), dacc, ty
     | Cannot_reify -> term, dacc, ty
     | Invalid ->
       let ty = T.bottom_like ty in

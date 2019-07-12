@@ -39,8 +39,15 @@ Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
 *)
     Reachable.reachable original_term, env_extension, dacc
 
-let apply_cse dacc ~original_prim =
+let apply_cse dacc ~original_prim ~min_occurrence_kind =
   match Flambda_primitive.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
-    TE.find_cse (DE.typing_env (DA.denv dacc)) with_fixed_value
+    let typing_env = DE.typing_env (DA.denv dacc) in
+    match TE.find_cse typing_env with_fixed_value with
+    | None -> None
+    | Some simple ->
+      let aliases =
+        TE.aliases_of_simple typing_env ~min_occurrence_kind simple
+      in
+      Simple.Set.get_singleton aliases
