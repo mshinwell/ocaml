@@ -740,7 +740,12 @@ let expand_head_ty (type a) t
         force_to_unknown_or_join typ
       | Discriminant discr ->
         let typ =
-          Flambda_type0_core.this_discriminant_without_alias discr
+          match Discriminant.sort discr with
+          | Int | Is_int ->
+            let imm = Immediate.int (Discriminant.to_int discr) in
+            Flambda_type0_core.this_tagged_immediate_without_alias imm
+          | Tag ->
+            Flambda_type0_core.this_discriminant_without_alias discr
         in
         force_to_unknown_or_join typ
       | Name name ->

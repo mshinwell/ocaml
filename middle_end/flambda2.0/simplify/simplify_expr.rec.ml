@@ -881,7 +881,7 @@ and simplify_switch
               let tag =
                 match Discriminant.to_tag arm with
                 | None -> None
-                | Some tag -> Tag.Scannable.create tag
+                | Some tag -> Tag.Scannable.of_tag tag
               in
               begin match tag with
               | None ->
@@ -898,72 +898,41 @@ and simplify_switch
                     Switch.print switch
                 | size ->
                   let size = Targetint.OCaml.to_int size in
-                  let field_tys = List.init size (fun _ -> T.any_value ()) in
-                  T.immutable_block tag ~field_tys
+                  let fields = List.init size (fun _ -> T.any_value ()) in
+                  T.immutable_block (Tag.Scannable.to_tag tag) ~fields
               end
             | (Int | Is_int | Tag), _ ->
-              Switch.invariant switch;
-              Misc.fatal_error "[Switch.invariant] should have failed"
+              Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
+                Switch.print switch
           in
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom -> dacc
           | Ok (meet_ty, env_extension) ->
             let typing_env_at_use =
-              match scrutinee with
+              match Simple.descr scrutinee with
               | Name name -> TE.add_equation typing_env_at_use name meet_ty
               | (Const _ | Discriminant _) -> typing_env_at_use
+            in
+            let typing_env_at_use =
+              TE.add_env_extension typing_env_at_use env_extension
             in
             DA.record_continuation_use dacc cont
               ~typing_env_at_use
               ~arg_types:[])
-        reachable_arms
+        arms
         dacc
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
-    let reachable_arms =
-      Discriminant.Map.filter_map reachable_arms ~f:(fun _arm cont ->
+    let arms =
+      Discriminant.Map.filter_map arms ~f:(fun _arm cont ->
         let cont = UE.resolve_continuation_aliases uenv cont in
         match UE.find_continuation uenv cont with
         | Unreachable _ -> None
         | Unknown _ | Inline _ -> Some cont)
     in
-    let expr = Expr.create_switch ~scrutinee ~arms:reachable_arms in
+    let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
     expr, user_data, uacc
-
-
-    match T.meet typing_env scrutinee_ty shape with
-    | Bottom -> invalid ()
-    | Ok (meet_ty, env_extension) ->
-      let typing_env =
-        match scrutinee with
-        | Name name -> TE.add_equation typing_env name meet_ty
-        | _ -> typing_env
-      in
-      let typing_env = TE.add_env_extension typing_env env_extension in
-
-
-    let known_values_of_scrutinee : _ Or_unknown.t =
-      match
-        T.prove_equals_discriminants (DE.typing_env (DA.denv dacc))
-          scrutinee_ty
-      with
-      | Proved discrs -> Known discrs
-      | Unknown -> Unknown
-      | Invalid ->
-        Misc.fatal_errorf "Simplification of [Switch] scrutinee did not \
-            yield [Bottom] even though type (%a) is bottom:@ %a"
-          T.print scrutinee_ty
-          Switch.print switch
-    in
-    let reachable_arms =
-      Discriminant.Map.filter_map (Switch.arms switch) ~f:(fun arm cont ->
-        match known_values_of_scrutinee with
-        | Unknown -> Some cont
-        | Known known_values ->
-          if Discriminant.Set.mem arm known_values then Some cont
-          else None)
-    in
 
 and simplify_expr
   : 'a. DA.t -> Expr.t -> 'a k -> Expr.t * 'a * UA.t
