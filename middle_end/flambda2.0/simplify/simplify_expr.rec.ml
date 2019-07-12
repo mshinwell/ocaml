@@ -72,14 +72,12 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
-(*
 Format.eprintf "About to simplify handler %a: params %a, param types %a, \
     dacc:@ %a\n%!"
   Continuation.print _cont
   KP.List.print params
   (Format.pp_print_list T.print) arg_types
   DA.print dacc;
-*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
@@ -863,20 +861,14 @@ and simplify_switch
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
     let arms = Switch.arms switch in
-    let dacc =
+    let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
-      Discriminant.Map.fold (fun arm cont dacc ->
+      Discriminant.Map.fold (fun arm cont (arms, dacc) ->
           let shape =
             match Discriminant.sort arm, Switch.sort switch with
             | Int, Int | Is_int, Is_int ->
-              let imms =
-                Discriminant.Map.fold (fun discr _cont imms ->
-                    let imm = Immediate.int (Discriminant.to_int discr) in
-                    Immediate.Set.add imm imms)
-                  (Switch.arms switch)
-                  Immediate.Set.empty
-              in
-              T.these_tagged_immediates imms
+              let imm = Immediate.int (Discriminant.to_int arm) in
+              T.this_tagged_immediate imm
             | Tag, Tag { tags_to_sizes; } ->
               let tag =
                 match Discriminant.to_tag arm with
@@ -906,21 +898,24 @@ and simplify_switch
                 Switch.print switch
           in
           match T.meet typing_env_at_use scrutinee_ty shape with
-          | Bottom -> dacc
-          | Ok (meet_ty, env_extension) ->
-            let typing_env_at_use =
-              match Simple.descr scrutinee with
-              | Name name -> TE.add_equation typing_env_at_use name meet_ty
-              | (Const _ | Discriminant _) -> typing_env_at_use
-            in
+          | Bottom -> arms, dacc
+          | Ok (_meet_ty, env_extension) ->
+(*
+Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
+  T.print scrutinee_ty T.print shape T.print _meet_ty;
+*)
+            let arms = Discriminant.Map.add arm cont arms in
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use env_extension
             in
-            DA.record_continuation_use dacc cont
-              ~typing_env_at_use
-              ~arg_types:[])
+            let dacc =
+              DA.record_continuation_use dacc cont
+                ~typing_env_at_use
+                ~arg_types:[]
+            in
+            arms, dacc)
         arms
-        dacc
+        (Discriminant.Map.empty, dacc)
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in

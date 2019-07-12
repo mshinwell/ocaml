@@ -24,7 +24,7 @@ module Sort = struct
     | Tag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
     | Is_int
 
-  let to_lowercase_string t =
+  let _to_lowercase_string t =
     match t with
     | Int -> "int"
     | Tag _ -> "tag"
@@ -50,11 +50,9 @@ let print_arms ppf arms =
         Continuation.print l)
     arms
 
-let print ppf { sort; scrutinee; arms; } =
-  let sort = Sort.to_lowercase_string sort in
+let print ppf { sort = _; scrutinee; arms; } =
   fprintf ppf
-    "@[<hov 1>(@<0>%sswitch_%s@<0>%s %a@ @[<v 0>%a@])@]"
-    sort
+    "@[<hov 1>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
     (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
     Simple.print scrutinee

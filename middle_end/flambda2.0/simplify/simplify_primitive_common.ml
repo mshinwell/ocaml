@@ -43,11 +43,17 @@ let apply_cse dacc ~original_prim ~min_occurrence_kind =
   match Flambda_primitive.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
+Format.eprintf "Trying CSE on %a in@ %a@ ..." Flambda_primitive.print original_prim
+  DA.print dacc;
     let typing_env = DE.typing_env (DA.denv dacc) in
     match TE.find_cse typing_env with_fixed_value with
-    | None -> None
+    | None ->
+Format.eprintf "failure\n%!";
+      None
     | Some simple ->
-      let aliases =
-        TE.aliases_of_simple typing_env ~min_occurrence_kind simple
-      in
-      Simple.Set.get_singleton aliases
+Format.eprintf "success (=%a)\n%!" Simple.print simple;
+      match TE.get_canonical_simple typing_env ~min_occurrence_kind simple with
+      | Bottom | Ok None -> None
+      | Ok (Some simple) ->
+Format.eprintf "returning =%a\n%!" Simple.print simple;
+        Some simple

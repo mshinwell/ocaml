@@ -148,11 +148,14 @@ let print_with_cache ~cache ppf
         "@[<hov 1>(\
             @[<hov 1>(prev_levels@ %a)@]@ \
             @[<hov 1>(current_level@ %a)@]@ \
-            @[<hov 1>(defined_symbols@ %a)@]\
+            @[<hov 1>(defined_symbols@ %a)@]@ \
+            @[<hov 1>(aliases@ %a)@]\
             )@]"
         (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
         (One_level.print_with_cache ~cache) current_level
-        (Symbol.Map.print K.print) defined_symbols)
+        (Symbol.Map.print K.print) defined_symbols
+        Aliases.print
+        (Cached.aliases (One_level.just_after_level current_level)))
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
