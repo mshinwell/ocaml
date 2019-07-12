@@ -66,27 +66,21 @@ val add_env_extension
   -> Typing_env_extension.t
   -> t
 
-(* CR mshinwell: Document that the returned type isn't necessarily what
-   [find] would return; this one (if the result is non-bottom) always
-   returns an [Alias]. *)
 val get_canonical_simple
    : t
   -> Simple.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t Or_bottom.t * Flambda_types.t
+  -> Simple.t Or_bottom.t
 
-val resolve_ty
+val expand_head_ty
    : t
   -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
   -> apply_rec_info:('a -> Rec_info.t -> 'a Or_bottom.t)
   -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
   -> 'a Flambda_types.ty
-  -> 'a Flambda_types.unknown_or_join * (Simple.t option)
+  -> 'a Flambda_types.unknown_or_join
 
-val resolve_type
-   : t
-  -> Flambda_types.t
-  -> Simple.t option * Flambda_types.resolved
+val expand_head : t -> Flambda_types.t -> Flambda_types.resolved
 
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
 
