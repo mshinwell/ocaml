@@ -629,7 +629,7 @@ let find_name_occurrence_kind_of_simple t simple =
   | Name name -> find_name_occurrence_kind t name
 
 let get_canonical_simple0 t simple ~min_occurrence_kind
-      : Simple.t Or_bottom.t * Flambda_types.t * Rec_info.t option =
+      : Simple.t Or_bottom.t * Rec_info.t option =
   let newer_rec_info = Simple.rec_info simple in
   let occurrence_kind = find_name_occurrence_kind_of_simple t simple in
   let alias = alias_of_simple t simple occurrence_kind in
@@ -647,31 +647,28 @@ let get_canonical_simple0 t simple ~min_occurrence_kind
     | Some alias -> Alias.kind alias, Alias.simple alias
   in
   match Simple.merge_rec_info simple ~newer_rec_info with
-  | None -> Bottom, Flambda_type0_core.bottom kind, newer_rec_info
+  | None -> Bottom, newer_rec_info
   | Some simple ->
     let rec_info = Simple.rec_info simple in
     match Simple.descr simple with
-    | Const _ | Discriminant _ ->
-      Ok simple, Flambda_type0_core.alias_type_of kind simple, rec_info
+    | Const _ | Discriminant _ -> Ok simple, rec_info
     | Name name ->
       let ty = find t name in
-      if Flambda_type0_core.is_obviously_bottom ty then
-        Bottom, Flambda_type0_core.bottom kind, rec_info
-      else
-        Ok simple, Flambda_type0_core.alias_type_of kind simple, rec_info
+      if Flambda_type0_core.is_obviously_bottom ty then Bottom, rec_info
+      else Ok simple, rec_info
 
 let get_canonical_simple t simple ~min_occurrence_kind =
-  let simple, typ, _rec_info =
+  let simple, _rec_info =
     get_canonical_simple0 t simple ~min_occurrence_kind
   in
-  simple, typ
+  simple
 
-let resolve_ty (type a) t
+let expand_head_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
       ~(apply_rec_info : a -> Rec_info.t -> a Or_bottom.t)
       ~print_ty
       (ty : a Flambda_types.ty)
-      : a Flambda_types.unknown_or_join * (Simple.t option) =
+      : a Flambda_types.unknown_or_join =
   ignore print_ty;  (* CR mshinwell: remove *)
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
@@ -680,22 +677,16 @@ let resolve_ty (type a) t
       Misc.fatal_errorf "Expected [No_alias]:@ %a" Type_printers.print typ
   in
   match ty with
-  | No_alias unknown_or_join -> unknown_or_join, None
+  | No_alias unknown_or_join -> unknown_or_join
   | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
   | Equals simple ->
-    let orig_simple = simple in
-    let min_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
-    match get_canonical_simple0 t orig_simple ~min_occurrence_kind with
-    | Bottom, _typ, _rec_info -> Bottom, None
-    | Ok simple, _typ, rec_info ->
-    (* CR mshinwell: [get_canonical_simple] etc. may be misnamed, since they
-       don't necessarily return the canonical one---the minimum name
-       occurrence kind might prohibit that. *)
-    (* XXX Should this function be taking the min occurrence kind? *)
-    match get_canonical_simple0 t orig_simple ~min_occurrence_kind:Name_occurrence_kind.min with
-    | Bottom, _typ, _rec_info -> Bottom, None
-    | Ok canonical_simple, _typ, _rec_info ->
-      match Simple.descr canonical_simple with
+    let min_occurrence_kind = Name_occurrence_kind.min in
+    (* We must get the canonical simple with the least occurrence kind,
+       since that's the one that is guaranteed not to have an [Equals] type. *)
+    match get_canonical_simple0 t simple ~min_occurrence_kind with
+    | Bottom, _rec_info -> Bottom
+    | Ok simple, rec_info ->
+      match Simple.descr simple with
       (* CR mshinwell: Could check kinds against [S.kind] here. *)
       | Const const ->
         let typ =
@@ -713,28 +704,27 @@ let resolve_ty (type a) t
           | Naked_nativeint i ->
             Flambda_type0_core.this_naked_nativeint_without_alias i
         in
-        force_to_unknown_or_join typ, Some simple
+        force_to_unknown_or_join typ
       | Discriminant discr ->
         let typ =
           Flambda_type0_core.this_discriminant_without_alias discr
         in
-        force_to_unknown_or_join typ, Some simple
+        force_to_unknown_or_join typ
       | Name name ->
         let ty = force_to_kind (find t name) in
         match ty with
-        | No_alias Bottom -> Bottom, Some simple
-        | No_alias Unknown -> Unknown, Some simple
+        | No_alias Bottom -> Bottom
+        | No_alias Unknown -> Unknown
         | No_alias (Ok of_kind_foo) ->
           begin match rec_info with
-          | None -> Ok of_kind_foo, Some simple
+          | None -> Ok of_kind_foo
           | Some rec_info ->
+            (* CR mshinwell: check rec_info handling is correct, after recent
+               changes in this area *)
             (* [simple] already has [rec_info] applied to it (see
                [get_canonical_simple], above).  However we also need to apply it
                to the expanded head of the type. *)
-            begin match apply_rec_info of_kind_foo rec_info with
-            | Ok of_kind_foo -> Ok of_kind_foo, Some simple
-            | Bottom -> Bottom, Some simple
-            end
+            apply_rec_info of_kind_foo rec_info
           end
         | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
         | Equals _ ->
@@ -746,57 +736,35 @@ let resolve_ty (type a) t
             print t;
           invariant_should_fail t
 
-let resolve_type t (ty : Flambda_types.t)
-      : Simple.t option * Flambda_types.resolved =
+let expand_head t (ty : Flambda_types.t) : Flambda_types.resolved =
   match ty with
   | Value ty_value ->
-    let unknown_or_join, canonical_simple =
-      resolve_ty t
+    let unknown_or_join =
+      expand_head_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_value
         ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
-    begin match Option.map Simple.descr canonical_simple with
-    (* CR mshinwell: add more kind checking & improve error messages *)
-    | Some (Const const) -> canonical_simple, Const const
-    | Some (Discriminant _) -> Misc.fatal_error "Kind error"
-    | Some (Name _)
-    | None -> canonical_simple, Resolved (Resolved_value unknown_or_join)
-    end
+    Resolved (Resolved_value unknown_or_join)
   | Naked_number (ty_naked_number, kind) ->
-    let unknown_or_join, canonical_simple =
-      resolve_ty t
+    let unknown_or_join =
+      expand_head_ty t
         ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
         ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
         ty_naked_number
     in
-    begin match Option.map Simple.descr canonical_simple with
-    | Some (Const ((Naked_immediate _ | Naked_float _ | Naked_int32 _
-        | Naked_int64 _ | Naked_nativeint _) as const)) ->
-      canonical_simple, Const const
-    | Some (Const (Tagged_immediate _))
-    | Some (Discriminant _) -> Misc.fatal_error "Kind error"
-    | Some (Name _)
-    | None ->
-      canonical_simple, Resolved (Resolved_naked_number (unknown_or_join, kind))
-    end
+    Resolved (Resolved_naked_number (unknown_or_join, kind))
   | Fabricated ty_fabricated ->
-    let unknown_or_join, canonical_simple =
-      resolve_ty t
+    let unknown_or_join =
+      expand_head_ty t
         ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
         ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
         ty_fabricated
     in
-    begin match Option.map Simple.descr canonical_simple with
-    | Some (Const _) -> Misc.fatal_error "Kind error"
-    | Some (Discriminant discr) -> canonical_simple, Discriminant discr
-    | Some (Name _)
-    | None ->
-      canonical_simple, Resolved (Resolved_fabricated unknown_or_join)
-    end
+    Resolved (Resolved_fabricated unknown_or_join)
 
 let aliases_of_simple_allowable_in_types t simple =
   let name_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
