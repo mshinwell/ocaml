@@ -889,7 +889,9 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
      For the CSE equations we need to allow lower occurrence kinds than for
      the binding, as the equations may now refer to e.g. [In_types] when the
      binding is [Normal].  This is fine so long as the RHS of the CSE equation
-     respects the current occurrence kind. *)
+     respects the current occurrence kind.
+
+     Use meet + reify? *)
   match S.simplify_simple dacc arg1 ~min_occurrence_kind:Name_occurrence_kind.min with
   | Bottom, ty -> invalid ty
   | Ok arg1, _arg1_ty ->

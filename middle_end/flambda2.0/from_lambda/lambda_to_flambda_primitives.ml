@@ -692,6 +692,21 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
+  | Parraysets Pgenarray, [array; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Block_set (Array (Value Anything), Assignment),
+          array, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Array_length (Array (Value Anything)), array)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
 
 
   (* | Pdivbint { size; is_safe = Safe }, [arg1; arg2] -> *)
@@ -817,8 +832,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pbytessets
     | Parrayrefu _
     | Parraysetu _
-    | Parrayrefs _
     | Parraysets _
+    | Parrayrefs _
     | Pbintcomp _
     | Pbigarrayref _
     | Pbigarrayset _

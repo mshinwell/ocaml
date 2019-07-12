@@ -7,10 +7,12 @@ let foo () = A
 let foo () = A
 *)
 
+external ( + ) : int -> int -> int = "%addint"
 external array_get: 'a array -> int -> 'a = "%array_safe_get"
+external array_set: 'a array -> int -> 'a -> unit = "%array_safe_set"
 
-let foo arr i =
-  array_get arr i, array_get arr i
+let foo arr f i =
+  array_set arr i (f (array_get arr i))
 
 (*
 let bar x =
