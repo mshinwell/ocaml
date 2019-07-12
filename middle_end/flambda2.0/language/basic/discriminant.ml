@@ -116,4 +116,5 @@ include Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
+let all_bools_set = Set.of_list [bool_false; bool_true]
 let all_is_int_set = Set.of_list [is_int_false; is_int_true]

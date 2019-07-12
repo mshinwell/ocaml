@@ -156,6 +156,8 @@ and of_kind_naked_nativeint = Flambda_kind.naked_nativeint of_kind_naked_number
 
 (** Types of kind [Fabricated].  No source-level values are of this kind. *)
 and of_kind_fabricated =
+  (* CR mshinwell: Work out how to do the dependent-discriminant thing
+     properly. *)
   | Discriminants of Discriminants.t
     (** A discriminant is either:
         - a block tag, as returned by the [Get_tag] primitive; or

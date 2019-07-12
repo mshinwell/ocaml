@@ -62,6 +62,13 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     if is_obviously_bottom meet_ty then Bottom
     else Ok env_extension
 
+  let meet env t1 t2 : _ Or_bottom.t =
+    let meet_env = Meet_env.create env in
+    (* CR mshinwell: We shouldn't need to do this Or_bottom.t recovery *)
+    let meet_ty, env_extension = meet meet_env t1 t2 in
+    if is_obviously_bottom meet_ty then Bottom
+    else Ok (meet_ty, env_extension)
+
   let erase_aliases env ~bound_name ~allowed t =
     Type_erase_aliases.erase_aliases env ~bound_name
       ~already_seen:Simple.Set.empty ~allowed t

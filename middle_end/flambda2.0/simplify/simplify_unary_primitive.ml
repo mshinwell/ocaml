@@ -98,18 +98,24 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
 
 let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let ty = T.discriminant_from_type Is_int scrutinee_ty in
-  let env_extension = TEE.one_equation name ty in
-  Reachable.reachable original_term, env_extension, dacc
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  let proof = T.prove_is_int typing_env scrutinee_ty in
+  let proved discriminant =
+    let ty = T.this_discriminant discriminant in
+    let env_extension = TEE.one_equation name ty in
+    Reachable.reachable original_term, env_extension, dacc
+  in
+  match proof with
+  | Proved true -> proved Discriminant.bool_true
+  | Proved false -> proved Discriminant.bool_false
+  | Unknown ->
+    let ty = T.these_discriminants Discriminant.all_bools_set in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Invalid ->
+    let ty = T.bottom K.fabricated in
+    Reachable.invalid (), TEE.one_equation name ty, dacc
 
 let simplify_get_tag dacc ~original_term ~block_ty ~result_var =
-  let name = Name.var (Var_in_binding_pos.var result_var) in
-  let ty = T.discriminant_from_type Tag block_ty in
-  let env_extension = TEE.one_equation name ty in
-  Reachable.reachable original_term, env_extension, dacc
-
-let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
-      ~block_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let typing_env = DE.typing_env (DA.denv dacc) in
   let type_for_tags tags_to_sizes =
@@ -123,75 +129,15 @@ let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
     T.these_discriminants discrs
   in
   match T.prove_tags_and_sizes typing_env block_ty with
-  | Proved inferred_tags ->
-    let tags =
-      Tag.Map.merge (fun tag claimed inferred ->
-          (* CR mshinwell: Maybe one or both of these fatal error cases
-             should actually just be [Invalid]. *)
-          match claimed, inferred with
-          | None, None
-          | Some _, None -> None
-          | Some claimed_size, Some inferred_size ->
-            if Targetint.OCaml.equal claimed_size inferred_size then
-              Some claimed_size
-            else
-              Misc.fatal_errorf "Binding of [Get_tag] to %a: primitive \
-                  mentions tag %a with size %a, but inferred type has \
-                  size %a:@ %a"
-                Var_in_binding_pos.print result_var
-                Tag.print tag
-                Targetint.OCaml.print claimed_size
-                Targetint.OCaml.print inferred_size
-                T.print block_ty
-          | None, Some size ->
-            Misc.fatal_errorf "Binding of [Get_tag] to %a: primitive does \
-                not mention tag %a / size %a combination, but inferred \
-                type does:@ %a"
-              Var_in_binding_pos.print result_var
-              Tag.print tag
-              Targetint.OCaml.print size
-              T.print block_ty)
-        claimed_tags
-        inferred_tags
-    in
+  | Proved tags ->
     let ty = type_for_tags tags in
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
   | Unknown ->
-    let ty = type_for_tags claimed_tags in
+    let ty = T.unknown K.fabricated in
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
   | Invalid ->
     let ty = T.bottom K.fabricated in
     Reachable.invalid (), TEE.one_equation name ty, dacc
-
-let simplify_discriminant_of_int dacc ~original_term ~int_ty ~result_var =
-  let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  let invalid () =
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
-  in
-  let proof = T.prove_equals_tagged_immediates typing_env int_ty in
-  match proof with
-  | Proved imms ->
-    let discrs =
-      Immediate.Set.fold (fun imm discrs ->
-          let as_int = Immediate.to_targetint imm in
-          match Discriminant.create as_int with
-          | Some discr -> Discriminant.Set.add discr discrs
-          | None -> discrs)
-        imms
-        Discriminant.Set.empty
-    in
-    if Discriminant.Set.cardinal discrs <> Immediate.Set.cardinal imms then
-      invalid ()
-    else
-      let ty = T.these_discriminants discrs in
-      let env_extension = TEE.one_equation name ty in
-      Reachable.reachable original_term, env_extension, dacc
-  | Unknown ->
-    let ty = T.unknown K.fabricated in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid -> invalid ()
 
 let simplify_array_length dacc ~original_term ~array_ty ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
@@ -258,12 +204,8 @@ Format.eprintf "simplify_unary_primitive: type of arg %a:@ %a\n%!"
           boxable_number_kind ~result_var
       | Is_int ->
         simplify_is_int dacc ~original_term ~scrutinee_ty:arg_ty ~result_var
-      | Get_tag { tags_to_sizes; } ->
-        simplify_get_tag dacc ~original_term ~tags_to_sizes ~block_ty:arg_ty
-          ~result_var
-      | Discriminant_of_int ->
-        simplify_discriminant_of_int dacc ~original_term ~int_ty:arg_ty
-          ~result_var
+      | Get_tag ->
+        simplify_get_tag dacc ~original_term ~block_ty:arg_ty ~result_var
       | Array_length (Array (Value _)) ->
         simplify_array_length dacc ~original_term ~array_ty:arg_ty ~result_var
       | _ ->

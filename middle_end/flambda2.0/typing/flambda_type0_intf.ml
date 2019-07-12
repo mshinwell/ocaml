@@ -144,6 +144,8 @@ module type S = sig
     -> result_kind:Flambda_kind.t
     -> Typing_env_extension.t Or_bottom.t
 
+  val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+
   val join : Typing_env.t -> t -> t -> t
 
   (* CR mshinwell: Substitute out this alias once it's finalised *)
