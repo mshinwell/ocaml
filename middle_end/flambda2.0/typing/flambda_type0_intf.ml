@@ -114,9 +114,15 @@ module type S = sig
 
     val get_canonical_simple
        : t
+      -> ?min_occurrence_kind:Name_occurrence_kind.t
       -> Simple.t
-      -> min_occurrence_kind:Name_occurrence_kind.t
-      -> Simple.t Or_bottom.t * flambda_type
+      -> Simple.t option Or_bottom.t
+
+    val get_canonical_simple_with_kind
+       : t
+      -> ?min_occurrence_kind:Name_occurrence_kind.t
+      -> Simple.t
+      -> Simple.t option Or_bottom.t * Flambda_kind.t
 
     val cut
        : t

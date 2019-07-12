@@ -68,9 +68,27 @@ val add_env_extension
 
 val get_canonical_simple
    : t
+  -> ?min_occurrence_kind:Name_occurrence_kind.t
   -> Simple.t
-  -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t Or_bottom.t
+  -> Simple.t option Or_bottom.t
+
+val get_canonical_simple_with_kind
+   : t
+  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> Simple.t
+  -> Simple.t option Or_bottom.t * Flambda_kind.t
+
+val get_alias_ty_then_canonical_simple
+   : t
+  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> _ Flambda_types.ty
+  -> Simple.t option Or_bottom.t
+
+val get_alias_then_canonical_simple
+   : t
+  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> Flambda_types.t
+  -> Simple.t option Or_bottom.t
 
 val expand_head_ty
    : t

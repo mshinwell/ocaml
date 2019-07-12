@@ -50,6 +50,27 @@ struct
       Simple.Set.add simple
         (Typing_env.aliases_of_simple_allowable_in_types env simple)
 
+  let get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2 =
+    let canonical_simple1 =
+      Typing_env.get_alias_ty_then_canonical_simple typing_env or_alias1
+    in
+    let unknown_or_join1 =
+      Typing_env.expand_head_ty typing_env
+        ~force_to_kind:S.force_to_kind ~print_ty
+        ~apply_rec_info:S.apply_rec_info
+        or_alias1
+    in
+    let canonical_simple2 =
+      Typing_env.get_alias_ty_then_canonical_simple typing_env or_alias2
+    in
+    let unknown_or_join2 =
+      Typing_env.expand_head_ty typing_env
+        ~force_to_kind:S.force_to_kind
+        ~apply_rec_info:S.apply_rec_info
+        ~print_ty or_alias2
+    in
+    canonical_simple1, unknown_or_join1, canonical_simple2, unknown_or_join2
+
   let meet_on_unknown_or_join env ~meet_or_join_ty
         (ou1 : S.of_kind_foo T.unknown_or_join)
         (ou2 : S.of_kind_foo T.unknown_or_join)
@@ -87,30 +108,24 @@ struct
   let rec meet_ty env
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty * TEE.t =
-    let unknown_or_join1, canonical_simple1 =
-      Typing_env.resolve_ty (Meet_env.env env)
-        ~force_to_kind:S.force_to_kind ~print_ty
-        ~apply_rec_info:S.apply_rec_info
-        or_alias1
-    in
-    let unknown_or_join2, canonical_simple2 =
-      Typing_env.resolve_ty (Meet_env.env env)
-        ~force_to_kind:S.force_to_kind
-        ~apply_rec_info:S.apply_rec_info
-        ~print_ty or_alias2
+    let canonical_simple1, unknown_or_join1,
+        canonical_simple2, unknown_or_join2 =
+      let typing_env = Meet_env.env env in
+      get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
     in
     match canonical_simple1, canonical_simple2 with
-    | None, None ->
+    | Bottom, _ | _, Bottom -> No_alias Bottom, TEE.empty ()
+    | Ok None, Ok None ->
       let unknown_or_join, env_extension =
         meet_on_unknown_or_join env ~meet_or_join_ty
           unknown_or_join1 unknown_or_join2
       in
       No_alias unknown_or_join, env_extension
-    | Some simple1, Some simple2
+    | Ok (Some simple1), Ok (Some simple2)
         when Simple.equal simple1 simple2
                || Meet_env.already_meeting env simple1 simple2 ->
       Equals simple1, TEE.empty ()
-    | Some simple1, Some simple2 ->
+    | Ok (Some simple1), Ok (Some simple2) ->
 (*
 Format.eprintf "Meeting simples: %a and %a\n%!"
   Simple.print simple1
@@ -145,7 +160,7 @@ Format.eprintf "TEE from meeting simples (2): %a\n%!"
 Format.eprintf "Returning =%a\n%!" Simple.print simple1;
 *)
       Equals simple1, env_extension
-    | Some simple, None | None, Some simple ->
+    | Ok (Some simple), Ok None | Ok None, Ok (Some simple) ->
       let unknown_or_join, env_extension =
         meet_on_unknown_or_join env ~meet_or_join_ty
           unknown_or_join1 unknown_or_join2
@@ -156,35 +171,29 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
       in
       Equals simple, env_extension
 
-  and join_ty ?bound_name env
+  and join_ty ?bound_name typing_env
         (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
         : S.of_kind_foo T.ty =
-    let unknown_or_join1, canonical_simple1 =
-      Typing_env.resolve_ty env
-        ~force_to_kind:S.force_to_kind
-        ~apply_rec_info:S.apply_rec_info
-        ~print_ty
-        or_alias1
+    let canonical_simple1, unknown_or_join1,
+        canonical_simple2, unknown_or_join2 =
+      get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
     in
-    let unknown_or_join2, canonical_simple2 =
-      Typing_env.resolve_ty env
-        ~force_to_kind:S.force_to_kind
-        ~apply_rec_info:S.apply_rec_info
-        ~print_ty
-        or_alias2
-    in
-    (* CR mshinwell: Think further about this "bound name" stuff. *)
-    let shared_aliases_not_aliasing_bound_name =
-      Simple.Set.diff
-        (Simple.Set.inter (all_aliases_of env canonical_simple1)
-          (all_aliases_of env canonical_simple2))
-        (all_aliases_of env (Option.map Simple.name bound_name))
-    in
-    match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
-    | Some simple -> Equals simple
-    | None ->
-      No_alias (join_on_unknown_or_join env ~meet_or_join_ty
-        unknown_or_join1 unknown_or_join2)
+    match canonical_simple1, canonical_simple2 with
+    | Bottom, _ -> or_alias2
+    | _, Bottom -> or_alias1
+    | Ok canonical_simple1, Ok canonical_simple2 ->
+      (* CR mshinwell: Think further about this "bound name" stuff. *)
+      let shared_aliases_not_aliasing_bound_name =
+        Simple.Set.diff
+          (Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
+            (all_aliases_of typing_env canonical_simple2))
+          (all_aliases_of typing_env (Option.map Simple.name bound_name))
+      in
+      match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
+      | Some simple -> Equals simple
+      | None ->
+        No_alias (join_on_unknown_or_join typing_env ~meet_or_join_ty
+          unknown_or_join1 unknown_or_join2)
 
   and meet_or_join_ty ?bound_name env
         (or_alias1 : S.of_kind_foo T.ty)

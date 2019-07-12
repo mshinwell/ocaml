@@ -603,6 +603,11 @@ let get_alias t =
   | Fabricated (Equals simple) -> Some simple
   | Fabricated _ -> None
 
+let get_alias_ty ty =
+  match ty with
+  | Equals simple -> Some simple
+  | _ -> None
+
 let apply_rec_info_of_kind_naked_number (type k)
       (of_kind_naked_number : k Flambda_types.of_kind_naked_number) rec_info
       : k Flambda_types.of_kind_naked_number Or_bottom.t =

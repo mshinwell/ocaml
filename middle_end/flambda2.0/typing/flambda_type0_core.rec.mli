@@ -19,6 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val get_alias : Flambda_types.t -> Simple.t option
+val get_alias_ty : _ Flambda_types.ty -> Simple.t option
 
 val is_obviously_bottom : Flambda_types.t -> bool
 

@@ -21,13 +21,33 @@ module DE = Simplify_env_and_result.Downwards_env
 module T = Flambda_type
 module TE = T.Typing_env
 
-let simplify_simple dacc simple ~min_occurrence_kind =
+let simplify_simple dacc simple ~min_occurrence_kind : _ Or_bottom.t * _ =
   let typing_env = DE.typing_env (DA.denv dacc) in
-  TE.get_canonical_simple typing_env simple ~min_occurrence_kind
+  match
+    TE.get_canonical_simple_with_kind typing_env simple ~min_occurrence_kind
+  with
+  | Bottom, kind -> Bottom, T.bottom kind
+  | Ok (Some simple), kind -> Ok simple, T.alias_type_of kind simple
+  | Ok None, _kind ->
+    Misc.fatal_errorf "No canonical [Simple] for %a exists at the \
+        requested occurrence kind (%a).  Downwards accumulator:@ %a"
+      Simple.print simple
+      Name_occurrence_kind.print min_occurrence_kind
+      DA.print dacc
 
 let simplify_simples dacc simples ~min_occurrence_kind =
+  let typing_env = DE.typing_env (DA.denv dacc) in
   Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
-      match simplify_simple dacc simple ~min_occurrence_kind with
-      | Ok simple, ty -> Ok (simple, ty)
-      | Bottom, _ty -> Bottom)
+      match
+        TE.get_canonical_simple_with_kind typing_env simple
+          ~min_occurrence_kind
+      with
+      | Bottom, _kind -> Bottom
+      | Ok (Some simple), kind -> Ok (simple, T.alias_type_of kind simple)
+      | Ok None, _kind ->
+        Misc.fatal_errorf "No canonical [Simple] for %a exists at the \
+            requested occurrence kind (%a).  Downwards accumulator:@ %a"
+          Simple.print simple
+          Name_occurrence_kind.print min_occurrence_kind
+          DA.print dacc)
     simples)

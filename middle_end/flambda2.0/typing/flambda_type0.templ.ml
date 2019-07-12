@@ -71,7 +71,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       ~already_seen:Simple.Set.empty ~allowed ty_value
 
   let arity_of_list ts =
-    Flambda_arity.create (List.map Flambda_type0_core.kind ts)
+    Flambda_arity.create (List.map kind ts)
 
   type typing_env = Typing_env.t
   type typing_env_extension = Typing_env_extension.t
@@ -90,7 +90,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     Naked_number (ty_naked_number, kind)
 
   let is_bottom env t =
-    match snd (Typing_env.resolve_type env t) with
+    match Typing_env.expand_head env t with
     | Resolved (Resolved_value Bottom)
     | Resolved (Resolved_naked_number (Bottom, _))
     | Resolved (Resolved_fabricated Bottom) -> true
@@ -115,6 +115,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       Misc.fatal_errorf "Type %a is not of kind value"
         Type_printers.print t
     end;
+    (* XXX This probably shouldn't be using [get_alias] *)
     match get_alias t with
     | None -> Unknown
     | Some simple ->
@@ -131,17 +132,9 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
           Typing_env.get_canonical_simple env simple
             ~min_occurrence_kind:Name_occurrence_kind.normal
         with
-        | Bottom, _ -> Invalid
-        | Ok simple, ty ->
-          let kind = Flambda_type0_core.kind ty in
-          if not (K.equal kind K.value) then begin
-            Misc.fatal_errorf "Canonical [Simple] (%a) has a kind (%a) \
-                different from that returned by [kind] (%a):@ %a"
-              Simple.print simple
-              K.print kind
-              K.print original_kind
-              Type_printers.print t
-          end;
+        | Bottom -> Invalid
+        | Ok None -> Unknown
+        | Ok (Some simple) ->
           (* CR mshinwell: Instead, get all aliases and find a Symbol,
              to avoid relying on the fact that if there is a Symbol alias then
              it will be canonical *)
@@ -150,6 +143,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
           | Name (Var _) -> Unknown
           | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
           | Const _ | Discriminant _ ->
+            let kind = kind t in
             Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
                 doesn't match the kind of the returned [Simple] %a:@ %a"
               K.print kind
@@ -158,7 +152,7 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
-    match snd (Typing_env.resolve_type env t) with
+    match Typing_env.expand_head env t with
     | Const _ | Discriminant _ -> Invalid
     | Resolved resolved ->
       match resolved with
@@ -181,12 +175,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
-    | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+    match Typing_env.expand_head env t with
+    | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
+    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
@@ -220,12 +214,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_float]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Naked_float f) -> Proved (Float.Set.singleton f)
-    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_int32 _
+    match Typing_env.expand_head env t with
+    | Const (Naked_float f) -> Proved (Float.Set.singleton f)
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_naked_number (Ok (Float fs), Naked_float) -> Proved fs
       | Resolved_naked_number (Unknown, Naked_float) -> Unknown
@@ -237,12 +231,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int32]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
-    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+    match Typing_env.expand_head env t with
+    | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int64 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_naked_number (Ok (Int32 is), Naked_int32) -> Proved is
       | Resolved_naked_number (Unknown, Naked_int32) -> Unknown
@@ -254,12 +248,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
-    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+    match Typing_env.expand_head env t with
+    | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_naked_number (Ok (Int64 is), Naked_int64) -> Proved is
       | Resolved_naked_number (Unknown, Naked_int64) -> Unknown
@@ -271,12 +265,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | _, Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
+    match Typing_env.expand_head env t with
+    | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_naked_number (Ok (Nativeint is), Naked_nativeint) -> Proved is
       | Resolved_naked_number (Unknown, Naked_nativeint) -> Unknown
@@ -288,12 +282,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Tagged_immediate _) -> Proved true
-    | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+    match Typing_env.expand_head env t with
+    | Const (Tagged_immediate _) -> Proved true
+    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
@@ -317,12 +311,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const (Tagged_immediate _) -> Unknown
-    | _, Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+    match Typing_env.expand_head env t with
+    | Const (Tagged_immediate _) -> Unknown
+    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
-    | _, Discriminant _ -> wrong_kind ()
-    | _, Resolved resolved ->
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
       match resolved with
       | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.immediates with
@@ -408,10 +402,10 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Fabricated]:@ %a" print t
     in
-    match Typing_env.resolve_type env t with
-    | _, Const _ -> wrong_kind ()
-    | _, Discriminant discr -> Proved (Discriminant.Set.singleton discr)
-    | _, Resolved resolved ->
+    match Typing_env.expand_head env t with
+    | Const _ -> wrong_kind ()
+    | Discriminant discr -> Proved (Discriminant.Set.singleton discr)
+    | Resolved resolved ->
       match resolved with
       | Resolved_value _ | Resolved_naked_number _ -> wrong_kind ()
       | Resolved_fabricated (Ok (Discriminants discrs)) ->
@@ -440,10 +434,9 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
 (*
 Format.eprintf "reifying %a\n%!" Type_printers.print t;
 *)
-    match Typing_env.resolve_type env t with
-    | _, Const const -> Simple (Simple.const const)
-    | _, Discriminant discr -> Simple (Simple.discriminant discr)
-    | Some canonical_simple, _
+    match Typing_env.get_alias_then_canonical_simple env t with
+    | Bottom -> Invalid
+    | Ok (Some canonical_simple)
         when begin match Simple.descr canonical_simple with
         | Name (Symbol _) -> true
         | _ -> false
@@ -452,73 +445,78 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
          anything else, this could cause aliases between symbols, which are
          currently forbidden (every symbol has the same binding time). *)
       Cannot_reify
-    | canonical_simple, Resolved resolved ->
-      let try_canonical_simple () =
-        match canonical_simple with
-        | None -> Cannot_reify
-        | Some canonical_simple -> Simple canonical_simple
-      in
-      match resolved with
-      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
-        begin match blocks_imms.blocks, blocks_imms.immediates with
-        | Known blocks, Known imms ->
-          if Immediates.is_bottom imms then
-            begin match Blocks.get_singleton blocks with
-            | None -> try_canonical_simple ()
-            | Some ((tag, size), field_types) ->
-              assert (Targetint.OCaml.equal size
-                (Blocks.Int_indexed_product.width field_types));
-              (* CR mshinwell: Could recognise other things, e.g. tagged
-                 immediates and float arrays, supported by [Static_part]. *)
-              let field_types =
-                Blocks.Int_indexed_product.components field_types
-              in
-              let symbols_or_tagged_immediates =
-                List.filter_map
-                  (fun field_type : symbol_or_tagged_immediate option ->
-                    match
-                      prove_equals_to_symbol_or_tagged_immediate env field_type
-                    with
-                    | Proved (Symbol sym) -> Some (Symbol sym)
-                    | Proved (Tagged_immediate sym) ->
-                      Some (Tagged_immediate sym)
-                    (* CR mshinwell: [Invalid] should propagate up *)
-                    | Unknown | Invalid -> None)
-                  field_types
-              in
-              if List.compare_lengths field_types symbols_or_tagged_immediates
-                = 0
-              then
-                match Tag.Scannable.of_tag tag with
-                | Some tag ->
-                  Lift (Immutable_block (tag, symbols_or_tagged_immediates))
-                | None -> try_canonical_simple ()
-              else
-                try_canonical_simple ()
-            end
-          else
-            try_canonical_simple ()
-        | _, _ -> try_canonical_simple ()
-        end
-(*
-      | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
-        let unknown_or_join, _canonical_simple =
-          Typing_env.resolve_any_toplevel_alias_on_ty0 env
-            ~force_to_kind:Flambda_type0_core.force_to_kind_naked_int64
-            ~print_ty:Type_printers.print_ty_naked_int64
-            ty_naked_int64
-        in
-        begin match unknown_or_join with
-        | Ok (Int64 ints) ->
-          begin match Int64.Set.get_singleton ints with
-          | Some i -> Lift (Boxed_int64 i)
+    | Ok canonical_simple_opt ->
+      match Typing_env.expand_head env t with
+      | Const const -> Simple (Simple.const const)
+      | Discriminant discr -> Simple (Simple.discriminant discr)
+      | Resolved resolved ->
+        let try_canonical_simple () =
+          match canonical_simple_opt with
           | None -> Cannot_reify
+          | Some canonical_simple -> Simple canonical_simple
+        in
+        match resolved with
+        | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+          begin match blocks_imms.blocks, blocks_imms.immediates with
+          | Known blocks, Known imms ->
+            if Immediates.is_bottom imms then
+              begin match Blocks.get_singleton blocks with
+              | None -> try_canonical_simple ()
+              | Some ((tag, size), field_types) ->
+                assert (Targetint.OCaml.equal size
+                  (Blocks.Int_indexed_product.width field_types));
+                (* CR mshinwell: Could recognise other things, e.g. tagged
+                   immediates and float arrays, supported by [Static_part]. *)
+                let field_types =
+                  Blocks.Int_indexed_product.components field_types
+                in
+                let symbols_or_tagged_immediates =
+                  List.filter_map
+                    (fun field_type : symbol_or_tagged_immediate option ->
+                      match
+                        prove_equals_to_symbol_or_tagged_immediate env
+                          field_type
+                      with
+                      | Proved (Symbol sym) -> Some (Symbol sym)
+                      | Proved (Tagged_immediate sym) ->
+                        Some (Tagged_immediate sym)
+                      (* CR mshinwell: [Invalid] should propagate up *)
+                      | Unknown | Invalid -> None)
+                    field_types
+                in
+                if List.compare_lengths field_types symbols_or_tagged_immediates
+                  = 0
+                then
+                  match Tag.Scannable.of_tag tag with
+                  | Some tag ->
+                    Lift (Immutable_block (tag, symbols_or_tagged_immediates))
+                  | None -> try_canonical_simple ()
+                else
+                  try_canonical_simple ()
+              end
+            else
+              try_canonical_simple ()
+          | _, _ -> try_canonical_simple ()
           end
-        | _ -> Cannot_reify
-        end
-*)
-      | Resolved_value Bottom
-      | Resolved_naked_number (Bottom, _)
-      | Resolved_fabricated Bottom -> Invalid
-      | _ -> try_canonical_simple ()
+  (*
+        | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
+          let unknown_or_join, _canonical_simple =
+            Typing_env.resolve_any_toplevel_alias_on_ty0 env
+              ~force_to_kind:force_to_kind_naked_int64
+              ~print_ty:Type_printers.print_ty_naked_int64
+              ty_naked_int64
+          in
+          begin match unknown_or_join with
+          | Ok (Int64 ints) ->
+            begin match Int64.Set.get_singleton ints with
+            | Some i -> Lift (Boxed_int64 i)
+            | None -> Cannot_reify
+            end
+          | _ -> Cannot_reify
+          end
+  *)
+        | Resolved_value Bottom
+        | Resolved_naked_number (Bottom, _)
+        | Resolved_fabricated Bottom -> Invalid
+        | _ -> try_canonical_simple ()
 end
