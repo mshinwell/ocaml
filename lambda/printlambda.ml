@@ -265,7 +265,7 @@ let primitive ppf = function
        | Backend_type -> "backend_type" in
      fprintf ppf "sys.constant_%s" const_name
   | Pisint -> fprintf ppf "isint"
-  | Pgettag _ -> fprintf ppf "gettag"
+  | Pgettag -> fprintf ppf "gettag"
   | Pisout -> fprintf ppf "isout"
   | Pbintofint bi -> print_boxed_integer "of_int" ppf bi
   | Pintofbint bi -> print_boxed_integer "to_int" ppf bi
@@ -348,7 +348,6 @@ let primitive ppf = function
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
   | Popaque -> fprintf ppf "opaque"
-  | Pdiscriminant_of_int -> fprintf ppf "int_to_scrutinee"
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -413,7 +412,7 @@ let name_of_primitive = function
   | Parraysets _ -> "Parraysets"
   | Pctconst _ -> "Pctconst"
   | Pisint -> "Pisint"
-  | Pgettag _ -> "Pgettag"
+  | Pgettag -> "Pgettag"
   | Pisout -> "Pisout"
   | Pbintofint _ -> "Pbintofint"
   | Pintofbint _ -> "Pintofbint"
@@ -453,7 +452,6 @@ let name_of_primitive = function
   | Pbbswap _ -> "Pbbswap"
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
-  | Pdiscriminant_of_int -> "Pdiscriminant_of_int"
 
 let function_attribute ppf { inline; specialise; local; is_a_functor; stub } =
   if is_a_functor then

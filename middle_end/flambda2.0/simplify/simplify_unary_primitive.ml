@@ -98,22 +98,15 @@ let simplify_box_number dacc ~original_term ~naked_number_ty
 
 let simplify_is_int dacc ~original_term ~scrutinee_ty ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  let proof = T.prove_is_int typing_env scrutinee_ty in
-  let proved discriminant =
-    let ty = T.this_discriminant discriminant in
-    let env_extension = TEE.one_equation name ty in
-    Reachable.reachable original_term, env_extension, dacc
-  in
-  match proof with
-  | Proved true -> proved Discriminant.bool_true
-  | Proved false -> proved Discriminant.bool_false
-  | Unknown ->
-    let ty = T.these_discriminants Discriminant.all_bools_set in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid ->
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+  let ty = T.discriminant_from_type Is_int scrutinee_ty in
+  let env_extension = TEE.one_equation name ty in
+  Reachable.reachable original_term, env_extension, dacc
+
+let simplify_get_tag dacc ~original_term ~block_ty ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let ty = T.discriminant_from_type Tag block_ty in
+  let env_extension = TEE.one_equation name ty in
+  Reachable.reachable original_term, env_extension, dacc
 
 let simplify_get_tag dacc ~original_term ~tags_to_sizes:claimed_tags
       ~block_ty ~result_var =

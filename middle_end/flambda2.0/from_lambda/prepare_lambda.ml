@@ -20,6 +20,17 @@ module L = Lambda
 
 let stub_hack_prim_name = "*stub*"
 
+let sw_numblocks_int_switch = -1
+let sw_numblocks_tag_switch = -1
+let sw_numblocks_isint_switch = -1
+
+let classify_switch (switch : Lambda.lambda_switch) : Flambda.Switch.Sort.t =
+  if switch.sw_numblocks = sw_numblocks_int_switch then Int
+  else if switch.sw_numblocks = sw_numblocks_tag_switch then
+    Tag { tags_to_sizes = switch.sw_tags_to_sizes; }
+  else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
+  else Misc.fatal_errorf "Prepare_lambda.classify_switch %d" switch.sw_numblocks
+
 let add_default_argument_wrappers lam =
   (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
      as stubs.  Other possibilities:
@@ -545,11 +556,14 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let consts_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numconsts;
                 sw_consts = List.combine const_nums sw_consts;
-                sw_numblocks = -1;
+                sw_numblocks = sw_numblocks_int_switch;
                 sw_blocks = [];
                 sw_failaction;
+                sw_tags_to_sizes = Tag.Scannable.Map.empty;
               }
             in
+            (* CR mshinwell: Merge this file into Cps_conversion then delete
+               [sw_tags_to_sizes]. *)
             let tags_to_sizes =
               List.fold_left (fun tags_to_sizes
                         ({ sw_tag; sw_size; } : L.lambda_switch_block_key) ->
@@ -570,27 +584,27 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
-                (* XXX sw_numblocks is now irrelevant *)
-                sw_numblocks = -1;  (* indicates a tag switch *)
+                sw_numblocks = sw_numblocks_tag_switch;
                 sw_blocks = [];
                 sw_failaction;
+                sw_tags_to_sizes = tags_to_sizes;
               }
             in
             let consts_switch : L.lambda =
-              L.Lswitch (Lprim (Pdiscriminant_of_int, [scrutinee], Location.none),
-                consts_switch, loc)
+              L.Lswitch (scrutinee, consts_switch, loc)
             in
             let blocks_switch : L.lambda =
               L.Lswitch (
-               Lprim (Pgettag { tags_to_sizes; }, [scrutinee], Location.none),
+               Lprim (Pgettag, [scrutinee], Location.none),
                blocks_switch, loc)
             in
             let isint_switch : L.lambda_switch =
               { sw_numconsts = 2;
                 sw_consts = [0, blocks_switch; 1, consts_switch];
-                sw_numblocks = -1;
+                sw_numblocks = sw_numblocks_isint_switch;
                 sw_blocks = [];
                 sw_failaction = None;
+                sw_tags_to_sizes = Tag.Scannable.Map.empty;
               }
             in
             let switch =
@@ -622,13 +636,13 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
           let switch : Lambda.lambda_switch =
             { sw_numconsts = 2;
               sw_consts = [0, ifnot; 1, ifso];
-              sw_numblocks = -1;
+              sw_numblocks = sw_numblocks_int_switch;
               sw_blocks = [];
               sw_failaction = None;
+              sw_tags_to_sizes = Tag.Scannable.Map.empty;
             }
           in
-          k (L.Lswitch (Lprim (Pdiscriminant_of_int, [cond], Location.none),
-            switch, Location.none)))))
+          k (L.Lswitch (cond, switch, Location.none)))))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create_local "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k

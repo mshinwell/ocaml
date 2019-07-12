@@ -92,7 +92,7 @@ type primitive =
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
   (* Extract a block's tag *)
-  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -144,7 +144,6 @@ type primitive =
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
-  | Pdiscriminant_of_int
 
 and integer_comparison =
     Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -293,8 +292,7 @@ let primitive_can_raise = function
   | Pbbswap _
   | Pint_as_pointer
   | Popaque
-  | Pgettag _
-  | Pdiscriminant_of_int -> false
+  | Pgettag -> false
 
 type structured_constant =
     Const_base of constant
@@ -407,7 +405,9 @@ and lambda_switch =
     sw_consts: (int * lambda) list;
     sw_numblocks: int;
     sw_blocks: (lambda_switch_block_key * lambda) list;
-    sw_failaction : lambda option}
+    sw_failaction : lambda option;
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  }
 
 and lambda_switch_block_key =
   { sw_tag : int;
@@ -882,6 +882,7 @@ let shallow_map f = function
                  sw_numblocks = sw.sw_numblocks;
                  sw_blocks = List.map (fun (n, e) -> (n, f e)) sw.sw_blocks;
                  sw_failaction = Misc.may_map f sw.sw_failaction;
+                 sw_tags_to_sizes = sw.sw_tags_to_sizes;
                },
                loc)
   | Lstringswitch (e, sw, default, loc) ->

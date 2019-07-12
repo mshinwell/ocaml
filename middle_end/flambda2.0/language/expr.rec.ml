@@ -249,7 +249,7 @@ type switch_creation_result =
   | Have_deleted_comparison_and_branch
   | Nothing_deleted
 
-let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
+let create_switch0 sort ~scrutinee ~arms : t * switch_creation_result =
   if Discriminant.Map.cardinal arms < 1 then
     create_invalid (), Have_deleted_comparison_and_branch
   else
@@ -268,11 +268,11 @@ let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
       match Continuation.Set.get_singleton destinations with
       | Some k -> change_to_goto k
       | None ->
-        let switch = Switch.create ~scrutinee ~arms in
+        let switch = Switch.create sort ~scrutinee ~arms in
         create (Switch switch), Nothing_deleted
 
-let create_switch ~scrutinee ~arms =
-  let expr, _ = create_switch0 ~scrutinee ~arms in
+let create_switch sort ~scrutinee ~arms =
+  let expr, _ = create_switch0 sort ~scrutinee ~arms in
   expr
 
 let create_if_then_else ~scrutinee ~if_true ~if_false =
@@ -282,7 +282,7 @@ let create_if_then_else ~scrutinee ~if_true ~if_false =
       Discriminant.bool_false, if_false;
     ]
   in
-  create_switch ~scrutinee ~arms
+  create_switch Int ~scrutinee ~arms
 
 let bind ~bindings ~body =
   List.fold_left (fun expr (bound_var, defining_expr) ->

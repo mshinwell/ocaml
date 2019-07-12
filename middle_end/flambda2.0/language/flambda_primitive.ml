@@ -434,10 +434,7 @@ type unary_primitive =
       destination_mutability : mutable_or_immutable; 
     }
   | Is_int
-  | Get_tag of {
-      tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
-    }
-  | Discriminant_of_int
+  | Get_tag
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
   | String_length of string_or_bytes
@@ -470,8 +467,7 @@ let unary_primitive_eligible_for_cse p =
     } -> true
   | Duplicate_block _ -> false
   | Is_int
-  | Get_tag _
-  | Discriminant_of_int -> true
+  | Get_tag -> true
   | Array_length _ -> false
   | Bigarray_length _ -> false
   | String_length _ -> false
@@ -492,8 +488,7 @@ let compare_unary_primitive p1 p2 =
     match p with
     | Duplicate_block _ -> 0
     | Is_int -> 1
-    | Get_tag _ -> 2
-    | Discriminant_of_int -> 3
+    | Get_tag -> 2
     | Array_length _ -> 4
     | Bigarray_length _ -> 5
     | String_length _ -> 6
@@ -526,11 +521,7 @@ let compare_unary_primitive p1 p2 =
       else
         Stdlib.compare destination_mutability1 destination_mutability2
   | Is_int, Is_int -> 0
-  | Get_tag { tags_to_sizes = tags_to_sizes1; },
-      Get_tag { tags_to_sizes = tags_to_sizes2; } ->
-    Tag.Map.compare Targetint.OCaml.compare
-      tags_to_sizes1 tags_to_sizes2
-  | Discriminant_of_int, Discriminant_of_int -> 0
+  | Get_tag, Get_tag -> 0
   | String_length kind1, String_length kind2 ->
     Stdlib.compare kind1 kind2
   | Int_arith (kind1, op1), Int_arith (kind2, op2) ->
@@ -566,8 +557,7 @@ let compare_unary_primitive p1 p2 =
     Var_within_closure.compare var_within_closure1 var_within_closure2
   | (Duplicate_block _
     | Is_int
-    | Get_tag _
-    | Discriminant_of_int
+    | Get_tag
     | String_length _
     | Int_as_pointer
     | Opaque_identity
@@ -594,8 +584,7 @@ let print_unary_primitive ppf p =
       print_mutable_or_immutable source_mutability
       print_mutable_or_immutable destination_mutability
   | Is_int -> fprintf ppf "Is_int"
-  | Get_tag _ -> fprintf ppf "Get_tag"
-  | Discriminant_of_int -> fprintf ppf "Discriminant_of_int"
+  | Get_tag -> fprintf ppf "Get_tag"
   | String_length _ -> fprintf ppf "String_length"
   | Int_as_pointer -> fprintf ppf "Int_as_pointer"
   | Opaque_identity -> fprintf ppf "Opaque_identity"
@@ -629,8 +618,7 @@ let arg_kind_of_unary_primitive p =
   match p with
   | Duplicate_block _ -> K.value
   | Is_int -> K.value
-  | Get_tag _ -> K.value
-  | Discriminant_of_int -> K.value
+  | Get_tag -> K.value
   | String_length _ -> K.value
   | Int_as_pointer -> K.value
   | Opaque_identity -> K.value
@@ -651,8 +639,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Duplicate_block _ -> Singleton K.value
   | Is_int -> Singleton K.fabricated
   | String_length _ -> Singleton K.value
-  | Get_tag _ -> Singleton K.fabricated
-  | Discriminant_of_int -> Singleton K.fabricated
+  | Get_tag -> Singleton K.fabricated
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
@@ -684,10 +671,9 @@ let effects_and_coeffects_of_unary_primitive p =
       Only_generative_effects destination_mutability, Has_coeffects
     end
   | Is_int -> No_effects, No_coeffects
-  | Get_tag _ ->
+  | Get_tag ->
     (* [Obj.truncate] has now been removed. *)
     No_effects, No_coeffects
-  | Discriminant_of_int -> No_effects, No_coeffects
   | String_length _ -> reading_from_an_array_like_thing
   | Int_as_pointer
   | Opaque_identity -> Arbitrary_effects, Has_coeffects
@@ -711,9 +697,8 @@ let unary_classify_for_printing p =
   match p with
   | Duplicate_block _ -> Constructive
   | String_length _
-  | Get_tag _ -> Destructive
+  | Get_tag -> Destructive
   | Is_int
-  | Discriminant_of_int
   | Int_as_pointer
   | Opaque_identity
   | Int_arith _
@@ -1127,8 +1112,7 @@ let invariant env t =
       E.check_simple_is_bound_and_of_kind env closure K.value
     | Duplicate_block _, _
     | Is_int, _
-    | Get_tag _, _
-    | Discriminant_of_int, _
+    | Get_tag, _
     | Array_length _, _
     | Bigarray_length _, _
     | String_length _, _
@@ -1383,8 +1367,8 @@ module Eligible_for_cse = struct
   let create_is_int ~immediate_or_block =
     Unary (Is_int, Simple.name immediate_or_block)
 
-  let create_get_tag ~block ~tags_to_sizes =
-    Unary (Get_tag { tags_to_sizes }, Simple.name block)
+  let create_get_tag ~block =
+    Unary (Get_tag, Simple.name block)
 
   let eligible t =
     match create t with
