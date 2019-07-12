@@ -147,8 +147,7 @@ let convert (prim : Lambda.primitive) : Clambda_primitives.primitive =
   | Pidentity
   | Pgetglobal _
   | Psetglobal _
-  | Pgettag _
-  | Pdiscriminant_of_int
+  | Pgettag
     ->
       Misc.fatal_errorf "lambda primitive %a can't be converted to \
                          clambda primitive"

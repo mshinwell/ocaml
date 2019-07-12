@@ -348,20 +348,13 @@ let rec bind_rec ~backend exn_cont
               bind_rec_primitive ~backend exn_cont ~register_const_string
                 (Prim expr_primitive) dbg
                 (fun prim_result ->
-                  let cast_to_fabricated : Flambda_primitive.t =
-                    Unary (Discriminant_of_int, prim_result)
-                  in
-                  let condition_holds = Variable.create "condition_holds" in
-                  Expr.create_let
-                    (Var_in_binding_pos.create condition_holds
-                       Name_occurrence_kind.normal)
-                    (Named.create_prim cast_to_fabricated dbg)
-                    (Expr.create_switch
-                      ~scrutinee:(Simple.var condition_holds)
-                      ~arms:(Discriminant.Map.of_list [
-                        Discriminant.bool_true, condition_passed_cont;
-                        Discriminant.bool_false, failure_cont;
-                      ])))))
+                  (Expr.create_switch
+                    Is_int
+                    ~scrutinee:prim_result
+                    ~arms:(Discriminant.Map.of_list [
+                      Discriminant.is_int_true, condition_passed_cont;
+                      Discriminant.is_int_false, failure_cont;
+                    ])))))
         (Expr.create_apply_cont (Apply_cont.create primitive_cont ~args:[]))
         validity_conditions
     in
@@ -575,16 +568,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 
   | Pisint, [arg] ->
     Unary (Is_int, arg)
-  | Pgettag { tags_to_sizes }, [arg] ->
-    let tags_to_sizes =
-      Tag.Scannable.Map.fold (fun tag size ->
-          Tag.Map.add (Tag.Scannable.to_tag tag) size)
-        tags_to_sizes
-        Tag.Map.empty
-    in
-    Unary (Get_tag { tags_to_sizes }, arg)
-  | Pdiscriminant_of_int, [arg] ->
-    Unary (Discriminant_of_int, arg)
+  | Pgettag, [arg] ->
+    Unary (Get_tag, arg)
   | Pisout, [arg1; arg2] ->
     Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
             tagged_immediate_as_naked_nativeint arg1,
@@ -749,7 +734,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
     | Pintoffloat | Pfloatofint
     | Pnegfloat | Pabsfloat | Pstringlength
-    | Pbyteslength | Pisint | Pgettag _
+    | Pbyteslength | Pisint | Pgettag
     | Pbintofint _
     | Pintofbint _
     | Pnegbint _
@@ -759,7 +744,6 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pduparray _
     | Pfloatfield _
     | Pcvtbint _
-    | Pdiscriminant_of_int
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \

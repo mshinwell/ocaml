@@ -192,10 +192,7 @@ type unary_primitive =
     }
     (** [Duplicate_block] may not be used to change the tag of a block. *)
   | Is_int
-  | Get_tag of {
-      tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
-    }
-  | Discriminant_of_int
+  | Get_tag
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)
@@ -403,11 +400,7 @@ module Eligible_for_cse : sig
   val create : primitive_application -> t option
 
   val create_is_int : immediate_or_block:Name.t -> t
-
-  val create_get_tag
-     : block:Name.t
-    -> tags_to_sizes:Targetint.OCaml.t Tag.Map.t
-    -> t
+  val create_get_tag : block:Name.t -> t
 
   val eligible : primitive_application -> bool
 

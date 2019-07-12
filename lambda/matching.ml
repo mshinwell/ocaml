@@ -1546,7 +1546,9 @@ let inline_lazy_force_switch arg loc =
                               ap_args=[varg];
                               ap_inlined=Default_inline;
                               ap_specialised=Default_specialise}) ];
-               sw_failaction = Some varg }, loc ))))
+               sw_failaction = Some varg;
+               sw_tags_to_sizes = Tag.Scannable.Map.empty;
+             }, loc ))))
 
 let inline_lazy_force arg loc =
   if !Clflags.afl_instrument then
@@ -1954,7 +1956,7 @@ module SArg = struct
     Lswitch(arg,
             {sw_numconsts = Array.length cases ; sw_consts = !l ;
              sw_numblocks = 0 ; sw_blocks =  []  ;
-             sw_failaction = None}, loc)
+             sw_failaction = None; sw_tags_to_sizes = Tag.Scannable.Map.empty}, loc)
   let make_catch  = make_catch_delayed
   let make_exit = make_exit
 
@@ -2432,7 +2434,8 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
                   let sw =
                     {sw_numconsts = cstr.cstr_consts; sw_consts = consts;
                      sw_numblocks = cstr.cstr_nonconsts; sw_blocks = nonconsts;
-                     sw_failaction = fail_opt} in
+                     sw_failaction = fail_opt; sw_tags_to_sizes = Tag.Scannable.Map.empty;
+                    } in
                   let hs,sw = share_actions_sw sw in
                   let sw = reintroduce_fail sw in
                   hs (Lswitch (arg,sw,loc)) in

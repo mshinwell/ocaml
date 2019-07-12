@@ -170,8 +170,10 @@ module Static_part = struct
     in
     match t with
     | Block (tag, mut, fields) ->
-      fprintf ppf "@[(%sblock (tag %a) (%a))@]"
+      fprintf ppf "@[(@<0>%s%sblock@<0>%s (tag %a) (%a))@]"
+        (Flambda_colours.static_part ())
         (match mut with Immutable -> "Immutable_" | Mutable -> "Mutable_")
+        (Flambda_colours.normal ())
         Tag.Scannable.print tag
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Of_kind_value.print) fields

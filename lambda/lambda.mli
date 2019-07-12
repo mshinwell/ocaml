@@ -100,7 +100,7 @@ type primitive =
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
   (* Extract a block's tag *)
-  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
+  | Pgettag
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
@@ -154,7 +154,6 @@ type primitive =
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
-  | Pdiscriminant_of_int
 
 and integer_comparison =
     Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -306,7 +305,9 @@ and lambda_switch =
     sw_consts: (int * lambda) list;     (* Integer cases *)
     sw_numblocks: int;                  (* Number of tag block cases *)
     sw_blocks: (lambda_switch_block_key * lambda) list;  (* Tag block cases *)
-    sw_failaction : lambda option}      (* Action to take if failure *)
+    sw_failaction : lambda option;      (* Action to take if failure *)
+    sw_tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  }
 
 and lambda_switch_block_key =
   { sw_tag : int;
