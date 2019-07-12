@@ -885,6 +885,18 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
+  (* XXX Sort this out properly and think a bit more.
+     For the CSE equations we need to allow lower occurrence kinds than for
+     the binding, as the equations may now refer to e.g. [In_types] when the
+     binding is [Normal].  This is fine so long as the RHS of the CSE equation
+     respects the current occurrence kind. *)
+  match S.simplify_simple dacc arg1 ~min_occurrence_kind:Name_occurrence_kind.min with
+  | Bottom, ty -> invalid ty
+  | Ok arg1, _arg1_ty ->
+    match S.simplify_simple dacc arg2 ~min_occurrence_kind:Name_occurrence_kind.min with
+    | Bottom, ty -> invalid ty
+    | Ok arg2, _arg2_ty ->
+  let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
   match S.simplify_simple dacc arg1 ~min_occurrence_kind with
   | Bottom, ty -> invalid ty
   | Ok arg1, arg1_ty ->
@@ -892,7 +904,6 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
     | Bottom, ty -> invalid ty
     | Ok arg2, arg2_ty ->
       let kind = Flambda_primitive.result_kind_of_binary_primitive' prim in
-      let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
       let original_term = Named.create_prim original_prim dbg in
       (* CR mshinwell: Factor out this next part *)
       match

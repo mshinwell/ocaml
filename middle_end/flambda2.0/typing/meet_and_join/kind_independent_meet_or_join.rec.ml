@@ -126,31 +126,40 @@ struct
                || Meet_env.already_meeting env simple1 simple2 ->
       Equals simple1, TEE.empty ()
     | Ok (Some simple1), Ok (Some simple2) ->
+      (* XXX Think about how to handle this properly. *)
+      begin match Simple.descr simple1, Simple.descr simple2 with
+      | Const const1, Const const2
+          when not (Simple.Const.equal const1 const2) ->
+        No_alias Bottom, TEE.empty ()
+      | Discriminant discriminant1, Discriminant discriminant2
+          when not (Discriminant.equal discriminant1 discriminant2) ->
+        No_alias Bottom, TEE.empty ()
+      | _, _ ->
 (*
 Format.eprintf "Meeting simples: %a and %a\n%!"
   Simple.print simple1
   Simple.print simple2;
 *)
-      let unknown_or_join, env_extension =
-        let env = Meet_env.now_meeting env simple1 simple2 in
-        meet_on_unknown_or_join env ~meet_or_join_ty
-          unknown_or_join1 unknown_or_join2
-      in
+        let unknown_or_join, env_extension =
+          let env = Meet_env.now_meeting env simple1 simple2 in
+          meet_on_unknown_or_join env ~meet_or_join_ty
+            unknown_or_join1 unknown_or_join2
+        in
 (*
 Format.eprintf "TEE from meeting simples (1): %a\n%!"
   Typing_env_extension.print env_extension;
 *)
-      let env_extension =
-        if Typing_env.defined_earlier (Meet_env.env env) simple1 ~than:simple2
-        then
-          env_extension
-          |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
-          |> add_equation env simple2 (S.to_type (Equals simple1))
-        else
-          env_extension
-          |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
-          |> add_equation env simple1 (S.to_type (Equals simple2))
-      in
+        let env_extension =
+          if Typing_env.defined_earlier (Meet_env.env env) simple1 ~than:simple2
+          then
+            env_extension
+            |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
+            |> add_equation env simple2 (S.to_type (Equals simple1))
+          else
+            env_extension
+            |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
+            |> add_equation env simple1 (S.to_type (Equals simple2))
+        in
 (*
 Format.eprintf "TEE from meeting simples (2): %a\n%!"
   Typing_env_extension.print env_extension;
@@ -159,7 +168,8 @@ Format.eprintf "TEE from meeting simples (2): %a\n%!"
 (*
 Format.eprintf "Returning =%a\n%!" Simple.print simple1;
 *)
-      Equals simple1, env_extension
+        Equals simple1, env_extension
+      end
     | Ok (Some simple), Ok None | Ok None, Ok (Some simple) ->
       let unknown_or_join, env_extension =
         meet_on_unknown_or_join env ~meet_or_join_ty
@@ -169,6 +179,7 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
         env_extension
         |> add_equation env simple (S.to_type (No_alias unknown_or_join))
       in
+      (* XXX Not sure we want to return [Equals] when it's Bottom *)
       Equals simple, env_extension
 
   and join_ty ?bound_name typing_env
