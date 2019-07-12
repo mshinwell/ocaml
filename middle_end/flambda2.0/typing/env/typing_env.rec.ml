@@ -628,40 +628,56 @@ let find_name_occurrence_kind_of_simple t simple =
   | Const _ | Discriminant _ -> Name_occurrence_kind.normal
   | Name name -> find_name_occurrence_kind t name
 
-let get_canonical_simple0 t simple ~min_occurrence_kind
-      : Simple.t Or_bottom.t * Rec_info.t option =
+let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
   let newer_rec_info = Simple.rec_info simple in
   let occurrence_kind = find_name_occurrence_kind_of_simple t simple in
   let alias = alias_of_simple t simple occurrence_kind in
-  let kind, simple =
-    match
-      Aliases.get_canonical_element (aliases t) alias
-        ~min_order_within_equiv_class:min_occurrence_kind
-    with
-    | None ->
-      Misc.fatal_errorf "Cannot get canonical [Simple] for [Alias]@ \
-          %a.@ Alias tracker:@ %a.@ Environment:@ %a"
-        Alias.print alias
-        Aliases.print (aliases t)
-        print t
-    | Some alias -> Alias.kind alias, Alias.simple alias
+  let kind = Alias.kind alias in
+  let min_order_within_equiv_class =
+    match min_occurrence_kind with
+    | None -> occurrence_kind
+    | Some occurrence_kind -> occurrence_kind
   in
-  match Simple.merge_rec_info simple ~newer_rec_info with
-  | None -> Bottom, newer_rec_info
-  | Some simple ->
-    let rec_info = Simple.rec_info simple in
-    match Simple.descr simple with
-    | Const _ | Discriminant _ -> Ok simple, rec_info
-    | Name name ->
-      let ty = find t name in
-      if Flambda_type0_core.is_obviously_bottom ty then Bottom, rec_info
-      else Ok simple, rec_info
+  match
+    Aliases.get_canonical_element (aliases t) alias
+      ~min_order_within_equiv_class
+  with
+  | None -> Ok None, kind
+  | Some alias ->
+    let simple = Alias.simple alias in
+    match Simple.merge_rec_info simple ~newer_rec_info with
+    | None -> Bottom, kind
+    | Some simple ->
+      let rec_info = Simple.rec_info simple in
+      match Simple.descr simple with
+      | Const _ | Discriminant _ -> Ok (Some (simple, rec_info)), kind
+      | Name name ->
+        let ty = find t name in
+        if Flambda_type0_core.is_obviously_bottom ty
+        then Bottom, kind
+        else Ok (Some (simple, rec_info)), kind
 
-let get_canonical_simple t simple ~min_occurrence_kind =
-  let simple, _rec_info =
-    get_canonical_simple0 t simple ~min_occurrence_kind
+let get_canonical_simple_with_kind t ?min_occurrence_kind simple =
+  let result, kind = get_canonical_simple0 t ?min_occurrence_kind simple in
+  let result =
+    Or_bottom.map result ~f:(fun result ->
+      Option.map (fun (simple, _rec_info) -> simple) result)
   in
-  simple
+  result, kind
+
+let get_canonical_simple t ?min_occurrence_kind simple =
+  fst (get_canonical_simple_with_kind t ?min_occurrence_kind simple)
+
+let get_alias_then_canonical_simple t ?min_occurrence_kind typ : _ Or_bottom.t =
+  match Flambda_type0_core.get_alias typ with
+  | None -> Ok None
+  | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
+
+let get_alias_ty_then_canonical_simple t ?min_occurrence_kind typ
+      : _ Or_bottom.t =
+  match Flambda_type0_core.get_alias_ty typ with
+  | None -> Ok None
+  | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
 let expand_head_ty (type a) t
       ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
@@ -684,10 +700,14 @@ let expand_head_ty (type a) t
     (* We must get the canonical simple with the least occurrence kind,
        since that's the one that is guaranteed not to have an [Equals] type. *)
     match get_canonical_simple0 t simple ~min_occurrence_kind with
-    | Bottom, _rec_info -> Bottom
-    | Ok simple, rec_info ->
+    | Bottom, _kind -> Bottom
+    | Ok None, _kind ->
+      Misc.fatal_errorf "There should always be a canonical simple for %a \
+          in environment:@ %a"
+        Simple.print simple
+        print t
+    | Ok (Some (simple, rec_info)), _kind ->
       match Simple.descr simple with
-      (* CR mshinwell: Could check kinds against [S.kind] here. *)
       | Const const ->
         let typ =
           match const with
@@ -724,14 +744,16 @@ let expand_head_ty (type a) t
             (* [simple] already has [rec_info] applied to it (see
                [get_canonical_simple], above).  However we also need to apply it
                to the expanded head of the type. *)
-            apply_rec_info of_kind_foo rec_info
+            match apply_rec_info of_kind_foo rec_info with
+            | Bottom -> Bottom
+            | Ok of_kind_foo -> Ok of_kind_foo
           end
         | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
         | Equals _ ->
           Format.eprintf "@[<hov 1>%s>> Canonical alias %a should never have \
               [Equals] type:%s@ %a@]\n"
             (Flambda_colours.error ())
-            Simple.print canonical_simple
+            Simple.print simple
             (Flambda_colours.normal ())
             print t;
           invariant_should_fail t

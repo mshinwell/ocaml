@@ -31,7 +31,7 @@ let inline dacc ~callee ~args function_decl
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
       let denv = DA.denv dacc in
       let typing_env = DE.typing_env denv in
-      let canonical_callee, _ =
+      let canonical_callee =
         T.Typing_env.get_canonical_simple typing_env callee
           ~min_occurrence_kind:Name_occurrence_kind.normal
       in
@@ -39,7 +39,7 @@ let inline dacc ~callee ~args function_decl
          lifting of the closure symbol to have [Rec_info] on it *)
       match canonical_callee with
       | Bottom -> dacc, Expr.create_invalid ()
-      | Ok canonical_callee ->
+      | Ok (Some canonical_callee) ->
         (* CR mshinwell: Move to [Typing_env.map_type_of_canonical] or
            similar.  (Can we actually hide [find] from the Typing_env
            external interface?) *)
@@ -58,7 +58,7 @@ let inline dacc ~callee ~args function_decl
               ~f:(fun callee_ty ->
                 T.Typing_env.add_equation typing_env callee_name callee_ty)
         in
-        match typing_env with
+        begin match typing_env with
         | Bottom -> dacc, Expr.create_invalid ()
         | Ok typing_env ->
           let denv = DE.with_typing_environment denv typing_env in
@@ -88,4 +88,10 @@ let inline dacc ~callee ~args function_decl
                     (Named.create_simple callee)
                     body)))
           in
-          DA.with_denv dacc denv, expr)
+          DA.with_denv dacc denv, expr
+        end
+      | Ok None ->
+        Misc.fatal_errorf "Canonical callee should always exist at [normal] \
+            occurrence kind, since application expressions are never made \
+            phantom:@ %a"
+          Simple.print callee)

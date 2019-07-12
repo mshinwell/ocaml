@@ -69,8 +69,8 @@ let erase_aliases_ty env ~bound_name ~already_seen
       match Simple.Set.choose_opt eligible_aliases with
       | Some alias -> Equals alias
       | None ->
-        let unknown_or_join, _ =
-          Typing_env.resolve_ty env ~force_to_kind ~print_ty ~apply_rec_info
+        let unknown_or_join =
+          Typing_env.expand_head_ty env ~force_to_kind ~print_ty ~apply_rec_info
             ty
         in
         let already_seen = Simple.Set.union all_aliases already_seen in
