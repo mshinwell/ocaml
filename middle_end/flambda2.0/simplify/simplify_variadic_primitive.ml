@@ -16,18 +16,11 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module S = Simplify_simple
-module T = Flambda_type
-module TEE = Flambda_type.Typing_env_extension
+open! Simplify_import
 
 let simplify_make_block dacc _prim dbg
-      ~(make_block_kind : Flambda_primitive.make_block_kind)
-      ~(mutable_or_immutable : Flambda_primitive.mutable_or_immutable)
+      ~(make_block_kind : P.make_block_kind)
+      ~(mutable_or_immutable : P.mutable_or_immutable)
       args_with_tys ~result_var =
   let denv = DA.denv dacc in
   let args, _arg_tys = List.split args_with_tys in
@@ -86,19 +79,19 @@ let try_cse dacc prim args ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
   match S.simplify_simples dacc args ~min_occurrence_kind with
   | Bottom ->
-    let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
+    let kind = P.result_kind_of_variadic_primitive' prim in
     Invalid (T.bottom kind)
   | Ok args_with_tys ->
     let args, _tys = List.split args_with_tys in
-    let original_prim : Flambda_primitive.t = Variadic (prim, args) in
+    let original_prim : P.t = Variadic (prim, args) in
     let result_kind =
-      Flambda_primitive.result_kind_of_variadic_primitive' prim
+      P.result_kind_of_variadic_primitive' prim
     in
     Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
       ~min_occurrence_kind ~result_var
 
 let simplify_variadic_primitive dacc
-      (prim : Flambda_primitive.variadic_primitive) args dbg ~result_var =
+      (prim : P.variadic_primitive) args dbg ~result_var =
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
@@ -111,7 +104,7 @@ let simplify_variadic_primitive dacc
   | Not_applied dacc ->
     match S.simplify_simples dacc args ~min_occurrence_kind with
     | Bottom ->
-      let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
+      let kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom kind)
     | Ok args_with_tys ->
       match prim with
@@ -121,7 +114,7 @@ let simplify_variadic_primitive dacc
       | Bigarray_set (_num_dims, _kind, _layout)
       | Bigarray_load (_num_dims, _kind, _layout) ->
         let named = Named.create_prim (Variadic (prim, args)) dbg in
-        let kind = Flambda_primitive.result_kind_of_variadic_primitive' prim in
+        let kind = P.result_kind_of_variadic_primitive' prim in
         let ty = T.unknown kind in
         let env_extension = TEE.one_equation (Name.var result_var') ty in
         Reachable.reachable named, env_extension, dacc

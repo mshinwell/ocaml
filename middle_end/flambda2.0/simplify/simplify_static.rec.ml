@@ -16,18 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module CUE = Continuation_uses_env
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module KP = Kinded_parameter
-module R = Simplify_env_and_result.Result
-module S = Simplify_simple
-module T = Flambda_type
-module UA = Upwards_acc
-module UE = Simplify_env_and_result.Upwards_env
+open! Simplify_import
 
 module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program

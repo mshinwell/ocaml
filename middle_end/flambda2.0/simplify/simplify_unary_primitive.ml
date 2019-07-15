@@ -16,14 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module S = Simplify_simple
-module T = Flambda_type
-module TEE = Flambda_type.Typing_env_extension
+open! Simplify_import
 
 let simplify_project_closure closure_id dacc ~original_term ~arg:_
       ~arg_ty:set_of_closures_ty ~result_var =
@@ -153,16 +146,16 @@ let try_cse dacc prim arg ~min_occurrence_kind ~result_var
   match S.simplify_simple dacc arg ~min_occurrence_kind with
   | Bottom, ty -> Invalid ty
   | Ok arg, _arg_ty ->
-    let original_prim : Flambda_primitive.t = Unary (prim, arg) in
-    let result_kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
+    let original_prim : P.t = Unary (prim, arg) in
+    let result_kind = P.result_kind_of_unary_primitive' prim in
     Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
       ~min_occurrence_kind ~result_var
 
-let simplify_unary_primitive dacc (prim : Flambda_primitive.unary_primitive)
+let simplify_unary_primitive dacc (prim : P.unary_primitive)
       arg dbg ~result_var =
 (*
-Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
-  ((Flambda_primitive.Unary (prim, arg)) : Flambda_primitive.t);
+Format.eprintf "Simplifying %a\n%!" P.print
+  ((P.Unary (prim, arg)) : P.t);
 *)
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
@@ -177,7 +170,7 @@ Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
     match S.simplify_simple dacc arg ~min_occurrence_kind with
     | Bottom, ty -> invalid ty
     | Ok arg, arg_ty ->
-      let original_prim : Flambda_primitive.t = Unary (prim, arg) in
+      let original_prim : P.t = Unary (prim, arg) in
       let original_term = Named.create_prim original_prim dbg in
       let simplifier =
         match prim with
@@ -205,7 +198,7 @@ Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
           fun dacc ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
             (* CR mshinwell: temporary code *)
             let named = Named.create_prim (Unary (prim, arg)) dbg in
-            let kind = Flambda_primitive.result_kind_of_unary_primitive' prim in
+            let kind = P.result_kind_of_unary_primitive' prim in
             let ty = T.unknown kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
             Reachable.reachable named, env_extension, dacc

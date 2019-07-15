@@ -16,8 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let simplify_primitive dacc (prim : Flambda_primitive.t) dbg ~result_var =
-(*Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;*)
+open! Simplify_import
+
+let simplify_primitive dacc (prim : P.t) dbg ~result_var =
+(*Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;*)
   match prim with
   | Unary (prim, arg) ->
     Simplify_unary_primitive.simplify_unary_primitive dacc
