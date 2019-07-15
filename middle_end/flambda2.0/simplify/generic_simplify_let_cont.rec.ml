@@ -16,16 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module CUE = Continuation_uses_env
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module R = Simplify_env_and_result.Result
-module T = Flambda_type
-module UA = Upwards_acc
-module UE = Simplify_env_and_result.Upwards_env
-module VB = Var_in_binding_pos
+open! Simplify_import
 
 type 'a result =
   | No_wrapper of 'a

@@ -16,12 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module R = Simplify_env_and_result.Result
-module UA = Upwards_acc
-module UE = Simplify_env_and_result.Upwards_env
+open! Simplify_import
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =

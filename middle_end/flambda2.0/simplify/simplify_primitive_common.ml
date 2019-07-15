@@ -16,13 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module T = Flambda_type
-module TE = Flambda_type.Typing_env
-module TEE = Flambda_type.Typing_env_extension
+open! Simplify_import
 
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
@@ -47,11 +41,11 @@ type cse =
   | Not_applied of DA.t
 
 let apply_cse dacc ~original_prim ~min_occurrence_kind =
-  match Flambda_primitive.Eligible_for_cse.create original_prim with
+  match P.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
 (*
-Format.eprintf "Trying CSE on %a in@ %a@ ..." Flambda_primitive.print original_prim
+Format.eprintf "Trying CSE on %a in@ %a@ ..." P.print original_prim
   DA.print dacc;
 *)
     let typing_env = DE.typing_env (DA.denv dacc) in
@@ -84,7 +78,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
     Applied (Reachable.reachable named, env_extension, dacc)
   | None ->
     let dacc =
-      match Flambda_primitive.Eligible_for_cse.create original_prim with
+      match P.Eligible_for_cse.create original_prim with
       | None -> dacc
       | Some with_fixed_value ->
         let bound_to = Simple.var result_var in

@@ -16,15 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module R = Simplify_env_and_result.Result
-module T = Flambda_type
-module TE = T.Typing_env
-module UA = Upwards_acc
+open! Simplify_import
 
 type pre_simplification_types_of_my_closures = {
   set_of_closures : (Name_in_binding_pos.t * Flambda_type.t) option;
@@ -364,7 +356,7 @@ let simplify_named0 dacc (named : Named.t) ~result_var =
     end
   | Prim (prim, dbg) ->
 (*
-Format.eprintf "Simplifying primitive:@ %a\n%!" Flambda_primitive.print prim;
+Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;
 *)
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
@@ -374,12 +366,12 @@ Format.eprintf "SP env_extension:@ %a\n%!" T.Typing_env_extension.print env_exte
 *)
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
-        let kind = Flambda_primitive.result_kind' prim in
+        let kind = P.result_kind' prim in
         let denv = DE.add_variable denv result_var (T.unknown kind) in
         DE.extend_typing_environment denv env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
-       whenever [not (Flambda_primitive.With_fixed_value.eligible prim)]
+       whenever [not (P.With_fixed_value.eligible prim)]
        holds. *)
     Reification.try_to_reify dacc term ~bound_to:result_var
   | Set_of_closures set_of_closures ->

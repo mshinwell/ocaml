@@ -16,11 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-open! Flambda.Import
-
-module S = Simplify_simple
-module T = Flambda_type
-module TEE = Flambda_type.Typing_env_extension
+open! Simplify_import
 
 let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
@@ -33,16 +29,16 @@ let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
       match S.simplify_simple dacc arg3 ~min_occurrence_kind with
       | Bottom, ty -> Invalid ty
       | Ok arg3, _arg3_ty ->
-        let original_prim : Flambda_primitive.t =
+        let original_prim : P.t =
           Ternary (prim, arg1, arg2, arg3)
         in
         let result_kind =
-          Flambda_primitive.result_kind_of_ternary_primitive' prim
+          P.result_kind_of_ternary_primitive' prim
         in
         Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
           ~min_occurrence_kind ~result_var
 
-let simplify_ternary_primitive dacc (prim : Flambda_primitive.ternary_primitive)
+let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
       arg1 arg2 arg3 dbg ~result_var =
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
@@ -74,7 +70,7 @@ let simplify_ternary_primitive dacc (prim : Flambda_primitive.ternary_primitive)
               Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
             in
             let kind =
-              Flambda_primitive.result_kind_of_ternary_primitive' prim
+              P.result_kind_of_ternary_primitive' prim
             in
             let ty = T.unknown kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in

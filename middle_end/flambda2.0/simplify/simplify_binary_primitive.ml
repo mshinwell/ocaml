@@ -16,16 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
+open! Simplify_import
 
 module A = Number_adjuncts
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module S = Simplify_simple
-module T = Flambda_type
-module TEE = Flambda_type.Typing_env_extension
-
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 
 type 'a binary_arith_outcome_for_one_side_only =
@@ -86,7 +79,7 @@ end = struct
   module Possible_result = struct
     type t =
       | Simple of Simple.t
-      | Prim of Flambda_primitive.t
+      | Prim of P.t
       | Exactly of N.Result.t
 
     include Identifiable.Make (struct
@@ -95,7 +88,7 @@ end = struct
       let compare t1 t2 =
         match t1, t2 with
         | Simple simple1, Simple simple2 -> Simple.compare simple1 simple2
-        | Prim prim1, Prim prim2 -> Flambda_primitive.compare prim1 prim2
+        | Prim prim1, Prim prim2 -> P.compare prim1 prim2
         | Exactly i1, Exactly i2 -> N.Result.compare i1 i2
         | Simple _, (Prim _ | Exactly _) -> -1
         | Prim _, Simple _ -> 1
@@ -113,7 +106,7 @@ end = struct
 
   let simplify op dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
         ~result_var =
-    let module P = Possible_result in
+    let module PR = Possible_result in
     let result = Name.var (Var_in_binding_pos.var result_var) in
     let denv = DA.denv dacc in
     let typing_env = DE.typing_env denv in
@@ -132,11 +125,11 @@ end = struct
       (* CR mshinwell: We may want to bound the size of the set.
          CARE: we either have to forget everything, or return everything;
          it's wrong to return just a subset. *)
-      if P.Set.is_empty possible_results then
+      if PR.Set.is_empty possible_results then
         result_invalid ()
       else
         let named =
-          match P.Set.get_singleton possible_results with
+          match PR.Set.get_singleton possible_results with
           | Some (Exactly i) -> N.term i
           | Some (Prim prim) -> Named.create_prim prim dbg
           | Some (Simple simple) -> Named.create_simple simple
@@ -144,17 +137,17 @@ end = struct
         in
         let ty =
           let is =
-            List.filter_map (fun (possible_result : P.t) ->
+            List.filter_map (fun (possible_result : PR.t) ->
                 match possible_result with
                 | Exactly i -> Some i
                 | Prim _ | Simple _ -> None)
-              (P.Set.elements possible_results)
+              (PR.Set.elements possible_results)
           in
-          if List.length is = P.Set.cardinal possible_results
+          if List.length is = PR.Set.cardinal possible_results
           then
             N.these (N.Result.Set.of_list is)
           else
-            match P.Set.get_singleton possible_results with
+            match PR.Set.get_singleton possible_results with
             | Some (Simple simple) -> T.alias_type_of kind simple
             | Some (Exactly _)
             | Some (Prim _)
@@ -171,9 +164,9 @@ end = struct
             | Some possible_results ->
               match op i with
               | Exactly result ->
-                Some (P.Set.add (Exactly result) possible_results)
+                Some (PR.Set.add (Exactly result) possible_results)
               | The_other_side ->
-                Some (P.Set.add (Simple other_side) possible_results)
+                Some (PR.Set.add (Simple other_side) possible_results)
               | Negation_of_the_other_side ->
                 let standard_int_kind : K.Standard_int.t =
                   match N.kind with
@@ -185,19 +178,19 @@ end = struct
                     Misc.fatal_error "Cannot use [Negation_of_the_other_side] \
                         with floats; use the float version instead"
                 in
-                let prim : Flambda_primitive.t =
+                let prim : P.t =
                   Unary (Int_arith (standard_int_kind, Neg), other_side)
                 in
-                Some (P.Set.add (Prim prim) possible_results)
+                Some (PR.Set.add (Prim prim) possible_results)
               | Float_negation_of_the_other_side ->
-                let prim : Flambda_primitive.t =
+                let prim : P.t =
                   Unary (Float_arith Neg, other_side)
                 in
-                Some (P.Set.add (Prim prim) possible_results)
+                Some (PR.Set.add (Prim prim) possible_results)
               | Cannot_simplify -> None
               | Invalid -> Some possible_results)
           nums
-          (Some P.Set.empty)
+          (Some PR.Set.empty)
       in
       match possible_results with
       | Some results -> check_possible_results ~possible_results:results
@@ -214,9 +207,9 @@ end = struct
             match N.op op i1 i2 with
             | None -> possible_results
             | Some result ->
-              P.Set.add (Exactly result) possible_results)
+              PR.Set.add (Exactly result) possible_results)
           all_pairs
-          P.Set.empty
+          PR.Set.empty
       in
       check_possible_results ~possible_results
     | (Proved nums1, Unknown)
@@ -239,13 +232,13 @@ end
 
 module Int_ops_for_binary_arith (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.binary_int_arith_op
+    with type op = P.binary_int_arith_op
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
   module Result = I.Num
 
-  type op = Flambda_primitive.binary_int_arith_op
+  type op = P.binary_int_arith_op
 
   (* There are never any restrictions on the constant propagation of
      integers, unlike for floats. *)
@@ -263,7 +256,7 @@ end = struct
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
 
-  let op (op : Flambda_primitive.binary_int_arith_op) n1 n2 =
+  let op (op : P.binary_int_arith_op) n1 n2 =
     let always_some f = Some (f n1 n2) in
     match op with
     | Add -> always_some I.Num.add
@@ -307,7 +300,7 @@ end = struct
       if Num.equal this_side Num.zero then The_other_side
       else Cannot_simplify
 
-  let op_lhs_unknown (op : Flambda_primitive.binary_int_arith_op) ~rhs
+  let op_lhs_unknown (op : P.binary_int_arith_op) ~rhs
         : Num.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:rhs
@@ -335,7 +328,7 @@ end = struct
       else if Num.equal rhs Num.minus_one then Exactly Num.zero
       else Cannot_simplify
 
-  let op_rhs_unknown (op : Flambda_primitive.binary_int_arith_op) ~lhs
+  let op_rhs_unknown (op : P.binary_int_arith_op) ~lhs
         : Num.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:lhs
@@ -369,13 +362,13 @@ module Binary_int_arith_nativeint =
 
 module Int_ops_for_binary_shift (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.int_shift_op
+    with type op = P.int_shift_op
 end = struct
   module Lhs = I.Num
   module Rhs = Immediate
   module Result = I.Num
 
-  type op = Flambda_primitive.int_shift_op
+  type op = P.int_shift_op
 
   let kind = I.kind
 
@@ -406,14 +399,14 @@ end = struct
 
   module Num = I.Num
 
-  let op (op : Flambda_primitive.int_shift_op) n1 n2 =
+  let op (op : P.int_shift_op) n1 n2 =
     let always_some f = Some (f n1 n2) in
     match op with
     | Lsl -> always_some Num.shift_left
     | Lsr -> always_some Num.shift_right_logical
     | Asr -> always_some Num.shift_right
 
-  let op_lhs_unknown (op : Flambda_primitive.int_shift_op) ~rhs
+  let op_lhs_unknown (op : P.int_shift_op) ~rhs
         : Num.t binary_arith_outcome_for_one_side_only =
     let module O = Targetint.OCaml in
     let rhs = Immediate.to_targetint rhs in
@@ -428,7 +421,7 @@ end = struct
       if O.equal rhs O.zero then The_other_side
       else Cannot_simplify
 
-  let op_rhs_unknown (op : Flambda_primitive.int_shift_op) ~lhs
+  let op_rhs_unknown (op : P.int_shift_op) ~lhs
         : Num.t binary_arith_outcome_for_one_side_only =
     (* In these cases we are giving a semantics for some cases where the
        right-hand side may be less than zero or greater than or equal to
@@ -467,13 +460,13 @@ module Binary_int_shift_nativeint =
 
 module Int_ops_for_binary_comp (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.ordered_comparison
+    with type op = P.ordered_comparison
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
   module Result = Immediate
 
-  type op = Flambda_primitive.ordered_comparison
+  type op = P.ordered_comparison
 
   let kind = I.kind
 
@@ -492,7 +485,7 @@ end = struct
 
   module Num = I.Num
 
-  let op (op : Flambda_primitive.ordered_comparison) n1 n2 =
+  let op (op : P.ordered_comparison) n1 n2 =
     let bool b = Immediate.bool b in
     match op with
     | Lt -> Some (bool (Num.compare n1 n2 < 0))
@@ -524,13 +517,13 @@ module Binary_int_comp_nativeint =
 
 module Int_ops_for_binary_comp_unsigned (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.ordered_comparison
+    with type op = P.ordered_comparison
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
   module Result = Immediate
 
-  type op = Flambda_primitive.ordered_comparison
+  type op = P.ordered_comparison
 
   let kind = I.kind
 
@@ -548,7 +541,7 @@ end = struct
 
   module Num = I.Num
 
-  let op (op : Flambda_primitive.ordered_comparison) n1 n2 =
+  let op (op : P.ordered_comparison) n1 n2 =
     let bool b = Immediate.bool b in
     match op with
     | Lt -> Some (bool (Num.compare_unsigned n1 n2 < 0))
@@ -580,7 +573,7 @@ module Binary_int_comp_unsigned_nativeint =
 
 module Float_ops_for_binary_arith : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.binary_float_arith_op
+    with type op = P.binary_float_arith_op
 end = struct
   module F = Float_by_bit_pattern
 
@@ -588,7 +581,7 @@ end = struct
   module Rhs = F
   module Result = F
 
-  type op = Flambda_primitive.binary_float_arith_op
+  type op = P.binary_float_arith_op
 
   let kind = K.Standard_int_or_float.Naked_float
 
@@ -667,7 +660,7 @@ module Binary_float_arith = Binary_arith_like (Float_ops_for_binary_arith)
 
 module Float_ops_for_binary_comp : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.comparison
+    with type op = P.comparison
 end = struct
   module F = Float_by_bit_pattern
 
@@ -675,7 +668,7 @@ end = struct
   module Rhs = F
   module Result = Immediate
 
-  type op = Flambda_primitive.comparison
+  type op = P.comparison
 
   let kind = K.Standard_int_or_float.Naked_float
 
@@ -719,13 +712,13 @@ module Binary_float_comp = Binary_arith_like (Float_ops_for_binary_comp)
 
 module Int_ops_for_binary_eq_comp (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = Flambda_primitive.equality_comparison
+    with type op = P.equality_comparison
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
   module Result = Immediate
 
-  type op = Flambda_primitive.equality_comparison
+  type op = P.equality_comparison
 
   let kind = I.kind
 
@@ -743,7 +736,7 @@ end = struct
 
   module Num = I.Num
 
-  let op (op : Flambda_primitive.equality_comparison) n1 n2 =
+  let op (op : P.equality_comparison) n1 n2 =
     let bool b = Immediate.bool b in
     match op with
     | Eq -> Some (bool (Num.compare n1 n2 = 0))
@@ -800,7 +793,7 @@ let simplify_block_load dacc ~original_term _dbg ~arg1:_ ~arg1_ty:block_ty
         ~field_n_minus_one:result_var')
       ~result_var ~result_kind:K.value
 
-let simplify_phys_equal (op : Flambda_primitive.equality_comparison)
+let simplify_phys_equal (op : P.equality_comparison)
       (kind : K.t) dacc ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var =
   let result = Name.var (Var_in_binding_pos.var result_var) in
@@ -854,7 +847,7 @@ let simplify_phys_equal (op : Flambda_primitive.equality_comparison)
   | Naked_number Naked_float ->
     (* CR mshinwell: Should this case be statically disallowed in the type,
        to force people to use [Float_comp]? *)
-    let op : Flambda_primitive.comparison =
+    let op : P.comparison =
       match op with
       | Eq -> Eq
       | Neq -> Neq
@@ -883,14 +876,14 @@ let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
     match S.simplify_simple dacc arg2 ~min_occurrence_kind with
     | Bottom, ty -> Invalid ty
     | Ok arg2, _arg2_ty ->
-      let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
+      let original_prim : P.t = Binary (prim, arg1, arg2) in
       let result_kind =
-        Flambda_primitive.result_kind_of_binary_primitive' prim
+        P.result_kind_of_binary_primitive' prim
       in
       Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
         ~min_occurrence_kind ~result_var
 
-let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
+let simplify_binary_primitive dacc (prim : P.binary_primitive)
       arg1 arg2 dbg ~result_var =
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
@@ -910,7 +903,7 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
       match S.simplify_simple dacc arg2 ~min_occurrence_kind with
       | Bottom, ty -> invalid ty
       | Ok arg2, arg2_ty ->
-        let original_prim : Flambda_primitive.t = Binary (prim, arg1, arg2) in
+        let original_prim : P.t = Binary (prim, arg1, arg2) in
         let original_term = Named.create_prim original_prim dbg in
         let simplifier =
           match prim with
@@ -955,7 +948,7 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
               (* CR mshinwell: temporary code *)
               let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
               let kind =
-                Flambda_primitive.result_kind_of_binary_primitive' prim
+                P.result_kind_of_binary_primitive' prim
               in
               let ty = T.unknown kind in
               let env_extension = TEE.one_equation (Name.var result_var') ty in
