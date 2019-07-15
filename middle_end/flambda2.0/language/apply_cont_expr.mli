@@ -46,6 +46,8 @@ val update_continuation_and_args
   -> args:Simple.t list
   -> t
 
+val update_args : t -> args:Simple.t list -> t
+
 val is_goto : t -> Continuation.t -> bool
 
 val to_goto : t -> Continuation.t option

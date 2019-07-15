@@ -63,7 +63,13 @@ module type S = sig
 
     val mem : t -> Name.t -> bool
 
-    val join : typing_env -> t -> t -> t
+    val join
+       : typing_env
+      -> left_env:typing_env
+      -> right_env:typing_env
+      -> t
+      -> t
+      -> t
   end
 
   module Typing_env : sig

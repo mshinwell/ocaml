@@ -189,6 +189,10 @@ let update_continuation_and_args t cont ~args =
       args;
     }
 
+let update_args t ~args =
+  if args == t.args then t
+  else { t with args; }
+
 let no_args t =
   match args t with
   | [] -> true

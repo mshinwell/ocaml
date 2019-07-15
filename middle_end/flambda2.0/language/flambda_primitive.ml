@@ -1377,6 +1377,30 @@ module Eligible_for_cse = struct
 
   let to_primitive t = t
 
+  let fold_args t ~init ~f =
+    match t with
+    | Unary (prim, arg) ->
+      let acc, arg = f init arg in
+      acc, Unary (prim, arg)
+    | Binary (prim, arg1, arg2) ->
+      let acc, arg1 = f init arg1 in
+      let acc, arg2 = f acc arg2 in
+      acc, Binary (prim, arg1, arg2)
+    | Ternary (prim, arg1, arg2, arg3) ->
+      let acc, arg1 = f init arg1 in
+      let acc, arg2 = f acc arg2 in
+      let acc, arg3 = f acc arg3 in
+      acc, Ternary (prim, arg1, arg2, arg3)
+    | Variadic (prim, args) ->
+      let acc, args =
+        List.fold_left (fun (acc, args) arg ->
+            let acc, arg = f acc arg in
+            acc, arg::args)
+          (init, [])
+          args
+      in
+      acc, Variadic (prim, List.rev args)
+
   let free_names = free_names
   let apply_name_permutation = apply_name_permutation
 

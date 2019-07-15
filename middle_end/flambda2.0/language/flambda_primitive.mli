@@ -406,6 +406,12 @@ module Eligible_for_cse : sig
 
   val to_primitive : t -> primitive_application
 
+  val fold_args
+     : t
+    -> init:'a
+    -> f:('a -> Simple.t -> 'a * Simple.t)
+    -> 'a * t
+
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Identifiable.S with type t := t
 

@@ -16,54 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
-
-val print_with_cache
-   : cache:Printing_cache.t
-  -> Format.formatter
-  -> t
-  -> unit
-
-val print : Format.formatter -> t -> unit
-
-val invariant : t -> unit
-
-val empty : unit -> t
-
-val is_empty : t -> bool
-
-val defined_vars_in_order : t -> (Variable.t * Flambda_kind.t) list
-
-val defined_vars_in_order' : t -> Variable.t list
-
-val equations : t -> Flambda_types.t Name.Map.t
-
-val one_equation : Name.t -> Flambda_types.t -> t
-
-val add_definition : t -> Variable.t -> Flambda_kind.t -> Binding_time.t -> t
-
-val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
-
-val add_cse
-   : t
-  -> Flambda_primitive.Eligible_for_cse.t
-  -> bound_to:Simple.t
+val create
+   : original_params:Kinded_parameter.t list
+  -> used_params:Kinded_parameter.t list
+  -> used_extra_params:(Kinded_parameter.t * Simple.t) list
   -> t
 
-val concat : t -> t -> t
+val apply : t -> Apply_cont.t -> Apply_cont.t
 
-val meet : Meet_env.t -> t -> t -> t
+val extra_params : t -> Kinded_parameter.t list
 
-val join
-   : Typing_env.t
-  -> left_env:Typing_env.t
-  -> right_env:Typing_env.t
-  -> t
-  -> t
-  -> t
-
-val mem : t -> Name.t -> bool
-
-val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
-
-include Contains_names.S with type t := t
+val extra_args : t -> Simple.t list

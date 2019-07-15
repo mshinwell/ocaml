@@ -408,7 +408,7 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler dacc ~arg_types _cont
+let simplify_return_continuation_handler dacc ~arg_types ~extra_params:_ _cont
       (return_cont_handler : Return_cont_handler.t) _k
       : Return_cont_handler.t Generic_simplify_let_cont.result * _ * _ =
   assert (List.compare_lengths arg_types
@@ -443,39 +443,24 @@ let simplify_return_continuation_handler dacc ~arg_types _cont
       return_cont_handler.exn_cont_scope
   in
   let uacc = UA.create uenv (DA.r dacc) in
-  let return_cont_handler : Return_cont_handler.t =
+  let handler : Return_cont_handler.t =
     { exn_continuation = return_cont_handler.exn_continuation;
       exn_cont_scope = return_cont_handler.exn_cont_scope;
       computed_values = used_computed_values;
       static_structure;
     }
   in
-  let need_wrapper =
-    List.compare_lengths used_computed_values original_computed_values <> 0
+  let rewrite =
+    Apply_cont_rewrite.create ~original_params:original_computed_values
+      ~used_params:used_computed_values
+      ~used_extra_params:[]
   in
-  if not need_wrapper then begin
-    No_wrapper return_cont_handler,
-      (used_computed_values, static_structure, dacc),
-      uacc
-  end else begin
-    let renamed_original_cont = Continuation.create () in
-    let wrapper =
-      Continuation_handler.create
-        ~params_and_handler:
-          (Continuation_params_and_handler.create
-            original_computed_values
-            ~handler:(Expr.create_apply_cont (
-              Apply_cont.create renamed_original_cont
-                ~args:(KP.List.simples used_computed_values))))
-        ~stub:true
-        ~is_exn_handler:false
-    in
-    With_wrapper {
-      wrapper;
-      renamed_original_cont;
-      original = return_cont_handler;
-    }, (used_computed_values, static_structure, dacc), uacc
-  end
+  let result : _ Generic_simplify_let_cont.result =
+    { handler;
+      rewrite;
+    }
+  in
+  result, (used_computed_values, static_structure, dacc), uacc
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
