@@ -62,6 +62,8 @@ module type S = sig
     val one_equation : Name.t -> flambda_type -> t
 
     val mem : t -> Name.t -> bool
+
+    val join : typing_env -> t -> t -> t
   end
 
   module Typing_env : sig

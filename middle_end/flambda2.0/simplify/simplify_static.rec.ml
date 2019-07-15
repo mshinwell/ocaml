@@ -191,7 +191,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
         : Simplify_named.pre_simplification_types_of_my_closures =
     let closure_types =
       Closure_id.Map.map (fun (closure_symbol, _closure_type) ->
-          T.alias_type_of K.fabricated (Simple.symbol closure_symbol))
+          T.alias_type_of K.value (Simple.symbol closure_symbol))
         closure_symbols_and_types
     in
     { set_of_closures = None;
