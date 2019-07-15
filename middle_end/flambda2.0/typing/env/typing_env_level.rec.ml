@@ -284,17 +284,12 @@ let meet env (t1 : t) (t2 : t) =
   end
 
 let join env (t1 : t) (t2 : t) : t =
-  let t1_defined = Name.set_of_var_set (Variable.Map.keys t1.defined_vars) in
-  let t2_defined = Name.set_of_var_set (Variable.Map.keys t2.defined_vars) in
-  let all_defined = Name.Set.union t1_defined t2_defined in
   let names_with_equations_in_join =
-    Name.Set.diff
+    Name.Set.inter
       (Name.Set.inter (Name.Map.keys t1.equations) (Name.Map.keys t2.equations))
-      all_defined
+      (Name.set_of_var_set (Typing_env.var_domain env))
   in
   let allowed = Typing_env.var_domain env in
-  assert (Variable.Set.subset
-    (Name.set_to_var_set names_with_equations_in_join) allowed);
   let get_type t name =
     Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
