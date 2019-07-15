@@ -192,7 +192,16 @@ Format.eprintf "Simplifying %a\n%!" Flambda_primitive.print
         | Is_int -> simplify_is_int
         | Get_tag -> simplify_get_tag
         | Array_length (Array (Value _)) -> simplify_array_length
-        | _ ->
+        | Duplicate_block _
+        | Array_length _
+        | Bigarray_length _
+        | String_length _
+        | Int_as_pointer
+        | Opaque_identity
+        | Int_arith _
+        | Float_arith _
+        | Num_conv _
+        | Boolean_not ->
           fun dacc ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
             (* CR mshinwell: temporary code *)
             let named = Named.create_prim (Unary (prim, arg)) dbg in

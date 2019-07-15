@@ -67,7 +67,8 @@ let simplify_ternary_primitive dacc (prim : Flambda_primitive.ternary_primitive)
         | Bottom, ty -> invalid ty
         | Ok arg3, _arg3_ty ->
           match prim with
-          | _ ->
+          | Block_set _
+          | Bytes_or_bigstring_set _ ->
             (* temporary code *)
             let named =
               Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg

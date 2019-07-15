@@ -948,7 +948,8 @@ let simplify_binary_primitive dacc (prim : Flambda_primitive.binary_primitive)
           | Float_arith op -> Binary_float_arith.simplify op
           | Float_comp op -> Binary_float_comp.simplify op
           | Phys_equal (kind, op) -> simplify_phys_equal op kind
-          | _ ->
+          | Block_load _
+          | String_or_bigstring_load _ ->
             fun dacc ~original_term:_ dbg ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_
                 ~result_var:_ ->
               (* CR mshinwell: temporary code *)
