@@ -20,13 +20,20 @@ open! Simplify_import
 
 let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
-  match S.simplify_simple dacc arg1 ~min_occurrence_kind with
+  match
+    S.simplify_simple dacc arg1 ~min_occurrence_kind:Name_occurrence_kind.min
+  with
   | Bottom, ty -> Invalid ty
   | Ok arg1, _arg1_ty ->
-    match S.simplify_simple dacc arg2 ~min_occurrence_kind with
+    match
+      S.simplify_simple dacc arg2 ~min_occurrence_kind:Name_occurrence_kind.min
+    with
     | Bottom, ty -> Invalid ty
     | Ok arg2, _arg2_ty ->
-      match S.simplify_simple dacc arg3 ~min_occurrence_kind with
+      match
+        S.simplify_simple dacc arg3
+          ~min_occurrence_kind:Name_occurrence_kind.min
+      with
       | Bottom, ty -> Invalid ty
       | Ok arg3, _arg3_ty ->
         let original_prim : P.t =
