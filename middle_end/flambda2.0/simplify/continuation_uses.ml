@@ -18,6 +18,7 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   type t = {
@@ -93,41 +94,49 @@ let env_and_arg_types t ~definition_typing_env =
     T.Typing_env.current_scope definition_typing_env
   in
   let cut_point = Scope.next definition_scope_level in
-  let process_use use =
+  let cut_use_environment use =
     let env = Use.typing_env_at_use use in
-    let env_extension, vars_in_scope_at_cut =
+    let env_extension, _vars_in_scope =
       TE.cut env ~unknown_if_defined_at_or_later_than:cut_point
     in
-    let arg_types = Use.arg_types use in
-    let arg_types =
-      List.map (fun ty ->
-          T.erase_aliases env ~bound_name:None
-            ~allowed:vars_in_scope_at_cut ty)
-        arg_types
-    in
-    env_extension, arg_types
+    env_extension
+  in
+  let process_use_arg_types use ~allowed =
+    let env = Use.typing_env_at_use use in
+    List.map (fun ty ->
+        T.erase_aliases env ~bound_name:None ~allowed ty)
+      (Use.arg_types use)
   in
   match t.uses with
   | [] -> definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity
   | [use] ->
-    let env_extension, use_arg_types = process_use use in
+    let env_extension = cut_use_environment use in
+    let allowed = TE.var_domain definition_typing_env in
+    let use_arg_types = process_use_arg_types use ~allowed in
     let env = TE.add_env_extension definition_typing_env env_extension in
     env, use_arg_types
   | use::uses ->
-    let env_extension, use_arg_types = process_use use in
-    List.fold_left (fun (env, arg_types) use ->
-        let env_extension, use_arg_types = process_use use in
-        let arg_types =
+    let first_env_extension = cut_use_environment use in
+    let joined_env_extension =
+      List.fold_left (fun joined_env_extension use ->
+          let env_extension = cut_use_environment use in
+          TEE.join definition_typing_env env_extension joined_env_extension)
+        first_env_extension
+        uses
+    in
+    let env = TE.add_env_extension definition_typing_env joined_env_extension in
+    let allowed = TE.var_domain env in
+    let first_arg_types = process_use_arg_types use ~allowed in
+    let arg_types =
+      List.fold_left (fun joined_arg_types use ->
           List.map2 (fun arg_type arg_type' ->
-              (* CR mshinwell: Which environment should be used here? *)
               T.join env arg_type arg_type')
-            arg_types
-            use_arg_types
-        in
-        let env = TE.add_env_extension definition_typing_env env_extension in
-        env, arg_types)
-      (TE.add_env_extension definition_typing_env env_extension, use_arg_types)
-      uses
+            joined_arg_types
+            (process_use_arg_types use ~allowed))
+        first_arg_types
+        uses
+    in
+    env, arg_types
 
 let number_of_uses t = List.length t.uses
 
