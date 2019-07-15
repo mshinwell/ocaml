@@ -25,8 +25,16 @@ val simplify_projection
   -> result_kind:Flambda_kind.t
   -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
 
-val apply_cse
+type cse =
+  | Invalid of Flambda_type.t
+  | Applied of
+      (Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t)
+  | Not_applied of Downwards_acc.t
+
+val try_cse
    : Downwards_acc.t
   -> original_prim:Flambda_primitive.t
+  -> result_kind:Flambda_kind.t
   -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t option
+  -> result_var:Variable.t
+  -> cse

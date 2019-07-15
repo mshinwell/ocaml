@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda.Import
+
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module T = Flambda_type
@@ -39,21 +41,55 @@ Format.eprintf "Returned env extension:@ %a\n%!" TEE.print env_extension;
 *)
     Reachable.reachable original_term, env_extension, dacc
 
+type cse =
+  | Invalid of T.t
+  | Applied of (Reachable.t * TEE.t * DA.t)
+  | Not_applied of DA.t
+
 let apply_cse dacc ~original_prim ~min_occurrence_kind =
   match Flambda_primitive.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
+(*
 Format.eprintf "Trying CSE on %a in@ %a@ ..." Flambda_primitive.print original_prim
   DA.print dacc;
+*)
     let typing_env = DE.typing_env (DA.denv dacc) in
     match TE.find_cse typing_env with_fixed_value with
     | None ->
+(*
 Format.eprintf "failure\n%!";
+*)
       None
     | Some simple ->
+(*
 Format.eprintf "success (=%a)\n%!" Simple.print simple;
+*)
       match TE.get_canonical_simple typing_env ~min_occurrence_kind simple with
       | Bottom | Ok None -> None
       | Ok (Some simple) ->
+(*
 Format.eprintf "returning =%a\n%!" Simple.print simple;
+*)
         Some simple
+
+let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
+      ~result_var : cse =
+  (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
+  match apply_cse dacc ~original_prim ~min_occurrence_kind with
+  | Some replace_with ->
+    let named = Named.create_simple replace_with in
+    let ty = T.alias_type_of result_kind replace_with in
+    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    Applied (Reachable.reachable named, env_extension, dacc)
+  | None ->
+    let dacc =
+      match Flambda_primitive.Eligible_for_cse.create original_prim with
+      | None -> dacc
+      | Some with_fixed_value ->
+        let bound_to = Simple.var result_var in
+        DA.map_denv dacc ~f:(fun denv ->
+          DE.with_typing_environment denv
+           (TE.add_cse (DE.typing_env denv) with_fixed_value ~bound_to))
+    in
+    Not_applied dacc
