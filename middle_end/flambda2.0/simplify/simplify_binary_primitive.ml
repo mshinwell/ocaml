@@ -870,10 +870,14 @@ let simplify_phys_equal (op : P.equality_comparison)
 
 let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
-  match S.simplify_simple dacc arg1 ~min_occurrence_kind with
+  match
+    S.simplify_simple dacc arg1 ~min_occurrence_kind:Name_occurrence_kind.min
+  with
   | Bottom, ty -> Invalid ty
   | Ok arg1, _arg1_ty ->
-    match S.simplify_simple dacc arg2 ~min_occurrence_kind with
+    match
+      S.simplify_simple dacc arg2 ~min_occurrence_kind:Name_occurrence_kind.min
+    with
     | Bottom, ty -> Invalid ty
     | Ok arg2, _arg2_ty ->
       let original_prim : P.t = Binary (prim, arg1, arg2) in

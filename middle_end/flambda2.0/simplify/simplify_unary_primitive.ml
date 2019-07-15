@@ -143,7 +143,9 @@ let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
 
 let try_cse dacc prim arg ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
-  match S.simplify_simple dacc arg ~min_occurrence_kind with
+  match
+    S.simplify_simple dacc arg ~min_occurrence_kind:Name_occurrence_kind.min
+  with
   | Bottom, ty -> Invalid ty
   | Ok arg, _arg_ty ->
     let original_prim : P.t = Unary (prim, arg) in

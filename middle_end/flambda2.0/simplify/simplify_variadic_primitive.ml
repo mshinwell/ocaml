@@ -77,7 +77,9 @@ let simplify_make_block dacc _prim dbg
 
 let try_cse dacc prim args ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
-  match S.simplify_simples dacc args ~min_occurrence_kind with
+  match
+    S.simplify_simples dacc args ~min_occurrence_kind:Name_occurrence_kind.min
+  with
   | Bottom ->
     let kind = P.result_kind_of_variadic_primitive' prim in
     Invalid (T.bottom kind)
