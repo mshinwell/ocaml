@@ -23,14 +23,6 @@
     a return continuation, in addition to normal [Let_cont] constructs.
 *)
 
-type 'a result =
-  | No_wrapper of 'a
-  | With_wrapper of {
-      wrapper : Flambda.Continuation_handler.t;
-      renamed_original_cont : Continuation.t;
-      original : 'a;
-    }
-
 module Make (Continuation_handler_like : sig
   type t
 
@@ -58,6 +50,7 @@ end) : sig
     -> body:Flambda.Expr.t
     -> (Downwards_acc.t
       -> arg_types:Flambda_type.t list
+      -> extra_params:(Kinded_parameter.t * Simple.t) list
       -> Continuation.t
       -> Continuation_handler_like.t
       -> (Continuation_uses_env.t
@@ -67,5 +60,5 @@ end) : sig
     -> (Continuation_uses_env.t
       -> Simplify_env_and_result.Result.t
       -> ('a * Upwards_acc.t))
-    -> Flambda.Expr.t * Continuation_handler_like.t result * 'a * Upwards_acc.t
+    -> Flambda.Expr.t * Continuation_handler_like.t * 'a * Upwards_acc.t
 end

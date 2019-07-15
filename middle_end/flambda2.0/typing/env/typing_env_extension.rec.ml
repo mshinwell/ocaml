@@ -85,11 +85,13 @@ let meet env (t1 : t) (t2 : t) : t =
   in
   { abst; }
 
-let join env (t1 : t) (t2 : t) : t =
+let join env ~left_env ~right_env (t1 : t) (t2 : t) : t =
   let abst =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->
       A.pattern_match t2.abst ~f:(fun _ level_2 ->
-        let level = Typing_env_level.join env level_1 level_2 in
+        let level =
+          Typing_env_level.join env ~left_env ~right_env level_1 level_2
+        in
         A.create (Typing_env_level.defined_vars_in_order' level) level))
   in
   { abst; }

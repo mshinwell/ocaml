@@ -47,6 +47,12 @@ val concat : t -> t -> t
 
 val meet : Meet_env.t -> t -> t -> t
 
-val join : Typing_env.t -> t -> t -> t
+val join
+   : Typing_env.t
+  -> left_env:Typing_env.t
+  -> right_env:Typing_env.t
+  -> t
+  -> t
+  -> t
 
 val mem : t -> Name.t -> bool

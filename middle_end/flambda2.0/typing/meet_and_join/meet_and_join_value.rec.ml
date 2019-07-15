@@ -107,7 +107,11 @@ struct
         }
       in
       let env_extension =
-        E.switch0 TEE.meet TEE.join env env_extension1 env_extension2
+        (* XXX *)
+        let left_env = Meet_env.env env in
+        let right_env = Meet_env.env env in
+        E.switch0 TEE.meet (TEE.join ~left_env ~right_env) env
+          env_extension1 env_extension2
       in
       Ok (blocks_and_imms, env_extension)
 
@@ -192,7 +196,12 @@ struct
           }
         in
         let env_extension =
-          E.switch0 TEE.meet TEE.join env env_extension1 env_extension2
+          (* XXX This should use the proper environments from both sides, no?
+             See if we can avoid needing that *)
+          let left_env = Meet_env.env env in
+          let right_env = Meet_env.env env in
+          E.switch0 TEE.meet (TEE.join ~left_env ~right_env) env
+            env_extension1 env_extension2
         in
         closures_entry, env_extension)
 

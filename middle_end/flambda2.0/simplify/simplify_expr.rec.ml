@@ -51,63 +51,53 @@ let rec simplify_let
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> arg_types:T.t list -> Continuation.t -> Continuation_handler.t
-    -> 'a k 
-    -> Continuation_handler.t Generic_simplify_let_cont.result * 'a * UA.t
-= fun dacc ~arg_types _cont cont_handler k ->
+  : 'a. DA.t -> arg_types:T.t list -> extra_params:(KP.t * Simple.t) list
+    -> Continuation.t -> Continuation_handler.t -> 'a k 
+    -> Continuation_handler.t * 'a * UA.t
+= fun dacc ~arg_types ~extra_params cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
+(*
 Format.eprintf "About to simplify handler %a: params %a, param types %a, \
     dacc:@ %a\n%!"
   Continuation.print _cont
   KP.List.print params
   (Format.pp_print_list T.print) arg_types
   DA.print dacc;
+*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
+      let free_names = Expr.free_names handler in
       let used_params, unused_params =
-        let free_names = Expr.free_names handler in
         List.partition (fun param ->
             Name_occurrences.mem_var free_names (KP.var param))
           params
       in
-      let original =
-        CH.with_params_and_handler cont_handler
-          (CPH.create used_params ~handler)
+      let used_extra_params =
+        List.filter (fun (extra_param, _bound_to) ->
+            Name_occurrences.mem_var free_names (KP.var param))
+          extra_params
       in
-      match unused_params with
-      | [] ->
-(*
-Format.eprintf "No wrapper for %a\n%!" Continuation.print _cont;
-*)
-        No_wrapper original, user_data, uacc
-      | _::_ ->
-        let renamed_original_cont = Continuation.create () in
-(*
-Format.eprintf "Fresh cont for original %a is %a\n%!"
-  Continuation.print _cont
-  Continuation.print renamed_original_cont;
-*)
-        let wrapper =
-          Continuation_handler.create
-            ~params_and_handler:
-              (Continuation_params_and_handler.create params ~handler:
-                (Expr.create_apply_cont (
-                  Apply_cont.create renamed_original_cont
-                    ~args:(KP.List.simples used_params))))
-            ~stub:true
-            ~is_exn_handler:false
+      let handler =
+        let used_extra_params =
+          List.map (fun (extra_param, _bound_to) -> extra_param)
         in
-        With_wrapper {
-          wrapper;
-          renamed_original_cont;
-          original;
-        }, user_data, uacc)
+        let params = used_params @ used_extra_params in
+        CH.with_params_and_handler cont_handler
+          (CPH.create params ~handler)
+      in
+      let rewrite =
+        Apply_cont_rewrite.create ~original_params:params
+          ~used_params
+          ~used_extra_params
+      in
+      let uacc = UA.add_apply_cont_rewrite cont rewrite in
+      handler, user_data, uacc)
 
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
@@ -115,20 +105,11 @@ and simplify_non_recursive_let_cont_handler
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let body, result, user_data, uacc =
+      let body, handler, user_data, uacc =
         Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
           cont cont_handler ~body simplify_one_continuation_handler k
       in
-      match result with
-      | No_wrapper original ->
-        Let_cont.create_non_recursive cont original ~body,
-          user_data, uacc
-      | With_wrapper { wrapper; renamed_original_cont; original; } ->
-        (* CR mshinwell: Isn't [cont] always unused, since the
-           inlining-out of the wrapper has been performed already? *)
-        Let_cont.create_non_recursive renamed_original_cont original
-            ~body:(Let_cont.create_non_recursive cont wrapper ~body),
-          user_data, uacc)
+      Let_cont.create_non_recursive cont handler ~body, user_data, uacc)
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
@@ -762,6 +743,7 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
+    let rewrite = UE.find_apply_cont_rewrite uenv cont in
     let check_arity_against_args ~arity =
       if not (Flambda_arity.equal args_arity arity) then begin
         Misc.fatal_errorf "Arity of arguments in [Apply_cont] (%a) does not \
@@ -770,6 +752,10 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
           Flambda_arity.print arity
           AC.print apply_cont
       end
+    in
+    let apply_cont =
+      Apply_cont_rewrite.apply rewrite
+        (AC.update_continuation_and_args apply_cont cont ~args)
     in
     let normal_case () =
       Expr.create_apply_cont
@@ -813,7 +799,10 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
                 AC.print apply_cont
             end;
             let expr =
-              Expr.bind_parameters_to_simples ~bind:params ~target:args handler
+              Expr.bind_parameters_to_simples
+                ~bind:(params @ (Apply_cont_rewrite.extra_params rewrite))
+                ~target:(args @ (Apply_cont_rewrite.extra_args rewrite))
+                handler
             in
             let r = UA.r uacc in
             let dacc = DA.with_r dacc r in
