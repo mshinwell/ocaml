@@ -291,7 +291,7 @@ type cannot_use =
    environments, even though it doesn't need to go down through [T.join]
    at the moment.
    ...actually, maybe that isn't the case.  It might have to. *)
-let join env ~left_env ~right_env (t1 : t) (t2 : t) : t =
+let n_way_join env envs_with_extensions : t * ... =
   let names_with_equations_in_join =
     Name.Set.inter
       (Name.Set.inter (Name.Map.keys t1.equations) (Name.Map.keys t2.equations))
