@@ -19,7 +19,7 @@
    - by inlining the continuation's body at the call site. *)
 
 type cont =
-  | Jump of int
+  | Jump of Cmm.machtype list * int
   | Inline of Backend_var.With_provenance.t list * Cmm.expression
 
 
@@ -84,7 +84,7 @@ let get_variable env v =
 
 let get_jump_id env k =
   match Continuation.Map.find k env.conts with
-  | Jump id -> id
+  | Jump (_, id) -> id
   | Inline _
   | exception Not_found -> assert false
 
@@ -100,9 +100,9 @@ let new_jump_id =
   let i = ref 0 in
   (fun () -> incr i; !i)
 
-let add_jump_cont env k =
+let add_jump_cont env tys k =
   let id = new_jump_id () in
-  let conts = Continuation.Map.add k (Jump id) env.conts in
+  let conts = Continuation.Map.add k (Jump (tys, id)) env.conts in
   id, { env with conts }
 
 let add_inline_cont env k vars e =
