@@ -57,7 +57,7 @@ val meet : Meet_env.t -> t -> t -> t
 module Make_join (Id : Identifiable.S) : sig
   type extra_cse_bindings = private {
     extra_params : Kinded_parameter.t list;
-    bound_to : Simple.t Id.Map.t;
+    bound_to : Simple.t list Id.Map.t;
   }
 
   val n_way_join
