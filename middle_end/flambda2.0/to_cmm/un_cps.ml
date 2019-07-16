@@ -200,28 +200,21 @@ let primitive_boxed_int_of_standard_int x =
   | Tagged_immediate -> assert false
 
 let unary_int_arith_primitive _env dbg kind op arg =
-  match (kind : Flambda_kind.Standard_int.t) with
-  | Tagged_immediate ->
-      begin match (op : Flambda_primitive.unary_int_arith_op) with
-      | Neg -> C.negint arg dbg
-      | Swap_byte_endianness ->
-          let untagged = C.untag_int arg dbg in
-          let swapped = C.bswap16 untagged dbg in
-          C.tag_int swapped dbg
-      end
+  match (kind : Flambda_kind.Standard_int.t), 
+        (op : Flambda_primitive.unary_int_arith_op) with
+  | Tagged_immediate, Neg -> C.negint arg dbg
+  | Tagged_immediate, Swap_byte_endianness ->
+      let untagged = C.untag_int arg dbg in
+      let swapped = C.bswap16 untagged dbg in
+      C.tag_int swapped dbg
   (* Special case for manipulating int64 on 32-bit hosts *)
-  | Naked_int64
-    when C.arch32 &&
-         op = (Flambda_primitive.Neg : Flambda_primitive.unary_int_arith_op) ->
+  | Naked_int64, Neg when C.arch32 ->
       C.extcall ~alloc:false "caml_int64_neg_native" typ_int64 [arg]
   (* General case (including byte swap for 64-bit on 32-bit archi) *)
-  | _ ->
-      begin match (op : Flambda_primitive.unary_int_arith_op) with
-      | Neg -> C.sub_int (C.int 0) arg dbg
-      | Swap_byte_endianness ->
-          let primitive_kind = primitive_boxed_int_of_standard_int kind in
-          C.bbswap primitive_kind arg dbg
-      end
+  | _, Neg -> C.sub_int (C.int 0) arg dbg
+  | _, Swap_byte_endianness ->
+      let primitive_kind = primitive_boxed_int_of_standard_int kind in
+      C.bbswap primitive_kind arg dbg
 
 let unary_float_arith_primitive _env dbg op arg =
   match (op : Flambda_primitive.unary_float_arith_op) with
@@ -419,9 +412,11 @@ let binary_float_comp_primitive _env dbg op x y =
 
 let ba_dimension_offset layout total_dim dim =
   match (layout : Lambda.bigarray_layout) with
-  | Pbigarray_unknown_layout -> assert false
   | Pbigarray_fortran_layout -> 4 + dim
   | Pbigarray_c_layout -> 5 + total_dim - dim
+  | Pbigarray_unknown_layout ->
+      Misc.fatal_errorf
+        "Unknown bigarray layout, cannot compute dimension offset"
 
 let unary_primitive env dbg f arg =
   match (f : Flambda_primitive.unary_primitive) with
@@ -527,7 +522,9 @@ let machtype_of_kinded_parameter p =
 
 let machtype_of_return_arity = function
   | [k] -> machtype_of_kind k
-  | _ -> assert false
+  | _ ->
+      (* TODO: update when unboxed tuples are used *)
+      Misc.fatal_errorf "Functions are currently limited to a single return value"
 
 (* Function calls and continuations *)
 
@@ -569,7 +566,9 @@ and decide_inline_cont h num_free_occurrences =
   Continuation_handler.stub h ||
   (match (num_free_occurrences : Name_occurrences.Num_occurrences.t) with
    | One -> true
-   | Zero -> assert false (* unused continuations should have been eliminated *)
+   | Zero ->
+       Misc.fatal_errof
+         "Found unused let-bound continuation, this should not happen"
    | More_than_one -> false)
 
 and let_cont env = function
@@ -663,7 +662,10 @@ and wrap_cont env res e =
     match Env.get_k env k with
     | Jump id -> C.cexit id [res]
     | Inline ([v], body) -> C.letin v res body
-    | Inline _ -> assert false
+    | Inline _ ->
+        (* TODO: add support using unboxed tuples *)
+        Misc.fatal_errorf
+          "Multi-arguments continuation across function calls are not yet supported"
   end
 
 and wrap_exn env res e =
@@ -683,7 +685,8 @@ and wrap_exn env res e =
     | Inline ([exn_var], handler) ->
         C.trywith ~dbg:Debuginfo.none ~body:res ~exn_var ~handler
     | Inline _ ->
-        assert false
+        Misc.fatal_errorf
+          "Exception continuations should only take one argument"
   end
 
 and apply_cont env e =
@@ -692,11 +695,16 @@ and apply_cont env e =
   if Continuation.equal (Env.exn_cont env) k then begin
     match args with
     | [res] -> C.raise_regular Debuginfo.none res
-    | _ -> assert false
+    | _ ->
+        Misc.fatal_errorf
+          "Exception continuations should only applied to a single argument"
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
     | [res] -> res
-    | _ -> assert false
+    | _ ->
+        (* TODO: add support using unboxed tuples *)
+        Misc.fatal_errorf
+          "Multi-arguments continuation across function calls are not yet supported"
   end else begin
     match Env.get_k env k with
     | Jump id -> C.cexit id args
@@ -712,7 +720,9 @@ and switch env s =
       let e = match Env.get_k env k with
         | Jump id -> C.cexit id []
         | Inline ([], body) -> body
-        | Inline _ -> assert false
+        | Inline _ ->
+            Misc.fatal_errorf
+              "Switch branches should be goto (zero arguments) continuations"
       in
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
@@ -957,7 +967,7 @@ let static_structure_item (type a) env r (symb, st) =
       | Var _ ->
           (* CR vlaviron: this doesn't make sense, strings
              can't be initialized without knowing their length *)
-          assert false
+          Misc.fatal_errorf "Trying to initialize a string of unknown length"
       | Const str ->
           let data = C.emit_string_constant (name, Cmmgen_state.Global) str in
           R.update_data data r
