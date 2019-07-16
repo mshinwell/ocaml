@@ -200,7 +200,7 @@ let primitive_boxed_int_of_standard_int x =
   | Tagged_immediate -> assert false
 
 let unary_int_arith_primitive _env dbg kind op arg =
-  match (kind : Flambda_kind.Standard_int.t), 
+  match (kind : Flambda_kind.Standard_int.t),
         (op : Flambda_primitive.unary_int_arith_op) with
   | Tagged_immediate, Neg -> C.negint arg dbg
   | Tagged_immediate, Swap_byte_endianness ->
@@ -562,14 +562,16 @@ and let_expr env t =
       C.letin v' (named env' e) (expr env' body)
     )
 
+and has_one_occurrence num =
+  match (num : Name_occurrences.Num_occurrences.t) with
+  | One -> true
+  | More_than_one -> false
+  | Zero ->
+      Misc.fatal_errorf
+        "Found unused let-bound continuation, this should not happen"
+
 and decide_inline_cont h num_free_occurrences =
-  Continuation_handler.stub h ||
-  (match (num_free_occurrences : Name_occurrences.Num_occurrences.t) with
-   | One -> true
-   | Zero ->
-       Misc.fatal_errof
-         "Found unused let-bound continuation, this should not happen"
-   | More_than_one -> false)
+  Continuation_handler.stub h || has_one_occurrence num_free_occurrences
 
 and let_cont env = function
   (* Single_use continuation, inlined at call site to avoid a needless jump *)
@@ -595,18 +597,21 @@ and let_cont_inline env k h body =
 
 and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in
-  let id, env = Env.add_jump_cont env k in
+  let id, env = Env.add_jump_cont env (List.map snd vars) k in
   C.ccatch
     ~rec_flag:false
     ~body:(expr env body)
     ~handlers:[C.handler id vars handle]
 
 and let_cont_rec env conts body =
-  let s = Continuation_handlers.domain conts in
-  let env = Continuation.Set.fold
-      (fun k acc -> snd (Env.add_jump_cont acc k)) s env in
+  (* Compute the environment for jump ids *)
   let map = Continuation_handlers.to_map conts in
+  let env = Continuation.Map.fold (fun k h acc ->
+      snd (Env.add_jump_cont acc (continuation_arg_tys h) k)
+    ) map env in
+  (* Translate each continuation handler *)
   let map = Continuation.Map.map (continuation_handler env) map in
+  (* Setup the cmm handlers for the static catch *)
   let handlers = Continuation.Map.fold (fun k (vars, handle) acc ->
       let id = Env.get_jump_id env k in
       C.handler id vars handle :: acc
@@ -615,6 +620,12 @@ and let_cont_rec env conts body =
     ~rec_flag:true
     ~body:(expr env body)
     ~handlers
+
+and continuation_arg_tys h =
+  let h = Continuation_handler.params_and_handler h in
+  Continuation_params_and_handler.pattern_match h ~f:(fun args ~handler:_ ->
+      List.map machtype_of_kinded_parameter args
+    )
 
 and continuation_handler env h =
   let h = Continuation_handler.params_and_handler h in
@@ -660,8 +671,9 @@ and wrap_cont env res e =
     res
   else begin
     match Env.get_k env k with
-    | Jump id -> C.cexit id [res]
+    | Jump ([_], id) -> C.cexit id [res]
     | Inline ([v], body) -> C.letin v res body
+    | Jump _
     | Inline _ ->
         (* TODO: add support using unboxed tuples *)
         Misc.fatal_errorf
@@ -675,7 +687,7 @@ and wrap_exn env res e =
     res
   else begin
     match Env.get_k env k_exn with
-    | Jump id ->
+    | Jump ([_], id) ->
         let v = Backend_var.create_local "exn_var" in
         let exn_var = Backend_var.With_provenance.create v in
         C.trywith
@@ -684,6 +696,7 @@ and wrap_exn env res e =
           ~handler:(C.cexit id [C.var v])
     | Inline ([exn_var], handler) ->
         C.trywith ~dbg:Debuginfo.none ~body:res ~exn_var ~handler
+    | Jump _
     | Inline _ ->
         Misc.fatal_errorf
           "Exception continuations should only take one argument"
@@ -707,7 +720,10 @@ and apply_cont env e =
           "Multi-arguments continuation across function calls are not yet supported"
   end else begin
     match Env.get_k env k with
-    | Jump id -> C.cexit id args
+    | Jump (tys, id) ->
+        (* The provided args should match the types in tys *)
+        assert (List.length tys = List.length args);
+        C.cexit id args
     | Inline (vars, body) ->
         List.fold_left2 (fun acc v e -> C.letin v e acc) body vars args
   end
@@ -718,8 +734,9 @@ and switch env s =
     Discriminant.Map.fold (fun d k (ints, exprs) ->
       let i = Targetint.OCaml.to_int (Discriminant.to_int d) in
       let e = match Env.get_k env k with
-        | Jump id -> C.cexit id []
+        | Jump ([], id) -> C.cexit id []
         | Inline ([], body) -> body
+        | Jump _
         | Inline _ ->
             Misc.fatal_errorf
               "Switch branches should be goto (zero arguments) continuations"
@@ -988,16 +1005,24 @@ let computation_wrapper offsets c =
       let k_exn = Exn_continuation.exn_handler c.exn_continuation in
       let env = Env.mk offsets k k_exn in
       let env, vars = var_list env c.computed_values in
-      (* CR gbury: for the future, try and inline the continuation when it
-         is called a single time, and then try and rearrange the generated cmm
-         code to move assignments closer to the variable definitions *)
-      let id, env = Env.add_jump_cont env k in
-      let body = expr env c.expr in
+      let free_names = Expr.free_names c.expr in
+      let num_occurrences = Name_occurrences.count_continuation free_names k in
       let wrap e =
-        C.ccatch
-          ~rec_flag:false ~body
-          ~handlers:[C.handler id vars e]
+        if has_one_occurrence num_occurrences then begin
+          let vars = List.map fst vars in
+          let env = Env.add_inline_cont env k vars e in
+          expr env c.expr
+        end else begin
+          let tys = List.map snd vars in
+          let id, env = Env.add_jump_cont env tys k in
+          let body = expr env c.expr in
+          C.ccatch
+            ~rec_flag:false ~body
+            ~handlers:[C.handler id vars e]
+        end
       in
+      (* CR gbury: for the future, try and rearrange the generated cmm
+         code to move assignments closer to the variable definitions *)
       env, wrap
 
 let definition offsets (d : Flambda_static.Program_body.Definition.t) =
