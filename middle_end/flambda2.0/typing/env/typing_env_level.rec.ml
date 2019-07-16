@@ -283,92 +283,116 @@ let meet env (t1 : t) (t2 : t) =
     Typing_env_extension.pattern_match env_extension ~f:(fun level -> level)
   end
 
-type cannot_use =
-  | Equation_ok
-  | Equation_ineligible
+module Make_join (Id : Identifiable.S) = struct
+  type extra_cse_bindings = {
+    extra_params : Kinded_parameter.t list;
+    bound_to : Simple.t list Id.Map.t;
+  }
 
-(* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
-   environments, even though it doesn't need to go down through [T.join]
-   at the moment.
-   ...actually, maybe that isn't the case.  It might have to. *)
-let n_way_join env envs_with_extensions : t * ... =
-  let names_with_equations_in_join =
-    Name.Set.inter
-      (Name.Set.inter (Name.Map.keys t1.equations) (Name.Map.keys t2.equations))
-      (Name.set_of_var_set (Typing_env.var_domain env))
-  in
-  let allowed = Typing_env.var_domain env in
-  let get_type t env name =
-    Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
-      ~already_seen:Simple.Set.empty ~allowed
-      (find_equation t name)
-  in
-  let t =
-    Name.Set.fold (fun name t ->
-        assert (not (Name.Map.mem name t.equations));
-        let ty1 = get_type t1 left_env name in
-        let ty2 = get_type t2 right_env name in
-        let join_ty = Api_meet_and_join.join ~bound_name:name env ty1 ty2 in
-        add_or_replace_equation t name join_ty)
-      names_with_equations_in_join
-      (empty ())
-  in
-  let simple_allowed simple =
-    match Simple.descr simple with
-    | Name (Var var) -> Variable.Set.mem var allowed
-    | Name (Symbol _) | Const _ | Discriminant _ -> true
-  in
-  let canonicalise_and_filter_cse env cse =
-    (* Analogously to the behaviour of [Type_erase_aliases], attempt to get
-       the CSE equations to refer to entities that will be in scope in
-       [env], to maximise information propagation across join points. *)
-    let canonicalise simple =
-      let all_aliases =
-        Simple.Set.add simple
-          (Typing_env.aliases_of_simple_allowable_in_types env simple)
-      in
-      let eligible_aliases = Simple.Set.filter simple_allowed all_aliases in
-      Simple.Set.get_singleton eligible_aliases
+  type cannot_use =
+    | Equation_ok
+    | Equation_ineligible
+
+  (* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
+     environments, even though it doesn't need to go down through [T.join]
+     at the moment.  (Actually, check a couple of places e.g. closures_entry
+     where it looks like these may still be needed...) *)
+
+  let n_way_join env envs_with_extensions : t * extra_cse_bindings =
+    let allowed = Typing_env.var_domain env in
+    let allowed_names = Name.set_of_var_set allowed in
+    let names_with_equations_in_join =
+      List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
+          Name.Set.inter t.equations names_with_equations_in_join)
+        allowed_names
+        envs_with_extensions
     in
-    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to cse ->
-        let cannot_use, prim =
-          (* CR mshinwell: share code with type_erase_aliases.ml *)
-          Flambda_primitive.Eligible_for_cse.fold_args prim
-            ~init:Equation_ok
-            ~f:(fun cannot_use arg ->
-              match cannot_use with
-              | Equation_ineligible -> Equation_ineligible, arg
-              | Equation_ok ->
-                match canonicalise arg with
-                | None -> Equation_ineligible, arg
-                | Some arg -> Equation_ok, arg)
+    let get_type t env name =
+      Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
+        ~already_seen:Simple.Set.empty ~allowed
+        (find_equation t name)
+    in
+    let t =
+      Name.Set.fold (fun name result ->
+          assert (not (Name.Map.mem name result.equations));
+          match envs_with_extensions with
+          | [] -> result
+          | (first_env, _id, t) :: envs_with_extensions ->
+            let join_ty =
+              List.fold_left (fun join_ty (one_env, _id, t) ->
+                  let ty = get_type t one_env name in
+                  Api_meet_and_join.join ~bound_name:name env join_ty ty)
+                (get_type t first_env name)
+                envs_with_extensions
+            in
+            add_or_replace_equation t name join_ty)
+        names_with_equations_in_join
+        (empty ())
+    in
+    let simple_allowed simple =
+      match Simple.descr simple with
+      | Name (Var var) -> Variable.Set.mem var allowed
+      | Name (Symbol _) | Const _ | Discriminant _ -> true
+    in
+    let canonicalise_and_filter_cse env cse =
+      let canonicalise simple =
+        let all_aliases =
+          Simple.Set.add simple
+            (Typing_env.aliases_of_simple_allowable_in_types env simple)
         in
-        match cannot_use with
-        | Equation_ineligible -> cse
-        | Equation_ok ->
-          match canonicalise bound_to with
-          | None -> cse
-          | Some bound_to ->
-            Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse)
-      cse
-      Flambda_primitive.Eligible_for_cse.Map.empty
-  in
-  let cse1 = canonicalise_and_filter_cse left_env t1.cse in
-  let cse2 = canonicalise_and_filter_cse right_env t2.cse in
-  let cse =
-    Flambda_primitive.Eligible_for_cse.Map.merge
-      (fun _prim bound_to1 bound_to2 ->
-        match bound_to1, bound_to2 with
-        | None, None | Some _, None | None, Some _ -> None
-        | Some bound_to1, Some bound_to2 ->
-          if Simple.equal bound_to1 bound_to2
-            && simple_allowed bound_to1
-          then Some bound_to1
-          else None)
-      cse1 cse2
-  in
-  assert (Variable.Map.is_empty t.defined_vars);
-  { t with cse; }
+        let eligible_aliases = Simple.Set.filter simple_allowed all_aliases in
+        Simple.Set.choose_opt eligible_aliases
+      in
+      Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to cse ->
+          let cannot_use, prim =
+            (* CR mshinwell: share code with type_erase_aliases.ml *)
+            Flambda_primitive.Eligible_for_cse.fold_args prim
+              ~init:Equation_ok
+              ~f:(fun cannot_use arg ->
+                match cannot_use with
+                | Equation_ineligible -> Equation_ineligible, arg
+                | Equation_ok ->
+                  match canonicalise arg with
+                  | None -> Equation_ineligible, arg
+                  | Some arg -> Equation_ok, arg)
+          in
+          match cannot_use with
+          | Equation_ineligible -> cse
+          | Equation_ok ->
+            match canonicalise bound_to with
+            | None -> cse
+            | Some bound_to ->
+              Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse)
+        cse
+        Flambda_primitive.Eligible_for_cse.Map.empty
+    in
+    let cses =
+      List.map (fun (env, _id, t) ->
+          canonicalise_and_filter_cse env t.cse)
+        envs_with_extensions
+    in
+
+
+
+    let cse =
+      Flambda_primitive.Eligible_for_cse.Map.merge
+        (fun _prim bound_to1 bound_to2 ->
+          match bound_to1, bound_to2 with
+          | None, None | Some _, None | None, Some _ -> None
+          | Some bound_to1, Some bound_to2 ->
+            if Simple.equal bound_to1 bound_to2
+              && simple_allowed bound_to1
+            then Some bound_to1
+            else None)
+        cse1 cse2
+    in
+
+
+
+    let t : t = { t with cse; } in
+    assert (Variable.Map.is_empty t.defined_vars);
+    t, extra_cse_bindings
+end
 
 let mem t name =
   Name.Map.mem name t.equations
