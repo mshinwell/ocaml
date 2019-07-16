@@ -16,14 +16,22 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Id : sig
+  type t
+  include Identifiable.S with type t := t
+
+  val create : unit -> t
+end
+
 val create
    : original_params:Kinded_parameter.t list
   -> used_params:Kinded_parameter.t list
+  -> extra_params_and_args:Continuation_uses_env.extra_params_and_args
   -> used_extra_params:(Kinded_parameter.t * Simple.t) list
   -> t
 
-val apply : t -> Apply_cont.t -> Apply_cont.t
+val extra_params : t -> Kinded_parameter.Set.t
 
-val extra_params : t -> Kinded_parameter.t list
+val extra_args : t -> Id.t -> Simple.t list
 
-val extra_args : t -> Simple.t list
+val rewrite_use : t -> Id.t -> Apply_cont.t -> Apply_cont.t

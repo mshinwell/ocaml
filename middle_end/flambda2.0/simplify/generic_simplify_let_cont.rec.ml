@@ -65,7 +65,7 @@ end) = struct
             (R.get_lifted_constants r)
         in
         let arity = Continuation_handler_like.arity cont_handler in
-        let typing_env, arg_types, extra_params =
+        let typing_env, arg_types, extra_params_and_args =
           CUE.continuation_env_and_arg_types cont_uses_env
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
@@ -87,7 +87,7 @@ end) = struct
           else
             try
               simplify_continuation_handler_like dacc ~arg_types
-                ~extra_params cont cont_handler k
+                ~extra_params_and_args cont cont_handler k
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s simplifying continuation \
                   handler@ %a@ \

@@ -50,7 +50,7 @@ end) : sig
     -> body:Flambda.Expr.t
     -> (Downwards_acc.t
       -> arg_types:Flambda_type.t list
-      -> extra_params:(Kinded_parameter.t * Simple.t) list
+      -> extra_params_and_args:Continuation_uses_env.extra_params_and_args
       -> Continuation.t
       -> Continuation_handler_like.t
       -> (Continuation_uses_env.t
