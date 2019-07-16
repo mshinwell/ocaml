@@ -366,12 +366,32 @@ module Make_join (Id : Identifiable.S) = struct
         cse
         Flambda_primitive.Eligible_for_cse.Map.empty
     in
+    (* XXX We surely need to have all equations whose LHS is available on
+       all paths first. *)
     let cses_with_valid_lhs_in_joined_env =
       (* These are the CSE equations whose left-hand sides (but not
          necessarily whose right-hand sides) are valid in the joined [env]. *)
       List.map (fun (env, _id, t) ->
           canonicalise_and_filter_cse env t.cse)
         envs_with_extensions
+    in
+    let cses_
+      (* These are the CSE equations whose left-hand sides are valid in
+         the joined [env] and which, in all environment extensions being
+         joined, have a right-hand side that is in scope in [env]. *)
+      List.fold_left (fun with_valid_rhs cse ->
+          Flambda_primitive.Eligible_for_cse.Map.merge
+            (fun _prim bound_to1 bound_to2 ->
+              match bound_to1, bound_to2 with
+              | None, None | Some _, None | None, Some _ -> None
+              | Some bound_to1, Some bound_to2 ->
+                if Simple.equal bound_to1 bound_to2
+                  && simple_allowed bound_to1
+                then Some bound_to1
+                else None)
+            with_valid_rhs cse)
+        Flambda_primitive.Eligible_for_cse.Map.empty
+        cses_with_valid_lhs_in_joined_env
     in
     let cses_with_valid_rhs_in_joined_env =
       (* These are the CSE equations whose left-hand sides are valid in
@@ -398,7 +418,6 @@ module Make_join (Id : Identifiable.S) = struct
          [cses_with_valid_rhs_in_joined_env].  These equations can only be
          used at the join point by adding extra parameters to the
          continuation whose handler forms such join point. *)
-
     in
     let t : t = { t with cse; } in
     assert (Variable.Map.is_empty t.defined_vars);
