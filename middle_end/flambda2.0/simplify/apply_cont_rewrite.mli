@@ -14,6 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Rewrites applied to [Apply_cont] expressions in order to reflect
+    changes in continuation arities consequential to addition or removal of
+    parameters. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Id : sig
@@ -25,9 +29,9 @@ end
 
 val create
    : original_params:Kinded_parameter.t list
-  -> used_params:Kinded_parameter.t list
+  -> used_params:Kinded_parameter.Set.t
   -> extra_params_and_args:Continuation_uses_env.extra_params_and_args
-  -> used_extra_params:(Kinded_parameter.t * Simple.t) list
+  -> used_extra_params:Kinded_parameter.Set.t
   -> t
 
 val extra_params : t -> Kinded_parameter.Set.t

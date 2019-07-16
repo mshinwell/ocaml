@@ -28,7 +28,6 @@ type t = {
 let create ~original_params ~used_params
       ~(extra_params_and_args : CUE.extra_params_and_args)
       ~used_extra_params =
-  let used_params = KP.Set.of_list used_params in
   (* CR mshinwell: check there weren't any duplicates in the param lists too *)
   if Set.cardinal original_params < Set.cardinal used_params then begin
     Misc.fatal_error "Must have at least as many [original_params] (%a)@ as \
@@ -36,7 +35,6 @@ let create ~original_params ~used_params
       KP.Set.print original_params
       KP.Set.print used_params
   end;
-  let used_extra_params = KP.Set.of_list used_extra_params in
   if Set.cardinal extra_params_and_args.extra_params
     < Set.cardinal used_extra_params
   then begin

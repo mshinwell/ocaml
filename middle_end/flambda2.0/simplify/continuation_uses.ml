@@ -22,22 +22,25 @@ module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   type t = {
+    id : Apply_cont_rewrite.Id.t;
     arg_types : T.t list;
     typing_env : TE.t;
   }
 
-  let create ~typing_env_at_use:typing_env ~arg_types =
-    { arg_types;
+  let create ~typing_env_at_use:typing_env id ~arg_types =
+    { id;
+      arg_types;
       typing_env;
     }
 
-  let print ppf { typing_env = _; arg_types; } =
+  let print ppf { typing_env = _; id = _; arg_types; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(arg_types@ %a)@]@ \
         )@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Flambda_type.print)
       arg_types
 
+  let id t = t.id
   let arg_types t = t.arg_types
   let typing_env_at_use t = t.typing_env
 end
@@ -64,7 +67,7 @@ let print ppf { continuation; arity; uses; } =
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
-let add_use t ~typing_env_at_use ~arg_types =
+let add_use t ~typing_env_at_use id ~arg_types =
   try
     let arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal arity t.arity) then begin
@@ -73,7 +76,7 @@ let add_use t ~typing_env_at_use ~arg_types =
         Flambda_arity.print arity
         Flambda_arity.print t.arity
     end;
-    let use = Use.create ~typing_env_at_use ~arg_types in
+    let use = Use.create ~typing_env_at_use id ~arg_types in
     { t with
       uses = use :: t.uses;
     }
@@ -89,7 +92,9 @@ let add_use t ~typing_env_at_use ~arg_types =
     raise Misc.Fatal_error
   end
 
-let env_and_arg_types t ~definition_typing_env =
+module Join = TEE.Make_join (Apply_cont_rewrite.Id)
+
+let env_and_param_types t ~definition_typing_env =
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
   in
@@ -108,37 +113,26 @@ let env_and_arg_types t ~definition_typing_env =
       (Use.arg_types use)
   in
   match t.uses with
-  | [] -> definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity
+  | [] ->
+    definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity,
+      ...
   | [use] ->
     let env_extension = cut_use_environment use in
     let allowed = TE.var_domain definition_typing_env in
     let use_arg_types = process_use_arg_types use ~allowed in
     let env = TE.add_env_extension definition_typing_env env_extension in
-    env, use_arg_types
+    env, use_arg_types, ...
   | (use::uses) as all_uses ->
-    let for_join =
+    let use_envs_with_ids_and_extensions =
       List.map (fun use ->
-          let apply_cont_id = Use.apply_cont_id use in
           let typing_env = Use.typing_env_at_use use in
-          let 
-          all_uses
+          let id = Use.id use in
+          let env_extension = cut_use_environment use in
+          typing_env, id, env_extension)
+        all_uses
     in
-
-    let use_envs =
-    in
-    let env_extensions =
-      List.map (fun use -> cut_use_environment use) all_uses
-    in
-    let joined_env_extension,  =
-      TEE.n_way_join definition_typing_env
-        (List.combine use_envs env_extensions)
-
-        TEE.join definition_typing_env
-          ~left_env:(Use.typing_env_at_use use)
-          ~right_env:definition_typing_env
-          env_extension joined_env_extension)
-        first_env_extension
-        uses
+    let joined_env_extension, extra_cse_bindings =
+      Join.n_way_join definition_typing_env use_envs_with_ids_and_extensions
     in
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
     let allowed = TE.var_domain env in
@@ -152,7 +146,7 @@ let env_and_arg_types t ~definition_typing_env =
         first_arg_types
         uses
     in
-    env, arg_types
+    env, arg_types, ...
 
 let number_of_uses t = List.length t.uses
 

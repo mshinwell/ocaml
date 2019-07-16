@@ -450,10 +450,18 @@ let simplify_return_continuation_handler dacc ~arg_types ~extra_params:_ _cont
       static_structure;
     }
   in
+  let extra_params_and_args : CUE.extra_params_and_args =
+    (* CR mshinwell: CUE.extra_params_and_args into its own module; add
+       [empty], [print], etc.  Use [empty] here. *)
+    { extra_params = [];
+      extra_args = [];
+    }
+  in
   let rewrite =
     Apply_cont_rewrite.create ~original_params:original_computed_values
-      ~used_params:used_computed_values
-      ~used_extra_params:[]
+      ~used_params:(KP.Set.of_list used_computed_values)
+      ~extra_params_and_args
+      ~used_extra_params:KP.Set.empty
   in
   let result : _ Generic_simplify_let_cont.result =
     { handler;
