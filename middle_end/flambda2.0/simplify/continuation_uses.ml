@@ -151,7 +151,12 @@ let env_and_param_types t ~definition_typing_env =
         first_arg_types
         uses
     in
-    env, arg_types, ...
+    let extra_params_and_args : CUE.extra_params_and_args =
+      { extra_params = extra_cse_bindings.extra_params;
+        extra_args = extra_cse_bindings.bound_to;
+      }
+    in
+    env, arg_types, extra_params_and_args
 
 let number_of_uses t = List.length t.uses
 
