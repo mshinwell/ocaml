@@ -115,15 +115,28 @@ let env_and_arg_types t ~definition_typing_env =
     let use_arg_types = process_use_arg_types use ~allowed in
     let env = TE.add_env_extension definition_typing_env env_extension in
     env, use_arg_types
-  | use::uses ->
-    let first_env_extension = cut_use_environment use in
-    let joined_env_extension =
-      List.fold_left (fun joined_env_extension use ->
-          let env_extension = cut_use_environment use in
-          TEE.join definition_typing_env
-            ~left_env:(Use.typing_env_at_use use)
-            ~right_env:definition_typing_env
-            env_extension joined_env_extension)
+  | (use::uses) as all_uses ->
+    let for_join =
+      List.map (fun use ->
+          let apply_cont_id = Use.apply_cont_id use in
+          let typing_env = Use.typing_env_at_use use in
+          let 
+          all_uses
+    in
+
+    let use_envs =
+    in
+    let env_extensions =
+      List.map (fun use -> cut_use_environment use) all_uses
+    in
+    let joined_env_extension,  =
+      TEE.n_way_join definition_typing_env
+        (List.combine use_envs env_extensions)
+
+        TEE.join definition_typing_env
+          ~left_env:(Use.typing_env_at_use use)
+          ~right_env:definition_typing_env
+          env_extension joined_env_extension)
         first_env_extension
         uses
     in

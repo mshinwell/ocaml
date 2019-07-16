@@ -51,10 +51,13 @@ let rec simplify_let
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> arg_types:T.t list -> extra_params:(KP.t * Simple.t) list
+  : 'a. DA.t -> arg_types:T.t list
+    -> extra_params_and_args:Downwards_acc.extra_params_and_args
     -> Continuation.t -> Continuation_handler.t -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
-= fun dacc ~arg_types ~extra_params cont_handler k ->
+= fun dacc ~arg_types
+      ~(extra_params_and_args : Downwards_acc.extra_params_and_args)
+      cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
@@ -79,14 +82,11 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
           params
       in
       let used_extra_params =
-        List.filter (fun (extra_param, _bound_to) ->
+        List.filter (fun extra_param ->
             Name_occurrences.mem_var free_names (KP.var param))
-          extra_params
+          extra_params_and_args.extra_params
       in
       let handler =
-        let used_extra_params =
-          List.map (fun (extra_param, _bound_to) -> extra_param)
-        in
         let params = used_params @ used_extra_params in
         CH.with_params_and_handler cont_handler
           (CPH.create params ~handler)
@@ -94,6 +94,7 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
       let rewrite =
         Apply_cont_rewrite.create ~original_params:params
           ~used_params
+          ~extra_params_and_args
           ~used_extra_params
       in
       let uacc = UA.add_apply_cont_rewrite cont rewrite in
@@ -733,8 +734,9 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
   DA.print dacc;
 *)
     let args_arity = T.arity_of_list arg_types in
-    let dacc =
-      DA.record_continuation_use dacc (AC.continuation apply_cont)
+    let dacc, rewrite_id =
+      DA.record_continuation_use dacc
+        (AC.continuation apply_cont)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
@@ -743,7 +745,12 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
-    let rewrite = UE.find_apply_cont_rewrite uenv cont in
+    let apply_cont =
+      let apply_cont_rewrite = UE.find_apply_cont_rewrite uenv cont in
+      let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
+      Apply_cont_rewrite.rewrite_use apply_cont_rewrite rewrite_id apply_cont
+    in
+    (* CR mshinwell: Clarify that [arity] is the arity before any rewrite. *)
     let check_arity_against_args ~arity =
       if not (Flambda_arity.equal args_arity arity) then begin
         Misc.fatal_errorf "Arity of arguments in [Apply_cont] (%a) does not \
@@ -752,10 +759,6 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
           Flambda_arity.print arity
           AC.print apply_cont
       end
-    in
-    let apply_cont =
-      Apply_cont_rewrite.apply rewrite
-        (AC.update_continuation_and_args apply_cont cont ~args)
     in
     let normal_case () =
       Expr.create_apply_cont
@@ -799,9 +802,13 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
                 AC.print apply_cont
             end;
             let expr =
+              let extra_params = Apply_cont_rewrite.extra_params rewrite in
+              let extra_args =
+                Apply_cont_rewrite.extra_args rewrite rewrite_id
+              in
               Expr.bind_parameters_to_simples
-                ~bind:(params @ (Apply_cont_rewrite.extra_params rewrite))
-                ~target:(args @ (Apply_cont_rewrite.extra_args rewrite))
+                ~bind:(params @ extra_params)
+                ~target:(args @ extra_args)
                 handler
             in
             let r = UA.r uacc in

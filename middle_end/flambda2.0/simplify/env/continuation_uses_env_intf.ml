@@ -29,16 +29,21 @@ module type S = sig
     -> Continuation.t
     -> typing_env_at_use:Flambda_type.Typing_env.t
     -> arg_types:Flambda_type.t list
-    -> t
+    -> t * Apply_cont_rewrite.Id.t
 
   (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
-  val continuation_env_and_arg_types
+  type extra_params_and_args = private {
+    extra_params : Kinded_parameter.t list;
+    extra_args : Simple.t list Apply_cont_rewrite.Id.Map.t;
+  }
+
+  val continuation_env_and_param_types
      : t
     -> definition_typing_env:Flambda_type.Typing_env.t
     -> Continuation.t
     -> Flambda_arity.t
-    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
+    -> Flambda_type.Typing_env.t * (Flambda_type.t list) * extra_params_and_args
 
   val num_continuation_uses : t -> Continuation.t -> int
 end

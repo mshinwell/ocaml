@@ -47,7 +47,7 @@ let record_continuation_use t cont ~typing_env_at_use ~arg_types =
   { continuation_uses;
   }
 
-let continuation_env_and_arg_types t ~definition_typing_env cont arity =
+let continuation_env_and_param_types t ~definition_typing_env cont arity =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found ->
     let arg_types =
