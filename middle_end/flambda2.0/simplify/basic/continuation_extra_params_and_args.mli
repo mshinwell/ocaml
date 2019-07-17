@@ -21,6 +21,8 @@ type t = {
   extra_args : Simple.t list Apply_cont_rewrite_id.Map.t;
 }
 
+val print : Format.formatter -> t -> unit
+
 val empty : t
 
 val add

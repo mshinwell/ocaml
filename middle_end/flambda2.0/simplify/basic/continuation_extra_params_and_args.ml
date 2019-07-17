@@ -21,6 +21,14 @@ type t = {
   extra_args : Simple.t list Apply_cont_rewrite_id.Map.t;
 }
 
+let print ppf { extra_params; extra_args; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(extra_params@ %a)@ \
+      @[<hov 1>(extra_args@ %a)\
+      )@]"
+    Kinded_parameter.List.print extra_params
+    (Apply_cont_rewrite_id.Map.print Simple.List.print) extra_args
+
 let empty = {
   extra_params = [];
   extra_args = Apply_cont_rewrite_id.Map.empty;

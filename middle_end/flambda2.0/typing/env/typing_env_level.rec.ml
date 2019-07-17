@@ -407,6 +407,9 @@ Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
   EP.print prim
   Kinded_parameter.print extra_param
   (Apply_cont_rewrite_id.Map.print Simple.print) bound_to;
+        let cse =
+          EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
+        in
         let extra_bindings =
           Continuation_extra_params_and_args.add extra_bindings ~extra_param
             ~extra_args:bound_to

@@ -61,6 +61,11 @@ val find_cse
   -> Flambda_primitive.Eligible_for_cse.t
   -> Simple.t option
 
+val add_env_extension_from_level
+   : t
+  -> Typing_env_level.t
+  -> t
+
 val add_env_extension
    : t
   -> Typing_env_extension.t
