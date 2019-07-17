@@ -174,6 +174,11 @@ let must_be_var t =
   | Name (Var var) | Rec_name (Var var, _) -> Some var
   | Name _ | Rec_name (_, _) | Const _ | Discriminant _ -> None
 
+let allowed t ~allowed =
+  match must_be_var t with
+  | None -> true
+  | Some var -> Variable.Set.mem var allowed
+
 let to_name t =
   match t with
   | Name name -> Some (None, name)

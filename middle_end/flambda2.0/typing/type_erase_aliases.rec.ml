@@ -19,11 +19,6 @@
 (* CR mshinwell: Consider packaging up [env], [bound_name], [already_seen]
    and [allowed] into a single environment. *)
 
-let simple_is_eligible ~allowed simple =
-  match Simple.descr simple with
-  | Const _ | Discriminant _ | Name (Symbol _) -> true
-  | Name (Var var) -> Variable.Set.mem var allowed
-
 let erase_aliases_unknown_or_join erase_aliases_contents env ~bound_name
       ~already_seen ~allowed (o : _ Flambda_types.unknown_or_join)
       : _ Flambda_types.unknown_or_join =
@@ -63,7 +58,7 @@ let erase_aliases_ty env ~bound_name ~already_seen
           Simple.Set.remove (Simple.name bound_name) all_aliases
       in
       let eligible_aliases =
-        Simple.Set.filter (fun simple -> simple_is_eligible ~allowed simple)
+        Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
           all_aliases_minus_bound_name
       in
       match Simple.Set.choose_opt eligible_aliases with
