@@ -534,42 +534,41 @@ let find_cse t prim =
   | exception Not_found -> None
   | bound_to -> Some bound_to
 
-let add_env_extension t env_extension : t =
-(*
-Format.eprintf "Adding env extension:@ %a\n%!"
-  Typing_env_extension.print env_extension;
-*)
+let add_env_extension_from_level t level : t =
+  let t =
+    List.fold_left (fun t (var, kind) ->
+        add_variable_definition t var kind Name_occurrence_kind.in_types)
+      t
+      (Typing_env_level.defined_vars_in_order level)
+  in
+  let t =
+    Name.Map.fold (fun name ty t ->
+        if !Clflags.flambda_invariant_checks then begin
+          let free_names = Type_free_names.free_names ty in
+          let free_vars = Name_occurrences.variables free_names in
+          let defined = Name_occurrences.variables (domain t) in
+          if not (Variable.Set.subset free_vars defined) then begin
+            Misc.fatal_errorf "Cannot add equation %a = %a@ to typing \
+                environment since some names are unbound:@ %a"
+              Name.print name
+              Type_printers.print ty
+              print t
+          end
+        end;
+        (* CR mshinwell: Do we actually need the "more precise" check here?
+            Shouldn't the extensions always be as or more precise? *)
+        add_equation t name ty)
+      (Typing_env_level.equations level)
+      t
+  in
+  Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
+      add_cse t prim ~bound_to)
+    (Typing_env_level.cse level)
+    t
+
+let add_env_extension t env_extension =
   Typing_env_extension.pattern_match env_extension ~f:(fun level ->
-    let t =
-      List.fold_left (fun t (var, kind) ->
-          add_variable_definition t var kind Name_occurrence_kind.in_types)
-        t
-        (Typing_env_level.defined_vars_in_order level)
-    in
-    let t =
-      Name.Map.fold (fun name ty t ->
-          if !Clflags.flambda_invariant_checks then begin
-            let free_names = Type_free_names.free_names ty in
-            let free_vars = Name_occurrences.variables free_names in
-            let defined = Name_occurrences.variables (domain t) in
-            if not (Variable.Set.subset free_vars defined) then begin
-              Misc.fatal_errorf "Cannot add equation %a = %a@ to typing \
-                  environment since some names are unbound:@ %a"
-                Name.print name
-                Type_printers.print ty
-                print t
-            end
-          end;
-          (* CR mshinwell: Do we actually need the "more precise" check here?
-             Shouldn't the extensions always be as or more precise? *)
-          add_equation t name ty)
-        (Typing_env_level.equations level)
-        t
-    in
-    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
-        add_cse t prim ~bound_to)
-      (Typing_env_level.cse level)
-      t)
+    add_env_extension_from_level t level)
 
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
@@ -620,28 +619,22 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
           t
     in
     invariant t;
+(*
 Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   Scope.print min_scope
   print original_t
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
-    let env_extension =
+*)
+    let level =
       Scope.Map.fold (fun _scope one_level result ->
-(*
-Format.eprintf "Folding in scope %a\n%!" Scope.print _scope;
-Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_level);
-*)
-          let env_extension =
-            Typing_env_extension.create (One_level.level one_level)
-          in
-(*
-Format.eprintf "Extension is:@ %a\n%!"
-  Typing_env_extension.print env_extension;
-*)
-          Typing_env_extension.concat result env_extension)
+          Typing_env_level.concat result (One_level.level one_level))
         at_or_after_cut
-        (Typing_env_extension.empty ())
+        (Typing_env_level.empty ())
     in
+    let env_extension = Typing_env_extension.create level in
+(*
 Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
+*)
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     env_extension, vars_in_scope_at_cut
 

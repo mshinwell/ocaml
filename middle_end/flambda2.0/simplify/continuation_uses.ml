@@ -108,7 +108,9 @@ Format.eprintf "Retrieving env + param types for %a; unknown >= level %a\n%!"
     in
     env_extension
   in
+(*
 Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typing_env;
+*)
   let process_use_arg_types use ~allowed =
     let env = Use.typing_env_at_use use in
     List.map (fun ty ->
@@ -128,9 +130,12 @@ Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typ
           typing_env, id, env_extension)
         all_uses
     in
+    (* CR mshinwell: Maybe cutting should return a level rather than an
+       extension, to save opening all the extensions again? *)
     let joined_env_extension, extra_cse_bindings =
       TEE.n_way_join definition_typing_env use_envs_with_ids_and_extensions
     in
+Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
     let env =
       List.fold_left (fun env extra_param ->

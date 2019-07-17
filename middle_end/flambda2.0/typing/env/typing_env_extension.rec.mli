@@ -43,8 +43,6 @@ val one_equation : Name.t -> Flambda_types.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Flambda_types.t -> t
 
-val concat : t -> t -> t
-
 val meet : Meet_env.t -> t -> t -> t
 
 val n_way_join

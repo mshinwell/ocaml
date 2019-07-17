@@ -91,10 +91,12 @@ end) = struct
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s simplifying continuation \
                   handler@ %a@ \
+                  with [extra_params_and_args]@ %a@ \
                   with downwards accumulator:@ %a\n"
                 (Flambda_colours.error ())
                 (Flambda_colours.normal ())
                 Continuation_handler_like.print cont_handler
+                Continuation_extra_params_and_args.print extra_params_and_args
                 DA.print dacc;
               raise Misc.Fatal_error
             end

@@ -762,7 +762,8 @@ Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
       match rewrite with
       | None -> apply_cont
       | Some rewrite ->
-Format.eprintf "Applying rewrite:@ %a\n%!"
+Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
+  Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in

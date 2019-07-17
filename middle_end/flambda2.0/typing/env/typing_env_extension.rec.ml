@@ -70,15 +70,6 @@ let add_or_replace_equation { abst; } name ty =
 let mem { abst; } name =
   A.pattern_match abst ~f:(fun _ level -> Typing_env_level.mem level name)
 
-let concat (t1 : t) (t2 : t) : t =
-  let abst =
-    A.pattern_match t1.abst ~f:(fun _ level_1 ->
-      A.pattern_match t2.abst ~f:(fun _ level_2 ->
-        let level = Typing_env_level.concat level_1 level_2 in
-        A.create (Typing_env_level.defined_vars_in_order' level) level))
-  in
-  { abst; }
-
 let meet env (t1 : t) (t2 : t) : t =
   let abst =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->
@@ -100,8 +91,10 @@ let n_way_join env envs_with_extensions : t * _ =
           A.create (Typing_env_level.defined_vars_in_order' level) level
         in
         abst, extra_cse_bindings
-      | (env, id, t)::envs_with_extensions ->
+      | (_env, id, t)::envs_with_extensions ->
+        (* CR mshinwell: about _env, see CR in Continuation_uses *)
         A.pattern_match t.abst ~f:(fun _ level ->
+          let env = Typing_env.add_env_extension_from_level env level in
           (* It doesn't matter that the list gets reversed. *)
           let envs_with_levels = (env, id, level) :: envs_with_levels in
           open_binders envs_with_extensions envs_with_levels)
