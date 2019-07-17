@@ -287,159 +287,169 @@ let meet env (t1 : t) (t2 : t) =
     Typing_env_extension.pattern_match env_extension ~f:(fun level -> level)
   end
 
-module Make_join (Id : Identifiable.S) = struct
-  module Extra_cse_bindings = struct
-    type t = {
-      extra_params : Kinded_parameter.t list;
-      bound_to : Simple.t Id.Map.t list;
-    }
+type cannot_use =
+  | Equation_ok
+  | Equation_ineligible
 
-    let empty = {
-      extra_params = [];
-      bound_to = [];
-    }
-
-    let add t ~extra_param ~bound_to =
-      { extra_params = extra_param :: t.extra_params;
-        bound_to = bound_to :: t.bound_to;
-      }
-  end
-
-  type cannot_use =
-    | Equation_ok
-    | Equation_ineligible
-
-  type rhs_kind =
+module Rhs_kind = struct
+  type t =
     | Needs_extra_binding of { bound_to : Simple.t; }
     | Rhs_in_scope of { bound_to : Simple.t; }
 
-  let cse_after_n_way_join env envs_with_extensions ~allowed =
-    let module EP = Flambda_primitive.Eligible_for_cse in
-    let canonicalise env simple =
-      let all_aliases =
-        Simple.Set.add simple
-          (Typing_env.aliases_of_simple_allowable_in_types env simple)
-      in
-      let eligible_aliases =
-        Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
-          all_aliases
-      in
-      Simple.Set.choose_opt eligible_aliases
-    in
-    let canonicalise_lhs env cse =
-      EP.Map.fold (fun prim bound_to cse ->
-          let cannot_use, prim =
-            (* CR mshinwell: share code with type_erase_aliases.ml *)
-            EP.fold_args prim
-              ~init:Equation_ok
-              ~f:(fun cannot_use arg ->
-                match cannot_use with
-                | Equation_ineligible -> Equation_ineligible, arg
-                | Equation_ok ->
-                  match canonicalise arg with
-                  | None -> Equation_ineligible, arg
-                  | Some arg -> Equation_ok, arg)
-          in
-          match cannot_use with
-          | Equation_ineligible -> cse
-          | Equation_ok -> EP.Map.add prim bound_to cse)
-        cse
-        EP.Map.empty
-    in
-    let lhs_of_cses_valid_on_all_paths =
-      match cses_with_valid_lhs_in_joined_env with
-      | [] -> EP.Set.empty
-      | [_env, _id, cse] -> EP.Map.keys (canonicalise_lhs env t.cse)
-      | (_env, _id, cse)::cses ->
-        let cse = canonicalise_lhs env cse in
-        List.fold_left (fun valid_on_all_paths (_env, _id, cse) ->
-            let cse = canonicalise_lhs env cse in
-            EP.Set.inter (EP.Map.keys cse) valid_on_all_paths)
-          (EP.Map.keys cse)
-          cses
-    in
-    EP.Set.fold (fun prim (cse, extra_bindings) ->
-        let rhs_kinds =
-          List.fold_left (fun rhs_kinds (env, id, cse) ->
-              let bound_to = EP.Map.find cse prim in
-              let rhs_kind =
-                match canonicalise env bound_to with
-                | None -> Needs_extra_binding { bound_to; }
-                | Some bound_to -> Rhs_in_scope { bound_to; }
-              in
-              Id.Map.add id rhs_kind rhs_kinds)
-            Id.Map.empty
-            cses_with_valid_lhs_in_joined_env
-        in
-        let rhs_has_same_value_on_all_paths =
-          Rhs_kind.Set.get_singleton
-            (Rhs_kind.Set.of_list (Id.Map.data rhs_kinds))
-        in
-        match rhs_has_same_value_on_all_paths with
-        | None ->
-          let prim_result_kind =
-            Flambda_primitive.result_kind' (EP.to_primitive prim)
-          in
-          let extra_param =
-            let var = Variable.create "cse_param" in
-            Kinded_parameter.create (Parameter.wrap var) prim_result_kind
-          in
-          let bound_to =
-            Id.Map.mapi (fun id rhs_kind ->
-                match rhs_kind with
-                | Needs_extra_binding { bound_to; }
-                | Rhs_in_scope { bound_to; } -> bound_to)
-              rhs_kinds
-          in
-          let extra_bindings =
-            Extra_cse_bindings.add extra_cse_bindings ~extra_param ~bound_to
-          in
-          cse, extra_bindings
-        | Some bound_to ->
-          EP.Map.add prim bound_to cse, extra_bindings)
-      lhs_of_cses_valid_on_all_paths
-      (EP.Map.empty, Extra_cse_bindings.empty)
+  let bound_to t =
+    match t with
+    | Needs_extra_binding { bound_to; }
+    | Rhs_in_scope { bound_to; } -> bound_to
 
-  (* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
-     environments, even though it doesn't need to go down through [T.join]
-     at the moment.  (Actually, check a couple of places e.g. closures_entry
-     where it looks like these may still be needed...) *)
+  include Identifiable.Make (struct
+    type nonrec t = t
 
-  let n_way_join env envs_with_extensions : t * extra_cse_bindings =
-    let allowed = Typing_env.var_domain env in
-    let allowed_names = Name.set_of_var_set allowed in
-    let names_with_equations_in_join =
-      List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
-          Name.Set.inter t.equations names_with_equations_in_join)
-        allowed_names
-        envs_with_extensions
-    in
-    let get_type t env name =
-      Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
-        ~already_seen:Simple.Set.empty ~allowed
-        (find_equation t name)
-    in
-    let t =
-      Name.Set.fold (fun name result ->
-          assert (not (Name.Map.mem name result.equations));
-          match envs_with_extensions with
-          | [] -> result
-          | (first_env, _id, t) :: envs_with_extensions ->
-            let join_ty =
-              List.fold_left (fun join_ty (one_env, _id, t) ->
-                  let ty = get_type t one_env name in
-                  Api_meet_and_join.join ~bound_name:name env join_ty ty)
-                (get_type t first_env name)
-                envs_with_extensions
-            in
-            add_or_replace_equation t name join_ty)
-        names_with_equations_in_join
-        (empty ())
-    in
-    let cse, extra_cse_bindings =
-      cse_after_n_way_join env envs_with_extensions ~allowed
-    in
-    let t : t = { t with cse; } in
-    assert (Variable.Map.is_empty t.defined_vars);
-    t, extra_cse_bindings
+    let print _ _ = Misc.fatal_error "Not yet implemented"
+    let output _ _ = Misc.fatal_error "Not yet implemented"
+    let hash _ = Misc.fatal_error "Not yet implemented"
+    let equal _ = Misc.fatal_error "Not yet implemented"
+
+    let compare t1 t2 =
+      match t1, t2 with
+      | Needs_extra_binding { bound_to = bound_to1; },
+          Needs_extra_binding { bound_to = bound_to2; } ->
+        Simple.compare bound_to1 bound_to2
+      | Rhs_in_scope { bound_to = bound_to1; },
+          Rhs_in_scope { bound_to = bound_to2; } ->
+        Simple.compare bound_to1 bound_to2
+      | Needs_extra_binding _, _ -> -1
+      | Rhs_in_scope _, _ -> 1
+  end)
 end
+
+let cse_after_n_way_join env envs_with_extensions ~allowed =
+  let module EP = Flambda_primitive.Eligible_for_cse in
+  let canonicalise env simple =
+    let all_aliases =
+      Simple.Set.add simple
+        (Typing_env.aliases_of_simple_allowable_in_types env simple)
+    in
+    let eligible_aliases =
+      Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
+        all_aliases
+    in
+    Simple.Set.choose_opt eligible_aliases
+  in
+  let canonicalise_lhs env cse =
+    EP.Map.fold (fun prim bound_to cse ->
+        let cannot_use, prim =
+          (* CR mshinwell: share code with type_erase_aliases.ml *)
+          EP.fold_args prim
+            ~init:Equation_ok
+            ~f:(fun cannot_use arg ->
+              match cannot_use with
+              | Equation_ineligible -> Equation_ineligible, arg
+              | Equation_ok ->
+                match canonicalise env arg with
+                | None -> Equation_ineligible, arg
+                | Some arg -> Equation_ok, arg)
+        in
+        match cannot_use with
+        | Equation_ineligible -> cse
+        | Equation_ok -> EP.Map.add prim bound_to cse)
+      cse
+      EP.Map.empty
+  in
+  let cses_with_canonicalised_lhs =
+    List.map (fun (env, id, t) ->
+        env, id, canonicalise_lhs env t.cse)
+      envs_with_extensions
+  in
+  let lhs_of_cses_valid_on_all_paths =
+    match cses_with_canonicalised_lhs with
+    | [] -> EP.Set.empty
+    | [_env, _id, cse] -> EP.Map.keys cse
+    | (_env, _id, cse)::cses ->
+      let cse = canonicalise_lhs env cse in
+      List.fold_left (fun valid_on_all_paths (_env, _id, cse) ->
+          EP.Set.inter (EP.Map.keys cse) valid_on_all_paths)
+        (EP.Map.keys cse)
+        cses
+  in
+  EP.Set.fold (fun prim (cse, extra_bindings) ->
+      let rhs_kinds =
+        List.fold_left (fun rhs_kinds (env, id, cse) ->
+            let bound_to = EP.Map.find prim cse in
+            let rhs_kind : Rhs_kind.t =
+              match canonicalise env bound_to with
+              | None -> Needs_extra_binding { bound_to; }
+              | Some bound_to -> Rhs_in_scope { bound_to; }
+            in
+            Apply_cont_rewrite_id.Map.add id rhs_kind rhs_kinds)
+          Apply_cont_rewrite_id.Map.empty
+          cses_with_canonicalised_lhs
+      in
+      let rhs_has_same_value_on_all_paths =
+        Rhs_kind.Set.get_singleton
+          (Rhs_kind.Set.of_list (Apply_cont_rewrite_id.Map.data rhs_kinds))
+      in
+      match rhs_has_same_value_on_all_paths with
+      | None ->
+        let prim_result_kind =
+          Flambda_primitive.result_kind' (EP.to_primitive prim)
+        in
+        let extra_param =
+          let var = Variable.create "cse_param" in
+          Kinded_parameter.create (Parameter.wrap var) prim_result_kind
+        in
+        let bound_to =
+          Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
+        in
+        let extra_bindings =
+          Continuation_extra_params_and_args.add extra_bindings ~extra_param
+            ~extra_args:bound_to
+        in
+        cse, extra_bindings
+      | Some rhs_kind ->
+        EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
+    lhs_of_cses_valid_on_all_paths
+    (EP.Map.empty, Continuation_extra_params_and_args.empty)
+
+(* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
+   environments, even though it doesn't need to go down through [T.join]
+   at the moment.  (Actually, check a couple of places e.g. closures_entry
+   where it looks like these may still be needed...) *)
+
+let n_way_join env envs_with_extensions =
+  let allowed = Typing_env.var_domain env in
+  let allowed_names = Name.set_of_var_set allowed in
+  let names_with_equations_in_join =
+    List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
+        Name.Set.inter (Name.Map.keys t.equations)
+          names_with_equations_in_join)
+      allowed_names
+      envs_with_extensions
+  in
+  let get_type t env name =
+    Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
+      ~already_seen:Simple.Set.empty ~allowed
+      (find_equation t name)
+  in
+  let t =
+    Name.Set.fold (fun name result ->
+        assert (not (Name.Map.mem name result.equations));
+        match envs_with_extensions with
+        | [] -> result
+        | (first_env, _id, t) :: envs_with_extensions ->
+          let join_ty =
+            List.fold_left (fun join_ty (one_env, _id, t) ->
+                let ty = get_type t one_env name in
+                Api_meet_and_join.join ~bound_name:name env join_ty ty)
+              (get_type t first_env name)
+              envs_with_extensions
+          in
+          add_or_replace_equation t name join_ty)
+      names_with_equations_in_join
+      (empty ())
+  in
+  let cse, extra_cse_bindings =
+    cse_after_n_way_join env envs_with_extensions ~allowed
+  in
+  let t : t = { t with cse; } in
+  assert (Variable.Map.is_empty t.defined_vars);
+  t, extra_cse_bindings

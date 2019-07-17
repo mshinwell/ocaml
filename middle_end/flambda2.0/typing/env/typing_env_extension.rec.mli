@@ -47,18 +47,9 @@ val concat : t -> t -> t
 
 val meet : Meet_env.t -> t -> t -> t
 
-module Make_join (Id : Identifiable.S) : sig
-  module Extra_cse_bindings : sig
-    type t = private {
-      extra_params : Kinded_parameter.t list;
-      bound_to : Simple.t Id.Map.t list;
-    }
-  end
-
-  val n_way_join
-     : Typing_env.t
-    -> (Typing_env.t * Id.t * t) list
-    -> t * Extra_cse_bindings.t
-end
+val n_way_join
+   : Typing_env.t
+  -> (Typing_env.t * Apply_cont_rewrite_id.t * t) list
+  -> t * Continuation_extra_params_and_args.t
 
 val mem : t -> Name.t -> bool

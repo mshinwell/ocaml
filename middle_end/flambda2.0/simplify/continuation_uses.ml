@@ -93,8 +93,6 @@ let add_use t ~typing_env_at_use id ~arg_types =
     raise Misc.Fatal_error
   end
 
-module Join = TEE.Make_join (Apply_cont_rewrite_id)
-
 let env_and_param_types t ~definition_typing_env =
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
@@ -133,7 +131,7 @@ let env_and_param_types t ~definition_typing_env =
         all_uses
     in
     let joined_env_extension, extra_cse_bindings =
-      Join.n_way_join definition_typing_env use_envs_with_ids_and_extensions
+      TEE.n_way_join definition_typing_env use_envs_with_ids_and_extensions
     in
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
     let env =
@@ -157,12 +155,7 @@ let env_and_param_types t ~definition_typing_env =
         first_arg_types
         uses
     in
-    let extra_params_and_args : Continuation_extra_params_and_args.t =
-      { extra_params = extra_cse_bindings.extra_params;
-        extra_args = extra_cse_bindings.bound_to;
-      }
-    in
-    env, arg_types, extra_params_and_args
+    env, arg_types, extra_cse_bindings
 
 let number_of_uses t = List.length t.uses
 

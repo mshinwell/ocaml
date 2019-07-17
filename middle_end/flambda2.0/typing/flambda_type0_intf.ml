@@ -63,17 +63,10 @@ module type S = sig
 
     val mem : t -> Name.t -> bool
 
-    module Make_join (Id : Identifiable.S) : sig
-      type extra_cse_bindings = private {
-        extra_params : Kinded_parameter.t list;
-        bound_to : Simple.t list Id.Map.t;
-      }
-
-      val n_way_join
-         : typing_env
-        -> (typing_env * Id.t * t) list
-        -> t * extra_cse_bindings
-    end
+    val n_way_join
+       : typing_env
+      -> (typing_env * Apply_cont_rewrite_id.t * t) list
+      -> t * Continuation_extra_params_and_args.t
   end
 
   module Typing_env : sig
