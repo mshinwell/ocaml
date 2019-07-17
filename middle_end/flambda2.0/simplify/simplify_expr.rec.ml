@@ -936,6 +936,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let new_let_conts, arms =
+      (* CR mshinwell: Test this all works *)
       Discriminant.Map.fold (fun arm (cont, id) (new_let_conts, arms) ->
           let cont = UE.resolve_continuation_aliases uenv cont in
           match UE.find_continuation uenv cont with
