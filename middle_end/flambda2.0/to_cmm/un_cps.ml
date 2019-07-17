@@ -636,8 +636,7 @@ and continuation_handler env h =
 
 and apply_expr env e =
   let res = apply_call env e in
-  let continued = wrap_cont env res e in
-  wrap_exn env continued e
+  wrap_cont env (wrap_exn env res e) e
 
 and apply_call env e =
   let f = Apply_expr.callee e in
