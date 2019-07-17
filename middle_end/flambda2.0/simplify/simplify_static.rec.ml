@@ -439,23 +439,8 @@ let simplify_return_continuation_handler dacc ~arg_types
   let uenv =
     (* CR mshinwell: This is a bit of a wart.  Maybe there should be an
        equivalent of [Return_cont_handler] for the exception continuation. *)
-    let uenv =
-      UE.add_exn_continuation UE.empty return_cont_handler.exn_continuation
-        return_cont_handler.exn_cont_scope
-    in
-    (* XXX This is wrong for exn continuation extra-args.  Address the
-       above CR. *)
-    let param = KP.create (Parameter.wrap (Variable.create "exn")) K.value in
-    let rewrite =
-      Apply_cont_rewrite.create ~original_params:[param]
-        ~used_params:(KP.Set.singleton param)
-        ~extra_params:[]
-        ~extra_args:Apply_cont_rewrite_id.Map.empty
-        ~used_extra_params:KP.Set.empty
-    in
-    UE.add_apply_cont_rewrite uenv
-      (Exn_continuation.exn_handler return_cont_handler.exn_continuation)
-      rewrite
+    UE.add_exn_continuation UE.empty return_cont_handler.exn_continuation
+      return_cont_handler.exn_cont_scope
   in
   let handler : Return_cont_handler.t =
     { exn_continuation = return_cont_handler.exn_continuation;

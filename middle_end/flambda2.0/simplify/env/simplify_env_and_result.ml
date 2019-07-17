@@ -420,11 +420,8 @@ end = struct
 
   let find_apply_cont_rewrite t cont =
     match Continuation.Map.find cont t.apply_cont_rewrites with
-    | exception Not_found ->
-      Misc.fatal_errorf "[Apply_cont_rewrite] for %a not found in:@ %a"
-        Continuation.print cont
-        print t
-    | rewrite -> rewrite
+    | exception Not_found -> None
+    | rewrite -> Some rewrite
 end and Result : sig
   include Simplify_env_and_result_intf.Result
 end = struct

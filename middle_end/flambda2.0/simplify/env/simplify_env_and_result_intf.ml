@@ -188,7 +188,7 @@ module type Upwards_env = sig
   val find_apply_cont_rewrite
      : t
     -> Continuation.t
-    -> Apply_cont_rewrite.t
+    -> Apply_cont_rewrite.t option
 end
 
 module type Result = sig
