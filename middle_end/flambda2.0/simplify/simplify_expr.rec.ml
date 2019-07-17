@@ -755,7 +755,10 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
     let rewrite = UE.find_apply_cont_rewrite uenv cont in
     let apply_cont =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
-      Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
+      match rewrite with
+      | None -> apply_cont
+      | Some rewrite ->
+        Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
     (* CR mshinwell: Clarify that [arity] is the arity before any rewrite. *)
     let check_arity_against_args ~arity =
@@ -809,9 +812,15 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
                 AC.print apply_cont
             end;
             let expr =
-              let extra_params = Apply_cont_rewrite.extra_params rewrite in
-              let extra_args =
-                Apply_cont_rewrite.extra_args rewrite rewrite_id
+              let extra_params, extra_args =
+                match rewrite with
+                | None -> [], []
+                | Some rewrite ->
+                  let extra_params = Apply_cont_rewrite.extra_params rewrite in
+                  let extra_args =
+                    Apply_cont_rewrite.extra_args rewrite rewrite_id
+                  in
+                  extra_params, extra_args
               in
               Expr.bind_parameters_to_simples
                 ~bind:(params @ extra_params)
