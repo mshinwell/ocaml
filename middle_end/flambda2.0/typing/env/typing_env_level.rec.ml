@@ -206,6 +206,10 @@ let add_or_replace_equation t name ty =
     equations = Name.Map.add name ty t.equations;
   }
 
+(* CR mshinwell: [mem] -> [mem_equation] *)
+let mem t name =
+  Name.Map.mem name t.equations
+
 let find_equation t name =
   match Name.Map.find name t.equations with
   | exception Not_found ->
@@ -293,6 +297,83 @@ module Make_join (Id : Identifiable.S) = struct
     | Equation_ok
     | Equation_ineligible
 
+  type rhs_kind =
+    | Needs_extra_binding of { bound_to : Simple.t; }
+    | Rhs_in_scope of { bound_to : Simple.t; }
+
+  let cse_after_n_way_join env envs_with_extensions ~allowed =
+    let module EP = Flambda_primitive.Eligible_for_cse in
+    let canonicalise env simple =
+      let all_aliases =
+        Simple.Set.add simple
+          (Typing_env.aliases_of_simple_allowable_in_types env simple)
+      in
+      let eligible_aliases =
+        Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
+          all_aliases
+      in
+      Simple.Set.choose_opt eligible_aliases
+    in
+    let canonicalise_lhs env cse =
+      EP.Map.fold (fun prim bound_to cse ->
+          let cannot_use, prim =
+            (* CR mshinwell: share code with type_erase_aliases.ml *)
+            EP.fold_args prim
+              ~init:Equation_ok
+              ~f:(fun cannot_use arg ->
+                match cannot_use with
+                | Equation_ineligible -> Equation_ineligible, arg
+                | Equation_ok ->
+                  match canonicalise arg with
+                  | None -> Equation_ineligible, arg
+                  | Some arg -> Equation_ok, arg)
+          in
+          match cannot_use with
+          | Equation_ineligible -> cse
+          | Equation_ok -> EP.Map.add prim bound_to cse)
+        cse
+        EP.Map.empty
+    in
+    let lhs_of_cses_valid_on_all_paths =
+      match cses_with_valid_lhs_in_joined_env with
+      | [] -> EP.Set.empty
+      | [_env, _id, cse] -> EP.Map.keys (canonicalise_lhs env t.cse)
+      | (_env, _id, cse)::cses ->
+        let cse = canonicalise_lhs env cse in
+        List.fold_left (fun valid_on_all_paths (_env, _id, cse) ->
+            let cse = canonicalise_lhs env cse in
+            EP.Set.inter (EP.Map.keys cse) valid_on_all_paths)
+          (EP.Map.keys cse)
+          cses
+    in
+    EP.Set.fold (fun prim (cse, extra_bindings) ->
+        let rhs_kinds =
+          List.fold_left (fun rhs_kinds (env, id, cse) ->
+              let bound_to = EP.Map.find cse prim in
+              let rhs_kind =
+                match canonicalise env bound_to with
+                | None -> Needs_extra_binding { bound_to; }
+                | Some bound_to -> Rhs_in_scope { bound_to; }
+              in
+              Id.Map.add id rhs_kind rhs_kinds)
+            Id.Map.empty
+            cses_with_valid_lhs_in_joined_env
+        in
+        let rhs_has_same_value_on_all_paths =
+          Rhs_kind.Set.get_singleton
+            (Rhs_kind.Set.of_list (Id.Map.data rhs_kinds))
+        in
+        match rhs_has_same_value_on_all_paths with
+        | None ->
+          let extra_bindings =
+
+          in
+          cse, extra_bindings
+        | Some bound_to ->
+          EP.Map.add prim bound_to cse, extra_bindings)
+      lhs_of_cses_valid_on_all_paths
+      (EP.Map.empty, [])
+
   (* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
      environments, even though it doesn't need to go down through [T.join]
      at the moment.  (Actually, check a couple of places e.g. closures_entry
@@ -329,100 +410,10 @@ module Make_join (Id : Identifiable.S) = struct
         names_with_equations_in_join
         (empty ())
     in
-    let simple_allowed simple =
-      match Simple.descr simple with
-      | Name (Var var) -> Variable.Set.mem var allowed
-      | Name (Symbol _) | Const _ | Discriminant _ -> true
-    in
-    let canonicalise_and_filter_cse env cse =
-      let canonicalise simple =
-        let all_aliases =
-          Simple.Set.add simple
-            (Typing_env.aliases_of_simple_allowable_in_types env simple)
-        in
-        let eligible_aliases = Simple.Set.filter simple_allowed all_aliases in
-        Simple.Set.choose_opt eligible_aliases
-      in
-      Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to cse ->
-          let cannot_use, prim =
-            (* CR mshinwell: share code with type_erase_aliases.ml *)
-            Flambda_primitive.Eligible_for_cse.fold_args prim
-              ~init:Equation_ok
-              ~f:(fun cannot_use arg ->
-                match cannot_use with
-                | Equation_ineligible -> Equation_ineligible, arg
-                | Equation_ok ->
-                  match canonicalise arg with
-                  | None -> Equation_ineligible, arg
-                  | Some arg -> Equation_ok, arg)
-          in
-          match cannot_use with
-          | Equation_ineligible -> cse
-          | Equation_ok ->
-            match canonicalise bound_to with
-            | None -> cse
-            | Some bound_to ->
-              Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse)
-        cse
-        Flambda_primitive.Eligible_for_cse.Map.empty
-    in
-    (* XXX We surely need to have all equations whose LHS is available on
-       all paths first. *)
-    let cses_with_valid_lhs_in_joined_env =
-      (* These are the CSE equations whose left-hand sides (but not
-         necessarily whose right-hand sides) are valid in the joined [env]. *)
-      List.map (fun (env, _id, t) ->
-          canonicalise_and_filter_cse env t.cse)
-        envs_with_extensions
-    in
-    let cses_
-      (* These are the CSE equations whose left-hand sides are valid in
-         the joined [env] and which, in all environment extensions being
-         joined, have a right-hand side that is in scope in [env]. *)
-      List.fold_left (fun with_valid_rhs cse ->
-          Flambda_primitive.Eligible_for_cse.Map.merge
-            (fun _prim bound_to1 bound_to2 ->
-              match bound_to1, bound_to2 with
-              | None, None | Some _, None | None, Some _ -> None
-              | Some bound_to1, Some bound_to2 ->
-                if Simple.equal bound_to1 bound_to2
-                  && simple_allowed bound_to1
-                then Some bound_to1
-                else None)
-            with_valid_rhs cse)
-        Flambda_primitive.Eligible_for_cse.Map.empty
-        cses_with_valid_lhs_in_joined_env
-    in
-    let cses_with_valid_rhs_in_joined_env =
-      (* These are the CSE equations whose left-hand sides are valid in
-         the joined [env] and which, in all environment extensions being
-         joined, have a right-hand side that is in scope in [env]. *)
-      List.fold_left (fun with_valid_rhs cse ->
-          Flambda_primitive.Eligible_for_cse.Map.merge
-            (fun _prim bound_to1 bound_to2 ->
-              match bound_to1, bound_to2 with
-              | None, None | Some _, None | None, Some _ -> None
-              | Some bound_to1, Some bound_to2 ->
-                if Simple.equal bound_to1 bound_to2
-                  && simple_allowed bound_to1
-                then Some bound_to1
-                else None)
-            with_valid_rhs cse)
-        Flambda_primitive.Eligible_for_cse.Map.empty
-        cses_with_valid_lhs_in_joined_env
-    in
-    let extra_cse_bindings =
-      (* These are the CSE equations whose left-hand sides are valid in
-         the joined [env] and which are defined in all environment
-         extensions being joined, excepting those in
-         [cses_with_valid_rhs_in_joined_env].  These equations can only be
-         used at the join point by adding extra parameters to the
-         continuation whose handler forms such join point. *)
+    let cse, extra_cse_bindings =
+      cse_after_n_way_join env envs_with_extensions ~allowed
     in
     let t : t = { t with cse; } in
     assert (Variable.Map.is_empty t.defined_vars);
     t, extra_cse_bindings
 end
-
-let mem t name =
-  Name.Map.mem name t.equations

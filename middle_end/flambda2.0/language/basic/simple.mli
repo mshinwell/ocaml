@@ -95,6 +95,8 @@ include Contains_names.S with type t := t
 
 val free_names_in_types : t -> Name_occurrences.t
 
+val allowed : t -> allowed:Variable.Set.t -> bool 
+
 include Identifiable.S with type t := t
 
 module List : sig
