@@ -97,7 +97,10 @@ let env_and_param_types t ~definition_typing_env =
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
   in
-  let cut_point = Scope.next definition_scope_level in
+  let cut_point = (* Scope.next *) definition_scope_level in
+Format.eprintf "Retrieving env + param types for %a; unknown >= level %a\n%!"
+  Continuation.print t.continuation
+  Scope.print cut_point;
   let cut_use_environment use =
     let env = Use.typing_env_at_use use in
     let env_extension, _vars_in_scope =
@@ -105,6 +108,7 @@ let env_and_param_types t ~definition_typing_env =
     in
     env_extension
   in
+Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typing_env;
   let process_use_arg_types use ~allowed =
     let env = Use.typing_env_at_use use in
     List.map (fun ty ->
@@ -115,13 +119,7 @@ let env_and_param_types t ~definition_typing_env =
   | [] ->
     definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity,
       Continuation_extra_params_and_args.empty
-  | [use] ->
-    let env_extension = cut_use_environment use in
-    let allowed = TE.var_domain definition_typing_env in
-    let use_arg_types = process_use_arg_types use ~allowed in
-    let env = TE.add_env_extension definition_typing_env env_extension in
-    env, use_arg_types, Continuation_extra_params_and_args.empty
-  | (use::uses) as all_uses ->
+  | (use :: uses) as all_uses ->
     let use_envs_with_ids_and_extensions =
       List.map (fun use ->
           let typing_env = Use.typing_env_at_use use in

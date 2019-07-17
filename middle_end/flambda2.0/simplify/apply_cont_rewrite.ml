@@ -85,8 +85,8 @@ let extra_params t = t.used_extra_params
 let extra_args t id =
   match Id.Map.find id t.extra_args with
   | exception Not_found ->
-    Misc.fatal_errorf "Apply cont rewrite ID %a not found"
-      Id.print id
+    assert (List.length (extra_params t) = 0);
+    []
   | extra_args -> extra_args
 
 let rewrite_use t id apply_cont =

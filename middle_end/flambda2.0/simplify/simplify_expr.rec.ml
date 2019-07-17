@@ -734,34 +734,42 @@ and simplify_apply_cont
     Expr.create_invalid (), user_data, uacc
   | Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
-(*
-Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
-  Continuation.print (AC.continuation apply_cont)
-  (Format.pp_print_list T.print) arg_types
-  DA.print dacc;
-*)
+(* CR mshinwell: Resurrect arity checks
     let args_arity = T.arity_of_list arg_types in
+*)
     let dacc, rewrite_id =
       DA.record_continuation_use dacc
         (AC.continuation apply_cont)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
+Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
+  Continuation.print (AC.continuation apply_cont)
+  (Format.pp_print_list T.print) arg_types
+  Apply_cont_rewrite_id.print rewrite_id;
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
     let rewrite = UE.find_apply_cont_rewrite uenv cont in
+Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
     let apply_cont =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
+      (* CR mshinwell: Could remove the option type most likely if
+         [Simplify_static] was fixed to handle the toplevel exn continuation
+         properly. *)
       match rewrite with
       | None -> apply_cont
       | Some rewrite ->
+Format.eprintf "Applying rewrite:@ %a\n%!"
+  Apply_cont_rewrite.print rewrite;
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
-    (* CR mshinwell: Clarify that [arity] is the arity before any rewrite. *)
-    let check_arity_against_args ~arity =
+    let args = Apply_cont.args apply_cont in
+Format.eprintf "Apply_cont is now %a\n%!" Apply_cont.print apply_cont;
+    let check_arity_against_args ~arity:_ = () in
+(*
       if not (Flambda_arity.equal args_arity arity) then begin
         Misc.fatal_errorf "Arity of arguments in [Apply_cont] (%a) does not \
             match continuation's arity from the environment (%a):@ %a"
@@ -770,6 +778,7 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
           AC.print apply_cont
       end
     in
+*)
     let normal_case () =
       Expr.create_apply_cont
           (AC.update_continuation_and_args apply_cont cont ~args),
@@ -804,6 +813,7 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
         Flambda.Continuation_params_and_handler.pattern_match
           (Flambda.Continuation_handler.params_and_handler handler)
           ~f:(fun params ~handler ->
+(*
             let params_arity = KP.List.arity params in
             if not (Flambda_arity.equal params_arity args_arity) then begin
               Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
@@ -811,6 +821,7 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
                 Flambda_arity.print params_arity
                 AC.print apply_cont
             end;
+*)
             let expr =
               let extra_params, extra_args =
                 match rewrite with
@@ -847,6 +858,7 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
               raise Misc.Fatal_error
             end)
 
+(* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
 and simplify_switch
   : 'a. DA.t -> Switch.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc switch k ->
@@ -903,32 +915,69 @@ and simplify_switch
 Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
   T.print scrutinee_ty T.print shape T.print _meet_ty;
 *)
-            let arms = Discriminant.Map.add arm cont arms in
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use env_extension
             in
-            let dacc, _id =
-              (* CR mshinwell: Add another [record_continuation_use] which is
-                 to be used when not dealing with [Apply_cont].  It should not
-                 return the id. *)
+            let dacc, id =
+Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
+  Simple.print scrutinee
+  Discriminant.print arm
+  Continuation.print cont
+  TE.print typing_env_at_use;
               DA.record_continuation_use dacc cont
                 ~typing_env_at_use
                 ~arg_types:[]
             in
+            let arms = Discriminant.Map.add arm (cont, id) arms in
             arms, dacc)
         arms
         (Discriminant.Map.empty, dacc)
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
-    let arms =
-      Discriminant.Map.filter_map arms ~f:(fun _arm cont ->
-        let cont = UE.resolve_continuation_aliases uenv cont in
-        match UE.find_continuation uenv cont with
-        | Unreachable _ -> None
-        | Unknown _ | Inline _ -> Some cont)
+    let new_let_conts, arms =
+      Discriminant.Map.fold (fun arm (cont, id) (new_let_conts, arms) ->
+          let cont = UE.resolve_continuation_aliases uenv cont in
+          match UE.find_continuation uenv cont with
+          | Unreachable _ -> new_let_conts, arms
+          | Unknown _ | Inline _ ->
+            match UE.find_apply_cont_rewrite uenv cont with
+            | None ->
+              let arms = Discriminant.Map.add arm cont arms in
+              new_let_conts, arms
+            | Some rewrite ->
+              (* CR mshinwell: check no parameters were deleted (!) *)
+              let apply_cont =
+                Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
+              in
+              (* CR mshinwell: try to remove this next bit? *)
+              match Apply_cont.to_goto apply_cont with
+              | Some cont ->
+                let arms = Discriminant.Map.add arm cont arms in
+                new_let_conts, arms
+              | None ->
+                let new_cont = Continuation.create () in
+                let new_handler =
+                  let params_and_handler =
+                    Continuation_params_and_handler.create []
+                      ~handler:(Expr.create_apply_cont apply_cont)
+                  in
+                  Continuation_handler.create ~params_and_handler
+                    ~stub:false
+                    ~is_exn_handler:false
+                in
+                let new_let_conts = (new_cont, new_handler) :: new_let_conts in
+                let arms = Discriminant.Map.add arm new_cont arms in
+                new_let_conts, arms)
+        arms
+        ([], Discriminant.Map.empty)
     in
-    let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
+    let expr =
+      List.fold_left (fun body (new_cont, new_handler) ->
+          Let_cont.create_non_recursive new_cont new_handler ~body)
+        (Expr.create_switch (Switch.sort switch) ~scrutinee ~arms)
+        new_let_conts
+    in
     expr, user_data, uacc
 
 and simplify_expr

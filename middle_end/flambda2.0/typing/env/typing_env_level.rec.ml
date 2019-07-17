@@ -322,7 +322,7 @@ module Rhs_kind = struct
   end)
 end
 
-let cse_after_n_way_join env envs_with_extensions ~allowed =
+let cse_after_n_way_join envs_with_extensions ~allowed =
   let module EP = Flambda_primitive.Eligible_for_cse in
   let canonicalise env simple =
     let all_aliases =
@@ -355,8 +355,10 @@ let cse_after_n_way_join env envs_with_extensions ~allowed =
       cse
       EP.Map.empty
   in
+Format.eprintf "starting CSE\n%!";
   let cses_with_canonicalised_lhs =
     List.map (fun (env, id, t) ->
+Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -364,13 +366,14 @@ let cse_after_n_way_join env envs_with_extensions ~allowed =
     match cses_with_canonicalised_lhs with
     | [] -> EP.Set.empty
     | [_env, _id, cse] -> EP.Map.keys cse
-    | (_env, _id, cse)::cses ->
+    | (env, _id, cse)::cses ->
       let cse = canonicalise_lhs env cse in
       List.fold_left (fun valid_on_all_paths (_env, _id, cse) ->
           EP.Set.inter (EP.Map.keys cse) valid_on_all_paths)
         (EP.Map.keys cse)
         cses
   in
+Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_all_paths;
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
@@ -400,12 +403,19 @@ let cse_after_n_way_join env envs_with_extensions ~allowed =
         let bound_to =
           Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
         in
+Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
+  EP.print prim
+  Kinded_parameter.print extra_param
+  (Apply_cont_rewrite_id.Map.print Simple.print) bound_to;
         let extra_bindings =
           Continuation_extra_params_and_args.add extra_bindings ~extra_param
             ~extra_args:bound_to
         in
         cse, extra_bindings
       | Some rhs_kind ->
+Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
+  EP.print prim
+  Simple.print (Rhs_kind.bound_to rhs_kind);
         EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
@@ -448,7 +458,7 @@ let n_way_join env envs_with_extensions =
       (empty ())
   in
   let cse, extra_cse_bindings =
-    cse_after_n_way_join env envs_with_extensions ~allowed
+    cse_after_n_way_join envs_with_extensions ~allowed
   in
   let t : t = { t with cse; } in
   assert (Variable.Map.is_empty t.defined_vars);
