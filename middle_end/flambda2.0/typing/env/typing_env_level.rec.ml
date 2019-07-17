@@ -288,10 +288,22 @@ let meet env (t1 : t) (t2 : t) =
   end
 
 module Make_join (Id : Identifiable.S) = struct
-  type extra_cse_bindings = {
-    extra_params : Kinded_parameter.t list;
-    bound_to : Simple.t list Id.Map.t;
-  }
+  module Extra_cse_bindings = struct
+    type t = {
+      extra_params : Kinded_parameter.t list;
+      bound_to : Simple.t Id.Map.t list;
+    }
+
+    let empty = {
+      extra_params = [];
+      bound_to = [];
+    }
+
+    let add t ~extra_param ~bound_to =
+      { extra_params = extra_param :: t.extra_params;
+        bound_to = bound_to :: t.bound_to;
+      }
+  end
 
   type cannot_use =
     | Equation_ok
@@ -365,14 +377,28 @@ module Make_join (Id : Identifiable.S) = struct
         in
         match rhs_has_same_value_on_all_paths with
         | None ->
+          let prim_result_kind =
+            Flambda_primitive.result_kind' (EP.to_primitive prim)
+          in
+          let extra_param =
+            let var = Variable.create "cse_param" in
+            Kinded_parameter.create (Parameter.wrap var) prim_result_kind
+          in
+          let bound_to =
+            Id.Map.map (fun id rhs_kind ->
+                match rhs_kind with
+                | Needs_extra_binding { bound_to; }
+                | Rhs_in_scope { bound_to; })
+              rhs_kinds
+          in
           let extra_bindings =
-
+            Extra_cse_bindings.add extra_cse_bindings ~extra_param ~bound_to
           in
           cse, extra_bindings
         | Some bound_to ->
           EP.Map.add prim bound_to cse, extra_bindings)
       lhs_of_cses_valid_on_all_paths
-      (EP.Map.empty, [])
+      (EP.Map.empty, Extra_cse_bindings.empty)
 
   (* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
      environments, even though it doesn't need to go down through [T.join]
