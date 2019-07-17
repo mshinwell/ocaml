@@ -152,8 +152,9 @@ let float_of_int = unary Cmm.Cfloatofint
 let letin v e body = Cmm.Clet (v, e, body)
 
 let ite
-    ?(dbg=Debuginfo.none) ?(then_dbg=Debuginfo.none) ?(else_dbg=Debuginfo.none)
-    ~then_ ~else_ cond =
+    ?(dbg=Debuginfo.none)
+    ?(then_dbg=Debuginfo.none) ~then_
+    ?(else_dbg=Debuginfo.none) ~else_ cond =
   Cmm.Cifthenelse(cond, then_dbg, then_, else_dbg, else_, dbg)
 
 let load ?(dbg=Debuginfo.none) kind mut addr =
@@ -246,10 +247,13 @@ let block_set ?(dbg=Debuginfo.none) kind init block index value =
 let string_like_load_aux ~dbg kind width block ptr idx =
   match (width : Flambda_primitive.string_accessor_width) with
   | Eight ->
+      let idx = untag_int idx dbg in
       load ~dbg Cmm.Byte_unsigned Asttypes.Mutable (add_int ptr idx dbg)
   | Sixteen ->
+      let idx = untag_int idx dbg in
       unaligned_load_16 ptr idx dbg
   | Thirty_two ->
+      let idx = untag_int idx dbg in
       unaligned_load_32 ptr idx dbg
   | Sixty_four ->
       if arch32 then
@@ -357,6 +361,13 @@ let trywith ?(dbg=Debuginfo.none) ~body ~exn_var ~handler =
 
 
 (* Static jumps *)
+
+type static_handler =
+  int *
+  ((Backend_var.With_provenance.t * Cmm.machtype) list) *
+  Cmm.expression *
+  Debuginfo.t
+(* Alias for static handler *)
 
 let handler ?(dbg=Debuginfo.none) id vars body =
   (id, vars, body, dbg)
