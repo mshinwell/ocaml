@@ -408,9 +408,9 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler dacc ~arg_types ~extra_params:_ _cont
-      (return_cont_handler : Return_cont_handler.t) _k
-      : Return_cont_handler.t Generic_simplify_let_cont.result * _ * _ =
+let simplify_return_continuation_handler dacc ~arg_types
+      ~extra_params_and_args:_ cont
+      (return_cont_handler : Return_cont_handler.t) _k =
   assert (List.compare_lengths arg_types
     return_cont_handler.computed_values = 0);
   let dacc =
@@ -439,10 +439,24 @@ let simplify_return_continuation_handler dacc ~arg_types ~extra_params:_ _cont
   let uenv =
     (* CR mshinwell: This is a bit of a wart.  Maybe there should be an
        equivalent of [Return_cont_handler] for the exception continuation. *)
-    UE.add_exn_continuation UE.empty return_cont_handler.exn_continuation
-      return_cont_handler.exn_cont_scope
+    let uenv =
+      UE.add_exn_continuation UE.empty return_cont_handler.exn_continuation
+        return_cont_handler.exn_cont_scope
+    in
+    (* XXX This is wrong for exn continuation extra-args.  Address the
+       above CR. *)
+    let param = KP.create (Parameter.wrap (Variable.create "exn")) K.value in
+    let rewrite =
+      Apply_cont_rewrite.create ~original_params:[param]
+        ~used_params:(KP.Set.singleton param)
+        ~extra_params:[]
+        ~extra_args:Apply_cont_rewrite_id.Map.empty
+        ~used_extra_params:KP.Set.empty
+    in
+    UE.add_apply_cont_rewrite uenv
+      (Exn_continuation.exn_handler return_cont_handler.exn_continuation)
+      rewrite
   in
-  let uacc = UA.create uenv (DA.r dacc) in
   let handler : Return_cont_handler.t =
     { exn_continuation = return_cont_handler.exn_continuation;
       exn_cont_scope = return_cont_handler.exn_cont_scope;
@@ -450,25 +464,16 @@ let simplify_return_continuation_handler dacc ~arg_types ~extra_params:_ _cont
       static_structure;
     }
   in
-  let extra_params_and_args : CUE.extra_params_and_args =
-    (* CR mshinwell: CUE.extra_params_and_args into its own module; add
-       [empty], [print], etc.  Use [empty] here. *)
-    { extra_params = [];
-      extra_args = [];
-    }
-  in
   let rewrite =
     Apply_cont_rewrite.create ~original_params:original_computed_values
       ~used_params:(KP.Set.of_list used_computed_values)
-      ~extra_params_and_args
+      ~extra_params:[]
+      ~extra_args:Apply_cont_rewrite_id.Map.empty
       ~used_extra_params:KP.Set.empty
   in
-  let result : _ Generic_simplify_let_cont.result =
-    { handler;
-      rewrite;
-    }
-  in
-  result, (used_computed_values, static_structure, dacc), uacc
+  let uenv = UE.add_apply_cont_rewrite uenv cont rewrite in
+  let uacc = UA.create uenv (DA.r dacc) in
+  handler, (used_computed_values, static_structure, dacc), uacc
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
@@ -491,7 +496,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           static_structure = defn.static_structure;
         }
       in
-      let expr, result, (computed_values, static_structure, dacc), uacc =
+      let expr, _handler, (computed_values, static_structure, dacc), uacc =
         Simplify_return_cont.simplify_body_of_non_recursive_let_cont dacc
           computation.return_continuation
           return_cont_handler
@@ -503,14 +508,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             (computation.computed_values, defn.static_structure, dacc), uacc)
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
-      let return_continuation =
-        match result with
-        | No_wrapper _ -> computation.return_continuation
-        | With_wrapper { renamed_original_cont; _ } ->
-          assert (not (Continuation.equal
-            renamed_original_cont computation.return_continuation));
-          renamed_original_cont
-      in
+      let return_continuation = computation.return_continuation in
       let computation_can_be_deleted =
         match Expr.descr expr with
         | Apply_cont apply_cont ->

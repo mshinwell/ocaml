@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
@@ -135,6 +136,16 @@ let env_and_param_types t ~definition_typing_env =
       Join.n_way_join definition_typing_env use_envs_with_ids_and_extensions
     in
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
+    let env =
+      List.fold_left (fun env extra_param ->
+          let name =
+            Name_in_binding_pos.create (KP.name extra_param)
+              Name_occurrence_kind.normal
+          in
+          TE.add_definition env name (KP.kind extra_param))
+        env
+        extra_cse_bindings.extra_params
+    in
     let allowed = TE.var_domain env in
     let first_arg_types = process_use_arg_types use ~allowed in
     let arg_types =
