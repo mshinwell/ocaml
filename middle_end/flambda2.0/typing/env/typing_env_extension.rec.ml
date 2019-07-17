@@ -88,40 +88,24 @@ let meet env (t1 : t) (t2 : t) : t =
   in
   { abst; }
 
-module Make_join (Id : Identifiable.S) = struct
-  module Join = Typing_env_level.Make_join (Id)
-
-  module Extra_cse_bindings = struct
-    type t = {
-      extra_params : Kinded_parameter.t list;
-      bound_to : Simple.t Id.Map.t list;
-    }
-  end
-
-  let n_way_join env envs_with_extensions : t * _ =
-    let abst, extra_cse_bindings =
-      let rec open_binders envs_with_extensions envs_with_levels =
-        match envs_with_extensions with
-        | [] ->
-          let level, extra_cse_bindings =
-            Join.n_way_join env envs_with_levels
-          in
-          let abst =
-            A.create (Typing_env_level.defined_vars_in_order' level) level
-          in
-          abst, extra_cse_bindings
-        | (env, id, t)::envs_with_extensions ->
-          A.pattern_match t.abst ~f:(fun _ level ->
-            (* It doesn't matter that the list gets reversed. *)
-            let envs_with_levels = (env, id, level) :: envs_with_levels in
-            open_binders envs_with_extensions envs_with_levels)
-      in
-      open_binders envs_with_extensions []
+let n_way_join env envs_with_extensions : t * _ =
+  let abst, extra_cse_bindings =
+    let rec open_binders envs_with_extensions envs_with_levels =
+      match envs_with_extensions with
+      | [] ->
+        let level, extra_cse_bindings =
+          Typing_env_level.n_way_join env envs_with_levels
+        in
+        let abst =
+          A.create (Typing_env_level.defined_vars_in_order' level) level
+        in
+        abst, extra_cse_bindings
+      | (env, id, t)::envs_with_extensions ->
+        A.pattern_match t.abst ~f:(fun _ level ->
+          (* It doesn't matter that the list gets reversed. *)
+          let envs_with_levels = (env, id, level) :: envs_with_levels in
+          open_binders envs_with_extensions envs_with_levels)
     in
-    let extra_cse_bindings : Extra_cse_bindings.t =
-      { extra_params = extra_cse_bindings.extra_params;
-        bound_to = extra_cse_bindings.bound_to;
-      }
-    in
-    { abst; }, extra_cse_bindings
-end
+    open_binders envs_with_extensions []
+  in
+  { abst; }, extra_cse_bindings

@@ -22,3 +22,9 @@ type t = {
 }
 
 val empty : t
+
+val add
+   : t
+  -> extra_param:Kinded_parameter.t
+  -> extra_args:Simple.t Apply_cont_rewrite_id.Map.t
+  -> t
