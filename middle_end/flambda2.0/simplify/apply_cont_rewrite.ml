@@ -16,52 +16,55 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+module KP = Kinded_parameter
+
+module Id = struct
+  include Numbers.Int
+
+  let next = ref 0
+
+  let create () =
+    let t = !next in
+    incr next;
+    t
+end
 
 type t = {
   original_params : KP.t list;
   used_params : KP.Set.t;
   used_extra_params : KP.Set.t;
-  extra_args : Simple.t list Apply_cont_rewrite.Id.Map.t;
+  extra_args : Simple.t list Id.Map.t;
 }
 
-let create ~original_params ~used_params
-      ~(extra_params_and_args : CUE.extra_params_and_args)
+let create ~original_params ~used_params ~extra_params ~extra_args
       ~used_extra_params =
   (* CR mshinwell: check there weren't any duplicates in the param lists too *)
-  if Set.cardinal original_params < Set.cardinal used_params then begin
-    Misc.fatal_error "Must have at least as many [original_params] (%a)@ as \
+  if List.length original_params < KP.Set.cardinal used_params then begin
+    Misc.fatal_errorf "Must have at least as many [original_params] (%a)@ as \
         [used_params] (%a)"
-      KP.Set.print original_params
+      KP.List.print original_params
       KP.Set.print used_params
   end;
-  if Set.cardinal extra_params_and_args.extra_params
-    < Set.cardinal used_extra_params
-  then begin
-    Misc.fatal_error "Must have at least as many \
-        [extra_params_and_args.extra_params] (%a)@ as \
+  if List.length extra_params < KP.Set.cardinal used_extra_params then begin
+    Misc.fatal_errorf "Must have at least as many [extra_params] (%a)@ as \
         [used_extra_params] (%a)"
-      KP.Set.print extra_params_and_args.extra_params
+      KP.List.print extra_params
       KP.Set.print used_extra_params
   end;
   let extra_args =
-    Apply_cont_rewrite.Id.Map.map (fun extra_args ->
-        if List.compare_lengths extra_params_and_args.extra_params
-          extra_args <> 0
-        then begin
-          Misc.fatal_error "Lengths of [extra_params_and_args.extra_params] \
-              (%a)@ and all [extra_args] (e.g. %a) should be equal"
-            KP.List.print extra_params_and_args.extra_params
+    Id.Map.map (fun extra_args ->
+        if List.compare_lengths extra_params extra_args <> 0 then begin
+          Misc.fatal_errorf "Lengths of [extra_params] (%a)@ and all \
+              [extra_args] (e.g. %a) should be equal"
+            KP.List.print extra_params
             Simple.List.print extra_args
         end;
-        let extra_params_and_args =
-          List.combine extra_params_and_args.extra_params extra_args
-        in
+        let extra_params_and_args = List.combine extra_params extra_args in
         List.filter_map (fun (extra_param, extra_arg) ->
             if KP.Set.mem extra_param used_extra_params then Some extra_arg
             else None)
           extra_params_and_args)
-      extra_params_and_args.extra_args
+      extra_args
   in
   { original_params;
     used_params;
@@ -72,14 +75,14 @@ let create ~original_params ~used_params
 let extra_params t = t.used_extra_params
 
 let extra_args t id =
-  match Apply_cont_rewrite.Id.Map.find id t.extra_args with
+  match Id.Map.find id t.extra_args with
   | exception Not_found ->
     Misc.fatal_errorf "Apply cont rewrite ID %a not found"
       Id.print id
   | extra_args -> extra_args
 
-let apply t id apply_cont =
-  let args = Apply_cont.args apply_cont in
+let rewrite_use t id apply_cont =
+  let args = Flambda.Apply_cont.args apply_cont in
   if List.compare_lengths args t.original_params <> 0 then begin
     Misc.fatal_errorf "Arguments to this [Apply_cont] do not match@ \
         [original_params] (%a):@ %a"
@@ -94,4 +97,4 @@ let apply t id apply_cont =
       original_params_with_args
   in
   let extra_args = extra_args t id in
-  Apply_cont.with_args apply_cont ~args:(args @ extra_args)
+  Flambda.Apply_cont.update_args apply_cont ~args:(args @ extra_args)

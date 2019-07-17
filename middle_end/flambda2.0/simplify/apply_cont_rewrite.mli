@@ -27,10 +27,13 @@ module Id : sig
   val create : unit -> t
 end
 
+type t
+
 val create
    : original_params:Kinded_parameter.t list
   -> used_params:Kinded_parameter.Set.t
-  -> extra_params_and_args:Continuation_uses_env.extra_params_and_args
+  -> extra_params:Kinded_parameter.t list
+  -> extra_args:Simple.t list Id.Map.t
   -> used_extra_params:Kinded_parameter.Set.t
   -> t
 
@@ -38,4 +41,4 @@ val extra_params : t -> Kinded_parameter.Set.t
 
 val extra_args : t -> Id.t -> Simple.t list
 
-val rewrite_use : t -> Id.t -> Apply_cont.t -> Apply_cont.t
+val rewrite_use : t -> Id.t -> Flambda.Apply_cont.t -> Flambda.Apply_cont.t

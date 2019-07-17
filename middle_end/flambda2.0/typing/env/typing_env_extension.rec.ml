@@ -67,6 +67,9 @@ let add_or_replace_equation { abst; } name ty =
   in
   { abst; }
 
+let mem { abst; } name =
+  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.mem level name)
+
 let concat (t1 : t) (t2 : t) : t =
   let abst =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->
@@ -85,16 +88,40 @@ let meet env (t1 : t) (t2 : t) : t =
   in
   { abst; }
 
-let join env ~left_env ~right_env (t1 : t) (t2 : t) : t =
-  let abst =
-    A.pattern_match t1.abst ~f:(fun _ level_1 ->
-      A.pattern_match t2.abst ~f:(fun _ level_2 ->
-        let level =
-          Typing_env_level.join env ~left_env ~right_env level_1 level_2
-        in
-        A.create (Typing_env_level.defined_vars_in_order' level) level))
-  in
-  { abst; }
+module Make_join (Id : Identifiable.S) = struct
+  module Join = Typing_env_level.Make_join (Id)
 
-let mem { abst; } name =
-  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.mem level name)
+  module Extra_cse_bindings = struct
+    type t = {
+      extra_params : Kinded_parameter.t list;
+      bound_to : Simple.t Id.Map.t list;
+    }
+  end
+
+  let n_way_join env envs_with_extensions : t * _ =
+    let abst, extra_cse_bindings =
+      let rec open_binders envs_with_extensions envs_with_levels =
+        match envs_with_extensions with
+        | [] ->
+          let level, extra_cse_bindings =
+            Join.n_way_join env envs_with_levels
+          in
+          let abst =
+            A.create (Typing_env_level.defined_vars_in_order' level) level
+          in
+          abst, extra_cse_bindings
+        | (env, id, t)::envs_with_extensions ->
+          A.pattern_match t.abst ~f:(fun _ level ->
+            (* It doesn't matter that the list gets reversed. *)
+            let envs_with_levels = (env, id, level) :: envs_with_levels in
+            open_binders envs_with_extensions envs_with_levels)
+      in
+      open_binders envs_with_extensions []
+    in
+    let extra_cse_bindings : Extra_cse_bindings.t =
+      { extra_params = extra_cse_bindings.extra_params;
+        bound_to = extra_cse_bindings.bound_to;
+      }
+    in
+    { abst; }, extra_cse_bindings
+end

@@ -65,7 +65,7 @@ module Make_join (Id : Identifiable.S) : sig
   val n_way_join
      : Typing_env.t
     -> (Typing_env.t * Id.t * t) list
-    -> t * extra_cse_bindings
+    -> t * Extra_cse_bindings.t
 end
 
 val mem : t -> Name.t -> bool
