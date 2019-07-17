@@ -45,8 +45,7 @@ let apply_cse dacc ~original_prim ~min_occurrence_kind =
   | None -> None
   | Some with_fixed_value ->
 (*
-Format.eprintf "Trying CSE on %a in@ %a@ ..." P.print original_prim
-  DA.print dacc;
+Format.eprintf "Trying CSE on %a..." P.print original_prim;
 *)
     let typing_env = DE.typing_env (DA.denv dacc) in
     match TE.find_cse typing_env with_fixed_value with
@@ -80,10 +79,15 @@ let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
     let dacc =
       match P.Eligible_for_cse.create original_prim with
       | None -> dacc
-      | Some with_fixed_value ->
+      | Some eligible_prim ->
         let bound_to = Simple.var result_var in
+(*
+Format.eprintf "Adding CSE: %a = %a\n%!"
+  P.Eligible_for_cse.print eligible_prim
+  Simple.print bound_to;
+*)
         DA.map_denv dacc ~f:(fun denv ->
           DE.with_typing_environment denv
-           (TE.add_cse (DE.typing_env denv) with_fixed_value ~bound_to))
+           (TE.add_cse (DE.typing_env denv) eligible_prim ~bound_to))
     in
     Not_applied dacc

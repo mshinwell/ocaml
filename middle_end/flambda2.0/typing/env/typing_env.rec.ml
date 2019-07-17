@@ -535,8 +535,10 @@ let find_cse t prim =
   | bound_to -> Some bound_to
 
 let add_env_extension t env_extension : t =
+(*
 Format.eprintf "Adding env extension:@ %a\n%!"
   Typing_env_extension.print env_extension;
+*)
   Typing_env_extension.pattern_match env_extension ~f:(fun level ->
     let t =
       List.fold_left (fun t (var, kind) ->
@@ -624,13 +626,17 @@ Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
     let env_extension =
       Scope.Map.fold (fun _scope one_level result ->
+(*
 Format.eprintf "Folding in scope %a\n%!" Scope.print _scope;
 Format.eprintf "Level is:@ %a\n%!" Typing_env_level.print (One_level.level one_level);
+*)
           let env_extension =
             Typing_env_extension.create (One_level.level one_level)
           in
+(*
 Format.eprintf "Extension is:@ %a\n%!"
   Typing_env_extension.print env_extension;
+*)
           Typing_env_extension.concat result env_extension)
         at_or_after_cut
         (Typing_env_extension.empty ())
