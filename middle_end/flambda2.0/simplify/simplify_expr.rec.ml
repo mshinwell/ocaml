@@ -76,8 +76,8 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
       let free_names = Expr.free_names handler in
-      let used_params, unused_params =
-        List.partition (fun param ->
+      let used_params =
+        List.filter (fun param ->
             Name_occurrences.mem_var free_names (KP.var param))
           params
       in
