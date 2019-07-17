@@ -20,25 +20,24 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Id : sig
-  type t
-  include Identifiable.S with type t := t
-
-  val create : unit -> t
-end
-
 type t
+
+val print : Format.formatter -> t -> unit
 
 val create
    : original_params:Kinded_parameter.t list
   -> used_params:Kinded_parameter.Set.t
   -> extra_params:Kinded_parameter.t list
-  -> extra_args:Simple.t list Id.Map.t
+  -> extra_args:Simple.t list Apply_cont_rewrite_id.Map.t
   -> used_extra_params:Kinded_parameter.Set.t
   -> t
 
-val extra_params : t -> Kinded_parameter.Set.t
+val extra_params : t -> Kinded_parameter.t list
 
-val extra_args : t -> Id.t -> Simple.t list
+val extra_args : t -> Apply_cont_rewrite_id.t -> Simple.t list
 
-val rewrite_use : t -> Id.t -> Flambda.Apply_cont.t -> Flambda.Apply_cont.t
+val rewrite_use
+   : t
+  -> Apply_cont_rewrite_id.t
+  -> Flambda.Apply_cont.t
+  -> Flambda.Apply_cont.t

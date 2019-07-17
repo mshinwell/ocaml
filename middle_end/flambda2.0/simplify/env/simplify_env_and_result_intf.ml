@@ -179,9 +179,16 @@ module type Upwards_env = sig
 
   val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
 
-  val add_apply_cont_rewrite : t -> Apply_cont_rewrite.t -> t
+  val add_apply_cont_rewrite
+     : t
+    -> Continuation.t
+    -> Apply_cont_rewrite.t
+    -> t
 
-  val find_apply_cont_rewrite : t -> Apply_cont_rewrite.Id.t -> t
+  val find_apply_cont_rewrite
+     : t
+    -> Continuation.t
+    -> Apply_cont_rewrite.t
 end
 
 module type Result = sig
