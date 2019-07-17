@@ -117,6 +117,8 @@ type layout_slot =
   | Infix_header
   | Closure of Closure_id.t
 
+type layout = (int * layout_slot) list
+
 let order_closures env l acc =
   List.fold_left (fun acc closure ->
       let o = closure_offset env closure in

@@ -465,7 +465,7 @@ let binary_primitive env dbg f x y =
   | Block_load (kind, _) ->
       C.block_load ~dbg kind x y
   | String_or_bigstring_load (kind, width) ->
-      C.string_like_load ~dbg kind width x (C.untag_int y dbg)
+      C.string_like_load ~dbg kind width x y
   | Phys_equal (kind, op) ->
       binary_phys_comparison env dbg kind op x y
   | Int_arith (kind, op) ->
