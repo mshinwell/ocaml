@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module CUE = Continuation_uses_env
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension

@@ -385,10 +385,10 @@ module Make_join (Id : Identifiable.S) = struct
             Kinded_parameter.create (Parameter.wrap var) prim_result_kind
           in
           let bound_to =
-            Id.Map.map (fun id rhs_kind ->
+            Id.Map.mapi (fun id rhs_kind ->
                 match rhs_kind with
                 | Needs_extra_binding { bound_to; }
-                | Rhs_in_scope { bound_to; })
+                | Rhs_in_scope { bound_to; } -> bound_to)
               rhs_kinds
           in
           let extra_bindings =
