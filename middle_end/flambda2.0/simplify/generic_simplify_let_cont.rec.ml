@@ -66,7 +66,7 @@ end) = struct
         in
         let arity = Continuation_handler_like.arity cont_handler in
         let typing_env, arg_types, extra_params_and_args =
-          CUE.continuation_env_and_arg_types cont_uses_env
+          CUE.continuation_env_and_param_types cont_uses_env
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
         in

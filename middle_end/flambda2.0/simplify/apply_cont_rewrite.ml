@@ -17,24 +17,28 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module KP = Kinded_parameter
-
-module Id = struct
-  include Numbers.Int
-
-  let next = ref 0
-
-  let create () =
-    let t = !next in
-    incr next;
-    t
-end
+module Id = Apply_cont_rewrite_id
 
 type t = {
   original_params : KP.t list;
   used_params : KP.Set.t;
-  used_extra_params : KP.Set.t;
+  used_extra_params : KP.t list;
   extra_args : Simple.t list Id.Map.t;
 }
+
+let print ppf { original_params; used_params; used_extra_params;
+                extra_args;
+              } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(original_params@ %a)@]@ \
+      @[<hov 1>(used_params@ %a)@]@ \
+      @[<hov 1>(used_extra_params@ %a)@]@ \
+      @[<hov 1>(extra_args@ %a)@]\
+      )@]"
+    KP.List.print original_params
+    KP.Set.print used_params
+    KP.List.print used_extra_params
+    (Id.Map.print Simple.List.print) extra_args
 
 let create ~original_params ~used_params ~extra_params ~extra_args
       ~used_extra_params =
@@ -65,6 +69,10 @@ let create ~original_params ~used_params ~extra_params ~extra_args
             else None)
           extra_params_and_args)
       extra_args
+  in
+  let used_extra_params =
+    List.filter (fun extra_param -> KP.Set.mem extra_param used_extra_params)
+      extra_params
   in
   { original_params;
     used_params;

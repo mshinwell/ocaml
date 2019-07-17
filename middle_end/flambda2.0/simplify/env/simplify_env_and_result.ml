@@ -273,6 +273,7 @@ end = struct
     continuations : (Scope.t * Continuation_in_env.t) Continuation.Map.t;
     exn_continuations : Scope.t Exn_continuation.Map.t;
     continuation_aliases : Continuation.t Continuation.Map.t;
+    apply_cont_rewrites : Apply_cont_rewrite.t Continuation.Map.t;
   }
 
   let invariant _t = ()
@@ -281,6 +282,7 @@ end = struct
     { continuations = Continuation.Map.empty;
       exn_continuations = Exn_continuation.Map.empty;
       continuation_aliases = Continuation.Map.empty;
+      apply_cont_rewrites = Continuation.Map.empty;
     }
 
   let print_scope_level_and_continuation_in_env ppf (scope_level, cont_in_env) =
@@ -292,16 +294,20 @@ end = struct
       Continuation_in_env.print cont_in_env
 
   let print ppf { continuations; exn_continuations; continuation_aliases;
+                  apply_cont_rewrites;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(continuations@ %a)@]@ \
         @[<hov 1>(exn_continuations@ %a)@]@ \
-        @[<hov 1>(continuation_aliases@ %a)@]\
+        @[<hov 1>(continuation_aliases@ %a)@]@ \
+        @[<hov 1>(apply_cont_rewrites@ %a)@]\
         )@]"
       (Continuation.Map.print print_scope_level_and_continuation_in_env)
       continuations
       (Exn_continuation.Map.print Scope.print) exn_continuations
       (Continuation.Map.print Continuation.print) continuation_aliases
+      (Continuation.Map.print Apply_cont_rewrite.print)
+      apply_cont_rewrites
 
   let find_continuation t cont =
     match Continuation.Map.find cont t.continuations with
@@ -399,6 +405,26 @@ end = struct
         Exn_continuation.print exn_cont
         print t
     end
+
+  let add_apply_cont_rewrite t cont rewrite =
+    if Continuation.Map.mem cont t.apply_cont_rewrites then begin
+      Misc.fatal_errorf "Cannot redefine [Apply_cont_rewrite] for %a"
+        Continuation.print cont
+    end;
+    let apply_cont_rewrites =
+      Continuation.Map.add cont rewrite t.apply_cont_rewrites
+    in
+    { t with
+      apply_cont_rewrites;
+    }
+
+  let find_apply_cont_rewrite t cont =
+    match Continuation.Map.find cont t.apply_cont_rewrites with
+    | exception Not_found ->
+      Misc.fatal_errorf "[Apply_cont_rewrite] for %a not found in:@ %a"
+        Continuation.print cont
+        print t
+    | rewrite -> rewrite
 end and Result : sig
   include Simplify_env_and_result_intf.Result
 end = struct

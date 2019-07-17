@@ -52,16 +52,16 @@ let rec simplify_let
 
 and simplify_one_continuation_handler
   : 'a. DA.t -> arg_types:T.t list
-    -> extra_params_and_args:Downwards_acc.extra_params_and_args
+    -> extra_params_and_args:Continuation_extra_params_and_args.t
     -> Continuation.t -> Continuation_handler.t -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
 = fun dacc ~arg_types
-      ~(extra_params_and_args : Downwards_acc.extra_params_and_args)
-      cont_handler k ->
+      ~(extra_params_and_args : Continuation_extra_params_and_args.t)
+      cont cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
-    ~f:(fun params ~handler : (_ Generic_simplify_let_cont.result * _ * _) ->
+    ~f:(fun params ~handler ->
 (*
 Format.eprintf "About to simplify handler %a: params %a, param types %a, \
     dacc:@ %a\n%!"
@@ -83,7 +83,7 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
       in
       let used_extra_params =
         List.filter (fun extra_param ->
-            Name_occurrences.mem_var free_names (KP.var param))
+            Name_occurrences.mem_var free_names (KP.var extra_param))
           extra_params_and_args.extra_params
       in
       let handler =
@@ -93,11 +93,15 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
       in
       let rewrite =
         Apply_cont_rewrite.create ~original_params:params
-          ~used_params
-          ~extra_params_and_args
-          ~used_extra_params
+          ~used_params:(KP.Set.of_list used_params)
+          ~extra_params:extra_params_and_args.extra_params
+          ~extra_args:extra_params_and_args.extra_args
+          ~used_extra_params:(KP.Set.of_list used_extra_params)
       in
-      let uacc = UA.add_apply_cont_rewrite cont rewrite in
+      let uacc =
+        UA.map_uenv uacc ~f:(fun uenv ->
+          UE.add_apply_cont_rewrite uenv cont rewrite)
+      in
       handler, user_data, uacc)
 
 and simplify_non_recursive_let_cont_handler
@@ -207,12 +211,12 @@ and simplify_direct_full_application
   match inlined with
   | Some (dacc, inlined) -> simplify_expr dacc inlined k
   | None ->
-    let dacc =
+    let dacc, _id =
       DA.record_continuation_use dacc (Apply.continuation apply)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
-    let dacc =
+    let dacc, _id =
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
@@ -461,7 +465,7 @@ and simplify_function_call_where_callee's_type_unavailable
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
-  let dacc =
+  let dacc, _id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
@@ -479,13 +483,16 @@ and simplify_function_call_where_callee's_type_unavailable
         Apply.print apply
     end;
 *)
-    DA.record_continuation_use dacc cont ~typing_env_at_use
-      ~arg_types:(T.unknown_types_from_arity return_arity)
+    let dacc, _id =
+      DA.record_continuation_use dacc cont ~typing_env_at_use
+        ~arg_types:(T.unknown_types_from_arity return_arity)
+    in
+    dacc
   in
   let call_kind, dacc =
     match call with
     | Indirect_unknown_arity ->
-      let dacc =
+      let dacc, _id =
         DA.record_continuation_use dacc (Apply.continuation apply)
           ~typing_env_at_use ~arg_types:[T.any_value ()]
       in
@@ -633,12 +640,12 @@ and simplify_method_call
         [value]:@ %a"
       Apply.print apply
   end;
-  let dacc =
+  let dacc, _id =
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
   in
-  let dacc =
+  let dacc, _id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
@@ -681,12 +688,12 @@ and simplify_c_call
       Apply.print apply
   end;
 *)
-  let dacc =
+  let dacc, _id =
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
-  let dacc =
+  let dacc, _id =
     (* CR mshinwell: Try to factor out these stanzas, here and above. *)
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
@@ -745,10 +752,10 @@ Format.eprintf "Apply_cont %a: arg types %a, env@ %a\n%!"
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
+    let rewrite = UE.find_apply_cont_rewrite uenv cont in
     let apply_cont =
-      let apply_cont_rewrite = UE.find_apply_cont_rewrite uenv cont in
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
-      Apply_cont_rewrite.rewrite_use apply_cont_rewrite rewrite_id apply_cont
+      Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
     (* CR mshinwell: Clarify that [arity] is the arity before any rewrite. *)
     let check_arity_against_args ~arity =
@@ -891,7 +898,10 @@ Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use env_extension
             in
-            let dacc =
+            let dacc, _id =
+              (* CR mshinwell: Add another [record_continuation_use] which is
+                 to be used when not dealing with [Apply_cont].  It should not
+                 return the id. *)
               DA.record_continuation_use dacc cont
                 ~typing_env_at_use
                 ~arg_types:[]

@@ -34,18 +34,24 @@ let empty = {
 
 let record_continuation_use t cont ~typing_env_at_use ~arg_types =
   (* XXX This needs to deal with exn continuation extra-args *)
+  let id = Apply_cont_rewrite_id.create () in
   let continuation_uses =
     Continuation.Map.update cont (function
         | None ->
           let arity = T.arity_of_list arg_types in
           let uses = Continuation_uses.create cont arity in
-          Some (Continuation_uses.add_use uses ~typing_env_at_use ~arg_types)
+          Some (Continuation_uses.add_use uses ~typing_env_at_use id
+            ~arg_types)
         | Some uses ->
-          Some (Continuation_uses.add_use uses ~typing_env_at_use ~arg_types))
+          Some (Continuation_uses.add_use uses ~typing_env_at_use id
+            ~arg_types))
       t.continuation_uses
   in
-  { continuation_uses;
-  }
+  let t : t =
+    { continuation_uses;
+    }
+  in
+  t, id
 
 let continuation_env_and_param_types t ~definition_typing_env cont arity =
   match Continuation.Map.find cont t.continuation_uses with
@@ -54,9 +60,9 @@ let continuation_env_and_param_types t ~definition_typing_env cont arity =
       (* CR mshinwell: Move to [Flambda_type] *)
       List.map (fun kind -> T.bottom kind) arity
     in
-    definition_typing_env, arg_types
+    definition_typing_env, arg_types, Continuation_extra_params_and_args.empty
   | uses ->
-    Continuation_uses.env_and_arg_types uses ~definition_typing_env
+    Continuation_uses.env_and_param_types uses ~definition_typing_env
 
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with

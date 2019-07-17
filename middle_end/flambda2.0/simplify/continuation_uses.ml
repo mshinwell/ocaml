@@ -16,14 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module CUE = Continuation_uses_env
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   type t = {
-    id : Apply_cont_rewrite.Id.t;
+    id : Apply_cont_rewrite_id.t;
     arg_types : T.t list;
     typing_env : TE.t;
   }
@@ -93,7 +92,7 @@ let add_use t ~typing_env_at_use id ~arg_types =
     raise Misc.Fatal_error
   end
 
-module Join = TEE.Make_join (Apply_cont_rewrite.Id)
+module Join = TEE.Make_join (Apply_cont_rewrite_id)
 
 let env_and_param_types t ~definition_typing_env =
   let definition_scope_level =
@@ -113,21 +112,16 @@ let env_and_param_types t ~definition_typing_env =
         T.erase_aliases env ~bound_name:None ~allowed ty)
       (Use.arg_types use)
   in
-  let empty_extra_params_and_args : CUE.extra_params_and_args =
-    { extra_params = [];
-      extra_args = [];
-    }
-  in
   match t.uses with
   | [] ->
     definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity,
-      empty_extra_params_and_args
+      Continuation_extra_params_and_args.empty
   | [use] ->
     let env_extension = cut_use_environment use in
     let allowed = TE.var_domain definition_typing_env in
     let use_arg_types = process_use_arg_types use ~allowed in
     let env = TE.add_env_extension definition_typing_env env_extension in
-    env, use_arg_types, empty_extra_params_and_args
+    env, use_arg_types, Continuation_extra_params_and_args.empty
   | (use::uses) as all_uses ->
     let use_envs_with_ids_and_extensions =
       List.map (fun use ->
@@ -152,7 +146,7 @@ let env_and_param_types t ~definition_typing_env =
         first_arg_types
         uses
     in
-    let extra_params_and_args : CUE.extra_params_and_args =
+    let extra_params_and_args : Continuation_extra_params_and_args.t =
       { extra_params = extra_cse_bindings.extra_params;
         extra_args = extra_cse_bindings.bound_to;
       }

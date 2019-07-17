@@ -33,7 +33,7 @@ val print : Format.formatter -> t -> unit
 val add_use
    : t
   -> typing_env_at_use:Flambda_type.Typing_env.t
-  -> Apply_cont_rewrite.Id.t
+  -> Apply_cont_rewrite_id.t
   -> arg_types:Flambda_type.t list
   -> t
 
@@ -41,7 +41,7 @@ val env_and_param_types
    : t
   -> definition_typing_env:Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t * (Flambda_type.t list)
-       * Continuation_uses_env.extra_params_and_args
+       * Continuation_extra_params_and_args.t
 
 val number_of_uses : t -> int
 
