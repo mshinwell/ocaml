@@ -77,7 +77,8 @@ let create_variables env l =
 
 let get_variable env v =
   try Variable.Map.find v env.vars
-  with Not_found -> assert false
+  with Not_found ->
+    Misc.fatal_errorf "Variable %a not found in env" Variable.print v
 
 
 (* Continuations *)
@@ -85,8 +86,12 @@ let get_variable env v =
 let get_jump_id env k =
   match Continuation.Map.find k env.conts with
   | Jump (_, id) -> id
-  | Inline _
-  | exception Not_found -> assert false
+  | Inline _ ->
+      Misc.fatal_errorf "Expected continuation %a to be bound to a jump"
+        Continuation.print k
+  | exception Not_found ->
+      Misc.fatal_errorf "Continuation %a not found in env"
+        Continuation.print k
 
 let get_k env k =
   match Continuation.Map.find k env.conts with
