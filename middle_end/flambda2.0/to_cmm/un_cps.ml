@@ -25,7 +25,7 @@ module Env = Un_cps_env
    - int32 on 64 bits are represented as an int64 in the range of
      32-bit integers. Currently we trust flambda2 to insert
      double shifts to clear the higher order 32-bits between operations.
-     Once the samll_arith PR comes, we can use dedicated 32-bits
+     Once the small_arith PR comes, we can use dedicated 32-bits
      cmm arithmetic operations.
 *)
 
@@ -721,7 +721,7 @@ and apply_cont env e =
     match Env.get_k env k with
     | Jump (tys, id) ->
         (* The provided args should match the types in tys *)
-        assert (List.length tys = List.length args);
+        assert (List.compare_lengths tys args = 0);
         C.cexit id args
     | Inline (vars, body) ->
         List.fold_left2 (fun acc v e -> C.letin v e acc) body vars args
