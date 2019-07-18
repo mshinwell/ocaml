@@ -749,10 +749,10 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id;
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
+    let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
-    let rewrite = UE.find_apply_cont_rewrite uenv cont in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
     let apply_cont =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in

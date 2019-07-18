@@ -457,11 +457,13 @@ Format.eprintf "Adding equation %a : %a\n%!"
       end
     | _ -> ()
   end;
+(*
 Format.eprintf "Trying to add equation %a = %a\n%!"
   Name.print name
   Type_printers.print ty;
 Format.eprintf "Aliases before adding equation:@ %a\n%!"
   Aliases.print (aliases t);
+*)
   let aliases, simple, ty =
     let aliases = aliases t in
     match Flambda_type0_core.get_alias ty with
@@ -615,12 +617,10 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
           t
     in
     invariant t;
-(*
 Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
   Scope.print min_scope
   print original_t
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
-*)
     let level =
       Scope.Map.fold (fun _scope one_level result ->
           Typing_env_level.concat result (One_level.level one_level))
@@ -628,9 +628,7 @@ Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
         (Typing_env_level.empty ())
     in
     let env_extension = Typing_env_extension.create level in
-(*
 Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
-*)
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     env_extension, vars_in_scope_at_cut
 

@@ -325,15 +325,18 @@ end
 let cse_after_n_way_join envs_with_extensions ~allowed =
   let module EP = Flambda_primitive.Eligible_for_cse in
   let canonicalise env simple =
-    let all_aliases =
-      Simple.Set.add simple
-        (Typing_env.aliases_of_simple_allowable_in_types env simple)
+    let canonical_simple =
+      Typing_env.get_canonical_simple env
+        ~min_occurrence_kind:Name_occurrence_kind.in_types
+        simple
     in
-    let eligible_aliases =
-      Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
-        all_aliases
-    in
-    Simple.Set.choose_opt eligible_aliases
+    match canonical_simple with
+    | Bottom -> None
+    | Ok None -> (* CR mshinwell: Can this happen? *)
+      Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
+    | Ok (Some simple) ->
+      if Simple.allowed simple ~allowed then Some simple
+      else None
   in
   let canonicalise_lhs env cse =
     EP.Map.fold (fun prim bound_to cse ->
@@ -428,8 +431,9 @@ Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
    at the moment.  (Actually, check a couple of places e.g. closures_entry
    where it looks like these may still be needed...) *)
 
-let n_way_join env envs_with_extensions =
+let n_way_join0 env envs_with_extensions =
   let allowed = Typing_env.var_domain env in
+Format.eprintf "Allowed vars %a\n%!" Variable.Set.print allowed;
   let allowed_names = Name.set_of_var_set allowed in
   let names_with_equations_in_join =
     List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
@@ -473,3 +477,9 @@ typ
   let t : t = { t with cse; } in
   assert (Variable.Map.is_empty t.defined_vars);
   t, extra_cse_bindings
+
+let n_way_join env envs_with_extensions =
+  match envs_with_extensions with
+  | [] -> empty (), Continuation_extra_params_and_args.empty
+  | [_env, _id, t] -> t, Continuation_extra_params_and_args.empty
+  | envs_with_extensions -> n_way_join0 env envs_with_extensions
