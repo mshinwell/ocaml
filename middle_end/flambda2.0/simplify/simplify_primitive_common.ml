@@ -44,26 +44,18 @@ let apply_cse dacc ~original_prim ~min_occurrence_kind =
   match P.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
-(*
 Format.eprintf "Trying CSE on %a..." P.print original_prim;
-*)
     let typing_env = DE.typing_env (DA.denv dacc) in
     match TE.find_cse typing_env with_fixed_value with
     | None ->
-(*
 Format.eprintf "failure\n%!";
-*)
       None
     | Some simple ->
-(*
 Format.eprintf "success (=%a)\n%!" Simple.print simple;
-*)
       match TE.get_canonical_simple typing_env ~min_occurrence_kind simple with
       | Bottom | Ok None -> None
       | Ok (Some simple) ->
-(*
 Format.eprintf "returning =%a\n%!" Simple.print simple;
-*)
         Some simple
 
 let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
