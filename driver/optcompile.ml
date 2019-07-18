@@ -80,21 +80,6 @@ let flambda i backend typed =
           code;
         }
       in
-      begin
-        match Sys.getenv "FLAMBDA2" with
-        | exception Not_found -> ()
-        | _ ->
-          let _ : Flambda2.Flambda_static.Program.t =
-            Flambda2.Flambda2_middle_end.middle_end ~ppf_dump:i.ppf_dump
-              ~prefixname:"<prefixname>"
-              ~backend:flambda2_backend
-              ~size:main_module_block_size
-              ~filename:"<filename>"
-              ~module_ident
-              ~module_initializer:code
-          in
-          ()
-      end;
       Asmgen.compile_implementation
         ~backend
         ~filename:i.source_file
@@ -103,6 +88,36 @@ let flambda i backend typed =
         ~ppf_dump:i.ppf_dump
         program);
     Compilenv.save_unit_info (cmx i))
+
+let flambda2 i typed =
+  if !Clflags.classic_inlining then begin
+    Clflags.default_simplify_rounds := 1;
+    Clflags.use_inlining_arguments_set Clflags.classic_arguments;
+    Clflags.unbox_free_vars_of_closures := false;
+    Clflags.unbox_specialised_args := false
+  end;
+  typed
+  |> Profile.(record transl)
+      (Translmod.transl_implementation_flambda i.module_name)
+  |> Profile.(record generate)
+    (fun {Lambda.module_ident; main_module_block_size;
+          required_globals; code; } ->
+    ((module_ident, main_module_block_size), code)
+    |>> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
+    |>> Simplif.simplify_lambda
+    |>> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
+    |> (fun ((module_ident, main_module_block_size), code) ->
+        Asmgen.compile_implementation2 required_globals
+          ~backend:flambda2_backend
+          ~prefixname:i.output_prefix
+          ~size:main_module_block_size
+          ~filename:i.source_file
+          ~module_ident
+          ~module_initializer:code
+          ~ppf_dump:i.ppf_dump
+          ~middle_end:Flambda2.Flambda2_middle_end.middle_end);
+    Compilenv.save_unit_info (cmx i)
+    )
 
 let clambda i backend typed =
   Clflags.use_inlining_arguments_set Clflags.classic_arguments;
@@ -123,11 +138,16 @@ let clambda i backend typed =
             ~ppf_dump:i.ppf_dump;
        Compilenv.save_unit_info (cmx i))
 
+let config_flambda2 () =
+  try ignore (Sys.getenv "FLAMBDA2"); true
+  with Not_found -> false
+
 let implementation ~backend ~source_file ~output_prefix =
   let backend info typed =
     Compilenv.reset ?packname:!Clflags.for_package info.module_name;
-    if Config.flambda
-    then flambda info backend typed
+    if Config.flambda then
+      if config_flambda2 () then flambda2 info typed
+      else flambda info backend typed
     else clambda info backend typed
   in
   with_info ~source_file ~output_prefix ~dump_ext:"cmx" @@ fun info ->

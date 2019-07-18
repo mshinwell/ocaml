@@ -139,23 +139,36 @@
 )
 
 (library
+ (name ocamloptcommon)
+ (wrapped false)
+ (flags (:standard -principal -nostdlib))
+ (libraries stdlib ocamlcommon ocamlmiddleend)
+ (modules_without_implementation x86_ast)
+ (modules
+   arch proc x86_ast x86_proc
+   reg reg_availability_set reg_with_debug_info
+   cmm cmmgen_state cmm_helpers printcmm
+   mach printmach
+   interval strmatch
+  )
+)
+
+(library
  (name ocamloptcomp)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon ocamlmiddleend flambda2)
- (modules_without_implementation x86_ast)
+ (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2)
  (modules
    ;; asmcomp/
-   afl_instrument arch asmgen asmlibrarian asmlink asmpackager branch_relaxation
-   branch_relaxation_intf cmm cmm_helpers cmmgen cmmgen_state coloring comballoc
-   CSE CSEgen deadcode emit emitaux interf interval linearize linscan liveness
-   mach printcmm printlinear printmach proc reg reload reloadgen schedgen
-   scheduling selectgen selection spacetime_profiling spill split strmatch
-   x86_ast x86_dsl x86_gas x86_masm x86_proc
+   afl_instrument asmgen asmlibrarian asmlink asmpackager branch_relaxation
+   branch_relaxation_intf cmmgen coloring comballoc
+   CSE CSEgen deadcode emit emitaux interf linearize linscan liveness
+   printlinear regtype reload reloadgen schedgen
+   scheduling selectgen selection spacetime_profiling spill split
+   x86_dsl x86_gas x86_masm
 
    ;; asmcomp/debug/
-   reg_availability_set compute_ranges_intf available_regs reg_with_debug_info
-   compute_ranges
+   compute_ranges_intf available_regs compute_ranges
 
    ;; driver/
    optcompile opterrors

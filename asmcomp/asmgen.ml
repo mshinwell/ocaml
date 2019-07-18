@@ -71,6 +71,11 @@ let compile_fundecl ~ppf_dump fd_cmm =
   fd_cmm
   ++ Profile.record ~accumulate:true "selection" Selection.fundecl
   ++ pass_dump_if ppf_dump dump_selection "After instruction selection"
+  ++ Profile.record ~accumulate:true "regtype "Regtype.fundecl
+    (*
+  ++ Profile.record ~accumulate:true "regtype" Regtype.fundecl
+  ++ pass_dump_if ppf_dump (ref false) "After register typing"
+       *)
   ++ Profile.record ~accumulate:true "comballoc" Comballoc.fundecl
   ++ pass_dump_if ppf_dump dump_combine "After allocation combining"
   ++ Profile.record ~accumulate:true "cse" CSE.fundecl
@@ -130,11 +135,10 @@ let compile_unit asm_filename keep_asm obj_filename gen =
        if create_asm && not keep_asm then remove_file asm_filename
     )
 
-let end_gen_implementation ?toplevel ~ppf_dump
-    (clambda : Clambda.with_constants) =
+let end_gen_implementation ?toplevel ~ppf_dump to_cmm program =
   Emit.begin_assembly ();
-  clambda
-  ++ Profile.record "cmm" Cmmgen.compunit
+  program
+  ++ Profile.record "cmm" to_cmm
   ++ Profile.record "compile_phrases" (List.iter (compile_phrase ~ppf_dump))
   ++ (fun () -> ());
   (match toplevel with None -> () | Some f -> compile_genfuns ~ppf_dump f);
@@ -160,7 +164,7 @@ type middle_end =
   -> Clambda.with_constants
 
 let compile_implementation ?toplevel ~backend ~filename ~prefixname ~middle_end
-      ~ppf_dump (program : Lambda.program) =
+    ~ppf_dump (program : Lambda.program)  =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
     then prefixname ^ ext_asm
@@ -172,7 +176,33 @@ let compile_implementation ?toplevel ~backend ~filename ~prefixname ~middle_end
       let clambda_with_constants =
         middle_end ~backend ~filename ~prefixname ~ppf_dump program
       in
-      end_gen_implementation ?toplevel ~ppf_dump clambda_with_constants)
+      end_gen_implementation ?toplevel ~ppf_dump Cmmgen.compunit clambda_with_constants)
+
+type middle_end2 =
+     ppf_dump:Format.formatter
+  -> prefixname:string
+  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> size:int
+  -> filename:string
+  -> module_ident:Ident.t
+  -> module_initializer:Lambda.lambda
+  -> Flambda2.Flambda_static.Program.t
+
+let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
+    ~module_ident ~module_initializer ~middle_end ~ppf_dump required_globals =
+  let asmfile =
+    if !keep_asm_file || !Emitaux.binary_backend_available
+    then prefixname ^ ext_asm
+    else Filename.temp_file "camlasm" ext_asm
+  in
+  compile_unit asmfile !keep_asm_file (prefixname ^ ext_obj)
+    (fun () ->
+      Ident.Set.iter Compilenv.require_global required_globals;
+      let translated_program =
+        (middle_end : middle_end2) ~backend ~size ~filename ~prefixname
+          ~ppf_dump ~module_ident ~module_initializer
+      in
+      end_gen_implementation ?toplevel ~ppf_dump Flambda2.Un_cps.program translated_program)
 
 (* Error report *)
 
