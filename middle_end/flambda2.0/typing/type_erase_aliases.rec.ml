@@ -44,31 +44,23 @@ let erase_aliases_ty env ~bound_name ~already_seen
        to appear in types.
        If that fails, expand the head of the type, and then recursively erase
        aliases on the result (returning a non-alias type). *)
-    if Simple.Set.mem simple already_seen then
-      No_alias Unknown
-    else
-      let all_aliases =
-        Simple.Set.add simple
-          (Typing_env.aliases_of_simple_allowable_in_types env simple)
-      in
-      let all_aliases_minus_bound_name =
-        match bound_name with
-        | None -> all_aliases
-        | Some bound_name ->
-          Simple.Set.remove (Simple.name bound_name) all_aliases
-      in
-      let eligible_aliases =
-        Simple.Set.filter (fun simple -> Simple.allowed simple ~allowed)
-          all_aliases_minus_bound_name
-      in
-      match Simple.Set.choose_opt eligible_aliases with
-      | Some alias -> Equals alias
-      | None ->
+    let canonical_simple =
+      Typing_env.get_canonical_simple env
+        ~min_occurrence_kind:Name_occurrence_kind.in_types
+        simple
+    in
+    match canonical_simple with
+    | Bottom -> No_alias Bottom
+    | Ok None -> (* CR mshinwell: Can this happen? *)
+      Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
+    | Ok (Some simple) ->
+      if Simple.allowed simple ~allowed then Equals simple
+      else
         let unknown_or_join =
           Typing_env.expand_head_ty env ~force_to_kind ~print_ty ~apply_rec_info
             ty
         in
-        let already_seen = Simple.Set.union all_aliases already_seen in
+        let already_seen = Simple.Set.add simple already_seen in
         No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
           ~bound_name ~already_seen ~allowed unknown_or_join)
 

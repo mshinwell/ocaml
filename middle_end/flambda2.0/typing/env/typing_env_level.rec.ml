@@ -433,15 +433,22 @@ let n_way_join env envs_with_extensions =
   let allowed_names = Name.set_of_var_set allowed in
   let names_with_equations_in_join =
     List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
+Format.eprintf "Level in n_way_join:@ %a\n%!" print t;
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
       allowed_names
       envs_with_extensions
   in
   let get_type t env name =
+Format.eprintf "get_type %a: starting type %a\n%!" Name.print name
+  Type_printers.print (find_equation t name);
+let typ =
     Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
       (find_equation t name)
+in
+Format.eprintf "...and after: %a\n%!" Type_printers.print typ;
+typ
   in
   let t =
     Name.Set.fold (fun name result ->
@@ -456,7 +463,7 @@ let n_way_join env envs_with_extensions =
               (get_type t first_env name)
               envs_with_extensions
           in
-          add_or_replace_equation t name join_ty)
+          add_or_replace_equation result name join_ty)
       names_with_equations_in_join
       (empty ())
   in
