@@ -526,6 +526,12 @@ let machtype_of_return_arity = function
       (* TODO: update when unboxed tuples are used *)
       Misc.fatal_errorf "Functions are currently limited to a single return value"
 
+let meth_kind k =
+  match (k : Call_kind.method_kind) with
+  | Self -> (Self : Lambda.meth_kind)
+  | Public -> (Public : Lambda.meth_kind)
+  | Cached -> (Cached : Lambda.meth_kind)
+
 (* Function calls and continuations *)
 
 let var_list env l =
@@ -661,8 +667,11 @@ and apply_call env e =
       let f = function_name f in
       let ty = machtype_of_return_arity return_arity in
       C.extcall ~dbg ~alloc f ty args
-  | Call_kind.Method _ ->
-      todo()
+  | Call_kind.Method { kind; obj; } ->
+      let meth = simple env f in
+      let kind = meth_kind kind in
+      let obj = simple env obj in
+      C.send kind meth obj args dbg
 
 and wrap_cont env res e =
   let k = Apply_expr.continuation e in
