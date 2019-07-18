@@ -424,10 +424,8 @@ let unary_primitive env dbg f arg =
       C.extcall ~alloc:true "caml_obj_dup" typ_val [arg]
   | Is_int ->
       C.and_ ~dbg arg (C.int ~dbg 1)
-  | Get_tag _ ->
+  | Get_tag ->
       C.get_tag arg dbg
-  | Discriminant_of_int ->
-      C.untag_int arg dbg
   | Array_length block_access_kind ->
       C.block_length ~dbg block_access_kind arg
   | Bigarray_length { dimension } ->
