@@ -171,7 +171,7 @@ module Greedy = struct
 
       This strategy should be able to correctly compute offsets for all legitimate
       situations, with no expected blowup of computation time. However the generated
-      offsets can be far from optimal.
+      offsets can be far from optimal (i.e. leave more holes than necessary).
 
       CR Gbury: when do we import info from a cmx ? When creating new slots (check for
       info in external compunits ?).
