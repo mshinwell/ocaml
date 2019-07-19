@@ -135,4 +135,4 @@ let rewrite_use t id apply_cont =
     Flambda.Expr.bind ~bindings:extra_lets
       ~body:(Flambda.Expr.create_apply_cont apply_cont)
   in
-  expr, args
+  expr, apply_cont, args

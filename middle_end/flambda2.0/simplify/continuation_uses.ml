@@ -24,17 +24,19 @@ module TEE = Flambda_type.Typing_env_extension
 module Use = struct
   type t = {
     id : Apply_cont_rewrite_id.t;
+    args : Simple.t list;
     arg_types : T.t list;
     typing_env : TE.t;
   }
 
-  let create ~typing_env_at_use:typing_env id ~arg_types =
+  let create ~typing_env_at_use:typing_env id ~args ~arg_types =
     { id;
+      args;
       arg_types;
       typing_env;
     }
 
-  let print ppf { typing_env = _; id = _; arg_types; } =
+  let print ppf { typing_env = _; id = _; args = _; arg_types; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(arg_types@ %a)@]@ \
         )@]"
@@ -68,7 +70,7 @@ let print ppf { continuation; arity; uses; } =
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
-let add_use t ~typing_env_at_use id ~arg_types =
+let add_use t ~typing_env_at_use id ~args ~arg_types =
   try
     let arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal arity t.arity) then begin
@@ -77,7 +79,7 @@ let add_use t ~typing_env_at_use id ~arg_types =
         Flambda_arity.print arity
         Flambda_arity.print t.arity
     end;
-    let use = Use.create ~typing_env_at_use id ~arg_types in
+    let use = Use.create ~typing_env_at_use id ~args ~arg_types in
     { t with
       uses = use :: t.uses;
     }
@@ -119,7 +121,9 @@ Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typ
   in
   match t.uses with
   | [] ->
-    definition_typing_env, List.map (fun kind -> T.unknown kind) t.arity,
+    definition_typing_env,
+      List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity,
+      List.map (fun kind -> T.unknown kind) t.arity,
       Continuation_extra_params_and_args.empty
   | (use :: uses) as all_uses ->
     let use_envs_with_ids_and_extensions =
@@ -149,16 +153,20 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
     in
     let allowed = TE.var_domain env in
     let first_arg_types = process_use_arg_types use ~allowed in
-    let arg_types =
-      List.fold_left (fun joined_arg_types use ->
+    let args, arg_types =
+      List.fold_left (fun (args, joined_arg_types) (use:Use.t) ->
+          List.map2 (fun arg arg' ->
+            Apply_cont_rewrite_id.Map.add use.id arg' arg)
+            args use.args,
           List.map2 (fun arg_type arg_type' ->
               T.join env arg_type arg_type')
             joined_arg_types
             (process_use_arg_types use ~allowed))
-        first_arg_types
+        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity,
+         first_arg_types)
         uses
     in
-    env, arg_types, extra_cse_bindings
+    env, args, arg_types, extra_cse_bindings
 
 let number_of_uses t = List.length t.uses
 
