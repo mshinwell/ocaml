@@ -116,8 +116,6 @@ end
 
 type string_or_bytes = String | Bytes
 
-type mutable_or_immutable = Immutable | Mutable
-
 type init_or_assign = Initialization | Assignment
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
@@ -182,14 +180,14 @@ type signed_or_unsigned =
 type unary_int_arith_op = Neg | Swap_byte_endianness
 
 (** Naked float unary arithmetic operations. *)
-type unary_float_arith_op = Abs | Neg 
+type unary_float_arith_op = Abs | Neg
 
 (** Primitives taking exactly one argument. *)
 type unary_primitive =
   | Duplicate_block of {
       kind : duplicate_block_kind;
-      source_mutability : mutable_or_immutable; 
-      destination_mutability : mutable_or_immutable; 
+      source_mutability : Effects.mutable_or_immutable;
+      destination_mutability : Effects.mutable_or_immutable;
     }
     (** [Duplicate_block] may not be used to change the tag of a block. *)
   | Is_int
@@ -240,7 +238,7 @@ type binary_float_arith_op = Add | Sub | Mul | Div
 
 (** Primitives taking exactly two arguments. *)
 type binary_primitive =
-  | Block_load of Block_access_kind.t * mutable_or_immutable
+  | Block_load of Block_access_kind.t * Effects.mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
   (* CR mshinwell: Phys_equal should maybe have "phys" in the name somewhere;
      this is physical (in)equality *)
@@ -260,7 +258,7 @@ type ternary_primitive =
 (** Primitives taking zero or more arguments. *)
 type variadic_primitive =
   (* CR pchambart / mshinwell: Effects of Make_block? *)
-  | Make_block of make_block_kind * mutable_or_immutable
+  | Make_block of make_block_kind * Effects.mutable_or_immutable
   (* CR mshinwell: Invariant checks -- e.g. that the number of arguments
      matches [num_dimensions] *)
   | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
@@ -332,53 +330,10 @@ val result_kind_of_ternary_primitive' : ternary_primitive -> Flambda_kind.t
 val result_kind_of_variadic_primitive' : variadic_primitive -> Flambda_kind.t
 val result_kind' : t -> Flambda_kind.t
 
-(** Things that a primitive application does to the world. *)
-type effects =
-  | No_effects
-  (** The primitive does not change the observable state of the world. For
-      example, it must not write to any mutable storage, call arbitrary external
-      functions or change control flow (e.g. by raising an exception). Note that
-      allocation is not "No effects" (see below).
-
-      It is assumed in Flambda that applications of primitives with no
-      effects, whose results are not used, may be eliminated.  It is further
-      assumed that applications of primitives with no effects may be
-      duplicated (and thus possibly executed more than once).
-
-      Exceptions arising from allocation points, for example "out of memory" or
-      exceptions propagated from finalizers or signal handlers, are treated as
-      "effects out of the ether" and thus ignored for our determination here
-      of effectfulness.  The same goes for floating point operations that may
-      cause hardware traps on some platforms. *)
-  | Only_generative_effects of mutable_or_immutable
-  (** The primitive does not change the observable state of the world save for
-      possibly affecting the state of the garbage collector by performing an
-      allocation. Applications of primitives that only have generative effects
-      and whose results are unused may be eliminated by the compiler. However,
-      unlike "No effects" primitives, such applications will never be eligible
-      for duplication.
-      The argument to [Only_generative_effects] states whether the returned
-      value from the primitive is mutable. *)
-  | Arbitrary_effects
-  (** The primitive may have effects beyond those described by [No_effects]
-      and [Only_generative_effects]. *)
-
-(** Things that the world does to a primitive application. *)
-type coeffects =
-  | No_coeffects
-  (** "No coeffects" means that the primitive does not observe the effects (in
-      the sense described above) of other expressions. For example, it must not
-      read from any mutable storage or call arbitrary external functions.
-
-      It is assumed in Flambda that, subject to data dependencies,
-      expressions with neither effects nor coeffects may be reordered with
-      respect to other expressions. *)
-  | Has_coeffects
-  (** The primitive may be affected by effects from other expressions. *)
 
 (** Describe the effects and coeffects that the application of the given
     primitive may have. *)
-val effects_and_coeffects : t -> effects * coeffects
+val effects_and_coeffects : t -> Effects.t * Coeffects.t
 
 (** Returns [true] iff the given primitive has neither effects nor
     coeffects. *)

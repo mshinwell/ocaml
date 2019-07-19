@@ -20,7 +20,7 @@ open! Simplify_import
 
 let simplify_make_block dacc _prim dbg
       ~(make_block_kind : P.make_block_kind)
-      ~(mutable_or_immutable : P.mutable_or_immutable)
+      ~(mutable_or_immutable : Effects.mutable_or_immutable)
       args_with_tys ~result_var =
       (*
 Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
