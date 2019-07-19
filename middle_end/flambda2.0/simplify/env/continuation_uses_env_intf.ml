@@ -28,6 +28,7 @@ module type S = sig
      : t
     -> Continuation.t
     -> typing_env_at_use:Flambda_type.Typing_env.t
+    -> args:Simple.t list
     -> arg_types:Flambda_type.t list
     -> t * Apply_cont_rewrite_id.t
 
@@ -39,7 +40,7 @@ module type S = sig
     -> Continuation.t
     -> Flambda_arity.t
     -> Flambda_type.Typing_env.t
-         * Simple.t Apply_cont_rewrite_id.Map.t
+         * Simple.t Apply_cont_rewrite_id.Map.t list
          * (Flambda_type.t list)
          * Continuation_extra_params_and_args.t
 

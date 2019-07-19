@@ -215,6 +215,7 @@ and simplify_direct_full_application
       DA.record_continuation_use dacc (Apply.continuation apply)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
+        ~args:(Misc.fatal_error "TODO HERE")
     in
     let dacc, _id =
       DA.record_continuation_use dacc
@@ -222,6 +223,7 @@ and simplify_direct_full_application
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
+        ~args:(Misc.fatal_error "TODO HERE")
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let return_cont =
@@ -471,6 +473,7 @@ and simplify_function_call_where_callee's_type_unavailable
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
+      ~args:(Misc.fatal_error "TODO HERE")
   in
   let check_return_arity_and_record_return_cont_use ~return_arity =
 (*
@@ -486,6 +489,7 @@ and simplify_function_call_where_callee's_type_unavailable
     let dacc, _id =
       DA.record_continuation_use dacc cont ~typing_env_at_use
         ~arg_types:(T.unknown_types_from_arity return_arity)
+        ~args:(Misc.fatal_error "TODO HERE")
     in
     dacc
   in
@@ -495,6 +499,7 @@ and simplify_function_call_where_callee's_type_unavailable
       let dacc, _id =
         DA.record_continuation_use dacc (Apply.continuation apply)
           ~typing_env_at_use ~arg_types:[T.any_value ()]
+          ~args:(Misc.fatal_error "TODO HERE")
       in
       Call_kind.indirect_function_call_unknown_arity (), dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
@@ -644,6 +649,7 @@ and simplify_method_call
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
+      ~args:(Misc.fatal_error "TODO HERE")
   in
   let dacc, _id =
     DA.record_continuation_use dacc
@@ -651,6 +657,7 @@ and simplify_method_call
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
+      ~args:(Misc.fatal_error "TODO HERE")
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
@@ -692,6 +699,7 @@ and simplify_c_call
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
+      ~args:(Misc.fatal_error "TODO HERE")
   in
   let dacc, _id =
     (* CR mshinwell: Try to factor out these stanzas, here and above. *)
@@ -700,6 +708,7 @@ and simplify_c_call
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
+      ~args:(Misc.fatal_error "TODO HERE")
   in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
@@ -742,6 +751,7 @@ and simplify_apply_cont
         (AC.continuation apply_cont)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
+        ~args
     in
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Continuation.print (AC.continuation apply_cont)
@@ -754,13 +764,13 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-    let apply_cont, args =
+    let apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
-      | None -> apply_cont, Apply_cont.args apply_cont
+      | None -> Expr.create_apply_cont apply_cont, apply_cont, Apply_cont.args apply_cont
       | Some rewrite ->
         (* CR mshinwell: Try to merge with inlining case *)
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
@@ -768,7 +778,7 @@ Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite.print rewrite;
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
-Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont;
+Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
     let check_arity_against_args ~arity:_ = () in
 (*
       if not (Flambda_arity.equal args_arity arity) then begin
@@ -780,7 +790,7 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont;
       end
     in
 *)
-    let normal_case () = apply_cont, user_data, uacc in
+    let normal_case () = apply_cont_expr, user_data, uacc in
     match UE.find_continuation uenv cont with
     | Unknown { arity; } ->
       check_arity_against_args ~arity;
@@ -830,7 +840,7 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont;
                   in
                   extra_params, extra_args
               in
-              let extra_args =
+              let extra_args_simple =
                 List.map
                   (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
                     match arg with
@@ -854,10 +864,10 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont;
               let inlined =
                 Expr.bind_parameters_to_simples
                   ~bind:(extra_params @ params)
-                  ~target:(extra_args @ args)
+                  ~target:(extra_args_simple @ args)
                   handler
               in
-              Expr.bind ~bindings:extra_lets inlined
+              Expr.bind ~bindings:extra_lets ~body:inlined
             in
             let r = UA.r uacc in
             let dacc = DA.with_r dacc r in
@@ -948,6 +958,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               DA.record_continuation_use dacc cont
                 ~typing_env_at_use
                 ~arg_types:[]
+                ~args:[]
             in
             let arms = Discriminant.Map.add arm (cont, id) arms in
             arms, dacc)
@@ -969,22 +980,22 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               new_let_conts, arms
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
-              let apply_cont, _args =
+              let apply_cont_expr, apply_cont, _args =
                 Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
               in
-(*
               (* CR mshinwell: try to remove this next bit? *)
               match Apply_cont.to_goto apply_cont with
               | Some cont ->
+                (* If this is a goto, there is no bindings around the
+                   apply_cont so we can drop apply_cont_expr *)
                 let arms = Discriminant.Map.add arm cont arms in
                 new_let_conts, arms
               | None ->
-*)
                 let new_cont = Continuation.create () in
                 let new_handler =
                   let params_and_handler =
                     Continuation_params_and_handler.create []
-                      ~handler:apply_cont
+                      ~handler:apply_cont_expr
                   in
                   Continuation_handler.create ~params_and_handler
                     ~stub:false

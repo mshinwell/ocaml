@@ -44,4 +44,4 @@ val rewrite_use
    : t
   -> Apply_cont_rewrite_id.t
   -> Flambda.Apply_cont.t
-  -> Flambda.Expr.t * Simple.t list
+  -> Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list
