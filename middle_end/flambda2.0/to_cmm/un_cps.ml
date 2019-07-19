@@ -679,7 +679,9 @@ and wrap_cont env res e =
     res
   else begin
     match Env.get_k env k with
+    | Jump ([], id) -> C.sequence res (C.cexit id [])
     | Jump ([_], id) -> C.cexit id [res]
+    | Inline ([], body) -> C.sequence res body
     | Inline ([v], body) -> C.letin v res body
     | Jump _
     | Inline _ ->
@@ -707,7 +709,7 @@ and wrap_exn env res e =
     | Jump _
     | Inline _ ->
         Misc.fatal_errorf
-          "Exception continuations should only take one argument"
+          "Exception continuations should take exactly one argument"
   end
 
 and apply_cont env e =
@@ -721,6 +723,7 @@ and apply_cont env e =
           "Exception continuations should only applied to a single argument"
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
+    | [] -> C.void
     | [res] -> res
     | _ ->
         (* TODO: add support using unboxed tuples *)
