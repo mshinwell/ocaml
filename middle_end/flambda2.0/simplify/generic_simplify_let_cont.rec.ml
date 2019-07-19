@@ -38,6 +38,74 @@ module Make (Continuation_handler_like : sig
 
   val real_handler : t -> Continuation_handler.t option
 end) = struct
+  let make_unboxing_decision typing_env ~args_by_use_id ~param_type
+        extra_params_and_args =
+    match T.prove_tags_and_sizes typing_env param_type with
+    | Invalid | Unknown -> typing_env, param_type, extra_params_and_args
+    | Proved tags_to_sizes ->
+      match Tag.Map.get_singleton tags_to_sizes with
+      | None -> typing_env, param_type, extra_params_and_args
+      | Some (tag, size) ->
+        let fields_with_vars =
+          List.init (Targetint.OCaml.to_int size) (fun _ ->
+            let var = Variable.create "field" in
+            let ty = T.alias_type_of K.value (Simple.var var) in
+            ty, var)
+        in
+        let fields, vars = List.split fields_with_vars in
+        let block_type = T.immutable_block tag ~fields in
+        match T.meet typing_env block_type param_type with
+        | Bottom ->
+          Misc.fatal_errorf "[meet] between %a and %a should not have failed"
+            T.print block_type
+            T.print param_type
+        | Ok (param_type, env_extension) ->
+          let typing_env = TE.add_env_extension typing_env env_extension in
+          let _index, extra_params_and_args =
+            List.fold_left (fun (index, extra_params_and_args) param ->
+                let extra_param = KP.create (Parameter.wrap param) K.value in
+                let extra_args =
+                  Apply_cont_rewrite_id.Map.map (fun arg : EA.t ->
+                      let bound_to =
+                        Var_in_binding_pos.create
+                          (Variable.create (Printf.sprintf "unboxed%d" index))
+                          Name_occurrence_kind.normal
+                      in
+                      let index =
+                        Immediate.int (Targetint.OCaml.of_int index)
+                      in
+                      let prim =
+                        P.Binary (
+                          Block_load (Block (Value Anything), Immutable),
+                          arg, Simple.const (Tagged_immediate index))
+                      in
+                      New_let_binding (bound_to, prim))
+                    args_by_use_id
+                in
+                let extra_params_and_args =
+                  EPA.add extra_params_and_args ~extra_param ~extra_args
+                in
+                index + 1, extra_params_and_args)
+              (0, extra_params_and_args)
+              vars
+          in
+          typing_env, param_type, extra_params_and_args
+
+  let make_unboxing_decisions typing_env ~args_by_use_id ~param_types
+        extra_params_and_args =
+    let typing_env, param_types_rev, extra_params_and_args =
+      List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
+                (args_by_use_id, param_type) ->
+          let typing_env, param_type, extra_params_and_args =
+            make_unboxing_decision typing_env ~args_by_use_id ~param_type
+              extra_params_and_args
+          in
+          typing_env, param_type :: param_types_rev, extra_params_and_args)
+        (typing_env, [], extra_params_and_args)
+        (List.combine args_by_use_id param_types)
+    in
+    typing_env, List.rev param_types_rev, extra_params_and_args
+
   let simplify_body_of_non_recursive_let_cont
         dacc cont cont_handler ~body simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
@@ -65,10 +133,16 @@ end) = struct
             (R.get_lifted_constants r)
         in
         let arity = Continuation_handler_like.arity cont_handler in
-        let typing_env, arg_types, extra_params_and_args =
+        (* CR mshinwell: rename arg_types -> param_types *)
+        (* CR mshinwell: Return one list of args, types, etc *)
+        let typing_env, args_by_use_id, arg_types, extra_params_and_args =
           CUE.continuation_env_and_param_types cont_uses_env
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
+        in
+        let typing_env, param_types, extra_params_and_args =
+          make_unboxing_decisions typing_env ~args_by_use_id
+            ~param_types:arg_types extra_params_and_args
         in
         let definition_denv =
           DE.with_typing_environment definition_denv typing_env
@@ -86,7 +160,7 @@ end) = struct
             cont_handler, user_data, uacc
           else
             try
-              simplify_continuation_handler_like dacc ~arg_types
+              simplify_continuation_handler_like dacc ~arg_types:param_types
                 ~extra_params_and_args cont cont_handler k
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s simplifying continuation \

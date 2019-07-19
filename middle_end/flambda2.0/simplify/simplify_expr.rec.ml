@@ -754,21 +754,21 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-    let apply_cont =
+    let apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
-      | None -> apply_cont
+      | None -> apply_cont, Apply_cont.args apply_cont
       | Some rewrite ->
+        (* CR mshinwell: Try to merge with inlining case *)
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
-    let args = Apply_cont.args apply_cont in
-Format.eprintf "Apply_cont is now %a\n%!" Apply_cont.print apply_cont;
+Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont;
     let check_arity_against_args ~arity:_ = () in
 (*
       if not (Flambda_arity.equal args_arity arity) then begin
@@ -780,11 +780,7 @@ Format.eprintf "Apply_cont is now %a\n%!" Apply_cont.print apply_cont;
       end
     in
 *)
-    let normal_case () =
-      Expr.create_apply_cont
-          (AC.update_continuation_and_args apply_cont cont ~args),
-        user_data, uacc
-    in
+    let normal_case () = apply_cont, user_data, uacc in
     match UE.find_continuation uenv cont with
     | Unknown { arity; } ->
       check_arity_against_args ~arity;
@@ -839,14 +835,29 @@ Format.eprintf "Apply_cont is now %a\n%!" Apply_cont.print apply_cont;
                   (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
                     match arg with
                     | Already_in_scope simple -> simple
-                    | New_let_binding (_var, _named) ->
-                      Misc.fatal_error "Not yet done")
+                    | New_let_binding (var, _named) ->
+                      Simple.var (Var_in_binding_pos.var var))
                   extra_args
               in
-              Expr.bind_parameters_to_simples
-                ~bind:(extra_params @ params)
-                ~target:(extra_args @ args)
-                handler
+              let extra_lets =
+                List.filter_map
+                  (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+                    match arg with
+                    | Already_in_scope _ -> None
+                    | New_let_binding (var, prim) ->
+                      (* CR mshinwell: fix debuginfo (?) *)
+                      let dbg = Debuginfo.none in
+                      let named = Named.create_prim prim dbg in
+                      Some (var, named))
+                  extra_args
+              in
+              let inlined =
+                Expr.bind_parameters_to_simples
+                  ~bind:(extra_params @ params)
+                  ~target:(extra_args @ args)
+                  handler
+              in
+              Expr.bind ~bindings:extra_lets inlined
             in
             let r = UA.r uacc in
             let dacc = DA.with_r dacc r in
@@ -958,20 +969,22 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               new_let_conts, arms
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
-              let apply_cont =
+              let apply_cont, _args =
                 Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
               in
+(*
               (* CR mshinwell: try to remove this next bit? *)
               match Apply_cont.to_goto apply_cont with
               | Some cont ->
                 let arms = Discriminant.Map.add arm cont arms in
                 new_let_conts, arms
               | None ->
+*)
                 let new_cont = Continuation.create () in
                 let new_handler =
                   let params_and_handler =
                     Continuation_params_and_handler.create []
-                      ~handler:(Expr.create_apply_cont apply_cont)
+                      ~handler:apply_cont
                   in
                   Continuation_handler.create ~params_and_handler
                     ~stub:false

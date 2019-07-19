@@ -105,13 +105,34 @@ let rewrite_use t id apply_cont =
         else None)
       original_params_with_args
   in
+  let extra_args_list = extra_args t id in
   let extra_args =
     List.map
       (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
         match arg with
         | Already_in_scope simple -> simple
-        | New_let_binding (_var, _named) ->
-          Misc.fatal_error "Not yet done")
-      (extra_args t id)
+        | New_let_binding (var, _named) ->
+          Simple.var (Var_in_binding_pos.var var))
+      extra_args_list
   in
-  Flambda.Apply_cont.update_args apply_cont ~args:(extra_args @ args)
+  let extra_lets =
+    List.filter_map
+      (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+        match arg with
+        | Already_in_scope _ -> None
+        | New_let_binding (var, prim) ->
+          (* CR mshinwell: fix debuginfo (?) *)
+          let dbg = Debuginfo.none in
+          let named = Flambda.Named.create_prim prim dbg in
+          Some (var, named))
+      extra_args_list
+  in
+  let args = extra_args @ args in
+  let apply_cont =
+    Flambda.Apply_cont.update_args apply_cont ~args:(extra_args @ args)
+  in
+  let expr =
+    Flambda.Expr.bind ~bindings:extra_lets
+      ~body:(Flambda.Expr.create_apply_cont apply_cont)
+  in
+  expr, args
