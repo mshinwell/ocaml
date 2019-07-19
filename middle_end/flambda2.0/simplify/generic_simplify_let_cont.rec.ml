@@ -83,6 +83,23 @@ end) = struct
                       let index =
                         Immediate.int (Targetint.OCaml.of_int index)
                       in
+                      (* CR pchambart: This shouldn't another load if
+                         there is already one in the list of
+                         parameters
+
+                           apply_cont k (a, b) a
+                         where k x y
+
+                         should become
+
+                           apply_cont k (a, b) a b
+                         where k x y b'
+
+                         not
+
+                           apply_cont k (a, b) a a b
+                         where k x y a' b'
+                      *)
                       let prim =
                         P.Binary (
                           Block_load (Block (Value Anything), Immutable),
