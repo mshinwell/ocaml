@@ -485,10 +485,10 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
       match Aliases.add aliases alias alias_of with
       | None, aliases -> aliases, Alias.simple alias_of, ty
       | (Some { canonical_element; alias_of; }), aliases ->
-Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
-  Name.print name
-  Alias.print canonical_element
-  Alias.print alias_of;
+(* Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
+ *   Name.print name
+ *   Alias.print canonical_element
+ *   Alias.print alias_of; *)
         let kind = Flambda_type0_core.kind ty in
         let ty =
           Flambda_type0_core.alias_type_of kind
@@ -496,13 +496,13 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
         in
         aliases, Alias.simple alias_of, ty
   in
-Format.eprintf "Now really adding equation %a = %a\n%!"
-  Simple.print simple
-  Type_printers.print ty;
-Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
-  Simple.print simple
-  Type_printers.print ty
-  Aliases.print aliases;
+(* Format.eprintf "Now really adding equation %a = %a\n%!"
+ *   Simple.print simple
+ *   Type_printers.print ty;
+ * Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
+ *   Simple.print simple
+ *   Type_printers.print ty
+ *   Aliases.print aliases; *)
   match Simple.descr simple with
   | Const _ | Discriminant _ -> t
   | Name name ->
@@ -617,10 +617,10 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
           t
     in
     invariant t;
-Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
-  Scope.print min_scope
-  print original_t
-  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
+(* Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
+ *   Scope.print min_scope
+ *   print original_t
+ *   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15)); *)
     let level =
       Scope.Map.fold (fun _scope one_level result ->
           Typing_env_level.concat result (One_level.level one_level))
@@ -628,7 +628,7 @@ Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
         (Typing_env_level.empty ())
     in
     let env_extension = Typing_env_extension.create level in
-Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension;
+(* Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension; *)
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
     env_extension, vars_in_scope_at_cut
 

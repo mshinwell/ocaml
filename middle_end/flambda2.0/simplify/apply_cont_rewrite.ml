@@ -90,7 +90,7 @@ let extra_args t id =
     []
   | extra_args -> extra_args
 
-let rewrite_use t id apply_cont =
+let rewrite_use ~simplify_named dacc t id apply_cont =
   let args = Flambda.Apply_cont.args apply_cont in
   if List.compare_lengths args t.original_params <> 0 then begin
     Misc.fatal_errorf "Arguments to this [Apply_cont] do not match@ \
@@ -127,12 +127,25 @@ let rewrite_use t id apply_cont =
           Some (var, named))
       extra_args_list
   in
+  let dacc, extra_lets =
+    List.fold_right (fun (var, named) (dacc, extra_lets) ->
+        let (defining_expr : Reachable.t), dacc =
+          simplify_named dacc named
+            ~result_var:var
+        in
+        match defining_expr with
+        | Invalid _ ->
+          assert false
+        | Reachable defining_expr ->
+          dacc, (var, defining_expr) :: extra_lets)
+      extra_lets (dacc,[])
+  in
   let args = extra_args @ args in
   let apply_cont =
-    Flambda.Apply_cont.update_args apply_cont ~args:(extra_args @ args)
+    Flambda.Apply_cont.update_args apply_cont ~args
   in
   let expr =
     Flambda.Expr.bind ~bindings:extra_lets
       ~body:(Flambda.Expr.create_apply_cont apply_cont)
   in
-  expr, apply_cont, args
+  dacc, expr, apply_cont, args

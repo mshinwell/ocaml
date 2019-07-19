@@ -153,18 +153,22 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
     in
     let allowed = TE.var_domain env in
     let first_arg_types = process_use_arg_types use ~allowed in
-    let args, arg_types =
-      List.fold_left (fun (args, joined_arg_types) (use:Use.t) ->
-          List.map2 (fun arg arg' ->
-            Apply_cont_rewrite_id.Map.add use.id arg' arg)
-            args use.args,
+    let arg_types =
+      List.fold_left (fun joined_arg_types (use:Use.t) ->
           List.map2 (fun arg_type arg_type' ->
               T.join env arg_type arg_type')
             joined_arg_types
             (process_use_arg_types use ~allowed))
-        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity,
-         first_arg_types)
+        first_arg_types
         uses
+    in
+    let args =
+      List.fold_left (fun args (use:Use.t) ->
+          List.map2 (fun arg arg' ->
+            Apply_cont_rewrite_id.Map.add use.id arg' arg)
+          args use.args)
+        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
+        all_uses
     in
     env, args, arg_types, extra_cse_bindings
 

@@ -62,14 +62,17 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-(*
-Format.eprintf "About to simplify handler %a: params %a, param types %a, \
+
+Format.eprintf "About to simplify handler %a: params %a, param types@ %a, \
     dacc:@ %a\n%!"
-  Continuation.print _cont
+  Continuation.print cont
   KP.List.print params
   (Format.pp_print_list T.print) arg_types
   DA.print dacc;
-*)
+
+Format.printf "handler:@.%a@."
+  Expr.print handler;
+
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
@@ -764,19 +767,19 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-    let apply_cont_expr, apply_cont, args =
+    let dacc, apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
-      | None -> Expr.create_apply_cont apply_cont, apply_cont, Apply_cont.args apply_cont
+      | None -> dacc, Expr.create_apply_cont apply_cont, apply_cont, Apply_cont.args apply_cont
       | Some rewrite ->
         (* CR mshinwell: Try to merge with inlining case *)
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
-        Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
+        Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite rewrite_id apply_cont
     in
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
     let check_arity_against_args ~arity:_ = () in
@@ -861,6 +864,12 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                       Some (var, named))
                   extra_args
               in
+              Format.printf "UUUextra_params %a@.params %a@.extra_args_simple %a@.args %a@."
+                KP.List.print extra_params
+                KP.List.print params
+                Simple.List.print extra_args_simple
+                Simple.List.print args
+              ;
               let inlined =
                 Expr.bind_parameters_to_simples
                   ~bind:(extra_params @ params)
@@ -980,8 +989,9 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               new_let_conts, arms
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
-              let apply_cont_expr, apply_cont, _args =
-                Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
+              let _dacc, apply_cont_expr, apply_cont, _args =
+                (* This might not be the right dacc *)
+                Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite id (Apply_cont.goto cont)
               in
               (* CR mshinwell: try to remove this next bit? *)
               match Apply_cont.to_goto apply_cont with
