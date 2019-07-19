@@ -81,27 +81,6 @@ module Generic_array_specialisation = struct
   let compare = Stdlib.compare
 end
 
-type mutable_or_immutable = Immutable | Mutable
-
-let print_mutable_or_immutable ppf mut =
-  match mut with
-  | Immutable -> Format.pp_print_string ppf "Immutable"
-  | Mutable -> Format.pp_print_string ppf "Mutable"
-
-let compare_mutable_or_immutable mut1 mut2 =
-  match mut1, mut2 with
-  | Immutable, Immutable
-  | Mutable, Mutable -> 0
-  | Immutable, Mutable -> -1
-  | Mutable, Immutable -> 1
-
-type effects =
-  | No_effects
-  | Only_generative_effects of mutable_or_immutable
-  | Arbitrary_effects
-
-type coeffects = No_coeffects | Has_coeffects
-
 (* CR mshinwell: These types should probably go in their own modules with
    a comparison function next to each. *)
 
@@ -224,12 +203,12 @@ type array_like_operation = Reading | Writing
 
 let effects_of_operation operation =
   match operation with
-  | Reading -> No_effects
-  | Writing -> Arbitrary_effects
+  | Reading -> Effects.No_effects
+  | Writing -> Effects.Arbitrary_effects
 
 let reading_from_an_array_like_thing =
   let effects = effects_of_operation Reading in
-  effects, Has_coeffects
+  effects, Coeffects.Has_coeffects
 
 (* CR-someday mshinwell: Change this when [Obj.truncate] is removed (although
    beware, bigarrays will still be resizable). *)
@@ -239,7 +218,7 @@ let writing_to_an_array_like_thing =
      the block (for [Bytes_set] and [Array_set]) or the dimension of the
      bigarray.  As such these primitives have coeffects. *)
   (* XXX But there are no bounds checks now *)
-  effects, Has_coeffects
+  effects, Coeffects.Has_coeffects
 
 let array_like_thing_index_kind = K.value
 
@@ -430,8 +409,8 @@ type result_kind =
 type unary_primitive =
   | Duplicate_block of {
       kind : duplicate_block_kind;
-      source_mutability : mutable_or_immutable; 
-      destination_mutability : mutable_or_immutable; 
+      source_mutability : Effects.mutable_or_immutable;
+      destination_mutability : Effects.mutable_or_immutable;
     }
   | Is_int
   | Get_tag
@@ -576,8 +555,8 @@ let print_unary_primitive ppf p =
   | Duplicate_block { kind; source_mutability; destination_mutability; } ->
     fprintf ppf "(Duplicate_array %a (source %a) (dest %a))"
       print_duplicate_block_kind kind
-      print_mutable_or_immutable source_mutability
-      print_mutable_or_immutable destination_mutability
+      Effects.print_mutable_or_immutable source_mutability
+      Effects.print_mutable_or_immutable destination_mutability
   | Is_int -> fprintf ppf "Is_int"
   | Get_tag -> fprintf ppf "Get_tag"
   | String_length _ -> fprintf ppf "String_length"
@@ -656,30 +635,31 @@ let effects_and_coeffects_of_unary_primitive p =
     begin match source_mutability with
     | Immutable ->
       (* [Obj.truncate] has now been removed. *)
-      Only_generative_effects destination_mutability, No_coeffects
+      Effects.Only_generative_effects destination_mutability, Coeffects.No_coeffects
     | Mutable ->
-      Only_generative_effects destination_mutability, Has_coeffects
+      Effects.Only_generative_effects destination_mutability, Coeffects.Has_coeffects
     end
-  | Is_int -> No_effects, No_coeffects
-  | Get_tag | String_length _ ->
+  | Is_int -> Effects.No_effects, Coeffects.No_coeffects
+  | Get_tag ->
     (* [Obj.truncate] has now been removed. *)
-    No_effects, No_coeffects
+    Effects.No_effects, Coeffects.No_coeffects
+  | String_length _ -> reading_from_an_array_like_thing
   | Int_as_pointer
-  | Opaque_identity -> Arbitrary_effects, Has_coeffects
+  | Opaque_identity -> Effects.Arbitrary_effects, Coeffects.Has_coeffects
   | Int_arith (_, (Neg | Swap_byte_endianness))
   | Num_conv _
   | Boolean_not
-  | Float_arith (Abs | Neg) -> No_effects, No_coeffects
+  | Float_arith (Abs | Neg) -> Effects.No_effects, Coeffects.No_coeffects
   | Array_length _ ->
     reading_from_an_array_like_thing
   | Bigarray_length { dimension = _; } ->
     reading_from_an_array_like_thing
   | Unbox_number _ ->
-    No_effects, No_coeffects
+    Effects.No_effects, Coeffects.No_coeffects
   | Box_number _ ->
-    Only_generative_effects Immutable, No_coeffects
+    Effects.Only_generative_effects Immutable, Coeffects.No_coeffects
   | Select_closure _
-  | Project_var _ -> No_effects, No_coeffects
+  | Project_var _ -> Effects.No_effects, Coeffects.No_coeffects
 
 let unary_classify_for_printing p =
   match p with
@@ -735,7 +715,7 @@ let print_binary_float_arith_op ppf o =
   | Div -> fprintf ppf "/."
 
 type binary_primitive =
-  | Block_load of Block_access_kind.t * mutable_or_immutable
+  | Block_load of Block_access_kind.t * Effects.mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
   | Phys_equal of Flambda_kind.t * equality_comparison
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
@@ -784,7 +764,7 @@ let compare_binary_primitive p1 p2 =
   | Block_load (kind1, mut1), Block_load (kind2, mut2) ->
     let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
-    else compare_mutable_or_immutable mut1 mut2
+    else Effects.compare_mutable_or_immutable mut1 mut2
   | String_or_bigstring_load (string_like1, width1),
       String_or_bigstring_load (string_like2, width2) ->
     let c = Stdlib.compare string_like1 string_like2 in
@@ -831,7 +811,7 @@ let print_binary_primitive ppf p =
   | Block_load (kind, mut) ->
     fprintf ppf "@[(Block_load %a %a)@]"
       Block_access_kind.print kind
-      print_mutable_or_immutable mut
+      Effects.print_mutable_or_immutable mut
   | String_or_bigstring_load (string_like, width) ->
     fprintf ppf "@[(String_load %a %a)@]"
       print_string_like_value string_like
@@ -887,13 +867,13 @@ let result_kind_of_binary_primitive p : result_kind =
 let effects_and_coeffects_of_binary_primitive p =
   match p with
   | Block_load _ -> reading_from_an_array_like_thing
-  | Phys_equal _ -> No_effects, No_coeffects
+  | Phys_equal _ -> Effects.No_effects, Coeffects.No_coeffects
   | Int_arith (_kind, (Add | Sub | Mul | Div | Mod | And | Or | Xor)) ->
-    No_effects, No_coeffects
-  | Int_shift _ -> No_effects, No_coeffects
-  | Int_comp _ -> No_effects, No_coeffects
-  | Float_arith (Add | Sub | Mul | Div) -> No_effects, No_coeffects
-  | Float_comp _ -> No_effects, No_coeffects
+    Effects.No_effects, Coeffects.No_coeffects
+  | Int_shift _ -> Effects.No_effects, Coeffects.No_coeffects
+  | Int_comp _ -> Effects.No_effects, Coeffects.No_coeffects
+  | Float_arith (Add | Sub | Mul | Div) -> Effects.No_effects, Coeffects.No_coeffects
+  | Float_comp _ -> Effects.No_effects, Coeffects.No_coeffects
   | String_or_bigstring_load _ -> reading_from_an_array_like_thing
 
 let binary_classify_for_printing p =
@@ -989,7 +969,7 @@ let ternary_classify_for_printing p =
   | Bytes_or_bigstring_set _ -> Neither
 
 type variadic_primitive =
-  | Make_block of make_block_kind * mutable_or_immutable
+  | Make_block of make_block_kind * Effects.mutable_or_immutable
   | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
   | Bigarray_load of num_dimensions * bigarray_kind * bigarray_layout
 
@@ -1033,7 +1013,7 @@ let print_variadic_primitive ppf p =
   | Make_block (kind, mut) ->
     fprintf ppf "@[(Make_block %a %a)@]"
       print_make_block_kind kind
-      print_mutable_or_immutable mut
+      Effects.print_mutable_or_immutable mut
   | Bigarray_set _ -> fprintf ppf "Bigarray_set"
   | Bigarray_load _ -> fprintf ppf "Bigarray_load"
 
@@ -1070,11 +1050,11 @@ let effects_and_coeffects_of_variadic_primitive p =
   match p with
   (* CR mshinwell: Arrays of size zero? *)
   | Make_block (_, mut) ->
-    Only_generative_effects mut, No_coeffects
+    Effects.Only_generative_effects mut, Coeffects.No_coeffects
   | Bigarray_set (_, _, _) ->
     writing_to_an_array_like_thing
   | Bigarray_load (_, (Unknown | Complex32 | Complex64), _) ->
-    Only_generative_effects Immutable, Has_coeffects
+    Effects.Only_generative_effects Immutable, Coeffects.Has_coeffects
   | Bigarray_load (_, _, _) ->
     reading_from_an_array_like_thing
 

@@ -81,7 +81,7 @@ let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
       shape
 
 let convert_mutable_flag (flag : Asttypes.mutable_flag)
-      : P.mutable_or_immutable =
+      : Effects.mutable_or_immutable =
   match flag with
   | Mutable -> Mutable
   | Immutable -> Immutable
