@@ -54,6 +54,15 @@ end) = struct
         in
         let fields, vars = List.split fields_with_vars in
         let block_type = T.immutable_block tag ~fields in
+        let typing_env =
+          List.fold_left (fun typing_env var ->
+              let name =
+                Name_in_binding_pos.create (Name.var var)
+                  Name_occurrence_kind.normal
+              in
+              TE.add_definition typing_env name K.value)
+            typing_env vars
+        in
         match T.meet typing_env block_type param_type with
         | Bottom ->
           Misc.fatal_errorf "[meet] between %a and %a should not have failed"
@@ -82,6 +91,9 @@ end) = struct
                       New_let_binding (bound_to, prim))
                     args_by_use_id
                 in
+                Format.printf "ARGS: %a@.EPA: %a@."
+                  (Apply_cont_rewrite_id.Map.print Simple.print) args_by_use_id
+                  EPA.print extra_params_and_args;
                 let extra_params_and_args =
                   EPA.add extra_params_and_args ~extra_param ~extra_args
                 in
@@ -93,6 +105,7 @@ end) = struct
 
   let make_unboxing_decisions typing_env ~args_by_use_id ~param_types
         extra_params_and_args =
+    Format.printf "UNBOXLength %i@." (List.length param_types);
     let typing_env, param_types_rev, extra_params_and_args =
       List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
                 (args_by_use_id, param_type) ->
@@ -140,10 +153,13 @@ end) = struct
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
         in
+        Format.printf "CUE: %a@." CUE.print cont_uses_env;
         let typing_env, param_types, extra_params_and_args =
           make_unboxing_decisions typing_env ~args_by_use_id
             ~param_types:arg_types extra_params_and_args
         in
+        Format.printf "param typesXXX %i %i@.%a@." (List.length param_types) (List.length arg_types)
+        Continuation_extra_params_and_args.print extra_params_and_args;
         let definition_denv =
           DE.with_typing_environment definition_denv typing_env
         in

@@ -41,7 +41,14 @@ val extra_args
   -> Continuation_extra_params_and_args.Extra_arg.t list
 
 val rewrite_use
-   : t
+  : simplify_named:(
+     'a
+  -> Flambda.Named.t
+  -> result_var:Var_in_binding_pos.t
+  -> Reachable.t * 'a)
+  -> 'a
+  -> t
   -> Apply_cont_rewrite_id.t
   -> Flambda.Apply_cont.t
-  -> Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list
+  -> 'a *
+     Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list

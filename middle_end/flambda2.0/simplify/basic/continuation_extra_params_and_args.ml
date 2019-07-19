@@ -59,14 +59,21 @@ let empty = {
 }
 
 let add t ~extra_param ~extra_args =
+  Format.printf "extra args: %a@."
+    (Apply_cont_rewrite_id.Map.print Extra_arg.print)
+    extra_args;
   let extra_args =
     if Apply_cont_rewrite_id.Map.is_empty t.extra_args then
       Apply_cont_rewrite_id.Map.map (fun extra_args -> [extra_args]) extra_args
     else
-      Apply_cont_rewrite_id.Map.merge (fun _id already_extra_args extra_args ->
+      Apply_cont_rewrite_id.Map.merge (fun id already_extra_args extra_args ->
           match already_extra_args, extra_args with
           | None, None -> None
-          | Some _, None | None, Some _ ->
+          | Some l, None ->
+            Misc.fatal_errorf "Cannot change domain1 %a %i"
+              Apply_cont_rewrite_id.print id
+              (List.length l)
+          | None, Some _ ->
             Misc.fatal_error "Cannot change domain"
           | Some already_extra_args, Some extra_args ->
             Some (extra_args :: already_extra_args))
