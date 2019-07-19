@@ -28,13 +28,17 @@ val create
    : original_params:Kinded_parameter.t list
   -> used_params:Kinded_parameter.Set.t
   -> extra_params:Kinded_parameter.t list
-  -> extra_args:Simple.t list Apply_cont_rewrite_id.Map.t
+  -> extra_args:Continuation_extra_params_and_args.Extra_arg.t list
+       Apply_cont_rewrite_id.Map.t
   -> used_extra_params:Kinded_parameter.Set.t
   -> t
 
 val extra_params : t -> Kinded_parameter.t list
 
-val extra_args : t -> Apply_cont_rewrite_id.t -> Simple.t list
+val extra_args
+   : t
+  -> Apply_cont_rewrite_id.t
+  -> Continuation_extra_params_and_args.Extra_arg.t list
 
 val rewrite_use
    : t
