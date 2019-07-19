@@ -38,7 +38,9 @@ module type S = sig
     -> definition_typing_env:Flambda_type.Typing_env.t
     -> Continuation.t
     -> Flambda_arity.t
-    -> Flambda_type.Typing_env.t * (Flambda_type.t list)
+    -> Flambda_type.Typing_env.t
+         * Simple.t Apply_cont_rewrite_id.Map.t
+         * (Flambda_type.t list)
          * Continuation_extra_params_and_args.t
 
   val num_continuation_uses : t -> Continuation.t -> int
