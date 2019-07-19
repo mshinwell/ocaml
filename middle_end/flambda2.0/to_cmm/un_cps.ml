@@ -25,7 +25,7 @@ module Env = Un_cps_env
    - int32 on 64 bits are represented as an int64 in the range of
      32-bit integers. Currently we trust flambda2 to insert
      double shifts to clear the higher order 32-bits between operations.
-     Once the samll_arith PR comes, we can use dedicated 32-bits
+     Once the small_arith PR comes, we can use dedicated 32-bits
      cmm arithmetic operations.
 *)
 
@@ -526,6 +526,12 @@ let machtype_of_return_arity = function
       (* TODO: update when unboxed tuples are used *)
       Misc.fatal_errorf "Functions are currently limited to a single return value"
 
+let meth_kind k =
+  match (k : Call_kind.method_kind) with
+  | Self -> (Self : Lambda.meth_kind)
+  | Public -> (Public : Lambda.meth_kind)
+  | Cached -> (Cached : Lambda.meth_kind)
+
 (* Function calls and continuations *)
 
 let var_list env l =
@@ -661,8 +667,11 @@ and apply_call env e =
       let f = function_name f in
       let ty = machtype_of_return_arity return_arity in
       C.extcall ~dbg ~alloc f ty args
-  | Call_kind.Method _ ->
-      todo()
+  | Call_kind.Method { kind; obj; } ->
+      let meth = simple env f in
+      let kind = meth_kind kind in
+      let obj = simple env obj in
+      C.send kind meth obj args dbg
 
 and wrap_cont env res e =
   let k = Apply_expr.continuation e in
@@ -670,7 +679,9 @@ and wrap_cont env res e =
     res
   else begin
     match Env.get_k env k with
+    | Jump ([], id) -> C.sequence res (C.cexit id [])
     | Jump ([_], id) -> C.cexit id [res]
+    | Inline ([], body) -> C.sequence res body
     | Inline ([v], body) -> C.letin v res body
     | Jump _
     | Inline _ ->
@@ -698,7 +709,7 @@ and wrap_exn env res e =
     | Jump _
     | Inline _ ->
         Misc.fatal_errorf
-          "Exception continuations should only take one argument"
+          "Exception continuations should take exactly one argument"
   end
 
 and apply_cont env e =
@@ -712,6 +723,7 @@ and apply_cont env e =
           "Exception continuations should only applied to a single argument"
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
+    | [] -> C.void
     | [res] -> res
     | _ ->
         (* TODO: add support using unboxed tuples *)
@@ -721,7 +733,7 @@ and apply_cont env e =
     match Env.get_k env k with
     | Jump (tys, id) ->
         (* The provided args should match the types in tys *)
-        assert (List.length tys = List.length args);
+        assert (List.compare_lengths tys args = 0);
         C.cexit id args
     | Inline (vars, body) ->
         List.fold_left2 (fun acc v e -> C.letin v e acc) body vars args
