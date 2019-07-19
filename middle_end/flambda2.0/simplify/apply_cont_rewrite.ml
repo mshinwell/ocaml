@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module EA = Continuation_extra_params_and_args.Extra_arg
 module KP = Kinded_parameter
 module Id = Apply_cont_rewrite_id
 
@@ -23,7 +24,7 @@ type t = {
   original_params : KP.t list;
   used_params : KP.Set.t;
   used_extra_params : KP.t list;
-  extra_args : Simple.t list Id.Map.t;
+  extra_args : EA.t list Id.Map.t;
 }
 
 let print ppf { original_params; used_params; used_extra_params;
@@ -38,7 +39,7 @@ let print ppf { original_params; used_params; used_extra_params;
     KP.List.print original_params
     KP.Set.print used_params
     KP.List.print used_extra_params
-    (Id.Map.print Simple.List.print) extra_args
+    (Id.Map.print EA.List.print) extra_args
 
 let create ~original_params ~used_params ~extra_params ~extra_args
       ~used_extra_params =
@@ -61,7 +62,7 @@ let create ~original_params ~used_params ~extra_params ~extra_args
           Misc.fatal_errorf "Lengths of [extra_params] (%a)@ and all \
               [extra_args] (e.g. %a) should be equal"
             KP.List.print extra_params
-            Simple.List.print extra_args
+            Continuation_extra_params_and_args.Extra_arg.List.print extra_args
         end;
         let extra_params_and_args = List.combine extra_params extra_args in
         List.filter_map (fun (extra_param, extra_arg) ->
@@ -104,5 +105,13 @@ let rewrite_use t id apply_cont =
         else None)
       original_params_with_args
   in
-  let extra_args = extra_args t id in
-  Flambda.Apply_cont.update_args apply_cont ~args:(args @ extra_args)
+  let extra_args =
+    List.map
+      (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+        match arg with
+        | Already_in_scope simple -> simple
+        | New_let_binding (_var, _named) ->
+          Misc.fatal_error "Not yet done")
+      (extra_args t id)
+  in
+  Flambda.Apply_cont.update_args apply_cont ~args:(extra_args @ args)

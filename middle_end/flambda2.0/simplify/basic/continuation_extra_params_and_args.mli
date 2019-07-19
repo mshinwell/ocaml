@@ -16,9 +16,23 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Extra_arg : sig
+  type t =
+    | Already_in_scope of Simple.t
+    | New_let_binding of Var_in_binding_pos.t * Flambda_primitive.t
+
+  val print : Format.formatter -> t -> unit
+
+  module List : sig
+    type nonrec t = t list
+
+    val print : Format.formatter -> t -> unit
+  end
+end
+
 type t = {
   extra_params : Kinded_parameter.t list;
-  extra_args : Simple.t list Apply_cont_rewrite_id.Map.t;
+  extra_args : Extra_arg.t list Apply_cont_rewrite_id.Map.t;
 }
 
 val print : Format.formatter -> t -> unit
@@ -28,5 +42,5 @@ val empty : t
 val add
    : t
   -> extra_param:Kinded_parameter.t
-  -> extra_args:Simple.t Apply_cont_rewrite_id.Map.t
+  -> extra_args:Extra_arg.t Apply_cont_rewrite_id.Map.t
   -> t

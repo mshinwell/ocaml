@@ -87,7 +87,7 @@ Format.eprintf "About to simplify handler %a: params %a, param types %a, \
           extra_params_and_args.extra_params
       in
       let handler =
-        let params = used_params @ used_extra_params in
+        let params = used_extra_params @ used_params in
         CH.with_params_and_handler cont_handler
           (CPH.create params ~handler)
       in
@@ -834,9 +834,18 @@ Format.eprintf "Apply_cont is now %a\n%!" Apply_cont.print apply_cont;
                   in
                   extra_params, extra_args
               in
+              let extra_args =
+                List.map
+                  (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+                    match arg with
+                    | Already_in_scope simple -> simple
+                    | New_let_binding (_var, _named) ->
+                      Misc.fatal_error "Not yet done")
+                  extra_args
+              in
               Expr.bind_parameters_to_simples
-                ~bind:(params @ extra_params)
-                ~target:(args @ extra_args)
+                ~bind:(extra_params @ params)
+                ~target:(extra_args @ args)
                 handler
             in
             let r = UA.r uacc in

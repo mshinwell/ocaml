@@ -16,9 +16,33 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Extra_arg = struct
+  type t =
+    | Already_in_scope of Simple.t
+    | New_let_binding of Var_in_binding_pos.t * Flambda_primitive.t
+
+  let print ppf t =
+    match t with
+    | Already_in_scope simple ->
+      Format.fprintf ppf "@[<hov 1>(Already_in_scope@ %a)@]"
+        Simple.print simple
+    | New_let_binding (var, prim) ->
+      Format.fprintf ppf "@[<hov 1>(New_let_binding@ (%a@ %a))@]"
+        Var_in_binding_pos.print var
+        Flambda_primitive.print prim
+
+  module List = struct
+    type nonrec t = t list
+
+    let print ppf t =
+      Format.fprintf ppf "(%a)"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space print) t
+  end
+end
+
 type t = {
   extra_params : Kinded_parameter.t list;
-  extra_args : Simple.t list Apply_cont_rewrite_id.Map.t;
+  extra_args : Extra_arg.t list Apply_cont_rewrite_id.Map.t;
 }
 
 let print ppf { extra_params; extra_args; } =
@@ -27,7 +51,7 @@ let print ppf { extra_params; extra_args; } =
       @[<hov 1>(extra_args@ %a)\
       )@]"
     Kinded_parameter.List.print extra_params
-    (Apply_cont_rewrite_id.Map.print Simple.List.print) extra_args
+    (Apply_cont_rewrite_id.Map.print Extra_arg.List.print) extra_args
 
 let empty = {
   extra_params = [];
