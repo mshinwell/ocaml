@@ -20,9 +20,9 @@ open! Simplify_import
 
 let parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
       extra_params_and_args =
-  List.fold_left (fun (index, param_types_rev, extra_params_and_args) param ->
-      let param_kind = K.value in
-      let extra_param = KP.create (Parameter.wrap param) param_kind in
+  List.fold_left
+    (fun (index, param_types_rev, extra_params_and_args) extra_param ->
+      let param_kind = KP.kind extra_param in
       let field_var = Variable.create "field_at_use" in
       let field_name =
         Name_in_binding_pos.create (Name.var field_var)
@@ -42,21 +42,20 @@ let parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
             match extra_args with
             | None -> None
             | Some extra_args ->
-              let arg_kind = K.value in
               let env_extension =
-                let arg_type_at_use = T.alias_type_of arg_kind arg in
+                let arg_type_at_use = T.alias_type_of param_kind arg in
                 let result_var =
                   Var_in_binding_pos.create field_var
                     Name_occurrence_kind.normal
                 in
                 T.meet_shape typing_env_at_use arg_type_at_use
-                  ~shape ~result_var ~result_kind:arg_kind
+                  ~shape ~result_var ~result_kind:param_kind
               in
               match env_extension with
               | Bottom -> None
               | Ok env_extension ->
                 let typing_env_at_use =
-                  TE.add_definition typing_env_at_use field_name arg_kind
+                  TE.add_definition typing_env_at_use field_name param_kind
                 in
                 let typing_env_at_use =
                   TE.add_env_extension typing_env_at_use env_extension
@@ -103,8 +102,9 @@ let make_unboxing_decision typing_env ~args_by_use_id ~param_type
     | Some (tag, size) ->
       let new_param_vars =
         List.init (Targetint.OCaml.to_int size) (fun index ->
-          let name = Printf.sprintf "field%d" index in
-          Variable.create name)
+          let name = Printf.sprintf "unboxed%d" index in
+          let var = Variable.create name in
+          KP.create (Parameter.wrap var) K.value)
       in
       let _index, param_types_rev, extra_params_and_args =
         parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
@@ -113,12 +113,12 @@ let make_unboxing_decision typing_env ~args_by_use_id ~param_type
       let fields = List.rev param_types_rev in
       let block_type = T.immutable_block tag ~fields in
       let typing_env =
-        List.fold_left (fun typing_env var ->
+        List.fold_left (fun typing_env param ->
             let name =
-              Name_in_binding_pos.create (Name.var var)
+              Name_in_binding_pos.create (KP.name param)
                 Name_occurrence_kind.normal
             in
-            TE.add_definition typing_env name K.value)
+            TE.add_definition typing_env name (KP.kind param))
           typing_env
           new_param_vars
       in
