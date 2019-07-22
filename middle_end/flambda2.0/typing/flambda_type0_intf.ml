@@ -393,6 +393,12 @@ module type S = sig
     | Unknown
     | Invalid
 
+  type 'a proof_allowing_kind_mismatch = private
+    | Proved of 'a
+    | Unknown
+    | Invalid
+    | Wrong_kind
+
   (* CR mshinwell: Should remove "_equals_" from these names *)
   val prove_equals_tagged_immediates
      : Typing_env.t
@@ -429,25 +435,15 @@ module type S = sig
     -> t
     -> Targetint.Set.t proof
 
-  val prove_boxed_floats
+  val prove_is_a_boxed_float
      : Typing_env.t
     -> t
-    -> Float.Set.t proof
+    -> unit proof_allowing_kind_mismatch
 
-  val prove_boxed_int32s
-     : Typing_env.t
-    -> t
-    -> Numbers.Int32.Set.t proof
-
-  val prove_boxed_int64s
-     : Typing_env.t
-    -> t
-    -> Numbers.Int64.Set.t proof
-
-  val prove_boxed_nativeints
-     : Typing_env.t
-    -> t
-    -> Targetint.Set.t proof
+  val prove_boxed_floats : Typing_env.t -> t -> Float.Set.t proof
+  val prove_boxed_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
+  val prove_boxed_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
+  val prove_boxed_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
   val prove_tags_and_sizes
      : Typing_env.t
@@ -457,7 +453,7 @@ module type S = sig
   val prove_unique_tag_and_size
      : Typing_env.t
     -> t
-    -> (Tag.t * Targetint.OCaml.t) proof
+    -> (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch
 
   val prove_is_int
      : Typing_env.t

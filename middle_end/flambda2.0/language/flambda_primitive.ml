@@ -473,8 +473,9 @@ let unary_primitive_eligible_for_cse p =
   | String_length _ -> false
   | Int_as_pointer -> true
   | Opaque_identity -> false
-  | Int_arith _
-  | Float_arith _
+  | Int_arith _ -> true
+    (* CR mshinwell: See CR below about [Clflags]. *)
+  | Float_arith _ -> !Clflags.float_const_prop
   | Num_conv _
   | Boolean_not -> true
   | Unbox_number _ -> false
@@ -765,9 +766,14 @@ let binary_primitive_eligible_for_cse p =
   | Phys_equal _
   | Int_arith _
   | Int_shift _
-  | Int_comp _ 
+  | Int_comp _  -> true
+    (* CR mshinwell: Can changing rounding mode affect the result of
+       comparisons in any way?  If not, we could return [true] for
+       [Float_comp]. *)
+    (* CR mshinwell: Elsewhere, we don't directly depend on [Clflags].
+       Maybe that's a mistake? *)
   | Float_arith _
-  | Float_comp _ -> true
+  | Float_comp _ -> !Clflags.float_const_prop
 
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =

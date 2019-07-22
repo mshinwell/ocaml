@@ -53,7 +53,7 @@ module Make (U : Unboxing_spec) = struct
               | None -> None
               | Some extra_args ->
                 let env_extension =
-                  let arg_type_at_use = T.alias_type_of param_kind arg in
+                  let arg_type_at_use = T.alias_type_of K.value arg in
                   let result_var =
                     Var_in_binding_pos.create field_var
                       Name_occurrence_kind.normal
@@ -71,27 +71,28 @@ module Make (U : Unboxing_spec) = struct
                     TE.add_env_extension typing_env_at_use env_extension
                   in
                   let field = Simple.var field_var in
-                  let canonical_simple, _ =
+                  let canonical_simple, kind' =
                     TE.get_canonical_simple_with_kind typing_env_at_use
                       ~min_occurrence_kind:Name_occurrence_kind.normal
                       field
                   in
+                  assert (Flambda_kind.equal param_kind kind');
                   (* CR pchambart: This shouldn't add another load if
                      there is already one in the list of parameters
-                  
+
                        apply_cont k (a, b) a
                        where k x y
-                  
+
                      should become
-                  
+
                        apply_cont k (a, b) a b
                        where k x y b'
-                  
+
                      not
-                  
+
                        apply_cont k (a, b) a a b
                        where k x y a' b'
-                  
+
                      mshinwell: Think about this now that we're not adding extra
                      loads.  Probably still relevant.
                   *)
@@ -186,12 +187,13 @@ let make_unboxing_decision typing_env ~args_by_use_id ~param_type
   | Proved (tag, size) ->
     Blocks.make_unboxing_decision typing_env ~args_by_use_id ~param_type
       extra_params_and_args tag size K.value
-  | Invalid | Unknown ->
-    match T.prove_boxed_floats typing_env param_type with
-    | Proved _ ->
+  | Wrong_kind | Invalid | Unknown ->
+    match T.prove_is_a_boxed_float typing_env param_type with
+    | Proved () ->
       Floats.make_unboxing_decision typing_env ~args_by_use_id ~param_type
         extra_params_and_args Tag.double_tag Targetint.OCaml.one K.naked_float
-    | Invalid | Unknown -> typing_env, param_type, extra_params_and_args
+    | Wrong_kind | Invalid | Unknown ->
+      typing_env, param_type, extra_params_and_args
 
 let make_unboxing_decisions typing_env ~args_by_use_id ~param_types
       extra_params_and_args =

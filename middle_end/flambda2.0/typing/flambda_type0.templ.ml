@@ -111,6 +111,12 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
     | Unknown
     | Invalid
 
+  type 'a proof_allowing_kind_mismatch =
+    | Proved of 'a
+    | Unknown
+    | Invalid
+    | Wrong_kind
+
   type symbol_or_tagged_immediate =
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
@@ -341,14 +347,28 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value Bottom -> Invalid
       | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
 
-  let prove_unique_tag_and_size env t : (Tag.t * Targetint.OCaml.t) proof =
-    match prove_tags_and_sizes env t with
-    | Invalid -> Invalid
-    | Unknown -> Unknown
-    | Proved tags_to_sizes ->
-      match Tag.Map.get_singleton tags_to_sizes with
-      | None -> Unknown
-      | Some (tag, size) -> Proved (tag, size)
+  let prove_unique_tag_and_size env t
+       : (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch =
+    if not (Flambda_kind.equal (kind t) Flambda_kind.value) then
+      Wrong_kind
+    else
+      match prove_tags_and_sizes env t with
+      | Invalid -> Invalid
+      | Unknown -> Unknown
+      | Proved tags_to_sizes ->
+        match Tag.Map.get_singleton tags_to_sizes with
+        | None -> Unknown
+        | Some (tag, size) -> Proved (tag, size)
+
+  let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
+    match Typing_env.expand_head env t with
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value (Ok (Boxed_number (Boxed_float _))) -> Proved ()
+      | Resolved_value _ -> Invalid
+      | _ -> Wrong_kind
 
   (* CR mshinwell: Factor out code from the following. *)
 
