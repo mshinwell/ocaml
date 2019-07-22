@@ -252,6 +252,13 @@ module Boxable_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
+
+  let print_lowercase_short ppf t =
+    match t with
+    | Naked_float -> Format.pp_print_string ppf "float"
+    | Naked_int32 -> Format.pp_print_string ppf "int32"
+    | Naked_int64 -> Format.pp_print_string ppf "int64"
+    | Naked_nativeint -> Format.pp_print_string ppf "nativeint"
 end
 
 module Naked_number = struct

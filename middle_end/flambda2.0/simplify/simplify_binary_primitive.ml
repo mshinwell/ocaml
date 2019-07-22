@@ -39,7 +39,9 @@ module type Binary_arith_like_sig = sig
 
   val cross_product : Lhs.Set.t -> Rhs.Set.t -> Pair.Set.t
 
+  (* CR mshinwell: Rename to [arg_kind] *)
   val kind : K.Standard_int_or_float.t
+  val result_kind : K.t
 
   val term : Result.t -> Named.t
 
@@ -112,7 +114,7 @@ end = struct
     let typing_env = DE.typing_env denv in
     let proof1 = N.prover_lhs typing_env arg1_ty in
     let proof2 = N.prover_rhs typing_env arg2_ty in
-    let kind = K.Standard_int_or_float.to_kind N.kind in
+    let kind = N.result_kind in
     let result_unknown () =
       let env_extension = TEE.one_equation result (T.unknown kind) in
       Reachable.reachable original_term, env_extension, dacc
@@ -245,6 +247,7 @@ end = struct
   let ok_to_evaluate _env = true
 
   let kind = I.kind
+  let result_kind = K.Standard_int_or_float.to_kind kind
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
@@ -371,6 +374,7 @@ end = struct
   type op = P.int_shift_op
 
   let kind = I.kind
+  let result_kind = K.Standard_int_or_float.to_kind kind
 
   let ok_to_evaluate _env = true
 
@@ -469,6 +473,7 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
+  let result_kind = K.value
 
   let ok_to_evaluate _env = true
 
@@ -526,6 +531,7 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
+  let result_kind = K.value
 
   let ok_to_evaluate _env = true
 
@@ -584,6 +590,7 @@ end = struct
   type op = P.binary_float_arith_op
 
   let kind = K.Standard_int_or_float.Naked_float
+  let result_kind = K.naked_float
 
   let ok_to_evaluate denv = DE.float_const_prop denv
 
@@ -671,6 +678,7 @@ end = struct
   type op = P.comparison
 
   let kind = K.Standard_int_or_float.Naked_float
+  let result_kind = K.value
 
   let ok_to_evaluate denv = DE.float_const_prop denv
 
@@ -721,6 +729,7 @@ end = struct
   type op = P.equality_comparison
 
   let kind = I.kind
+  let result_kind = K.value
 
   let ok_to_evaluate _env = true
 

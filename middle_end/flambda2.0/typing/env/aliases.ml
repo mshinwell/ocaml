@@ -142,6 +142,9 @@ end) = struct
   type t = {
     canonical_elements : E.t E.Map.t;
     aliases_of_canonical_elements : Aliases_of_canonical_element.t E.Map.t;
+    (* For [elt |-> aliases] in [aliases_of_canonical_elements], then
+       [aliases] never includes [elt]. *)
+    (* CR mshinwell: check this always holds *)
   }
 
   let print ppf { canonical_elements; aliases_of_canonical_elements; } =
@@ -395,8 +398,9 @@ end) = struct
     let t = add_implicitly_bound_canonical_element t element in
     match E.Map.find element t.canonical_elements with
     | exception Not_found ->
-      (* CR mshinwell: Shouldn't this be a fatal error, as above? *)
-      None
+      Misc.fatal_errorf "Element %a not in [canonical_elements]:@ %a"
+        E.print element
+        print t
     | canonical_element ->
 (*
 Format.eprintf "looking for canonical for %a, candidate canonical %a, min order %a\n%!"
