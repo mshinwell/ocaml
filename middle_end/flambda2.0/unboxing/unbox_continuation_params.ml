@@ -29,7 +29,8 @@ let parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
           Name_occurrence_kind.normal
       in
       let shape =
-        T.immutable_block_with_size_at_least ~n:(Targetint.OCaml.of_int index)
+        T.immutable_block_with_size_at_least
+          ~n:(Targetint.OCaml.of_int (index + 1))
           ~field_n_minus_one:field_var
       in
       let extra_args =
