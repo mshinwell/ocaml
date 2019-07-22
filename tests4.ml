@@ -15,3 +15,8 @@ let f x =
   in
   let (u, v) = b in
   u + v
+
+let g foo =
+  let b = foo () in
+  let (u, v) = b in
+  u + v

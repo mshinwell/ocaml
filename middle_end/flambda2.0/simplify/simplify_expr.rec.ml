@@ -474,9 +474,9 @@ and simplify_function_call_where_callee's_type_unavailable
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~args:(Apply.args apply)
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
-      ~args:(Misc.fatal_error "TODO HERE")
   in
   let check_return_arity_and_record_return_cont_use ~return_arity =
 (*
@@ -492,7 +492,7 @@ and simplify_function_call_where_callee's_type_unavailable
     let dacc, _id =
       DA.record_continuation_use dacc cont ~typing_env_at_use
         ~arg_types:(T.unknown_types_from_arity return_arity)
-        ~args:(Misc.fatal_error "TODO HERE")
+        ~args:(Apply.args apply)
     in
     dacc
   in
@@ -502,7 +502,7 @@ and simplify_function_call_where_callee's_type_unavailable
       let dacc, _id =
         DA.record_continuation_use dacc (Apply.continuation apply)
           ~typing_env_at_use ~arg_types:[T.any_value ()]
-          ~args:(Misc.fatal_error "TODO HERE")
+          ~args:(Apply.args apply)
       in
       Call_kind.indirect_function_call_unknown_arity (), dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
