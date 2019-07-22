@@ -28,10 +28,11 @@ module type Unboxing_spec = sig
 end
 
 module Make (U : Unboxing_spec) = struct
-  let parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
-        extra_params_and_args =
+  let parameters_to_unbox_with_extra_args typing_env ~new_param_vars
+        ~arg_types_by_use_id extra_params_and_args ~make_unboxing_decision =
     List.fold_left
-      (fun (index, param_types_rev, extra_params_and_args) extra_param ->
+      (fun (index, typing_env, param_types_rev, extra_params_and_args)
+           extra_param ->
         let param_kind = KP.kind extra_param in
         let field_var = Variable.create "field_at_use" in
         let field_name =
@@ -43,34 +44,46 @@ module Make (U : Unboxing_spec) = struct
             ~n:(Targetint.OCaml.of_int (index + 1))
             ~field_n_minus_one:field_var
         in
-        let extra_args =
+        let extra_args, field_types_by_id =
           (* Don't unbox parameters unless, at all use sites, there is
              a non-irrelevant [Simple] available for the corresponding
              field of the block. *)
           Apply_cont_rewrite_id.Map.fold
-            (fun id (typing_env_at_use, arg) extra_args ->
-              match extra_args with
-              | None -> None
-              | Some extra_args ->
-                let env_extension =
-                  let arg_type_at_use = T.alias_type_of K.value arg in
-                  let result_var =
-                    Var_in_binding_pos.create field_var
-                      Name_occurrence_kind.normal
-                  in
-                  T.meet_shape typing_env_at_use arg_type_at_use
-                    ~shape ~result_var ~result_kind:param_kind
+            (fun id (typing_env_at_use, arg_type_at_use)
+                 (extra_args, field_types_by_id) ->
+              let env_extension =
+                let result_var =
+                  Var_in_binding_pos.create field_var
+                    Name_occurrence_kind.normal
                 in
-                match env_extension with
-                | Bottom -> None
-                | Ok env_extension ->
-                  let typing_env_at_use =
-                    TE.add_definition typing_env_at_use field_name param_kind
-                  in
-                  let typing_env_at_use =
-                    TE.add_env_extension typing_env_at_use env_extension
-                  in
-                  let field = Simple.var field_var in
+                T.meet_shape typing_env_at_use arg_type_at_use
+                  ~shape ~result_var ~result_kind:param_kind
+              in
+              match env_extension with
+              | Bottom ->
+                let field_types_by_id =
+                  Apply_cont_rewrite_id.Map.add id
+                    (typing_env_at_use, T.bottom param_kind)
+                    field_types_by_id
+                in
+                None, field_types_by_id
+              | Ok env_extension ->
+                let typing_env_at_use =
+                  TE.add_definition typing_env_at_use field_name param_kind
+                in
+                let typing_env_at_use =
+                  TE.add_env_extension typing_env_at_use env_extension
+                in
+                let field = Simple.var field_var in
+                let field_type = T.alias_type_of param_kind field in
+                let field_types_by_id =
+                  Apply_cont_rewrite_id.Map.add id
+                    (typing_env_at_use, field_type)
+                    field_types_by_id
+                in
+                match extra_args with
+                | None -> None, field_types_by_id
+                | Some extra_args ->
                   let canonical_simple, kind' =
                     TE.get_canonical_simple_with_kind typing_env_at_use
                       ~min_occurrence_kind:Name_occurrence_kind.normal
@@ -97,42 +110,60 @@ module Make (U : Unboxing_spec) = struct
                      loads.  Probably still relevant.
                   *)
                   match canonical_simple with
-                  | Bottom | Ok None -> None
+                  | Bottom | Ok None -> None, field_types_by_id
                   | Ok (Some simple) ->
-                    if Simple.equal simple field then None
+                    if Simple.equal simple field then None, field_types_by_id
                     else
                       let extra_arg : EA.t = Already_in_scope simple in
                       let extra_args =
                         Apply_cont_rewrite_id.Map.add id extra_arg extra_args
                       in
-                      Some extra_args)
-            args_by_use_id
-            (Some Apply_cont_rewrite_id.Map.empty)
+                      Some extra_args, field_types_by_id)
+            arg_types_by_use_id
+            (Some Apply_cont_rewrite_id.Map.empty,
+              Apply_cont_rewrite_id.Map.empty)
+        in
+        let param_type =
+          match extra_args with
+          | None -> T.unknown param_kind
+          | Some extra_args ->
+            T.alias_type_of param_kind (KP.simple extra_param)
+        in
+        let typing_env, param_type, extra_params_and_args =
+          (* If the value being unboxed is itself of kind [Value], then
+             attempt to unbox its contents too. *)
+          (* CR mshinwell: This recursion should have some kind of limit. *)
+          if not (K.equal param_kind K.value) then extra_params_and_args
+          else
+            make_unboxing_decision typing_env
+              ~arg_types_by_use_id:field_types_by_id
+              ~param_type
+              extra_params_and_args
         in
         match extra_args with
         | None ->
-          let param_type = T.unknown param_kind in
-          index + 1, param_type :: param_types_rev, extra_params_and_args
+          index + 1, typing_env, param_type :: param_types_rev,
+            extra_params_and_args
         | Some extra_args ->
           let extra_params_and_args =
             EPA.add extra_params_and_args ~extra_param ~extra_args
           in
-          let param_type = T.alias_type_of param_kind (KP.simple extra_param) in
-          index + 1, param_type :: param_types_rev, extra_params_and_args)
-      (0, [], extra_params_and_args)
+          index + 1, typing_env, param_type :: param_types_rev,
+            extra_params_and_args)
+      (0, typing_env, [], extra_params_and_args)
       new_param_vars
 
-  let make_unboxing_decision typing_env ~args_by_use_id ~param_type
-        extra_params_and_args tag size kind =
+  let make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
+        extra_params_and_args ~unbox_value tag size kind =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
         let name = Printf.sprintf "unboxed%d" index in
         let var = Variable.create name in
         KP.create (Parameter.wrap var) kind)
     in
-    let _index, param_types_rev, extra_params_and_args =
-      parameters_to_unbox_with_extra_args ~new_param_vars ~args_by_use_id
-        extra_params_and_args
+    let _index, typing_env, param_types_rev, extra_params_and_args =
+      parameters_to_unbox_with_extra_args typing_env ~new_param_vars
+        ~arg_types_by_use_id extra_params_and_args
     in
     let fields = List.rev param_types_rev in
     let block_type = U.make_boxed_value tag ~fields in
@@ -181,31 +212,33 @@ end
 module Blocks = Make (Block_spec)
 module Floats = Make (Float_spec)
 
-let make_unboxing_decision typing_env ~args_by_use_id ~param_type
+let make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
       extra_params_and_args =
   match T.prove_unique_tag_and_size typing_env param_type with
   | Proved (tag, size) ->
-    Blocks.make_unboxing_decision typing_env ~args_by_use_id ~param_type
-      extra_params_and_args tag size K.value
+    Blocks.make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
+      extra_params_and_args ~make_unboxing_decision
+      tag size K.value
   | Wrong_kind | Invalid | Unknown ->
     match T.prove_is_a_boxed_float typing_env param_type with
     | Proved () ->
-      Floats.make_unboxing_decision typing_env ~args_by_use_id ~param_type
-        extra_params_and_args Tag.double_tag Targetint.OCaml.one K.naked_float
+      Floats.make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
+        extra_params_and_args ~make_unboxing_decision
+        Tag.double_tag Targetint.OCaml.one K.naked_float
     | Wrong_kind | Invalid | Unknown ->
       typing_env, param_type, extra_params_and_args
 
-let make_unboxing_decisions typing_env ~args_by_use_id ~param_types
+let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
       extra_params_and_args =
   let typing_env, param_types_rev, extra_params_and_args =
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
-              (args_by_use_id, param_type) ->
+              (arg_types_by_use_id, param_type) ->
         let typing_env, param_type, extra_params_and_args =
-          make_unboxing_decision typing_env ~args_by_use_id ~param_type
+          make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
             extra_params_and_args
         in
         typing_env, param_type :: param_types_rev, extra_params_and_args)
       (typing_env, [], extra_params_and_args)
-      (List.combine args_by_use_id param_types)
+      (List.combine arg_types_by_use_id param_types)
   in
   typing_env, List.rev param_types_rev, extra_params_and_args

@@ -67,14 +67,15 @@ end) = struct
         let arity = Continuation_handler_like.arity cont_handler in
         (* CR mshinwell: rename arg_types -> param_types *)
         (* CR mshinwell: Return one list of args, types, etc *)
-        let typing_env, args_by_use_id, arg_types, extra_params_and_args =
+        let typing_env, arg_types_by_use_id, arg_types,
+            extra_params_and_args =
           CUE.continuation_env_and_param_types cont_uses_env
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
         in
         let typing_env, param_types, extra_params_and_args =
           Unbox_continuation_params.make_unboxing_decisions typing_env
-            ~args_by_use_id ~param_types:arg_types extra_params_and_args
+            ~arg_types_by_use_id ~param_types:arg_types extra_params_and_args
         in
         let definition_denv =
           DE.with_typing_environment definition_denv typing_env

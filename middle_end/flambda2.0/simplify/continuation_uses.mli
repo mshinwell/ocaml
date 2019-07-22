@@ -42,7 +42,8 @@ val env_and_param_types
    : t
   -> definition_typing_env:Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t
-       * (Flambda_type.Typing_env.t * Simple.t) Apply_cont_rewrite_id.Map.t list
+       * (Flambda_type.Typing_env.t * Flambda_type.t)
+           Apply_cont_rewrite_id.Map.t list
        * (Flambda_type.t list)
        * Continuation_extra_params_and_args.t
 
