@@ -1,5 +1,6 @@
 external ( + ) : int -> int -> int = "%addint"
 external ( - ) : int -> int -> int = "%subint"
+external ( * ) : int -> int -> int = "%mulint"
 external ( > ) : 'a -> 'a -> bool = "%greaterthan"
 external ( < ) : 'a -> 'a -> bool = "%lessthan"
 
@@ -36,3 +37,20 @@ let fl x =
   in
   let u = b +. 1. in
   u *. 2.
+
+external float_of_int : int -> float = "%floatofint"
+
+type t = {x: float; y: float}
+
+let pr2162_1 z x y =
+  let a, b =
+    if z then (x * 2, y *. 3.)
+    else (x, y +. 0.)
+  in
+  float_of_int a -. b
+
+(*
+let pr2162_2 = function
+  | Some {x; y = 0.} | Some {x = 0.; y = x} -> x +. x
+  | _ -> 0.
+*)
