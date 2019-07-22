@@ -341,6 +341,15 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value Bottom -> Invalid
       | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
 
+  let prove_unique_tag_and_size env t : (Tag.t * Targetint.OCaml.t) proof =
+    match prove_tags_and_sizes env t with
+    | Invalid -> Invalid
+    | Unknown -> Unknown
+    | Proved tags_to_sizes ->
+      match Tag.Map.get_singleton tags_to_sizes with
+      | None -> Unknown
+      | Some (tag, size) -> Proved (tag, size)
+
   let prove_boxed_floats env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =

@@ -454,6 +454,11 @@ module type S = sig
     -> t
     -> Targetint.OCaml.t Tag.Map.t proof
 
+  val prove_unique_tag_and_size
+     : Typing_env.t
+    -> t
+    -> (Tag.t * Targetint.OCaml.t) proof
+
   val prove_is_int
      : Typing_env.t
     -> t
