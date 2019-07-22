@@ -55,12 +55,15 @@ end) : sig
     -> E.t
     -> add_result option * t
 
+  (** [get_canonical_element] returns [None] only when the
+      [min_order_within_equiv_class] cannot be satisfied. *)
   val get_canonical_element
      : t
     -> E.t
     -> min_order_within_equiv_class:E.Order_within_equiv_class.t
     -> E.t option
 
+  (** [get_aliases] always returns the supplied element in the result set. *)
   val get_aliases : t -> E.t -> E.Set.t
 
   val canonical_elements : t -> E.Set.t

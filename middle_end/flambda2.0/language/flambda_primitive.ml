@@ -599,9 +599,9 @@ let print_unary_primitive ppf p =
   | Bigarray_length { dimension; } ->
     fprintf ppf "Bigarray_length %a" print_num_dimensions dimension
   | Unbox_number k ->
-    fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase k
+    fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase_short k
   | Box_number k ->
-    fprintf ppf "Box_%a" K.Boxable_number.print_lowercase k
+    fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
   | Project_closure closure_id ->
     Format.fprintf ppf "@[(Project_closure@ %a)@]"
       Closure_id.print closure_id

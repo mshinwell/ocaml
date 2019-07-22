@@ -125,6 +125,8 @@ module Boxable_number : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
+  val print_lowercase_short : Format.formatter -> t -> unit
+
   include Identifiable.S with type t := t
 end
 
