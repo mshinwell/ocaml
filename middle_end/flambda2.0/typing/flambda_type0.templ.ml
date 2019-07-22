@@ -350,6 +350,8 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | None -> Unknown
       | Some (tag, size) -> Proved (tag, size)
 
+  (* CR mshinwell: Factor out code from the following. *)
+
   let prove_boxed_floats env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =
@@ -363,6 +365,12 @@ Format.eprintf "shape for boxed float proof:@ %a\n%!"
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
+      let env =
+        Typing_env.add_definition env
+          (Name_in_binding_pos.create (Name.var result_var)
+            Name_occurrence_kind.normal)
+          result_kind
+      in
       let env = Typing_env.add_env_extension env env_extension in
       let t = Typing_env.find env (Name.var result_var) in
 Format.eprintf "result type for boxed float proof:@ %a\n%!"
@@ -380,6 +388,12 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
+      let env =
+        Typing_env.add_definition env
+          (Name_in_binding_pos.create (Name.var result_var)
+            Name_occurrence_kind.normal)
+          result_kind
+      in
       let env = Typing_env.add_env_extension env env_extension in
       let t = Typing_env.find env (Name.var result_var) in
       prove_naked_int32s env t
@@ -395,6 +409,12 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
+      let env =
+        Typing_env.add_definition env
+          (Name_in_binding_pos.create (Name.var result_var)
+            Name_occurrence_kind.normal)
+          result_kind
+      in
       let env = Typing_env.add_env_extension env env_extension in
       let t = Typing_env.find env (Name.var result_var) in
       prove_naked_int64s env t
@@ -410,6 +430,12 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
+      let env =
+        Typing_env.add_definition env
+          (Name_in_binding_pos.create (Name.var result_var)
+            Name_occurrence_kind.normal)
+          result_kind
+      in
       let env = Typing_env.add_env_extension env env_extension in
       let t = Typing_env.find env (Name.var result_var) in
       prove_naked_nativeints env t
