@@ -44,6 +44,7 @@ module Use = struct
       arg_types
 
   let id t = t.id
+  let args t = t.args
   let arg_types t = t.arg_types
   let typing_env_at_use t = t.typing_env
 end
@@ -164,10 +165,12 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
     in
     let arg_types_by_id =
       List.fold_left (fun args use ->
-          List.map2 (fun arg_map arg_type ->
-            let env = Use.typing_env_at_use use in
-            Apply_cont_rewrite_id.Map.add (Use.id use) (env, arg_type) arg_map)
-          args (process_use_arg_types use ~allowed))
+          List.map2 (fun arg_map (arg, arg_type) ->
+              let env = Use.typing_env_at_use use in
+              Apply_cont_rewrite_id.Map.add (Use.id use)
+                (env, arg, arg_type) arg_map)
+            args
+            (List.combine (Use.args use) (process_use_arg_types use ~allowed)))
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
         all_uses
     in

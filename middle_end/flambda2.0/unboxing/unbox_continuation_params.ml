@@ -25,7 +25,11 @@ module type Unboxing_spec = sig
      : n:Targetint.OCaml.t
     -> field_n_minus_one:Variable.t
     -> T.t
+
+  val project_field : block:Simple.t -> index:Simple.t -> P.t
 end
+
+let add_projections = true
 
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
@@ -46,7 +50,7 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
        a non-irrelevant [Simple] available for the corresponding
        field of the block. *)
     Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, arg_type_at_use)
+      (fun id (typing_env_at_use, arg, arg_type_at_use)
            (extra_args, field_types_by_id) ->
         let env_extension =
           let result_var =
@@ -56,11 +60,12 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
           T.meet_shape typing_env_at_use arg_type_at_use
             ~shape ~result_var ~result_kind:param_kind
         in
+        let field = Simple.var field_var in
         match env_extension with
         | Bottom ->
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, T.bottom param_kind)
+              (typing_env_at_use, field, T.bottom param_kind)
               field_types_by_id
           in
           None, field_types_by_id
@@ -71,11 +76,10 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
           let typing_env_at_use =
             TE.add_env_extension typing_env_at_use env_extension
           in
-          let field = Simple.var field_var in
           let field_type = T.alias_type_of param_kind field in
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, field_type)
+              (typing_env_at_use, field, field_type)
               field_types_by_id
           in
           match extra_args with
@@ -102,17 +106,34 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
 
                  apply_cont k (a, b) a a b
                  where k x y a' b'
-
-               mshinwell: Think about this now that we're not adding extra
-               loads.  Probably still relevant.
             *)
+            let no_simple () =
+              if not add_projections then None, field_types_by_id
+              else
+                let bound_to =
+                  Var_in_binding_pos.create
+                    (Variable.create (Printf.sprintf "unboxed%d" index))
+                    Name_occurrence_kind.normal
+                in
+                let index =
+                  Immediate.int (Targetint.OCaml.of_int index)
+                in
+                let prim =
+                  U.project_field ~block:arg
+                    ~index:(Simple.const (Tagged_immediate index))
+                in
+                let extra_arg : EA.t = New_let_binding (bound_to, prim) in
+                let extra_args =
+                  Apply_cont_rewrite_id.Map.add id extra_arg extra_args
+                in
+                Some extra_args, field_types_by_id
+            in
             match canonical_simple with
-            | Bottom | Ok None ->
-              Format.eprintf "No canonical simple\n%!";
-              None, field_types_by_id
+            | Bottom -> None, field_types_by_id
+            | Ok None -> no_simple ()
             | Ok (Some simple) ->
               Format.eprintf "Canonical simple %a\n%!" Simple.print simple;
-              if Simple.equal simple field then None, field_types_by_id
+              if Simple.equal simple field then no_simple ()
               else
                 let extra_arg : EA.t = Already_in_scope simple in
                 let extra_args =
@@ -205,10 +226,7 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
             if not (K.equal field_kind K.value) then
               typing_env, extra_params_and_args
             else begin
-  Format.eprintf "Recursive unbox_value.  field_types_by_id=%a param_type=%a\n%!"
-    (Apply_cont_rewrite_id.Map.print T.print)
-    (Apply_cont_rewrite_id.Map.map snd field_types_by_id)
-    T.print param_type;
+  Format.eprintf "Recursive unbox_value.\n%!";
               let typing_env, _, extra_params_and_args =
                 unbox_value typing_env
                   ~arg_types_by_use_id:field_types_by_id
@@ -226,6 +244,9 @@ end
 module Block_spec : Unboxing_spec = struct
   let make_boxed_value = T.immutable_block
   let make_boxed_value_with_size_at_least = T.immutable_block_with_size_at_least
+
+  let project_field ~block ~index =
+    P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
 
 module Float_spec : Unboxing_spec = struct
@@ -240,6 +261,9 @@ module Float_spec : Unboxing_spec = struct
        Misc.fatal_error "Boxed floats only have one field"
     end;
     T.box_float (T.alias_type_of K.naked_float (Simple.var field_n_minus_one))
+
+  let project_field ~block ~index:_ =
+    P.Unary (Unbox_number Naked_float, block)
 end
 
 module Blocks = Make (Block_spec)
