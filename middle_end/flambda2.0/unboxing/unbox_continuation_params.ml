@@ -38,7 +38,7 @@ module Make (U : Unboxing_spec) = struct
     let field_var = Variable.create "field_at_use" in
     let field_name =
       Name_in_binding_pos.create (Name.var field_var)
-        Name_occurrence_kind.normal
+        Name_occurrence_kind.in_types
     in
     let shape =
       U.make_boxed_value_with_size_at_least
@@ -182,7 +182,7 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
       extra_params_and_args
 
   let unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~unbox_value tag size kind =
+        extra_params_and_args ~unbox_value:_ tag size kind =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
         let name = Printf.sprintf "unboxed%d" index in
@@ -218,10 +218,11 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
       let typing_env, extra_params_and_args =
         List.fold_left2
           (fun (typing_env, extra_params_and_args) 
-               field_type field_types_by_id ->
+               _field_type _field_types_by_id ->
             (* For any field of kind [Value] of the parameter being unboxed, then
                attempt to unbox its contents too. *)
             (* CR mshinwell: This recursion should have some kind of limit. *)
+(*
             let field_kind = T.kind field_type in
             if not (K.equal field_kind K.value) then
               typing_env, extra_params_and_args
@@ -233,8 +234,10 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
                   ~param_type:field_type
                   extra_params_and_args
               in
+*)
               typing_env, extra_params_and_args
-            end)
+(*
+            end *))
           (typing_env, extra_params_and_args)
           fields all_field_types_by_id
       in
