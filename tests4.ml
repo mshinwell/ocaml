@@ -11,6 +11,7 @@ external ( /. ) : float -> float -> float = "%divfloat"
 
 external opaque_identity : 'a -> 'a = "%opaque"
 
+(*
 let f x =
   let a = opaque_identity 3 in
   let b =
@@ -37,7 +38,7 @@ let fl x =
   in
   let u = b +. 1. in
   u *. 2.
-
+*)
 external float_of_int : int -> float = "%floatofint"
 
 type t = {x: float; y: float}
