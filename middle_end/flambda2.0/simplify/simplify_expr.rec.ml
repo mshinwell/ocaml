@@ -63,12 +63,10 @@ and simplify_one_continuation_handler
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
 
-Format.eprintf "About to simplify handler %a: params %a, param types@ %a, \
-    dacc:@ %a\n%!"
+Format.eprintf "About to simplify handler %a: params %a, param types@ %a\n%!"
   Continuation.print cont
   KP.List.print params
-  (Format.pp_print_list T.print) arg_types
-  DA.print dacc;
+  (Format.pp_print_list T.print) arg_types;
 
 Format.printf "handler:@.%a@."
   Expr.print handler;
@@ -78,6 +76,8 @@ Format.printf "handler:@.%a@."
           DE.add_parameters denv params ~arg_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
+Format.printf "handler after simplify:@.%a@."
+  Expr.print handler;
       let free_names = Expr.free_names handler in
       let used_params =
         List.filter (fun param ->
@@ -884,9 +884,13 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
               DA.map_denv dacc ~f:(fun denv ->
                 DE.add_lifted_constants denv (R.get_lifted_constants r))
             in
+Format.eprintf "simplifying inlined body of continuation:@ %a\n%!" Expr.print expr;
             try
+              expr, user_data, uacc
+(*
               simplify_expr dacc expr (fun _cont_uses_env r ->
                 user_data, (UA.with_r uacc r))
+*)
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
                   The inlined body was:@ %a@ in environment:@ %a\n"

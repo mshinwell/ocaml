@@ -86,7 +86,12 @@ let extra_params t = t.used_extra_params
 let extra_args t id =
   match Id.Map.find id t.extra_args with
   | exception Not_found ->
-    assert (List.length (extra_params t) = 0);
+    if List.length (extra_params t) <> 0 then begin
+      Misc.fatal_errorf "This [Apply_cont_rewrite] does not have any@ \
+          extra arguments for use ID %a, but it has@ >= 1 extra parameter:@ %a"
+        Id.print id
+        print t
+    end;
     []
   | extra_args -> extra_args
 
