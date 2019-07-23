@@ -591,9 +591,9 @@ let print_unary_primitive ppf p =
   | Opaque_identity -> fprintf ppf "Opaque_identity"
   | Int_arith (_k, o) -> print_unary_int_arith_op ppf o
   | Num_conv { src; dst; } ->
-    fprintf ppf "Conv_%a_to_%a"
-      Flambda_kind.Standard_int_or_float.print src
-      Flambda_kind.Standard_int_or_float.print dst
+    fprintf ppf "Num_conv_%a_to_%a"
+      Flambda_kind.Standard_int_or_float.print_lowercase src
+      Flambda_kind.Standard_int_or_float.print_lowercase dst
   | Boolean_not -> fprintf ppf "Boolean_not"
   | Float_arith o -> print_unary_float_arith_op ppf o
   | Array_length _ -> fprintf ppf "Array_length"

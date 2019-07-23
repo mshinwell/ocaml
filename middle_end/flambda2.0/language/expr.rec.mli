@@ -105,6 +105,11 @@ val bind
   -> body:t
   -> t
 
+val bind_parameters
+   : bindings:(Kinded_parameter.t * Named.t) list
+  -> body:t
+  -> t
+
 (** Given lists of kinded parameters [p_1; ...; p_n] and simples
     [s_1; ...; s_n], create an expression that surrounds the given
     expression with bindings of each [p_i] to the corresponding [s_i],
