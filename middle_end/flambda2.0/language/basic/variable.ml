@@ -83,6 +83,8 @@ end;
 let create_with_same_name_as_ident ?user_visible ident : t =
   create ?user_visible (Ident.name ident)
 
+let fresh () : t = create "fresh"
+
 let clambda_name t =
   (Compilation_unit.string_for_printing t.compilation_unit) ^ "_" ^ t.name
 

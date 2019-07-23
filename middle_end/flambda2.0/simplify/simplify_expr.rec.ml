@@ -838,36 +838,38 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
               | None -> []
               | Some rewrite ->
                 let extra_params = Apply_cont_rewrite.extra_params rewrite in
+Format.eprintf "extra params: %a\n%!" KP.List.print extra_params;
                 let extra_args =
-                  List.map
-                    (fun (arg : Continuation_extra_params_and_args.Extra_arg.t)
-                     ->
+                  List.map (fun (arg : EA.t) ->
+Format.eprintf "extra arg: %a\n%!" EA.print arg;
                       match arg with
                       | Already_in_scope simple -> Named.create_simple simple
                       | New_let_binding (_var, prim) ->
                         Named.create_prim prim Debuginfo.none)
                     (Apply_cont_rewrite.extra_args rewrite rewrite_id)
                 in
+                assert (List.compare_lengths extra_params extra_args = 0);
                 List.combine extra_params extra_args
             in
-            (* We can't easily call [simplify_expr] on the inlined body
-               since [dacc] isn't the correct accumulator and environment any
-               more.  Instead we apply a name permutation to avoid bindings
-               of the form "<Name> = <Name>" and put up with the fact that
-               some bindings of the form "<Name> = <non-Name Simple>" will
-               remain.  [Flambda_to_cmm] (or any subsequent round of
-               [Simplify]) will clean these up. *)
+            (* We can't easily call [simplify_expr] on the inlined body since
+               [dacc] isn't the correct accumulator and environment any more.
+               However there's no need to simplify the inlined body except to
+               make use of parameter-to-argument bindings. What we do here will
+               clean up most [Let] bindings of the form "<Name> = <Name>"; but
+               we have to put up with the fact that any bindings of the form
+               "<Name> = <non-Name Simple>" will remain. [Flambda_to_cmm]
+               (or any subsequent round of [Simplify]) will clean these up. *)
             let params_and_args =
               assert (List.compare_lengths params args = 0);
               List.map (fun (param, arg) ->
+Format.eprintf "normal param/arg: %a/%a\n%!"
+  KP.print param Simple.print arg;
                   param, Named.create_simple arg)
                 (List.combine params args)
             in
             let bindings = extra_lets @ params_and_args in
-            let expr =
-              Expr.bind_parameters ~bindings ~body:handler
-            in
-            expr, user_data, uacc)
+Format.eprintf "handler: %a\n%!" Expr.print handler;
+            Expr.bind_parameters ~bindings ~body:handler, user_data, uacc)
 
 (* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
 and simplify_switch
