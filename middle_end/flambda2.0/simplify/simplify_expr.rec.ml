@@ -767,13 +767,15 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-    let _dacc, apply_cont_expr, apply_cont, args =
+    let _dacc, apply_cont_expr, apply_cont, add_extra_lets, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
-      | None -> dacc, Expr.create_apply_cont apply_cont, apply_cont, Apply_cont.args apply_cont
+      | None ->
+        dacc, Expr.create_apply_cont apply_cont, apply_cont,
+          (fun expr -> expr), Apply_cont.args apply_cont
       | Some rewrite ->
         (* CR mshinwell: Try to merge with inlining case *)
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
@@ -833,24 +835,8 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
             end;
 *)
             (* CR mshinwell: Why does [New_let_binding] have a [Variable]? *)
-            let extra_lets =
-              match rewrite with
-              | None -> []
-              | Some rewrite ->
-                let extra_params = Apply_cont_rewrite.extra_params rewrite in
-Format.eprintf "extra params: %a\n%!" KP.List.print extra_params;
-                let extra_args =
-                  List.map (fun (arg : EA.t) ->
-Format.eprintf "extra arg: %a\n%!" EA.print arg;
-                      match arg with
-                      | Already_in_scope simple -> Named.create_simple simple
-                      | New_let_binding (_var, prim) ->
-                        Named.create_prim prim Debuginfo.none)
-                    (Apply_cont_rewrite.extra_args rewrite rewrite_id)
-                in
-                assert (List.compare_lengths extra_params extra_args = 0);
-                List.combine extra_params extra_args
-            in
+            (* CR mshinwell: Should verify that names in the
+               [Apply_cont_rewrite] are in scope. *)
             (* We can't easily call [simplify_expr] on the inlined body since
                [dacc] isn't the correct accumulator and environment any more.
                However there's no need to simplify the inlined body except to
@@ -862,14 +848,14 @@ Format.eprintf "extra arg: %a\n%!" EA.print arg;
             let params_and_args =
               assert (List.compare_lengths params args = 0);
               List.map (fun (param, arg) ->
-Format.eprintf "normal param/arg: %a/%a\n%!"
-  KP.print param Simple.print arg;
                   param, Named.create_simple arg)
                 (List.combine params args)
             in
-            let bindings = extra_lets @ params_and_args in
-Format.eprintf "handler: %a\n%!" Expr.print handler;
-            Expr.bind_parameters ~bindings ~body:handler, user_data, uacc)
+            let expr =
+              add_extra_lets (
+                Expr.bind_parameters ~bindings:params_and_args ~body:handler)
+            in
+            expr, user_data, uacc)
 
 (* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
 and simplify_switch
@@ -962,7 +948,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               new_let_conts, arms
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
-              let _dacc, apply_cont_expr, apply_cont, _args =
+              let _dacc, apply_cont_expr, apply_cont, _add_extra_lets, _args =
                 (* This might not be the right dacc *)
                 Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite id (Apply_cont.goto cont)
               in

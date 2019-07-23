@@ -149,8 +149,6 @@ let rewrite_use ~simplify_named dacc t id apply_cont =
   let apply_cont =
     Flambda.Apply_cont.update_args apply_cont ~args
   in
-  let expr =
-    Flambda.Expr.bind ~bindings:extra_lets
-      ~body:(Flambda.Expr.create_apply_cont apply_cont)
-  in
-  dacc, expr, apply_cont, args
+  let wrap body = Flambda.Expr.bind ~bindings:extra_lets ~body in
+  let expr = wrap (Flambda.Expr.create_apply_cont apply_cont) in
+  dacc, expr, apply_cont, wrap, args
