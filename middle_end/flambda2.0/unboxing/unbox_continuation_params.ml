@@ -29,7 +29,7 @@ end
 
 module Make (U : Unboxing_spec) = struct
   let parameters_to_unbox_with_extra_args typing_env ~new_param_vars
-        ~arg_types_by_use_id extra_params_and_args ~make_unboxing_decision =
+        ~arg_types_by_use_id extra_params_and_args ~unbox_value =
     List.fold_left
       (fun (index, typing_env, param_types_rev, extra_params_and_args)
            extra_param ->
@@ -126,16 +126,16 @@ module Make (U : Unboxing_spec) = struct
         let param_type =
           match extra_args with
           | None -> T.unknown param_kind
-          | Some extra_args ->
-            T.alias_type_of param_kind (KP.simple extra_param)
+          | Some _ -> T.alias_type_of param_kind (KP.simple extra_param)
         in
         let typing_env, param_type, extra_params_and_args =
           (* If the value being unboxed is itself of kind [Value], then
              attempt to unbox its contents too. *)
           (* CR mshinwell: This recursion should have some kind of limit. *)
-          if not (K.equal param_kind K.value) then extra_params_and_args
+          if not (K.equal param_kind K.value) then
+            typing_env, param_type, extra_params_and_args
           else
-            make_unboxing_decision typing_env
+            unbox_value typing_env
               ~arg_types_by_use_id:field_types_by_id
               ~param_type
               extra_params_and_args
@@ -163,7 +163,7 @@ module Make (U : Unboxing_spec) = struct
     in
     let _index, typing_env, param_types_rev, extra_params_and_args =
       parameters_to_unbox_with_extra_args typing_env ~new_param_vars
-        ~arg_types_by_use_id extra_params_and_args
+        ~arg_types_by_use_id extra_params_and_args ~unbox_value
     in
     let fields = List.rev param_types_rev in
     let block_type = U.make_boxed_value tag ~fields in
@@ -212,18 +212,18 @@ end
 module Blocks = Make (Block_spec)
 module Floats = Make (Float_spec)
 
-let make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
+let rec make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
       extra_params_and_args =
   match T.prove_unique_tag_and_size typing_env param_type with
   | Proved (tag, size) ->
     Blocks.make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
-      extra_params_and_args ~make_unboxing_decision
+      extra_params_and_args ~unbox_value:make_unboxing_decision
       tag size K.value
   | Wrong_kind | Invalid | Unknown ->
     match T.prove_is_a_boxed_float typing_env param_type with
     | Proved () ->
       Floats.make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~make_unboxing_decision
+        extra_params_and_args ~unbox_value:make_unboxing_decision
         Tag.double_tag Targetint.OCaml.one K.naked_float
     | Wrong_kind | Invalid | Unknown ->
       typing_env, param_type, extra_params_and_args
