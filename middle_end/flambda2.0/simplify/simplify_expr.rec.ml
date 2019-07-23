@@ -767,7 +767,7 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-    let dacc, apply_cont_expr, apply_cont, args =
+    let _dacc, apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
@@ -832,26 +832,26 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                 AC.print apply_cont
             end;
 *)
-            let expr =
-              let extra_params, extra_args =
-                match rewrite with
-                | None -> [], []
-                | Some rewrite ->
-                  let extra_params = Apply_cont_rewrite.extra_params rewrite in
-                  let extra_args =
-                    Apply_cont_rewrite.extra_args rewrite rewrite_id
-                  in
-                  extra_params, extra_args
-              in
-              let extra_args_simple =
-                List.map
-                  (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
-                    match arg with
-                    | Already_in_scope simple -> simple
-                    | New_let_binding (var, _named) ->
-                      Simple.var (Var_in_binding_pos.var var))
-                  extra_args
-              in
+            let extra_params, extra_args =
+              match rewrite with
+              | None -> [], []
+              | Some rewrite ->
+                let extra_params = Apply_cont_rewrite.extra_params rewrite in
+                let extra_args =
+                  Apply_cont_rewrite.extra_args rewrite rewrite_id
+                in
+                extra_params, extra_args
+            in
+            let extra_args_simple =
+              List.map
+                (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+                  match arg with
+                  | Already_in_scope simple -> simple
+                  | New_let_binding (var, _named) ->
+                    Simple.var (Var_in_binding_pos.var var))
+                extra_args
+            in
+            let inlined =
               let extra_lets =
                 List.filter_map
                   (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
@@ -868,39 +868,51 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                 KP.List.print extra_params
                 KP.List.print params
                 Simple.List.print extra_args_simple
-                Simple.List.print args
-              ;
-              let inlined =
-                Expr.bind_parameters_to_simples
-                  ~bind:(extra_params @ params)
-                  ~target:(extra_args_simple @ args)
-                  handler
-              in
-              Expr.bind ~bindings:extra_lets ~body:inlined
+                Simple.List.print args;
+              Expr.bind ~bindings:extra_lets ~body:handler
             in
-            let r = UA.r uacc in
-            let dacc = DA.with_r dacc r in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
-                DE.add_lifted_constants denv (R.get_lifted_constants r))
+            (* We can't easily call [simplify_expr] on the inlined body
+               since [dacc] isn't the correct accumulator and environment any
+               more.  Instead we apply a name permutation to avoid bindings
+               of the form "<Name> = <Name>" and put up with the fact that
+               some bindings of the form "<Name> = <non-Name Simple>" will
+               remain.  [Flambda_to_cmm] (or any subsequent round of
+               [Simplify]) will clean these up. *)
+            let params = extra_params @ params in
+            let args = extra_args_simple @ args in
+            let perm, simples_to_bind =
+              List.fold_left (fun (perm, simples_to_bind) (param, arg) ->
+                  match Simple.descr arg with
+                  | Name arg_name ->
+                    begin match Simple.rec_info arg with
+                    | None ->
+                      let perm =
+                        Name_permutation.add_name perm (KP.name param) arg_name
+                      in
+                      perm, simples_to_bind
+                    | Some _ ->
+                      let var =
+                        Var_in_binding_pos.create (KP.var param)
+                          Name_occurrence_kind.normal
+                      in
+                      let defining_expr = Named.create_simple arg in
+                      perm, (var, defining_expr) :: simples_to_bind
+                    end
+                  | _ ->
+                    let var =
+                      Var_in_binding_pos.create (KP.var param)
+                        Name_occurrence_kind.normal
+                    in
+                    let defining_expr = Named.create_simple arg in
+                    perm, (var, defining_expr) :: simples_to_bind)
+                (Name_permutation.empty, [])
+                (List.combine params args)
             in
-Format.eprintf "simplifying inlined body of continuation:@ %a\n%!" Expr.print expr;
-            try
-              expr, user_data, uacc
-(*
-              simplify_expr dacc expr (fun _cont_uses_env r ->
-                user_data, (UA.with_r uacc r))
-*)
-            with Misc.Fatal_error -> begin
-              Format.eprintf "\n%sContext is:%s inlining [Apply_cont]@ %a.@ \
-                  The inlined body was:@ %a@ in environment:@ %a\n"
-                (Flambda_colours.error ())
-                (Flambda_colours.normal ())
-                AC.print apply_cont
-                Expr.print expr
-                DE.print (DA.denv dacc);
-              raise Misc.Fatal_error
-            end)
+            let inlined =
+              Expr.bind ~bindings:simples_to_bind ~body:inlined
+            in
+            let expr = Expr.apply_name_permutation inlined perm in
+            expr, user_data, uacc)
 
 (* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
 and simplify_switch
