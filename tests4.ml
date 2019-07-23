@@ -46,8 +46,23 @@ type t = {x: float; y: float}
 let pr2162_1 z x y =
   let a, b =
     if z then (x * 2, y *. 3.)
+    else (x, y)
+  in
+  float_of_int a -. b
+
+let pr2162_2 z x y =
+  let a, b =
+    if z then (x * 2, y *. 3.)
     else (x, y +. 0.)
   in
+  float_of_int a -. b
+
+let pr2162_3 z x y =
+  let pair =
+    if z then (x * 2, y *. 3.)
+    else (x, y +. 0.)
+  in
+  let a, b = pair in
   float_of_int a -. b
 
 (*
