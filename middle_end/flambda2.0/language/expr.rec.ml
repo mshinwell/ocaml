@@ -285,23 +285,48 @@ let create_if_then_else ~scrutinee ~if_true ~if_false =
   create_switch Int ~scrutinee ~arms
 
 let bind ~bindings ~body =
-  List.fold_left (fun expr (bound_var, defining_expr) ->
-      create_let bound_var defining_expr expr)
-    body bindings
+  List.fold_left (fun expr (var, (target : Named.t)) ->
+      match target with
+      | Simple simple ->
+        begin match Simple.descr simple with
+        | Name (Var var') ->
+          begin match Simple.rec_info simple with
+          | None ->
+            let perm =
+              Name_permutation.add_variable Name_permutation.empty
+                (Var_in_binding_pos.var var) var'
+            in
+            apply_name_permutation expr perm
+          | Some _ -> create_let var target expr
+          end
+        | _ -> create_let var target expr
+        end
+      | _ -> create_let var target expr)
+    body
+    (List.rev bindings)
 
-let bind_parameters_to_simples ~bind ~target t =
+let bind_parameters ~bindings ~body =
+  let bindings =
+    List.map (fun (bind, target) ->
+        let var =
+          Var_in_binding_pos.create (KP.var bind) Name_occurrence_kind.normal
+        in
+        var, target)
+      bindings
+  in
+  bind ~bindings ~body
+
+let bind_parameters_to_simples ~bind ~target body =
   if List.compare_lengths bind target <> 0 then begin
-    Misc.fatal_errorf "Lists of differing lengths: %a and %a"
+    Misc.fatal_errorf "Mismatching parameters and arguments: %a and %a"
       KP.List.print bind
       Simple.List.print target
   end;
-  List.fold_left2 (fun expr bind target ->
-      let var =
-        Var_in_binding_pos.create (KP.var bind) Name_occurrence_kind.normal
-      in
-      create_let var (Named.create_simple target) expr)
-    t
-    (List.rev bind) (List.rev target)
+  let bindings =
+    List.map (fun (bind, target) -> bind, Named.create_simple target)
+      (List.combine bind target)
+  in
+  bind_parameters ~bindings ~body
 
 let link_continuations0 ~is_exn_handler ~bind ~target ~arity t =
   let params =

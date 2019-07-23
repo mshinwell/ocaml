@@ -40,8 +40,6 @@ val apply_variable : t -> Variable.t -> Variable.t
 
 val apply_variable_set : t -> Variable.Set.t -> Variable.Set.t
 
-val add_name : t -> Name.t -> Name.t -> t
-
 val apply_name : t -> Name.t -> Name.t
 
 val add_continuation : t -> Continuation.t -> Continuation.t -> t

@@ -145,14 +145,6 @@ let add_variable t var1 var2 =
 let apply_variable t var =
   Variables.apply t.variables var
 
-let add_name t (name1 : Name.t) (name2 : Name.t) =
-  match name1, name2 with
-  | Var var1, Var var2 -> add_variable t var1 var2
-  | _, _ ->
-    Misc.fatal_errorf "Illegal argument(s) to [add_name]:@ %a and %a"
-      Name.print name1
-      Name.print name2
-
 let apply_variable_set t vars =
   Variable.Set.fold (fun var result ->
       let var = apply_variable t var in

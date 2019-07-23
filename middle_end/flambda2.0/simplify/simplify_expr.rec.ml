@@ -832,44 +832,23 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                 AC.print apply_cont
             end;
 *)
-            let extra_params, extra_args =
+            (* CR mshinwell: Why does [New_let_binding] have a [Variable]? *)
+            let extra_lets =
               match rewrite with
-              | None -> [], []
+              | None -> []
               | Some rewrite ->
                 let extra_params = Apply_cont_rewrite.extra_params rewrite in
                 let extra_args =
-                  Apply_cont_rewrite.extra_args rewrite rewrite_id
+                  List.map
+                    (fun (arg : Continuation_extra_params_and_args.Extra_arg.t)
+                     ->
+                      match arg with
+                      | Already_in_scope simple -> Named.create_simple simple
+                      | New_let_binding (_var, prim) ->
+                        Named.create_prim prim Debuginfo.none)
+                    (Apply_cont_rewrite.extra_args rewrite rewrite_id)
                 in
-                extra_params, extra_args
-            in
-            let extra_args_simple =
-              List.map
-                (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
-                  match arg with
-                  | Already_in_scope simple -> simple
-                  | New_let_binding (var, _named) ->
-                    Simple.var (Var_in_binding_pos.var var))
-                extra_args
-            in
-            let inlined =
-              let extra_lets =
-                List.filter_map
-                  (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
-                    match arg with
-                    | Already_in_scope _ -> None
-                    | New_let_binding (var, prim) ->
-                      (* CR mshinwell: fix debuginfo (?) *)
-                      let dbg = Debuginfo.none in
-                      let named = Named.create_prim prim dbg in
-                      Some (var, named))
-                  extra_args
-              in
-              Format.printf "UUUextra_params %a@.params %a@.extra_args_simple %a@.args %a@."
-                KP.List.print extra_params
-                KP.List.print params
-                Simple.List.print extra_args_simple
-                Simple.List.print args;
-              Expr.bind ~bindings:extra_lets ~body:handler
+                List.combine extra_params extra_args
             in
             (* We can't easily call [simplify_expr] on the inlined body
                since [dacc] isn't the correct accumulator and environment any
@@ -878,40 +857,16 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                some bindings of the form "<Name> = <non-Name Simple>" will
                remain.  [Flambda_to_cmm] (or any subsequent round of
                [Simplify]) will clean these up. *)
-            let params = extra_params @ params in
-            let args = extra_args_simple @ args in
-            let perm, simples_to_bind =
-              List.fold_left (fun (perm, simples_to_bind) (param, arg) ->
-                  match Simple.descr arg with
-                  | Name arg_name ->
-                    begin match Simple.rec_info arg with
-                    | None ->
-                      let perm =
-                        Name_permutation.add_name perm (KP.name param) arg_name
-                      in
-                      perm, simples_to_bind
-                    | Some _ ->
-                      let var =
-                        Var_in_binding_pos.create (KP.var param)
-                          Name_occurrence_kind.normal
-                      in
-                      let defining_expr = Named.create_simple arg in
-                      perm, (var, defining_expr) :: simples_to_bind
-                    end
-                  | _ ->
-                    let var =
-                      Var_in_binding_pos.create (KP.var param)
-                        Name_occurrence_kind.normal
-                    in
-                    let defining_expr = Named.create_simple arg in
-                    perm, (var, defining_expr) :: simples_to_bind)
-                (Name_permutation.empty, [])
+            let params_and_args =
+              assert (List.compare_lengths params args = 0);
+              List.map (fun (param, arg) ->
+                  param, Named.create_simple arg)
                 (List.combine params args)
             in
-            let inlined =
-              Expr.bind ~bindings:simples_to_bind ~body:inlined
+            let bindings = extra_lets @ params_and_args in
+            let expr =
+              Expr.bind_parameters ~bindings ~body:handler
             in
-            let expr = Expr.apply_name_permutation inlined perm in
             expr, user_data, uacc)
 
 (* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
