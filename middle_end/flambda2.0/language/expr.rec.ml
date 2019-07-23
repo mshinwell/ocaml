@@ -289,13 +289,19 @@ let bind ~bindings ~body =
       match target with
       | Simple simple ->
         begin match Simple.descr simple with
-        | Name (Var var') ->
+        | Name (Var rhs_var) ->
           begin match Simple.rec_info simple with
           | None ->
-            let perm =
+            let fresh_var = Variable.fresh () in
+            let first =
               Name_permutation.add_variable Name_permutation.empty
-                (Var_in_binding_pos.var var) var'
+                (Var_in_binding_pos.var var) fresh_var
             in
+            let second =
+              Name_permutation.add_variable Name_permutation.empty
+                fresh_var rhs_var
+            in
+            let perm = Name_permutation.compose ~second ~first in
             apply_name_permutation expr perm
           | Some _ -> create_let var target expr
           end

@@ -47,6 +47,8 @@ val rename
   -> t
   -> t
 
+val fresh : unit -> t
+
 val user_visible : t -> bool
 
 val with_user_visible : t -> user_visible:bool -> t
