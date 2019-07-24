@@ -958,11 +958,8 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
           | String_or_bigstring_load _ ->
             fun dacc ~original_term:_ dbg ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_
                 ~result_var:_ ->
-              (* CR mshinwell: temporary code *)
               let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-              let kind =
-                P.result_kind_of_binary_primitive' prim
-              in
+              let kind = P.result_kind_of_binary_primitive' prim in
               let ty = T.unknown kind in
               let env_extension = TEE.one_equation (Name.var result_var') ty in
               Reachable.reachable named, env_extension, dacc
