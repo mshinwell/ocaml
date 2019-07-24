@@ -72,13 +72,10 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
           match prim with
           | Block_set _
           | Bytes_or_bigstring_set _ ->
-            (* temporary code *)
             let named =
               Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
             in
-            let kind =
-              P.result_kind_of_ternary_primitive' prim
-            in
+            let kind = P.result_kind_of_ternary_primitive' prim in
             let ty = T.unknown kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
             Reachable.reachable named, env_extension, dacc
