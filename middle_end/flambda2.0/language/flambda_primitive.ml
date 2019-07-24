@@ -773,7 +773,14 @@ let binary_primitive_eligible_for_cse p =
     (* CR mshinwell: Elsewhere, we don't directly depend on [Clflags].
        Maybe that's a mistake? *)
   | Float_arith _
-  | Float_comp _ -> !Clflags.float_const_prop
+  | Float_comp _ ->
+    (* We believe that under the IEEE standard it is correct to CSE
+       floating-point comparison operations.  However we aren't completely
+       sure what the situation is with regard to 80-bit precision
+       floating-point support on Intel processors (and indeed whether we
+       make use of that).  As such, we don't CSE these comparisons unless
+       we would also CSE floating-point arithmetic operations. *)
+    !Clflags.float_const_prop
 
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =
