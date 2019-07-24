@@ -29,7 +29,7 @@ module type Unboxing_spec = sig
   val project_field : block:Simple.t -> index:Simple.t -> P.t
 end
 
-let add_projections = true
+let add_projections = false
 
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
@@ -77,6 +77,9 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
             TE.add_env_extension typing_env_at_use env_extension
           in
           let field_type = T.alias_type_of param_kind field in
+Format.eprintf "field type is %a, env is now:@ %a\n%!"
+  T.print field_type
+  TE.print typing_env_at_use;
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
               (typing_env_at_use, field, field_type)
@@ -108,6 +111,7 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
                  where k x y a' b'
             *)
             let no_simple () =
+Format.eprintf "No canonical simple\n%!";
               if not add_projections then None, field_types_by_id
               else
                 let bound_to =
@@ -182,7 +186,7 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
       extra_params_and_args
 
   let unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~unbox_value:_ tag size kind =
+        extra_params_and_args ~unbox_value tag size kind =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
         let name = Printf.sprintf "unboxed%d" index in
@@ -218,11 +222,10 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
       let typing_env, extra_params_and_args =
         List.fold_left2
           (fun (typing_env, extra_params_and_args) 
-               _field_type _field_types_by_id ->
+               field_type field_types_by_id ->
             (* For any field of kind [Value] of the parameter being unboxed, then
                attempt to unbox its contents too. *)
             (* CR mshinwell: This recursion should have some kind of limit. *)
-(*
             let field_kind = T.kind field_type in
             if not (K.equal field_kind K.value) then
               typing_env, extra_params_and_args
@@ -234,10 +237,8 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
                   ~param_type:field_type
                   extra_params_and_args
               in
-*)
               typing_env, extra_params_and_args
-(*
-            end *))
+            end)
           (typing_env, extra_params_and_args)
           fields all_field_types_by_id
       in

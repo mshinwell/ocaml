@@ -81,6 +81,9 @@ let add_use t ~typing_env_at_use id ~args ~arg_types =
         Flambda_arity.print t.arity
     end;
     let use = Use.create ~typing_env_at_use id ~args ~arg_types in
+Format.eprintf "For %a, recording use:@ %a\n%!"
+  Continuation.print t.continuation
+  Use.print use;
     { t with
       uses = use :: t.uses;
     }
@@ -114,7 +117,7 @@ Format.eprintf "Retrieving env + param types for %a; unknown >= level %a\n%!"
 (*
 Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typing_env;
 *)
-  let process_use_arg_types use ~allowed =
+  let process_use_arg_types use ~allowed = (* CR mshinwell: rename *)
     let env = Use.typing_env_at_use use in
     List.map (fun ty ->
         T.erase_aliases env ~bound_name:None ~allowed ty)
@@ -170,7 +173,7 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
               Apply_cont_rewrite_id.Map.add (Use.id use)
                 (env, arg, arg_type) arg_map)
             args
-            (List.combine (Use.args use) (process_use_arg_types use ~allowed)))
+            (List.combine (Use.args use) (Use.arg_types use)))
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
         all_uses
     in
