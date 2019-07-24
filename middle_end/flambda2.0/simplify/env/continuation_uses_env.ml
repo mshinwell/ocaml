@@ -62,8 +62,10 @@ let continuation_env_and_param_types t ~definition_typing_env cont arity =
     in
     definition_typing_env, assert false, arg_types, Continuation_extra_params_and_args.empty
   | uses ->
+(*
     Format.printf "USE: %a@."
       Continuation_uses.print uses;
+*)
     Continuation_uses.env_and_param_types uses ~definition_typing_env
 
 let num_continuation_uses t cont =

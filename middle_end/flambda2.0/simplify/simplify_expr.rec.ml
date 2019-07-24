@@ -62,7 +62,7 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-
+(*
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a\n%!"
   Continuation.print cont
   KP.List.print params
@@ -70,14 +70,16 @@ Format.eprintf "About to simplify handler %a: params %a, param types@ %a\n%!"
 
 Format.printf "handler:@.%a@."
   Expr.print handler;
-
+*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~arg_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
+(*
 Format.printf "handler after simplify:@.%a@."
   Expr.print handler;
+*)
       let free_names = Expr.free_names handler in
       let used_params =
         List.filter (fun param ->
@@ -218,7 +220,7 @@ and simplify_direct_full_application
       DA.record_continuation_use dacc (Apply.continuation apply)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
-        ~args:(Misc.fatal_error "TODO HERE")
+        ~args
     in
     let dacc, _id =
       DA.record_continuation_use dacc
@@ -226,7 +228,7 @@ and simplify_direct_full_application
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
-        ~args:(Misc.fatal_error "TODO HERE")
+        ~args
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let return_cont =
@@ -756,17 +758,21 @@ and simplify_apply_cont
         ~arg_types
         ~args
     in
+(*
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Continuation.print (AC.continuation apply_cont)
   (Format.pp_print_list T.print) arg_types
   Apply_cont_rewrite_id.print rewrite_id;
+*)
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
+(*
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
+*)
     let _dacc, apply_cont_expr, apply_cont, add_extra_lets, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
@@ -777,13 +783,16 @@ Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
         dacc, Expr.create_apply_cont apply_cont, apply_cont,
           (fun expr -> expr), Apply_cont.args apply_cont
       | Some rewrite ->
-        (* CR mshinwell: Try to merge with inlining case *)
+(*
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
+*)
         Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite rewrite_id apply_cont
     in
+(*
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
+*)
     let check_arity_against_args ~arity:_ = () in
 (*
       if not (Flambda_arity.equal args_arity arity) then begin
@@ -876,9 +885,11 @@ and simplify_switch
       Discriminant.Map.fold (fun arm cont (arms, dacc) ->
           let shape =
             match Discriminant.sort arm, Switch.sort switch with
-            | Int, Int | Is_int, Is_int ->
+            | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
               T.this_tagged_immediate imm
+            | Is_int, Is_int ->
+              T.this_discriminant arm
             | Tag, Tag { tags_to_sizes; } ->
               let tag =
                 match Discriminant.to_tag arm with
@@ -907,6 +918,10 @@ and simplify_switch
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
+(*
+Format.eprintf "scrutinee_ty %a shape %a\n%!"
+  T.print scrutinee_ty T.print shape;
+*)
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom -> arms, dacc
           | Ok (_meet_ty, env_extension) ->
@@ -918,11 +933,13 @@ Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
               TE.add_env_extension typing_env_at_use env_extension
             in
             let dacc, id =
+(*
 Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
   Simple.print scrutinee
   Discriminant.print arm
   Continuation.print cont
   TE.print typing_env_at_use;
+*)
               DA.record_continuation_use dacc cont
                 ~typing_env_at_use
                 ~arg_types:[]
@@ -949,8 +966,10 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
               let _dacc, apply_cont_expr, apply_cont, _add_extra_lets, _args =
-                (* This might not be the right dacc *)
-                Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite id (Apply_cont.goto cont)
+                (* CR pchambart: This might not be the right dacc *)
+                Apply_cont_rewrite.rewrite_use
+                  ~simplify_named:Simplify_named.simplify_named dacc
+                  rewrite id (Apply_cont.goto cont)
               in
               (* CR mshinwell: try to remove this next bit? *)
               match Apply_cont.to_goto apply_cont with

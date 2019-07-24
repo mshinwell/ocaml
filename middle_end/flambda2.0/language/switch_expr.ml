@@ -24,11 +24,14 @@ module Sort = struct
     | Tag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
     | Is_int
 
-  let _to_lowercase_string t =
+  let to_lowercase_string t =
     match t with
     | Int -> "int"
     | Tag _ -> "tag"
     | Is_int -> "is_int"
+
+  let print ppf t =
+    Format.fprintf ppf "%s" (to_lowercase_string t)
 end
 
 type t = {
