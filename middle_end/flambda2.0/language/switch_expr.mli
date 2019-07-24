@@ -28,6 +28,8 @@ module Sort : sig
     | Int
     | Tag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
     | Is_int
+
+  val print : Format.formatter -> t -> unit
 end
 
 type t

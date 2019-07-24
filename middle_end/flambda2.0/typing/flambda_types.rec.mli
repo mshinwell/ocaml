@@ -159,6 +159,8 @@ and of_kind_fabricated =
   (* CR mshinwell: Work out how to do the dependent-discriminant thing
      properly. *)
   | Discriminants of Discriminants.t
+    (* CR mshinwell: update comment.  It's now either a tag, or the
+       result of Pisint *)
     (** A discriminant is either:
         - a block tag, as returned by the [Get_tag] primitive; or
         - a constant constructor which has undergone a kind-cast to kind

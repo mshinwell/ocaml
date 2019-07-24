@@ -100,10 +100,10 @@ let simplify_is_int dacc ~original_term ~arg: _~arg_ty:scrutinee_ty
     Reachable.reachable original_term, env_extension, dacc
   in
   match proof with
-  | Proved true -> proved Discriminant.bool_true
-  | Proved false -> proved Discriminant.bool_false
+  | Proved true -> proved Discriminant.is_int_true
+  | Proved false -> proved Discriminant.is_int_false
   | Unknown ->
-    let ty = T.these_discriminants Discriminant.all_bools_set in
+    let ty = T.these_discriminants Discriminant.all_is_int_set in
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
   | Invalid ->
     let ty = T.bottom K.fabricated in

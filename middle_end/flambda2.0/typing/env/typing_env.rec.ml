@@ -737,10 +737,10 @@ let expand_head_ty (type a) t
       | Discriminant discr ->
         let typ =
           match Discriminant.sort discr with
-          | Int | Is_int ->
+          | Int ->
             let imm = Immediate.int (Discriminant.to_int discr) in
             Flambda_type0_core.this_tagged_immediate_without_alias imm
-          | Tag ->
+          | Is_int | Tag ->
             Flambda_type0_core.this_discriminant_without_alias discr
         in
         force_to_unknown_or_join typ

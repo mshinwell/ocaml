@@ -81,9 +81,11 @@ let add_use t ~typing_env_at_use id ~args ~arg_types =
         Flambda_arity.print t.arity
     end;
     let use = Use.create ~typing_env_at_use id ~args ~arg_types in
+(*
 Format.eprintf "For %a, recording use:@ %a\n%!"
   Continuation.print t.continuation
   Use.print use;
+*)
     { t with
       uses = use :: t.uses;
     }
@@ -104,9 +106,11 @@ let env_and_param_types t ~definition_typing_env =
     T.Typing_env.current_scope definition_typing_env
   in
   let cut_point = (* Scope.next *) definition_scope_level in
+(*
 Format.eprintf "Retrieving env + param types for %a; unknown >= level %a\n%!"
   Continuation.print t.continuation
   Scope.print cut_point;
+*)
   let cut_use_environment use =
     let env = Use.typing_env_at_use use in
     let env_extension, _vars_in_scope =
@@ -143,7 +147,9 @@ Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typ
     let joined_env_extension, extra_cse_bindings =
       TEE.n_way_join definition_typing_env use_envs_with_ids_and_extensions
     in
+(*
 Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
+*)
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
     let env =
       List.fold_left (fun env extra_param ->

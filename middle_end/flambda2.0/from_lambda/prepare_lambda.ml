@@ -21,8 +21,8 @@ module L = Lambda
 let stub_hack_prim_name = "*stub*"
 
 let sw_numblocks_int_switch = -1
-let sw_numblocks_tag_switch = -1
-let sw_numblocks_isint_switch = -1
+let sw_numblocks_tag_switch = -2
+let sw_numblocks_isint_switch = -3
 
 let classify_switch (switch : Lambda.lambda_switch) : Flambda.Switch.Sort.t =
   if switch.sw_numblocks = sw_numblocks_int_switch then Int

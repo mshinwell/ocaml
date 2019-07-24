@@ -73,7 +73,9 @@ end) = struct
             ~definition_typing_env:(DE.typing_env definition_denv)
             cont arity
         in
+(*
 Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print cont_handler;
+*)
         let typing_env, param_types, extra_params_and_args =
           Unbox_continuation_params.make_unboxing_decisions typing_env
             ~arg_types_by_use_id ~param_types:arg_types extra_params_and_args
@@ -138,9 +140,6 @@ Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print
               | None ->
                 UE.add_continuation uenv cont original_cont_scope_level arity
               | Some real_handler ->
-Format.eprintf "Recording %a for inlining, handler=%a\n%!"
-  Continuation.print cont
-  Continuation_handler.print real_handler;
                 UE.add_continuation_to_inline uenv cont
                   original_cont_scope_level arity
                   real_handler
