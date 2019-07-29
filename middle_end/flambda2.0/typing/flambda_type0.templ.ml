@@ -370,6 +370,36 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       | Resolved_value _ -> Invalid
       | _ -> Wrong_kind
 
+  let prove_is_a_boxed_int32 env t : _ proof_allowing_kind_mismatch =
+    match Typing_env.expand_head env t with
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value (Ok (Boxed_number (Boxed_int32 _))) -> Proved ()
+      | Resolved_value _ -> Invalid
+      | _ -> Wrong_kind
+
+  let prove_is_a_boxed_int64 env t : _ proof_allowing_kind_mismatch =
+    match Typing_env.expand_head env t with
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value (Ok (Boxed_number (Boxed_int64 _))) -> Proved ()
+      | Resolved_value _ -> Invalid
+      | _ -> Wrong_kind
+
+  let prove_is_a_boxed_nativeint env t : _ proof_allowing_kind_mismatch =
+    match Typing_env.expand_head env t with
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value (Ok (Boxed_number (Boxed_nativeint _))) -> Proved ()
+      | Resolved_value _ -> Invalid
+      | _ -> Wrong_kind
+
   (* CR mshinwell: Factor out code from the following. *)
 
   let prove_boxed_floats env t : _ proof =
