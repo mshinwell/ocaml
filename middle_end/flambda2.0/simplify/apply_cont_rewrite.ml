@@ -98,8 +98,9 @@ let extra_args t id =
 let rewrite_use ~simplify_named dacc t id apply_cont =
   let args = Flambda.Apply_cont.args apply_cont in
   if List.compare_lengths args t.original_params <> 0 then begin
-    Misc.fatal_errorf "Arguments to this [Apply_cont] do not match@ \
+    Misc.fatal_errorf "Arguments to this [Apply_cont]@ (%a)@ do not match@ \
         [original_params] (%a):@ %a"
+      Flambda.Apply_cont.print apply_cont
       KP.List.print t.original_params
       Simple.List.print args
   end;

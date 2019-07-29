@@ -59,9 +59,6 @@ let empty = {
 }
 
 let add t ~extra_param ~extra_args =
-  Format.printf "extra args: %a@."
-    (Apply_cont_rewrite_id.Map.print Extra_arg.print)
-    extra_args;
   let extra_args =
     if Apply_cont_rewrite_id.Map.is_empty t.extra_args then
       Apply_cont_rewrite_id.Map.map (fun extra_args -> [extra_args]) extra_args

@@ -2,15 +2,15 @@ Things in Closure that we still need to implement, + others:
 
 - Fix the Flambda 2.0 inlining size calculation
 - More primitives: 
-  - Block load for float arrays, etc?
+  - Block load for float records
   - String_or_bigstring load in the string case?
-  - Array_length for float arrays, etc?
+  - Array_length for the non-value cases
   - String_length
   - Int_arith unary    ]
   - Float_arith unary  ] should have code for these
   - Num_conv unary     ]
   - Boolean_not unary  ]
-- Implement loading/saving for .cmx files
+- Implement loading/saving for .cmx files (including reachability analysis)
 - Make sure that reify deals with all the cases for boxed numbers, etc.
   so that these get lifted.
 - Sharing of switch arms?  Unsure why this is needed, doesn't the Cmm
@@ -25,3 +25,4 @@ Remaining other parts:
 - Make sure Flambda_to_cmm does everything we need from the old Cmmgen code
   that won't be run any more -- Vincent says there's a fair amount here
 - Merge in backend exceptions patches
+- Add an option to keep name history

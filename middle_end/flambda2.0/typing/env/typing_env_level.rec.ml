@@ -358,10 +358,14 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
       cse
       EP.Map.empty
   in
+(*
 Format.eprintf "starting CSE\n%!";
+*)
   let cses_with_canonicalised_lhs =
     List.map (fun (env, id, t) ->
+(*
 Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
+*)
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -376,7 +380,9 @@ Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
         (EP.Map.keys cse)
         cses
   in
+(*
 Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_all_paths;
+*)
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
@@ -406,10 +412,12 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
         let bound_to =
           Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
         in
+(*
 Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
   EP.print prim
   Kinded_parameter.print extra_param
   (Apply_cont_rewrite_id.Map.print Simple.print) bound_to;
+*)
         let cse =
           EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
         in
@@ -425,9 +433,11 @@ Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
         in
         cse, extra_bindings
       | Some rhs_kind ->
+(*
 Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
   EP.print prim
   Simple.print (Rhs_kind.bound_to rhs_kind);
+*)
         EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
@@ -439,26 +449,34 @@ Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
 
 let n_way_join0 env envs_with_extensions =
   let allowed = Typing_env.var_domain env in
+(*
 Format.eprintf "Allowed vars %a\n%!" Variable.Set.print allowed;
+*)
   let allowed_names = Name.set_of_var_set allowed in
   let names_with_equations_in_join =
     List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
+(*
 Format.eprintf "Level in n_way_join:@ %a\n%!" print t;
+*)
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
       allowed_names
       envs_with_extensions
   in
   let get_type t env name =
+(*
 Format.eprintf "get_type %a: starting type %a\n%!" Name.print name
   Type_printers.print (find_equation t name);
 let typ =
+*)
     Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
       (find_equation t name)
+(*
 in
 Format.eprintf "...and after: %a\n%!" Type_printers.print typ;
 typ
+*)
   in
   let t =
     Name.Set.fold (fun name result ->
