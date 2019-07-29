@@ -25,20 +25,33 @@ type t = {
 }
 
 let print ppf { k; args; trap_action; } =
-  match args with
-  | [] ->
-    Format.fprintf ppf "@[<hov 1>%a@<0>%sgoto@<0>%s@ %a@]"
-      Trap_action.Option.print trap_action
-      (Flambda_colours.expr_keyword ())
-      (Flambda_colours.normal ())
-      Continuation.print k
-  | _ ->
-    Format.fprintf ppf "@[<hov 1>%a@<0>%sapply_cont@<0>%s@ %a@ %a@]"
-      Trap_action.Option.print trap_action
-      (Flambda_colours.expr_keyword ())
-      (Flambda_colours.normal ())
-      Continuation.print k
-      Simple.List.print args
+  let name, trap_action =
+    match Continuation.sort k, trap_action, args with
+    | Normal, None, [] -> "goto", None
+    | Normal, None, _::_ -> "apply_cont", None
+    | Normal, Some trap_action, [] -> "goto", Some trap_action
+    | Normal, Some trap_action, _::_ -> "apply_cont", Some trap_action
+    | Return, None, [] -> "return", None
+    | Return, None, _::_ -> "return", None
+    | Return, Some trap_action, [] -> "return", Some trap_action
+    | Return, Some trap_action, _::_ -> "return", Some trap_action
+    (* CR mshinwell: See CR on [create], below. *)
+    | Exn, (None | Some (Push _)), []
+    | Exn, (None | Some (Push _)), _::_ -> assert false
+    | Exn, Some (Pop _), [] -> "raise", None
+    | Exn, Some (Pop _), _::_ -> "raise", None
+  in
+  Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s@ "
+    Trap_action.Option.print trap_action
+    (Flambda_colours.expr_keyword ())
+    name
+    (Flambda_colours.normal ());
+  begin match args with
+  | [] -> ()
+  | args ->
+    Format.fprintf ppf "%a@ " Simple.List.print args
+  end;
+  Format.fprintf ppf "%a@]" Continuation.print k
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -138,6 +151,7 @@ let invariant env ({ k; args; trap_action; } as t) =
   current_stack
   *)
 
+(* CR mshinwell: Check the sort of [k]. *)
 let create ?trap_action k ~args = { k; args; trap_action; }
 
 let goto k =
