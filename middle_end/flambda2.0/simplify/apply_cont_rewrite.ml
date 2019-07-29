@@ -31,9 +31,9 @@ let print ppf { original_params; used_params; used_extra_params;
                 extra_args;
               } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(original_params@ %a)@]@ \
+      @[<hov 1>(original_params@ (%a))@]@ \
       @[<hov 1>(used_params@ %a)@]@ \
-      @[<hov 1>(used_extra_params@ %a)@]@ \
+      @[<hov 1>(used_extra_params@ (%a))@]@ \
       @[<hov 1>(extra_args@ %a)@]\
       )@]"
     KP.List.print original_params

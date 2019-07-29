@@ -336,7 +336,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let body_result = Ident.create_local "body_result" in
     let result_var = Ident.create_local "try_with_result" in
     let body_continuation = Continuation.create () in
-    let handler_continuation = Continuation.create () in
+    let handler_continuation = Continuation.create ~sort:Exn () in
     let poptrap_continuation = Continuation.create () in
     let after_continuation = Continuation.create () in
     let old_try_stack = !try_stack in
@@ -628,8 +628,8 @@ and cps_non_tail_list_core (lams : L.lambda list)
 
 and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
       : Ilambda.function_declaration =
-  let body_cont = Continuation.create () in
-  let body_exn_cont = Continuation.create () in
+  let body_cont = Continuation.create ~sort:Return () in
+  let body_exn_cont = Continuation.create ~sort:Exn () in
   let stub, body =
     match body with
     | Lprim (Pccall { prim_name; _ }, [body], _)
@@ -714,8 +714,8 @@ let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
   try_stack_at_handler := Continuation.Map.empty;
   recursive_static_catches := recursive_static_catches';
   seen_let_mutable := false;
-  let the_end = Continuation.create () in
-  let the_end_exn = Continuation.create () in
+  let the_end = Continuation.create ~sort:Return () in
+  let the_end_exn = Continuation.create ~sort:Exn () in
   let ilam = cps_tail lam the_end the_end_exn in
   let exn_continuation : I.exn_continuation =
     { exn_handler = the_end_exn;

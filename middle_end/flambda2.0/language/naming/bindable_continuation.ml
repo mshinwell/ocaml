@@ -22,7 +22,7 @@ let free_names t = Name_occurrences.singleton_continuation t
 
 let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
 
-let rename _t = create ()
+let rename t = create ~sort:(sort t) ()
 
 let add_to_name_permutation t1 t2 perm =
   Name_permutation.add_continuation perm t1 t2

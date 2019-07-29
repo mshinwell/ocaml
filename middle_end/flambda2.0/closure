@@ -26,3 +26,5 @@ Remaining other parts:
   that won't be run any more -- Vincent says there's a fair amount here
 - Merge in backend exceptions patches
 - Add an option to keep name history
+- Implement functionality to add to the backtrace buffer?  Not sure how much
+  other bookkeeping this needs, to determine what to add.

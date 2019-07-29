@@ -55,10 +55,10 @@ let tupled_function_call_stub
       ~(closure_id : Closure_id.t)
       recursive =
   let dbg = Debuginfo.none in
-  let return_continuation = Continuation.create () in
+  let return_continuation = Continuation.create ~sort:Return () in
   let exn_continuation =
-    Exn_continuation.create ~exn_handler:(Continuation.create ())
-      ~extra_args:[]
+    let exn_handler = Continuation.create ~sort:Exn () in
+    Exn_continuation.create ~exn_handler ~extra_args:[]
   in
   let tuple_param_var =
     Variable.rename ~append:"tupled_stub_param"
@@ -809,7 +809,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let module_symbol = Backend.symbol_for_global' module_ident in
   let module_block_tag = Tag.Scannable.zero in
   let module_block_var = Variable.create "module_block" in
-  let return_cont = Continuation.create () in
+  let return_cont = Continuation.create ~sort:Return () in
   let field_vars =
     List.init size (fun pos ->
       let pos_str = string_of_int pos in

@@ -70,6 +70,12 @@ end)
 let print_with_cache ~cache:_ ppf t = print ppf t
 
 let create ~exn_handler ~extra_args =
+  begin match Continuation.sort exn_handler with
+  | Exn -> ()
+  | _ ->
+    Misc.fatal_errorf "Continuation %a has wrong sort (must be [Exn])"
+      Continuation.print exn_handler
+  end;
   { exn_handler;
     extra_args;
   }

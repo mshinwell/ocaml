@@ -67,7 +67,7 @@ let add t ~extra_param ~extra_args =
           match already_extra_args, extra_args with
           | None, None -> None
           | Some l, None ->
-            Misc.fatal_errorf "Cannot change domain1 %a %i"
+            Misc.fatal_errorf "Cannot change domain (1) %a %i"
               Apply_cont_rewrite_id.print id
               (List.length l)
           | None, Some _ ->
