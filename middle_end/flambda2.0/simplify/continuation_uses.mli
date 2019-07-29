@@ -41,11 +41,7 @@ val add_use
 val env_and_param_types
    : t
   -> definition_typing_env:Flambda_type.Typing_env.t
-  -> Flambda_type.Typing_env.t
-       * (Flambda_type.Typing_env.t * Simple.t * Flambda_type.t)
-           Apply_cont_rewrite_id.Map.t list
-       * (Flambda_type.t list)
-       * Continuation_extra_params_and_args.t
+  -> Continuation_env_and_param_types.t
 
 val number_of_uses : t -> int
 

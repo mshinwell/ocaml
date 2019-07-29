@@ -74,7 +74,7 @@ module type Downwards_env = sig
   val add_parameters
      : t
     -> Kinded_parameter.t list
-    -> arg_types:Flambda_type.t list
+    -> param_types:Flambda_type.t list
     -> t
 
   val add_parameters_with_unknown_types : t -> Kinded_parameter.t list -> t

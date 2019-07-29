@@ -18,26 +18,7 @@
 
 open! Simplify_import
 
-module Make (Continuation_handler_like : sig
-  type t
-
-  val print : Format.formatter -> t -> unit
-
-  val is_exn_handler : t -> bool
-
-  val stub : t -> bool
-
-  val arity : t -> Flambda_arity.t
-
-  type behaviour = private
-    | Unreachable of { arity : Flambda_arity.t; }
-    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
-    | Unknown of { arity : Flambda_arity.t; }
-
-  val behaviour : t -> behaviour
-
-  val real_handler : t -> Continuation_handler.t option
-end) = struct
+module Make (CHL : Continuation_handler_like_intf.S) = struct
   let simplify_body_of_non_recursive_let_cont
         dacc cont cont_handler ~body simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
@@ -47,16 +28,6 @@ end) = struct
       in
       let dacc = DA.map_denv dacc ~f:DE.increment_continuation_scope_level in
       Simplify_expr.simplify_expr dacc body (fun cont_uses_env r ->
-        (* The environment currently in [dacc] is not the correct environment
-           for simplifying the handler. Instead, we must use the environment of
-           the [Let_cont] definition itself, augmented with any lifted constants
-           arising from simplification of the body. (These need to be present
-           since the type(s) of the continuation's parameter(s) may involve the
-           associated symbols.)
-
-           The environment in [dacc] does, however, contain the usage
-           information for the continuation. This will be used to compute the
-           types of the continuation's parameter(s). *)
         let definition_denv =
           DE.increment_continuation_scope_level definition_denv
         in
@@ -64,39 +35,32 @@ end) = struct
           DE.add_lifted_constants definition_denv
             (R.get_lifted_constants r)
         in
-        let arity = Continuation_handler_like.arity cont_handler in
-        (* CR mshinwell: rename arg_types -> param_types *)
-        (* CR mshinwell: Return one list of args, types, etc *)
-        let typing_env, arg_types_by_use_id, arg_types,
-            extra_params_and_args =
-          CUE.continuation_env_and_param_types cont_uses_env
-            ~definition_typing_env:(DE.typing_env definition_denv)
-            cont arity
-        in
-(*
-Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print cont_handler;
-*)
-        let typing_env, param_types, extra_params_and_args =
-          Unbox_continuation_params.make_unboxing_decisions typing_env
-            ~arg_types_by_use_id ~param_types:arg_types extra_params_and_args
-        in
-        let definition_denv =
-          DE.with_typing_environment definition_denv typing_env
-        in
-        let dacc = DA.create definition_denv cont_uses_env r in
-        let original_cont_num_uses = DA.num_continuation_uses dacc cont in
+        let num_uses = DA.num_continuation_uses dacc cont in
         let handler, user_data, uacc =
-          (* Don't simplify the handler if there aren't any uses: otherwise,
-             its code will be deleted but any continuation usage information
-             collected during its simplification will remain. *)
-          if original_cont_num_uses < 1 then
+          match
+            CUE.continuation_env_and_param_types cont_uses_env
+              ~definition_typing_env:(DE.typing_env definition_denv) cont
+          with
+          | No_uses ->
+            (* Don't simplify the handler if there aren't any uses: otherwise,
+               its code will be deleted but any continuation usage information
+               collected during its simplification will remain. *)
             let user_data, uacc =
               k (DA.continuation_uses_env dacc) (DA.r dacc)
             in
             cont_handler, user_data, uacc
-          else
+          | Uses { typing_env; arg_types_by_use_id; param_types;
+                   extra_params_and_args; } ->
+            let typing_env, param_types, extra_params_and_args =
+              Unbox_continuation_params.make_unboxing_decisions typing_env
+                ~arg_types_by_use_id ~param_types extra_params_and_args
+            in
+            let dacc =
+              DA.create (DE.with_typing_environment definition_denv typing_env)
+                cont_uses_env r
+            in
             try
-              simplify_continuation_handler_like dacc ~arg_types:param_types
+              simplify_continuation_handler_like dacc ~param_types
                 ~extra_params_and_args cont cont_handler k
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s simplifying continuation \
@@ -105,7 +69,7 @@ Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print
                   with downwards accumulator:@ %a\n"
                 (Flambda_colours.error ())
                 (Flambda_colours.normal ())
-                Continuation_handler_like.print cont_handler
+                CHL.print cont_handler
                 Continuation_extra_params_and_args.print extra_params_and_args
                 DA.print dacc;
               raise Misc.Fatal_error
@@ -114,8 +78,8 @@ Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print
         let uenv = UA.uenv uacc in
         let uenv_to_return = uenv in
         let uenv =
-          if Continuation_handler_like.is_exn_handler handler then
-            match Continuation_handler_like.behaviour handler with
+          if CHL.is_exn_handler handler then
+            match CHL.behaviour handler with
             | Alias_for { arity; alias_for; } ->
               (* CR mshinwell: More checks here?  e.g. on the arity and
                  ensuring the aliased continuation is an exn handler too *)
@@ -123,7 +87,7 @@ Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print
             | Unreachable { arity; } | Unknown { arity; } ->
               UE.add_continuation uenv cont original_cont_scope_level arity
           else
-            match Continuation_handler_like.behaviour handler with
+            match CHL.behaviour handler with
             | Unreachable { arity; } ->
               UE.add_unreachable_continuation uenv cont
                 original_cont_scope_level arity
@@ -131,10 +95,9 @@ Format.eprintf "unboxing parameters of:@ %a\n%!" Continuation_handler_like.print
               UE.add_continuation_alias uenv cont arity ~alias_for
             | Unknown { arity; } ->
               let can_inline =
-                if original_cont_num_uses <> 1
-                  && not (Continuation_handler_like.stub handler)
+                if num_uses <> 1 && not (CHL.stub handler)
                 then None
-                else Continuation_handler_like.real_handler handler
+                else CHL.real_handler handler
               in
               match can_inline with
               | None ->

@@ -16,29 +16,25 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(** A generic notion of "continuation handler". *)
+
 module type S = sig
   type t
 
-  (** We don't have an interface that insists on adding continuations before
-      seeing their uses. This would be problematic when inserting wrappers,
-      where we have already advanced past the point at which such wrappers would
-      need to be defined, before knowing that a wrapper is needed. *)
+  val print : Format.formatter -> t -> unit
 
-  val record_continuation_use
-     : t
-    -> Continuation.t
-    -> typing_env_at_use:Flambda_type.Typing_env.t
-    -> args:Simple.t list
-    -> arg_types:Flambda_type.t list
-    -> t * Apply_cont_rewrite_id.t
+  val is_exn_handler : t -> bool
 
-  (* CR mshinwell: Add [record_exn_continuation_use]? *)
+  val stub : t -> bool
 
-  val continuation_env_and_param_types
-     : t
-    -> definition_typing_env:Flambda_type.Typing_env.t
-    -> Continuation.t
-    -> Continuation_env_and_param_types.t
+  val arity : t -> Flambda_arity.t
 
-  val num_continuation_uses : t -> Continuation.t -> int
+  type behaviour = private
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
+
+  val behaviour : t -> behaviour
+
+  val real_handler : t -> Flambda.Continuation_handler.t option
 end

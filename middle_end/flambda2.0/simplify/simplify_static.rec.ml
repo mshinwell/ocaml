@@ -408,10 +408,10 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler dacc ~arg_types
+let simplify_return_continuation_handler dacc ~param_types
       ~extra_params_and_args:_ cont
       (return_cont_handler : Return_cont_handler.t) _k =
-  assert (List.compare_lengths arg_types
+  assert (List.compare_lengths param_types
     return_cont_handler.computed_values = 0);
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
@@ -424,7 +424,7 @@ let simplify_return_continuation_handler dacc ~arg_types
           assert (Flambda_kind.equal (T.kind ty) kind);
           DE.add_variable denv var ty)
         denv
-        arg_types return_cont_handler.computed_values)
+        param_types return_cont_handler.computed_values)
   in
   let dacc, static_structure =
     simplify_static_structure dacc return_cont_handler.static_structure

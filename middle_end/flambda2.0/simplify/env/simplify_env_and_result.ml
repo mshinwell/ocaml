@@ -186,21 +186,21 @@ end = struct
     else add_symbol t sym ty
 *)
 
-  let add_parameters t params ~arg_types =
+  let add_parameters t params ~param_types =
     (* CR mshinwell: Cause a fatal error if the lengths don't match *)
-    List.fold_left2 (fun t param arg_type ->
+    List.fold_left2 (fun t param param_type ->
         let var =
           Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
         in
-        add_variable t var arg_type)
+        add_variable t var param_type)
       t
-      params arg_types
+      params param_types
 
   let add_parameters_with_unknown_types t params =
-    let arg_types =
+    let param_types =
       List.map (fun param -> T.unknown (KP.kind param)) params
     in
-    add_parameters t params ~arg_types
+    add_parameters t params ~param_types
 
   let extend_typing_environment t env_extension =
     let typing_env = TE.add_env_extension t.typing_env env_extension in

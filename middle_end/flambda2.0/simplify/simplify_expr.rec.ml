@@ -51,11 +51,11 @@ let rec simplify_let
       expr, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> arg_types:T.t list
+  : 'a. DA.t -> param_types:T.t list
     -> extra_params_and_args:Continuation_extra_params_and_args.t
     -> Continuation.t -> Continuation_handler.t -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
-= fun dacc ~arg_types
+= fun dacc ~param_types
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont cont_handler k ->
   let module CH = Continuation_handler in
@@ -66,14 +66,14 @@ and simplify_one_continuation_handler
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a\n%!"
   Continuation.print cont
   KP.List.print params
-  (Format.pp_print_list T.print) arg_types;
+  (Format.pp_print_list T.print) param_types;
 
 Format.printf "handler:@.%a@."
   Expr.print handler;
 *)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
-          DE.add_parameters denv params ~arg_types)
+          DE.add_parameters denv params ~param_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
 (*
