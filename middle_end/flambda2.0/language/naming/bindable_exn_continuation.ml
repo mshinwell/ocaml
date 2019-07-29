@@ -31,4 +31,5 @@ let add_occurrence_in_terms t occs =
   Name_occurrences.add_continuation occs (exn_handler t)
 
 let rename t =
-  create ~exn_handler:(Continuation.create ()) ~extra_args:(extra_args t)
+  create ~exn_handler:(Continuation.create ~sort:Exn ())
+    ~extra_args:(extra_args t)

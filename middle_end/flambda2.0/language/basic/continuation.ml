@@ -29,10 +29,16 @@ end;
   incr raise_count;
   !raise_count
 
+type sort =
+  | Normal
+  | Return
+  | Exn
+
 type t = {
   id : int;
   (** [id]s are unique within any given compilation unit. *)
-  compilation_unit : Compilation_unit.t
+  compilation_unit : Compilation_unit.t;
+  sort : sort;
 }
 
 include Identifiable.Make (struct
@@ -41,7 +47,12 @@ include Identifiable.Make (struct
   let compare t1 t2 =
     let c = Stdlib.compare t1.id t2.id in
     if c <> 0 then c
-    else Compilation_unit.compare t1.compilation_unit t2.compilation_unit
+    else
+      let c =
+        Compilation_unit.compare t1.compilation_unit t2.compilation_unit
+      in
+      if c <> 0 then c
+      else Stdlib.compare t1.sort t2.sort
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
@@ -65,10 +76,14 @@ include Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
-let create () : t =
+let create ?sort () : t =
+  let sort = Option.value sort ~default:Normal in
   { id = next_raise_count ();
     compilation_unit = Compilation_unit.get_current_exn ();
+    sort;
   }
+
+let sort t = t.sort
 
 let to_int t = t.id
 
