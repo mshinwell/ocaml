@@ -18,6 +18,7 @@ let f c m n x' y' =
     | Some b ->
       to_inline (x + y) (a + b)
 
+(*
 let rec length_aux len = function
     [] -> len
   | _::l -> length_aux (len + 1) l
@@ -104,4 +105,5 @@ let f c m n x' y' =
     | None -> 1
     | Some b ->
       to_inline (x + y) (a + b)
+*)
 *)
