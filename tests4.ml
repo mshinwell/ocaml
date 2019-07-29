@@ -72,3 +72,23 @@ let pr2162_2 = function
   | Some {x; y = 0.} | Some {x = 0.; y = x} -> x +. x
   | _ -> 0.
 *)
+
+external int32_add : int32 -> int32 -> int32 = "%int32_add"
+external int32_sub : int32 -> int32 -> int32 = "%int32_sub"
+external int32_mul : int32 -> int32 -> int32 = "%int32_mul"
+external int32_of_int : int -> int32 = "%int32_of_int"
+
+external int64_add : int64 -> int64 -> int64 = "%int64_add"
+external int64_sub : int64 -> int64 -> int64 = "%int64_sub"
+external int64_mul : int64 -> int64 -> int64 = "%int64_mul"
+external int64_of_int : int -> int64 = "%int64_of_int"
+
+let pr2162_3_as_int64 z x y y' =
+  let pair =
+    if z then (x * 2, (int32_mul y' 4l, int64_mul y 3L))
+    else (x, (2l, int64_add y 0L))
+  in
+  let a, b = pair in
+  let c, d = b in
+  int64_sub (int64_of_int a) d,
+    int32_sub (int32_of_int a) c
