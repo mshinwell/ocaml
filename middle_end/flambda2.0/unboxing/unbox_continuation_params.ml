@@ -47,7 +47,7 @@ module Make (U : Unboxing_spec) = struct
        non-irrelevant [Simple] available for the corresponding field of the
        block. *)
     Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, _arg, arg_type_at_use)
+      (fun id (typing_env_at_use, arg_type_at_use)
            (extra_args, field_types_by_id) ->
         let env_extension =
           let result_var =
@@ -61,7 +61,7 @@ module Make (U : Unboxing_spec) = struct
         | Bottom ->
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, field, T.bottom param_kind)
+              (typing_env_at_use, T.bottom param_kind)
               field_types_by_id
           in
           None, field_types_by_id
@@ -75,7 +75,7 @@ module Make (U : Unboxing_spec) = struct
           let field_type = T.alias_type_of param_kind field in
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, field, field_type)
+              (typing_env_at_use, field_type)
               field_types_by_id
           in
           match extra_args with

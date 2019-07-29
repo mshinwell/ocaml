@@ -71,10 +71,10 @@ let with_continuation_uses_env t continuation_uses_env =
     continuation_uses_env;
   }
 
-let record_continuation_use t cont ~typing_env_at_use ~args ~arg_types =
+let record_continuation_use t cont ~typing_env_at_use ~arg_types =
   let cont_uses_env, id =
     CUE.record_continuation_use t.continuation_uses_env cont
-      ~typing_env_at_use ~args ~arg_types
+      ~typing_env_at_use ~arg_types
   in
   with_continuation_uses_env t cont_uses_env, id
 
