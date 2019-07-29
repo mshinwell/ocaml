@@ -177,17 +177,17 @@ module Make (U : Unboxing_spec) = struct
         T.print block_type
         T.print param_type
     | Ok (param_type, env_extension) ->
-      (* CR mshinwell: We can probably remove [New_let_binding] if we
-         are always going to restrict ourselves to types where the
-         field components are known [Simple]s. *)
+      (* CR mshinwell: We can remove [New_let_binding] if we are always going to
+         restrict ourselves to types where the field components are known
+         [Simple]s. *)
       let typing_env = TE.add_env_extension typing_env env_extension in
       assert (List.compare_lengths fields all_field_types_by_id = 0);
       let typing_env, extra_params_and_args =
         List.fold_left2
           (fun (typing_env, extra_params_and_args) 
                field_type field_types_by_id ->
-            (* For any field of kind [Value] of the parameter being unboxed, then
-               attempt to unbox its contents too. *)
+            (* For any field of kind [Value] of the parameter being unboxed,
+               then attempt to unbox its contents too. *)
             (* CR mshinwell: This recursion should have some kind of limit. *)
             let field_kind = T.kind field_type in
             if not (K.equal field_kind K.value) then
