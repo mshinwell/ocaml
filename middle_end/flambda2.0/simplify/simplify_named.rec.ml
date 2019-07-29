@@ -52,11 +52,6 @@ Format.eprintf "Closure ID %a, done entering closure\n%!"
             (DE.increment_continuation_scope_level denv)
         in
         let denv = DE.add_parameters_with_unknown_types denv params in
-(*
-Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
-  Closure_id.print closure_id
-  T.print (type_of_my_closure closure_id);
-*)
         let denv =
           match pre_simplification_types_of_my_closures.set_of_closures with
           | None -> denv
@@ -74,11 +69,15 @@ Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
               Closure_id.print closure_id
           | ty -> ty
         in
+Format.eprintf "Closure ID %a, adding type_of_my_closure:@ %a\n%!"
+  Closure_id.print closure_id
+  T.print type_of_my_closure;
         let denv =
           DE.add_variable denv
             (Var_in_binding_pos.create my_closure Name_occurrence_kind.normal)
             type_of_my_closure
         in
+Format.eprintf "denv is now:@ %a\n" DE.print denv;
         let denv =
           match pre_simplification_types_of_my_closures.set_of_closures with
           | None -> denv

@@ -37,7 +37,7 @@ let print ppf { k; args; trap_action; } =
     | Return, Some trap_action, _::_ -> "return", Some trap_action
     (* CR mshinwell: See CR on [create], below. *)
     | Exn, (None | Some (Push _)), []
-    | Exn, (None | Some (Push _)), _::_ -> assert false
+    | Exn, (None | Some (Push _)), _::_ -> "apply_cont", trap_action (*assert false*)
     | Exn, Some (Pop _), [] -> "raise", None
     | Exn, Some (Pop _), _::_ -> "raise", None
   in

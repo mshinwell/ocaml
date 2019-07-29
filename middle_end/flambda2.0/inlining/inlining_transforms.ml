@@ -26,6 +26,9 @@ let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
   let newer_rec_info = Some (Rec_info.create ~depth:1 ~unroll_to) in
+Format.eprintf "About to inline: %a, newer_rec_info=%a\n%!"
+  Simple.print callee
+  (Misc.Stdlib.Option.print Rec_info.print) newer_rec_info;
   match Simple.merge_rec_info callee ~newer_rec_info with
   | None -> dacc, Expr.create_invalid ()
   | Some callee_with_rec_info ->
@@ -52,4 +55,5 @@ let inline dacc ~callee ~args function_decl
                   (Named.create_simple callee_with_rec_info)
                   body)))
         in
+Format.eprintf "Result of inlining:@ %a\n%!" Expr.print expr;
         DA.with_denv dacc denv, expr)

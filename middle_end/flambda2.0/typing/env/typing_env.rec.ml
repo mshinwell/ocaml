@@ -464,16 +464,17 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
 Format.eprintf "Aliases before adding equation:@ %a\n%!"
   Aliases.print (aliases t);
 *)
-  let aliases, simple, ty =
+  let aliases, simple, rec_info, ty =
     let aliases = aliases t in
     match Flambda_type0_core.get_alias ty with
-    | None -> aliases, Simple.name name, ty
+    | None -> aliases, Simple.name name, None, ty
     | Some alias_of ->
       let kind = Flambda_type0_core.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
         Alias.create_name kind name binding_time name_occurrence_kind
       in
+      let rec_info = Simple.rec_info alias_of in
       let alias_of =
         let name_occurrence_kind =
           match Simple.descr alias_of with
@@ -483,7 +484,7 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
         alias_of_simple t alias_of name_occurrence_kind
       in
       match Aliases.add aliases alias alias_of with
-      | None, aliases -> aliases, Alias.simple alias_of, ty
+      | None, aliases -> aliases, Alias.simple alias_of, rec_info, ty
       | (Some { canonical_element; alias_of; }), aliases ->
 (* Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
  *   Name.print name
@@ -494,11 +495,22 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
           Flambda_type0_core.alias_type_of kind
             (Alias.simple canonical_element)
         in
-        aliases, Alias.simple alias_of, ty
+        aliases, Alias.simple alias_of, rec_info, ty
   in
-(* Format.eprintf "Now really adding equation %a = %a\n%!"
- *   Simple.print simple
- *   Type_printers.print ty;
+  let ty =
+    match rec_info with
+    | None -> ty
+    | Some rec_info ->
+      match Flambda_type0_core.apply_rec_info ty rec_info with
+      | Bottom -> Flambda_type0_core.bottom (Flambda_type0_core.kind ty)
+      | Ok ty -> ty
+  in
+(*
+Format.eprintf "Now really adding equation %a = %a\n%!"
+  Simple.print simple
+  Type_printers.print ty;
+*)
+(*
  * Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
  *   Simple.print simple
  *   Type_printers.print ty
@@ -638,7 +650,23 @@ let find_name_occurrence_kind_of_simple t simple =
   | Name name -> find_name_occurrence_kind t name
 
 let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
-  let newer_rec_info = Simple.rec_info simple in
+  let newer_rec_info =
+    let newer_rec_info = Simple.rec_info simple in
+    match Simple.descr simple with
+    | Const _ | Discriminant _ -> newer_rec_info
+    | Name name ->
+      let ty = find t name in
+      match Flambda_type0_core.get_alias ty with
+      | None -> newer_rec_info
+      | Some simple ->
+        match Simple.rec_info simple with
+        | None -> newer_rec_info
+        | Some rec_info ->
+          match newer_rec_info with
+          | None -> Some rec_info
+          | Some newer_rec_info ->
+            Some (Rec_info.merge rec_info ~newer:newer_rec_info)
+  in
   let occurrence_kind = find_name_occurrence_kind_of_simple t simple in
   let alias = alias_of_simple t simple occurrence_kind in
   let kind = Alias.kind alias in
@@ -654,6 +682,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
   | None -> Ok None, kind
   | Some alias ->
     let simple = Alias.simple alias in
+    (* CR mshinwell: Check that [simple] has no [Rec_info] on it *)
     match Simple.merge_rec_info simple ~newer_rec_info with
     | None -> Bottom, kind
     | Some simple ->

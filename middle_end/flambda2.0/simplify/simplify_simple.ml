@@ -23,11 +23,14 @@ module TE = T.Typing_env
 
 let simplify_simple dacc simple ~min_occurrence_kind : _ Or_bottom.t * _ =
   let typing_env = DE.typing_env (DA.denv dacc) in
+Format.eprintf "simplify_simple %a\n%!" Simple.print simple;
   match
     TE.get_canonical_simple_with_kind typing_env simple ~min_occurrence_kind
   with
   | Bottom, kind -> Bottom, T.bottom kind
-  | Ok (Some simple), kind -> Ok simple, T.alias_type_of kind simple
+  | Ok (Some simple), kind ->
+Format.eprintf "...canonical_simple %a\n%!" Simple.print simple;
+Ok simple, T.alias_type_of kind simple
   | Ok None, _kind ->
     Misc.fatal_errorf "No canonical [Simple] for %a exists at the \
         requested occurrence kind (%a).  Downwards accumulator:@ %a"
