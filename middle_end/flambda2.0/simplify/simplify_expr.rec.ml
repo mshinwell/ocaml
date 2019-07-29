@@ -62,22 +62,28 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
+(*
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a@ "
   Continuation.print cont
   KP.List.print params
   (Format.pp_print_list T.print) param_types;
 Format.eprintf "handler:@.%a@."
   Expr.print handler;
+*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~param_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
+(*
 Format.eprintf "handler %a after simplify:@.%a@."
   Continuation.print cont
   Expr.print handler;
+*)
       let free_names = Expr.free_names handler in
+(*
 Format.eprintf "free names:@ %a\n%!" Name_occurrences.print free_names;
+*)
       let used_params =
         List.filter (fun param ->
             Name_occurrences.mem_var free_names (KP.var param))
@@ -90,7 +96,9 @@ Format.eprintf "free names:@ %a\n%!" Name_occurrences.print free_names;
       in
       let handler =
         let params = used_extra_params @ used_params in
+(*
 Format.eprintf "Final params list:@ %a\n%!" KP.List.print params;
+*)
         CH.with_params_and_handler cont_handler
           (CPH.create params ~handler)
       in
@@ -101,7 +109,9 @@ Format.eprintf "Final params list:@ %a\n%!" KP.List.print params;
           ~extra_args:extra_params_and_args.extra_args
           ~used_extra_params:(KP.Set.of_list used_extra_params)
       in
+(*
 Format.eprintf "Rewrite:@ %a\n%!" Apply_cont_rewrite.print rewrite;
+*)
       let uacc =
         UA.map_uenv uacc ~f:(fun uenv ->
           UE.add_apply_cont_rewrite uenv cont rewrite)
