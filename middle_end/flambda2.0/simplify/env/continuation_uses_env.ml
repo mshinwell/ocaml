@@ -53,20 +53,11 @@ let record_continuation_use t cont ~typing_env_at_use ~args ~arg_types =
   in
   t, id
 
-let continuation_env_and_param_types t ~definition_typing_env cont arity =
+let continuation_env_and_param_types t ~definition_typing_env cont
+      : Continuation_env_and_param_types.t =
   match Continuation.Map.find cont t.continuation_uses with
-  | exception Not_found ->
-    let arg_types =
-      (* CR mshinwell: Move to [Flambda_type] *)
-      List.map (fun kind -> T.bottom kind) arity
-    in
-    definition_typing_env, assert false, arg_types, Continuation_extra_params_and_args.empty
-  | uses ->
-(*
-    Format.printf "USE: %a@."
-      Continuation_uses.print uses;
-*)
-    Continuation_uses.env_and_param_types uses ~definition_typing_env
+  | exception Not_found -> No_uses
+  | uses -> Continuation_uses.env_and_param_types uses ~definition_typing_env
 
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with

@@ -101,7 +101,8 @@ Format.eprintf "For %a, recording use:@ %a\n%!"
     raise Misc.Fatal_error
   end
 
-let env_and_param_types t ~definition_typing_env =
+let env_and_param_types t ~definition_typing_env
+      : Continuation_env_and_param_types.t =
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
   in
@@ -128,11 +129,7 @@ Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typ
       (Use.arg_types use)
   in
   match t.uses with
-  | [] ->
-    definition_typing_env,
-      List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity,
-      List.map (fun kind -> T.unknown kind) t.arity,
-      Continuation_extra_params_and_args.empty
+  | [] -> No_uses
   | (use :: uses) as all_uses ->
     let use_envs_with_ids_and_extensions =
       List.map (fun use ->
@@ -172,7 +169,7 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
         first_param_types
         uses
     in
-    let arg_types_by_id =
+    let arg_types_by_use_id =
       List.fold_left (fun args use ->
           List.map2 (fun arg_map (arg, arg_type) ->
               let env = Use.typing_env_at_use use in
@@ -183,7 +180,12 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
         all_uses
     in
-    env, arg_types_by_id, param_types, extra_cse_bindings
+    Uses {
+      typing_env = env;
+      arg_types_by_use_id;
+      param_types;
+      extra_params_and_args = extra_cse_bindings;
+    }
 
 let number_of_uses t = List.length t.uses
 

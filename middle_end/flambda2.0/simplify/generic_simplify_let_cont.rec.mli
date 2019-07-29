@@ -23,33 +23,14 @@
     a return continuation, in addition to normal [Let_cont] constructs.
 *)
 
-module Make (Continuation_handler_like : sig
-  type t
-
-  val print : Format.formatter -> t -> unit
-
-  val is_exn_handler : t -> bool
-
-  val stub : t -> bool
-
-  val arity : t -> Flambda_arity.t
-
-  type behaviour = private
-    | Unreachable of { arity : Flambda_arity.t; }
-    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
-    | Unknown of { arity : Flambda_arity.t; }
-
-  val behaviour : t -> behaviour
-
-  val real_handler : t -> Flambda.Continuation_handler.t option
-end) : sig
+module Make (Continuation_handler_like : Continuation_handler_like_intf.S) : sig
   val simplify_body_of_non_recursive_let_cont
      : Downwards_acc.t
     -> Continuation.t
     -> Continuation_handler_like.t
     -> body:Flambda.Expr.t
     -> (Downwards_acc.t
-      -> arg_types:Flambda_type.t list
+      -> param_types:Flambda_type.t list
       -> extra_params_and_args:Continuation_extra_params_and_args.t
       -> Continuation.t
       -> Continuation_handler_like.t

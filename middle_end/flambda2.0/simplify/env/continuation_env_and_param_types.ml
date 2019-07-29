@@ -16,29 +16,15 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
-  type t
+module T = Flambda_type
+module TE = Flambda_type.Typing_env
 
-  (** We don't have an interface that insists on adding continuations before
-      seeing their uses. This would be problematic when inserting wrappers,
-      where we have already advanced past the point at which such wrappers would
-      need to be defined, before knowing that a wrapper is needed. *)
-
-  val record_continuation_use
-     : t
-    -> Continuation.t
-    -> typing_env_at_use:Flambda_type.Typing_env.t
-    -> args:Simple.t list
-    -> arg_types:Flambda_type.t list
-    -> t * Apply_cont_rewrite_id.t
-
-  (* CR mshinwell: Add [record_exn_continuation_use]? *)
-
-  val continuation_env_and_param_types
-     : t
-    -> definition_typing_env:Flambda_type.Typing_env.t
-    -> Continuation.t
-    -> Continuation_env_and_param_types.t
-
-  val num_continuation_uses : t -> Continuation.t -> int
-end
+type t =
+  | No_uses
+  | Uses of {
+      typing_env : TE.t;
+      arg_types_by_use_id : 
+        (TE.t * Simple.t * T.t) Apply_cont_rewrite_id.Map.t list;
+      param_types : T.t list;
+      extra_params_and_args : Continuation_extra_params_and_args.t;
+    }
