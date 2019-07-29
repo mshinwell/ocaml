@@ -212,7 +212,9 @@ and simplify_direct_full_application
       match Inlining_decision.Call_site_decision.can_inline decision with
       | Do_not_inline -> None
       | Inline { unroll_to; } ->
+(*
 Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
+*)
         let dacc, inlined =
           Inlining_transforms.inline dacc ~callee
             ~args function_decl
@@ -230,7 +232,6 @@ Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
       DA.record_continuation_use dacc (Apply.continuation apply)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
-        ~args
     in
     let dacc, _id =
       DA.record_continuation_use dacc
@@ -238,7 +239,6 @@ Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
-        ~args
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let return_cont =
@@ -486,7 +486,6 @@ and simplify_function_call_where_callee's_type_unavailable
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
-      ~args:(Apply.args apply)
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -504,7 +503,6 @@ and simplify_function_call_where_callee's_type_unavailable
     let dacc, _id =
       DA.record_continuation_use dacc cont ~typing_env_at_use
         ~arg_types:(T.unknown_types_from_arity return_arity)
-        ~args:(Apply.args apply)
     in
     dacc
   in
@@ -514,7 +512,6 @@ and simplify_function_call_where_callee's_type_unavailable
       let dacc, _id =
         DA.record_continuation_use dacc (Apply.continuation apply)
           ~typing_env_at_use ~arg_types:[T.any_value ()]
-          ~args:(Apply.args apply)
       in
       Call_kind.indirect_function_call_unknown_arity (), dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
@@ -664,7 +661,6 @@ and simplify_method_call
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
-      ~args:(Misc.fatal_error "TODO HERE")
   in
   let dacc, _id =
     DA.record_continuation_use dacc
@@ -672,7 +668,6 @@ and simplify_method_call
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
-      ~args:(Misc.fatal_error "TODO HERE")
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
@@ -714,7 +709,6 @@ and simplify_c_call
     DA.record_continuation_use dacc (Apply.continuation apply)
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
-      ~args:(Misc.fatal_error "TODO HERE")
   in
   let dacc, _id =
     (* CR mshinwell: Try to factor out these stanzas, here and above. *)
@@ -723,7 +717,6 @@ and simplify_c_call
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
-      ~args:(Misc.fatal_error "TODO HERE")
   in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
@@ -766,7 +759,6 @@ and simplify_apply_cont
         (AC.continuation apply_cont)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
-        ~args
     in
 (*
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
@@ -953,7 +945,6 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               DA.record_continuation_use dacc cont
                 ~typing_env_at_use
                 ~arg_types:[]
-                ~args:[]
             in
             let arms = Discriminant.Map.add arm (cont, id) arms in
             arms, dacc)

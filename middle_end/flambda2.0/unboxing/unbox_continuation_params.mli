@@ -20,8 +20,7 @@ open! Simplify_import
 
 val make_unboxing_decisions
    : TE.t
-  -> arg_types_by_use_id:(TE.t * Simple.t * T.t)
-       Apply_cont_rewrite_id.Map.t list
+  -> arg_types_by_use_id:(TE.t * T.t) Apply_cont_rewrite_id.Map.t list
   -> param_types:T.t list
   -> Continuation_extra_params_and_args.t
   -> TE.t * (T.t list) * Continuation_extra_params_and_args.t

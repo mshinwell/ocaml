@@ -34,7 +34,6 @@ val add_use
    : t
   -> typing_env_at_use:Flambda_type.Typing_env.t
   -> Apply_cont_rewrite_id.t
-  -> args:Simple.t list
   -> arg_types:Flambda_type.t list
   -> t
 
