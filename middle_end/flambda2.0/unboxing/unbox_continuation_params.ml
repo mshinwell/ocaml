@@ -29,8 +29,6 @@ module type Unboxing_spec = sig
   val project_field : block:Simple.t -> index:Simple.t -> P.t
 end
 
-let add_projections = false
-
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
         ~arg_types_by_use_id =
@@ -45,17 +43,15 @@ module Make (U : Unboxing_spec) = struct
         ~n:(Targetint.OCaml.of_int (index + 1))
         ~field_n_minus_one:field_var
     in
-Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
-    (* Don't unbox parameters unless, at all use sites, there is
-       a non-irrelevant [Simple] available for the corresponding
-       field of the block. *)
+    (* Don't unbox parameters unless, at all use sites, there is a
+       non-irrelevant [Simple] available for the corresponding field of the
+       block. *)
     Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, arg, arg_type_at_use)
+      (fun id (typing_env_at_use, _arg, arg_type_at_use)
            (extra_args, field_types_by_id) ->
         let env_extension =
           let result_var =
-            Var_in_binding_pos.create field_var
-              Name_occurrence_kind.normal
+            Var_in_binding_pos.create field_var Name_occurrence_kind.normal
           in
           T.meet_shape typing_env_at_use arg_type_at_use
             ~shape ~result_var ~result_kind:param_kind
@@ -77,9 +73,6 @@ Format.eprintf "Index %d, shape %a\n%!" index T.print shape;
             TE.add_env_extension typing_env_at_use env_extension
           in
           let field_type = T.alias_type_of param_kind field in
-Format.eprintf "field type is %a, env is now:@ %a\n%!"
-  T.print field_type
-  TE.print typing_env_at_use;
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
               (typing_env_at_use, field, field_type)
@@ -94,50 +87,22 @@ Format.eprintf "field type is %a, env is now:@ %a\n%!"
                 field
             in
             assert (Flambda_kind.equal param_kind kind');
-            (* CR pchambart: This shouldn't add another load if
-               there is already one in the list of parameters
-
+            (* CR-someday pchambart: This shouldn't add another load if
+               there is already one in the list of parameters.  That is,
                  apply_cont k (a, b) a
                  where k x y
-
-               should become
-
+               should become:
                  apply_cont k (a, b) a b
                  where k x y b'
-
-               not
-
+               not:
                  apply_cont k (a, b) a a b
                  where k x y a' b'
+               mshinwell: We never add any loads now, but might in the future.
             *)
-            let no_simple () =
-Format.eprintf "No canonical simple\n%!";
-              if not add_projections then None, field_types_by_id
-              else
-                let bound_to =
-                  Var_in_binding_pos.create
-                    (Variable.create (Printf.sprintf "unboxed%d" index))
-                    Name_occurrence_kind.normal
-                in
-                let index =
-                  Immediate.int (Targetint.OCaml.of_int index)
-                in
-                let prim =
-                  U.project_field ~block:arg
-                    ~index:(Simple.const (Tagged_immediate index))
-                in
-                let extra_arg : EA.t = New_let_binding (bound_to, prim) in
-                let extra_args =
-                  Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-                in
-                Some extra_args, field_types_by_id
-            in
             match canonical_simple with
-            | Bottom -> None, field_types_by_id
-            | Ok None -> no_simple ()
+            | Bottom | Ok None -> None, field_types_by_id
             | Ok (Some simple) ->
-              Format.eprintf "Canonical simple %a\n%!" Simple.print simple;
-              if Simple.equal simple field then no_simple ()
+              if Simple.equal simple field then None, field_types_by_id
               else
                 let extra_arg : EA.t = Already_in_scope simple in
                 let extra_args =
@@ -169,11 +134,9 @@ Format.eprintf "No canonical simple\n%!";
           in
           match extra_args with
           | None ->
-  Format.eprintf "index %d has no extra param\n%!" index;
             index + 1, param_type :: param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args
           | Some extra_args ->
-  Format.eprintf "index %d has extra param %a\n%!" index KP.print extra_param;
             let extra_params_and_args =
               EPA.add extra_params_and_args ~extra_param ~extra_args
             in
@@ -230,7 +193,6 @@ Format.eprintf "No canonical simple\n%!";
             if not (K.equal field_kind K.value) then
               typing_env, extra_params_and_args
             else begin
-  Format.eprintf "Recursive unbox_value.\n%!";
               let typing_env, _, extra_params_and_args =
                 unbox_value typing_env
                   ~arg_types_by_use_id:field_types_by_id
@@ -253,42 +215,102 @@ module Block_spec : Unboxing_spec = struct
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
 
-module Float_spec : Unboxing_spec = struct
+module Make_unboxed_number_spec (N : sig
+  val name : string
+  val tag : Tag.t
+
+  val unboxed_kind : K.t
+  val boxable_number_kind : K.Boxable_number.t
+
+  val box : T.t -> T.t
+end) = struct
   let make_boxed_value tag ~fields =
-    assert (Tag.equal tag Tag.double_tag);
+    assert (Tag.equal tag N.tag);
     match fields with
-    | [field] -> T.box_float field
-    | _ -> Misc.fatal_error "Boxed floats only have one field"
+    | [field] -> N.box field
+    | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
 
   let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
     if not (Targetint.OCaml.equal n Targetint.OCaml.one) then begin
-       Misc.fatal_error "Boxed floats only have one field"
+       Misc.fatal_errorf "Boxed %ss only have one field" N.name
     end;
-    T.box_float (T.alias_type_of K.naked_float (Simple.var field_n_minus_one))
+    N.box (T.alias_type_of N.unboxed_kind (Simple.var field_n_minus_one))
 
   let project_field ~block ~index:_ =
-    P.Unary (Unbox_number Naked_float, block)
+    P.Unary (Unbox_number N.boxable_number_kind, block)
 end
+
+module Float_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "float"
+  let tag = Tag.double_tag
+  let unboxed_kind = K.naked_float
+  let boxable_number_kind = K.Boxable_number.Naked_float
+  let box = T.box_float
+end)
+
+module Int32_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "int32"
+  let tag = Tag.custom_tag
+  let unboxed_kind = K.naked_int32
+  let boxable_number_kind = K.Boxable_number.Naked_int32
+  let box = T.box_int32
+end)
+
+module Int64_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "int64"
+  let tag = Tag.custom_tag
+  let unboxed_kind = K.naked_int64
+  let boxable_number_kind = K.Boxable_number.Naked_int64
+  let box = T.box_int64
+end)
+
+module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "nativeint"
+  let tag = Tag.custom_tag
+  let unboxed_kind = K.naked_nativeint
+  let boxable_number_kind = K.Boxable_number.Naked_nativeint
+  let box = T.box_nativeint
+end)
 
 module Blocks = Make (Block_spec)
 module Floats = Make (Float_spec)
+module Int32s = Make (Int32_spec)
+module Int64s = Make (Int64_spec)
+module Nativeints = Make (Nativeint_spec)
+
+let unboxed_number_decisions = [
+  T.prove_is_a_boxed_float, Floats.unbox_one_parameter,
+    Tag.double_tag, K.naked_float;
+  T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter,
+    Tag.custom_tag, K.naked_int32;
+  T.prove_is_a_boxed_int64, Int64s.unbox_one_parameter,
+    Tag.custom_tag, K.naked_int64;
+  T.prove_is_a_boxed_nativeint, Nativeints.unbox_one_parameter,
+    Tag.custom_tag, K.naked_nativeint;
+]
 
 let rec make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
       extra_params_and_args =
-Format.eprintf "make_unboxing_decision, param_type %a\n%!" T.print param_type;
   match T.prove_unique_tag_and_size typing_env param_type with
   | Proved (tag, size) ->
     Blocks.unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
       extra_params_and_args ~unbox_value:make_unboxing_decision
       tag size K.value
   | Wrong_kind | Invalid | Unknown ->
-    match T.prove_is_a_boxed_float typing_env param_type with
-    | Proved () ->
-      Floats.unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~unbox_value:make_unboxing_decision
-        Tag.double_tag Targetint.OCaml.one K.naked_float
-    | Wrong_kind | Invalid | Unknown ->
-      typing_env, param_type, extra_params_and_args
+    let rec try_unboxing = function
+      | [] -> typing_env, param_type, extra_params_and_args
+      | (prover, unboxer, tag, kind) :: decisions ->
+        let proof : _ T.proof_allowing_kind_mismatch =
+          prover typing_env param_type
+        in
+        match proof with
+        | Proved () ->
+          unboxer typing_env ~arg_types_by_use_id ~param_type
+            extra_params_and_args ~unbox_value:make_unboxing_decision
+            tag Targetint.OCaml.one kind
+        | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+    in
+    try_unboxing unboxed_number_decisions
 
 let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
       extra_params_and_args =

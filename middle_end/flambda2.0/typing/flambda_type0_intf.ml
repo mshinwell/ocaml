@@ -440,6 +440,21 @@ module type S = sig
     -> t
     -> unit proof_allowing_kind_mismatch
 
+  val prove_is_a_boxed_int32
+     : Typing_env.t
+    -> t
+    -> unit proof_allowing_kind_mismatch
+
+  val prove_is_a_boxed_int64
+     : Typing_env.t
+    -> t
+    -> unit proof_allowing_kind_mismatch
+
+  val prove_is_a_boxed_nativeint
+     : Typing_env.t
+    -> t
+    -> unit proof_allowing_kind_mismatch
+
   val prove_boxed_floats : Typing_env.t -> t -> Float.Set.t proof
   val prove_boxed_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
   val prove_boxed_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
