@@ -775,22 +775,22 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
 (*
 Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
 *)
-    let _dacc, apply_cont_expr, apply_cont, add_extra_lets, args =
+    let apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
       | None ->
-        dacc, Expr.create_apply_cont apply_cont, apply_cont,
-          (fun expr -> expr), Apply_cont.args apply_cont
+        Expr.create_apply_cont apply_cont, apply_cont,
+          Apply_cont.args apply_cont
       | Some rewrite ->
 (*
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
 *)
-        Apply_cont_rewrite.rewrite_use ~simplify_named:Simplify_named.simplify_named dacc rewrite rewrite_id apply_cont
+        Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
 (*
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
@@ -863,8 +863,7 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
                 (List.combine params args)
             in
             let expr =
-              add_extra_lets (
-                Expr.bind_parameters ~bindings:params_and_args ~body:handler)
+              Expr.bind_parameters ~bindings:params_and_args ~body:handler
             in
             expr, user_data, uacc)
 
@@ -970,11 +969,8 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
               new_let_conts, arms
             | Some rewrite ->
               (* CR mshinwell: check no parameters were deleted (!) *)
-              let _dacc, apply_cont_expr, apply_cont, _add_extra_lets, _args =
-                (* CR pchambart: This might not be the right dacc *)
-                Apply_cont_rewrite.rewrite_use
-                  ~simplify_named:Simplify_named.simplify_named dacc
-                  rewrite id (Apply_cont.goto cont)
+              let apply_cont_expr, apply_cont, _args =
+                Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
               in
               (* CR mshinwell: try to remove this next bit? *)
               match Apply_cont.to_goto apply_cont with
