@@ -102,6 +102,7 @@ let simplify_or_variable dacc type_for_const
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
       ~set_of_closures_symbol
       ~closure_symbols ~closure_elements_and_types =
+Format.eprintf "Simplify_static.simplify_set_of_closures\n%!";
   let closure_elements, closure_element_types =
     match closure_elements_and_types with
     | Some (closure_elements, closure_element_types) ->
@@ -171,7 +172,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
         let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
         let function_decl_type =
           T.create_inlinable_function_declaration func_decl
-            (Rec_info.create ~depth:1 ~unroll_to:None)
+            (Rec_info.create ~depth:0 ~unroll_to:None)
         in
         let closure_type =
           T.closure closure_id function_decl_type closure_element_types
@@ -190,8 +191,19 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
   let pre_simplification_types_of_my_closures
         : Simplify_named.pre_simplification_types_of_my_closures =
     let closure_types =
-      Closure_id.Map.map (fun (closure_symbol, _closure_type) ->
-          T.alias_type_of K.value (Simple.symbol closure_symbol))
+      Closure_id.Map.mapi (fun closure_id (closure_symbol, _closure_type) ->
+          (* CR mshinwell: Maybe [merge_rec_info] shouldn't cause an error
+             if the Simple isn't a Name? *)
+          match
+            Simple.merge_rec_info (Simple.symbol closure_symbol)
+              ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to:None))
+          with
+          | None -> assert false
+          | Some closure_symbol ->
+Format.eprintf "Closure id %a has symbol %a\n%!"
+  Closure_id.print closure_id
+  Simple.print closure_symbol;
+            T.alias_type_of K.value closure_symbol)
         closure_symbols_and_types
     in
     { set_of_closures = None;

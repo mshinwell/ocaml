@@ -212,6 +212,7 @@ and simplify_direct_full_application
       match Inlining_decision.Call_site_decision.can_inline decision with
       | Do_not_inline -> None
       | Inline { unroll_to; } ->
+Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
         let dacc, inlined =
           Inlining_transforms.inline dacc ~callee
             ~args function_decl
