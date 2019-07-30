@@ -397,7 +397,7 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
 let invariant_for_new_equation t name ty =
   let defined_names = domain t in
   let free_names = Type_free_names.free_names ty in
-  if not (Name_occurrences.subset free_names defined_names) then begin
+  if not (Name_occurrences.subset_domain free_names defined_names) then begin
     let unbound_names = Name_occurrences.diff free_names (domain t) in
     Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names@ (%a):@ %a"
       Name.print name
@@ -434,13 +434,16 @@ Format.eprintf "Adding equation %a : %a\n%!"
 *)
   let name_occurrence_kind = find_name_occurrence_kind t name in
   let free_names = Type_free_names.free_names ty in
-  if not (Name_occurrences.subset free_names (domain t)) then begin
+  if not (Name_occurrences.subset_domain free_names (domain t))
+  then begin
     let unbound_names = Name_occurrences.diff free_names (domain t) in
     Misc.fatal_errorf "Cannot add equation, involving unbound names@ (%a),@ on \
-        name@ %a =@ %a@ in environment:@ %a"
+        name@ %a =@ %a@ (free names %a) in environment with domain %a:@ %a"
       Name_occurrences.print unbound_names
       Name.print name
       Type_printers.print ty
+      Name_occurrences.print free_names
+      Name_occurrences.print (domain t)
       print t
   end;
   begin match Flambda_type0_core.get_alias ty with
@@ -553,18 +556,6 @@ let add_env_extension_from_level t level : t =
   in
   let t =
     Name.Map.fold (fun name ty t ->
-        if !Clflags.flambda_invariant_checks then begin
-          let free_names = Type_free_names.free_names ty in
-          let free_vars = Name_occurrences.variables free_names in
-          let defined = Name_occurrences.variables (domain t) in
-          if not (Variable.Set.subset free_vars defined) then begin
-            Misc.fatal_errorf "Cannot add equation %a = %a@ to typing \
-                environment since some names are unbound:@ %a"
-              Name.print name
-              Type_printers.print ty
-              print t
-          end
-        end;
         (* CR mshinwell: Do we actually need the "more precise" check here?
             Shouldn't the extensions always be as or more precise? *)
         add_equation t name ty)

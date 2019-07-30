@@ -148,44 +148,9 @@ end) = struct
       N.Map.empty
 
   let diff t1 t2 =
-    let t =
-      N.Map.merge (fun _name for_one_name1 for_one_name2 ->
-          let for_one_name1 =
-            Option.value for_one_name1 ~default:For_one_name.empty
-          in
-          let for_one_name2 =
-            Option.value for_one_name2 ~default:For_one_name.empty
-          in
-          let by_kind1 = For_one_name.by_kind for_one_name1 in
-          let by_kind2 = For_one_name.by_kind for_one_name2 in
-          let by_kind =
-            Kind.Map.merge (fun _kind count1 count2 ->
-                let count1 = Option.value count1 ~default:0 in
-                let count2 = Option.value count2 ~default:0 in
-                let count = count1 - count2 in
-                if count < 1 then None
-                else Some count)
-              by_kind1 by_kind2
-          in
-          if Kind.Map.is_empty by_kind then begin
-            None
-          end else begin
-            let num_occurrences =
-              For_one_name.num_occurrences for_one_name1
-                - For_one_name.num_occurrences for_one_name2
-            in
-            assert (num_occurrences > 0);
-            let for_one_name : For_one_name.t =
-              { num_occurrences;
-                by_kind;
-              }
-            in
-            Some for_one_name
-          end)
-        t1 t2
-    in
-    invariant t;
-    t
+    N.Set.fold (fun name t -> N.Map.remove name t)
+      (N.Map.keys t2)
+      t1
 
   let union t1 t2 =
     let t =
@@ -223,9 +188,9 @@ end) = struct
     invariant t;
     t
 
-  let subset t1 t2 = is_empty (diff t1 t2)
-
   let keys t = N.Map.keys t
+
+  let subset_domain t1 t2 = N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
 
   let mem t name = N.Map.mem name t
 
@@ -410,10 +375,10 @@ let union t1 t2 =
     ~for_symbols:For_symbols.union
     t1 t2
 
-let subset t1 t2 =
-  binary_predicate ~for_variables:For_variables.subset
-    ~for_continuations:For_continuations.subset
-    ~for_symbols:For_symbols.subset
+let subset_domain t1 t2 =
+  binary_predicate ~for_variables:For_variables.subset_domain
+    ~for_continuations:For_continuations.subset_domain
+    ~for_symbols:For_symbols.subset_domain
     t1 t2
 
 let rec union_list ts =
