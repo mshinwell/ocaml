@@ -332,6 +332,10 @@ module type S = sig
      : flambda_type Closure_id.Map.t
     -> flambda_type
 
+  val at_least_these_closures
+     : flambda_type Closure_id.Map.t
+    -> flambda_type
+
   val array_of_length : length:ty_value -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
