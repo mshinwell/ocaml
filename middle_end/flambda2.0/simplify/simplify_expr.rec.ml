@@ -226,7 +226,12 @@ Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
         Some (dacc, inlined)
   in
   match inlined with
-  | Some (dacc, inlined) -> simplify_expr dacc inlined k
+  | Some (dacc, inlined) ->
+(*
+Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
+  (DE.get_inlining_depth_increment (DA.denv dacc));
+*)
+    simplify_expr dacc inlined k
   | None ->
     let dacc, _id =
       DA.record_continuation_use dacc (Apply.continuation apply)
@@ -623,6 +628,12 @@ and simplify_apply_shared dacc apply : _ Or_bottom.t =
         DE.get_inlining_depth_increment (DA.denv dacc)
           + Apply.inlining_depth apply
       in
+(*
+Format.eprintf "Apply of %a: apply's inlining depth %d, DE's delta %d\n%!"
+  Simple.print callee
+  (Apply.inlining_depth apply)
+  (DE.get_inlining_depth_increment (DA.denv dacc));
+*)
       let apply =
         Apply.create ~callee
           ~continuation:(Apply.continuation apply)
@@ -910,10 +921,17 @@ and simplify_switch
                       in the [tags_to_sizes] map:@ %a"
                     Discriminant.print arm
                     Switch.print switch
-                | size ->
+                | _size ->
+                  (* CR mshinwell: Should [Tag] switches actually not be
+                     working on the output of [Get_tag], and instead take
+                     the block?  Otherwise we're not going to learn what the
+                     block tag is from the [Switch]. *)
+                  T.this_discriminant arm
+(*
                   let size = Targetint.OCaml.to_int size in
                   let fields = List.init size (fun _ -> T.any_value ()) in
                   T.immutable_block (Tag.Scannable.to_tag tag) ~fields
+*)
               end
             | (Int | Is_int | Tag), _ ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"

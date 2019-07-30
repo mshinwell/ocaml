@@ -67,7 +67,7 @@ let simplify_make_block dacc _prim dbg
       let ty =
         match mutable_or_immutable with
         | Immutable -> T.immutable_block_of_values tag ~fields
-        | Mutable -> Misc.fatal_error "Not yet implemented"
+        | Mutable -> T.any_value ()
       in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
       Reachable.reachable term, env_extension, dacc
