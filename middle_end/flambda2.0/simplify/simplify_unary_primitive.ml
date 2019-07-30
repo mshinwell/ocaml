@@ -47,7 +47,7 @@ let simplify_move_within_set_of_closures ~move_from ~move_to
   in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.set_of_closures_containing_at_least closures)
+    ~shape:(T.at_least_these_closures closures)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var closure_element dacc ~original_term

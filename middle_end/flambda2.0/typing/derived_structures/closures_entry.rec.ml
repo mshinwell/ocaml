@@ -42,7 +42,7 @@ let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let equal _ _ = Misc.fatal_error "Not yet implemented"
 
-let widen t ~to_match:_ = t  (* XXX Think about this *)
+let widen _t ~to_match:_ = assert false  (* XXX Think about this *)
 
 module Meet_value = Meet_and_join_value.Make (Lattice_ops.For_meet)
 module Join_value = Meet_and_join_value.Make (Lattice_ops.For_join)

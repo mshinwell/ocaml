@@ -54,7 +54,14 @@ let erase_aliases_ty env ~bound_name ~already_seen
     | Ok None -> (* CR mshinwell: Can this happen? *)
       Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
     | Ok (Some simple) ->
+(*
+Format.eprintf "checking canonical simple %a.  allowed? %b  mem? %b\n%!"
+  Simple.print simple
+  (Simple.allowed simple ~allowed)
+  (Simple.Set.mem simple already_seen);
+*)
       if Simple.allowed simple ~allowed then Equals simple
+      else if Simple.Set.mem simple already_seen then No_alias Unknown
       else
         let unknown_or_join =
           Typing_env.expand_head_ty env ~force_to_kind ~print_ty ~apply_rec_info
@@ -70,6 +77,11 @@ let erase_aliases_of_kind_naked_number (type n) _env ~bound_name:_
 
 let rec erase_aliases env ~bound_name ~already_seen ~allowed
       (t : Flambda_types.t) : Flambda_types.t =
+(*
+Format.eprintf "erase_aliases (allowed %a) %a\n%!"
+  Variable.Set.print allowed
+  Type_printers.print t;
+*)
   match t with
   | Value ty ->
     Value (

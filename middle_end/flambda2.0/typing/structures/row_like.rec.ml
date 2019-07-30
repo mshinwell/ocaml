@@ -25,6 +25,10 @@ module Make
     type t = Tag.t * Index.t
     include Identifiable.S with type t := t
   end)
+  (Tag_or_unknown_and_index : sig
+    type t = Tag.t Or_unknown.t * Index.t
+    include Identifiable.S with type t := t
+  end)
   (Maps_to : Row_like_maps_to_intf.S
     with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
@@ -34,7 +38,7 @@ module Make
 struct
   type t = {
     known : Maps_to.t Tag_and_index.Map.t;
-    at_least : Maps_to.t Index.Map.t;
+    at_least : Maps_to.t Tag_or_unknown_and_index.Map.t;
   }
 
   let print_with_cache ~cache ppf ({ known; at_least } : t) =
@@ -44,7 +48,8 @@ struct
          @[<hov 1>(at_least@ %a)@]\
          )@]"
       (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
-      (Index.Map.print (Maps_to.print_with_cache ~cache)) at_least
+      (Tag_or_unknown_and_index.Map.print (Maps_to.print_with_cache ~cache))
+      at_least
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -53,22 +58,22 @@ struct
 
   let create_bottom () =
     { known = Tag_and_index.Map.empty;
-      at_least = Index.Map.empty;
+      at_least = Tag_or_unknown_and_index.Map.empty;
     }
 
   let create_exactly tag index maps_to =
     { known = Tag_and_index.Map.singleton (tag, index) maps_to;
-      at_least = Index.Map.empty;
+      at_least = Tag_or_unknown_and_index.Map.empty;
     }
 
   let create_exactly_multiple known =
     { known;
-      at_least = Index.Map.empty;
+      at_least = Tag_or_unknown_and_index.Map.empty;
     }
 
   let create_at_least index maps_to =
     { known = Tag_and_index.Map.empty;
-      at_least = Index.Map.singleton index maps_to;
+      at_least = Tag_or_unknown_and_index.Map.singleton index maps_to;
     }
 
   let create_at_least_multiple at_least =
@@ -88,8 +93,8 @@ struct
     | None | Some false -> false
     | Some true ->
       match
-        Index.Map.fold2_stop_on_key_mismatch
-          (fun _index maps_to1 maps_to2 result ->
+        Tag_or_unknown_and_index.Map.fold2_stop_on_key_mismatch
+          (fun _tag_and_index maps_to1 maps_to2 result ->
             result && Maps_to.equal env maps_to1 maps_to2)
           at_least1 at_least2 true
       with
@@ -111,11 +116,11 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
       let env_extension = ref (TEE.empty ()) in
       let one_side_only index1 maps_to1 at_least2 =
         let from_at_least2 =
-          Index.Map.find_last_opt
-            (fun index -> Index.compare index index1 <= 0)
+          Tag_or_unknown_and_index.Map.find_last_opt
+            (fun tag_and_index ->
+              Tag_or_unknown_and_index.compare tag_and_index index1 <= 0)
             at_least2
         in
-        (* XXX This should widen the products as required *)
         begin match from_at_least2 with
         | None ->
           begin match E.op () with
@@ -181,12 +186,15 @@ Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
           known2
       in
       let at_least =
-        Index.Map.merge (fun index maps_to1 maps_to2 ->
+        Tag_or_unknown_and_index.Map.merge
+          (fun tag_and_index maps_to1 maps_to2 ->
             merge index maps_to1 maps_to2)
           at_least1
           at_least2
       in
-      if Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least then begin
+      if Tag_and_index.Map.is_empty known &&
+        Tag_or_unknown_and_index.Map.is_empty at_least
+      then begin
 (*
 Format.eprintf "RL meet is returning bottom\n%!";
 *)
@@ -206,17 +214,18 @@ Format.eprintf "RL meet is returning bottom\n%!";
     | Bottom -> create_bottom ()
 
   let is_bottom { known; at_least; } =
-    Tag_and_index.Map.is_empty known && Index.Map.is_empty at_least
+    Tag_and_index.Map.is_empty known
+      && Tag_or_unknown_and_index.Map.is_empty at_least
 
   let known t = t.known
   let at_least t = t.at_least
 
   let get_singleton { known; at_least; } =
-    if not (Index.Map.is_empty at_least) then None
+    if not (Tag_or_unknown_and_index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
 
   let all_tags_and_indexes { known; at_least; } : _ Or_unknown.t =
-    if not (Index.Map.is_empty at_least) then Unknown
+    if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
     else Known (Tag_and_index.Map.keys known)
 
   let erase_aliases { known; at_least; } env ~already_seen ~allowed =
@@ -226,7 +235,7 @@ Format.eprintf "RL meet is returning bottom\n%!";
         known
     in
     let at_least =
-      Index.Map.map (fun maps_to ->
+      Tag_or_unknown_and_index.Map.map (fun maps_to ->
           Maps_to.erase_aliases maps_to env ~already_seen ~allowed)
         at_least
     in
@@ -243,7 +252,7 @@ Format.eprintf "RL meet is returning bottom\n%!";
         Name_occurrences.empty
     in
     let from_at_least =
-      Index.Map.fold (fun _index maps_to free_names ->
+      Tag_or_unknown_and_index.Map.fold (fun _index maps_to free_names ->
           Name_occurrences.union free_names
             (Maps_to.free_names maps_to))
         at_least
@@ -265,7 +274,7 @@ Format.eprintf "RL meet is returning bottom\n%!";
         known
     in
     let at_least =
-      Index.Map.map (fun maps_to ->
+      Tag_or_unknown_and_index.Map.map (fun maps_to ->
           match f maps_to with
           | Bottom ->
             found_bottom := true;
@@ -287,7 +296,7 @@ Format.eprintf "RL meet is returning bottom\n%!";
           known
       in
       let at_least' =
-        Index.Map.map_sharing (fun maps_to ->
+        Tag_or_unknown_and_index.Map.map_sharing (fun maps_to ->
             Maps_to.apply_name_permutation maps_to perm)
           at_least
       in

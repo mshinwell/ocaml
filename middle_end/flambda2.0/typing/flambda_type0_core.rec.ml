@@ -580,6 +580,32 @@ let set_of_closures_containing_at_least by_closure_id =
   in
   Fabricated (No_alias (Ok (Set_of_closures { closures; })))
 
+let at_least_these_closures closure_ids_to_closure_types =
+  let closures_entry : closures_entry =
+    { function_decl = Unknown;
+      closure_elements = Closure_elements.empty;
+      set_of_closures = any_fabricated_as_ty_fabricated ();
+    }
+  in
+  let closure_ids_to_closure_types =
+    Closure_id.Map.fold
+      (fun closure_id closure_typ closure_ids_to_closure_types ->
+        let closure_vars = Var_within_closure_set.Map.empty in
+        let tag_and_index = Or_unknown.Known closure_id, closure_vars in
+        Closure_id.Map.add tag_and_index closure_typ
+          closure_ids_to_closure_types)
+      Closure_id.Map.empty
+  in
+  let by_closure_id =
+    Closures_entry_by_closure_id.create_at_least_multiple
+      closure_ids_to_closure_types
+  in
+  let closures : closures =
+    { by_closure_id;
+    }
+  in
+  Value (No_alias (Ok (Closures closures)))
+
 let array_of_length ~length =
   Value (No_alias (Ok (Array { length; })))
 

@@ -145,6 +145,10 @@ val set_of_closures_containing_at_least
    : Flambda_types.t Closure_id.Map.t
   -> Flambda_types.t
 
+val at_least_these_closures
+   : Flambda_types.t Closure_id.Map.t
+  -> Flambda_types.t
+
 val array_of_length : length:Flambda_types.ty_value -> Flambda_types.t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> Flambda_types.t

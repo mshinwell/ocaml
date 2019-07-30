@@ -24,6 +24,11 @@ module Make
     type t = Tag.t * Index.t
     include Identifiable.S with type t := t
   end)
+  (Tag_or_unknown_and_index : sig
+    (** Likewise. *)
+    type t = Tag.t Or_unknown.t * Index.t
+    include Identifiable.S with type t := t
+  end)
   (Maps_to : Row_like_maps_to_intf.S
     with type flambda_type := Flambda_types.t
     with type typing_env := Typing_env.t
@@ -39,13 +44,13 @@ sig
 
   val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
 
-  val create_at_least : Index.t -> Maps_to.t -> t
+  val create_at_least : Tag.t Or_unknown.t -> Index.t -> Maps_to.t -> t
 
-  val create_at_least_multiple : Maps_to.t Index.Map.t -> t
+  val create_at_least_multiple : Maps_to.t Tag_or_unknown_and_index.Map.t -> t
 
   val known : t -> Maps_to.t Tag_and_index.Map.t
 
-  val at_least : t -> Maps_to.t Index.Map.t
+  val at_least : t -> Maps_to.t Tag_or_unknown_and_index.Map.t
 
   val get_singleton : t -> (Tag_and_index.t * Maps_to.t) option
 
