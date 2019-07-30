@@ -437,15 +437,7 @@ and simplify_direct_function_call
     -> (Function_declaration.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
-      ~recursive ~arg_types function_decl_opt k ->
-  let args_arity = T.arity_of_list arg_types in
-  if not (Flambda_arity.equal param_arity args_arity) then begin
-    Misc.fatal_errorf "Wrong argument arity for direct OCaml function call \
-        (expected %a, found %a):@ %a"
-      Flambda_arity.print param_arity
-      Flambda_arity.print args_arity
-      Apply.print apply
-  end;
+      ~recursive ~arg_types:_ function_decl_opt k ->
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
