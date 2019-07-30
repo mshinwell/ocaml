@@ -56,13 +56,19 @@ val create_variables : Variable.Set.t -> Name_occurrence_kind.t -> t
 
 val create_names : Name.Set.t -> Name_occurrence_kind.t -> t
 
+(** [diff t1 t2] removes from [t1] all those names that occur in [t2].
+    The number of occurrences of any names in the return value will be exactly
+    the same as in [t1]. *)
 val diff : t -> t -> t
 
 val union : t -> t -> t
 
 val union_list : t list -> t
 
-val subset : t -> t -> bool
+(** [subset_domain t1 t2] is the usual "set subset" test on the names
+    occurring in [t1] and [t2].  The numbers of occurrences and the kinds of
+    those occurrences are ignored. *)
+val subset_domain : t -> t -> bool
 
 val variables : t -> Variable.Set.t
 
