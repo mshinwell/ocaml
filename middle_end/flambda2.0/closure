@@ -13,8 +13,6 @@ Things in Closure that we still need to implement, + others:
 - Implement loading/saving for .cmx files (including reachability analysis)
 - Make sure that reify deals with all the cases for boxed numbers, etc.
   so that these get lifted.
-- Sharing of switch arms?  Unsure why this is needed, doesn't the Cmm
-  translation do this?
 
 Remaining other parts:
 

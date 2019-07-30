@@ -35,7 +35,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
           DE.add_lifted_constants definition_denv
             (R.get_lifted_constants r)
         in
-        let num_uses = DA.num_continuation_uses dacc cont in
+        let num_uses = CUE.num_continuation_uses cont_uses_env cont in
         let handler, user_data, uacc =
           match
             CUE.continuation_env_and_param_types cont_uses_env
@@ -45,9 +45,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
             (* Don't simplify the handler if there aren't any uses: otherwise,
                its code will be deleted but any continuation usage information
                collected during its simplification will remain. *)
-            let user_data, uacc =
-              k (DA.continuation_uses_env dacc) (DA.r dacc)
-            in
+            let user_data, uacc = k cont_uses_env r in
             cont_handler, user_data, uacc
           | Uses { typing_env; arg_types_by_use_id; param_types;
                    extra_params_and_args; } ->

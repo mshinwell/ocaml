@@ -5,7 +5,6 @@ external ( < ) : 'a -> 'a -> bool = "%lessthan"
 external array_get: 'a array -> int -> 'a = "%array_safe_get"
 external array_set: 'a array -> int -> 'a -> unit = "%array_safe_set"
 
-(*
 let [@inline always] to_inline _x _y = 42
 
 let f c m n x' y' =
@@ -31,7 +30,6 @@ let f' c m n x' y' =
     | None -> 1
     | Some b ->
       to_inline' (x + y) (a + b)
-*)
 
 let rec length_aux len = function
     [] -> len
@@ -39,12 +37,20 @@ let rec length_aux len = function
 
 let length l = (length_aux [@unrolled 3]) 0 l
 
-(*
+let [@inline always] to_inline' x y = x + y
+
+let foo_length =
+  let len = 100 in
+  let param = [] in
+  match param with
+    [] -> len
+  | _::_ -> 42
+
 let length_aux len = function
     [] -> len
   | _::_ -> 42
 
-let foo_length = length_aux 0 []
+let foo_length = length_aux 444 []
 
 let n =
   let rec f x =
@@ -52,9 +58,7 @@ let n =
     else 42
   in
   (f [@unrolled 10]) 5
-*)
 
-(*
 module Int32 = struct
   external add : int32 -> int32 -> int32 = "%int32_add"
   external mul : int32 -> int32 -> int32 = "%int32_mul"
@@ -114,4 +118,3 @@ let f c m n x' y' =
   let x = if c < 0 then x' else x' + 10 in
   let y = if c < 0 then y' else y' + 20 in
   x + y
-*)
