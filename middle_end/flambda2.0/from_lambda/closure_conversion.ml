@@ -327,8 +327,7 @@ let close_exn_continuation env (exn_continuation : Ilambda.exn_continuation) =
   in
   Exn_continuation.create ~exn_handler:exn_continuation.exn_handler ~extra_args
 
-let close_primitive t ~backend
-      env ~let_bound_var named (prim : Lambda.primitive) ~args
+let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       loc (exn_continuation : Ilambda.exn_continuation option)
       (k : Named.t option -> Expr.t) : Expr.t =
   let exn_continuation =
@@ -372,11 +371,11 @@ let close_primitive t ~backend
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
     Flambda.Expr.create_apply_cont apply_cont
   | prim, args ->
-    Lambda_to_flambda_primitives.convert_and_bind ~backend exn_continuation
+    Lambda_to_flambda_primitives.convert_and_bind exn_continuation
       ~register_const_string:(register_const_string t)
       prim ~args dbg k
 
-let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
+let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
   | Let (id, user_visible, _kind, defining_expr, body) ->
     (* CR mshinwell: Remove [kind] on the Ilambda terms? *)
@@ -389,18 +388,18 @@ let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
         | Some _ | None -> body_env
       in
       (* CR pchambart: Not tail ! *)
-      let body = close ~backend t body_env body in
+      let body = close t body_env body in
       match defining_expr with
       | None -> body
       | Some defining_expr ->
         let var = VB.create var Name_occurrence_kind.normal in
         Expr.create_let var defining_expr body
     in
-    close_named ~backend t env ~let_bound_var:var defining_expr cont
+    close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
     Misc.fatal_error "[Let_mutable] should have been removed by \
       [Eliminate_mutable_vars]"
-  | Let_rec (defs, body) -> close_let_rec t ~backend env ~defs ~body
+  | Let_rec (defs, body) -> close_let_rec t env ~defs ~body
   | Let_cont { name; is_exn_handler; params; recursive; body;
       handler; } ->
     if is_exn_handler then begin
@@ -436,7 +435,7 @@ let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
         params
         params_with_kinds
     in
-    let handler = close ~backend t handler_env handler in
+    let handler = close t handler_env handler in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create params ~handler
     in
@@ -445,7 +444,7 @@ let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
         ~stub:false
         ~is_exn_handler:is_exn_handler
     in
-    let body = close ~backend t env body in
+    let body = close t env body in
     begin match recursive with
     | Nonrecursive ->
       Flambda.Let_cont.create_non_recursive name handler ~body
@@ -511,7 +510,7 @@ let rec close ~backend t env (ilam : Ilambda.t) : Expr.t =
     let scrutinee = Simple.name (Env.find_name env scrutinee) in
     Expr.create_switch sw.sort ~scrutinee ~arms
 
-and close_named ~backend t env ~let_bound_var (named : Ilambda.named)
+and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
   match named with
   | Var id ->
@@ -524,13 +523,13 @@ and close_named ~backend t env ~let_bound_var (named : Ilambda.named)
     let named, _name = close_const t cst in
     k (Some named)
   | Prim { prim; args; loc; exn_continuation; } ->
-    close_primitive t ~backend env ~let_bound_var named prim ~args loc
+    close_primitive t env ~let_bound_var named prim ~args loc
       exn_continuation k
   | Assign _ ->
     Misc.fatal_error "[Assign] should have been removed by \
       [Eliminate_mutable_vars]"
 
-and close_let_rec t ~backend env ~defs ~body =
+and close_let_rec t env ~defs ~body =
   let env =
     List.fold_right (fun (id, _) env ->
         let env, _var = Env.add_var_like env id User_visible in
@@ -563,49 +562,24 @@ and close_let_rec t ~backend env ~defs ~body =
         function_declaration)
       defs
   in
-  let name =
-    (* The Microsoft assembler has a 247-character limit on symbol
-       names, so we keep them shorter to try not to hit this. *)
-    (* CR-soon mshinwell: We should work out how to shorten symbol names
-       anyway, to help avoid enormous ELF string tables. *)
-    if Sys.win32 then begin
-      match defs with
-      | (id, _)::_ -> (Ident.unique_name id) ^ "_let_rec"
-      | _ -> "let_rec"
-    end else begin
-      String.concat "_and_"
-        (List.map (fun (id, _) -> Ident.unique_name id) defs)
-    end
-  in
-  let set_of_closures_var = Variable.create name in
-  let set_of_closures =
-    close_functions t ~backend env
-      (Function_decls.create function_declarations)
-  in
-  let body =
-    let set_of_closures_var = Simple.var set_of_closures_var in
-    List.fold_left (fun body decl ->
-        let let_rec_ident = Function_decl.let_rec_ident decl in
-        let closure_id = Function_decl.closure_id decl in
-        let let_bound_var =
-          Var_in_binding_pos.create (Env.find_var env let_rec_ident)
+  let closure_vars =
+    List.fold_left (fun closure_vars decl ->
+        let closure_var =
+          VB.create (Env.find_var env (Function_decl.let_rec_ident decl))
             Name_occurrence_kind.normal
         in
-        let project_closure : Flambda_primitive.t =
-          Unary (Project_closure closure_id, set_of_closures_var)
-        in
-        Expr.create_let let_bound_var
-          (Named.create_prim project_closure Debuginfo.none)
-          body)
-      (close ~backend t env body)
+        let closure_id = Function_decl.closure_id decl in
+        Closure_id.Map.add closure_id closure_var closure_vars)
+      Closure_id.Map.empty
       function_declarations
   in
-  let set_of_closures_var =
-    Var_in_binding_pos.create set_of_closures_var Name_occurrence_kind.normal
+  let set_of_closures =
+    close_functions t env (Function_decls.create function_declarations)
   in
-  Expr.create_let set_of_closures_var set_of_closures body
+  let body = close t env body in
+  Expr.create_let (Set_of_closures { closure_vars; }) set_of_closures body
 
-and close_functions t ~backend external_env function_declarations =
+and close_functions t external_env function_declarations =
   let all_free_idents =
     (* Filter out predefined exception identifiers, since they will be
        turned into symbols when we closure-convert the body. *)
@@ -629,7 +603,7 @@ and close_functions t ~backend external_env function_declarations =
   in
   let funs =
     List.fold_left (fun by_closure_id function_decl ->
-        close_one_function t ~backend ~external_env ~by_closure_id function_decl
+        close_one_function t ~external_env ~by_closure_id function_decl
           ~var_within_closures_from_idents ~closure_ids_from_idents
           function_declarations)
       Closure_id.Map.empty
@@ -648,7 +622,7 @@ and close_functions t ~backend external_env function_declarations =
   in
   Named.create_set_of_closures set_of_closures
 
-and close_one_function t ~backend ~external_env ~by_closure_id decl
+and close_one_function t ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
       function_declarations =
   let body = Function_decl.body decl in
@@ -688,6 +662,7 @@ and close_one_function t ~backend ~external_env ~by_closure_id decl
       var_within_closures_from_idents
       (Variable.Map.empty, Ident.Map.empty)
   in
+  (* CR mshinwell: Remove "project_closure" names *)
   let project_closure_to_bind, vars_for_project_closure =
     List.fold_left (fun (to_bind, vars_for_idents) function_decl ->
         let let_rec_ident = Function_decl.let_rec_ident function_decl in
@@ -731,7 +706,7 @@ and close_one_function t ~backend ~external_env ~by_closure_id decl
         Kinded_parameter.create (Parameter.wrap var) (LC.value_kind kind))
       param_vars
   in
-  let body = close ~backend t closure_env body in
+  let body = close t closure_env body in
   let free_vars_of_body = Name_occurrences.variables (Expr.free_names body) in
   let my_closure' = Simple.var my_closure in
   let body =
@@ -794,7 +769,7 @@ and close_one_function t ~backend ~external_env ~by_closure_id decl
     Closure_id.Map.add unboxed_version fun_decl
       (Closure_id.Map.add closure_id generic_function_stub by_closure_id)
 
-let ilambda_to_flambda ~backend ~module_ident ~size ~filename
+let ilambda_to_flambda ~module_ident ~size ~filename
       (ilam : Ilambda.program) : Flambda_static.Program.t =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
@@ -860,7 +835,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
        fields; the variables bound to such fields are returned as the
        [computed_values], below. The compilation of the [Define_symbol]
        constructions below then causes the actual module block to be created. *)
-    let body = close ~backend t Env.empty ilam.expr in
+    let body = close t Env.empty ilam.expr in
     Flambda.Let_cont.create_non_recursive ilam.return_continuation
       load_fields_cont_handler
       ~body

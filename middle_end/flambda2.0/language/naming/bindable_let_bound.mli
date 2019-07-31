@@ -2,11 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,11 +14,12 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** Introduce closures into Ilambda code, producing Flambda. *)
+(** Things that a [Let]-expression binds. *)
 
-val ilambda_to_flambda
-   : module_ident:Ident.t
-  -> size:int
-  -> filename:string
-  -> Ilambda.program
-  -> Flambda_static.Program.t
+type t =
+  | Singleton of Var_in_binding_pos.t
+  | Set_of_closures of {
+      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
+    }
+
+include Bindable.S with type t := t
