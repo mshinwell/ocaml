@@ -55,6 +55,8 @@ module type Downwards_env = sig
 
   val define_variable : t -> Var_in_binding_pos.t -> Flambda_kind.t -> t
 
+  val add_name : t -> Name_in_binding_pos.t -> Flambda_type.t -> t
+
   val add_variable : t -> Var_in_binding_pos.t -> Flambda_type.t -> t
 
   val add_equation_on_variable : t -> Variable.t -> Flambda_type.t -> t

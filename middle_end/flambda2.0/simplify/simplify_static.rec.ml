@@ -99,210 +99,48 @@ let simplify_or_variable dacc type_for_const
   | Const const -> or_variable, type_for_const const
   | Var var -> or_variable, DE.find_variable denv var
 
-let simplify_set_of_closures dacc ~result_dacc set_of_closures
-      ~set_of_closures_symbol
-      ~closure_symbols ~closure_elements_and_types =
-(*
-Format.eprintf "Simplify_static.simplify_set_of_closures\n%!";
-*)
-  let closure_elements, closure_element_types =
-    match closure_elements_and_types with
-    | Some (closure_elements, closure_element_types) ->
-      closure_elements, closure_element_types
-    | None ->
-      Var_within_closure.Map.fold
-        (fun var_within_closure simple
-             (closure_elements, closure_element_types) ->
-          let min_occurrence_kind = Name_occurrence_kind.normal in
-          match
-            Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
-          with
-          | Bottom, ty ->
-            assert (K.equal (T.kind ty) K.value);
-            (* CR mshinwell: Work out what should happen here *)
-            closure_elements, closure_element_types
-          | Ok simple, ty ->
-            let closure_elements =
-              Var_within_closure.Map.add var_within_closure simple
-                closure_elements
-            in
-            let ty_value = T.force_to_kind_value ty in
-            let closure_element_types =
-              Var_within_closure.Map.add var_within_closure ty_value
-                closure_element_types
-            in
-            closure_elements, closure_element_types)
-        (Set_of_closures.closure_elements set_of_closures)
-        (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
+let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
+      ~set_of_closures_symbol ~closure_symbols ~closure_elements
+      ~closure_element_types =
+  let closure_bound_names =
+    Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols
   in
-  let function_decls = Set_of_closures.function_decls set_of_closures in
-  let funs = Function_declarations.funs function_decls in
-  let denv = DA.denv dacc in
-  let denv = DE.define_symbol denv set_of_closures_symbol K.fabricated in
-  let denv =
-    Closure_id.Map.fold (fun _closure_id closure_symbol denv ->
-        DE.define_symbol denv closure_symbol K.value)
-      closure_symbols
-      denv
-  in
-  let set_of_closures_ty_fabricated =
-    T.alias_type_of_as_ty_fabricated (Simple.symbol set_of_closures_symbol)
-  in
-  (* CR mshinwell: Some of this code could maybe be shared with the
-     post-body-simplification code that builds types, below. *)
-  let set_of_closures_type =
-    (* The set-of-closures type describes the closures it contains via
-       aliases to the closure symbols.  This means that when an appropriate
-       [Project_closure] primitive, for example, is encountered then it will
-       simplify directly to a symbol.
-
-       The detail of the closures themselves is described using closure
-       types assigned to the individual closure symbols.  These types in
-       turn tie back recursively to the set-of-closures symbol. *)
-    let closure_types_via_symbols =
-      Closure_id.Map.map (fun closure_sym ->
-          T.alias_type_of K.value (Simple.symbol closure_sym))
-        closure_symbols
-    in
-    T.set_of_closures ~closures:closure_types_via_symbols
-  in
-  let denv =
-    DE.add_equation_on_symbol denv set_of_closures_symbol set_of_closures_type
-  in
-  let closure_symbols_and_types =
-    Closure_id.Map.mapi (fun closure_id func_decl ->
-        let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
-        let function_decl_type =
-          T.create_inlinable_function_declaration func_decl
-            (Rec_info.create ~depth:0 ~unroll_to:None)
-        in
-        let closure_type =
-          T.closure closure_id function_decl_type closure_element_types
-            ~set_of_closures:set_of_closures_ty_fabricated
-        in
-        closure_symbol, closure_type)
-      funs
-  in
-  let denv =
-    Closure_id.Map.fold (fun _closure_id (closure_symbol, closure_type) denv ->
-        DE.add_equation_on_symbol denv closure_symbol closure_type)
-      closure_symbols_and_types
-      denv
-  in
-  let dacc = DA.with_denv dacc denv in
-  let pre_simplification_types_of_my_closures
-        : Simplify_named.pre_simplification_types_of_my_closures =
-    let closure_types =
-      Closure_id.Map.mapi (fun _closure_id (closure_symbol, _closure_type) ->
-          (* CR mshinwell: Maybe [merge_rec_info] shouldn't cause an error
-             if the Simple isn't a Name? *)
-          match
-            Simple.merge_rec_info (Simple.symbol closure_symbol)
-              ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to:None))
-          with
-          | None -> assert false
-          | Some closure_symbol ->
-(*
-Format.eprintf "Closure id %a has symbol %a\n%!"
-  Closure_id.print closure_id
-  Simple.print closure_symbol;
-*)
-            T.alias_type_of K.value closure_symbol)
-        closure_symbols_and_types
-    in
-    { set_of_closures = None;
-      closure_types;
-    }
-  in
-  let r = DA.r dacc in
-  let funs, fun_types, r =
-    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-        let dacc = DA.with_r dacc r in
-        let function_decl, ty, r =
-          Simplify_named.simplify_function dacc closure_id function_decl
-            pre_simplification_types_of_my_closures
-        in
-        let funs = Closure_id.Map.add closure_id function_decl funs in
-        let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        funs, fun_types, r)
-      funs
-      (Closure_id.Map.empty, Closure_id.Map.empty, r)
-  in
-  let result_dacc = DA.with_r result_dacc r in
-  let function_decls = Function_declarations.create funs in
-  let set_of_closures =
-    Set_of_closures.create ~function_decls ~closure_elements
-  in
-  let closure_types =
-    Closure_id.Map.mapi (fun closure_id function_decl_type ->
-        T.closure closure_id function_decl_type closure_element_types
-          ~set_of_closures:set_of_closures_ty_fabricated)
-      fun_types
-  in
-  let closure_symbols_and_types =
-    Closure_id.Map.mapi (fun closure_id typ ->
-        (* CR mshinwell: clean this up *)
-        let closure_symbol = Closure_id.Map.find closure_id closure_symbols in
-        closure_symbol, typ)
-      closure_types
-  in
-  let closure_symbols =
-    Closure_id.Map.map (fun (sym, _typ) -> sym) closure_symbols_and_types
-  in
-  let static_part : K.fabricated Static_part.t =
-    Set_of_closures set_of_closures
-  in
-  let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
-    Set_of_closures {
-      set_of_closures_symbol;
-      closure_symbols;
-    }
+  let set_of_closures, closure_types_by_bound_name, result_dacc =
+    Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
+      ~closure_bound_names
   in
   let static_structure : Program_body.Static_structure.t =
+    let static_part : K.fabricated Static_part.t =
+      Set_of_closures set_of_closures
+    in
+    let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
+      Set_of_closures { closure_symbols; }
+    in
     S [bound_symbols, static_part]
   in
-  let set_of_closures_type =
-    let closure_types_via_symbols =
-      Closure_id.Map.map (fun closure_sym ->
-          T.alias_type_of K.value (Simple.symbol closure_sym))
-        closure_symbols
-    in
-    T.set_of_closures ~closures:closure_types_via_symbols
-  in
-  (* The returned bindings are put into [result_env], rather than [env], so
-     [simplify_static_structure] below can correctly handle simultaneous
-     definitions of symbols. *)
-  let denv =
-    DE.define_symbol (DA.denv result_dacc) set_of_closures_symbol K.fabricated
-  in
-  let denv =
-    Closure_id.Map.fold (fun _ (symbol, _typ) denv ->
-        DE.define_symbol denv symbol K.value)
-      closure_symbols_and_types
-      denv
-  in
-  let denv =
-    DE.add_equation_on_symbol denv set_of_closures_symbol set_of_closures_type
-  in
-  let denv =
-    Closure_id.Map.fold (fun _ (symbol, typ) denv ->
-        DE.add_equation_on_symbol denv symbol typ)
-      closure_symbols_and_types
-      denv
-  in
   let static_structure_types =
-    let static_structure_types =
-      Closure_id.Map.fold (fun _ (symbol, typ) static_structure_types ->
-          Symbol.Map.add symbol typ static_structure_types)
-        closure_symbols_and_types
-        Symbol.Map.empty
-    in
-    Symbol.Map.add set_of_closures_symbol set_of_closures_type
-      static_structure_types
+    Name_in_binding_pos.Map.fold
+      (fun name closure_type static_structure_types ->
+        let symbol = Name_in_binding_pos.must_be_symbol name in
+        Symbol.Map.add symbol closure_type static_structure_types)
+      closure_types_by_bound_name
+      Symbol.Map.empty
   in
   let result_dacc = DA.with_denv result_dacc denv in
-  set_of_closures, result_dacc, set_of_closures_type, static_structure_types,
-    static_structure
+  set_of_closures, result_dacc, static_structure_types, static_structure
+
+let simplify_set_of_closures dacc ~result_dacc set_of_closures
+      ~set_of_closures_symbol ~closure_symbols =
+  let can_lift, closure_elements, closure_element_types =
+    type_closure_elements_and_make_lifting_decision dacc set_of_closures
+  in
+  if not can_lift then begin
+    Misc.fatal_errorf "Set of closures cannot be statically allocated:@ %a"
+      Set_of_closures.print set_of_closures
+  end;
+  simplify_set_of_closures0 dacc ~result_dacc set_of_closures
+    ~set_of_closures_symbol ~closure_symbols ~closure_elements
+    ~closure_element_types
 
 let simplify_static_part_of_kind_value dacc
       (static_part : K.value Static_part.t) ~result_sym

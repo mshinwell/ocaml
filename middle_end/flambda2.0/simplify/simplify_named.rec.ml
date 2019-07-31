@@ -19,7 +19,7 @@
 open! Simplify_import
 
 type pre_simplification_types_of_my_closures = {
-  closure_types_via_variables : T.t Closure_id.Map.t;
+  internal_closure_types : Flambda_type.t Closure_id.Map.t;
   closure_types : T.t Closure_id.Map.t;
 }
 
@@ -35,7 +35,7 @@ let function_decl_type denv function_decl rec_info =
       ~result_arity:(FD.result_arity function_decl)
       ~recursive:(FD.recursive function_decl)
 
-let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_vars
+let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
       ~closure_element_types =
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
@@ -43,10 +43,10 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_vars
           ~bound_name:None ~allowed:Variable.Set.empty ty_value)
       closure_element_types
   in
-  let closure_types_via_variables =
-    Closure_id.Map.map (fun bound_var ->
-        T.alias_type_of_as_ty_value (Var_in_binding_pos.simple bound_var))
-      closure_bound_vars
+  let closure_types_as_seen_from_own_body =
+    Closure_id.Map.map (fun name ->
+        T.alias_type_of_as_ty_value (Name_in_binding_pos.simple name))
+      closure_bound_names
   in
   let closure_types =
     Closure_id.Map.mapi (fun closure_id function_decl ->
@@ -56,11 +56,11 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_vars
         in
         T.exactly_this_closure closure_id
           function_decl_type_as_seen_from_own_body
-          ~all_closures_in_set:closure_types_via_variables
+          ~all_closures_in_set:closure_types_as_seen_from_own_body
           ~all_closure_vars_in_set:closure_element_types)
       funs
   in
-  { closure_types_via_variables;
+  { internal_closure_types = closure_types_as_seen_from_own_body;
     closure_types;
   }
 
@@ -104,7 +104,7 @@ let type_closure_elements_and_make_lifting_decision dacc set_of_closures =
   can_lift, closure_elements, closure_element_types
 
 let simplify_function dacc closure_id_this_function function_decl
-      pre_simplification_types_of_my_closures ~closure_bound_vars =
+      pre_simplification_types_of_my_closures ~closure_bound_names =
   let denv = DA.denv dacc in
   let params_and_body, r =
     Function_params_and_body.pattern_match (FD.params_and_body function_decl)
@@ -118,21 +118,33 @@ let simplify_function dacc closure_id_this_function function_decl
         let denv = DE.add_parameters_with_unknown_types denv params in
         let denv =
           Closure_id.Map.fold (fun closure_id closure_typ denv ->
-              match Closure_id.Map.find closure_id closure_bound_vars with
-              | exception Not_found ->
-                Misc.fatal_errorf "No bound variable for closure ID %a"
-                  Closure_id.print closure_id
-              | closure_var ->
-                let name_occurrence_kind =
-                  if Closure_id.equal closure_id closure_id_this_function
-                  then Name_occurrence_kind.normal
-                  else Name_occurrence_kind.in_types
-                in
-                DE.add_variable denv
-                  (Var_in_binding_pos.create closure_var name_occurrence_kind)
-                  closure_type)
+              if Closure_id.equal closure_id closure_id_this_function then
+                denv
+              else
+                match Closure_id.Map.find closure_id closure_bound_names with
+                | exception Not_found ->
+                  Misc.fatal_errorf "No bound variable for closure ID %a"
+                    Closure_id.print closure_id
+                | bound_name ->
+                  match Name_in_binding_pos.var_in_binding_pos bound_name with
+                  | None -> denv
+                  | Some var ->
+                    DE.add_variable denv var closure_type)
             pre_simplification_types_of_my_closures.closure_types
             denv
+        in
+        let denv =
+          match Closure_id.Map.find closure_id_this_function
+            pre_simplification_types_of_my_closures.closure_types
+          with
+          | exception Not_found ->
+            Misc.fatal_errorf "No closure type for this function \
+                (closure ID %a)"
+              Closure_id.print closure_id_this_function
+          | closure_type ->
+            DE.add_variable denv
+              (Var_in_binding_pos.create my_closure Name_occurrence_kind.normal)
+              closure_type
         in
         let dacc = DA.with_denv dacc denv in
         (* CR mshinwell: Should probably look at [cont_uses]? *)
@@ -170,11 +182,63 @@ let simplify_function dacc closure_id_this_function function_decl
   let function_decl = FD.update_params_and_body function_decl params_and_body in
   function_decl, function_decl_type denv function_decl Rec_info.initial, r
 
+let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
+      ~closure_bound_names ~closure_elements ~closure_element_types =
+  let function_decls = Set_of_closures.function_decls set_of_closures in
+  let funs = Function_declarations.funs function_decls in
+  let pre_simplification_types_of_my_closures =
+    pre_simplification_types_of_my_closures (DA.denv dacc)
+      ~funs ~closure_bound_names ~closure_element_types
+  in
+  let all_closures_in_set =
+    pre_simplification_types_of_my_closures.internal_closure_types
+  in
+  let funs, fun_types, r =
+    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+        let function_decl, ty, r =
+          simplify_function (DA.with_r dacc r) closure_id function_decl
+            pre_simplification_types_of_my_closures ~closure_bound_names
+        in
+        let funs = Closure_id.Map.add closure_id function_decl funs in
+        let fun_types = Closure_id.Map.add closure_id ty fun_types in
+        funs, fun_types, r)
+      funs
+      (Closure_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
+  in
+  let closure_types_by_bound_name =
+    Closure_id.Map.fold (fun closure_id function_decl_type closure_types ->
+        match Closure_id.Map.find closure_id closure_bound_names with
+        | exception Not_found ->
+          Misc.fatal_errorf "No bound variable for closure ID %a"
+            Closure_id.print closure_id
+        | bound_name ->
+          let closure_type =
+            T.exactly_this_closure closure_id function_decl_type
+              ~all_closures_in_set
+              ~all_closure_vars_in_set:closure_element_types
+          in
+          Name_in_binding_pos.Map.add bound_name closure_type closure_types)
+      fun_types
+      Name_in_binding_pos.Map.empty
+  in
+  let dacc =
+    DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
+      Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
+          match Closure_id.Map.find closure_id closure_bound_names with
+          | exception Not_found ->
+            Misc.fatal_errorf "No bound variable for closure ID %a"
+              Closure_id.print closure_id
+          | bound_name -> DE.add_name denv bound_name closure_type)
+        closure_types_by_bound_name
+        denv)
+  in
+  let set_of_closures =
+    Set_of_closures.create (Function_declarations.create funs) ~closure_elements
+  in
+  set_of_closures, closure_types_by_bound_name, dacc
+
 let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
-  let closure_elements_and_types =
-    Some (closure_elements, closure_element_types)
-  in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let closure_symbols =
     Closure_id.Map.mapi (fun closure_id _func_decl ->
@@ -182,9 +246,9 @@ let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
           (Linkage_name.create (Closure_id.unique_name closure_id)))
       (Function_declarations.funs function_decls)
   in
-  let _set_of_closures, dacc, ty, static_structure_types, static_structure =
+  let _set_of_closures, dacc, _ty, static_structure_types, static_structure =
     Simplify_static.simplify_set_of_closures dacc ~result_dacc:dacc
-      set_of_closures ~closure_symbols ~closure_elements_and_types
+      set_of_closures ~closure_symbols ~closure_elements ~closure_element_types
   in
   let r =
     let lifted_constants =  (* CR mshinwell: Add "s" to "Lifted_constant" *)
@@ -208,55 +272,19 @@ let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
       closure_bound_vars
       (DA.denv dacc, [])
   in
-  bindings, DA.with_denv (DA.with_r dacc r) denv, ty
+  bindings, DA.with_denv (DA.with_r dacc r) denv
 
 let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
-  let function_decls = Set_of_closures.function_decls set_of_closures in
-  let funs = Function_declarations.funs function_decls in
-  let pre_simplification_types_of_my_closures =
-    pre_simplification_types_of_my_closures (DA.denv dacc)
-      ~funs ~closure_bound_vars ~closure_element_types
+  let closure_bound_names =
+    Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
   in
-  let funs, fun_types, r =
-    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
-        let function_decl, ty, r =
-          simplify_function (DA.with_r dacc r) closure_id function_decl
-            pre_simplification_types_of_my_closures ~closure_bound_vars
-        in
-        let funs = Closure_id.Map.add closure_id function_decl funs in
-        let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        funs, fun_types, r)
-      funs
-      (Closure_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
-  in
-  let dacc = DA.with_r dacc r in
-  let all_closures_in_set =
-    pre_simplification_types_of_my_closures.closure_types_via_variables
-  in
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv ->
-      Closure_id.Map.fold (fun closure_id function_decl_type denv ->
-          match Closure_id.Map.find closure_id closure_bound_vars with
-          | exception Not_found ->
-            Misc.fatal_errorf "No bound variable for closure ID %a"
-              Closure_id.print closure_id
-          | bound_var ->
-            let closure_type =
-              T.exactly_this_closure closure_id function_decl_type
-                ~all_closures_in_set
-                ~all_closure_vars_in_set:closure_element_types
-            in
-            DE.add_variable denv bound_var closure_type)
-        fun_types
-        denv)
+  let set_of_closures, _closure_types_by_bound_name, dacc =
+    simplify_set_of_closures0 dacc ~result_dacc:dacc set_of_closures
+      ~closure_bound_names
   in
   let defining_expr =
-    funs
-    |> Function_declarations.create
-    |> Set_of_closures.create ~closure_elements
-    |> Named.create_set_of_closures
-    |> Reachable.reachable
+    Named.create_set_of_closures (Reachable.reachable set_of_closures)
   in
   [bound_vars, defining_expr], dacc
 
