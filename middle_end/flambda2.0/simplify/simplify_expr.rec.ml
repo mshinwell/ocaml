@@ -36,19 +36,22 @@ let rec simplify_let
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
-  L.pattern_match let_expr ~f:(fun ~bound_var ~body ->
-    let (defining_expr : Reachable.t), dacc =
-      Simplify_named.simplify_named dacc (L.defining_expr let_expr)
+  L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
+    let bound_vars_and_defining_exprs, dacc =
+      Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
         ~result_var:bound_var
     in
-    match defining_expr with
-    | Invalid _ ->
-      let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-      Expr.create_invalid (), user_data, uacc
-    | Reachable defining_expr ->
-      let body, user_data, uacc = simplify_expr dacc body k in
-      let expr = Expr.create_let bound_var defining_expr body in
-      expr, user_data, uacc)
+    let body, user_data, uacc = simplify_expr dacc body k in
+    let expr =
+      List.fold_left (fun (bound_vars, (defining_expr : Reachable.t)) expr ->
+          match defining_expr with
+          | Invalid -> Expr.create_invalid (), user_data, uacc
+          | Reachable defining_expr ->
+            Expr.create_pattern_let bound_vars defining_expr expr)
+        (List.rev bound_vars_and_defining_exprs)
+        body
+    in
+    expr, user_data, uacc)
 
 and simplify_one_continuation_handler
   : 'a. DA.t -> param_types:T.t list

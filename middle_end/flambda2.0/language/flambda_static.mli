@@ -103,12 +103,13 @@ module Program_body : sig
       | Singleton : Symbol.t -> Flambda_kind.value t
         (** A binding of a single symbol of kind [Value]. *)
       | Set_of_closures : {
-          set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> Flambda_kind.fabricated t
-        (** A binding of a single symbol to a set of closures together with
-            the binding of possibly multiple symbols to the individual closures
-            within such set of closures. *)
+        (** A binding of possibly multiple symbols to the individual closures
+            within a set of closures. *)
+        (* CR mshinwell: The GADT index should maybe not be on "kind", since
+           we don't have a concept of "set of closures as kind Fabricated"
+           any more. *)
 
     val print : Format.formatter -> _ t -> unit
 

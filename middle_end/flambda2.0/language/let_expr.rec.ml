@@ -28,12 +28,8 @@ type t = {
 }
 
 let pattern_match t ~f =
-  Bound_var_and_body.pattern_match t.bound_var_and_body
-    ~f:(fun bound_var body ->
-      let bound_var =
-        Var_in_binding_pos.create bound_var t.name_occurrence_kind
-      in
-      f ~bound_var ~body)
+  Bound_vars_and_body.pattern_match t.bound_vars_and_body
+    ~f:(fun bound_vars body -> f ~bound_vars ~body)
 
 let print_with_cache ~cache ppf
       ({ bound_var_and_body = _; name_occurrence_kind = _;
@@ -76,18 +72,43 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create ~bound_var ~defining_expr ~body =
-  let name_occurrence_kind = Var_in_binding_pos.occurrence_kind bound_var in
-  let bound_var = Var_in_binding_pos.var bound_var in
-  let bound_var_and_body = Bound_var_and_body.create bound_var body in
-  { bound_var_and_body;
-    name_occurrence_kind;
+let create ~bound_vars ~defining_expr ~body =
+  let bound_vars_and_body = Bound_vars_and_body.create bound_vars body in
+  { bound_vars_and_body;
     defining_expr;
   }
 
 let invariant env t =
   let module E = Invariant_env in
-  pattern_match t ~f:(fun ~bound_var:_ ~body -> Expr.invariant env body)
+  Named.invariant env t.defining_expr;
+  pattern_match t ~f:(fun ~bound_vars ~body ->
+    let env =
+      match t.defining_expr, bound_vars with
+      | Set_of_closures _, Set_of_closures { closure_vars; } ->
+        Closure_id.Map.fold (fun _closure_id closure_var env ->
+            let closure_var = VB.var closure_var in
+            E.add_variable env closure_var K.value)
+          closure_vars
+          env
+      | Set_of_closures _, Singleton _ ->
+        Misc.fatal_errorf "Cannot bind a [Set_of_closures] to a \
+            [Singleton]:@ %a"
+          print t
+      | _, Set_of_closures _ ->
+        Misc.fatal_errorf "Cannot bind a non-[Set_of_closures] to a \
+            [Set_of_closures]:@ %a"
+          print t
+      | Prim (prim, _dbg), Singleton var ->
+        let var = VB.var var in
+        E.add_variable env var (Flambda_primitive.result_kind' prim)
+      | Simple simple, Singleton var ->
+        let var = VB.var var in
+        match Simple.descr simple with
+        | Const const -> E.add_variable env var (T.kind_for_const const)
+        | Discriminant _ -> E.add_variable env var K.fabricated
+        | Name name -> E.add_variable env var (E.kind_of_name env name)
+    in
+    Expr.invariant env body)
 
 let defining_expr t = t.defining_expr
 
@@ -104,19 +125,18 @@ let free_names ({ bound_var_and_body = _; name_occurrence_kind;
     Name_occurrences.union from_defining_expr
       (Name_occurrences.remove_var from_body bound_var))
 
-let apply_name_permutation ({ bound_var_and_body; name_occurrence_kind;
-                              defining_expr; } as t) perm =
-  let bound_var_and_body' =
-    Bound_var_and_body.apply_name_permutation bound_var_and_body perm
+let apply_name_permutation ({ bound_vars_and_body; defining_expr; } as t)
+      perm =
+  let bound_vars_and_body' =
+    Bound_vars_and_body.apply_name_permutation bound_vars_and_body perm
   in
   let defining_expr' =
     Named.apply_name_permutation defining_expr perm
   in
-  if bound_var_and_body == bound_var_and_body'
+  if bound_vars_and_body == bound_vars_and_body'
     && defining_expr == defining_expr'
   then t
   else
-    { bound_var_and_body = bound_var_and_body';
-      name_occurrence_kind;
+    { bound_vars_and_body = bound_vars_and_body';
       defining_expr = defining_expr';
     }
