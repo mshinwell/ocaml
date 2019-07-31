@@ -450,8 +450,6 @@ let unary_primitive env dbg f arg =
       C.unbox_number ~dbg kind arg
   | Box_number kind ->
       C.box_number ~dbg kind arg
-  | Project_closure c ->
-      C.field_address arg (Env.closure_offset env c) dbg
   | Move_within_set_of_closures { move_from = c1; move_to = c2} ->
       let diff = (Env.closure_offset env c2) - (Env.closure_offset env c1) in
       C.field_address arg diff dbg
@@ -958,7 +956,11 @@ let static_structure_item (type a) env r (symb, st) =
       todo()
   | Set_of_closures s, Set_of_closures set ->
       let data, updates =
-        static_set_of_closures env s.set_of_closures_symbol s.closure_symbols set
+        (* CR mshinwell: Which symbol should be chosen instead of
+           the set of closures symbol, which now doesn't exist? *)
+        static_set_of_closures env
+          (Misc.fatal_error "Need to choose a set of closures symbol")
+          s.closure_symbols set
       in
       R.wrap_init (C.sequence updates) (R.add_data data r)
   | Singleton s, Boxed_float v ->

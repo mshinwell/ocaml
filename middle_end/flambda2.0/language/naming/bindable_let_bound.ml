@@ -89,7 +89,7 @@ let rename t =
     let closure_vars =
       Closure_id.Map.map (fun var -> Var_in_binding_pos.rename var) closure_vars
     in
-    Set_of_closures { name_occurence_kind; closure_vars; }
+    Set_of_closures { name_occurrence_kind; closure_vars; }
 
 let add_to_name_permutation t1 t2 perm =
   match t1, t2 with
@@ -153,7 +153,7 @@ let set_of_closures ~closure_vars =
 
 let name_occurrence_kind t =
   match t with
-  | Singleton var -> Var_in_binding_pos.name_occurrence_kind var
+  | Singleton var -> Var_in_binding_pos.occurrence_kind var
   | Set_of_closures { name_occurrence_kind; _ } -> name_occurrence_kind
 
 let must_be_singleton t =
