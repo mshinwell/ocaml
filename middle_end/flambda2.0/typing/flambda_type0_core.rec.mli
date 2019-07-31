@@ -128,7 +128,8 @@ val create_non_inlinable_function_declaration
 val exactly_this_closure
    : Closure_id.t
   -> Flambda_types.function_declaration
-  -> Flambda_types.ty_value Var_within_closure.Map.t
+  -> all_closures_in_set:Flambda_types.ty_value Closure_id.Map.t
+  -> all_closure_vars_in_set:Flambda_types.ty_value Var_within_closure.Map.t
   -> bound_to:Variable.t
   -> Flambda_types.t
 

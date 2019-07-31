@@ -16,10 +16,16 @@
 
 (** Things that a [Let]-expression binds. *)
 
-type t =
-  | Singleton of Var_in_binding_pos.t
-  | Set_of_closures of {
-      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
-    }
+type t
 
 include Bindable.S with type t := t
+
+val singleton : Var_in_binding_pos.t -> t
+
+val set_of_closures : closure_vars:Var_in_binding_pos.t Closure_id.Map.t -> t
+
+val must_be_singleton : t -> Var_in_binding_pos.t
+
+val must_be_set_of_closures : t -> Var_in_binding_pos.t Closure_id.Map.t
+
+val name_occurrence_kind : t -> Name_occurrence_kind.t

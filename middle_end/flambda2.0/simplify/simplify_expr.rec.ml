@@ -37,9 +37,8 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
-    let bound_vars_and_defining_exprs, dacc =
+    let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
-        ~result_var:bound_var
     in
     let body, user_data, uacc = simplify_expr dacc body k in
     let expr =
@@ -48,7 +47,7 @@ let rec simplify_let
           | Invalid -> Expr.create_invalid (), user_data, uacc
           | Reachable defining_expr ->
             Expr.create_pattern_let bound_vars defining_expr expr)
-        (List.rev bound_vars_and_defining_exprs)
+        (List.rev bindings)
         body
     in
     expr, user_data, uacc)

@@ -27,6 +27,7 @@ let create var occurrence_kind =
   }
 
 let var t = t.var
+let simple t = Simple.var (var t)
 let occurrence_kind t = t.occurrence_kind
 
 let with_var t var = { t with var; }
