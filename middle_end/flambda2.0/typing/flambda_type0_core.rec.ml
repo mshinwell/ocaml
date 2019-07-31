@@ -506,13 +506,11 @@ let create_non_inlinable_function_declaration ~param_arity ~result_arity
     recursive;
   }
 
-let exactly_this_closure closure_id function_decl closure_var_types
-      ~bound_to : t =
-  let closure_type = alias_type_of_as_ty_value (Name.var bound_to) in
-  let closure_types =
-    Types_by_closure_id.create
-      (Closure_id.Map.singleton closure_id closure_type)
-  in
+let exactly_this_closure closure_id function_decl
+      ~all_closures_in_set:closure_types
+      ~all_closure_vars_in_set:closure_var_types
+      : t =
+  let closure_types = Types_by_closure_id.create closure_types in
   let closure_var_types =
     Types_by_var_within_closure.create
       (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)

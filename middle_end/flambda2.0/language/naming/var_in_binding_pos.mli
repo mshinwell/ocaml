@@ -22,6 +22,8 @@ val create : Variable.t -> Name_occurrence_kind.t -> t
 
 val var : t -> Variable.t
 
+val simple : t -> Simple.t
+
 val occurrence_kind : t -> Name_occurrence_kind.t
 
 val rename : t -> t

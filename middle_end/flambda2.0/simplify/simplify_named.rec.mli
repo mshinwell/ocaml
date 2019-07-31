@@ -22,7 +22,6 @@ val simplify_named
    : Downwards_acc.t
   -> bound_vars:Bindable_let_bound.t
   -> Flambda.Named.t
-  -> result_var:Var_in_binding_pos.t
   -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
 type pre_simplification_types_of_my_closures = {

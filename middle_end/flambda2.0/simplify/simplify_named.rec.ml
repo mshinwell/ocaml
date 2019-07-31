@@ -190,17 +190,19 @@ let lift_set_of_closures dacc set_of_closures ~closure_elements_and_types
   in
   Reachable.reachable term, DA.with_r dacc r, ty
 
-let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
-  let set_of_closures_var = Variable.create "set_of_closures" in
-  let set_of_closures_ty_fabricated =
-    T.alias_type_of_as_ty_fabricated (Simple.var set_of_closures_var)
-  in
+let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_vars
+      ~closure_element_types =
   let closure_element_types =
     Var_within_closure.Map.map (fun ty_value ->
         T.erase_aliases_ty_value (DE.typing_env denv)
           ~bound_name:None
           ~allowed:Variable.Set.empty ty_value)
       closure_element_types
+  in
+  let closure_types_via_variables =
+    Closure_id.Map.map (fun bound_var ->
+        T.alias_type_of_as_ty_value (Var_in_binding_pos.simple bound_var))
+      closure_bound_vars
   in
   let closure_types =
     Closure_id.Map.mapi (fun closure_id function_decl ->
@@ -224,21 +226,20 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_element_types =
               ~param_arity ~result_arity
               ~recursive:(Function_declaration.recursive function_decl)
         in
-        T.closure closure_id function_decl_type closure_element_types
-          ~set_of_closures:set_of_closures_ty_fabricated)
+        T.exactly_this_closure closure_id function_decl_type
+          ~all_closures_in_set:closure_types_via_variables
+          ~all_closure_vars_in_set:closure_element_types)
       funs
   in
-  let set_of_closures_name =
-    Name_in_binding_pos.create (Name.var set_of_closures_var)
-      Name_occurrence_kind.in_types
-  in
-  let set_of_closures_type = T.set_of_closures ~closures:closure_types in
-  { set_of_closures = Some (set_of_closures_name, set_of_closures_type);
+  { closure_bound_vars;
     closure_types;
   }
 
-let simplify_set_of_closures dacc set_of_closures
-      ~(result_var : Var_in_binding_pos.t) =
+let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
+      set_of_closures =
+  let closure_bound_vars =
+    Bindable_let_bound.must_be_set_of_closures bound_vars
+  in
   (* By simplifying the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated. *)
   let closure_elements, closure_element_types =
@@ -248,7 +249,7 @@ let simplify_set_of_closures dacc set_of_closures
         (* CR mshinwell: This should probably be handled differently, but
            will require some threading through *)
         let min_occurrence_kind =
-          Var_in_binding_pos.occurrence_kind result_var
+          Bindable_let_bound.name_occurrence_kind bound_vars
         in
         let simple, ty =
           match
@@ -292,13 +293,9 @@ let simplify_set_of_closures dacc set_of_closures
        from the fact that closure elements cannot be deleted without a global
        analysis, as an inlined function's body may reference them out of
        scope of the closure declaration. *)
-(*
-Format.eprintf "Environment outside functions:\n%a\n%!"
-  T.Typing_env.print (DE.typing_env env);
-*)
     let pre_simplification_types_of_my_closures =
       pre_simplification_types_of_my_closures (DA.denv dacc)
-        ~funs ~closure_element_types
+        ~funs ~closure_bound_vars ~closure_element_types
     in
     let funs, fun_types, r =
       Closure_id.Map.fold
@@ -319,79 +316,68 @@ Format.eprintf "Environment outside functions:\n%a\n%!"
     let set_of_closures =
       Set_of_closures.create ~function_decls ~closure_elements
     in
-    let set_of_closures_ty_fabricated =
-      T.alias_type_of_as_ty_fabricated
-        (Simple.var (Var_in_binding_pos.var result_var))
-    in
     let closure_types =
       Closure_id.Map.mapi (fun closure_id function_decl_type ->
           T.closure closure_id function_decl_type closure_element_types
             ~set_of_closures:set_of_closures_ty_fabricated)
         fun_types
     in
-    let set_of_closures_type = T.set_of_closures ~closures:closure_types in
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         DE.add_variable denv result_var set_of_closures_type)
     in
     let term = Named.create_set_of_closures set_of_closures in
-    Reachable.reachable term, dacc, set_of_closures_type
+    let defining_expr = Reachable.reachable term in
+    [bound_vars, defining_expr], dacc
 
-let simplify_named0 dacc (named : Named.t) ~result_var =
-(*Format.eprintf "Simplifying binding of %a\n%!" Variable.print result_var;*)
+let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
+      (named : Named.t) =
   match named with
   | Simple simple ->
-(*let orig_simple = simple in*)
-    let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+    let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
+    let min_occurrence_kind = Var_in_binding_pos.occurrence_kind bound_var in
     begin match
       Simplify_simple.simplify_simple dacc simple ~min_occurrence_kind
     with
-    | Bottom, ty -> Reachable.invalid (), dacc, ty
+    | Bottom, ty ->
+      let defining_expr = Reachable.invalid () in
+      [bound_vars, defining_expr, ty], dacc
     | Ok simple, ty ->
-(*Format.eprintf "Simplified %a --> %a, type %a\n%!"
-  Simple.print orig_simple
-  Simple.print simple
-  T.print ty;*)
       let dacc =
-        DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv result_var ty)
+        DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv bound_var ty)
       in
-      Reachable.reachable (Named.create_simple simple), dacc, ty
+      let defining_expr = Reachable.reachable (Named.create_simple simple) in
+      [bound_vars, defining_expr], dacc
     end
   | Prim (prim, dbg) ->
-(*
-Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;
-*)
+    let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
     let term, env_extension, dacc =
-      Simplify_primitive.simplify_primitive dacc prim dbg ~result_var
+      Simplify_primitive.simplify_primitive dacc prim dbg ~result_var:bound_var
     in
-(*
-Format.eprintf "SP env_extension:@ %a\n%!" T.Typing_env_extension.print env_extension;
-*)
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let kind = P.result_kind' prim in
-        let denv = DE.add_variable denv result_var (T.unknown kind) in
+        let denv = DE.add_variable denv bound_var (T.unknown kind) in
         DE.extend_typing_environment denv env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)]
        holds. *)
-    Reification.try_to_reify dacc term ~bound_to:result_var
-  | Set_of_closures set_of_closures ->
-    simplify_set_of_closures dacc set_of_closures ~result_var
-
-let simplify_named dacc named ~result_var =
-  try
-    let named, dacc, ty = simplify_named0 dacc named ~result_var in
-    let named : Reachable.t =
-      match named with
-      | Invalid _ -> named
-      | Reachable _ ->
-        let denv = DA.denv dacc in
-        if T.is_bottom (DE.typing_env denv) ty then Reachable.invalid ()
-        else named
+    let defining_expr, dacc, ty =
+      Reification.try_to_reify dacc term ~bound_to:bound_var
     in
-    named, dacc
+    let defining_expr =
+      if T.is_bottom (DE.typing_env (DA.denv dacc)) ty then
+        Reachable.invalid ()
+      else
+        defining_expr
+    in
+    [bound_vars, defining_expr], dacc
+  | Set_of_closures set_of_closures ->
+    simplify_set_of_closures dacc ~bound_vars set_of_closures
+
+let simplify_named dacc ~bound_vars named =
+  try simplify_named0 dacc ~bound_vars named
   with Misc.Fatal_error -> begin
     Format.eprintf "\n%sContext is:%s simplifying [Let] binding@  %a = %a@ \
         with downwards accumulator:@ %a\n"
