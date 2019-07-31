@@ -155,3 +155,13 @@ let name_occurrence_kind t =
   match t with
   | Singleton var -> Var_in_binding_pos.name_occurrence_kind var
   | Set_of_closures { name_occurrence_kind; _ } -> name_occurrence_kind
+
+let must_be_singleton t =
+  match t with
+  | Singleton var -> var
+  | Set_of_closures _ -> Misc.fatal_errorf "Not a [Singleton]:@ %a" print t
+
+let must_be_set_of_closures t =
+  match t with
+  | Set_of_closures { closure_vars; _ } -> closure_vars
+  | Singleton _ -> Misc.fatal_errorf "Not a [Set_of_closures]:@ %a" print t

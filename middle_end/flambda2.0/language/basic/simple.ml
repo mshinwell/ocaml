@@ -146,6 +146,11 @@ let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
 
+let is_symbol t =
+  match t with
+  | Name (Symbol _) | Rec_name (Symbol _, _) -> true
+  | _ -> false
+
 let merge_rec_info t ~newer_rec_info =
   match newer_rec_info with
   | None -> Some t

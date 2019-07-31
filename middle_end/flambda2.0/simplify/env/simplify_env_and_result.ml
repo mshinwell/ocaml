@@ -94,6 +94,10 @@ end = struct
       continuation_scope_level = Scope.next t.continuation_scope_level;
     }
 
+  let increment_continuation_scope_level_twice t =
+    increment_continuation_scope_level
+      (increment_continuation_scope_level t)
+
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       continuation_scope_level = _;

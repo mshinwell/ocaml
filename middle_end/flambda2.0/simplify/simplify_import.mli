@@ -38,6 +38,7 @@ module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module EA = Continuation_extra_params_and_args.Extra_arg
 module EPA = Continuation_extra_params_and_args
+module FD = Function_declaration
 module K = Flambda_kind
 module KP = Kinded_parameter
 module P = Flambda_primitive
