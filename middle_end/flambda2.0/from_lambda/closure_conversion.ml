@@ -33,6 +33,7 @@ module P = Flambda_primitive
 module VB = Var_in_binding_pos
 
 type t = {
+  backend : (module Flambda2_backend_intf.S);
   current_unit_id : Ident.t;
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
@@ -372,6 +373,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
     Flambda.Expr.create_apply_cont apply_cont
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind exn_continuation
+      ~backend:t.backend
       ~register_const_string:(register_const_string t)
       prim ~args dbg k
 
@@ -577,7 +579,8 @@ and close_let_rec t env ~defs ~body =
     close_functions t env (Function_decls.create function_declarations)
   in
   let body = close t env body in
-  Expr.create_pattern_let (Set_of_closures { closure_vars; })
+  Expr.create_pattern_let
+    (Bindable_let_bound.set_of_closures ~closure_vars)
     set_of_closures body
 
 and close_functions t external_env function_declarations =
@@ -770,12 +773,13 @@ and close_one_function t ~external_env ~by_closure_id decl
     Closure_id.Map.add unboxed_version fun_decl
       (Closure_id.Map.add closure_id generic_function_stub by_closure_id)
 
-let ilambda_to_flambda ~module_ident ~size ~filename
+let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       (ilam : Ilambda.program) : Flambda_static.Program.t =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
-    { current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
+    { backend;
+      current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
       symbol_for_global' = Backend.symbol_for_global';
       filename;
       imported_symbols = Symbol.Set.empty;

@@ -33,7 +33,7 @@ val pattern_match
   -> 'a
 
 val create
-   : bound_var:Bindable_let_bound.t
+   : bound_vars:Bindable_let_bound.t
   -> defining_expr:Named.t
   -> body:Expr.t
   -> t

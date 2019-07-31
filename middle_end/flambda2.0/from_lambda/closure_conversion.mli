@@ -19,7 +19,8 @@
 (** Introduce closures into Ilambda code, producing Flambda. *)
 
 val ilambda_to_flambda
-   : module_ident:Ident.t
+   : backend:(module Flambda2_backend_intf.S)
+  -> module_ident:Ident.t
   -> size:int
   -> filename:string
   -> Ilambda.program

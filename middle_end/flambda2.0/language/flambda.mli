@@ -79,6 +79,10 @@ module rec Expr : sig
       whether something got deleted. *)
   val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
 
+  (** Create a [Let]-expression that may bind more than a single [Variable]
+      (such as is required to bind a [Set_of_closures]). *)
+  val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
+
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
 
@@ -213,7 +217,7 @@ end and Let_expr : sig
       class. *)
   val pattern_match
      : t
-    -> f:(bound_var:Var_in_binding_pos.t -> body:Expr.t -> 'a)
+    -> f:(bound_vars:Bindable_let_bound.t -> body:Expr.t -> 'a)
     -> 'a
 end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
