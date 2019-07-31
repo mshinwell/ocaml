@@ -530,7 +530,7 @@ module Iter_on_sets_of_closures = struct
     | Set_of_closures s -> set_of_closures f s
 
   and let_expr f t =
-    Let.pattern_match t ~f:(fun ~bound_var:_ ~body ->
+    Let.pattern_match t ~f:(fun ~bound_vars:_ ~body ->
         let e = Let.defining_expr t in
         named f e;
         expr f body

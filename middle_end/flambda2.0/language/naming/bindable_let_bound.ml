@@ -143,6 +143,7 @@ let set_of_closures ~closure_vars =
   match Name_occurrence_kind.Set.elements name_occurrence_kinds with
   | [] -> Misc.fatal_error "No closure IDs provided"
   | [name_occurrence_kind] ->
+    (* CR mshinwell: Check there are no duplicates in [closure_vars] *)
     Set_of_closures {
       name_occurrence_kind;
       closure_vars;
@@ -165,3 +166,9 @@ let must_be_set_of_closures t =
   match t with
   | Set_of_closures { closure_vars; _ } -> closure_vars
   | Singleton _ -> Misc.fatal_errorf "Not a [Set_of_closures]:@ %a" print t
+
+let all_bound_vars t =
+  match t with
+  | Singleton var -> Variable.Set.singleton var
+  | Set_of_closures closure_vars ->
+    Variable.Set.of_list (Closure_id.Map.data closure_vars)

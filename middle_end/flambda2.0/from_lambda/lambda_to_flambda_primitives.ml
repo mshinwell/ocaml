@@ -211,7 +211,7 @@ let print_list_of_simple_or_prim ppf simple_or_prim_list =
     (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple_or_prim)
     simple_or_prim_list
 
-let expression_for_failure exn_cont ~register_const_string
+let expression_for_failure ~backend exn_cont ~register_const_string
       primitive dbg (failure : failure) =
   let module B = (val backend : Flambda2_backend_intf.S) in
   let exn_bucket, extra_let_binding =
@@ -261,7 +261,7 @@ let expression_for_failure exn_cont ~register_const_string
   | Some (bound_var, defining_expr) ->
     Expr.create_let bound_var defining_expr apply_cont
 
-let rec bind_rec exn_cont
+let rec bind_rec ~backend exn_cont
           ~register_const_string
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
@@ -272,27 +272,27 @@ let rec bind_rec exn_cont
     let cont (arg : Simple.t) =
       cont (Named.create_prim (Unary (prim, arg)) dbg)
     in
-    bind_rec_primitive exn_cont ~register_const_string arg dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg dbg cont
   | Binary (prim, arg1, arg2) ->
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Named.create_prim (Binary (prim, arg1, arg2)) dbg)
       in
-      bind_rec_primitive exn_cont ~register_const_string arg1 dbg cont
+      bind_rec_primitive ~backend exn_cont ~register_const_string arg1 dbg cont
     in
-    bind_rec_primitive exn_cont ~register_const_string arg2 dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg2 dbg cont
   | Ternary (prim, arg1, arg2, arg3) ->
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg)
         in
-        bind_rec_primitive exn_cont ~register_const_string arg1
+        bind_rec_primitive ~backend exn_cont ~register_const_string arg1
           dbg cont
       in
-      bind_rec_primitive exn_cont ~register_const_string arg2 dbg cont
+      bind_rec_primitive ~backend exn_cont ~register_const_string arg2 dbg cont
     in
-    bind_rec_primitive exn_cont ~register_const_string arg3 dbg cont
+    bind_rec_primitive ~backend exn_cont ~register_const_string arg3 dbg cont
   | Variadic (prim, args) ->
     let cont args =
       cont (Named.create_prim (Variadic (prim, args)) dbg)
@@ -305,7 +305,7 @@ let rec bind_rec exn_cont
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive exn_cont ~register_const_string arg dbg cont
+        bind_rec_primitive ~backend exn_cont ~register_const_string arg dbg cont
     in
     build_cont (List.rev args) []
   | Checked { validity_conditions; primitive; failure; dbg; } ->
@@ -313,7 +313,7 @@ let rec bind_rec exn_cont
     let primitive_cont_handler =
       let params_and_handler =
         Continuation_params_and_handler.create []
-          ~handler:(bind_rec exn_cont ~register_const_string
+          ~handler:(bind_rec ~backend exn_cont ~register_const_string
             primitive dbg cont)
       in
       Continuation_handler.create ~params_and_handler
@@ -324,7 +324,7 @@ let rec bind_rec exn_cont
     let failure_cont_handler =
       let params_and_handler =
         Continuation_params_and_handler.create []
-          ~handler:(expression_for_failure exn_cont
+          ~handler:(expression_for_failure ~backend exn_cont
             ~register_const_string primitive dbg failure)
       in
       Continuation_handler.create ~params_and_handler
@@ -345,7 +345,7 @@ let rec bind_rec exn_cont
           Let_cont.create_non_recursive condition_passed_cont
             condition_passed_cont_handler
             ~body:(
-              bind_rec_primitive exn_cont ~register_const_string
+              bind_rec_primitive ~backend exn_cont ~register_const_string
                 (Prim expr_primitive) dbg
                 (fun prim_result ->
                   (Expr.create_switch
@@ -365,7 +365,7 @@ let rec bind_rec exn_cont
           failure_cont_handler
           ~body:check_validity_conditions)
 
-and bind_rec_primitive exn_cont ~register_const_string
+and bind_rec_primitive ~backend exn_cont ~register_const_string
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
       (cont : Simple.t -> Expr.t) : Expr.t =
@@ -378,7 +378,7 @@ and bind_rec_primitive exn_cont ~register_const_string
     let cont named =
       Flambda.Expr.create_let var' named (cont (Simple.var var))
     in
-    bind_rec exn_cont ~register_const_string p dbg cont
+    bind_rec ~backend exn_cont ~register_const_string p dbg cont
 
 let box_float (arg : expr_primitive) : expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
@@ -866,5 +866,5 @@ let convert_and_bind ~backend
       (dbg : Debuginfo.t)
       (cont : Named.t option -> Expr.t) : Expr.t =
   let expr = convert_lprim prim args dbg in
-  bind_rec exn_cont ~register_const_string expr dbg
+  bind_rec ~backend exn_cont ~register_const_string expr dbg
     (fun named -> cont (Some named))

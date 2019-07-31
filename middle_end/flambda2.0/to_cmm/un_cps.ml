@@ -14,6 +14,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* XXX Remove this once the file has been updated to cope with the
+   change in type of Let patterns *)
+[@@@ocaml.warning "-32"]
+
 open! Flambda.Import
 
 module Env = Un_cps_env
@@ -556,12 +560,17 @@ and named env n =
   | Prim (p, dbg) -> prim env dbg p
   | Set_of_closures s -> set_of_closures env s
 
-and let_expr env t =
-  Let.pattern_match t ~f:(fun ~bound_var:v ~body ->
+and let_expr _env t =
+  Let.pattern_match t ~f:(fun ~bound_vars:v ~body ->
+      ignore v;
+      ignore body;
+      Misc.fatal_error "Needs fixing"
+(*
       let e = Let.defining_expr t in
       let v = Var_in_binding_pos.var v in
       let env', v' = Env.create_variable env v in
       C.letin v' (named env' e) (expr env' body)
+*)
     )
 
 and has_one_occurrence num =
