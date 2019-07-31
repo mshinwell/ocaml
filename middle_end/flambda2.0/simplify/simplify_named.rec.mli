@@ -24,21 +24,14 @@ val simplify_named
   -> Flambda.Named.t
   -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
-type pre_simplification_types_of_my_closures = {
-  internal_closure_types : Flambda_type.t Closure_id.Map.t;
-  closure_types : Flambda_type.t Closure_id.Map.t;
-}
-
-val function_decl_type
-   : Simplify_env_and_result.Downwards_env.t
-  -> Flambda.Function_declaration.t
-  -> Rec_info.t
-  -> Flambda_type.t
-
-val simplify_function
+(** This is only for the use of [Simplify_static]. *)
+val simplify_set_of_closures0
    : Downwards_acc.t
-  -> Closure_id.t
-  -> Flambda.Function_declaration.t
-  -> pre_simplification_types_of_my_closures
-  -> Flambda.Function_declaration.t * Flambda_type.function_declaration
-       * Simplify_env_and_result.Result.t
+  -> result_dacc:Downwards_acc.t
+  -> Flambda.Set_of_closures.t
+  -> closure_bound_names:Name_in_binding_pos.t Closure_id.Map.t
+  -> closure_elements:Simple.t Var_within_closure.Map.t
+  -> closure_element_types:Flambda_type.ty_value Var_within_closure.Map.t
+  -> Flambda.Set_of_closures.t
+       * Flambda_type.t Name_in_binding_pos.Map.t
+       * Downwards_acc.t
