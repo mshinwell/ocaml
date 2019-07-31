@@ -522,8 +522,9 @@ let closure closure_id function_decl closure_elements ~set_of_closures : t =
   in
   let by_closure_id =
     Closures_entry_by_closure_id.create_exactly_multiple
-      (Closure_id_and_var_within_closure_set.Map.singleton
-        (closure_id, Var_within_closure.Map.keys closure_elements)
+      (Closure_id_or_unknown_and_var_within_closure_set.Map.singleton
+        (Or_unknown.Known closure_id,
+          Var_within_closure.Map.keys closure_elements)
         closures_entry)
   in
   let closures : closures =
@@ -544,11 +545,12 @@ let closure_containing_at_least var_within_closure ~closure_element_var =
       set_of_closures = any_fabricated_as_ty_fabricated ();
     }
   in
+  let closure_id = Or_unknown.Unknown in
+  let closure_vars = Var_within_closure.Set.singleton var_within_closure in
   let by_closure_id =
     Closures_entry_by_closure_id.create_at_least_multiple
-      (Var_within_closure_set.Map.singleton
-        (Var_within_closure.Set.singleton var_within_closure)
-        closures_entry)
+      (Closure_id_or_unknown_and_var_within_closure_set.Map.singleton
+        (closure_id, closure_vars) closures_entry)
   in
   let closures : closures =
     { by_closure_id;
@@ -583,18 +585,19 @@ let set_of_closures_containing_at_least by_closure_id =
 let at_least_these_closures closure_ids_to_closure_types =
   let closures_entry : closures_entry =
     { function_decl = Unknown;
-      closure_elements = Closure_elements.empty;
+      closure_elements = Closure_elements.bottom;
       set_of_closures = any_fabricated_as_ty_fabricated ();
     }
   in
   let closure_ids_to_closure_types =
+    let module COU = Closure_id_or_unknown_and_var_within_closure_set in
     Closure_id.Map.fold
       (fun closure_id closure_typ closure_ids_to_closure_types ->
-        let closure_vars = Var_within_closure_set.Map.empty in
+        let closure_vars = Var_within_closure_set.empty in
         let tag_and_index = Or_unknown.Known closure_id, closure_vars in
-        Closure_id.Map.add tag_and_index closure_typ
-          closure_ids_to_closure_types)
-      Closure_id.Map.empty
+        COU.Map.add tag_and_index closure_typ closure_ids_to_closure_types)
+      closure_ids_to_closure_types
+      COU.Map.empty
   in
   let by_closure_id =
     Closures_entry_by_closure_id.create_at_least_multiple

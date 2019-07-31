@@ -16,9 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Closure_id.Set.t
+module Closure_id_or_unknown = Or_unknown.Lift (Closure_id)
 
-include Identifiable.S with type t := t
-include Contains_names.S with type t := t
+type t = Closure_id_or_unknown.t * Var_within_closure.Set.t
 
-val subset : t -> t -> bool
+include Identifiable.Make_pair (Closure_id_or_unknown) (Var_within_closure_set)

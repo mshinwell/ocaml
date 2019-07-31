@@ -29,3 +29,5 @@ end)
 
 let free_names _ = Name_occurrences.empty
 let apply_name_permutation () _ = ()
+
+let subset () () = true

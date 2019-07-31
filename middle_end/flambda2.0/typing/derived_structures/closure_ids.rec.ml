@@ -21,19 +21,37 @@ module Unit_and_closure_id_set = struct
   include Identifiable.Make_pair (Unit) (Closure_id_set)
 end
 
+module Unit_or_unknown = Or_unknown.Lift (Unit)
+
+module Unit_or_unknown_and_closure_id_set = struct
+  type t = unit Or_unknown.t * Closure_id.Set.t
+  include Identifiable.Make_pair (Unit_or_unknown) (Closure_id_set)
+end
+
 include Row_like.Make (Unit) (Closure_id_set) (Unit_and_closure_id_set)
-  (Set_of_closures_entry)
+  (Unit_or_unknown_and_closure_id_set) (Set_of_closures_entry)
 
 type open_or_closed = Open | Closed
 
 let create closure_ids_map open_or_closed : t =
   match open_or_closed with
-  | Open -> create_at_least_multiple closure_ids_map
+  | Open ->
+    let closure_ids_map =
+      Closure_id_set.Map.fold
+        (fun closure_ids set_of_closures_entry result ->
+          Unit_or_unknown_and_closure_id_set.Map.add
+            (Or_unknown.Known (), closure_ids)
+            set_of_closures_entry result)
+        closure_ids_map
+        Unit_or_unknown_and_closure_id_set.Map.empty
+    in
+    create_at_least_multiple closure_ids_map
   | Closed ->
     let closure_ids_map =
       Closure_id_set.Map.fold
         (fun closure_ids set_of_closures_entry result ->
-          Unit_and_closure_id_set.Map.add ((), closure_ids)
+          Unit_and_closure_id_set.Map.add
+            ((), closure_ids)
             set_of_closures_entry result)
         closure_ids_map
         Unit_and_closure_id_set.Map.empty

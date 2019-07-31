@@ -24,6 +24,13 @@ module Make (Thing : Identifiable.S) = struct
     include Identifiable.Make_pair (Thing) (Unit)
   end
 
+  module Thing_or_unknown = Or_unknown.Lift (Thing)
+
+  module Thing_or_unknown_and_unit = struct
+    type t = Thing.t Or_unknown.t * unit
+    include Identifiable.Make_pair (Thing_or_unknown) (Unit)
+  end
+
   module Unit_maps_to = struct
     include Unit
 
@@ -36,7 +43,8 @@ module Make (Thing : Identifiable.S) = struct
     let widen () ~to_match:() = ()
   end
 
-  include Row_like.Make (Thing) (Unit) (Thing_and_unit) (Unit_maps_to)
+  include Row_like.Make (Thing) (Unit) (Thing_and_unit)
+    (Thing_or_unknown_and_unit) (Unit_maps_to)
 
   let create things =
     let things =
@@ -50,7 +58,7 @@ module Make (Thing : Identifiable.S) = struct
   let all t : _ Or_unknown.t =
     let indexes = at_least t in
     let known = known t in
-    if not (Unit.Map.is_empty indexes) then Unknown
+    if not (Thing_or_unknown_and_unit.Map.is_empty indexes) then Unknown
     else
       let things =
         Thing_and_unit.Set.fold (fun (thing, ()) things ->
