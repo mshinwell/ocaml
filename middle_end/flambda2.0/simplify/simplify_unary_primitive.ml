@@ -18,39 +18,24 @@
 
 open! Simplify_import
 
-let simplify_project_closure closure_id dacc ~original_term ~arg:_
-      ~arg_ty:set_of_closures_ty ~result_var =
-  let result = Simple.var (Var_in_binding_pos.var result_var) in
-  let closures =
-    Closure_id.Map.empty
-    |> Closure_id.Map.add closure_id (T.alias_type_of K.value result)
-  in
-  Simplify_primitive_common.simplify_projection
-    dacc ~original_term ~deconstructing:set_of_closures_ty
-    ~shape:(T.set_of_closures_containing_at_least closures)
-    ~result_var ~result_kind:K.value
-
 let simplify_move_within_set_of_closures ~move_from ~move_to
       dacc ~original_term ~arg:closure ~arg_ty:closure_ty ~result_var =
-  (* CR mshinwell: We're assuming here that the argument to the move is
-     always the closure whose ID is [move_from].  We should document this
-     somewhere most probably, e.g. flambda_primitive.mli. *)
   let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
     Closure_id.Map.empty
-    |> Closure_id.Map.add move_from (T.alias_type_of K.value closure)
-    |> Closure_id.Map.add move_to (T.alias_type_of K.value result)
+    |> Closure_id.Map.add move_from closure
+    |> Closure_id.Map.add move_to result
   in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.at_least_these_closures closures)
+    ~shape:(T.at_least_the_closures_with_ids closures)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var closure_element dacc ~original_term
       ~arg:_ ~arg_ty:closure_ty ~result_var =
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.closure_containing_at_least closure_element
+    ~shape:(T.closure_with_at_least_this_closure_var closure_element
       ~closure_element_var:(Var_in_binding_pos.var result_var))
     ~result_var ~result_kind:K.value
 
@@ -172,7 +157,6 @@ Format.eprintf "Simplifying %a\n%!" P.print
       let original_term = Named.create_prim original_prim dbg in
       let simplifier =
         match prim with
-        | Project_closure closure_id -> simplify_project_closure closure_id
         | Project_var closure_element -> simplify_project_var closure_element
         | Move_within_set_of_closures { move_from; move_to; } ->
           simplify_move_within_set_of_closures ~move_from ~move_to

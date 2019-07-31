@@ -178,10 +178,6 @@ and erase_aliases_of_kind_fabricated env ~bound_name:_ ~already_seen ~allowed
   | Discriminants discrs ->
     Discriminants (
       Discriminants.erase_aliases discrs env ~already_seen ~allowed)
-  | Set_of_closures { closures; } ->
-    Set_of_closures {
-      closures = Closure_ids.erase_aliases closures env ~already_seen ~allowed;
-    }
 
 and erase_aliases_ty_value env ~bound_name ~already_seen ~allowed ty =
   erase_aliases_ty env ~bound_name ~already_seen ~allowed
