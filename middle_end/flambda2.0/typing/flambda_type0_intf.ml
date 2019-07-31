@@ -307,33 +307,21 @@ module type S = sig
     -> recursive:Recursive.t
     -> function_declaration
 
-  (** Create a closure type given full information about the closure. *)
-  val closure
+  val exactly_this_closure
      : Closure_id.t
     -> function_declaration
-    -> ty_value Var_within_closure.Map.t
-    -> set_of_closures:ty_fabricated
-    -> t
+    -> all_closures_in_set:ty_value Closure_id.Map.t
+    -> all_closure_vars_in_set:ty_value Var_within_closure.Map.t
+    -> bound_to:Variable.t
+    -> flambda_type
 
-  (** The type of a closure (of kind [Value]) containing at least one
-      closure that holds the given closure variable with the given type. *)
-  val closure_containing_at_least
+  val at_least_the_closures_with_ids
+     : Simple.t Closure_id.Map.t
+    -> flambda_type
+
+  val closure_with_at_least_this_closure_var
      : Var_within_closure.t
     -> closure_element_var:Variable.t
-    -> flambda_type
-
-  (** The type of a set of closures containing exactly those closure IDs
-      with the given types. *)
-  val set_of_closures
-     : closures:t Closure_id.Map.t
-    -> t
-
-  val set_of_closures_containing_at_least
-     : flambda_type Closure_id.Map.t
-    -> flambda_type
-
-  val at_least_these_closures
-     : flambda_type Closure_id.Map.t
     -> flambda_type
 
   val array_of_length : length:ty_value -> flambda_type

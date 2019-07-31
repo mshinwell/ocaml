@@ -121,6 +121,14 @@ end = struct
     in
     { t with typing_env; }
 
+  let add_name t name ty =
+    let typing_env =
+      TE.add_equation
+        (TE.add_definition t.typing_env name (T.kind ty))
+        (Name_in_binding_pos.name name) ty
+    in
+    { t with typing_env; }
+
   let add_variable t var ty =
     let typing_env =
       let var' = Name_in_binding_pos.var var in
