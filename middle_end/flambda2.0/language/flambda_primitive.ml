@@ -449,7 +449,6 @@ type unary_primitive =
   | Boolean_not
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
-  | Project_closure of Closure_id.t
   | Move_within_set_of_closures of {
       move_from : Closure_id.t;
       move_to : Closure_id.t;
@@ -480,7 +479,6 @@ let unary_primitive_eligible_for_cse p =
   | Boolean_not -> true
   | Unbox_number _ -> false
   | Box_number _ -> true
-  | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> false
 
@@ -501,9 +499,8 @@ let compare_unary_primitive p1 p2 =
     | Boolean_not -> 12
     | Unbox_number _ -> 13
     | Box_number _ -> 14
-    | Project_closure _ -> 15
-    | Move_within_set_of_closures _ -> 16
-    | Project_var _ -> 17
+    | Move_within_set_of_closures _ -> 15
+    | Project_var _ -> 16
   in
   match p1, p2 with
   | Duplicate_block { kind = kind1;
@@ -545,8 +542,6 @@ let compare_unary_primitive p1 p2 =
     K.Boxable_number.compare kind1 kind2
   | Box_number kind1, Box_number kind2 ->
     K.Boxable_number.compare kind1 kind2
-  | Project_closure closure_id1, Project_closure closure_id2 ->
-    Closure_id.compare closure_id1 closure_id2
   | Move_within_set_of_closures {
         move_from = move_from1; move_to = move_to1; },
       Move_within_set_of_closures {
@@ -570,7 +565,6 @@ let compare_unary_primitive p1 p2 =
     | Bigarray_length _
     | Unbox_number _
     | Box_number _
-    | Project_closure _
     | Move_within_set_of_closures _
     | Project_var _), _ ->
     Stdlib.compare (unary_primitive_numbering p1)
@@ -603,9 +597,6 @@ let print_unary_primitive ppf p =
     fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase_short k
   | Box_number k ->
     fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
-  | Project_closure closure_id ->
-    Format.fprintf ppf "@[(Project_closure@ %a)@]"
-      Closure_id.print closure_id
   | Move_within_set_of_closures { move_from; move_to; } ->
     Format.fprintf ppf "@[(Move_within_set_of_closures@ \
         (move_from %a)@ (move_to %a))@]"
@@ -631,7 +622,6 @@ let arg_kind_of_unary_primitive p =
   | Bigarray_length _ -> K.value
   | Unbox_number _ -> K.value
   | Box_number kind -> K.Boxable_number.to_kind kind
-  | Project_closure _ -> K.fabricated
   | Move_within_set_of_closures _
   | Project_var _ -> K.value
 
@@ -656,7 +646,6 @@ let result_kind_of_unary_primitive p : result_kind =
   | Bigarray_length _ -> Singleton K.value
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
-  | Project_closure _
   | Move_within_set_of_closures _ -> Singleton K.value
   | Project_var _ -> Singleton K.value
 
@@ -690,7 +679,6 @@ let effects_and_coeffects_of_unary_primitive p =
     No_effects, No_coeffects
   | Box_number _ ->
     Only_generative_effects Immutable, No_coeffects
-  | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> No_effects, No_coeffects
 
@@ -710,7 +698,6 @@ let unary_classify_for_printing p =
   | Bigarray_length _
   | Unbox_number _ -> Destructive
   | Box_number _ -> Constructive
-  | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> Destructive
 
@@ -1113,9 +1100,6 @@ let invariant env t =
     let kind0 = arg_kind_of_unary_primitive prim in
     E.check_simple_is_bound_and_of_kind env x0 kind0;
     begin match prim, x0 with
-    | Project_closure closure_id, set_of_closures ->
-      E.check_simple_is_bound_and_of_kind env set_of_closures K.fabricated;
-      E.add_use_of_closure_id env closure_id
     | Move_within_set_of_closures { move_from; move_to; }, closure ->
       E.check_simple_is_bound_and_of_kind env closure K.value;
       E.add_use_of_closure_id env move_from;

@@ -506,102 +506,101 @@ let create_non_inlinable_function_declaration ~param_arity ~result_arity
     recursive;
   }
 
-let closure closure_id function_decl closure_elements ~set_of_closures : t =
-  let closure_elements' =
-    let closure_elements =
-      Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
-        closure_elements
-    in
-    Closure_elements.create closure_elements
+let exactly_this_closure closure_id function_decl closure_var_types
+      ~bound_to : t =
+  let closure_type = alias_type_of_as_ty_value (Name.var bound_to) in
+  let closure_types =
+    Types_by_closure_id.create
+      (Closure_id.Map.singleton closure_id closure_type)
+  in
+  let closure_var_types =
+    Types_by_var_within_closure.create
+      (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
+        closure_var_types)
   in
   let closures_entry : closures_entry =
     { function_decl = Known function_decl;
-      closure_elements = closure_elements';
-      set_of_closures;
+      closure_types;
+      closure_var_types;
     }
   in
   let by_closure_id =
-    Closures_entry_by_closure_id.create_exactly_multiple
-      (Closure_id_or_unknown_and_var_within_closure_set.Map.singleton
-        (Or_unknown.Known closure_id,
-          Var_within_closure.Map.keys closure_elements)
-        closures_entry)
-  in
-  let closures : closures =
-    { by_closure_id;
-    }
-  in
-  Value (No_alias (Ok (Closures closures)))
-
-let closure_containing_at_least var_within_closure ~closure_element_var =
-  let ty_value = alias_type_of_as_ty_value (Simple.var closure_element_var) in
-  let closure_elements =
-    Var_within_closure.Map.singleton var_within_closure (Value ty_value)
-  in
-  let closure_elements = Closure_elements.create closure_elements in
-  let closures_entry : closures_entry =
-    { function_decl = Unknown;
-      closure_elements;
-      set_of_closures = any_fabricated_as_ty_fabricated ();
-    }
-  in
-  let closure_id = Or_unknown.Unknown in
-  let closure_vars = Var_within_closure.Set.singleton var_within_closure in
-  let by_closure_id =
-    Closures_entry_by_closure_id.create_at_least_multiple
-      (Closure_id_or_unknown_and_var_within_closure_set.Map.singleton
-        (closure_id, closure_vars) closures_entry)
-  in
-  let closures : closures =
-    { by_closure_id;
-    }
-  in
-  Value (No_alias (Ok (Closures closures)))
-
-let set_of_closures ~closures : t =
-  if Closure_id.Map.is_empty closures then bottom K.value
-  else
-    let all_closures = Closure_id.Map.keys closures in
-    let by_closure_id = Types_by_closure_id.create closures in
-    let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
-    let closures =
-      Closure_ids.create
-        (Closure_id_set.Map.singleton all_closures set_of_closures_entry)
-        Closed
+    let set_of_closures_contents =
+      Set_of_closures_contents.create (Closure_id.Set.singleton closure_id)
+        (Var_within_closure.Map.keys closure_elements)
     in
-    Fabricated (No_alias (Ok (Set_of_closures { closures; })))
-
-let set_of_closures_containing_at_least by_closure_id =
-  let all_closures = Closure_id.Map.keys by_closure_id in
-  let by_closure_id = Types_by_closure_id.create by_closure_id in
-  let set_of_closures_entry : set_of_closures_entry = { by_closure_id; } in
-  let closures =
-    Closure_ids.create
-      (Closure_id_set.Map.singleton all_closures set_of_closures_entry)
-      Open
+    let set_of_closures_contents_to_closures_entry =
+      Set_of_closures_contents.Map.singleton set_of_closures_contents
+        closures_entry
+    in
+    Closures_entry_by_set_of_closures_contents.create_exactly_multiple
+      set_of_closures_contents_to_closures_entry
   in
-  Fabricated (No_alias (Ok (Set_of_closures { closures; })))
-
-let at_least_these_closures closure_ids_to_closure_types =
-  let closures_entry : closures_entry =
-    { function_decl = Unknown;
-      closure_elements = Closure_elements.bottom;
-      set_of_closures = any_fabricated_as_ty_fabricated ();
+  let closures : closures =
+    { by_closure_id;
     }
   in
-  let closure_ids_to_closure_types =
-    let module COU = Closure_id_or_unknown_and_var_within_closure_set in
-    Closure_id.Map.fold
-      (fun closure_id closure_typ closure_ids_to_closure_types ->
-        let closure_vars = Var_within_closure_set.empty in
-        let tag_and_index = Or_unknown.Known closure_id, closure_vars in
-        COU.Map.add tag_and_index closure_typ closure_ids_to_closure_types)
-      closure_ids_to_closure_types
-      COU.Map.empty
+  Value (No_alias (Ok (Closures closures)))
+
+let at_least_the_closures_with_ids closure_ids_and_bindings : t =
+  let closure_ids_and_types =
+    Closure_id.Map.map (fun bound_to ->
+        alias_type_of_as_ty_value bound_to)
+      closure_ids_and_bindings
+  in
+  let closure_types = Types_by_closure_id.create closure_ids_and_types in
+  let closures_entry : closures_entry =
+    { function_decl = Known function_decl;
+      closure_types;
+      closure_var_types = Types_by_var_within_closure.bottom;
+    }
   in
   let by_closure_id =
-    Closures_entry_by_closure_id.create_at_least_multiple
-      closure_ids_to_closure_types
+    let set_of_closures_contents =
+      Set_of_closures_contents.create
+        (Closure_id.Map.keys closure_ids_and_types)
+        Var_within_closure.Set.empty
+    in
+    let set_of_closures_contents_to_closures_entry =
+      Set_of_closures_contents.Map.singleton set_of_closures_contents
+        closures_entry
+    in
+    Closures_entry_by_set_of_closures_contents.create_at_least_multiple
+      set_of_closures_contents_to_closures_entry
+  in
+  let closures : closures =
+    { by_closure_id;
+    }
+  in
+  Value (No_alias (Ok (Closures closures)))
+
+let closure_with_at_least_this_closure_var closure_var ~closure_element_var
+      : t =
+  let closure_var_type =
+    alias_type_of_as_ty_value (Name.var closure_element_var)
+  in
+  let closure_var_types =
+    Types_by_var_within_closure.create
+      (Var_within_closure.Map.singleton closure_var closure_var_type)
+  in
+  let closures_entry : closures_entry =
+    { function_decl = Known function_decl;
+      closure_types = Types_by_closure_id.bottom;
+      closure_var_types;
+    }
+  in
+  let by_closure_id =
+    let set_of_closures_contents =
+      Set_of_closures_contents.create
+        Closure_id.Map.empty
+        (Var_within_closure.Set.singleton closure_var)
+    in
+    let set_of_closures_contents_to_closures_entry =
+      Set_of_closures_contents.Map.singleton set_of_closures_contents
+        closures_entry
+    in
+    Closures_entry_by_set_of_closures_contents.create_at_least_multiple
+      set_of_closures_contents_to_closures_entry
   in
   let closures : closures =
     { by_closure_id;

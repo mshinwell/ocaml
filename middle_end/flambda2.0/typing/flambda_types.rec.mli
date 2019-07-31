@@ -117,16 +117,18 @@ and closures_entry = {
   (** Information from the term language, if available, about the function
       declaration associated with the closure (call it [C]) described by a
       [closures_entry]. *)
-  closure_elements : Closure_elements.t;
+  closure_types : Types_by_closure_id.t;
+  (** Product, indexed by individual closure IDs, that describes the closures
+      within a set of closures. *)
+  closure_var_types : Types_by_var_within_closure.t;
   (** Product describing the variables within a closure. *)
-  set_of_closures : ty_fabricated;
-  (** Link back to the type of the set of closures containing [C]. *)
 }
 
 and closures = {
-  by_closure_id : Closures_entry_by_closure_id.t;
+  by_closure_id : Closures_entry_by_set_of_closures_contents.t;
   (** Row-like structure that selects [closures_entry] structures based
-      on closure ID and the set of variables in the closure. *)
+      on closure ID and the set of variables and closures in the corresponding
+      set of closures. *)
 }
 
 (** Unboxed ("naked") integer and floating-point numbers. *)
@@ -165,18 +167,3 @@ and of_kind_fabricated =
         - a block tag, as returned by the [Get_tag] primitive; or
         - a constant constructor which has undergone a kind-cast to kind
           [Fabricated] using the [Discriminant_of_int] primitive. *)
-  | Set_of_closures of set_of_closures
-    (** A possibly mutually-recursive collection of closure values, which
-        at runtime will be represented by a single block. *)
-
-and set_of_closures_entry = {
-  by_closure_id : Types_by_closure_id.t;
-  (** Product, indexed by individual closure IDs, that describes the makeup
-      of a set of closures. *)
-}
-
-and set_of_closures = {
-  closures : Closure_ids.t;
-  (** Row-like structure that maps _sets_ of [Closure_id.t]s to
-      [set_of_closures_entry] structures. *)
-}

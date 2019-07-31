@@ -215,9 +215,6 @@ type unary_primitive =
      [Flambda_kind.Of_naked_number.t] arguments (one input, one output). *)
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
-  | Project_closure of Closure_id.t
-    (** Extract a closure from some set of closures, ready for function
-        application, etc. *)
   | Move_within_set_of_closures of {
       move_from : Closure_id.t;
       move_to : Closure_id.t;

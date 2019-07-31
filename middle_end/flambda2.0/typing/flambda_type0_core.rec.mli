@@ -125,28 +125,20 @@ val create_non_inlinable_function_declaration
   -> recursive:Recursive.t
   -> Flambda_types.function_declaration
 
-val closure
+val exactly_this_closure
    : Closure_id.t
   -> Flambda_types.function_declaration
   -> Flambda_types.ty_value Var_within_closure.Map.t
-  -> set_of_closures:Flambda_types.ty_fabricated
+  -> bound_to:Variable.t
   -> Flambda_types.t
 
-val closure_containing_at_least
+val at_least_the_closures_with_ids
+   : Simple.t Closure_id.Map.t
+  -> Flambda_types.t
+
+val closure_with_at_least_this_closure_var
    : Var_within_closure.t
   -> closure_element_var:Variable.t
-  -> Flambda_types.t
-
-val set_of_closures
-   : closures:Flambda_types.t Closure_id.Map.t
-  -> Flambda_types.t
-
-val set_of_closures_containing_at_least
-   : Flambda_types.t Closure_id.Map.t
-  -> Flambda_types.t
-
-val at_least_these_closures
-   : Flambda_types.t Closure_id.Map.t
   -> Flambda_types.t
 
 val array_of_length : length:Flambda_types.ty_value -> Flambda_types.t

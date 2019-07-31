@@ -191,8 +191,6 @@ and print_of_kind_fabricated ~cache ppf
   | Discriminants discriminants ->
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
       (Discriminants.print_with_cache ~cache) discriminants
-  | Set_of_closures { closures; } ->
-    Closure_ids.print_with_cache ~cache ppf closures
 
 and print_ty_fabricated_with_cache ~cache ppf
       (ty : Flambda_types.ty_fabricated) =
