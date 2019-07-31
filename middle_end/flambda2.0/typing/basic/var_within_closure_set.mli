@@ -21,4 +21,8 @@
    things brought in using "include" can be shadowed.) *)
 type t = Var_within_closure.Set.t
 
+val empty : t
+
+val subset : t -> t -> bool
+
 include Identifiable.S with type t := t

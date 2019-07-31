@@ -35,10 +35,6 @@ let simplify_move_within_set_of_closures ~move_from ~move_to
   (* CR mshinwell: We're assuming here that the argument to the move is
      always the closure whose ID is [move_from].  We should document this
      somewhere most probably, e.g. flambda_primitive.mli. *)
-  (* CR mshinwell: We talked about enhancing [Row_like] so a tag could be
-     specified in the "at least" cases.  In this case we would set the tag
-     to [move_from].  Think again as to whether we really need this, as it
-     will complicate [Row_like]. *)
   let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
     Closure_id.Map.empty

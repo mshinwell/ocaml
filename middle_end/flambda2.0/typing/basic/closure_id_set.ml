@@ -25,3 +25,5 @@ end)
 
 let free_names _t = Name_occurrences.empty
 let apply_name_permutation t _perm = t
+
+let subset t1 t2 = Closure_id.Set.subset t1 t2

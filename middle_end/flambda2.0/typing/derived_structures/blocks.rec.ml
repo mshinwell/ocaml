@@ -20,8 +20,13 @@ module Int = Numbers.Int
 
 module Int_indexed_product = Product.Make (Int)
 
-include Row_like.Make (Tag) (Targetint.OCaml) (Tag_and_size)
-  (Int_indexed_product)
+module Index = struct
+  include Targetint.OCaml
+  let subset t1 t2 = Stdlib.(<=) (compare t1 t2) 0
+end
+
+include Row_like.Make (Tag) (Index) (Tag_and_size)
+  (Tag_or_unknown_and_size) (Int_indexed_product)
 
 type open_or_closed = Open | Closed of Tag.t
 
@@ -30,7 +35,7 @@ let create ~field_tys (open_or_closed : open_or_closed) =
   let product = Int_indexed_product.create (Int.Map.of_list fields) in
   let size = Targetint.OCaml.of_int (List.length field_tys) in
   match open_or_closed with
-  | Open -> create_at_least size product
+  | Open -> create_at_least Unknown size product
   | Closed tag -> create_exactly tag size product
 
 let all_tags_and_sizes t : _ Or_unknown.t =

@@ -22,11 +22,12 @@ type t
     and the set of variables in the closure. *)
 val create_exactly_multiple
    : Flambda_types.closures_entry
-       Closure_id_and_var_within_closure_set.Map.t
+       Closure_id_or_unknown_and_var_within_closure_set.Map.t
   -> t
 
 val create_at_least_multiple
-   : Flambda_types.closures_entry Var_within_closure_set.Map.t
+   : Flambda_types.closures_entry
+       Closure_id_or_unknown_and_var_within_closure_set.Map.t
   -> t
 
 val get_singleton

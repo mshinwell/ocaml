@@ -22,6 +22,8 @@ val create : Flambda_types.t Var_within_closure.Map.t -> t
 
 val bottom : t
 
+val widen : t -> to_match:t -> t
+
 include Type_structure_intf.S
   with type t := t
   with type typing_env := Typing_env.t

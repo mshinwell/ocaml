@@ -20,7 +20,10 @@ module TEE = Typing_env_extension
 
 module Make
   (Tag : Identifiable.S)
-  (Index : Identifiable.S)
+  (Index : sig
+     include Identifiable.S
+     val subset : t -> t -> bool
+  end)
   (Tag_and_index : sig
     type t = Tag.t * Index.t
     include Identifiable.S with type t := t
@@ -114,11 +117,16 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
       let env_extension = ref (TEE.empty ()) in
-      let one_side_only index1 maps_to1 at_least2 =
+      let one_side_only (tag_or_unknown1 : _ Or_unknown.t) index1
+            maps_to1 at_least2 =
         let from_at_least2 =
           Tag_or_unknown_and_index.Map.find_last_opt
-            (fun tag_and_index ->
-              Tag_or_unknown_and_index.compare tag_and_index index1 <= 0)
+            (fun (tag_or_unknown_and_index2 : _ Or_unknown.t * _) ->
+              match tag_or_unknown1, tag_or_unknown_and_index2 with
+              | _, (Unknown, index2)
+              | Unknown, (Known _, index2) -> Index.subset index2 index1
+              | Known tag1, (Known tag2, index2) ->
+                Tag.equal tag2 tag1 && Index.subset index2 index1)
             at_least2
         in
         begin match from_at_least2 with
@@ -127,7 +135,7 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
           | Meet -> None
           | Join -> Some maps_to1
           end
-        | Some (index2, from_at_least2) ->
+        | Some ((_tag_or_unknown, index2), from_at_least2) ->
           assert (Index.compare index2 index1 <= 0);
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env
@@ -151,12 +159,12 @@ Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
             Some maps_to
         end
       in
-      let merge index maps_to1 maps_to2 =
+      let merge tag index maps_to1 maps_to2 =
         match maps_to1, maps_to2 with
         | Some maps_to1, None ->
-          one_side_only index maps_to1 at_least2
+          one_side_only tag index maps_to1 at_least2
         | None, Some maps_to2 ->
-          one_side_only index maps_to2 at_least1
+          one_side_only tag index maps_to2 at_least1
         | Some maps_to1, Some maps_to2 ->
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env maps_to1 maps_to2
@@ -180,15 +188,15 @@ Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
         | None, None -> None
       in
       let known =
-        Tag_and_index.Map.merge (fun (_tag, index) maps_to1 maps_to2 ->
-            merge index maps_to1 maps_to2)
+        Tag_and_index.Map.merge (fun (tag, index) maps_to1 maps_to2 ->
+            merge (Known tag) index maps_to1 maps_to2)
           known1
           known2
       in
       let at_least =
         Tag_or_unknown_and_index.Map.merge
-          (fun tag_and_index maps_to1 maps_to2 ->
-            merge index maps_to1 maps_to2)
+          (fun (tag_or_unknown, index) maps_to1 maps_to2 ->
+            merge tag_or_unknown index maps_to1 maps_to2)
           at_least1
           at_least2
       in

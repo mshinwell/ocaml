@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Move the definition of type [t] here then remove all the
+   " : t" type annotations. *)
 type t = Flambda_types.closures_entry
 
 let create_bottom () : t =
@@ -42,7 +44,14 @@ let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let equal _ _ = Misc.fatal_error "Not yet implemented"
 
-let widen _t ~to_match:_ = assert false  (* XXX Think about this *)
+let widen (t : t) ~to_match : t =
+  let closure_elements =
+    Closure_elements.widen t.closure_elements ~to_match
+  in
+  { function_decl = t.function_decl;
+    closure_elements;
+    set_of_closures = t.set_of_closures;
+  }
 
 module Meet_value = Meet_and_join_value.Make (Lattice_ops.For_meet)
 module Join_value = Meet_and_join_value.Make (Lattice_ops.For_join)

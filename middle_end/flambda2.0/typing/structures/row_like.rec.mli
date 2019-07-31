@@ -18,7 +18,10 @@
 
 module Make
   (Tag : Identifiable.S)
-  (Index : Identifiable.S)
+  (Index : sig
+     include Identifiable.S
+     val subset : t -> t -> bool
+  end)
   (Tag_and_index : sig
     (** These values will not contain any names. *)
     type t = Tag.t * Index.t
