@@ -25,9 +25,15 @@ val simplify_named
   -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
 type pre_simplification_types_of_my_closures = {
-  set_of_closures : (Name_in_binding_pos.t * Flambda_type.t) option;
+  internal_closure_types : Flambda_type.t Closure_id.Map.t;
   closure_types : Flambda_type.t Closure_id.Map.t;
 }
+
+val function_decl_type
+   : Simplify_env_and_result.Downwards_env.t
+  -> Flambda.Function_declaration.t
+  -> Rec_info.t
+  -> Flambda_type.t
 
 val simplify_function
    : Downwards_acc.t
