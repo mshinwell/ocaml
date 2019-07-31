@@ -16,11 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(** [simplify_named] returns the bindings in order (i.e. outermost first
+    in the list). *)
 val simplify_named
    : Downwards_acc.t
+  -> bound_vars:Bindable_let_bound.t
   -> Flambda.Named.t
   -> result_var:Var_in_binding_pos.t
-  -> Reachable.t * Downwards_acc.t
+  -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
 type pre_simplification_types_of_my_closures = {
   set_of_closures : (Name_in_binding_pos.t * Flambda_type.t) option;

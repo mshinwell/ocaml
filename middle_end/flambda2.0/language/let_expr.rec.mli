@@ -29,11 +29,11 @@ val defining_expr : t -> Named.t
     class. *)
 val pattern_match
    : t
-  -> f:(bound_var:Var_in_binding_pos.t -> body:Expr.t -> 'a)
+  -> f:(bound_vars:Bindable_let_bound.t -> body:Expr.t -> 'a)
   -> 'a
 
 val create
-   : bound_var:Var_in_binding_pos.t
+   : bound_var:Bindable_let_bound.t
   -> defining_expr:Named.t
   -> body:Expr.t
   -> t

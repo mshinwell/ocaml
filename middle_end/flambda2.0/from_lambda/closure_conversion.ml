@@ -577,7 +577,8 @@ and close_let_rec t env ~defs ~body =
     close_functions t env (Function_decls.create function_declarations)
   in
   let body = close t env body in
-  Expr.create_let (Set_of_closures { closure_vars; }) set_of_closures body
+  Expr.create_pattern_let (Set_of_closures { closure_vars; })
+    set_of_closures body
 
 and close_functions t external_env function_declarations =
   let all_free_idents =

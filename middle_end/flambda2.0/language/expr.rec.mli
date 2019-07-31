@@ -60,6 +60,11 @@ val create_let0
     whether something got deleted. *)
 val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
 
+(** Create a [Let]-expression that may bind more than a single [Variable]
+    (such as is required to bind a [Set_of_closures]). *)
+(* CR mshinwell: Rename [Bindable_let_bound] -> [Let_pattern]? *)
+val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
+
 (** Create an application expression. *)
 val create_apply : Apply.t -> t
 

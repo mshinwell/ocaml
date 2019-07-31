@@ -342,7 +342,6 @@ module Program_body = struct
     type 'k t =
       | Singleton : Symbol.t -> K.value t
       | Set_of_closures : {
-          set_of_closures_symbol : Symbol.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> K.fabricated t
 
@@ -352,35 +351,22 @@ module Program_body = struct
         Format.fprintf ppf "@[<hov 1>(singleton@ @[(%a@ \u{2237}@ %a)@])@]"
           Symbol.print sym
           K.print K.value
-      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+      | Set_of_closures { closure_symbols; } ->
         Format.fprintf ppf "@[<hov 1>(\
-            @[<hov 1>(set_of_closures_symbol@ %a)@]@ \
             @[<hov 1>(closure_symbol@ %a)@]\
             )@]"
-          Symbol.print set_of_closures_symbol
           (Closure_id.Map.print Symbol.print) closure_symbols
 
     (* CR mshinwell: This should have an [invariant] function.  One thing to
-       check is that the [closure_symbols] are all distinct (and presumably
-       different from the set of closure symbol too, even though one will
-       eventually end up the same).
-    *)
+       check is that the [closure_symbols] are all distinct. *)
 
     let being_defined (type k) (t : k t) =
       match t with
       | Singleton sym -> Symbol.Set.singleton sym
-      | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
-        Symbol.Set.add set_of_closures_symbol
-          (Symbol.Set.of_list (Closure_id.Map.data closure_symbols))
+      | Set_of_closures { closure_symbols; } ->
+        Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
 
-    let _gc_roots (type k) (t : k t) =
-      match t with
-      | Singleton sym -> Symbol.Set.singleton sym
-      | Set_of_closures { set_of_closures_symbol; closure_symbols = _; } ->
-        (* Since all of the closures will be within the set of closures
-           value, using [Infix_tag], the individual closure symbols do not
-           need to be registered as roots. *)
-        Symbol.Set.singleton set_of_closures_symbol
+    let _gc_roots (type k) (_t : k t) = Misc.fatal_error "NYI"
   end
 
   module Static_structure = struct
