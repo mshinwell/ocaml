@@ -24,7 +24,7 @@ type t = {
 (* CR mshinwell: A sketch of code for the invariant check is on cps_types. *)
 let invariant _env _t = ()
 
-let create ~function_decls ~closure_elements =
+let create function_decls ~closure_elements =
   { function_decls;
     closure_elements;
   }

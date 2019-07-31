@@ -24,7 +24,7 @@ include Expr_std.S with type t := t
 (** Create a set of closures given the code for its functions and the
     closure variables. *)
 val create
-   : function_decls:Function_declarations.t
+   : Function_declarations.t
   -> closure_elements:Simple.t Var_within_closure.Map.t
   -> t
 

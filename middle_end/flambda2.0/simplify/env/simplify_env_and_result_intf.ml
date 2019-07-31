@@ -47,6 +47,8 @@ module type Downwards_env = sig
 
   val increment_continuation_scope_level : t -> t
 
+  val increment_continuation_scope_level_twice : t -> t
+
   val get_continuation_scope_level : t -> Scope.t
 
   val typing_env : t -> Flambda_type.Typing_env.t
