@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -927,7 +927,7 @@ and simplify_switch
                   T.immutable_block (Tag.Scannable.to_tag tag) ~fields
 *)
               end
-            | (Int | Is_int | Tag), _ ->
+            | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in

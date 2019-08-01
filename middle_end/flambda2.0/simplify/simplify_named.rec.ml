@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -45,7 +45,7 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
   in
   let closure_types_as_seen_from_own_body =
     Closure_id.Map.map (fun name ->
-        T.alias_type_of_as_ty_value (Name_in_binding_pos.simple name))
+        T.alias_type_of_as_ty_value (Name_in_binding_pos.to_simple name))
       closure_bound_names
   in
   let closure_types =
@@ -54,25 +54,17 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
           function_decl_type denv function_decl
             (Rec_info.create ~depth:1 ~unroll_to:None)
         in
-        let bound_to =
-          match Closure_id.Map.find closure_id closure_bound_names with
-          | exception Not_found ->
-            Misc.fatal_errorf "No [Name] for closure ID %a\n%!"
-              Closure_id.print closure_id
-          | name -> Name_in_binding_pos.name name
-        in
         T.exactly_this_closure closure_id
           function_decl_type_as_seen_from_own_body
           ~all_closures_in_set:closure_types_as_seen_from_own_body
-          ~all_closure_vars_in_set:closure_element_types
-          ~bound_to)
+          ~all_closure_vars_in_set:closure_element_types)
       funs
   in
   { internal_closure_types = closure_types_as_seen_from_own_body;
     closure_types;
   }
 
-let type_closure_elements_and_make_lifting_decision dacc ~bound_vars
+let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
       set_of_closures =
   (* By computing the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated.
@@ -84,11 +76,6 @@ let type_closure_elements_and_make_lifting_decision dacc ~bound_vars
   let closure_elements, closure_element_types =
     Var_within_closure.Map.fold
       (fun closure_var simple (closure_elements, closure_element_types) ->
-        (* CR mshinwell: This should probably be handled differently, but
-           will require some threading through *)
-        let min_occurrence_kind =
-          Bindable_let_bound.name_occurrence_kind bound_vars
-        in
         let simple, ty =
           match S.simplify_simple dacc simple ~min_occurrence_kind with
           | Bottom, ty ->
@@ -108,7 +95,8 @@ let type_closure_elements_and_make_lifting_decision dacc ~bound_vars
       (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
   in
   let can_lift =
-    Var_within_closure.Map.for_all Simple.is_symbol closure_elements
+    Var_within_closure.Map.for_all (fun _ simple -> Simple.is_symbol simple)
+      closure_elements
   in
   can_lift, closure_elements, closure_element_types
 
@@ -126,7 +114,7 @@ let simplify_function dacc closure_id_this_function function_decl
         let denv = DE.increment_continuation_scope_level_twice denv in
         let denv = DE.add_parameters_with_unknown_types denv params in
         let denv =
-          Closure_id.Map.fold (fun closure_id closure_typ denv ->
+          Closure_id.Map.fold (fun closure_id closure_type denv ->
               if Closure_id.equal closure_id closure_id_this_function then
                 denv
               else
@@ -135,10 +123,9 @@ let simplify_function dacc closure_id_this_function function_decl
                   Misc.fatal_errorf "No bound variable for closure ID %a"
                     Closure_id.print closure_id
                 | bound_name ->
-                  match Name_in_binding_pos.var_in_binding_pos bound_name with
+                  match Name_in_binding_pos.to_var bound_name with
                   | None -> denv
-                  | Some var ->
-                    DE.add_variable denv var closure_type)
+                  | Some var -> DE.add_variable denv var closure_type)
             pre_simplification_types_of_my_closures.closure_types
             denv
         in
@@ -233,11 +220,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   let dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
-          match Closure_id.Map.find closure_id closure_bound_names with
-          | exception Not_found ->
-            Misc.fatal_errorf "No bound variable for closure ID %a"
-              Closure_id.print closure_id
-          | bound_name -> DE.add_name denv bound_name closure_type)
+          DE.add_name denv bound_name closure_type)
         closure_types_by_bound_name
         denv)
   in
@@ -246,7 +229,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   in
   set_of_closures, closure_types_by_bound_name, dacc
 
-let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
+let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let closure_symbols =
@@ -255,8 +238,8 @@ let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
           (Linkage_name.create (Closure_id.unique_name closure_id)))
       (Function_declarations.funs function_decls)
   in
-  let _set_of_closures, dacc, _ty, static_structure_types, static_structure =
-    Simplify_static.simplify_set_of_closures dacc ~result_dacc:dacc
+  let _set_of_closures, dacc, static_structure_types, static_structure =
+    Simplify_static.simplify_set_of_closures0 dacc ~result_dacc:dacc
       set_of_closures ~closure_symbols ~closure_elements ~closure_element_types
   in
   let r =
@@ -276,7 +259,8 @@ let simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
           let simple = Simple.symbol closure_symbol in
           let defining_expr = Named.create_simple simple in
           let typ = T.alias_type_of K.value simple in
-          let denv = DA.add_variable denv bound_var typ in
+          let denv = DE.add_variable denv bound_var typ in
+          let bound_var = Bindable_let_bound.singleton bound_var in
           denv, (bound_var, Reachable.reachable defining_expr) :: bindings)
       closure_bound_vars
       (DA.denv dacc, [])
@@ -290,10 +274,10 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   in
   let set_of_closures, _closure_types_by_bound_name, dacc =
     simplify_set_of_closures0 dacc ~result_dacc:dacc set_of_closures
-      ~closure_bound_names
+      ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let defining_expr =
-    Named.create_set_of_closures (Reachable.reachable set_of_closures)
+    Reachable.reachable (Named.create_set_of_closures set_of_closures)
   in
   [bound_vars, defining_expr], dacc
 
@@ -302,12 +286,17 @@ let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
   let closure_bound_vars =
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in
+  (* CR mshinwell: This should probably be handled differently, but
+     will require some threading through *)
+  let min_occurrence_kind =
+    Bindable_let_bound.name_occurrence_kind bound_vars
+  in
   let can_lift, closure_elements, closure_element_types =
-    type_closure_elements_and_make_lifting_decision dacc ~bound_vars
+    type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
       set_of_closures
   in
   if can_lift then
-    simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars
+    simplify_and_lift_set_of_closures dacc ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types
   else
     simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
@@ -320,9 +309,9 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
     let min_occurrence_kind = Var_in_binding_pos.occurrence_kind bound_var in
     begin match S.simplify_simple dacc simple ~min_occurrence_kind with
-    | Bottom, ty ->
+    | Bottom, _ty ->
       let defining_expr = Reachable.invalid () in
-      [bound_vars, defining_expr, ty], dacc
+      [bound_vars, defining_expr], dacc
     | Ok simple, ty ->
       let dacc =
         DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv bound_var ty)

@@ -130,7 +130,6 @@ val exactly_this_closure
   -> Type_grammar.function_declaration
   -> all_closures_in_set:Type_grammar.ty_value Closure_id.Map.t
   -> all_closure_vars_in_set:Type_grammar.ty_value Var_within_closure.Map.t
-  -> bound_to:Variable.t
   -> Type_grammar.t
 
 val at_least_the_closures_with_ids

@@ -34,7 +34,17 @@ let var v =
     occurrence_kind = Var_in_binding_pos.occurrence_kind v;
   }
 
-let simple t = Simple.name t.name
+let symbol sym =
+  { name = Name.symbol sym;
+    occurrence_kind = Name_occurrence_kind.normal;
+  }
+
+let to_var t =
+  match t.name with
+  | Var var -> Some (Var_in_binding_pos.create var t.occurrence_kind)
+  | Symbol _ -> None
+
+let to_simple t = Simple.name t.name
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -61,3 +71,8 @@ include Identifiable.Make (struct
 
   let output _ _ = Misc.fatal_error "Not yet implemented"
 end)
+
+let must_be_symbol t =
+  match t.name with
+  | Symbol sym -> sym
+  | Var _ -> Misc.fatal_errorf "Must be a symbol:@ %a" print t

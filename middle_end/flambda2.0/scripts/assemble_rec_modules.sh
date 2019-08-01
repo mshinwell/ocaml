@@ -12,6 +12,9 @@ REC_MODULES_FILE=$2
 OUTPUT=$3
 
 DELIMITER="-- module rec binding here --"
+# CR mshinwell: Fix this to use something else -- we should be able to
+# delete the warning stanzas on .rec.ml files -- they are overridden by the
+# one in the .templ.ml file.
 WARNING_DELIMITER="@@@ocaml.warning"
 
 REC_BINDINGS=$(cat $REC_MODULES_FILE)
