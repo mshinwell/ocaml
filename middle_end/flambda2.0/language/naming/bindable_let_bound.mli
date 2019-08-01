@@ -16,7 +16,12 @@
 
 (** Things that a [Let]-expression binds. *)
 
-type t
+type t = private
+  | Singleton of Var_in_binding_pos.t
+  | Set_of_closures of {
+      name_occurrence_kind : Name_occurrence_kind.t;
+      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
+    }
 
 include Bindable.S with type t := t
 
@@ -31,3 +36,5 @@ val must_be_set_of_closures : t -> Var_in_binding_pos.t Closure_id.Map.t
 val name_occurrence_kind : t -> Name_occurrence_kind.t
 
 val all_bound_vars : t -> Var_in_binding_pos.Set.t
+
+val all_bound_vars' : t -> Variable.Set.t

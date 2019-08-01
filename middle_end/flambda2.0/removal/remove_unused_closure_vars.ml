@@ -135,7 +135,7 @@ and remove_vars_set_of_closures used_closure_vars set_of_closures =
         Var_within_closure.Set.mem closure_var used_closure_vars)
       (Set_of_closures.closure_elements set_of_closures)
   in
-  Set_of_closures.create ~function_decls ~closure_elements
+  Set_of_closures.create function_decls ~closure_elements
 
 let run program =
   let used_closure_vars = ref Var_within_closure.Set.empty in

@@ -41,16 +41,16 @@ let rec simplify_let
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
     let body, user_data, uacc = simplify_expr dacc body k in
-    let expr =
-      List.fold_left (fun (bound_vars, (defining_expr : Reachable.t)) expr ->
-          match defining_expr with
-          | Invalid -> Expr.create_invalid (), user_data, uacc
-          | Reachable defining_expr ->
-            Expr.create_pattern_let bound_vars defining_expr expr)
-        (List.rev bindings)
-        body
-    in
-    expr, user_data, uacc)
+    List.fold_left
+      (fun (expr, user_data, uacc)
+           (bound_vars, (defining_expr : Reachable.t)) ->
+        match defining_expr with
+        | Invalid _ -> Expr.create_invalid (), user_data, uacc
+        | Reachable defining_expr ->
+          let expr = Expr.create_pattern_let bound_vars defining_expr expr in
+          expr, user_data, uacc)
+      (body, user_data, uacc)
+      (List.rev bindings))
 
 and simplify_one_continuation_handler
   : 'a. DA.t -> param_types:T.t list
@@ -373,7 +373,7 @@ and simplify_direct_partial_application
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
-    Set_of_closures.create ~function_decls ~closure_elements
+    Set_of_closures.create function_decls ~closure_elements
   in
   let apply_cont =
     Apply_cont.create (Apply.continuation apply)

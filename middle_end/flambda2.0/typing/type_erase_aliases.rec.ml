@@ -161,8 +161,8 @@ and erase_aliases_of_kind_value env ~bound_name ~already_seen ~allowed
   | Closures { by_closure_id; } ->
     Closures {
       by_closure_id =
-        Closures_entry_by_closure_id.erase_aliases by_closure_id env
-          ~already_seen ~allowed;
+        Closures_entry_by_set_of_closures_contents.erase_aliases by_closure_id
+          env ~already_seen ~allowed;
     }
   | String _ -> of_kind
   | Array { length; } ->

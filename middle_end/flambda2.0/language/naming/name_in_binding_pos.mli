@@ -28,4 +28,6 @@ val occurrence_kind : t -> Name_occurrence_kind.t
 
 val var : Var_in_binding_pos.t -> t
 
+val simple : t -> Simple.t
+
 include Identifiable.S with type t := t

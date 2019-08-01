@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module T = Flambda_type
+module VB = Var_in_binding_pos
+
 module Bound_vars_and_body = Name_abstraction.Make (Bindable_let_bound) (Expr)
 
 type t = {
@@ -75,10 +78,10 @@ let create ~bound_vars ~defining_expr ~body =
 let invariant env t =
   let module E = Invariant_env in
   Named.invariant env t.defining_expr;
-  pattern_match t ~f:(fun ~bound_vars ~body ->
+  pattern_match t ~f:(fun ~(bound_vars : Bindable_let_bound.t) ~body ->
     let env =
       match t.defining_expr, bound_vars with
-      | Set_of_closures _, Set_of_closures { closure_vars; } ->
+      | Set_of_closures _, Set_of_closures { closure_vars; _ } ->
         Closure_id.Map.fold (fun _closure_id closure_var env ->
             let closure_var = VB.var closure_var in
             E.add_variable env closure_var K.value)
@@ -106,21 +109,20 @@ let invariant env t =
 
 let defining_expr t = t.defining_expr
 
-let free_names ({ bound_var_and_body = _; defining_expr; } as t) =
+let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
   pattern_match t ~f:(fun ~bound_vars ~body ->
-    let bound_var = Bindable_let_bound.all_bound_vars bound_vars in
     let name_occurrence_kind =
       Bindable_let_bound.name_occurrence_kind bound_vars
     in
+    let bound_vars = Bindable_let_bound.all_bound_vars' bound_vars in
     let from_defining_expr =
       Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
         (Named.free_names defining_expr)
         name_occurrence_kind
     in
-    let from_body =
-      Var_in_binding_pos.Set.fold (fun ... Expr.free_names body in
+    let from_body = Expr.free_names body in
     Name_occurrences.union from_defining_expr
-      (Name_occurrences.remove_var from_body bound_var))
+      (Name_occurrences.remove_vars from_body bound_vars))
 
 let apply_name_permutation ({ bound_vars_and_body; defining_expr; } as t)
       perm =

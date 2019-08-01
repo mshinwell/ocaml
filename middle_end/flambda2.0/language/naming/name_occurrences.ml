@@ -403,6 +403,9 @@ let remove_var t var =
     variables;
   }
 
+let remove_vars t vars =
+  Variable.Set.fold (fun var t -> remove_var t var) vars t
+
 let only_contains_symbols { variables; continuations; symbols; } =
   For_variables.is_empty variables
     && For_continuations.is_empty continuations

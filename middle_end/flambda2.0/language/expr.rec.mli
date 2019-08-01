@@ -50,8 +50,8 @@ type let_creation_result = private
 (** Create a variable binding.  Unnecessary variable bindings will not be
     created and their associated defining expressions will be reported as
     [Have_deleted]. *)
-val create_let0
-   : Var_in_binding_pos.t
+val create_pattern_let0
+   : Bindable_let_bound.t
   -> Named.t
   -> t
   -> t * let_creation_result

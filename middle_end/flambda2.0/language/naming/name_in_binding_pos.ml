@@ -34,6 +34,8 @@ let var v =
     occurrence_kind = Var_in_binding_pos.occurrence_kind v;
   }
 
+let simple t = Simple.name t.name
+
 include Identifiable.Make (struct
   type nonrec t = t
 

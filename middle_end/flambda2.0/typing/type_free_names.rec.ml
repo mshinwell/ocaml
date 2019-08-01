@@ -59,7 +59,7 @@ and free_names_of_kind_value (of_kind : Flambda_types.of_kind_value)
   | Boxed_number (Boxed_nativeint n) ->
     free_names_ty free_names_of_kind_naked_number n
   | Closures { by_closure_id; } ->
-    Closures_entry_by_closure_id.free_names by_closure_id
+    Closures_entry_by_set_of_closures_contents.free_names by_closure_id
   | String _ -> Name_occurrences.empty
   | Array { length; } ->
     free_names_ty free_names_of_kind_value length
@@ -68,7 +68,6 @@ and free_names_of_kind_fabricated
       (of_kind : Flambda_types.of_kind_fabricated) =
   match of_kind with
   | Discriminants discrs -> Discriminants.free_names discrs
-  | Set_of_closures { closures; } -> Closure_ids.free_names closures
 
 let free_names_of_ty_fabricated ty =
   free_names_ty free_names_of_kind_fabricated ty
