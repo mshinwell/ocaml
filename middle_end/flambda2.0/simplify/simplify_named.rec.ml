@@ -232,7 +232,8 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           denv
       in
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
-          DE.add_name denv bound_name closure_type)
+          DE.add_equation_on_name denv (Name_in_binding_pos.to_name bound_name)
+            closure_type)
         closure_types_by_bound_name
         denv)
   in

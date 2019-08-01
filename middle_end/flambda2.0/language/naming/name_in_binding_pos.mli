@@ -34,6 +34,7 @@ val must_be_symbol : t -> Symbol.t
 (* CR mshinwell: Ensure naming consistent with Var_in_binding_pos.  Make
    constructors and destructors clear. *)
 val to_var : t -> Var_in_binding_pos.t option
+val to_name : t -> Name.t
 val to_simple : t -> Simple.t
 
 include Identifiable.S with type t := t
