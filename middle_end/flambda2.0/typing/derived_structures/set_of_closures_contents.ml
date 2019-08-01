@@ -25,10 +25,10 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let print ppf { closures; closure_vars; } =
-    Format.fprintf ppf "@[<hov 1>\
+    Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(closures@ %a)@]@ \
           @[<hov 1>(closure_vars@ %a)@]\
-        @]"
+          )@]"
       Closure_id.Set.print closures
       Var_within_closure.Set.print closure_vars
 
@@ -67,7 +67,10 @@ module With_closure_id = struct
   include Identifiable.Make (struct
     type nonrec t = t
 
-    let print _ _ = Misc.fatal_error "Not yet implemented"
+    let print ppf (closure_id, contents) =
+      Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+        Closure_id.print closure_id
+        print contents
 
     let output _ _ = Misc.fatal_error "Not yet implemented"
 
@@ -89,7 +92,10 @@ module With_closure_id_or_unknown = struct
   include Identifiable.Make (struct
     type nonrec t = t
 
-    let print _ _ = Misc.fatal_error "Not yet implemented"
+    let print ppf (closure_id_or_unknown, contents) =
+      Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+        (Or_unknown.print Closure_id.print) closure_id_or_unknown
+        print contents
 
     let output _ _ = Misc.fatal_error "Not yet implemented"
 

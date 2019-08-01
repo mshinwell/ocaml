@@ -32,7 +32,7 @@ let print_with_cache ~cache ppf
     "@[<hov 1>(\
       @[<hov 1>(function_decl@ %a)@]@ \
       @[<hov 1>(closure_types@ %a)@]@ \
-      @[<hov 1>(closure_var_types@ %a)@]@\
+      @[<hov 1>(closure_var_types@ %a)@]\
       )@]"
     (Or_unknown.print
       (Type_printers.print_function_declaration_with_cache ~cache))
@@ -42,7 +42,7 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let equal _ _ = Misc.fatal_error "Not yet implemented"
+let equal _ _ = Misc.fatal_error "Closures_entry.equal not yet implemented"
 
 let widen (t : t) ~(to_match : t) : t =
   let closure_types =
