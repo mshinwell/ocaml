@@ -46,8 +46,10 @@ let print_arms ppf arms =
   let spc = ref false in
   Discriminant.Map.iter (fun discriminant l ->
       if !spc then fprintf ppf "@ " else spc := true;
-      fprintf ppf "@[<h>| %a ->@ @<0>%sgoto@<0>%s %a@]"
+      fprintf ppf "@[<h>| %a @<0>%s\u{21a6}@<0>%s@ @<0>%sgoto@<0>%s %a@]"
         Discriminant.print discriminant
+        (Flambda_colours.elide ())
+        (Flambda_colours.normal ())
         (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
         Continuation.print l)

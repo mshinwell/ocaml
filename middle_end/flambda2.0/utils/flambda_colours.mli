@@ -52,3 +52,5 @@ val elide : unit -> string
 val error : unit -> string
 
 val each_file : unit -> string
+
+val lambda : unit -> string

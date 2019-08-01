@@ -72,6 +72,9 @@ let print_with_cache0 ~compact ~cache ppf
   let module C = Flambda_colours in
   Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+      let my_closure =
+        Kinded_parameter.create (Parameter.wrap my_closure) Flambda_kind.value
+      in
       fprintf ppf "@[<hov 1>(\
           @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
           @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
@@ -81,9 +84,7 @@ let print_with_cache0 ~compact ~cache ppf
           @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
           @[<hov 1>(closure_origin@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
-          @[<hov 1>(exn_continuation@ %a)@]@ \
-          @[<hov 1>(params@ %a)@]@ \
-          @[<hov 1>(my_closure@ @<0>%s%a@<0>%s)@]@ "
+          @[<hov 1>(exn_continuation@ %a)@]@ "
         (if not stub then Flambda_colours.elide () else C.normal ())
         stub
         (Flambda_colours.normal ())
@@ -114,15 +115,18 @@ let print_with_cache0 ~compact ~cache ppf
         (Flambda_colours.normal ())
         Closure_origin.print closure_origin
         Continuation.print return_continuation
-        Exn_continuation.print exn_continuation
-        Kinded_parameter.List.print params
-        (Flambda_colours.parameter ())
-        Variable.print my_closure
-        (Flambda_colours.normal ());
+        Exn_continuation.print exn_continuation;
       if compact then begin
-        fprintf ppf "@[<hov 1>(body@ <elided>)@])@]"
+        fprintf ppf "@[<hov 1>(params_and_body@ <elided>)@])@]"
       end else begin
-        fprintf ppf "@[<hov 1>(body@ %a)@])@]"
+        fprintf ppf
+          "@[<hov 1>(@<0>%s\u{03bb}@<0>%s %a %a @<0>%s.@<0>%s@ %a)@])@]"
+          (Flambda_colours.lambda ())
+          (Flambda_colours.normal ())
+          Kinded_parameter.List.print params
+          Kinded_parameter.print my_closure
+          (Flambda_colours.elide ())
+          (Flambda_colours.normal ())
           (Expr.print_with_cache ~cache) body
       end)
 
