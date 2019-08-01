@@ -54,3 +54,5 @@ let error () = C.fg_256 160
 let elide () = C.fg_256 243
 
 let each_file () = C.fg_256 51
+
+let lambda () = expr_keyword ()

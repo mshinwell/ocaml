@@ -24,11 +24,19 @@ type t =
 include Identifiable.Make (struct
   type nonrec t = t
 
+  let print_closure_binding ppf (closure_id, var) =
+    Format.fprintf ppf "@[(%a \u{21a6} %a)@]"
+      Closure_id.print closure_id
+      Var_in_binding_pos.print var
+
   let print ppf t =
     match t with
     | Singleton var -> Var_in_binding_pos.print ppf var
     | Set_of_closures { name_occurrence_kind = _; closure_vars; } ->
-      Closure_id.Map.print Var_in_binding_pos.print ppf closure_vars
+      Format.fprintf ppf "@[<hov 1>(%a)@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          print_closure_binding)
+        (Closure_id.Map.bindings closure_vars)
 
   let compare t1 t2 =
     match t1, t2 with

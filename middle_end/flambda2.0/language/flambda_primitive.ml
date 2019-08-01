@@ -599,7 +599,7 @@ let print_unary_primitive ppf p =
     fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
   | Move_within_set_of_closures { move_from; move_to; } ->
     Format.fprintf ppf "@[(Move_within_set_of_closures@ \
-        (move_from %a)@ (move_to %a))@]"
+        (%a \u{2192} %a))@]"
       Closure_id.print move_from
       Closure_id.print move_to
   | Project_var var_within_closure ->
