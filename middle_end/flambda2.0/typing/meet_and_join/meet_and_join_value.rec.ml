@@ -127,12 +127,12 @@ struct
 
   let meet_or_join_closures_entry env
         ({ function_decl = function_decl1;
-           closure_elements = closure_elements1;
-           set_of_closures = set_of_closures1;
+           closure_types = closure_types1;
+           closure_var_types = closure_var_types1;
          } : T.closures_entry)
         ({ function_decl = function_decl2;
-           closure_elements = closure_elements2;
-           set_of_closures = set_of_closures2;
+           closure_types = closure_types2;
+           closure_var_types = closure_var_types2;
          } : T.closures_entry) =
     let function_decl : T.function_declaration Or_unknown.t =
       match function_decl1, function_decl2 with
@@ -189,20 +189,21 @@ struct
                both behave in the same way, even if we cannot prove it. *)
             function_decl1
     in
-    let closure_elements =
-      E.switch Closure_elements.meet Closure_elements.join env
-        closure_elements1 closure_elements2
+    let closure_types =
+      E.switch Types_by_closure_id.meet Types_by_closure_id.join
+        env closure_types1 closure_types2
     in
-    let set_of_closures =
-      Fabricated.meet_or_join_ty env set_of_closures1 set_of_closures2
+    let closure_var_types =
+      E.switch Types_by_var_within_closure.meet Types_by_var_within_closure.join
+        env closure_var_types1 closure_var_types2
     in
-    Or_bottom.both closure_elements set_of_closures
-      ~f:(fun (closure_elements, env_extension1)
-              (set_of_closures, env_extension2) ->
+    Or_bottom.both closure_types closure_var_types
+      ~f:(fun (closure_types, env_extension1)
+              (closure_var_types, env_extension2) ->
         let closures_entry : T.closures_entry =
           { function_decl;
-            closure_elements;
-            set_of_closures;
+            closure_types;
+            closure_var_types;
           }
         in
         let env_extension =
@@ -259,7 +260,7 @@ struct
         (fun n -> T.Boxed_nativeint n)
     | Closures { by_closure_id = by_closure_id1; },
         Closures { by_closure_id = by_closure_id2; } ->
-      let module C = Closures_entry_by_closure_id in
+      let module C = Closures_entry_by_set_of_closures_contents in
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch C.meet C.join env by_closure_id1 by_closure_id2)
         ~f:(fun (by_closure_id, env_extension) ->

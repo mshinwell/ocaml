@@ -6,7 +6,6 @@
     type_grammar.rec.ml
     basic_type_ops.rec.ml
     derived_structures/blocks.rec.ml
-    derived_structures/closure_elements.rec.ml
     derived_structures/closures_entry.rec.ml
     derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
     derived_structures/discriminants.rec.ml
@@ -38,7 +37,6 @@
     type_grammar.rec.mli
     basic_type_ops.rec.mli
     derived_structures/blocks.rec.mli
-    derived_structures/closure_elements.rec.mli
     derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_set_of_closures_contents.rec.mli
     derived_structures/discriminants.rec.mli

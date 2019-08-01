@@ -28,7 +28,7 @@ let simplify_move_within_set_of_closures ~move_from ~move_to
   in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.at_least_the_closures_with_ids closures)
+    ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var closure_element dacc ~original_term

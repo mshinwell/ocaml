@@ -26,6 +26,8 @@ val print
   -> 'a t
   -> unit
 
+val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+
 val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
 val map : 'a t -> f:('a -> 'b) -> 'b t

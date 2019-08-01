@@ -310,12 +310,13 @@ module type S = sig
   val exactly_this_closure
      : Closure_id.t
     -> function_declaration
-    -> all_closures_in_set:ty_value Closure_id.Map.t
+    -> all_closures_in_set:t Closure_id.Map.t
     -> all_closure_vars_in_set:ty_value Var_within_closure.Map.t
     -> flambda_type
 
   val at_least_the_closures_with_ids
-     : Simple.t Closure_id.Map.t
+     : this_closure:Closure_id.t
+    -> Simple.t Closure_id.Map.t
     -> flambda_type
 
   val closure_with_at_least_this_closure_var

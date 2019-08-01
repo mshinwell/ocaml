@@ -171,11 +171,11 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
       match resolved with
       | Resolved_value (Ok (Closures closures)) ->
         begin
-          match Closures_entry_by_closure_id.get_singleton
+          match Closures_entry_by_set_of_closures_contents.get_singleton
             closures.by_closure_id
         with
         | None -> Unknown
-        | Some ((closure_id, _var_within_closures), closures_entry) ->
+        | Some ((closure_id, _set_of_closures_contents), closures_entry) ->
           Proved (closure_id, closures_entry.function_decl)
         end
       | Resolved_value (Ok _) -> Invalid
@@ -505,7 +505,6 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
         | Known discrs -> Proved discrs
         | Unknown -> Unknown
         end
-      | Resolved_fabricated (Ok (Set_of_closures _)) -> Invalid
       | Resolved_fabricated Unknown -> Unknown
       | Resolved_fabricated Bottom -> Invalid
 

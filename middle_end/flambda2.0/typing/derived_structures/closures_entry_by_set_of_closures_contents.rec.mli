@@ -19,11 +19,12 @@
 type t
 
 val create_exactly_multiple
-   : Type_grammar.closures_entry Set_of_closures_contents.Map.t
+   : Type_grammar.closures_entry Set_of_closures_contents.With_closure_id.Map.t
   -> t
 
 val create_at_least_multiple
-   : Type_grammar.closures_entry Set_of_closures_contents.Map.t
+   : Type_grammar.closures_entry
+       Set_of_closures_contents.With_closure_id_or_unknown.Map.t
   -> t
 
 val map_function_decl_types

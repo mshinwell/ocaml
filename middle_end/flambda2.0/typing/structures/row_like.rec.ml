@@ -74,9 +74,10 @@ struct
       at_least = Tag_or_unknown_and_index.Map.empty;
     }
 
-  let create_at_least index maps_to =
+  let create_at_least tag_or_unknown_and_index maps_to =
     { known = Tag_and_index.Map.empty;
-      at_least = Tag_or_unknown_and_index.Map.singleton index maps_to;
+      at_least =
+        Tag_or_unknown_and_index.Map.singleton tag_or_unknown_and_index maps_to;
     }
 
   let create_at_least_multiple at_least =

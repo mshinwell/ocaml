@@ -19,4 +19,9 @@
 include
   Row_like.Make (Closure_id) (Set_of_closures_contents)
     (Set_of_closures_contents.With_closure_id)
+    (Set_of_closures_contents.With_closure_id_or_unknown)
     (Closures_entry)
+
+let map_function_decl_types t ~f =
+  map_maps_to t ~f:(fun closures_entry ->
+    Closures_entry.map_function_decl_types closures_entry ~f)
