@@ -24,7 +24,7 @@
     From the body of the function, accesses to variables within the closure
     need to go via a [Project_var] (from [my_closure]); accesses to any other
     simultaneously-defined functions need to go likewise via a
-    [Move_within_set_of_closures]. *)
+    [Select_closure]. *)
 type t
 
 (** Printing, invariant checks, name manipulation, etc. *)

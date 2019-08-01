@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let simplify_move_within_set_of_closures ~move_from ~move_to
+let simplify_select_closure ~move_from ~move_to
       dacc ~original_term ~arg:closure ~arg_ty:closure_ty ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
@@ -158,8 +158,8 @@ Format.eprintf "Simplifying %a\n%!" P.print
       let simplifier =
         match prim with
         | Project_var closure_element -> simplify_project_var closure_element
-        | Move_within_set_of_closures { move_from; move_to; } ->
-          simplify_move_within_set_of_closures ~move_from ~move_to
+        | Select_closure { move_from; move_to; } ->
+          simplify_select_closure ~move_from ~move_to
         | Unbox_number boxable_number_kind ->
           simplify_unbox_number boxable_number_kind
         | Box_number boxable_number_kind ->
