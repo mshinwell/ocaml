@@ -346,7 +346,7 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
 let simplify_named dacc ~bound_vars named =
   try simplify_named0 dacc ~bound_vars named
   with Misc.Fatal_error -> begin
-    Format.eprintf "\n%sContext is:%s simplifying [Let] binding@  %a = %a@ \
+    Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
         with downwards accumulator:@ %a\n"
       (Flambda_colours.error ())
       (Flambda_colours.normal ())
