@@ -20,9 +20,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Meet_and_join_naked_number_intf.S
-  with type flambda_type := Flambda_types.t
-  with type 'a ty := 'a Flambda_types.ty
-  with type 'a of_kind_naked_number := 'a Flambda_types.of_kind_naked_number
+  with type flambda_type := Type_grammar.t
+  with type 'a ty := 'a Type_grammar.ty
+  with type 'a of_kind_naked_number := 'a Type_grammar.of_kind_naked_number
   with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
   with type typing_env_extension := Typing_env_extension.t

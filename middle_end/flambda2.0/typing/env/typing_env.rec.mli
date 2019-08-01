@@ -22,13 +22,13 @@ val invariant : t -> unit
 
 val print : Format.formatter -> t -> unit
 
-val create : resolver:(Export_id.t -> Flambda_types.t option) -> t
+val create : resolver:(Export_id.t -> Type_grammar.t option) -> t
 
 val create_using_resolver_from : t -> t
 
 val create_using_resolver_and_symbol_bindings_from : t -> t
 
-val resolver : t -> (Export_id.t -> Flambda_types.t option)
+val resolver : t -> (Export_id.t -> Type_grammar.t option)
 
 val is_empty : t -> bool
 
@@ -44,9 +44,9 @@ val var_domain : t -> Variable.Set.t
 
 val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
-val add_equation : t -> Name.t -> Flambda_types.t -> t
+val add_equation : t -> Name.t -> Type_grammar.t -> t
 
-val find : t -> Name.t -> Flambda_types.t
+val find : t -> Name.t -> Type_grammar.t
 
 val mem : t -> Name.t -> bool
 
@@ -86,24 +86,24 @@ val get_canonical_simple_with_kind
 val get_alias_ty_then_canonical_simple
    : t
   -> ?min_occurrence_kind:Name_occurrence_kind.t
-  -> _ Flambda_types.ty
+  -> _ Type_grammar.ty
   -> Simple.t option Or_bottom.t
 
 val get_alias_then_canonical_simple
    : t
   -> ?min_occurrence_kind:Name_occurrence_kind.t
-  -> Flambda_types.t
+  -> Type_grammar.t
   -> Simple.t option Or_bottom.t
 
 val expand_head_ty
    : t
-  -> force_to_kind:(Flambda_types.t -> 'a Flambda_types.ty)
+  -> force_to_kind:(Type_grammar.t -> 'a Type_grammar.ty)
   -> apply_rec_info:('a -> Rec_info.t -> 'a Or_bottom.t)
-  -> print_ty:(Format.formatter -> 'a Flambda_types.ty -> unit)
-  -> 'a Flambda_types.ty
-  -> 'a Flambda_types.unknown_or_join
+  -> print_ty:(Format.formatter -> 'a Type_grammar.ty -> unit)
+  -> 'a Type_grammar.ty
+  -> 'a Type_grammar.unknown_or_join
 
-val expand_head : t -> Flambda_types.t -> Flambda_types.resolved
+val expand_head : t -> Type_grammar.t -> Type_grammar.resolved
 
 val aliases_of_simple
    : t

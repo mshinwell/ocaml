@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T = Flambda_types
+module T = Type_grammar
 
 module Make
   (E : Lattice_ops_intf.S
@@ -28,9 +28,9 @@ struct
 
   let kind = K.fabricated
   let to_type ty : T.t = Fabricated ty
-  let force_to_kind = Flambda_type0_core.force_to_kind_fabricated
+  let force_to_kind = Basic_type_ops.force_to_kind_fabricated
   let print_ty = Type_printers.print_ty_fabricated_with_cache
-  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_fabricated
+  let apply_rec_info = Basic_type_ops.apply_rec_info_of_kind_fabricated
 
   let meet_or_join_of_kind_foo env ~meet_or_join_ty:_
         (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =

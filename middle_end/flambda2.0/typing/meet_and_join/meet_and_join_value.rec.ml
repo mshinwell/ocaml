@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module KI = Kind_independent_meet_or_join
-module T = Flambda_types
+module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Make
@@ -44,9 +44,9 @@ struct
 
   let kind = K.value
   let to_type ty : T.t = Value ty
-  let force_to_kind = Flambda_type0_core.force_to_kind_value
+  let force_to_kind = Basic_type_ops.force_to_kind_value
   let print_ty = Type_printers.print_ty_value_with_cache
-  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_value
+  let apply_rec_info = Basic_type_ops.apply_rec_info_of_kind_value
 
   (* CR mshinwell: These next two could go in a separate file. *)
   let meet_unknown meet_contents env

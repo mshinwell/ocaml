@@ -20,5 +20,5 @@
 
 (** The type system is parameterised over the expression language. *)
 module Make (Function_declaration : Term_language_function_declaration.S)
-  : Flambda_type0_intf.S
+  : Type_system_intf.S
     with type term_language_function_declaration := Function_declaration.t

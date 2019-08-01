@@ -16,4 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Flambda_types
+include Type_grammar

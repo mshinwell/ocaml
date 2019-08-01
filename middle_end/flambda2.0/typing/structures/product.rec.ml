@@ -15,7 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module K = Flambda_kind
-module T = Flambda_types
+module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Make (Index : Identifiable.S) = struct
@@ -84,8 +84,8 @@ module Make (Index : Identifiable.S) = struct
           | None, None | Some _, None | None, Some _ -> None
           | Some ty1, Some ty2 ->
             let ty, env_extension' = Api_meet_and_join.meet env ty1 ty2 in
-            if Flambda_type0_core.is_obviously_bottom ty then begin
-              Some (Flambda_type0_core.bottom K.value)
+            if Basic_type_ops.is_obviously_bottom ty then begin
+              Some (Basic_type_ops.bottom K.value)
             end else begin
               all_bottom := false;
               env_extension := TEE.meet env !env_extension env_extension';
@@ -115,7 +115,7 @@ module Make (Index : Identifiable.S) = struct
     let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
     let components_by_index =
       Index.Set.fold (fun index components_by_index ->
-          Index.Map.add index (Flambda_type0_core.any_value ())
+          Index.Map.add index (Basic_type_ops.any_value ())
             components_by_index)
         missing_indexes
         t.components_by_index
@@ -134,7 +134,7 @@ module Make (Index : Identifiable.S) = struct
   let apply_name_permutation ({ components_by_index; } as t) perm =
     let components_by_index' =
       Index.Map.map_sharing (fun typ ->
-          Flambda_type0_core.apply_name_permutation typ perm)
+          Basic_type_ops.apply_name_permutation typ perm)
         components_by_index
     in
     if components_by_index == components_by_index' then t
@@ -147,7 +147,7 @@ module Make (Index : Identifiable.S) = struct
       Name_occurrences.empty
 
   let map_types ({ components_by_index; } as t)
-        ~(f : Flambda_types.t -> Flambda_types.t Or_bottom.t)
+        ~(f : Type_grammar.t -> Type_grammar.t Or_bottom.t)
         : _ Or_bottom.t =
     let found_bottom = ref false in
     let components_by_index' =

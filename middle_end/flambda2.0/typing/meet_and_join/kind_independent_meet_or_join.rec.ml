@@ -20,7 +20,7 @@
    Distributivity of meet over join:
      X n (X' u Y') == (X n X') u (X n Y'). *)
 
-module T = Flambda_types
+module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Make
@@ -29,8 +29,8 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t)
   (S : Meet_and_join_spec_intf.S
-    with type flambda_type := Flambda_types.t
-    with type 'a ty := 'a Flambda_types.ty
+    with type flambda_type := Type_grammar.t
+    with type 'a ty := 'a Type_grammar.ty
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
@@ -212,6 +212,6 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
     let ty, env_extension =
       E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
     in
-    if Flambda_type0_core.ty_is_obviously_bottom ty then Bottom
+    if Basic_type_ops.ty_is_obviously_bottom ty then Bottom
     else Ok (ty, env_extension)
 end

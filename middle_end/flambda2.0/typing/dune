@@ -3,8 +3,8 @@
   (deps
     rec_modules
     flambda_type0.templ.ml
-    flambda_types.rec.ml
-    flambda_type0_core.rec.ml
+    type_grammar.rec.ml
+    basic_type_ops.rec.ml
     type_erase_aliases.rec.ml
     type_free_names.rec.ml
     type_printers.rec.ml
@@ -35,8 +35,8 @@
     structures/product.rec.ml
     structures/row_like.rec.ml
     structures/trivial_row_like.rec.ml
-    flambda_types.rec.mli
-    flambda_type0_core.rec.mli
+    type_grammar.rec.mli
+    basic_type_ops.rec.mli
     type_erase_aliases.rec.mli
     type_free_names.rec.mli
     type_printers.rec.mli

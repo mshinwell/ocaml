@@ -18,13 +18,13 @@
 
 type t
 
-val create : Flambda_types.t Closure_id.Map.t -> t
+val create : Type_grammar.t Closure_id.Map.t -> t
 
 val bottom : t
 
 val map_closure_types
    : t
-  -> f:(Flambda_types.t -> Flambda_types.t Or_bottom.t)
+  -> f:(Type_grammar.t -> Type_grammar.t Or_bottom.t)
   -> t Or_bottom.t
 
 include Type_structure_intf.S
@@ -33,4 +33,4 @@ include Type_structure_intf.S
   with type meet_env := Meet_env.t
   with type type_equality_env := Type_equality_env.t
   with type typing_env_extension := Typing_env_extension.t
-  with type flambda_type := Flambda_types.t
+  with type flambda_type := Type_grammar.t

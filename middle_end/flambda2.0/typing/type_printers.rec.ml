@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let print_or_alias print_descr ppf (or_alias : _ Flambda_types.or_alias) =
+let print_or_alias print_descr ppf (or_alias : _ Type_grammar.or_alias) =
   match or_alias with
   | No_alias descr -> print_descr ppf descr
   | Equals simple ->
@@ -33,7 +33,7 @@ let print_or_alias print_descr ppf (or_alias : _ Flambda_types.or_alias) =
 let unicode = true  (* CR mshinwell: move elsewhere *)
 
 let print_unknown_or_join print_contents ppf
-      (o : _ Flambda_types.unknown_or_join) =
+      (o : _ Type_grammar.unknown_or_join) =
   let colour = Flambda_colours.error () in
   match o with
   | Unknown ->
@@ -52,7 +52,7 @@ let print_ty_generic print_contents ppf ty =
   (print_or_alias (print_unknown_or_join print_contents)) ppf ty
 
 let print_of_kind_naked_number (type n) ppf
-      (n : n Flambda_types.of_kind_naked_number) =
+      (n : n Type_grammar.of_kind_naked_number) =
   match n with
   | Immediate i ->
     Format.fprintf ppf "@[(Naked_immediates@ (%a))@]"
@@ -71,7 +71,7 @@ let print_of_kind_naked_number (type n) ppf
       Targetint.Set.print i
 
 let print_ty_naked_number (type n) ppf
-      (ty : n Flambda_types.ty_naked_number) =
+      (ty : n Type_grammar.ty_naked_number) =
   print_ty_generic print_of_kind_naked_number ppf ty
 
 let _print_ty_naked_immediate_with_cache ~cache:_ ppf ty =
@@ -113,7 +113,7 @@ let _print_ty_naked_immediate ppf ty =
     ppf ty
 
 let print_of_kind_value_boxed_number (type n)
-      ppf (n : n Flambda_types.of_kind_value_boxed_number) =
+      ppf (n : n Type_grammar.of_kind_value_boxed_number) =
   match n with
   | Boxed_float f ->
     Format.fprintf ppf "@[(Boxed_float@ (%a))@]"
@@ -129,7 +129,7 @@ let print_of_kind_value_boxed_number (type n)
       print_ty_naked_number i
 
 let rec print_of_kind_value ~cache ppf
-        (of_kind_value : Flambda_types.of_kind_value) =
+        (of_kind_value : Type_grammar.of_kind_value) =
   match of_kind_value with
   | Blocks_and_tagged_immediates { blocks; immediates; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
@@ -154,12 +154,12 @@ let rec print_of_kind_value ~cache ppf
     Format.fprintf ppf "@[<hov 1>(Array@ (length@ %a))@]"
       (print_ty_value_with_cache ~cache) length
 
-and print_ty_value_with_cache ~cache ppf (ty : Flambda_types.ty_value) =
+and print_ty_value_with_cache ~cache ppf (ty : Type_grammar.ty_value) =
   print_ty_generic (print_of_kind_value ~cache) ppf ty
 
 and print_inlinable_function_declaration_with_cache ~cache ppf
       (({ function_decl; rec_info;
-        } : Flambda_types.inlinable_function_declaration) as decl) =
+        } : Type_grammar.inlinable_function_declaration) as decl) =
   Printing_cache.with_cache cache ppf "inlinable_fundecl" decl
     (fun ppf () ->
       Format.fprintf ppf
@@ -171,7 +171,7 @@ and print_inlinable_function_declaration_with_cache ~cache ppf
         Rec_info.print rec_info)
 
 and print_function_declaration_with_cache ~cache ppf
-      (decl : Flambda_types.function_declaration) =
+      (decl : Type_grammar.function_declaration) =
   match decl with
   | Inlinable decl ->
     print_inlinable_function_declaration_with_cache ~cache ppf decl
@@ -187,17 +187,17 @@ and print_function_declaration_with_cache ~cache ppf
       Recursive.print recursive
 
 and print_of_kind_fabricated ~cache ppf
-      (o : Flambda_types.of_kind_fabricated) =
+      (o : Type_grammar.of_kind_fabricated) =
   match o with
   | Discriminants discriminants ->
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
       (Discriminants.print_with_cache ~cache) discriminants
 
 and print_ty_fabricated_with_cache ~cache ppf
-      (ty : Flambda_types.ty_fabricated) =
+      (ty : Type_grammar.ty_fabricated) =
   print_ty_generic (print_of_kind_fabricated ~cache) ppf ty
 
-and print_with_cache ~cache ppf (t : Flambda_types.t) =
+and print_with_cache ~cache ppf (t : Type_grammar.t) =
   match t with
   | Value ty ->
     Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"

@@ -567,7 +567,7 @@ end and Function_declaration : sig
   (** Whether the function is recursive, in the sense of the syntactic analysis
       conducted during closure conversion. *)
   val recursive : t -> Recursive.t
-end and Flambda_type : Flambda_type0_intf.S
+end and Flambda_type : Type_system_intf.S
   with type term_language_function_declaration := Function_declaration.t
 
 module Let = Let_expr
