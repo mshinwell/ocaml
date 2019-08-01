@@ -114,6 +114,12 @@ let simplify_function dacc closure_id_this_function function_decl
         let denv = DE.increment_continuation_scope_level_twice denv in
         let denv = DE.add_parameters_with_unknown_types denv params in
         let denv =
+          Closure_id.Map.fold (fun _closure_id bound_name denv ->
+              DE.define_name denv bound_name K.value)
+            closure_bound_names
+            denv
+        in
+        let denv =
           Closure_id.Map.fold (fun closure_id closure_type denv ->
               if Closure_id.equal closure_id closure_id_this_function then
                 denv
@@ -219,6 +225,12 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   in
   let dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
+      let denv =
+        Closure_id.Map.fold (fun _closure_id bound_name denv ->
+            DE.define_name denv bound_name K.value)
+          closure_bound_names
+          denv
+      in
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
           DE.add_name denv bound_name closure_type)
         closure_types_by_bound_name

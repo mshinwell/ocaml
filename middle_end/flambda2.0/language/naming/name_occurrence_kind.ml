@@ -48,9 +48,10 @@ include Identifiable.Make (struct
     | In_types -> Format.pp_print_string ppf "In_types"
     | Phantom -> Format.pp_print_string ppf "Phantom"
 
-  let output _ _ = Misc.fatal_error "Not yet implemented"
+  let output _ _ =
+    Misc.fatal_error "Name_occurrence_kind.output not yet implemented"
 
-  let hash _ = Misc.fatal_error "Not yet implemented"
+  let hash _ = Misc.fatal_error "Name_occurrence_kind.hash not yet implemented"
 
   let number t =
     match t with

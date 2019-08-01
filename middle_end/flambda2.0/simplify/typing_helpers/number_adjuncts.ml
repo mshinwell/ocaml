@@ -142,7 +142,8 @@ module For_tagged_immediates : Int_number_kind = struct
 
     let compare_unsigned _t1 _t2 =
       (* CR mshinwell: Implement these *)
-      Misc.fatal_error "Not yet implemented"
+      Misc.fatal_error
+        "For_tagged_immediates.compare_unsigned not yet implemented"
 
     let div t1 t2 =
       if Immediate.equal t2 Immediate.zero then None

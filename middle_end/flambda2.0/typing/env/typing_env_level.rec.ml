@@ -304,10 +304,10 @@ module Rhs_kind = struct
   include Identifiable.Make (struct
     type nonrec t = t
 
-    let print _ _ = Misc.fatal_error "Not yet implemented"
-    let output _ _ = Misc.fatal_error "Not yet implemented"
-    let hash _ = Misc.fatal_error "Not yet implemented"
-    let equal _ = Misc.fatal_error "Not yet implemented"
+    let print _ _ = Misc.fatal_error "Rhs_kind.print not yet implemented"
+    let output _ _ = Misc.fatal_error "Rhs_kind.output not yet implemented"
+    let hash _ = Misc.fatal_error "Rhs_kind.hash not yet implemented"
+    let equal _ = Misc.fatal_error "Rhs_kind.equal not yet implemented"
 
     let compare t1 t2 =
       match t1, t2 with
