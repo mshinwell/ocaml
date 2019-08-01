@@ -154,9 +154,6 @@ let alias_type_of_as_ty_value name : ty_value = Equals name
 
 let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
 
-let bottom_as_ty_fabricated () : ty_fabricated =
-  No_alias Bottom
-
 let bottom (kind : K.t) : t =
   match kind with
   | Value ->
@@ -205,9 +202,6 @@ let any_naked_nativeint () : t =
 
 let any_fabricated () : t =
   Fabricated (No_alias Unknown)
-
-let any_fabricated_as_ty_fabricated () : ty_fabricated =
-  No_alias Unknown
 
 let unknown (kind : K.t) : t =
   match kind with
@@ -528,7 +522,8 @@ let exactly_this_closure closure_id function_decl
         (Var_within_closure.Map.keys closure_var_types)
     in
     let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.Map.singleton set_of_closures_contents
+      Set_of_closures_contents.With_closure_id.Map.singleton
+        (closure_id, set_of_closures_contents)
         closures_entry
     in
     Closures_entry_by_set_of_closures_contents.create_exactly_multiple
@@ -540,7 +535,7 @@ let exactly_this_closure closure_id function_decl
   in
   Value (No_alias (Ok (Closures closures)))
 
-let at_least_the_closures_with_ids closure_ids_and_bindings : t =
+let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings : t =
   let closure_ids_and_types =
     Closure_id.Map.map (fun bound_to -> alias_type_of K.value bound_to)
       closure_ids_and_bindings
@@ -559,7 +554,8 @@ let at_least_the_closures_with_ids closure_ids_and_bindings : t =
         Var_within_closure.Set.empty
     in
     let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.Map.singleton set_of_closures_contents
+      Set_of_closures_contents.With_closure_id_or_unknown.Map.singleton
+        (Known this_closure, set_of_closures_contents)
         closures_entry
     in
     Closures_entry_by_set_of_closures_contents.create_at_least_multiple
@@ -593,7 +589,8 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var
         (Var_within_closure.Set.singleton closure_var)
     in
     let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.Map.singleton set_of_closures_contents
+      Set_of_closures_contents.With_closure_id_or_unknown.Map.singleton
+        (Unknown, set_of_closures_contents)
         closures_entry
     in
     Closures_entry_by_set_of_closures_contents.create_at_least_multiple
@@ -853,6 +850,3 @@ and apply_name_permutation_of_kind_fabricated
     let discrs' = Discriminants.apply_name_permutation discrs perm in
     if discrs == discrs' then of_kind_fabricated
     else Discriminants discrs'
-
-let apply_name_permutation_ty_fabricated ty perm =
-  apply_name_permutation_ty apply_name_permutation_of_kind_fabricated ty perm

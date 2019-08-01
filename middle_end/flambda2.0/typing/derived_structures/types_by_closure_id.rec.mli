@@ -22,10 +22,12 @@ val create : Type_grammar.t Closure_id.Map.t -> t
 
 val bottom : t
 
+(*
 val map_closure_types
    : t
   -> f:(Type_grammar.t -> Type_grammar.t Or_bottom.t)
   -> t Or_bottom.t
+*)
 
 val widen : t -> to_match:t -> t
 

@@ -47,7 +47,7 @@ sig
 
   val create_exactly_multiple : Maps_to.t Tag_and_index.Map.t -> t
 
-  val create_at_least : Tag.t Or_unknown.t -> Index.t -> Maps_to.t -> t
+  val create_at_least : Tag_or_unknown_and_index.t -> Maps_to.t -> t
 
   val create_at_least_multiple : Maps_to.t Tag_or_unknown_and_index.Map.t -> t
 

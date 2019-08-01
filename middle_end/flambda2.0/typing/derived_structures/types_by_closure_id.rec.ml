@@ -19,5 +19,6 @@
 include Product.Make (Closure_id)
 
 let bottom = create Closure_id.Map.empty
-
+(*
 let map_closure_types t ~f = map_types t ~f
+*)

@@ -186,11 +186,3 @@ and erase_aliases_ty_value env ~bound_name ~already_seen ~allowed ty =
     ~print_ty:Type_printers.print_ty_value
     ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_value
     ty
-
-let erase_aliases_ty_fabricated env ~bound_name ~already_seen ~allowed ty =
-  erase_aliases_ty env ~bound_name ~already_seen ~allowed
-    erase_aliases_of_kind_fabricated
-    ~force_to_kind:Basic_type_ops.force_to_kind_fabricated
-    ~print_ty:Type_printers.print_ty_fabricated
-    ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_fabricated
-    ty

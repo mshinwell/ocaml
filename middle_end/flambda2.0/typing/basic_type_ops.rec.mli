@@ -105,7 +105,6 @@ val immutable_block_with_size_at_least
   -> Type_grammar.t
 
 val bottom : Flambda_kind.t -> Type_grammar.t
-val bottom_as_ty_fabricated : unit -> Type_grammar.ty_fabricated
 val bottom_like : Type_grammar.t -> Type_grammar.t
 
 val unknown_like : Type_grammar.t -> Type_grammar.t
@@ -128,12 +127,13 @@ val create_non_inlinable_function_declaration
 val exactly_this_closure
    : Closure_id.t
   -> Type_grammar.function_declaration
-  -> all_closures_in_set:Type_grammar.ty_value Closure_id.Map.t
+  -> all_closures_in_set:Type_grammar.t Closure_id.Map.t
   -> all_closure_vars_in_set:Type_grammar.ty_value Var_within_closure.Map.t
   -> Type_grammar.t
 
 val at_least_the_closures_with_ids
-   : Simple.t Closure_id.Map.t
+   : this_closure:Closure_id.t
+  -> Simple.t Closure_id.Map.t
   -> Type_grammar.t
 
 val closure_with_at_least_this_closure_var
@@ -202,8 +202,3 @@ val apply_name_permutation
    : Type_grammar.t
   -> Name_permutation.t
   -> Type_grammar.t
-
-val apply_name_permutation_ty_fabricated
-   : Type_grammar.ty_fabricated
-  -> Name_permutation.t
-  -> Type_grammar.ty_fabricated

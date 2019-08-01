@@ -35,7 +35,7 @@ let create ~field_tys (open_or_closed : open_or_closed) =
   let product = Int_indexed_product.create (Int.Map.of_list fields) in
   let size = Targetint.OCaml.of_int (List.length field_tys) in
   match open_or_closed with
-  | Open -> create_at_least Unknown size product
+  | Open -> create_at_least (Unknown, size) product
   | Closed tag -> create_exactly tag size product
 
 let all_tags_and_sizes t : _ Or_unknown.t =

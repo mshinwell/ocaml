@@ -19,7 +19,7 @@
 open! Simplify_import
 
 type pre_simplification_types_of_my_closures = {
-  internal_closure_types : T.ty_value Closure_id.Map.t;
+  internal_closure_types : T.t Closure_id.Map.t;
   closure_types : T.t Closure_id.Map.t;
 }
 
@@ -45,7 +45,7 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
   in
   let closure_types_as_seen_from_own_body =
     Closure_id.Map.map (fun name ->
-        T.alias_type_of_as_ty_value (Name_in_binding_pos.to_simple name))
+        T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
       closure_bound_names
   in
   let closure_types =

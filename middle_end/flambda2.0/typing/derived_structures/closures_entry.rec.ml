@@ -101,6 +101,8 @@ let map_function_decl_types
       ~(f : Type_grammar.function_declaration
         -> Type_grammar.function_declaration Or_bottom.t)
       : _ Or_bottom.t =
+  (* CR mshinwell: This needs to deal with [closure_types] too.
+     Deferring until new approach for [Rec_info] is sorted out. *)
   match function_decl with
   | Unknown -> Ok t
   | Known function_decl ->

@@ -1,7 +1,6 @@
 type_grammar.rec.ml
 basic_type_ops.rec.ml
 derived_structures/blocks.rec.ml
-derived_structures/closure_elements.rec.ml
 derived_structures/closures_entry.rec.ml
 derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
 derived_structures/discriminants.rec.ml

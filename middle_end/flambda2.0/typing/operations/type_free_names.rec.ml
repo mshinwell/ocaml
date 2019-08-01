@@ -68,6 +68,3 @@ and free_names_of_kind_fabricated
       (of_kind : Type_grammar.of_kind_fabricated) =
   match of_kind with
   | Discriminants discrs -> Discriminants.free_names discrs
-
-let free_names_of_ty_fabricated ty =
-  free_names_ty free_names_of_kind_fabricated ty

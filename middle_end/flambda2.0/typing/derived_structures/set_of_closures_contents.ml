@@ -82,3 +82,25 @@ module With_closure_id = struct
       compare t1 t2 = 0
   end)
 end
+
+module With_closure_id_or_unknown = struct
+  type nonrec t = Closure_id.t Or_unknown.t * t
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let print _ _ = Misc.fatal_error "Not yet implemented"
+
+    let output _ _ = Misc.fatal_error "Not yet implemented"
+
+    let hash _ = Misc.fatal_error "Not yet implemented"
+
+    let compare (closure_id1, contents1) (closure_id2, contents2) =
+      let c = Or_unknown.compare Closure_id.compare closure_id1 closure_id2 in
+      if c <> 0 then c
+      else compare contents1 contents2
+
+    let equal t1 t2 =
+      compare t1 t2 = 0
+  end)
+end

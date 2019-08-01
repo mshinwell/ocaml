@@ -38,3 +38,9 @@ module With_closure_id : sig
 
   include Identifiable.S with type t := t
 end
+
+module With_closure_id_or_unknown : sig
+  type nonrec t = Closure_id.t Or_unknown.t * t
+
+  include Identifiable.S with type t := t
+end
