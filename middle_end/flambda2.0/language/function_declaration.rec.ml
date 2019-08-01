@@ -78,9 +78,7 @@ let print_with_cache0 ~compact ~cache ppf
           @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
           @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
           @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-          @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
-          @[<hov 1>(return_continuation@ %a)@]@ \
-          @[<hov 1>(exn_continuation@ %a)@]@ "
+          @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ "
         (if not stub then Flambda_colours.elide () else C.normal ())
         stub
         (Flambda_colours.normal ())
@@ -108,16 +106,18 @@ let print_with_cache0 ~compact ~cache ppf
          | Non_recursive -> Flambda_colours.elide ()
          | Recursive -> Flambda_colours.normal ())
         Recursive.print recursive
-        (Flambda_colours.normal ())
-        Continuation.print return_continuation
-        Exn_continuation.print exn_continuation;
+        (Flambda_colours.normal ());
       if compact then begin
         fprintf ppf "@[<hov 1>(params_and_body@ <elided>)@])@]"
       end else begin
         fprintf ppf
-          "@[<hov 1>(@<0>%s\u{03bb}@<0>%s %a %a @<0>%s.@<0>%s@ %a)@])@]"
+          "@[<hov 1>(@<0>%s\u{03bb}@<0>%s@[<hov 1>\
+           \u{3008}%a\u{3009}\u{300a}%a\u{300b}\
+           %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
           (Flambda_colours.lambda ())
           (Flambda_colours.normal ())
+          Continuation.print return_continuation
+          Exn_continuation.print exn_continuation
           Kinded_parameter.List.print params
           Kinded_parameter.print my_closure
           (Flambda_colours.elide ())
