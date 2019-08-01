@@ -42,12 +42,6 @@ include Expr_std.S with type t := t
     declarations. *)
 val create : Function_declaration.t Closure_id.Map.t -> t
 
-(** An identifier of the original set of closures on which this set of
-    function declarations is based.  Used to prevent different
-    specialisations of the same functions from being inlined/specialised
-    within each other. *)
-val set_of_closures_origin : t -> Set_of_closures_origin.t
-
 (** The function(s) defined by the set of function declarations, indexed
     by closure ID. *)
 val funs : t -> Function_declaration.t Closure_id.Map.t

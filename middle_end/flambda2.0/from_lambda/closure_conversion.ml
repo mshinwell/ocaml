@@ -130,7 +130,6 @@ let tupled_function_call_stub
       ~my_closure
   in
   Flambda.Function_declaration.create
-    ~closure_origin:(Closure_origin.create closure_id)
     ~params_and_body
     ~result_arity:[K.value]
     ~stub:true
@@ -744,7 +743,6 @@ and close_one_function t ~external_env ~by_closure_id decl
       body
   in
   let fun_decl =
-    let closure_origin = Closure_origin.create my_closure_id in
     let exn_continuation =
       close_exn_continuation external_env (Function_decl.exn_continuation decl)
     in
@@ -754,8 +752,7 @@ and close_one_function t ~external_env ~by_closure_id decl
         ~return_continuation:(Function_decl.return_continuation decl)
         exn_continuation params ~body ~my_closure
     in
-    Flambda.Function_declaration.create ~closure_origin
-      ~params_and_body
+    Flambda.Function_declaration.create ~params_and_body
       ~result_arity:[LC.value_kind return]
       ~stub
       ~dbg

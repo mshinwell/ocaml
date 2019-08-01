@@ -443,12 +443,6 @@ end and Function_declarations : sig
       declarations. *)
   val create : Function_declaration.t Closure_id.Map.t -> t
 
-  (** An identifier of the original set of closures on which this set of
-      function declarations is based.  Used to prevent different
-      specialisations of the same functions from being inlined/specialised
-      within each other. *)
-  val set_of_closures_origin : t -> Set_of_closures_origin.t
-
   (** The function(s) defined by the set of function declarations, indexed
       by closure ID. *)
   val funs : t -> Function_declaration.t Closure_id.Map.t
@@ -504,19 +498,9 @@ end and Function_declaration : sig
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
 
-  (** Create a function declaration.  This calculates the free variables and
-      symbols occurring in the specified [body].
-
-      To just change the parameters or body of a function the "update" functions
-      below should be used, if possible; otherwise care must be taken to
-      preserve the [closure_origin].
-
-      When adding a stub to a function the stub should receive a new
-      [closure_origin] and the renamed original function should retain its
-      existing [closure_origin]. *)
+  (** Create a function declaration. *)
   val create
-     : closure_origin:Closure_origin.t
-    -> params_and_body:Function_params_and_body.t
+     : params_and_body:Function_params_and_body.t
     -> result_arity:Flambda_arity.t
     -> stub:bool
     -> dbg:Debuginfo.t
@@ -524,10 +508,6 @@ end and Function_declaration : sig
     -> is_a_functor:bool
     -> recursive:Recursive.t
     -> t
-
-  (** The closure from which this function declaration originally came.
-      Used as a backstop against unbounded recursion during inlining. *)
-  val closure_origin : t -> Closure_origin.t
 
   (** The alpha-equivalence class of the function's continuations and
       parameters bound over the code of the function. *)
