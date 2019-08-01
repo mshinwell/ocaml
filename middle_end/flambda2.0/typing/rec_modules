@@ -1,8 +1,5 @@
 type_grammar.rec.ml
 basic_type_ops.rec.ml
-type_erase_aliases.rec.ml
-type_free_names.rec.ml
-type_printers.rec.ml
 derived_structures/blocks.rec.ml
 derived_structures/closure_elements.rec.ml
 derived_structures/closures_entry.rec.ml
@@ -27,6 +24,9 @@ meet_and_join/meet_and_join_naked_nativeint.rec.ml
 meet_and_join/meet_and_join_value.rec.ml
 meet_and_join/meet_env.rec.ml
 meet_and_join/meet_or_join.rec.ml
+operations/type_erase_aliases.rec.ml
+operations/type_free_names.rec.ml
+operations/type_printers.rec.ml
 structures/product.rec.ml
 structures/row_like.rec.ml
 structures/trivial_row_like.rec.ml
