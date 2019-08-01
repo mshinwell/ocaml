@@ -29,7 +29,7 @@ module Switch = Switch_expr
 let fprintf = Format.fprintf
 
 (* -- module rec binding here -- *)
-and Flambda_type : Flambda_type0_intf.S
+and Flambda_type : Type_system_intf.S
     with type term_language_function_declaration := Function_declaration.t
   = Flambda_type0.Make (Function_declaration)
 

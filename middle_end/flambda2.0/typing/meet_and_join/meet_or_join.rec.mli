@@ -30,7 +30,7 @@ sig
   val meet_or_join
      : ?bound_name:Name.t
     -> Meet_env.t
-    -> Flambda_types.t
-    -> Flambda_types.t
-    -> Flambda_types.t * Typing_env_extension.t
+    -> Type_grammar.t
+    -> Type_grammar.t
+    -> Type_grammar.t * Typing_env_extension.t
 end

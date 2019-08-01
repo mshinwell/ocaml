@@ -22,7 +22,7 @@ module Aliases = Aliases.Make (Alias)
 module Cached = struct
   type t = {
     names_to_types :
-      (Flambda_types.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
+      (Type_grammar.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
@@ -45,7 +45,7 @@ module Cached = struct
           Misc.fatal_errorf "Canonical name %a not in [names_to_types]"
             Name.print name
         | ty ->
-          match Flambda_type0_core.get_alias ty with
+          match Basic_type_ops.get_alias ty with
           | None -> ()
           | Some alias_of ->
             Misc.fatal_errorf "Canonical name %a has an alias type: =%a"
@@ -121,7 +121,7 @@ module One_level = struct
 end
 
 type t = {
-  resolver : (Export_id.t -> Flambda_types.t option);
+  resolver : (Export_id.t -> Type_grammar.t option);
   defined_symbols : Flambda_kind.t Symbol.Map.t;
   prev_levels : One_level.t Scope.Map.t;
   (* CR mshinwell: hold list of symbol definitions, then change defined_names
@@ -325,7 +325,7 @@ Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.prin
 *)
     let names_to_types =
       Name.Map.add name
-        (Flambda_type0_core.unknown kind, t.next_binding_time,
+        (Basic_type_ops.unknown kind, t.next_binding_time,
           name_occurrence_kind)
         (names_to_types t)
     in
@@ -350,7 +350,7 @@ let add_symbol_definition t sym kind =
     in
     let names_to_types =
       Name.Map.add name
-        (Flambda_type0_core.unknown kind, Binding_time.symbols,
+        (Basic_type_ops.unknown kind, Binding_time.symbols,
           name_occurrence_kind)
         (names_to_types t)
     in
@@ -369,13 +369,13 @@ let alias_of_simple t simple =
   let kind, binding_time =
     match Simple.descr simple with
     | Const const ->
-      Flambda_type0_core.kind_for_const const,
+      Basic_type_ops.kind_for_const const,
         Binding_time.consts_and_discriminants
     | Discriminant _ ->
       K.fabricated, Binding_time.consts_and_discriminants
     | Name name ->
       let ty, binding_time = find_with_binding_time t name in
-      Flambda_type0_core.kind ty, binding_time
+      Basic_type_ops.kind ty, binding_time
   in
   Alias.create kind simple binding_time
 
@@ -446,7 +446,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
       Name_occurrences.print (domain t)
       print t
   end;
-  begin match Flambda_type0_core.get_alias ty with
+  begin match Basic_type_ops.get_alias ty with
   | None -> ()
   | Some simple ->
     match Simple.descr simple with
@@ -469,10 +469,10 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
 *)
   let aliases, simple, rec_info, ty =
     let aliases = aliases t in
-    match Flambda_type0_core.get_alias ty with
+    match Basic_type_ops.get_alias ty with
     | None -> aliases, Simple.name name, None, ty
     | Some alias_of ->
-      let kind = Flambda_type0_core.kind ty in
+      let kind = Basic_type_ops.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
         Alias.create_name kind name binding_time name_occurrence_kind
@@ -493,9 +493,9 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
  *   Name.print name
  *   Alias.print canonical_element
  *   Alias.print alias_of; *)
-        let kind = Flambda_type0_core.kind ty in
+        let kind = Basic_type_ops.kind ty in
         let ty =
-          Flambda_type0_core.alias_type_of kind
+          Basic_type_ops.alias_type_of kind
             (Alias.simple canonical_element)
         in
         aliases, Alias.simple alias_of, rec_info, ty
@@ -504,8 +504,8 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
     match rec_info with
     | None -> ty
     | Some rec_info ->
-      match Flambda_type0_core.apply_rec_info ty rec_info with
-      | Bottom -> Flambda_type0_core.bottom (Flambda_type0_core.kind ty)
+      match Basic_type_ops.apply_rec_info ty rec_info with
+      | Bottom -> Basic_type_ops.bottom (Basic_type_ops.kind ty)
       | Ok ty -> ty
   in
 (*
@@ -647,7 +647,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
     | Const _ | Discriminant _ -> newer_rec_info
     | Name name ->
       let ty = find t name in
-      match Flambda_type0_core.get_alias ty with
+      match Basic_type_ops.get_alias ty with
       | None -> newer_rec_info
       | Some simple ->
         match Simple.rec_info simple with
@@ -682,7 +682,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
       | Const _ | Discriminant _ -> Ok (Some (simple, rec_info)), kind
       | Name name ->
         let ty = find t name in
-        if Flambda_type0_core.is_obviously_bottom ty
+        if Basic_type_ops.is_obviously_bottom ty
         then Bottom, kind
         else Ok (Some (simple, rec_info)), kind
 
@@ -698,22 +698,22 @@ let get_canonical_simple t ?min_occurrence_kind simple =
   fst (get_canonical_simple_with_kind t ?min_occurrence_kind simple)
 
 let get_alias_then_canonical_simple t ?min_occurrence_kind typ : _ Or_bottom.t =
-  match Flambda_type0_core.get_alias typ with
+  match Basic_type_ops.get_alias typ with
   | None -> Ok None
   | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
 let get_alias_ty_then_canonical_simple t ?min_occurrence_kind typ
       : _ Or_bottom.t =
-  match Flambda_type0_core.get_alias_ty typ with
+  match Basic_type_ops.get_alias_ty typ with
   | None -> Ok None
   | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
 let expand_head_ty (type a) t
-      ~(force_to_kind : Flambda_types.t -> a Flambda_types.ty)
+      ~(force_to_kind : Type_grammar.t -> a Type_grammar.ty)
       ~(apply_rec_info : a -> Rec_info.t -> a Or_bottom.t)
       ~print_ty
-      (ty : a Flambda_types.ty)
-      : a Flambda_types.unknown_or_join =
+      (ty : a Type_grammar.ty)
+      : a Type_grammar.unknown_or_join =
   ignore print_ty;  (* CR mshinwell: remove *)
   let force_to_unknown_or_join typ =
     match force_to_kind typ with
@@ -741,17 +741,17 @@ let expand_head_ty (type a) t
         let typ =
           match const with
           | Naked_immediate imm ->
-            Flambda_type0_core.this_naked_immediate_without_alias imm
+            Basic_type_ops.this_naked_immediate_without_alias imm
           | Tagged_immediate imm ->
-            Flambda_type0_core.this_tagged_immediate_without_alias imm
+            Basic_type_ops.this_tagged_immediate_without_alias imm
           | Naked_float f ->
-            Flambda_type0_core.this_naked_float_without_alias f
+            Basic_type_ops.this_naked_float_without_alias f
           | Naked_int32 i ->
-            Flambda_type0_core.this_naked_int32_without_alias i
+            Basic_type_ops.this_naked_int32_without_alias i
           | Naked_int64 i ->
-            Flambda_type0_core.this_naked_int64_without_alias i
+            Basic_type_ops.this_naked_int64_without_alias i
           | Naked_nativeint i ->
-            Flambda_type0_core.this_naked_nativeint_without_alias i
+            Basic_type_ops.this_naked_nativeint_without_alias i
         in
         force_to_unknown_or_join typ
       | Discriminant discr ->
@@ -759,9 +759,9 @@ let expand_head_ty (type a) t
           match Discriminant.sort discr with
           | Int ->
             let imm = Immediate.int (Discriminant.to_int discr) in
-            Flambda_type0_core.this_tagged_immediate_without_alias imm
+            Basic_type_ops.this_tagged_immediate_without_alias imm
           | Is_int | Tag ->
-            Flambda_type0_core.this_discriminant_without_alias discr
+            Basic_type_ops.this_discriminant_without_alias discr
         in
         force_to_unknown_or_join typ
       | Name name ->
@@ -792,13 +792,13 @@ let expand_head_ty (type a) t
             print t;
           invariant_should_fail t
 
-let expand_head t (ty : Flambda_types.t) : Flambda_types.resolved =
+let expand_head t (ty : Type_grammar.t) : Type_grammar.resolved =
   match ty with
   | Value ty_value ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:Flambda_type0_core.force_to_kind_value
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_value
+        ~force_to_kind:Basic_type_ops.force_to_kind_value
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
@@ -806,18 +806,18 @@ let expand_head t (ty : Flambda_types.t) : Flambda_types.resolved =
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:(Flambda_type0_core.force_to_kind_naked_number kind)
+        ~force_to_kind:(Basic_type_ops.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_naked_number
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_naked_number
         ty_naked_number
     in
     Resolved (Resolved_naked_number (unknown_or_join, kind))
   | Fabricated ty_fabricated ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:Flambda_type0_core.force_to_kind_fabricated
+        ~force_to_kind:Basic_type_ops.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
-        ~apply_rec_info:Flambda_type0_core.apply_rec_info_of_kind_fabricated
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_fabricated
         ty_fabricated
     in
     Resolved (Resolved_fabricated unknown_or_join)
@@ -868,7 +868,7 @@ let create_using_resolver_and_symbol_bindings_from t =
   let t =
     Name.Map.fold (fun name (typ, _binding_time, occurrence_kind) t ->
         let name = Name_in_binding_pos.create name occurrence_kind in
-        add_definition t name (Flambda_type0_core.kind typ))
+        add_definition t name (Basic_type_ops.kind typ))
       names_to_types
       (create_using_resolver_from t)
   in

@@ -18,12 +18,12 @@
 
 (* CR mshinwell: Move the definition of type [t] here then remove all the
    " : t" type annotations. *)
-type t = Flambda_types.closures_entry
+type t = Type_grammar.closures_entry
 
 let create_bottom () : t =
   { function_decl = Unknown;
     closure_elements = Closure_elements.bottom;
-    set_of_closures = Flambda_type0_core.bottom_as_ty_fabricated ();
+    set_of_closures = Basic_type_ops.bottom_as_ty_fabricated ();
   }
 
 let print_with_cache ~cache ppf
@@ -82,7 +82,7 @@ let apply_name_permutation
     closure_elements =
       Closure_elements.apply_name_permutation closure_elements perm;
     set_of_closures =
-      Flambda_type0_core.apply_name_permutation_ty_fabricated
+      Basic_type_ops.apply_name_permutation_ty_fabricated
         set_of_closures perm;
   }
 
@@ -93,8 +93,8 @@ let free_names ({ function_decl = _; closure_elements; set_of_closures; } : t) =
 
 let map_function_decl_types
       (({ function_decl; closure_elements; set_of_closures; } : t) as t)
-      ~(f : Flambda_types.function_declaration
-        -> Flambda_types.function_declaration Or_bottom.t)
+      ~(f : Type_grammar.function_declaration
+        -> Type_grammar.function_declaration Or_bottom.t)
       : _ Or_bottom.t =
   match function_decl with
   | Unknown -> Ok t

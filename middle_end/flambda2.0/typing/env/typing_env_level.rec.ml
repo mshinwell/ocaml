@@ -18,7 +18,7 @@
 
 type t = {
   defined_vars : (Flambda_kind.t * Binding_time.t) Variable.Map.t;
-  equations : Flambda_types.t Name.Map.t;
+  equations : Type_grammar.t Name.Map.t;
   cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
 }
 
@@ -91,7 +91,7 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
   let equations' =
     Name.Map.fold (fun name typ equations ->
         let name' = Name_permutation.apply_name perm name in
-        let typ' = Flambda_type0_core.apply_name_permutation typ perm in
+        let typ' = Basic_type_ops.apply_name_permutation typ perm in
         if not (name == name' && typ == typ') then begin
           equations_changed := true
         end;
@@ -179,7 +179,7 @@ let add_definition t var kind binding_time =
   }
 
 let check_equation t name ty =
-  match Flambda_type0_core.get_alias ty with
+  match Basic_type_ops.get_alias ty with
   | None -> ()
   | Some simple ->
     match Simple.descr simple with

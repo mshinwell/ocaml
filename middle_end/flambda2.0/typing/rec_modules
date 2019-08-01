@@ -1,5 +1,5 @@
-flambda_types.rec.ml
-flambda_type0_core.rec.ml
+type_grammar.rec.ml
+basic_type_ops.rec.ml
 type_erase_aliases.rec.ml
 type_free_names.rec.ml
 type_printers.rec.ml

@@ -24,18 +24,18 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
-  type of_kind_foo = K.naked_nativeint Flambda_types.of_kind_naked_number
+  type of_kind_foo = K.naked_nativeint Type_grammar.of_kind_naked_number
 
   let kind = K.naked_nativeint
-  let to_type ty : Flambda_types.t = Naked_number (ty, Naked_nativeint)
-  let force_to_kind = Flambda_type0_core.force_to_kind_naked_nativeint
+  let to_type ty : Type_grammar.t = Naked_number (ty, Naked_nativeint)
+  let force_to_kind = Basic_type_ops.force_to_kind_naked_nativeint
   let print_ty = Type_printers.print_ty_naked_nativeint_with_cache
-  let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_naked_number
+  let apply_rec_info = Basic_type_ops.apply_rec_info_of_kind_naked_number
 
   let meet_or_join_of_kind_foo _meet_or_join_env ~meet_or_join_ty:_
-        (of_kind1 : K.naked_nativeint Flambda_types.of_kind_naked_number)
-        (of_kind2 : K.naked_nativeint Flambda_types.of_kind_naked_number)
-        : (K.naked_nativeint Flambda_types.of_kind_naked_number * TEE.t)
+        (of_kind1 : K.naked_nativeint Type_grammar.of_kind_naked_number)
+        (of_kind2 : K.naked_nativeint Type_grammar.of_kind_naked_number)
+        : (K.naked_nativeint Type_grammar.of_kind_naked_number * TEE.t)
             Or_bottom_or_absorbing.t =
     match of_kind1, of_kind2 with
     | Nativeint fs1, Nativeint fs2 ->

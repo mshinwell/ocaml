@@ -30,15 +30,15 @@ module Make
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t)
   (S : Meet_and_join_spec_intf.S
-    with type flambda_type := Flambda_types.t
-    with type 'a ty := 'a Flambda_types.ty
+    with type flambda_type := Type_grammar.t
+    with type 'a ty := 'a Type_grammar.ty
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t) :
 sig
   val meet_or_join_ty
      : ?bound_name:Name.t
     -> Meet_env.t
-    -> S.of_kind_foo Flambda_types.ty
-    -> S.of_kind_foo Flambda_types.ty
-    -> (S.of_kind_foo Flambda_types.ty * Typing_env_extension.t) Or_bottom.t
+    -> S.of_kind_foo Type_grammar.ty
+    -> S.of_kind_foo Type_grammar.ty
+    -> (S.of_kind_foo Type_grammar.ty * Typing_env_extension.t) Or_bottom.t
 end

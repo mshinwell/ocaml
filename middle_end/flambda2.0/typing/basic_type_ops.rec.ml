@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open Flambda_types
+open Type_grammar
 
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
@@ -634,16 +634,16 @@ let get_alias_ty ty =
   | _ -> None
 
 let apply_rec_info_of_kind_naked_number (type k)
-      (of_kind_naked_number : k Flambda_types.of_kind_naked_number) rec_info
-      : k Flambda_types.of_kind_naked_number Or_bottom.t =
+      (of_kind_naked_number : k Type_grammar.of_kind_naked_number) rec_info
+      : k Type_grammar.of_kind_naked_number Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok of_kind_naked_number
   else Bottom
 
 let apply_rec_info_ty (type of_kind_foo)
       (apply_rec_info_of_kind_foo :
         (of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t))
-      (ty : of_kind_foo Flambda_types.ty)
-      rec_info : of_kind_foo Flambda_types.ty Or_bottom.t =
+      (ty : of_kind_foo Type_grammar.ty)
+      rec_info : of_kind_foo Type_grammar.ty Or_bottom.t =
   match ty with
   | Equals simple ->
     let newer_rec_info = Some rec_info in
@@ -659,8 +659,8 @@ let apply_rec_info_ty (type of_kind_foo)
     | Bottom -> Bottom
     | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
-let rec apply_rec_info (t : Flambda_types.t) rec_info
-      : Flambda_types.t Or_bottom.t =
+let rec apply_rec_info (t : Type_grammar.t) rec_info
+      : Type_grammar.t Or_bottom.t =
   match t with
   | Value ty_value ->
     begin match
@@ -687,15 +687,15 @@ let rec apply_rec_info (t : Flambda_types.t) rec_info
     | Bottom -> Bottom
     end
 
-and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
-      rec_info : Flambda_types.of_kind_value Or_bottom.t =
+and apply_rec_info_of_kind_value (of_kind_value : Type_grammar.of_kind_value)
+      rec_info : Type_grammar.of_kind_value Or_bottom.t =
   match of_kind_value with
   | Closures { by_closure_id; } ->
     Or_bottom.map
       (Closures_entry_by_set_of_closures_contents.map_function_decl_types
         by_closure_id
-        ~f:(fun (decl : Flambda_types.function_declaration)
-              : Flambda_types.function_declaration Or_bottom.t ->
+        ~f:(fun (decl : Type_grammar.function_declaration)
+              : Type_grammar.function_declaration Or_bottom.t ->
           match decl with
           | Non_inlinable _ -> Ok decl
           | Inlinable { function_decl; rec_info = old_rec_info; } ->
@@ -710,16 +710,16 @@ and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
     else Bottom
 
 and apply_rec_info_of_kind_fabricated
-      (of_kind_fabricated : Flambda_types.of_kind_fabricated)
-      rec_info : Flambda_types.of_kind_fabricated Or_bottom.t =
+      (of_kind_fabricated : Type_grammar.of_kind_fabricated)
+      rec_info : Type_grammar.of_kind_fabricated Or_bottom.t =
   match of_kind_fabricated with
   | Discriminants _ ->
     if Rec_info.is_initial rec_info then Ok of_kind_fabricated
     else Bottom
 
 let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
-      (unknown_or_join : _ Flambda_types.unknown_or_join) perm
-      : _ Flambda_types.unknown_or_join =
+      (unknown_or_join : _ Type_grammar.unknown_or_join) perm
+      : _ Type_grammar.unknown_or_join =
   match unknown_or_join with
   | Unknown | Bottom -> unknown_or_join
   | Ok of_kind_foo ->
@@ -728,8 +728,8 @@ let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
     else Ok of_kind_foo'
 
 let apply_name_permutation_ty apply_name_permutation_of_kind_foo
-      (ty : _ Flambda_types.ty) perm
-      : _ Flambda_types.ty =
+      (ty : _ Type_grammar.ty) perm
+      : _ Type_grammar.ty =
   match ty with
   | No_alias unknown_or_join ->
     let unknown_or_join' =
@@ -745,11 +745,11 @@ let apply_name_permutation_ty apply_name_permutation_of_kind_foo
     else Equals simple'
 
 let apply_name_permutation_of_kind_naked_number (type n)
-      (of_kind_naked_number : n Flambda_types.of_kind_naked_number) _perm
-      : n Flambda_types.of_kind_naked_number =
+      (of_kind_naked_number : n Type_grammar.of_kind_naked_number) _perm
+      : n Type_grammar.of_kind_naked_number =
   of_kind_naked_number
 
-let rec apply_name_permutation (t : Flambda_types.t) perm : Flambda_types.t =
+let rec apply_name_permutation (t : Type_grammar.t) perm : Type_grammar.t =
   match t with
   | Value ty_value ->
     let ty_value' =
@@ -774,8 +774,8 @@ let rec apply_name_permutation (t : Flambda_types.t) perm : Flambda_types.t =
     else Fabricated ty_fabricated'
 
 and apply_name_permutation_of_kind_value
-      (of_kind_value : Flambda_types.of_kind_value) perm
-      : Flambda_types.of_kind_value =
+      (of_kind_value : Type_grammar.of_kind_value) perm
+      : Type_grammar.of_kind_value =
   match of_kind_value with
   | Blocks_and_tagged_immediates blocks_and_tagged_immediates ->
     let blocks_and_tagged_immediates' =
@@ -846,8 +846,8 @@ and apply_name_permutation_blocks_and_tagged_immediates
     { immediates = immediates'; blocks = blocks'; }
 
 and apply_name_permutation_of_kind_fabricated
-      (of_kind_fabricated : Flambda_types.of_kind_fabricated) perm
-      : Flambda_types.of_kind_fabricated =
+      (of_kind_fabricated : Type_grammar.of_kind_fabricated) perm
+      : Type_grammar.of_kind_fabricated =
   match of_kind_fabricated with
   | Discriminants discrs ->
     let discrs' = Discriminants.apply_name_permutation discrs perm in

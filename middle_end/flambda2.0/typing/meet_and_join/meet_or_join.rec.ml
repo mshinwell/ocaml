@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module KI = Kind_independent_meet_or_join
-module T = Flambda_types
+module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Make
@@ -51,44 +51,44 @@ struct
     | Value ty1, Value ty2 ->
       begin match Value.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Value ty, env_extension
-      | Bottom -> Flambda_type0_core.bottom K.value, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.value, TEE.empty ()
       end
     | Naked_number (ty1, Naked_immediate),
         Naked_number (ty2, Naked_immediate) ->
       begin match Naked_immediate.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) ->
         Naked_number (ty, Naked_immediate), env_extension
-      | Bottom -> Flambda_type0_core.bottom K.naked_immediate, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.naked_immediate, TEE.empty ()
       end
     | Naked_number (ty1, Naked_float), Naked_number (ty2, Naked_float) ->
       begin match Naked_float.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) ->
         Naked_number (ty, Naked_float), env_extension
-      | Bottom -> Flambda_type0_core.bottom K.naked_float, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.naked_float, TEE.empty ()
       end
     | Naked_number (ty1, Naked_int32), Naked_number (ty2, Naked_int32) ->
       begin match Naked_int32.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) ->
         Naked_number (ty, Naked_int32), env_extension
-      | Bottom -> Flambda_type0_core.bottom K.naked_int32, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.naked_int32, TEE.empty ()
       end
     | Naked_number (ty1, Naked_int64), Naked_number (ty2, Naked_int64) ->
       begin match Naked_int64.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) ->
         Naked_number (ty, Naked_int64), env_extension
-      | Bottom -> Flambda_type0_core.bottom K.naked_int64, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.naked_int64, TEE.empty ()
       end
     | Naked_number (ty1, Naked_nativeint),
         Naked_number (ty2, Naked_nativeint) ->
       begin match Naked_nativeint.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) ->
         Naked_number (ty, Naked_nativeint), env_extension
-      | Bottom -> Flambda_type0_core.bottom K.naked_nativeint, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.naked_nativeint, TEE.empty ()
       end
     | Fabricated ty1, Fabricated ty2 ->
       begin match Fabricated.meet_or_join_ty ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Fabricated ty, env_extension
-      | Bottom -> Flambda_type0_core.bottom K.fabricated, TEE.empty ()
+      | Bottom -> Basic_type_ops.bottom K.fabricated, TEE.empty ()
       end
     | (Value _ | Naked_number _ | Fabricated _), _ ->
       Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"

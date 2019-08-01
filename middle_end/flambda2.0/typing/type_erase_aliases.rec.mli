@@ -23,21 +23,21 @@ val erase_aliases
   -> bound_name:Name.t option
   -> already_seen:Simple.Set.t
   -> allowed:Variable.Set.t
-  -> Flambda_types.t
-  -> Flambda_types.t
+  -> Type_grammar.t
+  -> Type_grammar.t
 
 val erase_aliases_ty_value
    : Typing_env.t
   -> bound_name:Name.t option
   -> already_seen:Simple.Set.t
   -> allowed:Variable.Set.t
-  -> Flambda_types.ty_value
-  -> Flambda_types.ty_value
+  -> Type_grammar.ty_value
+  -> Type_grammar.ty_value
 
 val erase_aliases_ty_fabricated
    : Typing_env.t
   -> bound_name:Name.t option
   -> already_seen:Simple.Set.t
   -> allowed:Variable.Set.t
-  -> Flambda_types.ty_fabricated
-  -> Flambda_types.ty_fabricated
+  -> Type_grammar.ty_fabricated
+  -> Type_grammar.ty_fabricated

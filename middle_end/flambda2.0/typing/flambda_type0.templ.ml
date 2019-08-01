@@ -38,8 +38,8 @@ module Make
 = struct
   (* -- module rec binding here -- *)
 
-  include Flambda_type0_core
-  include Flambda_types
+  include Basic_type_ops
+  include Type_grammar
 
   let meet env t1 t2 = Api_meet_and_join.meet env t1 t2
   let join env t1 t2 = Api_meet_and_join.join env t1 t2
