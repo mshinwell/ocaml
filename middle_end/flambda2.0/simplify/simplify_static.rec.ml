@@ -88,7 +88,9 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
       | Name (Symbol sym) -> Of_kind_value.Symbol sym, ty
       | Name (Var _) -> of_kind_value, ty
       | Const (Tagged_immediate imm) -> Of_kind_value.Tagged_immediate imm, ty
-      | Const _ | Discriminant _ ->
+      | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+          | Naked_int64 _ | Naked_nativeint _)
+      | Discriminant _ ->
         (* CR mshinwell: This should be "invalid" and propagate up *)
         of_kind_value, ty
 
@@ -100,14 +102,13 @@ let simplify_or_variable dacc type_for_const
   | Var var -> or_variable, DE.find_variable denv var
 
 let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
-      ~set_of_closures_symbol ~closure_symbols ~closure_elements
-      ~closure_element_types =
+      ~closure_symbols ~closure_elements ~closure_element_types =
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols
   in
   let set_of_closures, closure_types_by_bound_name, result_dacc =
     Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
-      ~closure_bound_names
+      ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let static_structure : Program_body.Static_structure.t =
     let static_part : K.fabricated Static_part.t =
@@ -126,21 +127,20 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       closure_types_by_bound_name
       Symbol.Map.empty
   in
-  let result_dacc = DA.with_denv result_dacc denv in
   set_of_closures, result_dacc, static_structure_types, static_structure
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
-      ~set_of_closures_symbol ~closure_symbols =
+      ~closure_symbols =
   let can_lift, closure_elements, closure_element_types =
-    type_closure_elements_and_make_lifting_decision dacc set_of_closures
+    Simplify_named.type_closure_elements_and_make_lifting_decision dacc
+      ~min_occurrence_kind:Name_occurrence_kind.normal set_of_closures
   in
   if not can_lift then begin
     Misc.fatal_errorf "Set of closures cannot be statically allocated:@ %a"
       Set_of_closures.print set_of_closures
   end;
   simplify_set_of_closures0 dacc ~result_dacc set_of_closures
-    ~set_of_closures_symbol ~closure_symbols ~closure_elements
-    ~closure_element_types
+    ~closure_symbols ~closure_elements ~closure_element_types
 
 let simplify_static_part_of_kind_value dacc
       (static_part : K.value Static_part.t) ~result_sym
@@ -219,15 +219,13 @@ let simplify_static_part_of_kind_value dacc
 
 let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
-      ~set_of_closures_symbol ~closure_symbols
+      ~closure_symbols
     : K.fabricated Static_part.t * DA.t =
   match static_part with
   | Set_of_closures set_of_closures ->
-     let set_of_closures, dacc, _ty, _static_structure_types,
-         _static_structure =
+     let set_of_closures, dacc, _static_structure_types, _static_structure =
        simplify_set_of_closures dacc ~result_dacc set_of_closures
-         ~set_of_closures_symbol ~closure_symbols
-         ~closure_elements_and_types:None
+         ~closure_symbols
      in
      Set_of_closures set_of_closures, dacc
 
@@ -238,9 +236,9 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
   match bound_syms with
   | Singleton result_sym ->
     simplify_static_part_of_kind_value dacc static_part ~result_sym
-  | Set_of_closures { set_of_closures_symbol; closure_symbols; } ->
+  | Set_of_closures { closure_symbols; } ->
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
-      ~set_of_closures_symbol ~closure_symbols
+      ~closure_symbols
 
 let simplify_static_structure dacc
       ((S pieces) : Program_body.Static_structure.t)
@@ -356,7 +354,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             true
           | _ -> false
           end
-        | _ -> false
+        | Let _ | Let_cont _ | Apply _ | Switch _ | Invalid _ -> false
       in
       let computation : Program_body.Computation.t option =
         if computation_can_be_deleted then None

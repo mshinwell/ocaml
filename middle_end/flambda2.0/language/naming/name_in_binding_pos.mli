@@ -27,7 +27,13 @@ val name : t -> Name.t
 val occurrence_kind : t -> Name_occurrence_kind.t
 
 val var : Var_in_binding_pos.t -> t
+val symbol : Symbol.t -> t
 
-val simple : t -> Simple.t
+val must_be_symbol : t -> Symbol.t
+
+(* CR mshinwell: Ensure naming consistent with Var_in_binding_pos.  Make
+   constructors and destructors clear. *)
+val to_var : t -> Var_in_binding_pos.t option
+val to_simple : t -> Simple.t
 
 include Identifiable.S with type t := t

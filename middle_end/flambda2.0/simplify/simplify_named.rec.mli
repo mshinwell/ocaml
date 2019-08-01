@@ -24,7 +24,8 @@ val simplify_named
   -> Flambda.Named.t
   -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
-(** This is only for the use of [Simplify_static]. *)
+(** The following are only for the use of [Simplify_static]. *)
+
 val simplify_set_of_closures0
    : Downwards_acc.t
   -> result_dacc:Downwards_acc.t
@@ -35,3 +36,10 @@ val simplify_set_of_closures0
   -> Flambda.Set_of_closures.t
        * Flambda_type.t Name_in_binding_pos.Map.t
        * Downwards_acc.t
+
+val type_closure_elements_and_make_lifting_decision
+   : Downwards_acc.t
+  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> Flambda.Set_of_closures.t
+  -> bool * Simple.t Var_within_closure.Map.t
+       * Flambda_type.ty_value Var_within_closure.Map.t
