@@ -454,7 +454,7 @@ let unary_primitive env dbg f arg =
       C.unbox_number ~dbg kind arg
   | Box_number kind ->
       C.box_number ~dbg kind arg
-  | Move_within_set_of_closures { move_from = c1; move_to = c2} ->
+  | Select_closure { move_from = c1; move_to = c2} ->
       let diff = (Env.closure_offset env c2) - (Env.closure_offset env c1) in
       C.field_address arg diff dbg
   | Project_var v ->

@@ -27,7 +27,7 @@
     see above).
     At runtime, a [set_of_closures] corresponds to an OCaml value with tag
     [Closure_tag] (possibly with inline [Infix_tag](s)).  As an optimization,
-    an operation ([Move_within_set_of_closures]) is provided (see above)
+    an operation ([Select_closure]) is provided (see above)
     which enables one closure within a set to be located given another
     closure in the same set.  This avoids keeping a pointer to the whole set
     of closures alive when compiling, for example, mutually-recursive

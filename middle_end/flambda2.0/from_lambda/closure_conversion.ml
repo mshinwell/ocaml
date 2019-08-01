@@ -89,7 +89,7 @@ let tupled_function_call_stub
   in
   let body_with_closure_bound =
     let move : Flambda_primitive.unary_primitive =
-      Move_within_set_of_closures {
+      Select_closure {
         move_from = closure_id;
         move_to = unboxed_version;
       }
@@ -651,7 +651,7 @@ and close_one_function t ~external_env ~by_closure_id decl
      - The parameters: direct substitution by [Variable]s
      - The function being defined: accessible through [my_closure]
      - Other functions in the set being defined: accessible from [my_closure]
-       then a [Move_within_set_of_closures]
+       then a [Select_closure]
      - Other free variables: accessible using [Project_var] from
        [my_closure].
      Note that free variables corresponding to predefined exception
@@ -718,7 +718,7 @@ and close_one_function t ~external_env ~by_closure_id decl
         if not (Variable.Set.mem var free_vars_of_body) then body
         else
           let move : Flambda_primitive.unary_primitive =
-            Move_within_set_of_closures {
+            Select_closure {
               move_from = my_closure_id;
               move_to = closure_id;
             }
