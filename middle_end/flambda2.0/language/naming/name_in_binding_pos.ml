@@ -44,6 +44,7 @@ let to_var t =
   | Var var -> Some (Var_in_binding_pos.create var t.occurrence_kind)
   | Symbol _ -> None
 
+let to_name t = t.name
 let to_simple t = Simple.name t.name
 
 include Identifiable.Make (struct
