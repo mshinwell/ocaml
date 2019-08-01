@@ -26,6 +26,12 @@ val create_at_least_multiple
    : Flambda_types.closures_entry Set_of_closures_contents.Map.t
   -> t
 
+val map_function_decl_types
+   : t
+  -> f:(Flambda_types.function_declaration
+    -> Flambda_types.function_declaration Or_bottom.t)
+  -> t Or_bottom.t
+
 val get_singleton
    : t
   -> ((Closure_id.t * Set_of_closures_contents.t)

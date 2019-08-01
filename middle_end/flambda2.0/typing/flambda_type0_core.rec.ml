@@ -511,12 +511,12 @@ let exactly_this_closure closure_id function_decl
       ~all_closure_vars_in_set:closure_var_types
       : t =
   let closure_types = Types_by_closure_id.create closure_types in
-  let closure_var_types =
-    Types_by_var_within_closure.create
-      (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
-        closure_var_types)
-  in
   let closures_entry : closures_entry =
+    let closure_var_types =
+      Types_by_var_within_closure.create
+        (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
+          closure_var_types)
+    in
     { function_decl = Known function_decl;
       closure_types;
       closure_var_types;
@@ -525,7 +525,7 @@ let exactly_this_closure closure_id function_decl
   let by_closure_id =
     let set_of_closures_contents =
       Set_of_closures_contents.create (Closure_id.Set.singleton closure_id)
-        (Var_within_closure.Map.keys closure_elements)
+        (Var_within_closure.Map.keys closure_var_types)
     in
     let set_of_closures_contents_to_closures_entry =
       Set_of_closures_contents.Map.singleton set_of_closures_contents
@@ -542,13 +542,12 @@ let exactly_this_closure closure_id function_decl
 
 let at_least_the_closures_with_ids closure_ids_and_bindings : t =
   let closure_ids_and_types =
-    Closure_id.Map.map (fun bound_to ->
-        alias_type_of_as_ty_value bound_to)
+    Closure_id.Map.map (fun bound_to -> alias_type_of K.value bound_to)
       closure_ids_and_bindings
   in
   let closure_types = Types_by_closure_id.create closure_ids_and_types in
   let closures_entry : closures_entry =
-    { function_decl = Known function_decl;
+    { function_decl = Unknown;
       closure_types;
       closure_var_types = Types_by_var_within_closure.bottom;
     }
@@ -574,15 +573,15 @@ let at_least_the_closures_with_ids closure_ids_and_bindings : t =
 
 let closure_with_at_least_this_closure_var closure_var ~closure_element_var
       : t =
-  let closure_var_type =
-    alias_type_of_as_ty_value (Name.var closure_element_var)
-  in
   let closure_var_types =
+    let closure_var_type =
+      alias_type_of K.value (Simple.var closure_element_var)
+    in
     Types_by_var_within_closure.create
       (Var_within_closure.Map.singleton closure_var closure_var_type)
   in
   let closures_entry : closures_entry =
-    { function_decl = Known function_decl;
+    { function_decl = Unknown;
       closure_types = Types_by_closure_id.bottom;
       closure_var_types;
     }
@@ -590,7 +589,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var
   let by_closure_id =
     let set_of_closures_contents =
       Set_of_closures_contents.create
-        Closure_id.Map.empty
+        Closure_id.Set.empty
         (Var_within_closure.Set.singleton closure_var)
     in
     let set_of_closures_contents_to_closures_entry =
@@ -693,7 +692,8 @@ and apply_rec_info_of_kind_value (of_kind_value : Flambda_types.of_kind_value)
   match of_kind_value with
   | Closures { by_closure_id; } ->
     Or_bottom.map
-      (Closures_entry_by_closure_id.map_function_decl_types by_closure_id
+      (Closures_entry_by_set_of_closures_contents.map_function_decl_types
+        by_closure_id
         ~f:(fun (decl : Flambda_types.function_declaration)
               : Flambda_types.function_declaration Or_bottom.t ->
           match decl with
@@ -716,12 +716,6 @@ and apply_rec_info_of_kind_fabricated
   | Discriminants _ ->
     if Rec_info.is_initial rec_info then Ok of_kind_fabricated
     else Bottom
-  | Set_of_closures { closures; } ->
-    Or_bottom.map
-      (Closure_ids.map_closure_types closures 
-        ~f:(fun (closure_type : Flambda_types.t) ->
-          apply_rec_info closure_type rec_info))
-      ~f:(fun closures -> Set_of_closures { closures; })
 
 let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
       (unknown_or_join : _ Flambda_types.unknown_or_join) perm
@@ -822,7 +816,8 @@ and apply_name_permutation_of_kind_value
     else Boxed_number (Boxed_nativeint ty_naked_number')
   | Closures { by_closure_id; } ->
     let by_closure_id' =
-      Closures_entry_by_closure_id.apply_name_permutation by_closure_id perm
+      Closures_entry_by_set_of_closures_contents.apply_name_permutation
+        by_closure_id perm
     in
     if by_closure_id == by_closure_id' then of_kind_value
     else Closures { by_closure_id = by_closure_id'; }
@@ -858,10 +853,6 @@ and apply_name_permutation_of_kind_fabricated
     let discrs' = Discriminants.apply_name_permutation discrs perm in
     if discrs == discrs' then of_kind_fabricated
     else Discriminants discrs'
-  | Set_of_closures { closures; } ->
-    let closures' = Closure_ids.apply_name_permutation closures perm in
-    if closures == closures' then of_kind_fabricated
-    else Set_of_closures { closures = closures'; }
 
 let apply_name_permutation_ty_fabricated ty perm =
   apply_name_permutation_ty apply_name_permutation_of_kind_fabricated ty perm

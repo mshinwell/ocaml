@@ -32,19 +32,6 @@ struct
   let print_ty = Type_printers.print_ty_fabricated_with_cache
   let apply_rec_info = Flambda_type0_core.apply_rec_info_of_kind_fabricated
 
-  let meet_or_join_set_of_closures_entry env
-          ({ by_closure_id = by_closure_id1; } : T.set_of_closures_entry)
-          ({ by_closure_id = by_closure_id2; } : T.set_of_closures_entry) =
-    let meet_or_join =
-      E.switch Types_by_closure_id.meet Types_by_closure_id.join
-        env by_closure_id1 by_closure_id2
-    in
-    Or_bottom.map meet_or_join ~f:(fun (by_closure_id, env_extension) ->
-      let set_of_closures_entry : T.set_of_closures_entry =
-        { by_closure_id; }
-      in
-      set_of_closures_entry, env_extension)
-
   let meet_or_join_of_kind_foo env ~meet_or_join_ty:_
         (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =
     match of_kind1, of_kind2 with
@@ -53,12 +40,4 @@ struct
         (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
         ~f:(fun (discrs, env_extension) : (T.of_kind_fabricated * _) ->
           Discriminants discrs, env_extension)
-    | Set_of_closures { closures = closures1; },
-        Set_of_closures { closures = closures2; } ->
-      Or_bottom_or_absorbing.of_or_bottom
-        (E.switch Closure_ids.meet Closure_ids.join env closures1 closures2)
-        ~f:(fun (closures, env_extension) : (T.of_kind_fabricated * _) ->
-          Set_of_closures { closures; }, env_extension)
-    | (Discriminants _ | Set_of_closures _), _ ->
-      Or_bottom_or_absorbing.Absorbing
 end

@@ -69,8 +69,8 @@ module rec Expr : sig
   (** Create a [Let]-expression.  Unnecessary variable bindings will not be
       created and their associated defining expressions will be reported as
       [Have_deleted]. *)
-  val create_let0
-     : Var_in_binding_pos.t
+  val create_pattern_let0
+     : Bindable_let_bound.t
     -> Named.t
     -> t
     -> t * let_creation_result
@@ -399,7 +399,7 @@ end and Set_of_closures : sig
   (** Create a set of closures given the code for its functions and the
       closure variables. *)
   val create
-     : function_decls:Function_declarations.t
+     : Function_declarations.t
     -> closure_elements:Simple.t Var_within_closure.Map.t
     -> t
 

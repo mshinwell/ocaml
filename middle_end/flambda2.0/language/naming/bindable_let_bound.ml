@@ -169,6 +169,13 @@ let must_be_set_of_closures t =
 
 let all_bound_vars t =
   match t with
-  | Singleton var -> Variable.Set.singleton var
-  | Set_of_closures closure_vars ->
-    Variable.Set.of_list (Closure_id.Map.data closure_vars)
+  | Singleton var -> Var_in_binding_pos.Set.singleton var
+  | Set_of_closures { closure_vars; _ } ->
+    Var_in_binding_pos.Set.of_list (Closure_id.Map.data closure_vars)
+
+let all_bound_vars' t =
+  match t with
+  | Singleton var -> Variable.Set.singleton (Var_in_binding_pos.var var)
+  | Set_of_closures { closure_vars; _ } ->
+    Variable.Set.of_list (
+      List.map Var_in_binding_pos.var (Closure_id.Map.data closure_vars))

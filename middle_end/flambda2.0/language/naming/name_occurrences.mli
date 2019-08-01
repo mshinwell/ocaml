@@ -80,6 +80,8 @@ val mem_name : t -> Name.t -> bool
 
 val remove_var : t -> Variable.t -> t
 
+val remove_vars : t -> Variable.Set.t -> t
+
 val only_contains_symbols : t -> bool
 
 val greatest_occurrence_kind_var

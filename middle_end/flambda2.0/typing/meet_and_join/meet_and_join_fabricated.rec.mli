@@ -30,11 +30,4 @@ sig
     with type meet_env := Meet_env.t
     with type typing_env_extension := Typing_env_extension.t
     with type of_kind_foo = Flambda_types.of_kind_fabricated
-
-  val meet_or_join_set_of_closures_entry
-     : Meet_env.t
-    -> Flambda_types.set_of_closures_entry
-    -> Flambda_types.set_of_closures_entry
-    -> (Flambda_types.set_of_closures_entry * Typing_env_extension.t)
-         Or_bottom.t
 end

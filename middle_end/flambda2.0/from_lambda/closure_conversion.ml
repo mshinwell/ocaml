@@ -622,7 +622,7 @@ and close_functions t external_env function_declarations =
       Var_within_closure.Map.empty
   in
   let set_of_closures =
-    Flambda.Set_of_closures.create ~function_decls ~closure_elements
+    Flambda.Set_of_closures.create function_decls ~closure_elements
   in
   Named.create_set_of_closures set_of_closures
 

@@ -19,7 +19,7 @@
 open! Simplify_import
 
 type pre_simplification_types_of_my_closures = {
-  internal_closure_types : Flambda_type.t Closure_id.Map.t;
+  internal_closure_types : T.ty_value Closure_id.Map.t;
   closure_types : T.t Closure_id.Map.t;
 }
 
@@ -54,17 +54,26 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
           function_decl_type denv function_decl
             (Rec_info.create ~depth:1 ~unroll_to:None)
         in
+        let bound_to =
+          match Closure_id.Map.find closure_id closure_bound_names with
+          | exception Not_found ->
+            Misc.fatal_errorf "No [Name] for closure ID %a\n%!"
+              Closure_id.print closure_id
+          | name -> Name_in_binding_pos.name name
+        in
         T.exactly_this_closure closure_id
           function_decl_type_as_seen_from_own_body
           ~all_closures_in_set:closure_types_as_seen_from_own_body
-          ~all_closure_vars_in_set:closure_element_types)
+          ~all_closure_vars_in_set:closure_element_types
+          ~bound_to)
       funs
   in
   { internal_closure_types = closure_types_as_seen_from_own_body;
     closure_types;
   }
 
-let type_closure_elements_and_make_lifting_decision dacc set_of_closures =
+let type_closure_elements_and_make_lifting_decision dacc ~bound_vars
+      set_of_closures =
   (* By computing the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated.
      Note that simplifying the bodies of the functions won't change the
@@ -294,7 +303,8 @@ let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in
   let can_lift, closure_elements, closure_element_types =
-    type_closure_elements_and_make_lifting_decision dacc set_of_closures
+    type_closure_elements_and_make_lifting_decision dacc ~bound_vars
+      set_of_closures
   in
   if can_lift then
     simplify_and_lift_set_of_closures dacc ~bound_vars ~closure_bound_vars

@@ -124,20 +124,25 @@ let create descr =
     free_names = Not_computed;
   }
 
-type let_creation_result0 =
-  | Defining_expr_deleted
-  | Nothing_deleted
-
 type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
+let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
       : t * let_creation_result =
+  begin match !Clflags.dump_flambda_let with
+  | None -> ()
+  | Some stamp ->
+    Variable.debug_when_stamp_matches (Var_in_binding_pos.var bound_var) ~stamp
+      ~f:(fun () ->
+        Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
+          stamp
+          (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
+  end;
   let free_names_of_body = free_names body in
   (* CR mshinwell: [let_creation_result] should really be some kind of
      "benefit" type. *)
-  let for_one_bound_var bound_var : bool * let_creation_result0 =
+  let bound_var, keep_binding, let_creation_result =
     let greatest_occurrence_kind =
       Name_occurrences.greatest_occurrence_kind_var free_names_of_body
         (Var_in_binding_pos.var bound_var)
@@ -164,7 +169,7 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
           Var_in_binding_pos.print bound_var
           Named.print defining_expr
       end;
-      true, Nothing_deleted
+      bound_var, true, Nothing_deleted
     end else begin
       let has_uses =
         Name_occurrence_kind.Or_absent.is_present greatest_occurrence_kind
@@ -192,7 +197,7 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
           && (not (!Clflags.debug && (has_uses || user_visible)))
       in
       if will_delete_binding then
-        false, Defining_expr_deleted
+        bound_var, false, Have_deleted defining_expr
       else
         let occurrence_kind =
           match greatest_occurrence_kind with
@@ -203,27 +208,10 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
           Var_in_binding_pos.with_occurrence_kind bound_var occurrence_kind
         in
         if Name_occurrence_kind.is_normal occurrence_kind then
-          true, Nothing_deleted
+          bound_var, true, Nothing_deleted
         else
-          true, Defining_expr_deleted
+          bound_var, true, Have_deleted defining_expr
     end
-  in
-  let results =
-    List.map for_one_bound_var
-      (Var_in_binding_pos.Set.elements
-        (Bindable_let_bound.all_bound_vars bound_vars))
-  in
-  let keep_bindings, have_deleted = List.split results in
-  let keep_binding = List.for_all Fun.id keep_bindings in
-  let have_deleted =
-    (* CR mshinwell: Fix this *)
-    assert (List.length have_deleted > 0);
-    List.hd have_deleted
-  in
-  let let_creation_result : let_creation_result =
-    match have_deleted with
-    | Nothing_deleted -> Nothing_deleted
-    | Defining_expr_deleted -> Have_deleted defining_expr
   in
   (* CR mshinwell: When leaving behind phantom lets, maybe we should turn
      the defining expressions into simpler ones by using the type, if possible.
@@ -232,6 +220,7 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
      the types propagate the information forward. *)
   if not keep_binding then body, let_creation_result
   else
+    let bound_vars = Bindable_let_bound.singleton bound_var in
     let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
     let free_names = Let_expr.free_names let_expr in
     let t =
@@ -242,14 +231,34 @@ let create_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
     in
     t, Nothing_deleted
 
-let create_let bound_var defining_expr body : t =
-  let expr, _ =
-    create_let0 (Bindable_let_bound.singleton bound_var) defining_expr body
+let create_set_of_closures_let ~closure_vars defining_expr body
+      : t * let_creation_result =
+  (* CR mshinwell: Think about when these kinds of [Let]s can be
+     phantomised / removed *)
+  let bound_vars = Bindable_let_bound.set_of_closures ~closure_vars in
+  let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
+  let free_names = Let_expr.free_names let_expr in
+  let t =
+    { descr = Let let_expr;
+      delayed_permutation = Name_permutation.empty;
+      free_names = Ok free_names;
+    }
   in
+  t, Nothing_deleted
+
+let create_pattern_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
+      : t * let_creation_result =
+  match bound_vars with
+  | Singleton bound_var -> create_singleton_let bound_var defining_expr body
+  | Set_of_closures { closure_vars; _ } ->
+    create_set_of_closures_let ~closure_vars defining_expr body
+
+let create_let bound_var defining_expr body : t =
+  let expr, _ = create_singleton_let bound_var defining_expr body in
   expr
 
 let create_pattern_let bound_vars defining_expr body : t =
-  let expr, _ = create_let0 bound_vars defining_expr body in
+  let expr, _ = create_pattern_let0 bound_vars defining_expr body in
   expr
 
 let create_let_cont let_cont = create (Let_cont let_cont)

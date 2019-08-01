@@ -145,7 +145,8 @@ let rec print_of_kind_value ~cache ppf
     Format.fprintf ppf "@[<hov 1>(Boxed_number@ %a)@]"
       print_of_kind_value_boxed_number n
   | Closures { by_closure_id; } ->
-    Closures_entry_by_closure_id.print_with_cache ~cache ppf by_closure_id
+    Closures_entry_by_set_of_closures_contents.print_with_cache ~cache
+      ppf by_closure_id
   | String str_infos ->
     Format.fprintf ppf "@[<hov 1>(Strings@ (%a))@]"
       String_info.Set.print str_infos
