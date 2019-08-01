@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = {
-  closure_origin : Closure_origin.t;
   params_and_body : Function_params_and_body.t;
   (* CR mshinwell: Need to document that [code_id] is used for equality
      checking, so it must be updated.  Maybe it's a misnomer in fact. *)
@@ -32,7 +31,7 @@ type t = {
 
 let invariant _env _t = ()
 
-let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
+let create ~params_and_body ~result_arity ~stub ~dbg
       ~(inline : Inline_attribute.t)
       ~is_a_functor ~recursive : t =
   begin match stub, inline with
@@ -43,8 +42,7 @@ let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
       "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
       Function_params_and_body.print params_and_body
   end;
-  { closure_origin;
-    params_and_body;
+  { params_and_body;
     code_id = Code_id.create (Compilation_unit.get_current_exn ());
     result_arity;
     stub;
@@ -55,8 +53,7 @@ let create ~closure_origin ~params_and_body ~result_arity ~stub ~dbg
   }
 
 let print_with_cache0 ~compact ~cache ppf
-      { closure_origin;
-        params_and_body;
+      { params_and_body;
         code_id = _;
         result_arity;
         stub;
@@ -82,7 +79,6 @@ let print_with_cache0 ~compact ~cache ppf
           @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
           @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
           @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
-          @[<hov 1>(closure_origin@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ "
         (if not stub then Flambda_colours.elide () else C.normal ())
@@ -113,7 +109,6 @@ let print_with_cache0 ~compact ~cache ppf
          | Recursive -> Flambda_colours.normal ())
         Recursive.print recursive
         (Flambda_colours.normal ())
-        Closure_origin.print closure_origin
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation;
       if compact then begin
@@ -138,7 +133,6 @@ let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 let print_compact ppf t =
   print_with_cache0 ~compact:true ~cache:(Printing_cache.create ()) ppf t
 
-let closure_origin t = t.closure_origin
 let params_and_body t = t.params_and_body
 let code_id t = t.code_id
 let result_arity t = t.result_arity
@@ -155,8 +149,7 @@ let update_params_and_body t params_and_body =
   }
 
 let free_names
-      { closure_origin = _;
-        params_and_body;
+      { params_and_body;
         code_id = _;
         result_arity = _;
         stub = _;
@@ -168,8 +161,7 @@ let free_names
   Function_params_and_body.free_names params_and_body
 
 let apply_name_permutation
-      ({ closure_origin;
-         params_and_body;
+      ({ params_and_body;
          code_id;
          result_arity;
          stub;
@@ -183,8 +175,7 @@ let apply_name_permutation
   in
   if params_and_body == params_and_body' then t
   else
-    { closure_origin;
-      params_and_body = params_and_body';
+    { params_and_body = params_and_body';
       code_id;
       result_arity;
       stub;

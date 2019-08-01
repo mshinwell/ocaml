@@ -354,10 +354,8 @@ and simplify_direct_partial_application
         ~body
         ~my_closure
     in
-    let closure_origin = Closure_origin.create callee's_closure_id in
     let function_decl =
-      Function_declaration.create ~closure_origin
-        ~params_and_body
+      Function_declaration.create ~params_and_body
         ~result_arity
         ~stub:true
         ~dbg

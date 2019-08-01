@@ -24,19 +24,9 @@ include Expr_std.S with type t := t
 (** Compact printer for use when printing types. *)
 val print_compact : Format.formatter -> t -> unit
 
-(** Create a function declaration.  This calculates the free variables and
-    symbols occurring in the specified [body].
-
-    To just change the parameters or body of a function the "update" functions
-    below should be used, if possible; otherwise care must be taken to
-    preserve the [closure_origin].
-
-    When adding a stub to a function the stub should receive a new
-    [closure_origin] and the renamed original function should retain its
-    existing [closure_origin]. *)
+(** Create a function declaration. *)
 val create
-   : closure_origin:Closure_origin.t
-  -> params_and_body:Function_params_and_body.t
+   : params_and_body:Function_params_and_body.t
   -> result_arity:Flambda_arity.t
   -> stub:bool
   -> dbg:Debuginfo.t
@@ -44,10 +34,6 @@ val create
   -> is_a_functor:bool
   -> recursive:Recursive.t
   -> t
-
-(** The closure from which this function declaration originally came.
-    Used as a backstop against unbounded recursion during inlining. *)
-val closure_origin : t -> Closure_origin.t
 
 (** The alpha-equivalence class of the function's continuations and
     parameters bound over the code of the function. *)
