@@ -19,7 +19,7 @@
 open! Simplify_import
 
 type pre_simplification_types_of_my_closures = {
-  internal_closure_types : T.t Closure_id.Map.t;
+  closure_types_via_aliases : T.t Closure_id.Map.t;
   closure_types : T.t Closure_id.Map.t;
 }
 
@@ -43,24 +43,31 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
           ~bound_name:None ~allowed:Variable.Set.empty ty_value)
       closure_element_types
   in
-  let closure_types_as_seen_from_own_body =
+  let closure_types_via_aliases =
     Closure_id.Map.map (fun name ->
         T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
       closure_bound_names
   in
-  let closure_types =
-    Closure_id.Map.mapi (fun closure_id function_decl ->
-        let function_decl_type_as_seen_from_own_body =
-          function_decl_type denv function_decl
-            (Rec_info.create ~depth:1 ~unroll_to:None)
-        in
-        T.exactly_this_closure closure_id
-          function_decl_type_as_seen_from_own_body
-          ~all_closures_in_set:closure_types_as_seen_from_own_body
-          ~all_closure_vars_in_set:closure_element_types)
+  let internal_function_decl_types =
+    Closure_id.Map.map (fun function_decl ->
+        (* CR mshinwell: Is this [Rec_info] correct for functions that
+           aren't the one being simplified (i.e. others in the same
+           mutually-recursive set)? *)
+        function_decl_type denv function_decl
+          (Rec_info.create ~depth:1 ~unroll_to:None))
       funs
   in
-  { internal_closure_types = closure_types_as_seen_from_own_body;
+  let closure_type =
+    T.exactly_these_closures internal_function_decl_types
+      ~all_closures_in_set:closure_types_via_aliases
+      ~all_closure_vars_in_set:closure_element_types
+  in
+  (* CR mshinwell: Hmm.  So all the closures have the same type? *)
+  let closure_types =
+    Closure_id.Map.mapi (fun _closure_id _function_decl -> closure_type)
+      funs
+  in
+  { closure_types_via_aliases;
     closure_types;
   }
 
@@ -193,7 +200,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~funs ~closure_bound_names ~closure_element_types
   in
   let all_closures_in_set =
-    pre_simplification_types_of_my_closures.internal_closure_types
+    pre_simplification_types_of_my_closures.closure_types_via_aliases
   in
   let funs, fun_types, r =
     Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->

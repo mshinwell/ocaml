@@ -108,6 +108,7 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
     print_flambda "simplify" ppf flambda;
     let flambda = Remove_unused_closure_vars.run flambda in
     print_flambda "remove_unused_closure_vars" ppf flambda;
+    let _ = exit 0 in  (* XXX Remove once [Un_cps] is fixed *)
     flambda)
 
 let middle_end ~ppf_dump:ppf ~prefixname ~backend ~size ~filename ~module_ident

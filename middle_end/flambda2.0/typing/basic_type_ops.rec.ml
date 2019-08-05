@@ -535,6 +535,46 @@ let exactly_this_closure closure_id function_decl
   in
   Value (No_alias (Ok (Closures closures)))
 
+let exactly_these_closures closure_ids_to_function_decls
+      ~all_closures_in_set:closure_types
+      ~all_closure_vars_in_set:closure_var_types
+      : t =
+  let closure_types = Types_by_closure_id.create closure_types in
+  let closure_var_types' =
+    Types_by_var_within_closure.create
+      (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
+        closure_var_types)
+  in
+  let by_closure_id =
+    let set_of_closures_contents =
+      Set_of_closures_contents.create
+        (Closure_id.Map.keys closure_ids_to_function_decls)
+        (Var_within_closure.Map.keys closure_var_types)
+    in
+    let set_of_closures_contents_to_closures_entry =
+      Closure_id.Map.fold (fun closure_id function_decl result ->
+          let closures_entry : closures_entry =
+            { function_decl = Known function_decl;
+              closure_types;
+              closure_var_types = closure_var_types';
+            }
+          in
+          Set_of_closures_contents.With_closure_id.Map.add
+            (closure_id, set_of_closures_contents)
+            closures_entry
+            result)
+        closure_ids_to_function_decls
+        Set_of_closures_contents.With_closure_id.Map.empty
+    in
+    Closures_entry_by_set_of_closures_contents.create_exactly_multiple
+      set_of_closures_contents_to_closures_entry
+  in
+  let closures : closures =
+    { by_closure_id;
+    }
+  in
+  Value (No_alias (Ok (Closures closures)))
+
 let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings : t =
   let closure_ids_and_types =
     Closure_id.Map.map (fun bound_to -> alias_type_of K.value bound_to)
