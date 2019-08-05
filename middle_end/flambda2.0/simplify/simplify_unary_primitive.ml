@@ -21,6 +21,11 @@ open! Simplify_import
 let simplify_select_closure ~move_from ~move_to
       dacc ~original_term ~arg:closure ~arg_ty:closure_ty ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
+Format.eprintf "Simplifying Select_closure %a -> %a.  Closure type:@ %a@ dacc:@ %a\n%!"
+  Closure_id.print move_from
+  Closure_id.print move_to
+  T.print closure_ty
+  DA.print dacc;
   let closures =
     Closure_id.Map.empty
     |> Closure_id.Map.add move_from closure
