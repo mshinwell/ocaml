@@ -113,15 +113,14 @@ and function_declaration =
   | Inlinable of inlinable_function_declaration
 
 and closures_entry = {
-  function_decl : function_declaration Or_unknown.t;
+  function_decls : function_declaration Or_unknown.t Closure_id.Map.t;
   (** Information from the term language, if available, about the function
-      declaration associated with the closure (call it [C]) described by a
-      [closures_entry]. *)
+      declaration(s) associated with the closures. *)
   closure_types : Types_by_closure_id.t;
   (** Product, indexed by individual closure IDs, that describes the closures
       within a set of closures. *)
   closure_var_types : Types_by_var_within_closure.t;
-  (** Product describing the variables within a closure. *)
+  (** Product describing the variables within a set of closures. *)
 }
 
 and closures = {

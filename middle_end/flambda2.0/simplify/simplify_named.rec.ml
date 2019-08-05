@@ -48,23 +48,21 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
         T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
       closure_bound_names
   in
-  let internal_function_decl_types =
+  let all_function_decls_in_set =
+    (* CR mshinwell: Is this [Rec_info] correct for functions that
+       aren't the one being simplified (i.e. others in the same
+       mutually-recursive set)? *)
     Closure_id.Map.map (fun function_decl ->
-        (* CR mshinwell: Is this [Rec_info] correct for functions that
-           aren't the one being simplified (i.e. others in the same
-           mutually-recursive set)? *)
         function_decl_type denv function_decl
           (Rec_info.create ~depth:1 ~unroll_to:None))
       funs
   in
-  let closure_type =
-    T.exactly_these_closures internal_function_decl_types
-      ~all_closures_in_set:closure_types_via_aliases
-      ~all_closure_vars_in_set:closure_element_types
-  in
-  (* CR mshinwell: Hmm.  So all the closures have the same type? *)
   let closure_types =
-    Closure_id.Map.mapi (fun _closure_id _function_decl -> closure_type)
+    Closure_id.Map.mapi (fun closure_id _function_decl ->
+        T.exactly_this_closure closure_id
+          ~all_function_decls_in_set
+          ~all_closures_in_set:closure_types_via_aliases
+          ~all_closure_vars_in_set:closure_element_types)
       funs
   in
   { closure_types_via_aliases;
@@ -215,17 +213,21 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       (Closure_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
   in
   let closure_types_by_bound_name =
-    Closure_id.Map.fold (fun closure_id function_decl_type closure_types ->
+    Closure_id.Map.fold (fun closure_id _function_decl_type closure_types ->
         match Closure_id.Map.find closure_id closure_bound_names with
         | exception Not_found ->
           Misc.fatal_errorf "No bound variable for closure ID %a"
             Closure_id.print closure_id
         | bound_name ->
           let closure_type =
-            T.exactly_this_closure closure_id function_decl_type
+            T.exactly_this_closure closure_id
+              ~all_function_decls_in_set:fun_types
               ~all_closures_in_set
               ~all_closure_vars_in_set:closure_element_types
           in
+Format.eprintf "After simplification, %a has type:@ %a\n%!"
+  Name_in_binding_pos.print bound_name
+  T.print closure_type;
           Name_in_binding_pos.Map.add bound_name closure_type closure_types)
       fun_types
       Name_in_binding_pos.Map.empty
