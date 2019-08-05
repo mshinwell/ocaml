@@ -126,13 +126,8 @@ val create_non_inlinable_function_declaration
 
 val exactly_this_closure
    : Closure_id.t
-  -> Type_grammar.function_declaration
-  -> all_closures_in_set:Type_grammar.t Closure_id.Map.t
-  -> all_closure_vars_in_set:Type_grammar.ty_value Var_within_closure.Map.t
-  -> Type_grammar.t
-
-val exactly_these_closures
-   : Type_grammar.function_declaration Closure_id.Map.t
+  -> all_function_decls_in_set:
+       Type_grammar.function_declaration Closure_id.Map.t
   -> all_closures_in_set:Type_grammar.t Closure_id.Map.t
   -> all_closure_vars_in_set:Type_grammar.ty_value Var_within_closure.Map.t
   -> Type_grammar.t

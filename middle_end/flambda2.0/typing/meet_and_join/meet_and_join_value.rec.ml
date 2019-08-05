@@ -126,15 +126,18 @@ struct
       Ok (blocks_and_imms, env_extension)
 
   let meet_or_join_closures_entry env
-        ({ function_decl = function_decl1;
+        ({ function_decls = function_decls1;
            closure_types = closure_types1;
            closure_var_types = closure_var_types1;
          } : T.closures_entry)
-        ({ function_decl = function_decl2;
+        ({ function_decls = function_decls2;
            closure_types = closure_types2;
            closure_var_types = closure_var_types2;
          } : T.closures_entry) =
-    let function_decl : T.function_declaration Or_unknown.t =
+    let meet_or_join_function_decl
+          (function_decl1 : T.function_declaration Or_unknown.t)
+          (function_decl2 : T.function_declaration Or_unknown.t)
+          : T.function_declaration Or_unknown.t =
       match function_decl1, function_decl2 with
       | Unknown, Unknown -> Unknown
       | Known _, Unknown ->
@@ -189,6 +192,15 @@ struct
                both behave in the same way, even if we cannot prove it. *)
             function_decl1
     in
+    let function_decls =
+      Closure_id.Map.merge (fun _closure_id func_decl1 func_decl2 ->
+          match func_decl1, func_decl2 with
+          | None, None | Some _, None | None, Some _ -> None
+          | Some func_decl1, Some func_decl2 ->
+            let func_decl = meet_or_join_function_decl func_decl1 func_decl2 in
+            Some func_decl)
+        function_decls1 function_decls2
+    in
     let closure_types =
       E.switch Types_by_closure_id.meet Types_by_closure_id.join
         env closure_types1 closure_types2
@@ -201,7 +213,7 @@ struct
       ~f:(fun (closure_types, env_extension1)
               (closure_var_types, env_extension2) ->
         let closures_entry : T.closures_entry =
-          { function_decl;
+          { function_decls;
             closure_types;
             closure_var_types;
           }
