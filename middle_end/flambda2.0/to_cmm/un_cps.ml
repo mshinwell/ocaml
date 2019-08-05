@@ -560,17 +560,43 @@ and named env n =
   | Prim (p, dbg) -> prim env dbg p
   | Set_of_closures s -> set_of_closures env s
 
-and let_expr _env t =
-  Let.pattern_match t ~f:(fun ~bound_vars:v ~body ->
-      ignore v;
-      ignore body;
-      Misc.fatal_error "Needs fixing"
-(*
+and let_expr env t =
+  Let.pattern_match t ~f:(fun ~bound_vars ~body ->
       let e = Let.defining_expr t in
-      let v = Var_in_binding_pos.var v in
-      let env', v' = Env.create_variable env v in
-      C.letin v' (named env' e) (expr env' body)
-*)
+      match bound_vars with
+      | Singleton v ->
+          let v = Var_in_binding_pos.var v in
+          let env', v' = Env.create_variable env v in
+          C.letin v' (named env' e) (expr env' body)
+      | Set_of_closures { closure_vars; _ } -> begin
+          match e with
+          | Simple _ | Prim _ ->
+              Misc.fatal_errorf
+                "Set_of_closures binding a non-Set_of_closures:@ %a"
+                Let.print t
+          | Set_of_closures soc ->
+              let csoc = set_of_closures env soc in
+              let soc_var =
+                Backend_var.create_local "*set_of_closures*"
+              in
+              let env, wrap_body =
+                Closure_id.Map.fold (fun cid v (env, wrap_body) ->
+                    let v = Var_in_binding_pos.var v in
+                    let env', v' = Env.create_variable env v in
+                    let wrap_body' body =
+                      C.letin v'
+                        (C.field_address (Cmm.Cvar soc_var)
+                           (Env.closure_offset env cid)
+                           Debuginfo.none)
+                        (wrap_body body)
+                    in
+                    env', wrap_body')
+                  closure_vars
+                  (env, fun body -> body)
+              in
+              C.letin (Backend_var.With_provenance.create soc_var) csoc
+                (wrap_body (expr env body))
+        end
     )
 
 and has_one_occurrence num =
@@ -655,8 +681,8 @@ and apply_call env e =
   let dbg = Apply_expr.dbg e in
   match Apply_expr.call_kind e with
   | Call_kind.Function
-      Call_kind.Function_call.Direct { return_arity; _ } ->
-      let f = Un_cps_closure.closure_code (function_name f) in
+      Call_kind.Function_call.Direct { closure_id; return_arity; } ->
+      let f = Un_cps_closure.(closure_code (closure_name closure_id)) in
       let ty = machtype_of_return_arity return_arity in
       C.direct_call ~dbg ty (C.symbol f) args
   | Call_kind.Function
@@ -882,7 +908,7 @@ let static_boxed_number kind env s default emit transl v r =
   in
   R.wrap_init wrapper (R.update_data (or_variable aux default v) r)
 
-let rec static_set_of_closures env s symbs set =
+let rec static_set_of_closures env symbs set =
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
   let elts = Set_of_closures.closure_elements set in
@@ -890,23 +916,21 @@ let rec static_set_of_closures env s symbs set =
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
-  let symb = C.symbol (symbol s) in
   let l, updates, length =
-    fill_static_layout symb symbs decls elts env [] C.void 0 layout
+    fill_static_layout symbs decls elts env [] C.void 0 layout
   in
-  C.cint (C.black_closure_header length) ::
-  C.define_symbol ~global:true (symbol s) @ l, updates
+  C.cint (C.black_closure_header length) :: l, updates
 
-and fill_static_layout s symbs decls elts env acc updates i = function
+and fill_static_layout symbs decls elts env acc updates i = function
   | [] -> List.rev acc, updates, i
   | (j, slot) :: r ->
       let acc = fill_static_up_to j acc i in
       let acc, offset, updates =
-        fill_static_slot s symbs decls elts env acc j updates slot
+        fill_static_slot symbs decls elts env acc j updates slot
       in
-      fill_static_layout s symbs decls elts env acc updates offset r
+      fill_static_layout symbs decls elts env acc updates offset r
 
-and fill_static_slot s symbs decls elts env acc offset updates slot =
+and fill_static_slot symbs decls elts env acc offset updates slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
       let field = C.cint (C.infix_header offset) in
@@ -915,9 +939,7 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
       let fields, updates =
         match simple_static env (Var_within_closure.Map.find v elts) with
         | `Data fields -> fields, updates
-        | `Var v ->
-            let e = make_update env Cmm.Word_val s v offset in
-            [C.cint 1n], C.sequence e updates
+        | `Var _v -> todo ()
       in
       List.rev fields @ acc, offset + 1, updates
   | Closure c ->
@@ -967,8 +989,9 @@ let static_structure_item (type a) env r (symb, st) =
       let data, updates =
         (* CR mshinwell: Which symbol should be chosen instead of
            the set of closures symbol, which now doesn't exist? *)
+        (* CR vlaviron: The symbol is only needed if we need to update some
+           fields after allocation. For now, I'll assume it never happens. *)
         static_set_of_closures env
-          (Misc.fatal_error "Need to choose a set of closures symbol")
           s.closure_symbols set
       in
       R.wrap_init (C.sequence updates) (R.add_data data r)
