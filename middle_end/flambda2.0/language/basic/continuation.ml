@@ -115,3 +115,8 @@ module With_args = struct
       print (Format.formatter_of_out_channel chan) t
   end)
 end
+
+let is_exn t =
+  match t.sort with
+  | Exn -> true
+  | _ -> false

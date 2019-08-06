@@ -26,23 +26,16 @@ module Static_structure = Flambda_static.Program_body.Static_structure
 
 module Return_cont_handler = struct
   type t = {
-    exn_continuation : Exn_continuation.t;
-    exn_cont_scope : Scope.t;
-    computed_values : Kinded_parameter.t list;
+    computed_values : KP.t list;
     static_structure : Static_structure.t;
   }
 
-  let print ppf { exn_continuation; exn_cont_scope; computed_values;
-                  static_structure; } =
+  let print ppf { computed_values; static_structure; } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(exn_continuation@ %a)@]@ \
-        @[<hov 1>(exn_cont_scope@ %a)@]@ \
         @[<hov 1>(computed_values@ %a)@]@ \
         @[<hov 1>(static_structure@ %a)@]\
         )@]"
-      Exn_continuation.print exn_continuation
-      Scope.print exn_cont_scope
-      Kinded_parameter.List.print computed_values
+      KP.List.print computed_values
       Static_structure.print static_structure
 
   let is_exn_handler _t = false
@@ -57,7 +50,31 @@ module Return_cont_handler = struct
   let _ = Unreachable { arity = []; }
   let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
 
-  let arity t = Kinded_parameter.List.arity t.computed_values
+  let arity t = KP.List.arity t.computed_values
+
+  let behaviour t = Unknown { arity = arity t; }
+
+  let real_handler _t = None
+end
+
+module Exn_cont_handler = struct
+  type t = unit
+
+  let print ppf () = Format.pp_print_string ppf "()"
+
+  let is_exn_handler _t = true
+  let stub _t = false
+
+  type behaviour =
+    | Unreachable of { arity : Flambda_arity.t; }
+    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Unknown of { arity : Flambda_arity.t; }
+
+  (* Silence warning 37. *)
+  let _ = Unreachable { arity = []; }
+  let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
+
+  let arity _t = [K.value]
 
   let behaviour t = Unknown { arity = arity t; }
 
@@ -66,6 +83,9 @@ end
 
 module Simplify_return_cont =
   Generic_simplify_let_cont.Make (Return_cont_handler)
+
+module Simplify_exn_cont =
+  Generic_simplify_let_cont.Make (Exn_cont_handler)
 
 (* CR-someday mshinwell: Finish improved simplification using types *)
 
@@ -288,16 +308,8 @@ let simplify_return_continuation_handler dacc ~param_types
         Variable.Set.mem (KP.var param) free_variables)
       original_computed_values
   in
-  let uenv =
-    (* CR mshinwell: This is a bit of a wart.  Maybe there should be an
-       equivalent of [Return_cont_handler] for the exception continuation. *)
-    UE.add_exn_continuation UE.empty return_cont_handler.exn_continuation
-      return_cont_handler.exn_cont_scope
-  in
   let handler : Return_cont_handler.t =
-    { exn_continuation = return_cont_handler.exn_continuation;
-      exn_cont_scope = return_cont_handler.exn_cont_scope;
-      computed_values = used_computed_values;
+    { computed_values = used_computed_values;
       static_structure;
     }
   in
@@ -308,9 +320,18 @@ let simplify_return_continuation_handler dacc ~param_types
       ~extra_args:Apply_cont_rewrite_id.Map.empty
       ~used_extra_params:KP.Set.empty
   in
-  let uenv = UE.add_apply_cont_rewrite uenv cont rewrite in
+  let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
   let uacc = UA.create uenv (DA.r dacc) in
   handler, (used_computed_values, static_structure, dacc), uacc
+
+let simplify_exn_continuation_handler dacc ~param_types
+      ~extra_params_and_args:_ _cont
+      (_exn_cont_handler : Exn_cont_handler.t) k =
+  (* CR mshinwell: Change assertion to proper error.  Check no extra params. *)
+  assert (List.length param_types = 1);
+  let handler : Exn_cont_handler.t = () in
+  let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+  handler, user_data, uacc
 
 let simplify_definition dacc (defn : Program_body.Definition.t) =
   let dacc, computation, static_structure =
@@ -321,37 +342,52 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       dacc, None, static_structure
     | Some computation ->
-      let exn_cont_scope = DE.get_continuation_scope_level (DA.denv dacc) in
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.increment_continuation_scope_level denv)
-      in
+      let return_continuation = computation.return_continuation in
       let return_cont_handler : Return_cont_handler.t =
-        { exn_continuation = computation.exn_continuation;
-          exn_cont_scope;
-          computed_values = computation.computed_values;
+        { computed_values = computation.computed_values;
           static_structure = defn.static_structure;
         }
       in
+      let exn_continuation = computation.exn_continuation in
+      let exn_cont_handler : Exn_cont_handler.t = () in
       let expr, _handler, (computed_values, static_structure, dacc), uacc =
+        let simplify_body dacc expr k =
+          let expr, _handler, user_data, uacc =
+            let simplify_body : _ Simplify_exn_cont.simplify_body =
+              { simplify_body = Simplify_expr.simplify_expr; }
+            in
+            Simplify_exn_cont.simplify_body_of_non_recursive_let_cont dacc
+              (Exn_continuation.exn_handler exn_continuation)
+              exn_cont_handler
+              ~simplify_body
+              ~body:expr
+              ~simplify_continuation_handler_like:
+                simplify_exn_continuation_handler
+              k
+          in
+          expr, user_data, uacc
+        in
+        let simplify_body : _ Simplify_return_cont.simplify_body =
+          { simplify_body; }
+        in
         Simplify_return_cont.simplify_body_of_non_recursive_let_cont dacc
-          computation.return_continuation
+          return_continuation
           return_cont_handler
+          ~simplify_body
           ~body:computation.expr
-          simplify_return_continuation_handler
+          ~simplify_continuation_handler_like:
+            simplify_return_continuation_handler
           (fun _cont_uses_env r ->
             let uacc = UA.create UE.empty r in
             (* CR mshinwell: This should return an "invalid" node. *)
             (computation.computed_values, defn.static_structure, dacc), uacc)
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
-      let return_continuation = computation.return_continuation in
       let computation_can_be_deleted =
         match Expr.descr expr with
         | Apply_cont apply_cont ->
           begin match Apply_cont.to_goto apply_cont with
-          | Some cont when Continuation.equal cont return_continuation ->
-            true
+          | Some cont when Continuation.equal cont return_continuation -> true
           | _ -> false
           end
         | Let _ | Let_cont _ | Apply _ | Switch _ | Invalid _ -> false

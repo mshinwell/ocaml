@@ -376,6 +376,14 @@ end = struct
         Continuation.print cont
         Continuation.print alias_for
     end;
+    if Continuation.is_exn cont || Continuation.is_exn alias_for then begin
+      Misc.fatal_errorf "Cannot alias exception handlers: %a (exn handler? %b) \
+          as alias for %a (exn handler? %b)"
+        Continuation.print cont
+        (Continuation.is_exn cont)
+        Continuation.print alias_for
+        (Continuation.is_exn alias_for)
+    end;
     let alias_for = resolve_continuation_aliases t alias_for in
     let continuation_aliases =
       Continuation.Map.add cont alias_for t.continuation_aliases

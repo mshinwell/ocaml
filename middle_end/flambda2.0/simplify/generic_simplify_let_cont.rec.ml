@@ -19,15 +19,26 @@
 open! Simplify_import
 
 module Make (CHL : Continuation_handler_like_intf.S) = struct
+  type 'body simplify_body = {
+    simplify_body : 'a.
+         Downwards_acc.t
+      -> 'body
+      -> (Continuation_uses_env.t
+        -> Simplify_env_and_result.Result.t
+        -> ('a * Upwards_acc.t))
+      -> 'body * 'a * Upwards_acc.t;
+  }
+
   let simplify_body_of_non_recursive_let_cont
-        dacc cont cont_handler ~body simplify_continuation_handler_like k =
+        dacc cont cont_handler ~(simplify_body : _ simplify_body) ~body
+        ~simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
     let body, (result, uenv', user_data), uacc =
       let original_cont_scope_level =
         DE.get_continuation_scope_level definition_denv
       in
       let dacc = DA.map_denv dacc ~f:DE.increment_continuation_scope_level in
-      Simplify_expr.simplify_expr dacc body (fun cont_uses_env r ->
+      simplify_body.simplify_body dacc body (fun cont_uses_env r ->
         let definition_denv =
           DE.increment_continuation_scope_level definition_denv
         in
