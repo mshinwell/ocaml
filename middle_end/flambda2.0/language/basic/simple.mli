@@ -93,6 +93,8 @@ val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
 val is_symbol : t -> bool
 
+val is_var : t -> bool
+
 include Contains_names.S with type t := t
 
 val free_names_in_types : t -> Name_occurrences.t

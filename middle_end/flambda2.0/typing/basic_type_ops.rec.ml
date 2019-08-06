@@ -522,7 +522,7 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
   in
   let by_closure_id =
     let set_of_closures_contents =
-      Set_of_closures_contents.create (Closure_id.Set.singleton closure_id)
+      Set_of_closures_contents.create (Closure_id.Map.keys function_decls)
         (Var_within_closure.Map.keys closure_var_types)
     in
     let set_of_closures_contents_to_closures_entry =

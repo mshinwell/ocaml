@@ -165,14 +165,11 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
-Format.eprintf "Checking for single closures entry in:@ %a@ TE:@ %a\n%!" print t Typing_env.print env;
     match Typing_env.expand_head env t with
     | Const _ | Discriminant _ -> Invalid
     | Resolved resolved ->
       match resolved with
       | Resolved_value (Ok (Closures closures)) ->
-Format.eprintf "Type is:@ %a\n%!"
-  Closures_entry_by_set_of_closures_contents.print closures.by_closure_id;
         begin
           match Closures_entry_by_set_of_closures_contents.get_singleton
             closures.by_closure_id
