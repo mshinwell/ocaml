@@ -33,6 +33,8 @@ val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
 val sort : t -> sort
 
+val is_exn : t -> bool
+
 module With_args : sig
   type nonrec t = t * Variable.t list
   include Identifiable.S with type t := t

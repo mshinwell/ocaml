@@ -126,9 +126,14 @@ and simplify_non_recursive_let_cont_handler
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
+      let simplify_body : _ Simplify_let_cont.simplify_body =
+        { simplify_body = simplify_expr; }
+      in
       let body, handler, user_data, uacc =
         Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
-          cont cont_handler ~body simplify_one_continuation_handler k
+          cont cont_handler ~simplify_body ~body
+          ~simplify_continuation_handler_like:simplify_one_continuation_handler
+          k
       in
       Let_cont.create_non_recursive cont handler ~body, user_data, uacc)
 

@@ -10,4 +10,4 @@ let n =
     if x > 0 then 1 + f (x - 1)
     else 42
   in
-  (f [@unrolled 10]) 5
+  (f [@unrolled 10]) 3
