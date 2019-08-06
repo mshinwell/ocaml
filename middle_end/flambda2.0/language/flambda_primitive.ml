@@ -1285,6 +1285,13 @@ let apply_name_permutation t perm =
   | Variadic (prim, xs) ->
     Variadic (prim, Simple.List.apply_name_permutation xs perm)
 
+let args t =
+  match t with
+  | Unary (_, x0) -> [x0]
+  | Binary (_, x0, x1) -> [x0; x1]
+  | Ternary (_, x0, x1, x2) -> [x0; x1; x2]
+  | Variadic (_, xs) -> xs
+
 let result_kind (t : t) =
   match t with
   | Unary (prim, _) -> result_kind_of_unary_primitive prim
@@ -1342,12 +1349,17 @@ module Eligible_for_cse = struct
   type t = primitive_application
 
   let create t =
-    let eligible =
+    (* CR mshinwell: Possible way of handling commutativity: for eligible
+       primitives, sort the arguments here *)
+    let prim_eligible =
       match t with
       | Unary (prim, _) -> unary_primitive_eligible_for_cse prim
       | Binary (prim, _, _) -> binary_primitive_eligible_for_cse prim
       | Ternary (prim, _, _, _) -> ternary_primitive_eligible_for_cse prim
       | Variadic (prim, _) -> variadic_primitive_eligible_for_cse prim
+    in
+    let eligible =
+      prim_eligible && List.exists Simple.is_var (args t)
     in
     let effects_and_coeffects_ok =
       match effects_and_coeffects t with

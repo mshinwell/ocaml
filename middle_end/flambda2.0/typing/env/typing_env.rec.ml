@@ -547,6 +547,18 @@ let find_cse t prim =
   | exception Not_found -> None
   | bound_to -> Some bound_to
 
+let find_cse_rev t ~bound_to =
+  (* CR mshinwell: Store reverse map and add abstract type. *)
+  let cse = Cached.cse (cached t) in
+  let rev_cse =
+    Flambda_primitive.Eligible_for_cse.Map.bindings cse
+    |> List.map (fun (equation, bound_to) -> bound_to, equation)
+    |> Simple.Map.of_list
+  in
+  match Simple.Map.find bound_to rev_cse with
+  | exception Not_found -> None
+  | equation -> Some equation
+
 let add_env_extension_from_level t level : t =
   let t =
     List.fold_left (fun t (var, kind) ->

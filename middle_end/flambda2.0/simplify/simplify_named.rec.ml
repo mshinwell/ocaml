@@ -125,19 +125,15 @@ let simplify_function dacc closure_id_this_function function_decl
             denv
         in
         let denv =
-        (* XXX Not correct *)
           Closure_id.Map.fold (fun closure_id closure_type denv ->
-              if Closure_id.equal closure_id closure_id_this_function then
-                denv
-              else
-                match Closure_id.Map.find closure_id closure_bound_names with
-                | exception Not_found ->
-                  Misc.fatal_errorf "No bound variable for closure ID %a"
-                    Closure_id.print closure_id
-                | bound_name ->
-                  match Name_in_binding_pos.to_var bound_name with
-                  | None -> denv
-                  | Some var -> DE.add_variable denv var closure_type)
+              match Closure_id.Map.find closure_id closure_bound_names with
+              | exception Not_found ->
+                Misc.fatal_errorf "No bound variable for closure ID %a"
+                  Closure_id.print closure_id
+              | bound_name ->
+                DE.add_equation_on_name denv
+                  (Name_in_binding_pos.name bound_name)
+                  closure_type)
             pre_simplification_types_of_my_closures.closure_types
             denv
         in
@@ -226,9 +222,6 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
               ~all_closures_in_set
               ~all_closure_vars_in_set:closure_element_types
           in
-Format.eprintf "After simplification, %a has type:@ %a\n%!"
-  Name_in_binding_pos.print bound_name
-  T.print closure_type;
           Name_in_binding_pos.Map.add bound_name closure_type closure_types)
       fun_types
       Name_in_binding_pos.Map.empty
