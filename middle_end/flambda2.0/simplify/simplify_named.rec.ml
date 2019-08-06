@@ -10,7 +10,7 @@
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSDE.          *)
+(*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -125,6 +125,7 @@ let simplify_function dacc closure_id_this_function function_decl
             denv
         in
         let denv =
+        (* XXX Not correct *)
           Closure_id.Map.fold (fun closure_id closure_type denv ->
               if Closure_id.equal closure_id closure_id_this_function then
                 denv
