@@ -361,7 +361,9 @@ let bind_parameters_to_simples ~bind ~target body =
   in
   bind_parameters ~bindings ~body
 
-let link_continuations0 ~is_exn_handler ~bind ~target ~arity t =
+let link_continuations0 ~bind ~target ~arity t =
+  (* CR mshinwell: These don't collapse out when inlining.  Can we use a
+     permutation? *)
   let params =
     List.map (fun kind ->
         let param = Parameter.wrap (Variable.create "param") in
@@ -379,16 +381,16 @@ let link_continuations0 ~is_exn_handler ~bind ~target ~arity t =
   let handler =
     Continuation_handler.create ~params_and_handler
       ~stub:true
-      ~is_exn_handler
+      ~is_exn_handler:(Continuation.is_exn bind)
   in
   Let_cont_expr.create_non_recursive bind handler ~body:t
 
 let link_continuations ~bind ~target ~arity t =
-  link_continuations0 ~is_exn_handler:false ~bind ~target ~arity t
+  link_continuations0 ~bind ~target ~arity t
 
 let link_exn_continuations ~bind ~target t =
   (* CR mshinwell: Check arity of [bind] vs. [target] *)
-  link_continuations0 ~is_exn_handler:true
+  link_continuations0
     ~bind:(Exn_continuation.exn_handler bind)
     ~target:(Exn_continuation.exn_handler target)
     ~arity:(Exn_continuation.arity bind)

@@ -46,20 +46,21 @@ Format.eprintf "callee_with_rec_info now %a\n%!"
             (DE.add_inlined_debuginfo (DA.denv dacc) dbg)
             apply_inlining_depth
         in
+        let perm =
+          Name_permutation.add_continuation
+            (Name_permutation.add_continuation Name_permutation.empty
+              return_continuation apply_return_continuation)
+            (Exn_continuation.exn_handler exn_continuation)
+            (Exn_continuation.exn_handler apply_exn_continuation)
+        in
         let expr =
-          Expr.link_continuations
-            ~bind:return_continuation
-            ~target:apply_return_continuation
-            ~arity:(Function_declaration.result_arity function_decl)
-            (Expr.link_continuations
-              ~bind:(Exn_continuation.exn_handler exn_continuation)
-              ~target:(Exn_continuation.exn_handler apply_exn_continuation)
-              ~arity:(Exn_continuation.arity exn_continuation)
-              (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                (Expr.create_let
-                  (VB.create my_closure Name_occurrence_kind.normal)
-                  (Named.create_simple callee_with_rec_info)
-                  body)))
+          Expr.apply_name_permutation
+            (Expr.bind_parameters_to_simples ~bind:params ~target:args
+              (Expr.create_let
+                (VB.create my_closure Name_occurrence_kind.normal)
+                (Named.create_simple callee_with_rec_info)
+                body))
+            perm
         in
 (*
 Format.eprintf "Inlined body to be simplified:@ %a\n%!" Expr.print expr;
