@@ -897,9 +897,6 @@ let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
         ~min_occurrence_kind ~result_var
 
 let simplify_using_equations (defining_expr : Reachable.t) env_extension dacc =
-  defining_expr, env_extension, dacc
-
-(* CR mshinwell: Not complete, and unsure if we need this.
   match defining_expr with
   | Invalid _ -> defining_expr, env_extension, dacc
   | Reachable defining_expr' ->
@@ -936,7 +933,6 @@ Format.eprintf "Checking equation %a\n%!" P.Eligible_for_cse.print equation;
       | _, _ -> defining_expr, env_extension, dacc
       end
     | _ -> defining_expr, env_extension, dacc
-*)
 
 let simplify_binary_primitive dacc (prim : P.binary_primitive)
       arg1 arg2 dbg ~result_var =

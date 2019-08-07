@@ -60,7 +60,7 @@ and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
   | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
   | Closures of closures
-  | String of String_info.Set.t
+  | String of String_info.Set.t  (* CR mshinwell: String -> Strings *)
   | Array of { length : ty_value; }
 
 (* CR mshinwell: Document why e.g. Blocks_and_immediates has Or_unknown yet

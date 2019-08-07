@@ -122,6 +122,34 @@ let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
     ~shape:(T.array_of_length ~length:(T.alias_type_of_as_ty_value result))
     ~result_var ~result_kind:K.value
 
+(* CR-someday mshinwell: Consider whether "string length" should be treated
+   like a projection (cf. "array length"). *)
+let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
+      ~result_var =
+  let name = Name.var (Var_in_binding_pos.var result_var) in
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  match T.prove_strings typing_env str_ty with
+  | Proved str_infos ->
+    if String_info.Set.is_empty str_infos then
+      let ty = T.bottom K.value in
+      Reachable.invalid (), TEE.one_equation name ty, dacc
+    else
+      begin match String_info.Set.get_singleton str_infos with
+      | None ->
+        let ty = T.unknown K.value in
+        Reachable.reachable original_term, TEE.one_equation name ty, dacc
+      | Some str ->
+        let length = Immediate.int (String_info.size str) in
+        let ty = T.this_tagged_immediate length in
+        Reachable.reachable original_term, TEE.one_equation name ty, dacc
+      end
+  | Unknown ->
+    let ty = T.unknown K.value in
+    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+  | Invalid ->
+    let ty = T.bottom K.value in
+    Reachable.invalid (), TEE.one_equation name ty, dacc
+
 let try_cse dacc prim arg ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
   match
@@ -167,8 +195,8 @@ Format.eprintf "Simplifying %a\n%!" P.print
         | Is_int -> simplify_is_int
         | Get_tag -> simplify_get_tag
         | Array_length (Array (Value _)) -> simplify_array_length
+        | String_length _ -> simplify_string_length
         | Array_length _
-        | String_length _
         | Int_arith _
         | Float_arith _
         | Num_conv _

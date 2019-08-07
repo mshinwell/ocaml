@@ -292,6 +292,10 @@ module type S = sig
     -> field_n_minus_one:Variable.t
     -> t
 
+  val this_immutable_string : string -> t
+
+  val mutable_string : size:int -> t
+
   (** Create an "bottom" type with the same kind as the given type. *)
   val bottom_like : t -> t
 
@@ -480,6 +484,11 @@ module type S = sig
      : Typing_env.t
     -> t
     -> (Closure_id.t * function_declaration Or_unknown.t) proof
+
+  val prove_strings
+     : Typing_env.t
+    -> t
+    -> String_info.Set.t proof
 
   val apply_rec_info
      : flambda_type

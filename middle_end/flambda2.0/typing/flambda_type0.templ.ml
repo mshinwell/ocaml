@@ -511,6 +511,24 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
       | Resolved_fabricated Unknown -> Unknown
       | Resolved_fabricated Bottom -> Invalid
 
+  let prove_strings env t : String_info.Set.t proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match Typing_env.expand_head env t with
+    | Const _ ->
+      if K.equal (kind t) K.value then Invalid
+      else wrong_kind ()
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value (Ok (String strs)) -> Proved strs      
+      | Resolved_value (Ok _) -> Invalid
+      | Resolved_value Unknown -> Unknown
+      | Resolved_value Bottom -> Invalid
+      | Resolved_naked_number _
+      | Resolved_fabricated _ -> wrong_kind ()
+
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
     | Boxed_float of Float.t

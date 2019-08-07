@@ -119,7 +119,10 @@ let simplify_or_variable dacc type_for_const
   let denv = DA.denv dacc in
   match or_variable with
   | Const const -> or_variable, type_for_const const
-  | Var var -> or_variable, DE.find_variable denv var
+  | Var var ->
+    (* CR mshinwell: This needs to check the type of the variable according
+       to the various cases below. *)
+    or_variable, DE.find_variable denv var
 
 let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_symbols ~closure_elements ~closure_element_types =
@@ -220,19 +223,22 @@ let simplify_static_part_of_kind_value dacc
     let dacc = bind_result_sym (T.any_value ()) in
     Immutable_float_array fields, dacc
   | Mutable_string { initial_value; } ->
-    let initial_value, _initial_value_ty =
-      simplify_or_variable dacc (fun _str -> T.any_value ()) initial_value
+    let initial_value, str_ty =
+      simplify_or_variable dacc (fun initial_value ->
+          T.mutable_string ~size:(String.length initial_value))
+        initial_value
     in
     let static_part : K.value Static_part.t =
       Mutable_string {
         initial_value;
       }
     in
-    let dacc = bind_result_sym (T.any_value ()) in
+    let dacc = bind_result_sym str_ty in
     static_part, dacc
   | Immutable_string or_var ->
     let or_var, ty =
-      simplify_or_variable dacc (fun _str -> T.any_value ()) or_var
+      simplify_or_variable dacc (fun str -> T.this_immutable_string str)
+        or_var
     in
     let dacc = bind_result_sym ty in
     Immutable_string or_var, dacc
