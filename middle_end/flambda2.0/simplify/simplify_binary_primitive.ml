@@ -899,7 +899,9 @@ let simplify_using_equations (defining_expr : Reachable.t) env_extension dacc =
   match defining_expr with
   | Invalid _ -> defining_expr, env_extension, dacc
   | Reachable defining_expr' ->
+(*
 Format.eprintf "Checking %a\n%!" Named.print defining_expr';
+*)
     match defining_expr' with
     | Prim ((Binary (Int_arith (Tagged_immediate, Add), arg1, arg2)), dbg) ->
       begin match Simple.descr arg1, Simple.descr arg2 with
@@ -907,11 +909,15 @@ Format.eprintf "Checking %a\n%!" Named.print defining_expr';
       | Name (Var var), Const (Tagged_immediate imm) ->
         let typing_env = DE.typing_env (DA.denv dacc) in
         let bound_to = Simple.var var in
+(*
 Format.eprintf "Checking bound_to %a in:@ %a\n%!" Simple.print bound_to DA.print dacc;
+*)
         begin match TE.find_cse_rev typing_env ~bound_to with
         | None -> defining_expr, env_extension, dacc
         | Some equation ->
+(*
 Format.eprintf "Checking equation %a\n%!" P.Eligible_for_cse.print equation;
+*)
           match P.Eligible_for_cse.to_primitive equation with
           | Binary (Int_arith (Tagged_immediate, Add), arg1, arg2) ->
             begin match Simple.descr arg1, Simple.descr arg2 with
