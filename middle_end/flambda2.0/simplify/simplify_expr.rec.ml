@@ -321,23 +321,23 @@ and simplify_direct_partial_application
       Call_kind.direct_function_call callee's_closure_id
         ~return_arity:result_arity
     in
-    let full_application =
-      Apply.create ~callee:(Apply.callee apply)
-        ~continuation:return_continuation
-        (Apply.exn_continuation apply)
-        ~args
-        ~call_kind
-        dbg
-        ~inline:Default_inline
-        ~inlining_depth:(Apply.inlining_depth apply)
-    in
-    let applied_args_with_closure_vars =
+    let applied_args_with_closure_vars = (* CR mshinwell: rename *)
       List.map (fun applied_arg ->
           Var_within_closure.wrap (Variable.create "arg"), applied_arg)
-        applied_args
+        ((Apply.callee apply) :: applied_args)
     in
     let my_closure = Variable.create "my_closure" in
     let body =
+      let full_application =
+        Apply.create ~callee:(Apply.callee apply)
+          ~continuation:return_continuation
+          (Apply.exn_continuation apply)
+          ~args
+          ~call_kind
+          dbg
+          ~inline:Default_inline
+          ~inlining_depth:(Apply.inlining_depth apply)
+      in
       List.fold_left (fun expr (closure_var, applied_arg) ->
           match Simple.must_be_var applied_arg with
           | None -> expr
@@ -392,6 +392,7 @@ and simplify_direct_partial_application
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
+Format.eprintf "Expression for partial application is:@ %a\n%!" Expr.print expr;
   simplify_expr dacc expr k
 
 and simplify_direct_over_application
