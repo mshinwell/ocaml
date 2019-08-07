@@ -150,6 +150,189 @@ let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
     let ty = T.bottom K.value in
     Reachable.invalid (), TEE.one_equation name ty, dacc
 
+module Unary_int_arith (I : A.Int_number_kind) = struct
+  let simplify env r prim dbg (op : P.unary_int_arith_op) arg =
+    let arg, arg_ty = S.simplify_simple env arg in
+    let proof = I.unboxed_prover (E.get_typing_environment env) arg_ty in
+    let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+    let result_unknown () =
+      (* One might imagine doing something complicated to [ty] to reflect
+         the operation that has happened, but we don't.  As such we cannot
+         propagate [ty] and must return "unknown". *)
+      Reachable.reachable (original_term ()),
+        T.unknown (K.Standard_int_or_float.to_kind I.kind),
+        r
+    in
+    let result_invalid () =
+      Reachable.invalid (),
+        T.bottom (K.Standard_int_or_float.to_kind I.kind),
+        R.map_benefit r (B.remove_primitive (Unary prim))
+    in
+    match proof with
+    | Proved ints ->
+      assert (not (I.Num.Set.is_empty ints));
+      begin match op with
+      | Neg ->
+        let possible_results = I.Num.Set.map (fun i -> I.Num.neg i) ints in
+        Reachable.reachable (original_term ()),
+          I.these_unboxed possible_results, r
+      | Swap_byte_endianness ->
+        let possible_results =
+          I.Num.Set.map (fun i -> I.Num.swap_byte_endianness i) ints
+        in
+        Reachable.reachable (original_term ()),
+          I.these_unboxed possible_results, r
+      end
+    | Unknown -> result_unknown ()
+    | Invalid -> result_invalid ()
+end
+
+module Unary_int_arith_tagged_immediate =
+  Unary_int_arith (A.For_tagged_immediates)
+module Unary_int_arith_naked_int32 = Unary_int_arith (A.For_int32s)
+module Unary_int_arith_naked_int64 = Unary_int_arith (A.For_int64s)
+module Unary_int_arith_naked_nativeint = Unary_int_arith (A.For_nativeints)
+
+module Make_simplify_int_conv (N : A.Number_kind) = struct
+  module F = Float_by_bit_pattern
+
+  let simplify env r prim arg ~(dst : K.Standard_int_or_float.t) dbg =
+    let arg, arg_ty = S.simplify_simple env arg in
+    if K.Standard_int_or_float.equal N.kind dst then
+      if T.is_bottom (E.get_typing_environment env) arg_ty then
+        Reachable.invalid (),
+          T.bottom (K.Standard_int_or_float.to_kind dst),
+          R.map_benefit r (B.remove_primitive (Unary prim))
+      else
+        Reachable.reachable (Flambda.Named.Simple arg), arg_ty, r
+    else
+      let proof = N.unboxed_prover (E.get_typing_environment env) arg_ty in
+      let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+      match proof with
+      | Proved is ->
+        assert (N.Num.Set.cardinal is > 0);
+        begin match dst with
+        | Tagged_immediate ->
+          let imms =
+            N.Num.Set.fold (fun i imms ->
+                Immediate.Set.add (N.Num.to_tagged_immediate i) imms)
+              is
+              Immediate.Set.empty
+          in
+          Reachable.reachable (original_term ()),
+            T.these_tagged_immediates imms,
+            r
+        | Naked_float ->
+          let is =
+            N.Num.Set.fold (fun i is -> F.Set.add (N.Num.to_naked_float i) is)
+              is
+              F.Set.empty
+          in
+          Reachable.reachable (original_term ()), T.these_naked_floats is, r
+        | Naked_int32 ->
+          let is =
+            N.Num.Set.fold (fun i is ->
+                Int32.Set.add (N.Num.to_naked_int32 i) is)
+              is
+              Int32.Set.empty
+          in
+          Reachable.reachable (original_term ()), T.these_naked_int32s is, r
+        | Naked_int64 ->
+          let is =
+            N.Num.Set.fold (fun i is ->
+                Int64.Set.add (N.Num.to_naked_int64 i) is)
+              is
+              Int64.Set.empty
+          in
+          Reachable.reachable (original_term ()), T.these_naked_int64s is, r
+        | Naked_nativeint ->
+          let is =
+            N.Num.Set.fold (fun i is ->
+                Targetint.Set.add (N.Num.to_naked_nativeint i) is)
+              is
+              Targetint.Set.empty
+          in
+          Reachable.reachable (original_term ()),
+            T.these_naked_nativeints is, r
+        end
+      | Unknown ->
+        Reachable.reachable (original_term ()),
+          T.unknown (K.Standard_int_or_float.to_kind dst), r
+      | Invalid ->
+        Reachable.invalid (), T.bottom (K.Standard_int_or_float.to_kind dst),
+          R.map_benefit r (B.remove_primitive (Unary prim))
+end
+
+module Simplify_int_conv_tagged_immediate =
+  Make_simplify_int_conv (A.For_tagged_immediates)
+module Simplify_int_conv_naked_float = Make_simplify_int_conv (A.For_floats)
+module Simplify_int_conv_naked_int32 = Make_simplify_int_conv (A.For_int32s)
+module Simplify_int_conv_naked_int64 = Make_simplify_int_conv (A.For_int64s)
+module Simplify_int_conv_naked_nativeint =
+  Make_simplify_int_conv (A.For_nativeints)
+
+let simplify_boolean_not dacc r prim arg dbg =
+  let arg, ty = S.simplify_simple env arg in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let proof = T.prove_tagged_immediate (E.get_typing_environment env) ty in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.value ()),
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  match proof with
+  | Proved imms ->
+    let imms_ok =
+      Immediate.Set.for_all (fun imm ->
+          Immediate.equal imm Immediate.zero
+            || Immediate.equal imm Immediate.one)
+        imms
+    in
+    if not imms_ok then invalid ()
+    else
+      let imms =
+        Immediate.Set.map (fun imm ->
+            if Immediate.equal imm Immediate.zero then
+              Immediate.one
+            else
+              Immediate.zero)
+          imms
+      in
+      Reachable.reachable (original_term ()),
+        T.these_tagged_immediates imms, r
+  | Unknown ->
+    (* CR mshinwell: This should say something like (in the type) "when the
+       input is 0, the value is 1" and vice-versa. *)
+    Reachable.reachable (original_term ()),
+      T.these_tagged_immediates Immediate.all_bools, r
+  | Invalid -> invalid ()
+
+let simplify_float_arith_op (op : P.unary_float_arith_op) dacc r prim
+      arg dbg =
+  let module F = Numbers.Float_by_bit_pattern in
+  let arg, arg_ty = S.simplify_simple env arg in
+  let proof = T.prove_naked_float (E.get_typing_environment env) arg_ty in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let result_unknown () =
+    Reachable.reachable (original_term ()), T.unknown (K.naked_float ()), r
+  in
+  let result_invalid () =
+    Reachable.invalid (), T.bottom (K.naked_float ()),
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  match proof with
+  | Proved fs when E.const_float_prop env ->
+    assert (not (F.Set.is_empty fs));
+    let possible_results =
+      match op with
+      | Abs -> F.Set.map (fun f -> F.IEEE_semantics.abs f) fs
+      | Neg -> F.Set.map (fun f -> F.IEEE_semantics.neg f) fs
+    in
+    Reachable.reachable (original_term ()),
+      T.these_naked_floats possible_results,
+      r
+  | Proved _ | Unknown -> result_unknown ()
+  | Invalid -> result_invalid ()
+
 let try_cse dacc prim arg ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
   match
@@ -196,18 +379,17 @@ Format.eprintf "Simplifying %a\n%!" P.print
         | Get_tag -> simplify_get_tag
         | Array_length (Array (Value _)) -> simplify_array_length
         | String_length _ -> simplify_string_length
+        | Int_arith op -> simplify_int_arith_op op
+        | Float_arith op -> simplify_float_arith_op op
+        | Num_conv conv -> simplify_num_conv conv
+        | Boolean_not -> simplify_boolean_not
         | Array_length _
-        | Int_arith _
-        | Float_arith _
-        | Num_conv _
-        | Boolean_not
         (* The following will stay in the default case for version 1: *)
         | Int_as_pointer
         | Bigarray_length _
         | Duplicate_block _
         | Opaque_identity ->
           fun dacc ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
-            (* CR mshinwell: temporary code *)
             let named = Named.create_prim (Unary (prim, arg)) dbg in
             let kind = P.result_kind_of_unary_primitive' prim in
             let ty = T.unknown kind in
