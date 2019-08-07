@@ -527,7 +527,9 @@ module Iter_on_sets_of_closures = struct
   and named f n =
     match (n : Named.t) with
     | Simple _ | Prim _ -> ()
-    | Set_of_closures s -> set_of_closures f s
+    | Set_of_closures s ->
+        let () = f None s in
+        set_of_closures f s
 
   and let_expr f t =
     Let.pattern_match t ~f:(fun ~bound_vars:_ ~body ->
@@ -575,7 +577,6 @@ module Iter_on_sets_of_closures = struct
   and invalid _ _ = ()
 
   and set_of_closures f s =
-    let () = f None s in
     let decls = Set_of_closures.function_decls s in
     let map = Function_declarations.funs decls in
     Closure_id.Map.iter (fun_decl f) map
@@ -594,7 +595,8 @@ module Iter_on_sets_of_closures = struct
     match (symbs : a Flambda_static.Program_body.Bound_symbols.t),
           (st : a Flambda_static.Static_part.t) with
     | Set_of_closures r, Set_of_closures s ->
-        f (Some r.closure_symbols) s
+        f (Some r.closure_symbols) s;
+        set_of_closures f s
     | _ -> ()
 
   let static_structure f s =
