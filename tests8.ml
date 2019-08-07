@@ -8,5 +8,4 @@ let rec map f seq () =
   match seq () with
   | Nil -> Nil
   | Cons (x, next) ->
-    let _ = map f seq () in
     Cons (f x, map f next)

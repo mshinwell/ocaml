@@ -353,7 +353,7 @@ module Program_body = struct
           K.print K.value
       | Set_of_closures { closure_symbols; } ->
         Format.fprintf ppf "@[<hov 1>(\
-            @[<hov 1>(closure_symbol@ %a)@]\
+            @[<hov 1>(closure_symbols@ %a)@]\
             )@]"
           (Closure_id.Map.print Symbol.print) closure_symbols
 
