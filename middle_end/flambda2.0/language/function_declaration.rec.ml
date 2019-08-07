@@ -111,8 +111,8 @@ let print_with_cache0 ~compact ~cache ppf
         fprintf ppf "@[<hov 1>(params_and_body@ <elided>)@])@]"
       end else begin
         fprintf ppf
-          "@[<hov 1>(@<0>%s\u{03bb}@<0>%s@[<hov 1>\
-           \u{3008}%a\u{3009}\u{300a}%a\u{300b}\
+          "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
+           @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\
            %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
           (Flambda_colours.lambda ())
           (Flambda_colours.normal ())
