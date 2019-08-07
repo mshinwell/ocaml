@@ -125,21 +125,4 @@ val bind_parameters_to_simples
   -> t
   -> t
 
-(** Create an expression that binds, over the given expression, the
-    continuation [bind] such that when [bind] is called control is
-    transferred to [target].  Both [bind] and [target] must have the
-    given [arity]. *)
-val link_continuations
-   : bind:Continuation.t
-  -> target:Continuation.t
-  -> arity:Flambda_arity.t
-  -> t
-  -> t
-
-val link_exn_continuations
-   : bind:Exn_continuation.t
-  -> target:Exn_continuation.t
-  -> t
-  -> t
-
 val create_let_cont : Let_cont_expr.t -> t

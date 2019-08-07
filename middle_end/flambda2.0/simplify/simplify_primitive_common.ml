@@ -81,9 +81,11 @@ let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
       | None -> dacc
       | Some eligible_prim ->
         let bound_to = Simple.var result_var in
+(*
 Format.eprintf "Adding CSE: %a = %a, dacc:@ %a\n%!"
   P.Eligible_for_cse.print eligible_prim
   Simple.print bound_to DA.print dacc;
+*)
         DA.map_denv dacc ~f:(fun denv ->
           DE.with_typing_environment denv
            (TE.add_cse (DE.typing_env denv) eligible_prim ~bound_to))

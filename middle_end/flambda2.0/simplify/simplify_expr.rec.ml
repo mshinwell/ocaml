@@ -307,6 +307,7 @@ and simplify_direct_partial_application
       Apply.print apply
   end;
   let wrapper_var = Variable.create "partial" in
+  let wrapper_closure_id = Closure_id.wrap (Variable.create "closure") in
   let wrapper_taking_remaining_args =
     let return_continuation = Continuation.create () in
     let remaining_params =
@@ -368,10 +369,9 @@ and simplify_direct_partial_application
         ~is_a_functor:false
         ~recursive
     in
-    let closure_id = Closure_id.wrap (Variable.create "closure") in
     let function_decls =
       Function_declarations.create
-        (Closure_id.Map.singleton closure_id function_decl)
+        (Closure_id.Map.singleton wrapper_closure_id function_decl)
     in
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
@@ -384,7 +384,11 @@ and simplify_direct_partial_application
   in
   let expr =
     let wrapper_var = VB.create wrapper_var Name_occurrence_kind.normal in
-    Expr.create_let wrapper_var
+    let closure_vars =
+      Closure_id.Map.singleton wrapper_closure_id wrapper_var
+    in
+    let pattern = Bindable_let_bound.set_of_closures ~closure_vars in
+    Expr.create_pattern_let pattern
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
