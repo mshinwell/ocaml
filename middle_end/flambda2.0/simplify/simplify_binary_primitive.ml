@@ -773,26 +773,24 @@ module Binary_int_eq_comp_int64 =
 module Binary_int_eq_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
 
-let simplify_block_load dacc ~original_term _dbg ~arg1:_ ~arg1_ty:block_ty
-      ~arg2:_ ~arg2_ty:index_ty ~result_var =
+let simplify_block_load ~result_kind dacc ~original_term _dbg
+      ~arg1:_ ~arg1_ty:block_ty ~arg2:_ ~arg2_ty:index_ty ~result_var =
   let result_var' = Var_in_binding_pos.var result_var in
   let unchanged () =
-    let ty = T.any_value () in
+    let ty = T.unknown result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.reachable original_term, env_extension, dacc
   in
   let invalid () =
-    let ty = T.bottom K.value in
+    let ty = T.bottom result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
-(*Format.eprintf "Reifying index type: %a\n%!" T.print index_ty;*)
   let typing_env = DE.typing_env (DA.denv dacc) in
   match T.prove_equals_single_tagged_immediate typing_env index_ty with
   | Invalid -> invalid ()
   | Unknown -> unchanged ()
   | Proved index ->
-(*Format.eprintf "The block index is %a\n%!" Immediate.print index;*)
     let n =
       Targetint.OCaml.add (Immediate.to_targetint index) Targetint.OCaml.one
     in
@@ -800,7 +798,7 @@ let simplify_block_load dacc ~original_term _dbg ~arg1:_ ~arg1_ty:block_ty
       dacc ~original_term ~deconstructing:block_ty
       ~shape:(T.immutable_block_with_size_at_least ~n
         ~field_n_minus_one:result_var')
-      ~result_var ~result_kind:K.value
+      ~result_var ~result_kind
 
 let simplify_phys_equal (op : P.equality_comparison)
       (kind : K.t) dacc ~original_term dbg
@@ -896,6 +894,7 @@ let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
       Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
         ~min_occurrence_kind ~result_var
 
+(* CR mshinwell: This needs enhancing a bit. *)
 let simplify_using_equations (defining_expr : Reachable.t) env_extension dacc =
   match defining_expr with
   | Invalid _ -> defining_expr, env_extension, dacc
@@ -958,8 +957,10 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
         let original_term = Named.create_prim original_prim dbg in
         let simplifier =
           match prim with
-          | Block_load (Block (Value Anything), Immutable) ->
-            simplify_block_load
+          | Block_load (Block (Value _), Immutable) ->
+            simplify_block_load ~result_kind:K.value
+          | Block_load (Block Naked_float, Immutable) ->
+            simplify_block_load ~result_kind:K.naked_float
           | Int_arith (kind, op) ->
             begin match kind with
             | Tagged_immediate -> Binary_int_arith_tagged_immediate.simplify op

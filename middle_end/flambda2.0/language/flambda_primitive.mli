@@ -73,6 +73,7 @@ module Block_access_kind : sig
   type t0 =
     | Value of Value_kind.t
     | Naked_float
+    (* CR mshinwell: What was [Fabricated] for? *)
     | Fabricated of Value_kind.t
 
   type t =

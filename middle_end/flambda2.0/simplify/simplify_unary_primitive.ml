@@ -369,10 +369,6 @@ let try_cse dacc prim arg ~min_occurrence_kind ~result_var
 
 let simplify_unary_primitive dacc (prim : P.unary_primitive)
       arg dbg ~result_var =
-(*
-Format.eprintf "Simplifying %a\n%!" P.print
-  ((P.Unary (prim, arg)) : P.t);
-*)
   let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
@@ -399,7 +395,7 @@ Format.eprintf "Simplifying %a\n%!" P.print
           simplify_box_number boxable_number_kind
         | Is_int -> simplify_is_int
         | Get_tag -> simplify_get_tag
-        | Array_length (Array (Value _)) -> simplify_array_length
+        | Array_length _ -> simplify_array_length
         | String_length _ -> simplify_string_length
         | Int_arith (kind, op) ->
           begin match kind with
@@ -418,12 +414,12 @@ Format.eprintf "Simplifying %a\n%!" P.print
           | Naked_nativeint -> Simplify_int_conv_naked_nativeint.simplify ~dst
           end
         | Boolean_not -> simplify_boolean_not
-        | Array_length _
-        (* The following will stay in the default case for version 1: *)
         | Int_as_pointer
         | Bigarray_length _
         | Duplicate_block _
         | Opaque_identity ->
+          (* CR mshinwell: In these cases, the type of the argument should
+             still be checked.  Same for binary/ternary/etc. *)
           fun dacc ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
             let named = Named.create_prim (Unary (prim, arg)) dbg in
             let kind = P.result_kind_of_unary_primitive' prim in
