@@ -16,13 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
+open! Simplify_import
 
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module VB = Var_in_binding_pos
-
-let inline dacc ~callee ~args function_decl
+let inline dacc ~callee ~args closure_id function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
   let newer_rec_info = Some (Rec_info.create ~depth:1 ~unroll_to) in
@@ -36,7 +32,8 @@ Format.eprintf "callee_with_rec_info now %a\n%!"
   Simple.print callee_with_rec_info;
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
-      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+              ~irrelevant_closure_vars ~rec_info_var ->
         let denv =
           DE.set_inlining_depth_increment
             (DE.add_inlined_debuginfo (DA.denv dacc) dbg)
@@ -49,13 +46,29 @@ Format.eprintf "callee_with_rec_info now %a\n%!"
             (Exn_continuation.exn_handler exn_continuation)
             (Exn_continuation.exn_handler apply_exn_continuation)
         in
+        let irrelevant_closure_bindings =
+          List.map (fun (move_to, closure_var) ->
+              let var = VB.create closure_var Name_occurrence_kind.in_types in
+              let prim : P.t =
+                Unary (Select_closure { move_from = closure_id; move_to; },
+                  Simple.var my_closure)
+              in
+              var, Named.create_prim prim dbg)
+            (Closure_id.Map.bindings irrelevant_closure_vars)
+        in
+        let get_rec_info =
+          Named.create_prim (Unary (Get_rec_info, my_closure)) dbg
+        in
         let expr =
           Expr.apply_name_permutation
             (Expr.bind_parameters_to_simples ~bind:params ~target:args
               (Expr.create_let
                 (VB.create my_closure Name_occurrence_kind.normal)
                 (Named.create_simple callee_with_rec_info)
-                body))
+                (Expr.create_let
+                  (VB.create rec_info_var Name_occurrence_kind.in_types)
+                  get_rec_info
+                  (Expr.bind ~bindings:irrelevant_closure_bindings ~body))))
             perm
         in
 Format.eprintf "Inlined body to be simplified:@ %a\n%!" Expr.print expr;

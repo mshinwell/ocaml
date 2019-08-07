@@ -630,6 +630,9 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var
 let array_of_length ~length =
   Value (No_alias (Ok (Array { length; })))
 
+let this_rec_info rec_info =
+  Fabricated (No_alias (Ok (Rec_info rec_info)))
+
 let type_for_const (const : Simple.Const.t) =
   match const with
   | Naked_immediate i -> this_naked_immediate i
@@ -638,6 +641,7 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_int32 n -> this_naked_int32 n
   | Naked_int64 n -> this_naked_int64 n
   | Naked_nativeint n -> this_naked_nativeint n
+  | Initial_rec_info -> this_rec_info Rec_info.initial
 
 let kind_for_const const = kind (type_for_const const)
 

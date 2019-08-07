@@ -101,7 +101,6 @@ and 'a of_kind_value_boxed_number =
     closed entities in terms of names. *)
 and inlinable_function_declaration = {
   function_decl : Term_language_function_declaration.t;
-  rec_info : Rec_info.t;
 }
 
 and function_declaration =
@@ -113,6 +112,8 @@ and function_declaration =
   | Inlinable of inlinable_function_declaration
 
 and closures_entry = {
+  irrelevant_closure_vars : Variable.t Closure_id.Map.t;
+  (** Irrelevant variables bound to the types of the individual closures. *)
   function_decls : function_declaration Or_unknown.t Closure_id.Map.t;
   (** Information from the term language, if available, about the function
       declaration(s) associated with the closures. *)
@@ -166,3 +167,4 @@ and of_kind_fabricated =
         - a block tag, as returned by the [Get_tag] primitive; or
         - a constant constructor which has undergone a kind-cast to kind
           [Fabricated] using the [Discriminant_of_int] primitive. *)
+  | Rec_info of Rec_info.t

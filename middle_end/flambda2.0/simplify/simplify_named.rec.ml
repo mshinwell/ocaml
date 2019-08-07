@@ -110,7 +110,8 @@ let simplify_function dacc closure_id_this_function function_decl
   let denv = DA.denv dacc in
   let params_and_body, r =
     Function_params_and_body.pattern_match (FD.params_and_body function_decl)
-      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+              ~irrelevant_closure_vars ~rec_info_var ->
         let denv = DE.enter_closure denv in
         let return_cont_scope = Scope.initial in
         let exn_cont_scope = Scope.next return_cont_scope in
@@ -125,12 +126,15 @@ let simplify_function dacc closure_id_this_function function_decl
             denv
         in
         let denv =
+          (* XXX This needs to use [irrelevant_closure_vars] *)
           Closure_id.Map.fold (fun closure_id closure_type denv ->
               match Closure_id.Map.find closure_id closure_bound_names with
               | exception Not_found ->
                 Misc.fatal_errorf "No bound variable for closure ID %a"
                   Closure_id.print closure_id
               | bound_name ->
+                (* CR mshinwell: These should be irrelevant in the non-lifted
+                   case *)
                 DE.add_equation_on_name denv
                   (Name_in_binding_pos.name bound_name)
                   closure_type)

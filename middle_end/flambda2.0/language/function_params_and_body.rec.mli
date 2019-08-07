@@ -38,6 +38,8 @@ val create
   -> Kinded_parameter.t list
   -> body:Expr.t
   -> my_closure:Variable.t
+  -> irrelevant_closure_vars:Variable.t Closure_id.Map.t
+  -> rec_info_var:Variable.t
   -> t
 
 (** Choose a member of the alpha-equivalence class to enable examination
@@ -56,5 +58,7 @@ val pattern_match
     -> Kinded_parameter.t list
     -> body:Expr.t
     -> my_closure:Variable.t
+    -> irrelevant_closure_vars:Variable.t Closure_id.Map.t
+    -> rec_info_var:Variable.t
     -> 'a)
   -> 'a

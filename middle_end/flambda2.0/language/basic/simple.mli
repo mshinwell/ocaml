@@ -27,6 +27,7 @@ module Const : sig
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
     | Naked_nativeint of Targetint.t
+    | Initial_rec_info
 
   include Identifiable.S with type t := t
 
@@ -54,11 +55,11 @@ val symbol : Symbol.t -> t
 
 val const : Const.t -> t
 
-val rec_info : t -> Rec_info.t option
+val rec_info_newest_first : t -> Simple.t list
 
 val without_rec_info : t -> t
 
-val merge_rec_info : t -> newer_rec_info:Rec_info.t option -> t option
+val merge_rec_info : t -> newer_rec_info:Simple.t -> t
 
 val must_be_var : t -> Variable.t option
 
