@@ -139,16 +139,17 @@ let simplify_function dacc closure_id_this_function function_decl
         in
         let denv =
           match Closure_id.Map.find closure_id_this_function
-            pre_simplification_types_of_my_closures.closure_types
+            closure_bound_names
           with
           | exception Not_found ->
-            Misc.fatal_errorf "No closure type for this function \
+            Misc.fatal_errorf "No bound variable for this function \
                 (closure ID %a)"
               Closure_id.print closure_id_this_function
-          | closure_type ->
+          | name ->
+            let name = Name_in_binding_pos.name name in
             DE.add_variable denv
               (Var_in_binding_pos.create my_closure Name_occurrence_kind.normal)
-              closure_type
+              (T.alias_type_of K.value (Simple.name name))
         in
         let dacc = DA.with_denv dacc denv in
         (* CR mshinwell: Should probably look at [cont_uses]? *)

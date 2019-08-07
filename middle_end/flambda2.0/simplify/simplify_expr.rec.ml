@@ -392,7 +392,6 @@ and simplify_direct_partial_application
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
-Format.eprintf "Expression for partial application is:@ %a\n%!" Expr.print expr;
   simplify_expr dacc expr k
 
 and simplify_direct_over_application
