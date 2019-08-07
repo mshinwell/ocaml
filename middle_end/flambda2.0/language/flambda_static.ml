@@ -345,6 +345,12 @@ module Program_body = struct
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> K.fabricated t
 
+    (* CR mshinwell: Share with [Bindable_let_bound] *)
+    let print_closure_binding ppf (closure_id, sym) =
+      Format.fprintf ppf "@[(%a \u{21a6} %a)@]"
+        Closure_id.print closure_id
+        Symbol.print sym
+
     let print (type k) ppf (t : k t) =
       match t with
       | Singleton sym ->
@@ -355,7 +361,9 @@ module Program_body = struct
         Format.fprintf ppf "@[<hov 1>(\
             @[<hov 1>(closure_symbols@ %a)@]\
             )@]"
-          (Closure_id.Map.print Symbol.print) closure_symbols
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space
+            print_closure_binding)
+          (Closure_id.Map.bindings closure_symbols)
 
     (* CR mshinwell: This should have an [invariant] function.  One thing to
        check is that the [closure_symbols] are all distinct. *)

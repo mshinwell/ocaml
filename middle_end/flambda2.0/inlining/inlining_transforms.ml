@@ -26,18 +26,14 @@ let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
   let newer_rec_info = Some (Rec_info.create ~depth:1 ~unroll_to) in
-(*
 Format.eprintf "About to inline: %a, newer_rec_info=%a\n%!"
   Simple.print callee
   (Misc.Stdlib.Option.print Rec_info.print) newer_rec_info;
-*)
   match Simple.merge_rec_info callee ~newer_rec_info with
   | None -> dacc, Expr.create_invalid ()
   | Some callee_with_rec_info ->
-(*
 Format.eprintf "callee_with_rec_info now %a\n%!"
   Simple.print callee_with_rec_info;
-*)
     Function_params_and_body.pattern_match
       (Function_declaration.params_and_body function_decl)
       ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
@@ -62,7 +58,5 @@ Format.eprintf "callee_with_rec_info now %a\n%!"
                 body))
             perm
         in
-(*
 Format.eprintf "Inlined body to be simplified:@ %a\n%!" Expr.print expr;
-*)
         DA.with_denv dacc denv, expr)
