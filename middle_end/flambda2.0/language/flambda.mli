@@ -142,23 +142,6 @@ module rec Expr : sig
     -> target:Simple.t list
     -> t
     -> t
-
-  (** Create an expression that binds, over the given expression, the
-      continuation [bind] such that when [bind] is called control is
-      transferred to [target].  Both [bind] and [target] must have the
-      given [arity]. *)
-  val link_continuations
-     : bind:Continuation.t
-    -> target:Continuation.t
-    -> arity:Flambda_arity.t
-    -> t
-    -> t
-
-  val link_exn_continuations
-     : bind:Exn_continuation.t
-    -> target:Exn_continuation.t
-    -> t
-    -> t
 end and Named : sig
   (** The defining expressions of [Let] bindings. *)
   type t = private

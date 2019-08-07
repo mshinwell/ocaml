@@ -168,12 +168,14 @@ let name_occurrence_kind t =
 let must_be_singleton t =
   match t with
   | Singleton var -> var
-  | Set_of_closures _ -> Misc.fatal_errorf "Not a [Singleton]:@ %a" print t
+  | Set_of_closures _ ->
+    Misc.fatal_errorf "Bound name is not a [Singleton]:@ %a" print t
 
 let must_be_set_of_closures t =
   match t with
   | Set_of_closures { closure_vars; _ } -> closure_vars
-  | Singleton _ -> Misc.fatal_errorf "Not a [Set_of_closures]:@ %a" print t
+  | Singleton _ ->
+    Misc.fatal_errorf "Bound name is not a [Set_of_closures]:@ %a" print t
 
 let all_bound_vars t =
   match t with
