@@ -22,6 +22,7 @@ type string_contents =
 
 type t
 
+(* CR mshinwell: [size] shouldn't be needed when passing [Contents] *)
 val create : contents:string_contents -> size:Targetint.OCaml.t -> t
 
 val contents : t -> string_contents

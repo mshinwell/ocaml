@@ -477,6 +477,23 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one : t =
   in
   Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
 
+let this_immutable_string str =
+  (* CR mshinwell: Use "length" not "size" for strings *)
+  let size = Targetint.OCaml.of_int (String.length str) in
+  let string_info =
+    String_info.Set.singleton
+      (String_info.create ~contents:(Contents str) ~size)
+  in
+  Value (No_alias (Ok (String string_info)))
+
+let mutable_string ~size =
+  let size = Targetint.OCaml.of_int size in
+  let string_info =
+    String_info.Set.singleton
+      (String_info.create ~contents:Unknown_or_mutable ~size)
+  in
+  Value (No_alias (Ok (String string_info)))
+
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())

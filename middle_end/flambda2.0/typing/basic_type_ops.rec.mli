@@ -104,6 +104,10 @@ val immutable_block_with_size_at_least
   -> field_n_minus_one:Variable.t
   -> Type_grammar.t
 
+val this_immutable_string : string -> Type_grammar.t
+
+val mutable_string : size:int -> Type_grammar.t
+
 val bottom : Flambda_kind.t -> Type_grammar.t
 val bottom_like : Type_grammar.t -> Type_grammar.t
 

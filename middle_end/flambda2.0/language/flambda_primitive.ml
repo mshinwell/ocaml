@@ -469,7 +469,7 @@ let unary_primitive_eligible_for_cse p =
   | Get_tag -> true
   | Array_length _ -> false
   | Bigarray_length _ -> false
-  | String_length _ -> false
+  | String_length _ -> true
   | Int_as_pointer -> true
   | Opaque_identity -> false
   | Int_arith _ -> true
@@ -661,10 +661,9 @@ let effects_and_coeffects_of_unary_primitive p =
       Only_generative_effects destination_mutability, Has_coeffects
     end
   | Is_int -> No_effects, No_coeffects
-  | Get_tag ->
+  | Get_tag | String_length _ ->
     (* [Obj.truncate] has now been removed. *)
     No_effects, No_coeffects
-  | String_length _ -> reading_from_an_array_like_thing
   | Int_as_pointer
   | Opaque_identity -> Arbitrary_effects, Has_coeffects
   | Int_arith (_, (Neg | Swap_byte_endianness))
