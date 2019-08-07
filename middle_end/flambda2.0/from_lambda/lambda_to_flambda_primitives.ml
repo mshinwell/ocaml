@@ -632,7 +632,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pfloatfield field, [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Binary (Block_load (Block Naked_float, Mutable), arg, Simple field)
+    box_float
+      (Binary (Block_load (Block Naked_float, Mutable), arg, Simple field))
   | Psetfield (field, immediate_or_pointer, initialization_or_assignment),
     [block; value] ->
     let access_kind = convert_access_kind immediate_or_pointer in
