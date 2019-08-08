@@ -116,43 +116,24 @@ let apply_name_permutation { simple; rec_info_newest_first; } perm =
 module T0 = Identifiable.Make (struct
   type nonrec t = t
 
-  let compare t1 t2 =
-    match t1, t2 with
-    | Name n1, Name n2 -> Name.compare n1 n2
-    | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
-      let c = Name.compare n1 n2 in
-      if c <> 0 then c
-      else Rec_info.compare rec_info1 rec_info2
-    | Const c1, Const c2 -> RWC.compare c1 c2
-    | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
-    | Name _, _ -> -1
-    | Rec_name _, Name _ -> 1
-    | Rec_name _, _ -> -1
-    | Const _, (Name _ | Rec_name _) -> 1
-    | Const _, _ -> -1
-    | Discriminant _, _ -> 1
+  let compare
+        { simple = simple1; rec_info_newest_first = rec_info_newest_first1; }
+        { simple = simple2; rec_info_newest_first = rec_info_newest_first2; } =
+    let c = S0.compare simple1 simple2 in
+    if c <> 0 then c
+    else RIS.compare rec_info_newest_first1 rec_info_newest_first2
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
-  let hash t =
+  let hash { simple; rec_info_newest_first; } =
+    Hashtbl.hash (S0.hash simple, RIS.hash rec_info_newest_first)
 
-
-    match t with
-    | Name name -> Hashtbl.hash (0, Name.hash name)
-    | Rec_name (name, rec_info) ->
-      Hashtbl.hash (1, (Name.hash name, Rec_info.hash rec_info))
-    | Const c -> Hashtbl.hash (2, RWC.hash c)
-    | Discriminant t -> Hashtbl.hash (3, Discriminant.hash t)
-
-  let print ppf t =
-    match t with
-    | Name name -> Name.print ppf name
-    | Rec_name (name, rec_info) ->
+  let print ppf { simple; rec_info_newest_first; } =
+    if RIS.is_empty rec_info_newest_first then S0.print ppf simple
+    else
       Format.fprintf ppf "@[%a@ %a@]"
-        Name.print name
-        Rec_info.print rec_info
-    | Const c -> RWC.print ppf c
-    | Discriminant t -> Discriminant.print ppf t
+        S0.print simple
+        RIS.print rec_info_newest_first
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t

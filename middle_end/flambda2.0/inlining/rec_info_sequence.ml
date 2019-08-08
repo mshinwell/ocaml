@@ -69,3 +69,16 @@ let add_newer_rec_info (t : t) (entry : Entry.t) =
       (Rec_info.merge older_rec_info ~newer:newer_rec_info) :: rest
 
 let to_list_newest_first t = t
+
+let free_names t =
+
+let free_names_in_types t =
+
+let apply_name_permutation t perm =
+
+include Identifiable.Make (struct
+  type nonrec t = t
+
+
+
+end)
