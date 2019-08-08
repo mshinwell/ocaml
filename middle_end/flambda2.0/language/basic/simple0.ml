@@ -14,95 +14,84 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-module RIS = Rec_info_sequence
-module RWC = Reg_width_const
-module S0 = Simple0
+type t =
+  | Var of Variable.t
+  | Symbol of Symbol.t
+  | Const of Reg_width_const.t
+  | Discriminant of Discriminant.t
 
-type t = {
-  simple : S0.t;
-  rec_info_newest_first : RIS.t;
-}
+let name (name : Name.t) =
+  match name with
+  | Var var -> Var var
+  | Symbol sym -> Symbol sym
 
-let create simple =
-  { simple;
-    rec_info_newest_first = RIS.empty;
-  }
-
-let name name = create (name name)
-let var var = create (var var)
-let vars vars = create (vars vars)
-let symbol sym = create (symbol sym)
-let const cst = create (const cst)
-let discriminant discr = create (discriminant discr)
-
-let const_bool b = const (if b then RWC.const_true else RWC.const_false)
-let const_int i = const (RWC.const_int i)
-
-let const_true = const RWC.const_true
-let const_false = const RWC.const_false
-let const_zero = const RWC.const_zero
-let const_unit = const RWC.const_unit
+let var var = Var var
+let vars vars = List.map var vars
+let symbol sym = Symbol sym
+let const cst = Const cst
+let discriminant t = Discriminant t
 
 let is_var t =
   match t with
-  | Name (Var _) | Rec_name (Var _, _) -> true
-  | _ -> false
+  | Var _ -> true
+  | Symbol _ | Const _ | Discriminant _ -> false
 
 let is_symbol t =
   match t with
-  | Name (Symbol _) | Rec_name (Symbol _, _) -> true
-  | _ -> false
+  | Symbol _ -> true
+  | Var _ | Const _ | Discriminant _ -> false
 
-let add_rec_info t ~newer_rec_info =
-  { t with
-    rec_info_newest_first =
-      RIS.add_at_head t.rec_info_newest_first newer_rec_info;
-  }
+let must_be_var t =
+  match t with
+  | Var var -> Some var
+  | Symbol _ | Const _ | Discriminant _ -> None
 
-let rec_info_newest_first t = t.rec_info_newest_first
+let allowed t ~allowed =
+  match must_be_var t with
+  | None -> true
+  | Some var -> Variable.Set.mem var allowed
 
-let without_rec_info t = create t.simple
+let to_name t =
+  match t with
+  | Var var -> Name.var var
+  | Symbol sym -> Name.symbol sym
+  | Const _ | Discriminant _ -> None
 
-let must_be_var t = S0.must_be_var t.simple
-let allowed t ~allowed = S0.allowed t.simple ~allowed
-let to_name t = S0.to_name t.simple
+let map_name t ~f =
+  match to_name t with
+  | None -> t
+  | Some name' -> name (f name')
 
-let map_name { simple; rec_info_newest_first; } ~f =
-  let simple' = S0.map_name simple ~f in
-  if simple == simple' then t
-  else
-    { simple = simple';
-      rec_info_newest_first;
-    }
+let map_var t ~f =
+  match t with
+  | Var var ->
+    let var' = f var in
+    if var == var' then t
+    else Var var'
+  | Symbol _ | Const _ | Discriminant _ -> t
 
-let map_var { simple; rec_info_newest_first; } ~f =
-  let simple' = S0.map_var simple ~f in
-  if simple == simple' then t
-  else
-    { simple = simple';
-      rec_info_newest_first;
-    }
-
-let map_symbol { simple; rec_info_newest_first; } ~f =
-  let simple' = S0.map_symbol simple ~f in
-  if simple == simple' then t
-  else
-    { simple = simple';
-      rec_info_newest_first;
-    }
+let map_symbol t ~f =
+  match t with
+  | Symbol sym ->
+    let sym' = f sym in
+    if sym == sym' then t
+    else Symbol sym'
+  | Var _ | Const _ | Discriminant _ -> t
 
 let free_names t =
   match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.normal
+  | Var var ->
+    Name_occurrences.singleton_variable var Name_occurrence_kind.normal
+  | Symbol sym -> Name_occurrences.singleton_symbol sym
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.in_types
+  | Var var ->
+    Name_occurrences.singleton_variable var Name_occurrence_kind.in_types
+  | Symbol sym -> Name_occurrences.singleton_symbol sym
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
@@ -111,10 +100,6 @@ let apply_name_permutation t perm =
     let name' = Name_permutation.apply_name perm name in
     if name == name' then t
     else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Rec_name (name', rec_info)
   | Const _ | Discriminant _ -> t
 
 module T0 = Identifiable.Make (struct
@@ -127,11 +112,9 @@ module T0 = Identifiable.Make (struct
       let c = Name.compare n1 n2 in
       if c <> 0 then c
       else Rec_info.compare rec_info1 rec_info2
-    | Const c1, Const c2 -> RWC.compare c1 c2
+    | Const c1, Const c2 -> Reg_width_const.compare c1 c2
     | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
     | Name _, _ -> -1
-    | Rec_name _, Name _ -> 1
-    | Rec_name _, _ -> -1
     | Const _, (Name _ | Rec_name _) -> 1
     | Const _, _ -> -1
     | Discriminant _, _ -> 1
@@ -141,19 +124,13 @@ module T0 = Identifiable.Make (struct
   let hash t =
     match t with
     | Name name -> Hashtbl.hash (0, Name.hash name)
-    | Rec_name (name, rec_info) ->
-      Hashtbl.hash (1, (Name.hash name, Rec_info.hash rec_info))
-    | Const c -> Hashtbl.hash (2, RWC.hash c)
+    | Const c -> Hashtbl.hash (2, Reg_width_const.hash c)
     | Discriminant t -> Hashtbl.hash (3, Discriminant.hash t)
 
   let print ppf t =
     match t with
     | Name name -> Name.print ppf name
-    | Rec_name (name, rec_info) ->
-      Format.fprintf ppf "@[%a@ %a@]"
-        Name.print name
-        Rec_info.print rec_info
-    | Const c -> RWC.print ppf c
+    | Const c -> Reg_width_const.print ppf c
     | Discriminant t -> Discriminant.print ppf t
 
   let output chan t =
@@ -247,17 +224,19 @@ end
 
 type descr =
   | Name of Name.t
-  | Const of RWC.t
+  | Const of Reg_width_const.t
   | Discriminant of Discriminant.t
 
 let descr (t : t) : descr =
   match t with
-  | Name name | Rec_name (name, _) -> Name name
+  | Var var -> Name (Name.var var)
+  | Symbol sym -> Name (Name.symbol sym)
   | Const const -> Const const
   | Discriminant discr -> Discriminant discr
 
 let of_descr (descr : descr) : t =
   match descr with
-  | Name name -> Name name
+  | Name (Var var) -> Var var
+  | Name (Symbol sym) -> Symbol sym
   | Const const -> Const const
   | Discriminant discr -> Discriminant discr

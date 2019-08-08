@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2017 OCamlPro SAS                                    *)
+(*   Copyright 2014--2017 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,21 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A value that is known to fit into a register (of the appropriate kind)
-    on the target machine.  We do not require such values to be [Let]-bound. *)
-
-[@@@ocaml.warning "+a-30-40-41-42"]
-
-module Rec_info_entry : sig
-  type t = private
-    | Const of Rec_info.t
-    | Name of Name.t
-
-  include Identifiable.S with type t := t
-
-  val const : Rec_info.t -> t
-  val name : Name.t -> t
-end
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
 
@@ -40,34 +26,9 @@ val vars : Variable.t list -> t list
 
 val symbol : Symbol.t -> t
 
-val const : Reg_width_const.t -> t
-
-(** The constant representating the given number of type "int". *)
-val const_int : Targetint.OCaml.t -> t
-
-(** The constant representating the given boolean value. *)
-val const_bool : bool -> t
-
-(** The constant representating boolean true. *)
-val const_true : t
-
-(** The constant representating boolean false. *)
-val const_false : t
-
-(** The constant representating the number zero of type "int". *)
-val const_zero : t
-
-(** The constant representing the unit value. *)
-val const_unit : t
-
-(** The given switch discriminant as a simple. *)
 val discriminant : Discriminant.t -> t
 
-val add_rec_info : t -> newer_rec_info:Rec_info_entry.t -> t
-
-val rec_info_newest_first : t -> Rec_info_entry.t list
-
-val without_rec_info : t -> t
+val const : Reg_width_const.t -> t
 
 (* CR mshinwell: inconsistent naming *)
 val must_be_var : t -> Variable.t option
