@@ -58,7 +58,7 @@ let is_symbol t =
 let add_rec_info t ~newer_rec_info =
   { t with
     rec_info_newest_first =
-      RIS.add_at_head t.rec_info_newest_first newer_rec_info;
+      RIS.add_newer_rec_info t.rec_info_newest_first newer_rec_info;
   }
 
 let rec_info_newest_first t = t.rec_info_newest_first
@@ -93,29 +93,25 @@ let map_symbol { simple; rec_info_newest_first; } ~f =
       rec_info_newest_first;
     }
 
-let free_names t =
-  match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.normal
-  | Const _ | Discriminant _ -> Name_occurrences.empty
+let free_names { simple; rec_info_newest_first; } =
+  Name_occurrences.union (S0.free_names simple)
+    (RIS.free_names rec_info_newest_first)
 
-let free_names_in_types t =
-  match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.in_types
-  | Const _ | Discriminant _ -> Name_occurrences.empty
+let free_names_in_types { simple; rec_info_newest_first; } =
+  Name_occurrences.union (S0.free_names_in_types simple)
+    (RIS.free_names_in_types rec_info_newest_first)
 
-let apply_name_permutation t perm =
-  match t with
-  | Name name ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Rec_name (name', rec_info)
-  | Const _ | Discriminant _ -> t
+let apply_name_permutation { simple; rec_info_newest_first; } perm =
+  let simple' = S0.apply_name_permutation simple perm in
+  let rec_info_newest_first' =
+    RIS.apply_name_permutation rec_info_newest_first perm
+  in
+  if simple == simple' && rec_info_newest_first == rec_info_newest_first'
+  then t
+  else
+    { simple = simple';
+      rec_info_newest_first = rec_info_newest_first';
+    }
 
 module T0 = Identifiable.Make (struct
   type nonrec t = t
@@ -139,6 +135,8 @@ module T0 = Identifiable.Make (struct
   let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash t =
+
+
     match t with
     | Name name -> Hashtbl.hash (0, Name.hash name)
     | Rec_name (name, rec_info) ->
@@ -250,14 +248,14 @@ type descr =
   | Const of RWC.t
   | Discriminant of Discriminant.t
 
-let descr (t : t) : descr =
-  match t with
-  | Name name | Rec_name (name, _) -> Name name
+let descr t : descr =
+  match S0.descr t with
+  | Name name -> Name name
   | Const const -> Const const
   | Discriminant discr -> Discriminant discr
 
 let of_descr (descr : descr) : t =
   match descr with
-  | Name name -> Name name
-  | Const const -> Const const
-  | Discriminant discr -> Discriminant discr
+  | Name name' -> name name'
+  | Const const' -> const const'
+  | Discriminant discr' -> discriminant discr'

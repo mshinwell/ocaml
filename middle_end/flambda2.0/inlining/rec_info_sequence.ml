@@ -59,4 +59,13 @@ type t = Entry.t list
 
 let empty = []
 
-let add_at_head t entry = entry :: t
+let add_newer_rec_info (t : t) (entry : Entry.t) =
+  match t with
+  | [] -> [entry]
+  | head :: rest ->
+    match entry, head with
+    | Const _, Name _ | Name _, Const _ | Name _, Name _ -> entry :: t
+    | Const newer_rec_info, Const older_rec_info ->
+      (Rec_info.merge older_rec_info ~newer:newer_rec_info) :: rest
+
+let to_list_newest_first t = t

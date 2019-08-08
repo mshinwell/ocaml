@@ -31,4 +31,11 @@ type t
 
 val empty : t
 
-val add_at_head : t -> Entry.t -> t
+val add_newer_rec_info : t -> Entry.t -> t
+
+val to_list_newest_first : t -> Entry.t list
+
+include Identifiable.S with type t := t
+include Contains_names.S with type t := t
+
+val free_names_in_types : t -> Name_occurrences.t
