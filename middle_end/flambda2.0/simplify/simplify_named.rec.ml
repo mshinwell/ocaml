@@ -118,8 +118,23 @@ let simplify_function dacc closure_id_this_function function_decl
           (DE.get_continuation_scope_level denv));
         let denv = DE.increment_continuation_scope_level_twice denv in
         let denv = DE.add_parameters_with_unknown_types denv params in
+        (* XXX Need to add back the code for the irrelevant closure vars,
+           then remove hack below *)
         let denv =
           Closure_id.Map.fold (fun _closure_id bound_name denv ->
+              (* Hack start *)
+              let name = Name_in_binding_pos.name bound_name in
+              let is_var =
+                match Name_in_binding_pos.to_var bound_name with
+                | None -> false
+                | Some _ -> true
+              in
+              let bound_name =
+                Name_in_binding_pos.create name
+                  (if is_var then Name_occurrence_kind.in_types
+                   else Name_occurrence_kind.normal)
+              in
+              (* Hack end *)
               DE.define_name denv bound_name K.value)
             closure_bound_names
             denv

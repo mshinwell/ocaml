@@ -4,7 +4,6 @@ type +'a node =
 
 and 'a t = unit -> 'a node
 
-(*
 let rec map f seq () =
   match seq () with
   | Nil -> Nil
@@ -35,7 +34,6 @@ and flat_map_app f seq tail () = match seq () with
   | Nil -> flat_map f tail ()
   | Cons (x, next) ->
     Cons (x, flat_map_app f next tail)
-*)
 
 let fold_left f acc seq =
   let rec aux f acc seq =
