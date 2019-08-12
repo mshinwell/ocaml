@@ -88,6 +88,9 @@ module Make (Index : Identifiable.S) = struct
               Some (Basic_type_ops.bottom K.value)
             end else begin
               all_bottom := false;
+Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
+  TEE.print !env_extension
+  TEE.print env_extension';
               env_extension := TEE.meet env !env_extension env_extension';
               Some ty
             end)
