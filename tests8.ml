@@ -3,7 +3,7 @@ type +'a node =
   | Cons of 'a * 'a t
 
 and 'a t = unit -> 'a node
-
+(*
 let rec map f seq () =
   match seq () with
   | Nil -> Nil
@@ -44,3 +44,12 @@ let fold_left f acc seq =
       aux f acc next
   in
   aux f acc seq
+*)
+let iter f seq =
+  let rec aux seq = match seq () with
+    | Nil -> ()
+    | Cons (x, next) ->
+        f x;
+        aux next
+  in
+  aux seq

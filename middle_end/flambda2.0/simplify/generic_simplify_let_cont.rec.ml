@@ -47,6 +47,9 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
             (R.get_lifted_constants r)
         in
         let num_uses = CUE.num_continuation_uses cont_uses_env cont in
+        let cannot_change_arity =
+          CUE.cannot_change_continuation's_arity cont_uses_env cont
+        in
         let handler, user_data, uacc =
           match
             CUE.continuation_env_and_param_types cont_uses_env
@@ -60,17 +63,25 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
             cont_handler, user_data, uacc
           | Uses { typing_env; arg_types_by_use_id; param_types;
                    extra_params_and_args; } ->
-            let typing_env, param_types, extra_params_and_args =
-              Unbox_continuation_params.make_unboxing_decisions typing_env
-                ~arg_types_by_use_id ~param_types extra_params_and_args
-            in
-            let dacc =
-              DA.create (DE.with_typing_environment definition_denv typing_env)
-                cont_uses_env r
+            let param_types, extra_params_and_args, dacc =
+              if cannot_change_arity then
+                param_types, Continuation_extra_params_and_args.empty, dacc
+              else
+              let typing_env, param_types, extra_params_and_args =
+                Unbox_continuation_params.make_unboxing_decisions typing_env
+                  ~arg_types_by_use_id ~param_types extra_params_and_args
+              in
+              let dacc =
+                DA.create
+                  (DE.with_typing_environment definition_denv typing_env)
+                  cont_uses_env r
+              in
+              param_types, extra_params_and_args, dacc
             in
             try
               simplify_continuation_handler_like dacc ~param_types
-                ~extra_params_and_args cont cont_handler k
+                ~extra_params_and_args ~cannot_change_arity
+                cont cont_handler k
             with Misc.Fatal_error -> begin
               Format.eprintf "\n%sContext is:%s simplifying continuation \
                   handler@ %a@ \

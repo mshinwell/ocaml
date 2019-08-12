@@ -32,6 +32,7 @@ val print : Format.formatter -> t -> unit
 
 val add_use
    : t
+  -> Continuation_use_kind.t
   -> typing_env_at_use:Flambda_type.Typing_env.t
   -> Apply_cont_rewrite_id.t
   -> arg_types:Flambda_type.t list
@@ -45,3 +46,5 @@ val env_and_param_types
 val number_of_uses : t -> int
 
 val arity : t -> Flambda_arity.t
+
+val cannot_change_continuation's_arity : t -> bool

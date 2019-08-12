@@ -24,17 +24,19 @@ module TEE = Flambda_type.Typing_env_extension
 module Use = struct
   type t = {
     id : Apply_cont_rewrite_id.t;
+    kind : Continuation_use_kind.t;
     arg_types : T.t list;
     typing_env : TE.t;
   }
 
-  let create ~typing_env_at_use:typing_env id ~arg_types =
+  let create kind ~typing_env_at_use:typing_env id ~arg_types =
     { id;
+      kind;
       arg_types;
       typing_env;
     }
 
-  let print ppf { typing_env = _; id = _; arg_types; } =
+  let print ppf { typing_env = _; id = _; kind = _; arg_types; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(arg_types@ %a)@]@ \
         )@]"
@@ -42,6 +44,7 @@ module Use = struct
       arg_types
 
   let id t = t.id
+  let kind t = t.kind
   let arg_types t = t.arg_types
   let typing_env_at_use t = t.typing_env
 end
@@ -68,7 +71,7 @@ let print ppf { continuation; arity; uses; } =
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Use.print) uses
 
-let add_use t ~typing_env_at_use id ~arg_types =
+let add_use t kind ~typing_env_at_use id ~arg_types =
   try
     let arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal arity t.arity) then begin
@@ -77,7 +80,7 @@ let add_use t ~typing_env_at_use id ~arg_types =
         Flambda_arity.print arity
         Flambda_arity.print t.arity
     end;
-    let use = Use.create ~typing_env_at_use id ~arg_types in
+    let use = Use.create kind ~typing_env_at_use id ~arg_types in
 (*
 Format.eprintf "For %a, recording use:@ %a\n%!"
   Continuation.print t.continuation
@@ -187,3 +190,10 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
 let number_of_uses t = List.length t.uses
 
 let arity t = t.arity
+
+let cannot_change_continuation's_arity t =
+  List.exists (fun use ->
+      match Use.kind use with
+      | Normal -> false
+      | Fixed_arity -> true)
+    t.uses
