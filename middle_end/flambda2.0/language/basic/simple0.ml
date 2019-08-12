@@ -55,8 +55,8 @@ let allowed t ~allowed =
 
 let to_name t =
   match t with
-  | Var var -> Name.var var
-  | Symbol sym -> Name.symbol sym
+  | Var var -> Some (Name.var var)
+  | Symbol sym -> Some (Name.symbol sym)
   | Const _ | Discriminant _ -> None
 
 let map_name t ~f =
@@ -84,52 +84,55 @@ let free_names t =
   match t with
   | Var var ->
     Name_occurrences.singleton_variable var Name_occurrence_kind.normal
-  | Symbol sym -> Name_occurrences.singleton_symbol sym
+  | Symbol sym ->
+    Name_occurrences.singleton_symbol sym Name_occurrence_kind.normal
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
   | Var var ->
     Name_occurrences.singleton_variable var Name_occurrence_kind.in_types
-  | Symbol sym -> Name_occurrences.singleton_symbol sym
+  | Symbol sym ->
+    Name_occurrences.singleton_symbol sym Name_occurrence_kind.in_types
   | Const _ | Discriminant _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
   match t with
-  | Name name ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Name name'
-  | Const _ | Discriminant _ -> t
+  | Var var ->
+    let var' = Name_permutation.apply_variable perm var in
+    if var == var' then t
+    else Var var'
+  | Symbol _ | Const _ | Discriminant _ -> t
 
 module T0 = Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
     match t1, t2 with
-    | Name n1, Name n2 -> Name.compare n1 n2
-    | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
-      let c = Name.compare n1 n2 in
-      if c <> 0 then c
-      else Rec_info.compare rec_info1 rec_info2
+    | Var var1, Var var2 -> Variable.compare var1 var2
+    | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
     | Const c1, Const c2 -> Reg_width_const.compare c1 c2
     | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
-    | Name _, _ -> -1
-    | Const _, (Name _ | Rec_name _) -> 1
+    | Var _, _ -> -1
+    | _, Var _ -> 1
+    | Symbol _, _ -> -1
+    | _, Symbol _ -> 1
     | Const _, _ -> -1
-    | Discriminant _, _ -> 1
+    | _, Const _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash t =
     match t with
-    | Name name -> Hashtbl.hash (0, Name.hash name)
+    | Var var -> Hashtbl.hash (0, Variable.hash var)
+    | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
     | Const c -> Hashtbl.hash (2, Reg_width_const.hash c)
     | Discriminant t -> Hashtbl.hash (3, Discriminant.hash t)
 
   let print ppf t =
     match t with
-    | Name name -> Name.print ppf name
+    | Var var -> Variable.print ppf var
+    | Symbol sym -> Symbol.print ppf sym
     | Const c -> Reg_width_const.print ppf c
     | Discriminant t -> Discriminant.print ppf t
 

@@ -199,10 +199,11 @@ and simplify_let_cont
     simplify_recursive_let_cont_handlers dacc handlers k
 
 and simplify_direct_full_application
-  : 'a. DA.t -> Apply.t -> (Function_declaration.t * Rec_info.t) option
+  : 'a. DA.t -> Apply.t -> (FD.t * Rec_info.t) option
+    -> callee's_closure_id:Closure_id.t
     -> result_arity:Flambda_arity.t
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply function_decl_opt ~result_arity k ->
+= fun dacc apply function_decl_opt ~callee's_closure_id ~result_arity k ->
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
@@ -224,7 +225,7 @@ Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
 *)
         let dacc, inlined =
           Inlining_transforms.inline dacc ~callee
-            ~args function_decl
+            ~args ~callee's_closure_id function_decl
             ~apply_return_continuation:(Apply.continuation apply)
             ~apply_exn_continuation:(Apply.exn_continuation apply)
             ~apply_inlining_depth ~unroll_to
@@ -361,7 +362,7 @@ and simplify_direct_partial_application
         ~my_closure
     in
     let function_decl =
-      Function_declaration.create ~params_and_body
+      FD.create ~params_and_body
         ~result_arity
         ~stub:true
         ~dbg
@@ -443,7 +444,7 @@ and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> arg_types:T.t list
-    -> (Function_declaration.t * Rec_info.t) option
+    -> (FD.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
       ~recursive ~arg_types:_ function_decl_opt k ->
@@ -468,7 +469,7 @@ and simplify_direct_function_call
   let num_params = List.length param_arity in
   if provided_num_args = num_params then
     simplify_direct_full_application dacc apply function_decl_opt
-      ~result_arity k
+      ~callee's_closure_id ~result_arity k
   else if provided_num_args > num_params then
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
@@ -560,57 +561,84 @@ and simplify_function_call
     simplify_function_call_where_callee's_type_unavailable dacc apply call
       ~arg_types k
   in
+  let invalid () =
+    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    Expr.create_invalid (), user_data, uacc
+  in
+  let not_inlinable_but_function_decl_known function_decl =
+    simplify_direct_function_call dacc apply ~callee's_closure_id ~arg_types
+      ~param_arity:(FD.params_arity function_decl)
+      ~result_arity:(FD.result_arity function_decl)
+      ~recursive:(FD.recursive function_decl)
+      None k
+  in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   let denv = DA.denv dacc in
-  match T.prove_single_closures_entry (DE.typing_env denv) callee_ty with
+  let typing_env = DE.typing_env denv in
+  match T.prove_single_closures_entry typing_env callee_ty with
   | Proved (callee's_closure_id, func_decl_type) ->
-    (* CR mshinwell: We should check that the [set_of_closures] in the
-       [closures_entry] structure in the type does indeed contain the
-       closure in question. *)
     begin match func_decl_type with
     | Known (Inlinable { function_decl; rec_info; }) ->
-      begin match call with
-      | Direct { closure_id; _ } ->
-        if not (Closure_id.equal closure_id callee's_closure_id) then begin
-          Misc.fatal_errorf "Closure ID %a in application doesn't match \
-              closure ID %a discovered via typing.@ Application:@ %a"
-            Closure_id.print closure_id
-            Closure_id.print callee's_closure_id
-            Apply.print apply
-        end
-      | Indirect_unknown_arity
-      | Indirect_known_arity _ -> ()
-      end;
-      (* CR mshinwell: This should go in Typing_env (ditto logic for Rec_info
-         in Simplify_simple *)
-      let function_decl_rec_info =
-        match Simple.rec_info (Apply.callee apply) with
-        | None -> rec_info
-        | Some newer -> Rec_info.merge rec_info ~newer
-      in
-(*
-Format.eprintf "For call to %a: callee's rec info is %a, rec info from type of function is %a\n%!"
-  Simple.print (Apply.callee apply)
-  (Misc.Stdlib.Option.print Rec_info.print) (Simple.rec_info (Apply.callee apply))
-  Rec_info.print function_decl_rec_info;
-*)
-      simplify_direct_function_call dacc apply
-        ~callee's_closure_id ~arg_types
-        ~param_arity:(Function_declaration.params_arity function_decl)
-        ~result_arity:(Function_declaration.result_arity function_decl)
-        ~recursive:(Function_declaration.recursive function_decl)
-        (Some (function_decl, function_decl_rec_info)) k
+      begin match T.prove_rec_info_from_ty_fabricated typing_env rec_info with
+      | Invalid -> invalid ()
+      | Unknown -> not_inlinable_but_function_decl_known function_decl
+      | Proved older_rec_info ->
+        begin match call with
+        | Direct { closure_id; _ } ->
+          if not (Closure_id.equal closure_id callee's_closure_id) then begin
+            Misc.fatal_errorf "Closure ID %a in application doesn't match \
+                closure ID %a discovered via typing.@ Application:@ %a"
+              Closure_id.print closure_id
+              Closure_id.print callee's_closure_id
+              Apply.print apply
+          end
+        | Indirect_unknown_arity
+        | Indirect_known_arity _ -> ()
+        end;
+        let newer_rec_info_oldest_first =
+          Rec_info_sequence.to_list_oldest_first
+           (Simple.rec_info (Apply.callee apply))
+        in
+        let rec_info =
+          List.fold_left
+            (fun (rec_info : _ Or_unknown_or_bottom.t)
+                 (newer_rec_info : Rec_info_sequence.Entry.t)
+                 : _ Or_unknown_or_bottom.t =
+              match rec_info with
+              | Unknown -> Unknown
+              | Invalid -> Invalid
+              | Ok rec_info ->
+                match newer_rec_info with
+                | Const newer_rec_info ->
+                  Ok (Rec_info.merge rec_info ~newer:newer_rec_info)
+                | Name name ->
+                  let typ = TE.find typing_env name in
+                  match T.prove_rec_info typing_env typ with
+                  | Invalid -> Invalid
+                  | Unknown -> Unknown
+                  | Proved newer_rec_info ->
+                    Ok (Rec_info.merge rec_info ~newer:newer_rec_info))
+            older_rec_info
+            newer_rec_info_oldest_first
+        in
+        match rec_info with
+        | Unknown -> not_inlinable_but_function_decl_known function_decl
+        | Invalid -> invalid ()
+        | Ok rec_info ->
+          simplify_direct_function_call dacc apply
+            ~callee's_closure_id ~arg_types
+            ~param_arity:(FD.params_arity function_decl)
+            ~result_arity:(FD.result_arity function_decl)
+            ~recursive:(FD.recursive function_decl)
+            (Some (function_decl, rec_info)) k
+      end
     | Known (Non_inlinable { param_arity; result_arity; recursive; }) ->
-      simplify_direct_function_call dacc apply
-        ~callee's_closure_id ~arg_types
-        ~param_arity ~result_arity ~recursive
-        None k
+      simplify_direct_function_call dacc apply ~callee's_closure_id ~arg_types
+        ~param_arity ~result_arity ~recursive None k
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
-  | Invalid ->
-    let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-    Expr.create_invalid (), user_data, uacc
+  | Invalid -> invalid ()
 
 and simplify_apply_shared dacc apply : _ Or_bottom.t =
 (*

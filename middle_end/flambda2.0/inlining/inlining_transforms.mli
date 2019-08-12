@@ -22,7 +22,7 @@ val inline
    : Downwards_acc.t
   -> callee:Simple.t
   -> args:Simple.t list
-  -> Closure_id.t
+  -> callee's_closure_id:Closure_id.t
   -> Flambda.Function_declaration.t
   -> apply_return_continuation:Continuation.t
   -> apply_exn_continuation:Exn_continuation.t

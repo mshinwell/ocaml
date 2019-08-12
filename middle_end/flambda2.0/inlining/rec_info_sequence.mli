@@ -31,9 +31,13 @@ type t
 
 val empty : t
 
+val is_empty : t -> bool
+
 val add_newer_rec_info : t -> Entry.t -> t
 
 val to_list_newest_first : t -> Entry.t list
+
+val to_list_oldest_first : t -> Entry.t list
 
 include Identifiable.S with type t := t
 include Contains_names.S with type t := t

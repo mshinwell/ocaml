@@ -76,6 +76,11 @@ type t = Entry.t list
 
 let empty = []
 
+let is_empty t =
+  match t with
+  | [] -> true
+  | _::_ -> false
+
 let add_newer_rec_info (t : t) (entry : Entry.t) =
   match t with
   | [] -> [entry]
@@ -87,6 +92,8 @@ let add_newer_rec_info (t : t) (entry : Entry.t) =
       (Entry.Const rec_info) :: rest
 
 let to_list_newest_first t = t
+
+let to_list_oldest_first t = List.rev t
 
 let free_names t =
   Name_occurrences.union_list (List.map Entry.free_names t)

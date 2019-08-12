@@ -508,6 +508,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
         | Known discrs -> Proved discrs
         | Unknown -> Unknown
         end
+      | Resolved_fabricated (Ok _) -> Invalid
       | Resolved_fabricated Unknown -> Unknown
       | Resolved_fabricated Bottom -> Invalid
 
@@ -528,6 +529,25 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
       | Resolved_value Bottom -> Invalid
       | Resolved_naked_number _
       | Resolved_fabricated _ -> wrong_kind ()
+
+  let prove_rec_info env t : Rec_info.t proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Fabricated]:@ %a" print t
+    in
+    match Typing_env.expand_head env t with
+    | Const Empty_rec_info -> Proved Rec_info.initial
+    | Const _ -> wrong_kind ()
+    | Discriminant _ -> Invalid
+    | Resolved resolved ->
+      match resolved with
+      | Resolved_value _ | Resolved_naked_number _ -> wrong_kind ()
+      | Resolved_fabricated (Ok (Rec_info rec_info)) -> Proved rec_info
+      | Resolved_fabricated (Ok _) -> Invalid
+      | Resolved_fabricated Unknown -> Unknown
+      | Resolved_fabricated Bottom -> Invalid
+
+  let prove_rec_info_from_ty_fabricated env ty : Rec_info.t proof =
+    prove_rec_info env (Fabricated ty)
 
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)

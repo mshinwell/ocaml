@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let inline dacc ~callee ~args closure_id function_decl
+let inline dacc ~callee ~args ~callee's_closure_id function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
   let newer_rec_info = Some (Rec_info.create ~depth:1 ~unroll_to) in
@@ -50,7 +50,8 @@ Format.eprintf "callee_with_rec_info now %a\n%!"
           List.map (fun (move_to, closure_var) ->
               let var = VB.create closure_var Name_occurrence_kind.in_types in
               let prim : P.t =
-                Unary (Select_closure { move_from = closure_id; move_to; },
+                Unary (Select_closure {
+                    move_from = callee's_closure_id; move_to; },
                   Simple.var my_closure)
               in
               var, Named.create_prim prim dbg)

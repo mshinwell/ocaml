@@ -490,6 +490,11 @@ module type S = sig
     -> t
     -> String_info.Set.t proof
 
+  val prove_rec_info_from_ty_fabricated
+     : Typing_env.t
+    -> ty_fabricated
+    -> Rec_info.t proof
+
   val apply_rec_info
      : flambda_type
     -> Rec_info.t

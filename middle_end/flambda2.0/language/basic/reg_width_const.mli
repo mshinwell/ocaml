@@ -25,6 +25,8 @@ type t =
   | Naked_int32 of Int32.t
   | Naked_int64 of Int64.t
   | Naked_nativeint of Targetint.t
+  (* CR mshinwell: It's a bit strange that [Initial_rec_info] is here since
+     it never exists at runtime. *)
   | Initial_rec_info
 
 include Identifiable.S with type t := t

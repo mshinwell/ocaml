@@ -19,17 +19,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module Rec_info_entry : sig
-  type t = private
-    | Const of Rec_info.t
-    | Name of Name.t
-
-  include Identifiable.S with type t := t
-
-  val const : Rec_info.t -> t
-  val name : Name.t -> t
-end
-
 type t
 
 val name : Name.t -> t
@@ -63,9 +52,9 @@ val const_unit : t
 (** The given switch discriminant as a simple. *)
 val discriminant : Discriminant.t -> t
 
-val add_rec_info : t -> newer_rec_info:Rec_info_entry.t -> t
+val add_rec_info : t -> newer_rec_info:Rec_info_sequence.Entry.t -> t
 
-val rec_info_newest_first : t -> Rec_info_entry.t list
+val rec_info : t -> Rec_info_sequence.t
 
 val without_rec_info : t -> t
 

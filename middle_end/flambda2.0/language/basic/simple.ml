@@ -22,20 +22,20 @@ module S0 = Simple0
 
 type t = {
   simple : S0.t;
-  rec_info_newest_first : RIS.t;
+  rec_info : RIS.t;
 }
 
 let create simple =
   { simple;
-    rec_info_newest_first = RIS.empty;
+    rec_info = RIS.empty;
   }
 
-let name name = create (name name)
-let var var = create (var var)
-let vars vars = create (vars vars)
-let symbol sym = create (symbol sym)
-let const cst = create (const cst)
-let discriminant discr = create (discriminant discr)
+let name name = create (S0.name name)
+let var var = create (S0.var var)
+let vars vars = List.map var vars
+let symbol sym = create (S0.symbol sym)
+let const cst = create (S0.const cst)
+let discriminant discr = create (S0.discriminant discr)
 
 let const_bool b = const (if b then RWC.const_true else RWC.const_false)
 let const_int i = const (RWC.const_int i)
@@ -45,23 +45,16 @@ let const_false = const RWC.const_false
 let const_zero = const RWC.const_zero
 let const_unit = const RWC.const_unit
 
-let is_var t =
-  match t with
-  | Name (Var _) | Rec_name (Var _, _) -> true
-  | _ -> false
-
-let is_symbol t =
-  match t with
-  | Name (Symbol _) | Rec_name (Symbol _, _) -> true
-  | _ -> false
+let is_var t = S0.is_var t.simple
+let is_symbol t = S0.is_symbol t.simple
 
 let add_rec_info t ~newer_rec_info =
   { t with
-    rec_info_newest_first =
-      RIS.add_newer_rec_info t.rec_info_newest_first newer_rec_info;
+    rec_info =
+      RIS.add_newer_rec_info t.rec_info newer_rec_info;
   }
 
-let rec_info_newest_first t = t.rec_info_newest_first
+let rec_info t = t.rec_info
 
 let without_rec_info t = create t.simple
 
@@ -69,71 +62,71 @@ let must_be_var t = S0.must_be_var t.simple
 let allowed t ~allowed = S0.allowed t.simple ~allowed
 let to_name t = S0.to_name t.simple
 
-let map_name { simple; rec_info_newest_first; } ~f =
+let map_name ({ simple; rec_info; } as t) ~f =
   let simple' = S0.map_name simple ~f in
   if simple == simple' then t
   else
     { simple = simple';
-      rec_info_newest_first;
+      rec_info;
     }
 
-let map_var { simple; rec_info_newest_first; } ~f =
+let map_var ({ simple; rec_info; } as t) ~f =
   let simple' = S0.map_var simple ~f in
   if simple == simple' then t
   else
     { simple = simple';
-      rec_info_newest_first;
+      rec_info;
     }
 
-let map_symbol { simple; rec_info_newest_first; } ~f =
+let map_symbol ({ simple; rec_info; } as t) ~f =
   let simple' = S0.map_symbol simple ~f in
   if simple == simple' then t
   else
     { simple = simple';
-      rec_info_newest_first;
+      rec_info;
     }
 
-let free_names { simple; rec_info_newest_first; } =
+let free_names { simple; rec_info; } =
   Name_occurrences.union (S0.free_names simple)
-    (RIS.free_names rec_info_newest_first)
+    (RIS.free_names rec_info)
 
-let free_names_in_types { simple; rec_info_newest_first; } =
+let free_names_in_types { simple; rec_info; } =
   Name_occurrences.union (S0.free_names_in_types simple)
-    (RIS.free_names_in_types rec_info_newest_first)
+    (RIS.free_names_in_types rec_info)
 
-let apply_name_permutation { simple; rec_info_newest_first; } perm =
+let apply_name_permutation ({ simple; rec_info; } as t) perm =
   let simple' = S0.apply_name_permutation simple perm in
-  let rec_info_newest_first' =
-    RIS.apply_name_permutation rec_info_newest_first perm
+  let rec_info' =
+    RIS.apply_name_permutation rec_info perm
   in
-  if simple == simple' && rec_info_newest_first == rec_info_newest_first'
+  if simple == simple' && rec_info == rec_info'
   then t
   else
     { simple = simple';
-      rec_info_newest_first = rec_info_newest_first';
+      rec_info = rec_info';
     }
 
 module T0 = Identifiable.Make (struct
   type nonrec t = t
 
   let compare
-        { simple = simple1; rec_info_newest_first = rec_info_newest_first1; }
-        { simple = simple2; rec_info_newest_first = rec_info_newest_first2; } =
+        { simple = simple1; rec_info = rec_info1; }
+        { simple = simple2; rec_info = rec_info2; } =
     let c = S0.compare simple1 simple2 in
     if c <> 0 then c
-    else RIS.compare rec_info_newest_first1 rec_info_newest_first2
+    else RIS.compare rec_info1 rec_info2
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
-  let hash { simple; rec_info_newest_first; } =
-    Hashtbl.hash (S0.hash simple, RIS.hash rec_info_newest_first)
+  let hash { simple; rec_info; } =
+    Hashtbl.hash (S0.hash simple, RIS.hash rec_info)
 
-  let print ppf { simple; rec_info_newest_first; } =
-    if RIS.is_empty rec_info_newest_first then S0.print ppf simple
+  let print ppf { simple; rec_info; } =
+    if RIS.is_empty rec_info then S0.print ppf simple
     else
       Format.fprintf ppf "@[%a@ %a@]"
         S0.print simple
-        RIS.print rec_info_newest_first
+        RIS.print rec_info
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
@@ -230,7 +223,7 @@ type descr =
   | Discriminant of Discriminant.t
 
 let descr t : descr =
-  match S0.descr t with
+  match S0.descr t.simple with
   | Name name -> Name name
   | Const const -> Const const
   | Discriminant discr -> Discriminant discr
