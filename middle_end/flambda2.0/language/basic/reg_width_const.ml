@@ -23,6 +23,7 @@ type t =
   | Naked_int32 of Int32.t
   | Naked_int64 of Int64.t
   | Naked_nativeint of Targetint.t
+  | Initial_rec_info
 
 let const_true = Tagged_immediate (Immediate.bool_true)
 let const_false = Tagged_immediate (Immediate.bool_false)
@@ -49,6 +50,7 @@ include Identifiable.Make (struct
       Int64.compare n1 n2
     | Naked_nativeint n1, Naked_nativeint n2 ->
       Targetint.compare n1 n2
+    | Initial_rec_info, Initial_rec_info -> 0
     | Naked_immediate _, _ -> -1
     | _, Naked_immediate _ -> 1
     | Tagged_immediate _, _ -> -1
@@ -59,17 +61,20 @@ include Identifiable.Make (struct
     | _, Naked_int32 _ -> 1
     | Naked_int64 _, _ -> -1
     | _, Naked_int64 _ -> 1
+    | Naked_nativeint _, _ -> -1
+    | _, Naked_nativeint _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
   let hash t =
     match t with
-    | Naked_immediate n -> Immediate.hash n
-    | Tagged_immediate n -> Immediate.hash n
-    | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
-    | Naked_int32 n -> Hashtbl.hash n
-    | Naked_int64 n -> Hashtbl.hash n
-    | Naked_nativeint n -> Targetint.hash n
+    | Naked_immediate n -> Hashtbl.hash (0, Immediate.hash n)
+    | Tagged_immediate n -> Hashtbl.hash (1, Immediate.hash n)
+    | Naked_float n -> Hashtbl.hash (2, Numbers.Float_by_bit_pattern.hash n)
+    | Naked_int32 n -> Hashtbl.hash (3, n)
+    | Naked_int64 n -> Hashtbl.hash (4, n)
+    | Naked_nativeint n -> Hashtbl.hash (5, Targetint.hash n)
+    | Initial_rec_info -> Hashtbl.hash 6
 
   let print ppf (t : t) =
     match t with
@@ -103,6 +108,8 @@ include Identifiable.Make (struct
         (Flambda_colours.naked_number ())
         Targetint.print n
         (Flambda_colours.normal ())
+    | Initial_rec_info ->
+      Format.fprintf ppf "<initial>"
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
@@ -117,3 +124,4 @@ let kind t =
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
   | Naked_nativeint _ -> K.naked_nativeint
+  | Initial_rec_info -> K.fabricated

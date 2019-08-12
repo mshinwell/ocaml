@@ -135,7 +135,7 @@ let tag_targetint t = Targetint.(add (shift_left t 1) one)
 let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
 
 let const _env c =
-  match (c : Simple.Const.t) with
+  match (c : Reg_width_const.t) with
   | Naked_immediate i ->
       C.targetint (targetint_of_imm i)
   | Tagged_immediate i ->
@@ -145,9 +145,12 @@ let const _env c =
   | Naked_int32 i -> C.int32 i
   | Naked_int64 i -> C.int64 i
   | Naked_nativeint t -> C.targetint t
+  | Initial_rec_info ->
+    Misc.fatal_error "[Initial_rec_info] cannot be emitted (it is of kind \
+      [Fabricated])"
 
 let const_static _env c =
-  match (c : Simple.Const.t) with
+  match (c : Reg_width_const.t) with
   | Naked_immediate i ->
       [C.cint (nativeint_of_targetint (targetint_of_imm i))]
   | Tagged_immediate i ->
@@ -161,6 +164,9 @@ let const_static _env c =
       else [C.cint (Int64.to_nativeint i)]
   | Naked_nativeint t ->
       [C.cint (nativeint_of_targetint t)]
+  | Initial_rec_info ->
+    Misc.fatal_error "[Initial_rec_info] cannot be emitted (it is of kind \
+      [Fabricated])"
 
 (* Discriminants *)
 

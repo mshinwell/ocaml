@@ -633,7 +633,7 @@ let array_of_length ~length =
 let this_rec_info rec_info =
   Fabricated (No_alias (Ok (Rec_info rec_info)))
 
-let type_for_const (const : Simple.Const.t) =
+let type_for_const (const : Reg_width_const.t) =
   match const with
   | Naked_immediate i -> this_naked_immediate i
   | Tagged_immediate i -> this_tagged_immediate i

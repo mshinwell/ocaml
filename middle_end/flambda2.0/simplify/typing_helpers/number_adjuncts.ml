@@ -46,7 +46,7 @@ module type Num_common = sig
   val div : t -> t -> t option
   val mod_ : t -> t -> t option
 
-  val to_const : t -> Simple.Const.t
+  val to_const : t -> Reg_width_const.t
 
   val to_tagged_immediate : t -> Immediate.t
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
@@ -167,7 +167,7 @@ module For_tagged_immediates : Int_number_kind = struct
           Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
         t
 
-    let to_const t = Simple.Const.Tagged_immediate t
+    let to_const t = Reg_width_const.Tagged_immediate t
 
     let to_tagged_immediate t = t
 
@@ -205,7 +205,7 @@ module For_floats : Boxable_number_kind = struct
     let div t1 t2 = Some (IEEE_semantics.div t1 t2)
     let mod_ t1 t2 = Some (IEEE_semantics.mod_ t1 t2)
 
-    let to_const t = Simple.Const.Naked_float t
+    let to_const t = Reg_width_const.Naked_float t
 
     (* CR mshinwell: We need to validate that the backend compiles
        the [Int_of_float] primitive in the same way as
@@ -271,7 +271,7 @@ module For_int32s : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_int32 t
+    let to_const t = Reg_width_const.Naked_int32 t
 
     let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int32.to_float t)
@@ -330,7 +330,7 @@ module For_int64s : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_int64 t
+    let to_const t = Reg_width_const.Naked_int64 t
 
     let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int64.to_float t)
@@ -389,7 +389,7 @@ module For_nativeints : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_nativeint t
+    let to_const t = Reg_width_const.Naked_nativeint t
 
     let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
     let to_naked_float t = Float_by_bit_pattern.create (Targetint.to_float t)

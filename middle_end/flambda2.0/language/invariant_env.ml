@@ -248,7 +248,7 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
   match Simple.descr simple with
   | Name name -> check_name_is_bound_and_of_kind t name desired_kind
   | Const const ->
-    let actual_kind = Simple.Const.kind const in
+    let actual_kind = Reg_width_const.kind const in
     if not (Flambda_kind.equal actual_kind desired_kind)
     then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
@@ -302,7 +302,7 @@ let kind_of_name t name =
 let kind_of_simple t (simple : Simple.t) =
   match Simple.descr simple with
   | Name name -> kind_of_name t name
-  | Const const -> Simple.Const.kind const
+  | Const const -> Reg_width_const.kind const
   | Discriminant _ -> Flambda_kind.fabricated
 
 let kind_of_variable t var = kind_of_name t (Name.var var)

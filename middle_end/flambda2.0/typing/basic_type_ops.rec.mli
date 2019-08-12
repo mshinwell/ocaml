@@ -114,8 +114,8 @@ val bottom_like : Type_grammar.t -> Type_grammar.t
 val unknown_like : Type_grammar.t -> Type_grammar.t
 val unknown_as_ty_fabricated : unit -> Type_grammar.ty_fabricated
 
-val type_for_const : Simple.Const.t -> Type_grammar.t
-val kind_for_const : Simple.Const.t -> Flambda_kind.t
+val type_for_const : Reg_width_const.t -> Type_grammar.t
+val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t

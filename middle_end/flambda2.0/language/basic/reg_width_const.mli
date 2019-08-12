@@ -30,3 +30,18 @@ type t =
 include Identifiable.S with type t := t
 
 val kind : t -> Flambda_kind.t
+
+(** The constant representating the given number of type "int". *)
+val const_int : Targetint.OCaml.t -> t
+
+(** The constant representating boolean true. *)
+val const_true : t
+
+(** The constant representating boolean false. *)
+val const_false : t
+
+(** The constant representating the number zero of type "int". *)
+val const_zero : t
+
+(** The constant representing the unit value. *)
+val const_unit : t

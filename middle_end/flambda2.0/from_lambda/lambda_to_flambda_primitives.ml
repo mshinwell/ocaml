@@ -130,7 +130,7 @@ let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
   | Pint64 -> Naked_int64
 
 (* let const_of_boxed_integer (i:int32) (bint : Lambda.boxed_integer) *)
-(*   : Simple.Const.t = *)
+(*   : Reg_width_const.t = *)
 (*   match bint with *)
 (*   | Pnativeint -> Naked_nativeint (Targetint.of_int32 i) *)
 (*   | Pint32 -> Naked_int32 i *)
@@ -613,7 +613,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Poffsetint n, [arg] ->
     let const =
       Simple.const
-        (Simple.Const.Tagged_immediate
+        (Reg_width_const.Tagged_immediate
            (Immediate.int (Targetint.OCaml.of_int n)))
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
@@ -626,19 +626,19 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
        We need more type propagations to be precise here *)
 (* XXX *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
-    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    let field = Simple.const (Reg_width_const.Tagged_immediate imm) in
     Binary (Block_load (Block (Value Anything), Immutable), arg,
       Simple field)
   | Pfloatfield field, [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
-    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    let field = Simple.const (Reg_width_const.Tagged_immediate imm) in
     box_float
       (Binary (Block_load (Block Naked_float, Mutable), arg, Simple field))
   | Psetfield (field, immediate_or_pointer, initialization_or_assignment),
     [block; value] ->
     let access_kind = convert_access_kind immediate_or_pointer in
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
-    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    let field = Simple.const (Reg_width_const.Tagged_immediate imm) in
     Ternary
       (Block_set
          (Block access_kind, convert_init_or_assign initialization_or_assignment),
@@ -646,7 +646,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 
   | Psetfloatfield (field, init_or_assign), [block; value] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
-    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    let field = Simple.const (Reg_width_const.Tagged_immediate imm) in
     Ternary (Block_set (Block Naked_float, convert_init_or_assign init_or_assign),
       block, Simple field, value)
 
@@ -658,7 +658,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
         Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
-                     (Simple.Const.Tagged_immediate
+                     (Reg_width_const.Tagged_immediate
                         (Immediate.int (Targetint.OCaml.zero)))));
       ];
       failure = Division_by_zero;
@@ -673,7 +673,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
         Binary (Phys_equal (K.value, Eq), arg2,
                 Simple
                   (Simple.const
-                     (Simple.Const.Tagged_immediate
+                     (Reg_width_const.Tagged_immediate
                         (Immediate.int (Targetint.OCaml.zero)))));
       ];
       failure = Division_by_zero;
@@ -685,7 +685,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
         Binary (Block_load (Array (Value Anything), Mutable), array, index);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
+          Simple (Simple.const (Reg_width_const.Tagged_immediate
             (Immediate.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array (Value Anything)), array)));
@@ -700,7 +700,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
           array, index, new_value);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
+          Simple (Simple.const (Reg_width_const.Tagged_immediate
             (Immediate.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array (Value Anything)), array)));

@@ -358,8 +358,8 @@ module type S = sig
       constructed (in other words, it is [Invalid]). *)
   val is_bottom : (t -> bool) type_accessor
 
-  val type_for_const : Simple.Const.t -> t
-  val kind_for_const : Simple.Const.t -> Flambda_kind.t
+  val type_for_const : Reg_width_const.t -> t
+  val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
   val of_ty_naked_number
      : 'a ty_naked_number
