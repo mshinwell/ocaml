@@ -211,7 +211,7 @@ let close_const t (const : Lambda.structured_constant) =
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
-let close_c_call ~let_bound_var (prim : Primitive.description)
+let close_c_call t ~let_bound_var (prim : Primitive.description)
       ~(args : Simple.t list) exn_continuation dbg
       (k : Named.t option -> Expr.t) : Expr.t =
   (* CR pchambart: there should be a special case if body is a
@@ -231,6 +231,7 @@ let close_c_call ~let_bound_var (prim : Primitive.description)
     Symbol.create (Compilation_unit.external_symbols ())
       (Linkage_name.create prim.prim_name)
   in
+  t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =
     let apply =
       Flambda.Apply.create ~callee:(Simple.symbol call_symbol)
@@ -345,7 +346,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
           Ilambda.print_named named
       | Some exn_continuation -> exn_continuation
     in
-    close_c_call ~let_bound_var prim ~args exn_continuation dbg k
+    close_c_call t ~let_bound_var prim ~args exn_continuation dbg k
   | Pgetglobal id, [] ->
     let is_predef_exn = Ident.is_predef id in
     if not (is_predef_exn || not (Ident.same id t.current_unit_id))
@@ -904,6 +905,12 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         Symbol.Map.add symbol K.value imported_symbols)
       t.imported_symbols
       Symbol.Map.empty
+  in
+  let imported_symbols =
+    Symbol.Set.fold (fun sym imported_symbols ->
+        Symbol.Map.remove sym imported_symbols)
+      Backend.all_predefined_exception_symbols
+      imported_symbols
   in
   { imported_symbols;
     body = program_body;
