@@ -199,7 +199,12 @@ end = struct
 *)
 
   let add_parameters t params ~param_types =
-    (* CR mshinwell: Cause a fatal error if the lengths don't match *)
+    if List.compare_lengths params param_types <> 0 then begin
+      Misc.fatal_errorf "Mismatch between number of [params] and \
+          [param_types]:@ (%a)@ and@ %a"
+        Kinded_parameter.List.print params
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) param_types
+    end;
     List.fold_left2 (fun t param param_type ->
         let var =
           Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal

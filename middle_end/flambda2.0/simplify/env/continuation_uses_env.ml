@@ -32,7 +32,7 @@ let empty = {
   continuation_uses = Continuation.Map.empty;
 }
 
-let record_continuation_use t cont ~typing_env_at_use ~arg_types =
+let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
   (* XXX This needs to deal with exn continuation extra-args *)
   let id = Apply_cont_rewrite_id.create () in
   let continuation_uses =
@@ -40,10 +40,10 @@ let record_continuation_use t cont ~typing_env_at_use ~arg_types =
         | None ->
           let arity = T.arity_of_list arg_types in
           let uses = Continuation_uses.create cont arity in
-          Some (Continuation_uses.add_use uses ~typing_env_at_use id
+          Some (Continuation_uses.add_use uses kind ~typing_env_at_use id
             ~arg_types)
         | Some uses ->
-          Some (Continuation_uses.add_use uses ~typing_env_at_use id
+          Some (Continuation_uses.add_use uses kind ~typing_env_at_use id
             ~arg_types))
       t.continuation_uses
   in
@@ -63,3 +63,8 @@ let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found -> 0
   | uses -> Continuation_uses.number_of_uses uses
+
+let cannot_change_continuation's_arity t cont =
+  match Continuation.Map.find cont t.continuation_uses with
+  | exception Not_found -> false
+  | uses -> Continuation_uses.cannot_change_continuation's_arity uses

@@ -71,12 +71,15 @@ let with_continuation_uses_env t continuation_uses_env =
     continuation_uses_env;
   }
 
-let record_continuation_use t cont ~typing_env_at_use ~arg_types =
+let record_continuation_use t cont use_kind ~typing_env_at_use ~arg_types =
   let cont_uses_env, id =
-    CUE.record_continuation_use t.continuation_uses_env cont
+    CUE.record_continuation_use t.continuation_uses_env cont use_kind
       ~typing_env_at_use ~arg_types
   in
   with_continuation_uses_env t cont_uses_env, id
+
+let cannot_change_continuation's_arity t cont =
+  CUE.cannot_change_continuation's_arity t.continuation_uses_env cont
 
 let continuation_env_and_param_types t ~definition_typing_env cont =
   CUE.continuation_env_and_param_types t.continuation_uses_env

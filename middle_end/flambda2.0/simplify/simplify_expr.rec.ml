@@ -55,11 +55,12 @@ let rec simplify_let
 and simplify_one_continuation_handler
   : 'a. DA.t -> param_types:T.t list
     -> extra_params_and_args:Continuation_extra_params_and_args.t
+    -> cannot_change_arity:bool
     -> Continuation.t -> Continuation_handler.t -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
 = fun dacc ~param_types
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
-      cont cont_handler k ->
+      ~cannot_change_arity cont cont_handler k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
@@ -77,46 +78,42 @@ Format.eprintf "handler:@.%a@."
           DE.add_parameters denv params ~param_types)
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
-(*
-Format.eprintf "handler %a after simplify:@.%a@."
-  Continuation.print cont
-  Expr.print handler;
-*)
-      let free_names = Expr.free_names handler in
-(*
-Format.eprintf "free names:@ %a\n%!" Name_occurrences.print free_names;
-*)
-      let used_params =
-        List.filter (fun param ->
-            Name_occurrences.mem_var free_names (KP.var param))
-          params
-      in
-      let used_extra_params =
-        List.filter (fun extra_param ->
-            Name_occurrences.mem_var free_names (KP.var extra_param))
-          extra_params_and_args.extra_params
-      in
-      let handler =
-        let params = used_extra_params @ used_params in
-(*
-Format.eprintf "Final params list:@ %a\n%!" KP.List.print params;
-*)
-        CH.with_params_and_handler cont_handler
-          (CPH.create params ~handler)
-      in
-      let rewrite =
-        Apply_cont_rewrite.create ~original_params:params
-          ~used_params:(KP.Set.of_list used_params)
-          ~extra_params:extra_params_and_args.extra_params
-          ~extra_args:extra_params_and_args.extra_args
-          ~used_extra_params:(KP.Set.of_list used_extra_params)
-      in
-(*
-Format.eprintf "Rewrite:@ %a\n%!" Apply_cont_rewrite.print rewrite;
-*)
-      let uacc =
-        UA.map_uenv uacc ~f:(fun uenv ->
-          UE.add_apply_cont_rewrite uenv cont rewrite)
+      let handler, uacc =
+        if cannot_change_arity then
+          let handler =
+            CH.with_params_and_handler cont_handler
+              (CPH.create params ~handler)
+          in
+          handler, uacc
+        else
+          let free_names = Expr.free_names handler in
+          let used_params =
+            List.filter (fun param ->
+                Name_occurrences.mem_var free_names (KP.var param))
+              params
+          in
+          let used_extra_params =
+            List.filter (fun extra_param ->
+                Name_occurrences.mem_var free_names (KP.var extra_param))
+              extra_params_and_args.extra_params
+          in
+          let handler =
+            let params = used_extra_params @ used_params in
+            CH.with_params_and_handler cont_handler
+              (CPH.create params ~handler)
+          in
+          let rewrite =
+            Apply_cont_rewrite.create ~original_params:params
+              ~used_params:(KP.Set.of_list used_params)
+              ~extra_params:extra_params_and_args.extra_params
+              ~extra_args:extra_params_and_args.extra_args
+              ~used_extra_params:(KP.Set.of_list used_extra_params)
+          in
+          let uacc =
+            UA.map_uenv uacc ~f:(fun uenv ->
+              UE.add_apply_cont_rewrite uenv cont rewrite)
+          in
+          handler, uacc
       in
       handler, user_data, uacc)
 
@@ -241,13 +238,14 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
     simplify_expr dacc inlined k
   | None ->
     let dacc, _id =
-      DA.record_continuation_use dacc (Apply.continuation apply)
+      DA.record_continuation_use dacc (Apply.continuation apply) Fixed_arity
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
     let dacc, _id =
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+        Fixed_arity
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -491,6 +489,7 @@ and simplify_function_call_where_callee's_type_unavailable
   let dacc, _id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      Fixed_arity
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -507,7 +506,7 @@ and simplify_function_call_where_callee's_type_unavailable
     end;
 *)
     let dacc, _id =
-      DA.record_continuation_use dacc cont ~typing_env_at_use
+      DA.record_continuation_use dacc cont Fixed_arity ~typing_env_at_use
         ~arg_types:(T.unknown_types_from_arity return_arity)
     in
     dacc
@@ -516,7 +515,7 @@ and simplify_function_call_where_callee's_type_unavailable
     match call with
     | Indirect_unknown_arity ->
       let dacc, _id =
-        DA.record_continuation_use dacc (Apply.continuation apply)
+        DA.record_continuation_use dacc (Apply.continuation apply) Fixed_arity
           ~typing_env_at_use ~arg_types:[T.any_value ()]
       in
       Call_kind.indirect_function_call_unknown_arity (), dacc
@@ -670,13 +669,14 @@ and simplify_method_call
       Apply.print apply
   end;
   let dacc, _id =
-    DA.record_continuation_use dacc (Apply.continuation apply)
+    DA.record_continuation_use dacc (Apply.continuation apply) Fixed_arity
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
   in
   let dacc, _id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      Fixed_arity
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -718,7 +718,7 @@ and simplify_c_call
   end;
 *)
   let dacc, _id =
-    DA.record_continuation_use dacc (Apply.continuation apply)
+    DA.record_continuation_use dacc (Apply.continuation apply) Fixed_arity
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
@@ -726,6 +726,7 @@ and simplify_c_call
     (* CR mshinwell: Try to factor out these stanzas, here and above. *)
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+      Fixed_arity
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -768,7 +769,7 @@ and simplify_apply_cont
 *)
     let dacc, rewrite_id =
       DA.record_continuation_use dacc
-        (AC.continuation apply_cont)
+        (AC.continuation apply_cont) Normal
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
@@ -959,8 +960,10 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
   Discriminant.print arm
   Continuation.print cont
   TE.print typing_env_at_use;
-*)
-              DA.record_continuation_use dacc cont
+ *)
+              (* [Normal] not [Fixed_arity] because we can cope with the
+                 addition of extra continuation parameters. *)
+              DA.record_continuation_use dacc cont Normal
                 ~typing_env_at_use
                 ~arg_types:[]
             in
