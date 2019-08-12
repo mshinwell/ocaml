@@ -217,8 +217,8 @@ type init_or_assign = Initialization | Assignment
 let print_init_or_assign ppf init_or_assign =
   let fprintf = Format.fprintf in
   match init_or_assign with
-  | Initialization -> fprintf ppf "init"
-  | Assignment -> fprintf ppf "assign"
+  | Initialization -> fprintf ppf "Init"
+  | Assignment -> fprintf ppf "Assign"
 
 type array_like_operation = Reading | Writing
 
@@ -942,11 +942,11 @@ let print_ternary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Block_set (kind, init) ->
-    fprintf ppf "block_set[%a,%a]"
+    fprintf ppf "(Block_set %a %a)"
       Block_access_kind.print kind
       print_init_or_assign init
   | Bytes_or_bigstring_set (kind, string_accessor_width) ->
-    fprintf ppf "bytes_set[%a,%a]"
+    fprintf ppf "(Bytes_set %a %a)"
       print_bytes_like_value kind
       print_string_accessor_width string_accessor_width
 
