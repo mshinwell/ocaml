@@ -25,6 +25,8 @@ type t = {
 let invariant _env _t = ()
 
 let create function_decls ~closure_elements =
+  (* CR mshinwell: Make sure invariant checks are applied here, e.g. that
+     the set of closures is indeed closed. *)
   { function_decls;
     closure_elements;
   }
