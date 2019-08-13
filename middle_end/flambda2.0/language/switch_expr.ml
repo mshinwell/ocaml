@@ -57,7 +57,7 @@ let print_arms ppf arms =
 
 let print ppf { sort = _; scrutinee; arms; } =
   fprintf ppf
-    "@[<hov 1>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
+    "@[<v 0>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
     (Flambda_colours.expr_keyword ())
     (Flambda_colours.normal ())
     Simple.print scrutinee

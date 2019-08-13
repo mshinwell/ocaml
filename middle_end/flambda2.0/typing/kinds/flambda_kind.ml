@@ -80,7 +80,7 @@ include Identifiable.Make (struct
     match t with
     | Value ->
       if unicode then
-        Format.fprintf ppf "@<0>%s@<0>\u{1d54d}@<0>%s" colour
+        Format.fprintf ppf "@<0>%s@<1>\u{1d54d}@<0>%s" colour
           (Flambda_colours.normal ())
       else
         Format.fprintf ppf "Val"
@@ -88,19 +88,19 @@ include Identifiable.Make (struct
       if unicode then begin
         match naked_number_kind with
         | Naked_immediate ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d55a}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d55a}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_float ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d557}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<01\u{1d557}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_int32 ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d7db}\u{1d7da}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d7db}@<1>\u{1d7da}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_int64 ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{1d7de}\u{1d7dc}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d7de}@<1>\u{1d7dc}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_nativeint ->
-          Format.fprintf ppf "@<0>%s@<0>\u{2115}@<0>\u{2115}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{2115}@<0>%s"
             colour (Flambda_colours.normal ())
       end else begin
         Format.fprintf ppf "(Naked_number %a)"
@@ -108,7 +108,7 @@ include Identifiable.Make (struct
       end
     | Fabricated ->
       if unicode then
-        Format.fprintf ppf "@<0>%s@<0>\u{1d53d}@<0>%s"
+        Format.fprintf ppf "@<0>%s@<1>\u{1d53d}@<0>%s"
           colour (Flambda_colours.normal ())
       else
         Format.fprintf ppf "Fab"

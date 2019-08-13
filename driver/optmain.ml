@@ -255,6 +255,13 @@ end);;
 
 let main () =
   native_code := true;
+  begin match Sys.getenv_opt "COLUMNS" with
+  | None -> ()
+  | Some i ->
+    match int_of_string i with
+    | exception _ -> ()
+    | i -> Format.pp_set_margin Format.err_formatter i
+  end;
   let ppf = Format.err_formatter in
   try
     readenv ppf Before_args;
