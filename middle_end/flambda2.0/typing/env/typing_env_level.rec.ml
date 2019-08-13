@@ -259,33 +259,84 @@ let concat (t1 : t) (t2 : t) =
     cse;
   }
 
-(* XXX Not sure this is correct yet *)
+let meet_equation env t name typ =
+  let meet_typ, env_extension =
+    match Name.Map.find name t.equations with
+    | exception Not_found -> typ, Typing_env_extension.empty ()
+    | existing_typ -> Api_meet_and_join.meet env typ existing_typ
+  in
+  let env =
+    Meet_env.map_env env ~f:(fun typing_env ->
+      Typing_env.add_equation
+        (Typing_env.add_env_extension typing_env env_extension)
+        name typ)
+  in
+  let equations = Name.Map.add (* replace *) name meet_typ t.equations in
+  let equations =
+    Typing_env_extension.pattern_match env_extension ~f:(fun t_from_meet ->
+      if not (Variable.Map.is_empty t_from_meet.defined_vars) then begin
+        Misc.fatal_errorf "Didn't expect [defined_vars] in:@ %a"
+          print t_from_meet
+      end;
+      Name.Map.fold (fun name typ equations ->
+          Name.Map.add (* replace *) name typ equations)
+        t_from_meet.equations
+        equations)
+  in
+  let t = { t with equations; } in
+  t, env
+
 let meet env (t1 : t) (t2 : t) =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
      As such, since this is [meet], we perform unions on the domains.
      So if one of them is bottom, the result of meeting it with any other
      level is that level, not bottom. *)
-  if is_empty t1 then begin
-    t2
-  end else if is_empty t2 then begin
-    t1
-  end else begin
-    (* CR mshinwell: There may be a more efficient way of doing this.
-       Are we wasting time doing meets again when we've already got the
-       best types? *)
-    let env = Meet_env.env env in
-    let env = Typing_env.increment_scope env in
-    let level = Typing_env.current_scope env in
-    let t1 = Typing_env_extension.create t1 in
-    let t2 = Typing_env_extension.create t2 in
-    let env = Typing_env.add_env_extension env t1 in
-    let env = Typing_env.add_env_extension env t2 in
-    let env_extension, _names_in_scope_at_cut =
-      Typing_env.cut env ~unknown_if_defined_at_or_later_than:level
-    in
-    (* XXX This seems dubious as we will freshen defined names each time *)
-    Typing_env_extension.pattern_match env_extension ~f:(fun level -> level)
-  end
+  let defined_vars =
+    Variable.Map.merge (fun var data1 data2 ->
+        match data1, data2 with
+        | None, None -> None
+        | Some data, None | None, Some data -> Some data
+        | Some _, _ ->
+          Misc.fatal_errorf "Cannot meet levels that have overlapping \
+              defined variables (e.g. %a):@ %a@ and@ %a"
+            Variable.print var
+            print t1
+            print t2)
+      t1.defined_vars
+      t2.defined_vars
+  in
+  let env =
+    (* CR mshinwell: Should the binding time be ignored? *)
+    Meet_env.map_env env ~f:(fun typing_env ->
+      Variable.Map.fold (fun var (kind, _binding_time) typing_env ->
+          let name =
+            Name_in_binding_pos.create (Name.var var)
+              Name_occurrence_kind.in_types
+          in
+          Typing_env.add_definition typing_env name kind)
+        defined_vars
+        typing_env)
+  in
+  let t, env =
+    Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)
+      t1.equations
+      (empty (), env)
+  in
+  let t, _env =
+    Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)
+      t2.equations
+      (t, env)
+  in
+  let cse =
+    Flambda_primitive.Eligible_for_cse.Map.merge (fun _ simple1 simple2 ->
+        match simple1, simple2 with
+        | None, None | None, Some _ | Some _, None -> None
+        | Some simple1, Some simple2 ->
+          if Simple.equal simple1 simple2 then Some simple1
+          else None)
+      t1.cse t2.cse
+  in
+  { t with cse; }
 
 type cannot_use =
   | Equation_ok
