@@ -310,6 +310,7 @@ end) = struct
       in
       let add_result =
         { canonical_element;
+          (* CR mshinwell: [alias_of] is not a good name. *)
           alias_of = to_be_demoted;
         }
       in
@@ -319,18 +320,22 @@ end) = struct
       in
       Some add_result, t
     | Alias_of_canonical
-          { element = _; canonical_element = canonical_element1; },
+          { element = element1; canonical_element = canonical_element1; },
         Is_canonical canonical_element2
-    | Is_canonical canonical_element1,
+    | Is_canonical canonical_element2,
         Alias_of_canonical
-          { element = _; canonical_element = canonical_element2; } ->
+          { element = element1; canonical_element = canonical_element1; } ->
       let { canonical_element; to_be_demoted; } =
         choose_canonical_element_to_be_demoted ~canonical_element1
           ~canonical_element2
       in
+      let alias_of =
+        if E.equal to_be_demoted canonical_element1 then element1
+        else canonical_element2
+      in
       let add_result =
         { canonical_element;
-          alias_of = to_be_demoted;
+          alias_of;
         }
       in
       let t =
@@ -339,17 +344,21 @@ end) = struct
       in
       Some add_result, t
     | Alias_of_canonical
-          { element = _; canonical_element = canonical_element1; },
+          { element = element1; canonical_element = canonical_element1; },
         Alias_of_canonical
-          { element = _; canonical_element = canonical_element2; }
+          { element = element2; canonical_element = canonical_element2; }
         ->
       let { canonical_element; to_be_demoted; } =
         choose_canonical_element_to_be_demoted ~canonical_element1
           ~canonical_element2
       in
+      let alias_of =
+        if E.equal to_be_demoted canonical_element1 then element1
+        else element2
+      in
       let add_result =
         { canonical_element;
-          alias_of = to_be_demoted;
+          alias_of;
         }
       in
       let t =
