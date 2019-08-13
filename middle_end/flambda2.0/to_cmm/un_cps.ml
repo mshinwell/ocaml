@@ -696,6 +696,11 @@ and apply_call env e =
       C.indirect_call ~dbg ty f args
   | Call_kind.C_call { alloc; return_arity; _ } ->
       let f = function_name f in
+      (* CR vlaviron: temporary hack to recover the right symbol *)
+      let len = String.length f in
+      assert (len >= 9);
+      assert (String.sub f 0 9 = ".extern__");
+      let f = String.sub f 9 (len - 9) in
       let ty = machtype_of_return_arity return_arity in
       C.extcall ~dbg ~alloc f ty args
   | Call_kind.Method { kind; obj; } ->
@@ -1123,7 +1128,7 @@ let rec program_body offsets acc body =
 
 let program_functions offsets p =
   let fmap = Un_cps_closure.map_on_function_decl (function_decl offsets) p in
-  let all_functions = Code_id.Map.fold (fun _ x acc -> x :: acc) fmap [] in
+  let all_functions = Closure_id.Map.fold (fun _ x acc -> x :: acc) fmap [] in
   let sorted = List.sort
       (fun f f' -> Debuginfo.compare f.Cmm.fun_dbg f'.Cmm.fun_dbg) all_functions
   in

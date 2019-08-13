@@ -183,6 +183,10 @@ module Greedy = struct
     | Closure of Closure_id.t
     | Env_var of Var_within_closure.t
 
+  type slot_pos =
+    | Assigned of int
+    | Unassigned
+
   type set_of_closures = {
     id : int;
     mutable unallocated_closure_slots : slot list;
@@ -192,7 +196,7 @@ module Greedy = struct
 
   and slot = {
     desc : slot_desc;
-    mutable pos : int;    (* set to -1 when no position has been decided yet. *)
+    mutable pos : slot_pos;
     mutable size : int;
     mutable sets : set_of_closures list;
   }
@@ -211,7 +215,7 @@ module Greedy = struct
   (* create a fresh slot (with no position allocated yet) *)
   let create_slot size desc = {
     desc; size;
-    pos = -1;
+    pos = Unassigned;
     sets = []; }
 
   let make_set =
@@ -286,8 +290,8 @@ module Greedy = struct
     | Env_var _ -> false
 
   let add_slot_offset env slot offset =
-    assert (slot.pos = -1);
-    slot.pos <- offset;
+    assert (slot.pos = Unassigned);
+    slot.pos <- Assigned offset;
     match slot.desc with
     | Closure c -> add_closure_offset env c offset
     | Env_var v -> add_env_var_offset env v offset
@@ -430,14 +434,17 @@ module Greedy = struct
     in
     (* first offset used by a slot *)
     let first_used_by s =
-      if is_closure_slot s && s.pos <> 0 then s.pos - 1 else s.pos
+      match s.pos with
+      | Unassigned -> assert false
+      | Assigned pos ->
+          if is_closure_slot s && pos <> 0 then pos - 1 else pos
     in
     (* Adjust a starting position to not point in the middle of a block. *)
     let adjust curr =
       match Numbers.Int.Map.find_last (fun i -> i <= curr) map with
       | exception Not_found -> curr
       | (j, s) ->
-          assert (j = s.pos);
+          assert (Assigned j = s.pos);
           let first_free_after = j + s.size in
           max curr first_free_after
     in
@@ -492,8 +499,12 @@ module Greedy = struct
   (* Assign offsets to closure slots *)
 
   let assign_slot_offset env slot =
-    let offset = first_available_offset slot 0 slot.sets in
-   add_slot_offset env slot offset
+    match slot.pos with
+    | Unassigned ->
+        let offset = first_available_offset slot 0 slot.sets in
+        add_slot_offset env slot offset
+    | Assigned _pos ->
+        env
 
   let assign_closure_offsets state env =
     fold_on_unallocated_closure_slots assign_slot_offset env state
@@ -628,7 +639,7 @@ let compute_offsets program =
 let closure_name id =
   let compunit = Closure_id.get_compilation_unit id in
   let name = Compilation_unit.get_linkage_name compunit in
-  Format.asprintf "%a_%a" Linkage_name.print name Closure_id.print id
+  Format.asprintf "%a_%s" Linkage_name.print name (Closure_id.unique_name id)
 
 let closure_id_name o id =
   match o with
@@ -641,15 +652,15 @@ let closure_id_name o id =
 let closure_code s = Format.asprintf "%s_code" s
 
 let map_on_function_decl f program =
-  let map = ref Code_id.Map.empty in
+  (* CR vlaviron: Why was this Code_id ? *)
+  let map = ref Closure_id.Map.empty in
   let aux o s =
     let decls = Set_of_closures.function_decls s in
     let funs = Function_declarations.funs decls in
     Closure_id.Map.iter (fun closure_id decl ->
-        let id = Function_declaration.code_id decl in
         let name = closure_code (closure_id_name o closure_id) in
-        if not (Code_id.Map.mem id !map) then
-          map := Code_id.Map.add id (f name closure_id decl) !map
+        if not (Closure_id.Map.mem closure_id !map) then
+          map := Closure_id.Map.add closure_id (f name closure_id decl) !map
       ) funs
   in
   Iter_on_sets_of_closures.program aux program;
