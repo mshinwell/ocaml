@@ -427,11 +427,9 @@ let add_equation0 t aliases name name_occurrence_kind ty =
   with_current_level t ~current_level
 
 let add_equation t name ty =
-(*
 Format.eprintf "Adding equation %a : %a\n%!"
   Name.print name
   Type_printers.print ty;
-*)
   let name_occurrence_kind = find_name_occurrence_kind t name in
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset_domain free_names (domain t))
@@ -460,13 +458,11 @@ Format.eprintf "Adding equation %a : %a\n%!"
       end
     | _ -> ()
   end;
-(*
 Format.eprintf "Trying to add equation %a = %a\n%!"
   Name.print name
   Type_printers.print ty;
 Format.eprintf "Aliases before adding equation:@ %a\n%!"
   Aliases.print (aliases t);
-*)
   let aliases, simple, rec_info, ty =
     let aliases = aliases t in
     match Basic_type_ops.get_alias ty with
@@ -489,10 +485,10 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
       match Aliases.add aliases alias alias_of with
       | None, aliases -> aliases, Alias.simple alias_of, rec_info, ty
       | (Some { canonical_element; alias_of; }), aliases ->
-(* Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
- *   Name.print name
- *   Alias.print canonical_element
- *   Alias.print alias_of; *)
+Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
+   Name.print name
+   Alias.print canonical_element
+   Alias.print alias_of; 
         let kind = Basic_type_ops.kind ty in
         let ty =
           Basic_type_ops.alias_type_of kind
@@ -508,11 +504,9 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
       | Bottom -> Basic_type_ops.bottom (Basic_type_ops.kind ty)
       | Ok ty -> ty
   in
-(*
 Format.eprintf "Now really adding equation %a = %a\n%!"
   Simple.print simple
   Type_printers.print ty;
-*)
 (*
  * Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
  *   Simple.print simple
