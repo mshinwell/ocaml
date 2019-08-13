@@ -34,3 +34,5 @@ val now_meeting : t -> Simple.t -> Simple.t -> t
     [Simple]s.  The arguments do not have to be provided in the same order
     as when [now_meeting] was called. *)
 val already_meeting : t -> Simple.t -> Simple.t -> bool
+
+val map_env : t -> f:(Typing_env.t -> Typing_env.t) -> t

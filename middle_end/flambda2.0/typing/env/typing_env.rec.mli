@@ -71,6 +71,7 @@ val add_env_extension_from_level
   -> Typing_env_level.t
   -> t
 
+(* CR mshinwell: clarify that this does not meet *)
 val add_env_extension
    : t
   -> Typing_env_extension.t
