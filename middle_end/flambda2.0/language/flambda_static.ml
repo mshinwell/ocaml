@@ -321,7 +321,7 @@ module Program_body = struct
           @[<hov 1>(expr@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ \
-          @[<hov 1>(computed_values@ @[(%a)@])@])@]"
+          @[<hov 1>(computed_values@ (%a))@])@]"
         Flambda.Expr.print expr
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation

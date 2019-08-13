@@ -493,7 +493,7 @@ module Greedy = struct
 
   let assign_slot_offset env slot =
     let offset = first_available_offset slot 0 slot.sets in
-    add_slot_offset env slot offset
+   add_slot_offset env slot offset
 
   let assign_closure_offsets state env =
     fold_on_unallocated_closure_slots assign_slot_offset env state
