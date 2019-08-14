@@ -18,6 +18,9 @@
 
 open! Simplify_import
 
+(* CR mshinwell: Add a command-line flag. *)
+let max_unboxing_depth = 1
+
 module type Unboxing_spec = sig
   val make_boxed_value : Tag.t -> fields:T.t list -> T.t
 
@@ -148,7 +151,7 @@ module Make (U : Unboxing_spec) = struct
     List.rev param_types_rev, List.rev all_field_types_by_id_rev,
       extra_params_and_args
 
-  let unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
+  let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id ~param_type
         extra_params_and_args ~unbox_value tag size kind =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
@@ -188,13 +191,12 @@ module Make (U : Unboxing_spec) = struct
                field_type field_types_by_id ->
             (* For any field of kind [Value] of the parameter being unboxed,
                then attempt to unbox its contents too. *)
-            (* CR mshinwell: This recursion should have some kind of limit. *)
             let field_kind = T.kind field_type in
             if not (K.equal field_kind K.value) then
               typing_env, extra_params_and_args
             else begin
               let typing_env, _, extra_params_and_args =
-                unbox_value typing_env
+                unbox_value typing_env ~depth:(depth + 1)
                   ~arg_types_by_use_id:field_types_by_id
                   ~param_type:field_type
                   extra_params_and_args
@@ -289,28 +291,31 @@ let unboxed_number_decisions = [
     Tag.custom_tag, K.naked_nativeint;
 ]
 
-let rec make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
-      extra_params_and_args =
-  match T.prove_unique_tag_and_size typing_env param_type with
-  | Proved (tag, size) ->
-    Blocks.unbox_one_parameter typing_env ~arg_types_by_use_id ~param_type
-      extra_params_and_args ~unbox_value:make_unboxing_decision
-      tag size K.value
-  | Wrong_kind | Invalid | Unknown ->
-    let rec try_unboxing = function
-      | [] -> typing_env, param_type, extra_params_and_args
-      | (prover, unboxer, tag, kind) :: decisions ->
-        let proof : _ T.proof_allowing_kind_mismatch =
-          prover typing_env param_type
-        in
-        match proof with
-        | Proved () ->
-          unboxer typing_env ~arg_types_by_use_id ~param_type
-            extra_params_and_args ~unbox_value:make_unboxing_decision
-            tag Targetint.OCaml.one kind
-        | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
-    in
-    try_unboxing unboxed_number_decisions
+let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
+      ~param_type extra_params_and_args =
+  if depth > max_unboxing_depth then
+    typing_env, param_type, extra_params_and_args
+  else
+    match T.prove_unique_tag_and_size typing_env param_type with
+    | Proved (tag, size) ->
+      Blocks.unbox_one_parameter typing_env ~depth ~arg_types_by_use_id
+        ~param_type extra_params_and_args ~unbox_value:make_unboxing_decision
+        tag size K.value
+    | Wrong_kind | Invalid | Unknown ->
+      let rec try_unboxing = function
+        | [] -> typing_env, param_type, extra_params_and_args
+        | (prover, unboxer, tag, kind) :: decisions ->
+          let proof : _ T.proof_allowing_kind_mismatch =
+            prover typing_env param_type
+          in
+          match proof with
+          | Proved () ->
+            unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
+              extra_params_and_args ~unbox_value:make_unboxing_decision
+              tag Targetint.OCaml.one kind
+          | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+      in
+      try_unboxing unboxed_number_decisions
 
 let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
       extra_params_and_args =
@@ -318,8 +323,8 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
               (arg_types_by_use_id, param_type) ->
         let typing_env, param_type, extra_params_and_args =
-          make_unboxing_decision typing_env ~arg_types_by_use_id ~param_type
-            extra_params_and_args
+          make_unboxing_decision typing_env ~depth:0 ~arg_types_by_use_id
+            ~param_type extra_params_and_args
         in
         typing_env, param_type :: param_types_rev, extra_params_and_args)
       (typing_env, [], extra_params_and_args)
