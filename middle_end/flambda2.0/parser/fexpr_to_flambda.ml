@@ -85,6 +85,8 @@ let defining_expr env (named:Fexpr.named) : Named.t =
     Named.create_prim prim Debuginfo.none
   | _ -> assert false
 
+let value_kind _ = Flambda_kind.value
+
 let rec expr env (e : Fexpr.expr) : E.t =
   match e with
   | Let { var = Some var; kind = _; defining_expr = d; body } ->
@@ -95,6 +97,47 @@ let rec expr env (e : Fexpr.expr) : E.t =
       Var_in_binding_pos.create id Name_occurrence_kind.normal
     in
     E.create_let var named body
+
+  | Let_cont
+      { recursive; body;
+        handlers = [handler] } -> begin
+      let is_exn_handler = false in
+      let name, body_env =
+        fresh_cont env handler.name (List.length handler.params)
+      in
+      let body = expr body_env body in
+      let env =
+        match recursive with
+        | Nonrecursive -> env
+        | Recursive -> body_env
+      in
+      let handler_env, params =
+        List.fold_right
+          (fun ({ param; ty }:Fexpr.typed_parameter)
+            (env, args) ->
+            let var, env = fresh_var env param in
+            let user_visible = true in
+            let param = Variable.with_user_visible var ~user_visible in
+            let param = Kinded_parameter.create (Parameter.wrap param) (value_kind ty) in
+            env, param :: args)
+          handler.params (env, [])
+      in
+      let handler =
+        expr handler_env handler.handler
+      in
+      let params_and_handler =
+        Flambda.Continuation_params_and_handler.create params ~handler
+      in
+      let handler =
+        Flambda.Continuation_handler.create ~params_and_handler
+          ~stub:false
+          ~is_exn_handler:is_exn_handler
+      in
+      match recursive with
+      | Nonrecursive ->
+        Flambda.Let_cont.create_non_recursive name handler ~body
+      | Recursive -> assert false
+    end
 
   | Apply_cont ((cont, _loc), None, args) ->
     let c, arity = CM.find cont env.continuations in
