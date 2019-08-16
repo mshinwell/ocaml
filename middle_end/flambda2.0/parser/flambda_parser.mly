@@ -151,7 +151,7 @@ switch:
   | h = switch_case SEMICOLON t = switch { h :: t }
 ;
 kind:
-  | { () }
+  | { None }
 ;
 return_kinds:
   | { [] }
@@ -171,7 +171,7 @@ expr:
       { let (var, kind) = v in
         Let { var; kind; defining_expr; body } }
   | defining_expr = named SEMICOLON body = expr
-      { Let { var = None; kind = (); defining_expr; body } }
+      { Let { var = None; kind = None; defining_expr; body } }
   | LET MUT v = kinded_variable EQUAL initial_value = simple IN body = expr
       { let (var, kind) = v in
         Let_mutable { var; kind; initial_value; body } }
@@ -245,7 +245,7 @@ args:
 
 static_structure:
   | s = symbol EQUAL BLOCK t = tag LPAREN elts = of_kind_value* RPAREN
-    { ( s, (), Block (t, Immutable, elts) ) }
+    { ( s, None, Block (t, Immutable, elts) ) }
 ;
 
 tag:
@@ -263,11 +263,11 @@ typed_variable:
 ;
 
 kinded_variable:
-  | v = variable { v, () }
+  | v = variable { v, None }
 ;
 
 kinded_variable_opt:
-  | v = variable_opt { v, () }
+  | v = variable_opt { v, None }
 ;
 
 simple_args:

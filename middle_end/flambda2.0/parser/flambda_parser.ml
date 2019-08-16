@@ -345,7 +345,7 @@ and _menhir_goto_variable_opt : _menhir_env -> 'ttv_tail -> 'tv_variable_opt -> 
     let ((v : 'tv_variable_opt) : 'tv_variable_opt) = _v in
     ((let _v : 'tv_kinded_variable_opt = 
 # 270 "flambda_parser.mly"
-                     ( v, () )
+                     ( v, None )
 # 350 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
@@ -592,7 +592,7 @@ and _menhir_goto_list_of_kind_value_ : _menhir_env -> 'ttv_tail -> _menhir_state
 # 593 "flambda_parser.ml"
             ) = 
 # 248 "flambda_parser.mly"
-    ( ( s, (), Block (t, Immutable, elts) ) )
+    ( ( s, None, Block (t, Immutable, elts) ) )
 # 597 "flambda_parser.ml"
              in
             let (_menhir_env : _menhir_env) = _menhir_env in
@@ -837,7 +837,7 @@ and _menhir_reduce35 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_kind = 
 # 154 "flambda_parser.mly"
-    ( () )
+    ( None )
 # 842 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
@@ -1772,7 +1772,7 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         ((let (_menhir_stack, _menhir_s, (v : 'tv_variable)) = _menhir_stack in
         let _v : 'tv_kinded_variable = 
 # 266 "flambda_parser.mly"
-                 ( v, () )
+                 ( v, None )
 # 1777 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
@@ -2416,7 +2416,7 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 2417 "flambda_parser.ml"
         ) = 
 # 174 "flambda_parser.mly"
-      ( Let { var = None; kind = (); defining_expr; body } )
+      ( Let { var = None; kind = None; defining_expr; body } )
 # 2421 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv282)) : 'freshtv284)

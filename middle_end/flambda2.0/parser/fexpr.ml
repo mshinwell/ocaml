@@ -39,10 +39,24 @@ type tag_scannable = int
 type static_part =
   | Block of tag_scannable * mutable_or_immutable * of_kind_value list
 
-type kind = unit
+module Naked_number_kind = struct
+  type t =
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
+end
+
+type kind =
+  | Value
+  | Naked_number of Naked_number_kind.t
+  | Fabricated
+
+type okind = kind option
 type flambda_type = unit
 
-type static_structure = (symbol * kind * static_part)
+type static_structure = (symbol * okind * static_part)
 
 type invalid_term_semantics =
   | Treat_as_unreachable
@@ -88,7 +102,7 @@ type named =
 type is_fabricated =
   | Value | Fabricated
 
-type flambda_arity = kind list
+type flambda_arity = okind list
 
 type function_call =
   | Direct of {
@@ -128,7 +142,7 @@ type expr =
   | Let_mutable of {
       var : variable;
       initial_value : simple;
-      kind : kind;
+      kind : okind;
       body : expr;
     }
   | Let_cont of let_cont
@@ -143,7 +157,7 @@ type expr =
 
 and let_ = {
     var : variable_opt;
-    kind : kind;
+    kind : okind;
     defining_expr : named;
     body : expr;
   }
@@ -168,7 +182,7 @@ type computation = {
   expr : expr;
   return_cont : continuation;
   exception_cont : continuation;
-  computed_values : (variable * kind) list;
+  computed_values : (variable * okind) list;
 }
 
 type definition = {
