@@ -1,6 +1,12 @@
 %{
 open Fexpr
 
+let make_loc (startpos, endpos) = {
+  Location.loc_start = startpos;
+  Location.loc_end = endpos;
+  Location.loc_ghost = false;
+}
+
 let make_tag ~loc:_ = function
   | s, None -> int_of_string s
   | _, Some _ ->
@@ -215,7 +221,7 @@ definition:
       expr = expr
       { let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Loc.none); computed_values = v }
+            exception_cont = ("exn", Location.none); computed_values = v }
         in
         { computation = Some computation; static_structure = static } }
 ;
@@ -224,7 +230,7 @@ effect:
   | c = continuation v = args expr = expr
       { let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Loc.none); computed_values = v }
+            exception_cont = ("exn", Location.none); computed_values = v }
         in
         { computation = Some computation; static_structure = [] } }
 ;
@@ -243,7 +249,7 @@ static_structure:
 ;
 
 tag:
-  tag = INT { make_tag ~loc:($startpos, $endpos) tag }
+  tag = INT { make_tag ~loc:(make_loc ($startpos, $endpos)) tag }
 ;
 
 of_kind_value:
@@ -290,23 +296,23 @@ func_sym:
 ;
 
 symbol:
-  | e = UIDENT { e, ($startpos, $endpos) }
+  | e = UIDENT { e, make_loc ($startpos, $endpos) }
 ;
 
 csymbol:
-  | s = LIDENT { s, ($startpos, $endpos) }
+  | s = LIDENT { s, make_loc ($startpos, $endpos) }
 ;
 
 variable:
-  | e = LIDENT { e, ($startpos, $endpos) }
+  | e = LIDENT { e, make_loc ($startpos, $endpos) }
 ;
 
 variable_opt:
   | UNDERSCORE { None }
-  | e = LIDENT { Some (e, ($startpos, $endpos)) }
+  | e = LIDENT { Some (e, make_loc ($startpos, $endpos)) }
 ;
 
 continuation:
-  | e = LIDENT { e, ($startpos, $endpos) }
+  | e = LIDENT { e, make_loc ($startpos, $endpos) }
 ;
 %%
