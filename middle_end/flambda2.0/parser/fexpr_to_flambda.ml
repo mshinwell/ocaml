@@ -61,7 +61,7 @@ let simple env (s:Fexpr.simple) : Simple.t =
       match VM.find_opt v env.variables with
       | None ->
         Misc.fatal_errorf "Unbound variable %s : %a" v
-          Loc.pp_location loc
+          Location.print_loc loc
       | Some var -> Simple.var var
     end
   | Const c ->

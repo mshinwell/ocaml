@@ -280,6 +280,9 @@ and print ppf (t : t) =
       Continuation.print i
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
 
+let print_program ppf p =
+  print ppf p.expr
+
 let recursive_functions func_decls =
   let module SCC = Strongly_connected_components.Make (Ident) in
   let fun_ids = Ident.Set.of_list (List.map fst func_decls) in

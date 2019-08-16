@@ -7,7 +7,7 @@ module MenhirBasics = struct
     | UNREACHABLE
     | UNDERSCORE
     | UIDENT of (
-# 73 "flambda_parser.mly"
+# 79 "flambda_parser.mly"
        (string)
 # 13 "flambda_parser.ml"
   )
@@ -30,7 +30,7 @@ module MenhirBasics = struct
     | MINUS
     | LPAREN
     | LIDENT of (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
 # 36 "flambda_parser.ml"
   )
@@ -39,14 +39,14 @@ module MenhirBasics = struct
     | LBRACKET
     | LBRACE
     | INT of (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
 # 45 "flambda_parser.ml"
   )
     | IN
     | HCF
     | FLOAT of (
-# 46 "flambda_parser.mly"
+# 52 "flambda_parser.mly"
        (string * char option)
 # 52 "flambda_parser.ml"
   )
@@ -148,6 +148,12 @@ and _menhir_state =
   
 open Fexpr
 
+let make_loc (startpos, endpos) = {
+  Location.loc_start = startpos;
+  Location.loc_end = endpos;
+  Location.loc_ghost = false;
+}
+
 let make_tag ~loc:_ = function
   | s, None -> int_of_string s
   | _, Some _ ->
@@ -172,7 +178,7 @@ let make_const_float (i, m) =
   | None -> Naked_float (float_of_string i)
   | Some c -> failwith (Printf.sprintf "Unknown float modifier %c" c)
 
-# 176 "flambda_parser.ml"
+# 182 "flambda_parser.ml"
 
 let rec _menhir_goto_nonempty_list_static_structure_ : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_nonempty_list_static_structure_ -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
@@ -181,25 +187,25 @@ let rec _menhir_goto_nonempty_list_static_structure_ : _menhir_env -> 'ttv_tail 
     | MenhirState161 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : ('freshtv669 * _menhir_state * (
-# 81 "flambda_parser.mly"
-      (Fexpr.static_structure)
-# 187 "flambda_parser.ml"
-        )) * _menhir_state * 'tv_nonempty_list_static_structure_) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : ('freshtv667 * _menhir_state * (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
 # 193 "flambda_parser.ml"
         )) * _menhir_state * 'tv_nonempty_list_static_structure_) = Obj.magic _menhir_stack in
-        ((let ((_menhir_stack, _menhir_s, (x : (
-# 81 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : ('freshtv667 * _menhir_state * (
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 198 "flambda_parser.ml"
+# 199 "flambda_parser.ml"
+        )) * _menhir_state * 'tv_nonempty_list_static_structure_) = Obj.magic _menhir_stack in
+        ((let ((_menhir_stack, _menhir_s, (x : (
+# 87 "flambda_parser.mly"
+      (Fexpr.static_structure)
+# 204 "flambda_parser.ml"
         ))), _, (xs : 'tv_nonempty_list_static_structure_)) = _menhir_stack in
         let _v : 'tv_nonempty_list_static_structure_ = 
 # 223 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 203 "flambda_parser.ml"
+# 209 "flambda_parser.ml"
          in
         _menhir_goto_nonempty_list_static_structure_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv668)) : 'freshtv670)
     | MenhirState148 ->
@@ -260,13 +266,13 @@ let rec _menhir_goto_nonempty_list_static_structure_ : _menhir_env -> 'ttv_tail 
         let (_menhir_stack : 'freshtv677 * _menhir_state * 'tv_nonempty_list_static_structure_) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (static : 'tv_nonempty_list_static_structure_)) = _menhir_stack in
         let _v : (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 266 "flambda_parser.ml"
+# 272 "flambda_parser.ml"
         ) = 
-# 211 "flambda_parser.mly"
+# 217 "flambda_parser.mly"
       ( { computation = None; static_structure = static } )
-# 270 "flambda_parser.ml"
+# 276 "flambda_parser.ml"
          in
         _menhir_goto_definition _menhir_env _menhir_stack _menhir_s _v) : 'freshtv678)) : 'freshtv680)
     | _ ->
@@ -287,9 +293,9 @@ and _menhir_goto_return_kinds : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
         ((let (_menhir_stack, _menhir_s) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_return_arity = 
-# 156 "flambda_parser.mly"
+# 162 "flambda_parser.mly"
                            ( Some k )
-# 293 "flambda_parser.ml"
+# 299 "flambda_parser.ml"
          in
         _menhir_goto_return_arity _menhir_env _menhir_stack _menhir_s _v) : 'freshtv660)) : 'freshtv662)
     | MenhirState26 ->
@@ -304,9 +310,9 @@ and _menhir_goto_return_kinds : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
         ((let (_menhir_stack, _menhir_s, (k : 'tv_kind)) = _menhir_stack in
         let _2 = () in
         let _v : 'tv_return_kinds = 
-# 152 "flambda_parser.mly"
+# 158 "flambda_parser.mly"
                                     ( k :: t )
-# 310 "flambda_parser.ml"
+# 316 "flambda_parser.ml"
          in
         _menhir_goto_return_kinds _menhir_env _menhir_stack _menhir_s _v) : 'freshtv664)) : 'freshtv666)
     | _ ->
@@ -338,9 +344,9 @@ and _menhir_goto_variable_opt : _menhir_env -> 'ttv_tail -> 'tv_variable_opt -> 
     let (_menhir_stack : 'freshtv653) = Obj.magic _menhir_stack in
     let ((v : 'tv_variable_opt) : 'tv_variable_opt) = _v in
     ((let _v : 'tv_kinded_variable_opt = 
-# 264 "flambda_parser.mly"
+# 270 "flambda_parser.mly"
                      ( v, () )
-# 344 "flambda_parser.ml"
+# 350 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv651) = _menhir_stack in
@@ -403,9 +409,9 @@ and _menhir_goto_list_kinded_variable_ : _menhir_env -> 'ttv_tail -> _menhir_sta
             let _3 = () in
             let _1 = () in
             let _v : 'tv_args = 
-# 237 "flambda_parser.mly"
+# 243 "flambda_parser.mly"
                                        ( v )
-# 409 "flambda_parser.ml"
+# 415 "flambda_parser.ml"
              in
             _menhir_goto_args _menhir_env _menhir_stack _menhir_s _v) : 'freshtv634)) : 'freshtv636)
         | _ ->
@@ -424,7 +430,7 @@ and _menhir_goto_list_kinded_variable_ : _menhir_env -> 'ttv_tail -> _menhir_sta
         let _v : 'tv_list_kinded_variable_ = 
 # 213 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 428 "flambda_parser.ml"
+# 434 "flambda_parser.ml"
          in
         _menhir_goto_list_kinded_variable_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv642)) : 'freshtv644)
     | _ ->
@@ -442,9 +448,9 @@ and _menhir_goto_andk : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_andk ->
         ((let (((_menhir_stack, _menhir_s), _, (h : 'tv_continuation_handler)), _, (t : 'tv_andk)) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_andk = 
-# 206 "flambda_parser.mly"
+# 212 "flambda_parser.mly"
                                           ( h :: t )
-# 448 "flambda_parser.ml"
+# 454 "flambda_parser.ml"
          in
         _menhir_goto_andk _menhir_env _menhir_stack _menhir_s _v) : 'freshtv628)) : 'freshtv630)
     | MenhirState125 ->
@@ -501,7 +507,7 @@ and _menhir_goto_list_typed_variable_ : _menhir_env -> 'ttv_tail -> _menhir_stat
         let _v : 'tv_list_typed_variable_ = 
 # 213 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 505 "flambda_parser.ml"
+# 511 "flambda_parser.ml"
          in
         _menhir_goto_list_typed_variable_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv616)) : 'freshtv618)
     | MenhirState9 ->
@@ -520,9 +526,9 @@ and _menhir_goto_list_typed_variable_ : _menhir_env -> 'ttv_tail -> _menhir_stat
             let _3 = () in
             let _1 = () in
             let _v : 'tv_typed_args = 
-# 233 "flambda_parser.mly"
+# 239 "flambda_parser.mly"
                                       ( v )
-# 526 "flambda_parser.ml"
+# 532 "flambda_parser.ml"
              in
             _menhir_goto_typed_args _menhir_env _menhir_stack _menhir_s _v) : 'freshtv620)) : 'freshtv622)
         | _ ->
@@ -542,25 +548,25 @@ and _menhir_goto_list_of_kind_value_ : _menhir_env -> 'ttv_tail -> _menhir_state
     | MenhirState157 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : ('freshtv599 * _menhir_state * (
-# 84 "flambda_parser.mly"
-      (Fexpr.of_kind_value)
-# 548 "flambda_parser.ml"
-        )) * _menhir_state * 'tv_list_of_kind_value_) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : ('freshtv597 * _menhir_state * (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
 # 554 "flambda_parser.ml"
         )) * _menhir_state * 'tv_list_of_kind_value_) = Obj.magic _menhir_stack in
-        ((let ((_menhir_stack, _menhir_s, (x : (
-# 84 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : ('freshtv597 * _menhir_state * (
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 559 "flambda_parser.ml"
+# 560 "flambda_parser.ml"
+        )) * _menhir_state * 'tv_list_of_kind_value_) = Obj.magic _menhir_stack in
+        ((let ((_menhir_stack, _menhir_s, (x : (
+# 90 "flambda_parser.mly"
+      (Fexpr.of_kind_value)
+# 565 "flambda_parser.ml"
         ))), _, (xs : 'tv_list_of_kind_value_)) = _menhir_stack in
         let _v : 'tv_list_of_kind_value_ = 
 # 213 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 564 "flambda_parser.ml"
+# 570 "flambda_parser.ml"
          in
         _menhir_goto_list_of_kind_value_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv598)) : 'freshtv600)
     | MenhirState153 ->
@@ -581,28 +587,28 @@ and _menhir_goto_list_of_kind_value_ : _menhir_env -> 'ttv_tail -> _menhir_state
             let _3 = () in
             let _2 = () in
             let _v : (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 587 "flambda_parser.ml"
+# 593 "flambda_parser.ml"
             ) = 
-# 242 "flambda_parser.mly"
+# 248 "flambda_parser.mly"
     ( ( s, (), Block (t, Immutable, elts) ) )
-# 591 "flambda_parser.ml"
+# 597 "flambda_parser.ml"
              in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv605) = _menhir_stack in
             let (_menhir_s : _menhir_state) = _menhir_s in
             let (_v : (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 599 "flambda_parser.ml"
+# 605 "flambda_parser.ml"
             )) = _v in
             ((let _menhir_stack = (_menhir_stack, _menhir_s, _v) in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv603 * _menhir_state * (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 606 "flambda_parser.ml"
+# 612 "flambda_parser.ml"
             )) = Obj.magic _menhir_stack in
             ((assert (not _menhir_env._menhir_error);
             let _tok = _menhir_env._menhir_token in
@@ -612,19 +618,19 @@ and _menhir_goto_list_of_kind_value_ : _menhir_env -> 'ttv_tail -> _menhir_state
             | DEF | EFFECT | EOF | LET | RBRACE | ROOT ->
                 let (_menhir_env : _menhir_env) = _menhir_env in
                 let (_menhir_stack : 'freshtv601 * _menhir_state * (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 618 "flambda_parser.ml"
+# 624 "flambda_parser.ml"
                 )) = Obj.magic _menhir_stack in
                 ((let (_menhir_stack, _menhir_s, (x : (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 623 "flambda_parser.ml"
+# 629 "flambda_parser.ml"
                 ))) = _menhir_stack in
                 let _v : 'tv_nonempty_list_static_structure_ = 
 # 221 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [ x ] )
-# 628 "flambda_parser.ml"
+# 634 "flambda_parser.ml"
                  in
                 _menhir_goto_nonempty_list_static_structure_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv602)
             | _ ->
@@ -654,7 +660,7 @@ and _menhir_goto_list_simple_ : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
         let _v : 'tv_list_simple_ = 
 # 213 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 658 "flambda_parser.ml"
+# 664 "flambda_parser.ml"
          in
         _menhir_goto_list_simple_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv578)) : 'freshtv580)
     | MenhirState76 ->
@@ -673,9 +679,9 @@ and _menhir_goto_list_simple_ : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
             let _3 = () in
             let _1 = () in
             let _v : 'tv_simple_args = 
-# 269 "flambda_parser.mly"
+# 275 "flambda_parser.mly"
                               ( s )
-# 679 "flambda_parser.ml"
+# 685 "flambda_parser.ml"
              in
             _menhir_goto_simple_args _menhir_env _menhir_stack _menhir_s _v) : 'freshtv582)) : 'freshtv584)
         | _ ->
@@ -702,9 +708,9 @@ and _menhir_goto_list_simple_ : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
             let _3 = () in
             let _1 = () in
             let _v : 'tv_named = 
-# 133 "flambda_parser.mly"
+# 139 "flambda_parser.mly"
                                                ( Prim (Block (t, Immutable, elts)) )
-# 708 "flambda_parser.ml"
+# 714 "flambda_parser.ml"
              in
             _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv590)) : 'freshtv592)
         | _ ->
@@ -721,9 +727,9 @@ and _menhir_reduce78 : _menhir_env -> 'ttv_tail * _menhir_state * 'tv_variable -
   fun _menhir_env _menhir_stack ->
     let (_menhir_stack, _menhir_s, (v : 'tv_variable)) = _menhir_stack in
     let _v : 'tv_simple = 
-# 284 "flambda_parser.mly"
+# 290 "flambda_parser.mly"
                  ( Var v )
-# 727 "flambda_parser.ml"
+# 733 "flambda_parser.ml"
      in
     _menhir_goto_simple _menhir_env _menhir_stack _menhir_s _v
 
@@ -738,9 +744,9 @@ and _menhir_goto_const : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_const 
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((c : 'tv_const) : 'tv_const) = _v in
     ((let _v : 'tv_simple = 
-# 285 "flambda_parser.mly"
+# 291 "flambda_parser.mly"
               ( Const c )
-# 744 "flambda_parser.ml"
+# 750 "flambda_parser.ml"
      in
     _menhir_goto_simple _menhir_env _menhir_stack _menhir_s _v) : 'freshtv574)) : 'freshtv576)
 
@@ -830,9 +836,9 @@ and _menhir_goto_return_arity : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv
 and _menhir_reduce35 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_kind = 
-# 148 "flambda_parser.mly"
+# 154 "flambda_parser.mly"
     ( () )
-# 836 "flambda_parser.ml"
+# 842 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv559) = _menhir_stack in
@@ -869,9 +875,9 @@ and _menhir_reduce35 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
 and _menhir_reduce75 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_return_kinds = 
-# 151 "flambda_parser.mly"
+# 157 "flambda_parser.mly"
     ( [] )
-# 875 "flambda_parser.ml"
+# 881 "flambda_parser.ml"
      in
     _menhir_goto_return_kinds _menhir_env _menhir_stack _menhir_s _v
 
@@ -1028,13 +1034,13 @@ and _menhir_run30 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
     let (_menhir_s : _menhir_state) = _menhir_s in
     ((let _1 = () in
     let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 1034 "flambda_parser.ml"
+# 1040 "flambda_parser.ml"
     ) = 
-# 160 "flambda_parser.mly"
+# 166 "flambda_parser.mly"
                 ( Invalid Treat_as_unreachable )
-# 1038 "flambda_parser.ml"
+# 1044 "flambda_parser.ml"
      in
     _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv536)
 
@@ -1052,18 +1058,18 @@ and _menhir_run31 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let (_menhir_stack : 'freshtv527) = Obj.magic _menhir_stack in
         ((let _1 = () in
         let _v : 'tv_is_tag = 
-# 115 "flambda_parser.mly"
+# 121 "flambda_parser.mly"
         ( Fabricated )
-# 1058 "flambda_parser.ml"
+# 1064 "flambda_parser.ml"
          in
         _menhir_goto_is_tag _menhir_env _menhir_stack _v) : 'freshtv528)) : 'freshtv530)
     | LIDENT _ | UIDENT _ ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv531) = Obj.magic _menhir_stack in
         ((let _v : 'tv_is_tag = 
-# 116 "flambda_parser.mly"
+# 122 "flambda_parser.mly"
     ( Value )
-# 1067 "flambda_parser.ml"
+# 1073 "flambda_parser.ml"
          in
         _menhir_goto_is_tag _menhir_env _menhir_stack _v) : 'freshtv532)
     | _ ->
@@ -1082,9 +1088,9 @@ and _menhir_run49 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
     let (_menhir_s : _menhir_state) = _menhir_s in
     ((let _1 = () in
     let _v : 'tv_unop = 
-# 120 "flambda_parser.mly"
+# 126 "flambda_parser.mly"
            ( Opaque_identity )
-# 1088 "flambda_parser.ml"
+# 1094 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv523) = _menhir_stack in
@@ -1135,9 +1141,9 @@ and _menhir_run61 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let (_menhir_stack : 'freshtv511) = Obj.magic _menhir_stack in
         let (_endpos : Lexing.position) = _menhir_env._menhir_lexbuf.Lexing.lex_curr_p in
         let (_v : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1141 "flambda_parser.ml"
+# 1147 "flambda_parser.ml"
         )) = _v in
         let (_startpos : Lexing.position) = _menhir_env._menhir_lexbuf.Lexing.lex_start_p in
         ((let _menhir_env = _menhir_discard _menhir_env in
@@ -1145,21 +1151,21 @@ and _menhir_run61 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let (_menhir_stack : 'freshtv509) = Obj.magic _menhir_stack in
         let (_endpos_e_ : Lexing.position) = _endpos in
         let ((e : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1151 "flambda_parser.ml"
+# 1157 "flambda_parser.ml"
         )) : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1155 "flambda_parser.ml"
+# 1161 "flambda_parser.ml"
         )) = _v in
         let (_startpos_e_ : Lexing.position) = _startpos in
         ((let _v : 'tv_variable_opt = let _endpos = _endpos_e_ in
         let _startpos = _startpos_e_ in
         
-# 306 "flambda_parser.mly"
-               ( Some (e, (_startpos, _endpos)) )
-# 1163 "flambda_parser.ml"
+# 312 "flambda_parser.mly"
+               ( Some (e, make_loc (_startpos, _endpos)) )
+# 1169 "flambda_parser.ml"
          in
         _menhir_goto_variable_opt _menhir_env _menhir_stack _v) : 'freshtv510)) : 'freshtv512)
     | MUT ->
@@ -1182,9 +1188,9 @@ and _menhir_run61 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let (_menhir_stack : 'freshtv515) = Obj.magic _menhir_stack in
         ((let _1 = () in
         let _v : 'tv_variable_opt = 
-# 305 "flambda_parser.mly"
+# 311 "flambda_parser.mly"
                ( None )
-# 1188 "flambda_parser.ml"
+# 1194 "flambda_parser.ml"
          in
         _menhir_goto_variable_opt _menhir_env _menhir_stack _v) : 'freshtv516)) : 'freshtv518)
     | _ ->
@@ -1203,13 +1209,13 @@ and _menhir_run73 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
     let (_menhir_s : _menhir_state) = _menhir_s in
     ((let _1 = () in
     let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 1209 "flambda_parser.ml"
+# 1215 "flambda_parser.ml"
     ) = 
-# 159 "flambda_parser.mly"
+# 165 "flambda_parser.mly"
         ( Invalid Halt_and_catch_fire )
-# 1213 "flambda_parser.ml"
+# 1219 "flambda_parser.ml"
      in
     _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv508)
 
@@ -1243,9 +1249,9 @@ and _menhir_run83 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
             let (_menhir_stack : 'freshtv499) = Obj.magic _menhir_stack in
             let (_endpos : Lexing.position) = _menhir_env._menhir_lexbuf.Lexing.lex_curr_p in
             let (_v : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1249 "flambda_parser.ml"
+# 1255 "flambda_parser.ml"
             )) = _v in
             let (_startpos : Lexing.position) = _menhir_env._menhir_lexbuf.Lexing.lex_start_p in
             ((let _menhir_env = _menhir_discard _menhir_env in
@@ -1253,21 +1259,21 @@ and _menhir_run83 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
             let (_menhir_stack : 'freshtv497) = Obj.magic _menhir_stack in
             let (_endpos_s_ : Lexing.position) = _endpos in
             let ((s : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1259 "flambda_parser.ml"
+# 1265 "flambda_parser.ml"
             )) : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1263 "flambda_parser.ml"
+# 1269 "flambda_parser.ml"
             )) = _v in
             let (_startpos_s_ : Lexing.position) = _startpos in
             ((let _v : 'tv_csymbol = let _endpos = _endpos_s_ in
             let _startpos = _startpos_s_ in
             
-# 297 "flambda_parser.mly"
-               ( s, (_startpos, _endpos) )
-# 1271 "flambda_parser.ml"
+# 303 "flambda_parser.mly"
+               ( s, make_loc (_startpos, _endpos) )
+# 1277 "flambda_parser.ml"
              in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv495) = _menhir_stack in
@@ -1415,51 +1421,51 @@ and _menhir_reduce39 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_list_kinded_variable_ = 
 # 211 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [] )
-# 1419 "flambda_parser.ml"
+# 1425 "flambda_parser.ml"
      in
     _menhir_goto_list_kinded_variable_ _menhir_env _menhir_stack _menhir_s _v
 
 and _menhir_goto_definition : _menhir_env -> 'ttv_tail -> _menhir_state -> (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 1426 "flambda_parser.ml"
+# 1432 "flambda_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : ('freshtv479 * _menhir_state) * _menhir_state * 'tv_recursive) = Obj.magic _menhir_stack in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let (_v : (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 1435 "flambda_parser.ml"
+# 1441 "flambda_parser.ml"
     )) = _v in
     ((let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : ('freshtv477 * _menhir_state) * _menhir_state * 'tv_recursive) = Obj.magic _menhir_stack in
     let (_ : _menhir_state) = _menhir_s in
     let ((def : (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 1443 "flambda_parser.ml"
+# 1449 "flambda_parser.ml"
     )) : (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 1447 "flambda_parser.ml"
+# 1453 "flambda_parser.ml"
     )) = _v in
     ((let ((_menhir_stack, _menhir_s), _, (recu : 'tv_recursive)) = _menhir_stack in
     let _1 = () in
     let _v : 'tv_program_body_elt = 
-# 93 "flambda_parser.mly"
+# 99 "flambda_parser.mly"
                                           ( Define_symbol (recu, def) )
-# 1454 "flambda_parser.ml"
+# 1460 "flambda_parser.ml"
      in
     _menhir_goto_program_body_elt _menhir_env _menhir_stack _menhir_s _v) : 'freshtv478)) : 'freshtv480)
 
 and _menhir_reduce2 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_andk = 
-# 207 "flambda_parser.mly"
+# 213 "flambda_parser.mly"
     ( [] )
-# 1463 "flambda_parser.ml"
+# 1469 "flambda_parser.ml"
      in
     _menhir_goto_andk _menhir_env _menhir_stack _menhir_s _v
 
@@ -1492,13 +1498,13 @@ and _menhir_goto_simple_args : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_
         ((let (((_menhir_stack, _menhir_s), _, (c : 'tv_continuation)), _, (s : 'tv_simple_args)) = _menhir_stack in
         let _1 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 1498 "flambda_parser.ml"
+# 1504 "flambda_parser.ml"
         ) = 
-# 161 "flambda_parser.mly"
+# 167 "flambda_parser.mly"
                                           ( Apply_cont (c, None, s) )
-# 1502 "flambda_parser.ml"
+# 1508 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv472)) : 'freshtv474)
     | MenhirState87 ->
@@ -1606,7 +1612,7 @@ and _menhir_reduce47 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_list_typed_variable_ = 
 # 211 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [] )
-# 1610 "flambda_parser.ml"
+# 1616 "flambda_parser.ml"
      in
     _menhir_goto_list_typed_variable_ _menhir_env _menhir_stack _menhir_s _v
 
@@ -1621,9 +1627,9 @@ and _menhir_goto_option_SEMICOLON_ : _menhir_env -> 'ttv_tail -> _menhir_state -
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((_1 : 'tv_option_SEMICOLON_) : 'tv_option_SEMICOLON_) = _v in
     ((let _v : 'tv_switch = 
-# 143 "flambda_parser.mly"
+# 149 "flambda_parser.mly"
                       ( [] )
-# 1627 "flambda_parser.ml"
+# 1633 "flambda_parser.ml"
      in
     _menhir_goto_switch _menhir_env _menhir_stack _menhir_s _v) : 'freshtv456)) : 'freshtv458)
 
@@ -1632,14 +1638,14 @@ and _menhir_reduce41 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_list_of_kind_value_ = 
 # 211 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [] )
-# 1636 "flambda_parser.ml"
+# 1642 "flambda_parser.ml"
      in
     _menhir_goto_list_of_kind_value_ _menhir_env _menhir_stack _menhir_s _v
 
 and _menhir_run154 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1643 "flambda_parser.ml"
+# 1649 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -1648,25 +1654,25 @@ and _menhir_run154 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_stat
     let (_endpos_i_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((i : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1654 "flambda_parser.ml"
+# 1660 "flambda_parser.ml"
     )) : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1658 "flambda_parser.ml"
+# 1664 "flambda_parser.ml"
     )) = _v in
     let (_startpos_i_ : Lexing.position) = _startpos in
     ((let _v : (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 1664 "flambda_parser.ml"
+# 1670 "flambda_parser.ml"
     ) = let _endpos = _endpos_i_ in
     let _startpos = _startpos_i_ in
     
-# 252 "flambda_parser.mly"
+# 258 "flambda_parser.mly"
             ( Tagged_immediate ( make_tagged_immediate ~loc:(_startpos, _endpos) i ) )
-# 1670 "flambda_parser.ml"
+# 1676 "flambda_parser.ml"
      in
     _menhir_goto_of_kind_value _menhir_env _menhir_stack _menhir_s _v) : 'freshtv454)
 
@@ -1675,14 +1681,14 @@ and _menhir_reduce45 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_list_simple_ = 
 # 211 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [] )
-# 1679 "flambda_parser.ml"
+# 1685 "flambda_parser.ml"
      in
     _menhir_goto_list_simple_ _menhir_env _menhir_stack _menhir_s _v
 
 and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1686 "flambda_parser.ml"
+# 1692 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -1691,21 +1697,21 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
     let (_endpos_e_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((e : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1697 "flambda_parser.ml"
+# 1703 "flambda_parser.ml"
     )) : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 1701 "flambda_parser.ml"
+# 1707 "flambda_parser.ml"
     )) = _v in
     let (_startpos_e_ : Lexing.position) = _startpos in
     ((let _v : 'tv_variable = let _endpos = _endpos_e_ in
     let _startpos = _startpos_e_ in
     
-# 301 "flambda_parser.mly"
-               ( e, (_startpos, _endpos) )
-# 1709 "flambda_parser.ml"
+# 307 "flambda_parser.mly"
+               ( e, make_loc (_startpos, _endpos) )
+# 1715 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv449) = _menhir_stack in
@@ -1720,9 +1726,9 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         let (_menhir_stack : 'freshtv411 * _menhir_state * 'tv_variable) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (param : 'tv_variable)) = _menhir_stack in
         let _v : 'tv_typed_variable = 
-# 256 "flambda_parser.mly"
+# 262 "flambda_parser.mly"
                      ( { param; ty = () } )
-# 1726 "flambda_parser.ml"
+# 1732 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv409) = _menhir_stack in
@@ -1749,13 +1755,13 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         let (_menhir_stack : 'freshtv415 * _menhir_state * 'tv_variable) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (v : 'tv_variable)) = _menhir_stack in
         let _v : (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 1755 "flambda_parser.ml"
+# 1761 "flambda_parser.ml"
         ) = 
-# 279 "flambda_parser.mly"
+# 285 "flambda_parser.mly"
                  ( Var v )
-# 1759 "flambda_parser.ml"
+# 1765 "flambda_parser.ml"
          in
         _menhir_goto_name _menhir_env _menhir_stack _menhir_s _v) : 'freshtv416)) : 'freshtv418)
     | MenhirState139 | MenhirState136 | MenhirState63 ->
@@ -1765,9 +1771,9 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         let (_menhir_stack : 'freshtv429 * _menhir_state * 'tv_variable) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (v : 'tv_variable)) = _menhir_stack in
         let _v : 'tv_kinded_variable = 
-# 260 "flambda_parser.mly"
+# 266 "flambda_parser.mly"
                  ( v, () )
-# 1771 "flambda_parser.ml"
+# 1777 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv427) = _menhir_stack in
@@ -1834,9 +1840,9 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         ((let ((_menhir_stack, _menhir_s), _, (v : 'tv_variable)) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_named = 
-# 134 "flambda_parser.mly"
+# 140 "flambda_parser.mly"
                       ( Read_mutable v )
-# 1840 "flambda_parser.ml"
+# 1846 "flambda_parser.ml"
          in
         _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv436)) : 'freshtv438)
     | MenhirState164 | MenhirState141 | MenhirState29 | MenhirState129 | MenhirState60 | MenhirState121 | MenhirState119 | MenhirState113 | MenhirState72 ->
@@ -1879,22 +1885,22 @@ and _menhir_run10 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         let (_menhir_stack : 'freshtv445 * _menhir_state * 'tv_variable) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (v : 'tv_variable)) = _menhir_stack in
         let _v : (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 1885 "flambda_parser.ml"
+# 1891 "flambda_parser.ml"
         ) = 
-# 251 "flambda_parser.mly"
+# 257 "flambda_parser.mly"
                  ( Dynamically_computed v )
-# 1889 "flambda_parser.ml"
+# 1895 "flambda_parser.ml"
          in
         _menhir_goto_of_kind_value _menhir_env _menhir_stack _menhir_s _v) : 'freshtv446)) : 'freshtv448)
     | _ ->
         _menhir_fail ()) : 'freshtv450)) : 'freshtv452)
 
 and _menhir_run67 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1898 "flambda_parser.ml"
+# 1904 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -1903,26 +1909,26 @@ and _menhir_run67 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
     let (_endpos_c_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((c : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1909 "flambda_parser.ml"
+# 1915 "flambda_parser.ml"
     )) : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 1913 "flambda_parser.ml"
+# 1919 "flambda_parser.ml"
     )) = _v in
     let (_startpos_c_ : Lexing.position) = _startpos in
     ((let _v : 'tv_const = 
-# 273 "flambda_parser.mly"
+# 279 "flambda_parser.mly"
             ( make_const_int c )
-# 1919 "flambda_parser.ml"
+# 1925 "flambda_parser.ml"
      in
     _menhir_goto_const _menhir_env _menhir_stack _menhir_s _v) : 'freshtv406)
 
 and _menhir_run68 : _menhir_env -> 'ttv_tail -> _menhir_state -> (
-# 46 "flambda_parser.mly"
+# 52 "flambda_parser.mly"
        (string * char option)
-# 1926 "flambda_parser.ml"
+# 1932 "flambda_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -1930,27 +1936,27 @@ and _menhir_run68 : _menhir_env -> 'ttv_tail -> _menhir_state -> (
     let (_menhir_stack : 'freshtv403) = Obj.magic _menhir_stack in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((c : (
-# 46 "flambda_parser.mly"
+# 52 "flambda_parser.mly"
        (string * char option)
-# 1936 "flambda_parser.ml"
+# 1942 "flambda_parser.ml"
     )) : (
-# 46 "flambda_parser.mly"
+# 52 "flambda_parser.mly"
        (string * char option)
-# 1940 "flambda_parser.ml"
+# 1946 "flambda_parser.ml"
     )) = _v in
     ((let _v : 'tv_const = 
-# 274 "flambda_parser.mly"
+# 280 "flambda_parser.mly"
               ( make_const_float c )
-# 1945 "flambda_parser.ml"
+# 1951 "flambda_parser.ml"
      in
     _menhir_goto_const _menhir_env _menhir_stack _menhir_s _v) : 'freshtv404)
 
 and _menhir_reduce73 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_return_arity = 
-# 155 "flambda_parser.mly"
+# 161 "flambda_parser.mly"
     ( None )
-# 1954 "flambda_parser.ml"
+# 1960 "flambda_parser.ml"
      in
     _menhir_goto_return_arity _menhir_env _menhir_stack _menhir_s _v
 
@@ -1972,9 +1978,9 @@ and _menhir_run23 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
 and _menhir_reduce17 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_exn_and_stub = 
-# 191 "flambda_parser.mly"
+# 197 "flambda_parser.mly"
     ( false, false )
-# 1978 "flambda_parser.ml"
+# 1984 "flambda_parser.ml"
      in
     _menhir_goto_exn_and_stub _menhir_env _menhir_stack _menhir_s _v
 
@@ -1994,9 +2000,9 @@ and _menhir_run53 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let _2 = () in
         let _1 = () in
         let _v : 'tv_exn_and_stub = 
-# 194 "flambda_parser.mly"
+# 200 "flambda_parser.mly"
              ( true, true )
-# 2000 "flambda_parser.ml"
+# 2006 "flambda_parser.ml"
          in
         _menhir_goto_exn_and_stub _menhir_env _menhir_stack _menhir_s _v) : 'freshtv396)) : 'freshtv398)
     | LIDENT _ ->
@@ -2005,9 +2011,9 @@ and _menhir_run53 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         ((let (_menhir_stack, _menhir_s) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_exn_and_stub = 
-# 192 "flambda_parser.mly"
+# 198 "flambda_parser.mly"
          ( false, true )
-# 2011 "flambda_parser.ml"
+# 2017 "flambda_parser.ml"
          in
         _menhir_goto_exn_and_stub _menhir_env _menhir_stack _menhir_s _v) : 'freshtv400)
     | _ ->
@@ -2034,9 +2040,9 @@ and _menhir_run55 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         let _2 = () in
         let _1 = () in
         let _v : 'tv_exn_and_stub = 
-# 195 "flambda_parser.mly"
+# 201 "flambda_parser.mly"
              ( true, true )
-# 2040 "flambda_parser.ml"
+# 2046 "flambda_parser.ml"
          in
         _menhir_goto_exn_and_stub _menhir_env _menhir_stack _menhir_s _v) : 'freshtv388)) : 'freshtv390)
     | LIDENT _ ->
@@ -2045,9 +2051,9 @@ and _menhir_run55 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         ((let (_menhir_stack, _menhir_s) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_exn_and_stub = 
-# 193 "flambda_parser.mly"
+# 199 "flambda_parser.mly"
         ( true, false )
-# 2051 "flambda_parser.ml"
+# 2057 "flambda_parser.ml"
          in
         _menhir_goto_exn_and_stub _menhir_env _menhir_stack _menhir_s _v) : 'freshtv392)
     | _ ->
@@ -2059,17 +2065,17 @@ and _menhir_run55 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv394)
 
 and _menhir_goto_of_kind_value : _menhir_env -> 'ttv_tail -> _menhir_state -> (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 2065 "flambda_parser.ml"
+# 2071 "flambda_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
     let _menhir_stack = (_menhir_stack, _menhir_s, _v) in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv385 * _menhir_state * (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 2073 "flambda_parser.ml"
+# 2079 "flambda_parser.ml"
     )) = Obj.magic _menhir_stack in
     ((assert (not _menhir_env._menhir_error);
     let _tok = _menhir_env._menhir_token in
@@ -2170,9 +2176,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
         ((let ((_menhir_stack, _menhir_s, (v : 'tv_variable)), _, (s : 'tv_simple)) = _menhir_stack in
         let _2 = () in
         let _v : 'tv_named = 
-# 135 "flambda_parser.mly"
+# 141 "flambda_parser.mly"
                                        ( Assign { being_assigned = v; new_value = s } )
-# 2176 "flambda_parser.ml"
+# 2182 "flambda_parser.ml"
          in
         _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv352)) : 'freshtv354)
     | MenhirState103 ->
@@ -2182,9 +2188,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
         let (_menhir_stack : ('freshtv355 * _menhir_state * 'tv_unop) * _menhir_state * 'tv_simple) = Obj.magic _menhir_stack in
         ((let ((_menhir_stack, _menhir_s, (u : 'tv_unop)), _, (a : 'tv_simple)) = _menhir_stack in
         let _v : 'tv_named = 
-# 131 "flambda_parser.mly"
+# 137 "flambda_parser.mly"
                         ( Prim (Unop (u, a)) )
-# 2188 "flambda_parser.ml"
+# 2194 "flambda_parser.ml"
          in
         _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv356)) : 'freshtv358)
     | MenhirState164 | MenhirState141 | MenhirState29 | MenhirState129 | MenhirState60 | MenhirState121 | MenhirState119 | MenhirState113 | MenhirState72 ->
@@ -2201,9 +2207,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
             let (_menhir_stack : 'freshtv359) = Obj.magic _menhir_stack in
             ((let _1 = () in
             let _v : 'tv_binop = 
-# 125 "flambda_parser.mly"
+# 131 "flambda_parser.mly"
           ( Minus )
-# 2207 "flambda_parser.ml"
+# 2213 "flambda_parser.ml"
              in
             _menhir_goto_binop _menhir_env _menhir_stack _v) : 'freshtv360)) : 'freshtv362)
         | MINUSDOT ->
@@ -2214,9 +2220,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
             let (_menhir_stack : 'freshtv363) = Obj.magic _menhir_stack in
             ((let _1 = () in
             let _v : 'tv_binop = 
-# 126 "flambda_parser.mly"
+# 132 "flambda_parser.mly"
              ( Minusdot )
-# 2220 "flambda_parser.ml"
+# 2226 "flambda_parser.ml"
              in
             _menhir_goto_binop _menhir_env _menhir_stack _v) : 'freshtv364)) : 'freshtv366)
         | PLUS ->
@@ -2227,9 +2233,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
             let (_menhir_stack : 'freshtv367) = Obj.magic _menhir_stack in
             ((let _1 = () in
             let _v : 'tv_binop = 
-# 123 "flambda_parser.mly"
+# 129 "flambda_parser.mly"
          ( Plus )
-# 2233 "flambda_parser.ml"
+# 2239 "flambda_parser.ml"
              in
             _menhir_goto_binop _menhir_env _menhir_stack _v) : 'freshtv368)) : 'freshtv370)
         | PLUSDOT ->
@@ -2240,9 +2246,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
             let (_menhir_stack : 'freshtv371) = Obj.magic _menhir_stack in
             ((let _1 = () in
             let _v : 'tv_binop = 
-# 124 "flambda_parser.mly"
+# 130 "flambda_parser.mly"
             ( Plusdot )
-# 2246 "flambda_parser.ml"
+# 2252 "flambda_parser.ml"
              in
             _menhir_goto_binop _menhir_env _menhir_stack _v) : 'freshtv372)) : 'freshtv374)
         | IN | SEMICOLON ->
@@ -2250,9 +2256,9 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
             let (_menhir_stack : 'freshtv375 * _menhir_state * 'tv_simple) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, (s : 'tv_simple)) = _menhir_stack in
             let _v : 'tv_named = 
-# 130 "flambda_parser.mly"
+# 136 "flambda_parser.mly"
                ( Simple s )
-# 2256 "flambda_parser.ml"
+# 2262 "flambda_parser.ml"
              in
             _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv376)
         | _ ->
@@ -2269,26 +2275,26 @@ and _menhir_goto_simple : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_simpl
         let (_menhir_stack : (('freshtv381 * _menhir_state * 'tv_simple) * 'tv_binop) * _menhir_state * 'tv_simple) = Obj.magic _menhir_stack in
         ((let (((_menhir_stack, _menhir_s, (a1 : 'tv_simple)), (b : 'tv_binop)), _, (a2 : 'tv_simple)) = _menhir_stack in
         let _v : 'tv_named = 
-# 132 "flambda_parser.mly"
+# 138 "flambda_parser.mly"
                                       ( Prim (Binop (b, a1, a2)) )
-# 2275 "flambda_parser.ml"
+# 2281 "flambda_parser.ml"
          in
         _menhir_goto_named _menhir_env _menhir_stack _menhir_s _v) : 'freshtv382)) : 'freshtv384)
     | _ ->
         _menhir_fail ()
 
 and _menhir_goto_name : _menhir_env -> 'ttv_tail -> _menhir_state -> (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2284 "flambda_parser.ml"
+# 2290 "flambda_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
     let _menhir_stack = (_menhir_stack, _menhir_s, _v) in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : (('freshtv341 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2292 "flambda_parser.ml"
+# 2298 "flambda_parser.ml"
     )) = Obj.magic _menhir_stack in
     ((assert (not _menhir_env._menhir_error);
     let _tok = _menhir_env._menhir_token in
@@ -2296,9 +2302,9 @@ and _menhir_goto_name : _menhir_env -> 'ttv_tail -> _menhir_state -> (
     | LBRACE ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (('freshtv337 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2302 "flambda_parser.ml"
+# 2308 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let _menhir_env = _menhir_discard _menhir_env in
         let _tok = _menhir_env._menhir_token in
@@ -2318,9 +2324,9 @@ and _menhir_goto_name : _menhir_env -> 'ttv_tail -> _menhir_state -> (
         _menhir_env._menhir_error <- true;
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (('freshtv339 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2324 "flambda_parser.ml"
+# 2330 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv340)) : 'freshtv342)
@@ -2356,9 +2362,9 @@ and _menhir_fail : unit -> 'a =
 and _menhir_reduce4 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_args = 
-# 238 "flambda_parser.mly"
+# 244 "flambda_parser.mly"
     ( [] )
-# 2362 "flambda_parser.ml"
+# 2368 "flambda_parser.ml"
      in
     _menhir_goto_args _menhir_env _menhir_stack _menhir_s _v
 
@@ -2378,9 +2384,9 @@ and _menhir_run136 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) MenhirState136
 
 and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2384 "flambda_parser.ml"
+# 2390 "flambda_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
     let _menhir_stack = (_menhir_stack, _menhir_s, _v) in
@@ -2388,103 +2394,103 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
     | MenhirState113 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (('freshtv283 * _menhir_state * 'tv_named)) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2394 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : (('freshtv281 * _menhir_state * 'tv_named)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2400 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let ((_menhir_stack, _menhir_s, (defining_expr : 'tv_named)), _, (body : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : (('freshtv281 * _menhir_state * 'tv_named)) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2405 "flambda_parser.ml"
+# 2406 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let ((_menhir_stack, _menhir_s, (defining_expr : 'tv_named)), _, (body : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2411 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _2 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2411 "flambda_parser.ml"
+# 2417 "flambda_parser.ml"
         ) = 
-# 168 "flambda_parser.mly"
+# 174 "flambda_parser.mly"
       ( Let { var = None; kind = (); defining_expr; body } )
-# 2415 "flambda_parser.ml"
+# 2421 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv282)) : 'freshtv284)
     | MenhirState72 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (((((('freshtv287 * _menhir_state)) * _menhir_state * 'tv_kinded_variable)) * _menhir_state * 'tv_simple)) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2423 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : (((((('freshtv285 * _menhir_state)) * _menhir_state * 'tv_kinded_variable)) * _menhir_state * 'tv_simple)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2429 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let ((((_menhir_stack, _menhir_s), _, (v : 'tv_kinded_variable)), _, (initial_value : 'tv_simple)), _, (body : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : (((((('freshtv285 * _menhir_state)) * _menhir_state * 'tv_kinded_variable)) * _menhir_state * 'tv_simple)) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2434 "flambda_parser.ml"
+# 2435 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let ((((_menhir_stack, _menhir_s), _, (v : 'tv_kinded_variable)), _, (initial_value : 'tv_simple)), _, (body : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2440 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _6 = () in
         let _4 = () in
         let _2 = () in
         let _1 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2443 "flambda_parser.ml"
+# 2449 "flambda_parser.ml"
         ) = 
-# 170 "flambda_parser.mly"
+# 176 "flambda_parser.mly"
       ( let (var, kind) = v in
         Let_mutable { var; kind; initial_value; body } )
-# 2448 "flambda_parser.ml"
+# 2454 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv286)) : 'freshtv288)
     | MenhirState121 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : ((((('freshtv291 * _menhir_state) * 'tv_kinded_variable_opt)) * _menhir_state * 'tv_named)) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2456 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : ((((('freshtv289 * _menhir_state) * 'tv_kinded_variable_opt)) * _menhir_state * 'tv_named)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2462 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let ((((_menhir_stack, _menhir_s), (v : 'tv_kinded_variable_opt)), _, (defining_expr : 'tv_named)), _, (body : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : ((((('freshtv289 * _menhir_state) * 'tv_kinded_variable_opt)) * _menhir_state * 'tv_named)) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2467 "flambda_parser.ml"
+# 2468 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let ((((_menhir_stack, _menhir_s), (v : 'tv_kinded_variable_opt)), _, (defining_expr : 'tv_named)), _, (body : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2473 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _5 = () in
         let _3 = () in
         let _1 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2475 "flambda_parser.ml"
+# 2481 "flambda_parser.ml"
         ) = 
-# 165 "flambda_parser.mly"
+# 171 "flambda_parser.mly"
       ( let (var, kind) = v in
         Let { var; kind; defining_expr; body } )
-# 2480 "flambda_parser.ml"
+# 2486 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv290)) : 'freshtv292)
     | MenhirState60 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (((('freshtv305 * _menhir_state * 'tv_exn_and_stub) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_typed_args)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2488 "flambda_parser.ml"
+# 2494 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
         ((assert (not _menhir_env._menhir_error);
         let _tok = _menhir_env._menhir_token in
@@ -2492,29 +2498,29 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
         | RBRACE ->
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv301 * _menhir_state * 'tv_exn_and_stub) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_typed_args)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2498 "flambda_parser.ml"
+# 2504 "flambda_parser.ml"
             )) = Obj.magic _menhir_stack in
             ((let _menhir_env = _menhir_discard _menhir_env in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv299 * _menhir_state * 'tv_exn_and_stub) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_typed_args)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2505 "flambda_parser.ml"
+# 2511 "flambda_parser.ml"
             )) = Obj.magic _menhir_stack in
             ((let ((((_menhir_stack, _menhir_s, (exn_and_stub : 'tv_exn_and_stub)), _, (name : 'tv_continuation)), _, (params : 'tv_typed_args)), _, (handler : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2510 "flambda_parser.ml"
+# 2516 "flambda_parser.ml"
             ))) = _menhir_stack in
             let _6 = () in
             let _4 = () in
             let _v : 'tv_continuation_handler = 
-# 201 "flambda_parser.mly"
+# 207 "flambda_parser.mly"
     ( let is_exn_handler, stub = exn_and_stub in
       { name; params; stub; is_exn_handler; handler } )
-# 2518 "flambda_parser.ml"
+# 2524 "flambda_parser.ml"
              in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv297) = _menhir_stack in
@@ -2557,66 +2563,66 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
             _menhir_env._menhir_error <- true;
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv303 * _menhir_state * 'tv_exn_and_stub) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_typed_args)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2563 "flambda_parser.ml"
+# 2569 "flambda_parser.ml"
             )) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
             _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv304)) : 'freshtv306)
     | MenhirState129 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (((('freshtv309 * _menhir_state) * _menhir_state * 'tv_recursive) * _menhir_state * 'tv_continuation_handler) * _menhir_state * 'tv_andk) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2572 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : (((('freshtv307 * _menhir_state) * _menhir_state * 'tv_recursive) * _menhir_state * 'tv_continuation_handler) * _menhir_state * 'tv_andk) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2578 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let (((((_menhir_stack, _menhir_s), _, (recursive : 'tv_recursive)), _, (handler : 'tv_continuation_handler)), _, (t : 'tv_andk)), _, (body : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : (((('freshtv307 * _menhir_state) * _menhir_state * 'tv_recursive) * _menhir_state * 'tv_continuation_handler) * _menhir_state * 'tv_andk) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2583 "flambda_parser.ml"
+# 2584 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let (((((_menhir_stack, _menhir_s), _, (recursive : 'tv_recursive)), _, (handler : 'tv_continuation_handler)), _, (t : 'tv_andk)), _, (body : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2589 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _1 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2589 "flambda_parser.ml"
+# 2595 "flambda_parser.ml"
         ) = 
-# 173 "flambda_parser.mly"
+# 179 "flambda_parser.mly"
      ( let handlers = handler :: t in
        Let_cont { recursive; body; handlers } )
-# 2594 "flambda_parser.ml"
+# 2600 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv308)) : 'freshtv310)
     | MenhirState29 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : ((((((('freshtv319 * _menhir_state * 'tv_func_sym) * _menhir_state * 'tv_typed_args)) * _menhir_state * 'tv_continuation) * 'tv_option_exn_continuation_) * _menhir_state * 'tv_return_arity)) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2602 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : ((((((('freshtv317 * _menhir_state * 'tv_func_sym) * _menhir_state * 'tv_typed_args)) * _menhir_state * 'tv_continuation) * 'tv_option_exn_continuation_) * _menhir_state * 'tv_return_arity)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2608 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let ((((((_menhir_stack, _menhir_s, (name : 'tv_func_sym)), _, (params : 'tv_typed_args)), _, (ret_cont : 'tv_continuation)), (exn_cont : 'tv_option_exn_continuation_)), _, (ret_arity : 'tv_return_arity)), _, (expr : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : ((((((('freshtv317 * _menhir_state * 'tv_func_sym) * _menhir_state * 'tv_typed_args)) * _menhir_state * 'tv_continuation) * 'tv_option_exn_continuation_) * _menhir_state * 'tv_return_arity)) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2613 "flambda_parser.ml"
+# 2614 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let ((((((_menhir_stack, _menhir_s, (name : 'tv_func_sym)), _, (params : 'tv_typed_args)), _, (ret_cont : 'tv_continuation)), (exn_cont : 'tv_option_exn_continuation_)), _, (ret_arity : 'tv_return_arity)), _, (expr : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2619 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _7 = () in
         let _3 = () in
         let _v : 'tv_let_code = 
-# 106 "flambda_parser.mly"
+# 112 "flambda_parser.mly"
   ( ({ name; params; ret_cont; ret_arity; exn_cont; expr } : let_code) )
-# 2620 "flambda_parser.ml"
+# 2626 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv315) = _menhir_stack in
@@ -2634,37 +2640,37 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
         let _2 = () in
         let _1 = () in
         let _v : 'tv_program_body_elt = 
-# 94 "flambda_parser.mly"
+# 100 "flambda_parser.mly"
                                           ( Let_code let_code )
-# 2640 "flambda_parser.ml"
+# 2646 "flambda_parser.ml"
          in
         _menhir_goto_program_body_elt _menhir_env _menhir_stack _menhir_s _v) : 'freshtv312)) : 'freshtv314)) : 'freshtv316)) : 'freshtv318)) : 'freshtv320)
     | MenhirState141 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (('freshtv329 * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2648 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : (('freshtv327 * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2654 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let (((_menhir_stack, _menhir_s, (c : 'tv_continuation)), _, (v : 'tv_args)), _, (expr : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : (('freshtv327 * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2659 "flambda_parser.ml"
+# 2660 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let (((_menhir_stack, _menhir_s, (c : 'tv_continuation)), _, (v : 'tv_args)), _, (expr : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2665 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _v : 'tv_effect = 
-# 225 "flambda_parser.mly"
+# 231 "flambda_parser.mly"
       ( let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Loc.none); computed_values = v }
+            exception_cont = ("exn", Location.none); computed_values = v }
         in
         { computation = Some computation; static_structure = [] } )
-# 2668 "flambda_parser.ml"
+# 2674 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv325) = _menhir_stack in
@@ -2681,44 +2687,44 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
         ((let (_menhir_stack, _menhir_s) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_program_body_elt = 
-# 92 "flambda_parser.mly"
+# 98 "flambda_parser.mly"
                                           ( Define_symbol (Nonrecursive, e) )
-# 2687 "flambda_parser.ml"
+# 2693 "flambda_parser.ml"
          in
         _menhir_goto_program_body_elt _menhir_env _menhir_stack _menhir_s _v) : 'freshtv322)) : 'freshtv324)) : 'freshtv326)) : 'freshtv328)) : 'freshtv330)
     | MenhirState164 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (((((('freshtv333 * _menhir_state) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args)) * _menhir_state * 'tv_nonempty_list_static_structure_)) * _menhir_state * (
-# 82 "flambda_parser.mly"
-      (Fexpr.expr)
-# 2695 "flambda_parser.ml"
-        )) = Obj.magic _menhir_stack in
-        ((let (_menhir_env : _menhir_env) = _menhir_env in
-        let (_menhir_stack : (((((('freshtv331 * _menhir_state) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args)) * _menhir_state * 'tv_nonempty_list_static_structure_)) * _menhir_state * (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
 # 2701 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
-        ((let (((((_menhir_stack, _menhir_s), _, (c : 'tv_continuation)), _, (v : 'tv_args)), _, (static : 'tv_nonempty_list_static_structure_)), _, (expr : (
-# 82 "flambda_parser.mly"
+        ((let (_menhir_env : _menhir_env) = _menhir_env in
+        let (_menhir_stack : (((((('freshtv331 * _menhir_state) * _menhir_state * 'tv_continuation) * _menhir_state * 'tv_args)) * _menhir_state * 'tv_nonempty_list_static_structure_)) * _menhir_state * (
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2706 "flambda_parser.ml"
+# 2707 "flambda_parser.ml"
+        )) = Obj.magic _menhir_stack in
+        ((let (((((_menhir_stack, _menhir_s), _, (c : 'tv_continuation)), _, (v : 'tv_args)), _, (static : 'tv_nonempty_list_static_structure_)), _, (expr : (
+# 88 "flambda_parser.mly"
+      (Fexpr.expr)
+# 2712 "flambda_parser.ml"
         ))) = _menhir_stack in
         let _6 = () in
         let _4 = () in
         let _1 = () in
         let _v : (
-# 80 "flambda_parser.mly"
+# 86 "flambda_parser.mly"
       (Fexpr.definition)
-# 2714 "flambda_parser.ml"
+# 2720 "flambda_parser.ml"
         ) = 
-# 216 "flambda_parser.mly"
+# 222 "flambda_parser.mly"
       ( let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Loc.none); computed_values = v }
+            exception_cont = ("exn", Location.none); computed_values = v }
         in
         { computation = Some computation; static_structure = static } )
-# 2722 "flambda_parser.ml"
+# 2728 "flambda_parser.ml"
          in
         _menhir_goto_definition _menhir_env _menhir_stack _menhir_s _v) : 'freshtv332)) : 'freshtv334)
     | _ ->
@@ -2727,9 +2733,9 @@ and _menhir_goto_expr : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 and _menhir_reduce80 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_simple_args = 
-# 268 "flambda_parser.mly"
+# 274 "flambda_parser.mly"
     ( [] )
-# 2733 "flambda_parser.ml"
+# 2739 "flambda_parser.ml"
      in
     _menhir_goto_simple_args _menhir_env _menhir_stack _menhir_s _v
 
@@ -2757,9 +2763,9 @@ and _menhir_run76 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
 and _menhir_reduce90 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_typed_args = 
-# 234 "flambda_parser.mly"
+# 240 "flambda_parser.mly"
     ( [] )
-# 2763 "flambda_parser.ml"
+# 2769 "flambda_parser.ml"
      in
     _menhir_goto_typed_args _menhir_env _menhir_stack _menhir_s _v
 
@@ -2790,17 +2796,17 @@ and _menhir_goto_switch : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_switc
         ((let ((_menhir_stack, _menhir_s, (h : 'tv_switch_case)), _, (t : 'tv_switch)) = _menhir_stack in
         let _2 = () in
         let _v : 'tv_switch = 
-# 145 "flambda_parser.mly"
+# 151 "flambda_parser.mly"
                                          ( h :: t )
-# 2796 "flambda_parser.ml"
+# 2802 "flambda_parser.ml"
          in
         _menhir_goto_switch _menhir_env _menhir_stack _menhir_s _v) : 'freshtv270)) : 'freshtv272)
     | MenhirState37 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : (((('freshtv279 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2804 "flambda_parser.ml"
+# 2810 "flambda_parser.ml"
         ))) * _menhir_state * 'tv_switch) = Obj.magic _menhir_stack in
         ((assert (not _menhir_env._menhir_error);
         let _tok = _menhir_env._menhir_token in
@@ -2808,33 +2814,33 @@ and _menhir_goto_switch : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_switc
         | RBRACE ->
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv275 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2814 "flambda_parser.ml"
+# 2820 "flambda_parser.ml"
             ))) * _menhir_state * 'tv_switch) = Obj.magic _menhir_stack in
             ((let _menhir_env = _menhir_discard _menhir_env in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv273 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2821 "flambda_parser.ml"
+# 2827 "flambda_parser.ml"
             ))) * _menhir_state * 'tv_switch) = Obj.magic _menhir_stack in
             ((let ((((_menhir_stack, _menhir_s), (f : 'tv_is_tag)), _, (scrutinee : (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2826 "flambda_parser.ml"
+# 2832 "flambda_parser.ml"
             ))), _, (cases : 'tv_switch)) = _menhir_stack in
             let _6 = () in
             let _4 = () in
             let _1 = () in
             let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 2834 "flambda_parser.ml"
+# 2840 "flambda_parser.ml"
             ) = 
-# 163 "flambda_parser.mly"
+# 169 "flambda_parser.mly"
     ( Switch {scrutinee; is_fabricated = f; cases} )
-# 2838 "flambda_parser.ml"
+# 2844 "flambda_parser.ml"
              in
             _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv274)) : 'freshtv276)
         | _ ->
@@ -2842,9 +2848,9 @@ and _menhir_goto_switch : _menhir_env -> 'ttv_tail -> _menhir_state -> 'tv_switc
             _menhir_env._menhir_error <- true;
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : (((('freshtv277 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 2848 "flambda_parser.ml"
+# 2854 "flambda_parser.ml"
             ))) * _menhir_state * 'tv_switch) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
             _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv278)) : 'freshtv280)
@@ -2856,7 +2862,7 @@ and _menhir_reduce62 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_option_SEMICOLON_ = 
 # 114 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( None )
-# 2860 "flambda_parser.ml"
+# 2866 "flambda_parser.ml"
      in
     _menhir_goto_option_SEMICOLON_ _menhir_env _menhir_stack _menhir_s _v
 
@@ -2870,14 +2876,14 @@ and _menhir_run38 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
     let _v : 'tv_option_SEMICOLON_ = 
 # 116 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( Some x )
-# 2874 "flambda_parser.ml"
+# 2880 "flambda_parser.ml"
      in
     _menhir_goto_option_SEMICOLON_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv268)
 
 and _menhir_run39 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 2881 "flambda_parser.ml"
+# 2887 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -2886,21 +2892,21 @@ and _menhir_run39 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
     let (_endpos_tag_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((tag : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 2892 "flambda_parser.ml"
+# 2898 "flambda_parser.ml"
     )) : (
-# 49 "flambda_parser.mly"
+# 55 "flambda_parser.mly"
        (string * char option)
-# 2896 "flambda_parser.ml"
+# 2902 "flambda_parser.ml"
     )) = _v in
     let (_startpos_tag_ : Lexing.position) = _startpos in
     ((let _v : 'tv_tag = let _endpos = _endpos_tag_ in
     let _startpos = _startpos_tag_ in
     
-# 246 "flambda_parser.mly"
-            ( make_tag ~loc:(_startpos, _endpos) tag )
-# 2904 "flambda_parser.ml"
+# 252 "flambda_parser.mly"
+            ( make_tag ~loc:(make_loc (_startpos, _endpos)) tag )
+# 2910 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv263) = _menhir_stack in
@@ -3079,7 +3085,7 @@ and _menhir_goto_list_program_body_elt_ : _menhir_env -> 'ttv_tail -> _menhir_st
         let _v : 'tv_list_program_body_elt_ = 
 # 213 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( x :: xs )
-# 3083 "flambda_parser.ml"
+# 3089 "flambda_parser.ml"
          in
         _menhir_goto_list_program_body_elt_ _menhir_env _menhir_stack _menhir_s _v) : 'freshtv220)) : 'freshtv222)
     | MenhirState0 ->
@@ -3096,41 +3102,41 @@ and _menhir_goto_list_program_body_elt_ : _menhir_env -> 'ttv_tail -> _menhir_st
             ((let (_menhir_stack, _menhir_s, (elts : 'tv_list_program_body_elt_)) = _menhir_stack in
             let _2 = () in
             let _v : (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3102 "flambda_parser.ml"
+# 3108 "flambda_parser.ml"
             ) = 
-# 88 "flambda_parser.mly"
+# 94 "flambda_parser.mly"
                                        ( elts )
-# 3106 "flambda_parser.ml"
+# 3112 "flambda_parser.ml"
              in
             let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv227) = _menhir_stack in
             let (_menhir_s : _menhir_state) = _menhir_s in
             let (_v : (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3114 "flambda_parser.ml"
+# 3120 "flambda_parser.ml"
             )) = _v in
             ((let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv225) = Obj.magic _menhir_stack in
             let (_menhir_s : _menhir_state) = _menhir_s in
             let (_v : (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3122 "flambda_parser.ml"
+# 3128 "flambda_parser.ml"
             )) = _v in
             ((let (_menhir_env : _menhir_env) = _menhir_env in
             let (_menhir_stack : 'freshtv223) = Obj.magic _menhir_stack in
             let (_menhir_s : _menhir_state) = _menhir_s in
             let ((_1 : (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3130 "flambda_parser.ml"
+# 3136 "flambda_parser.ml"
             )) : (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3134 "flambda_parser.ml"
+# 3140 "flambda_parser.ml"
             )) = _v in
             (Obj.magic _1 : 'freshtv224)) : 'freshtv226)) : 'freshtv228)) : 'freshtv230)) : 'freshtv232)
         | _ ->
@@ -3144,9 +3150,9 @@ and _menhir_goto_list_program_body_elt_ : _menhir_env -> 'ttv_tail -> _menhir_st
         _menhir_fail ()
 
 and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 73 "flambda_parser.mly"
+# 79 "flambda_parser.mly"
        (string)
-# 3150 "flambda_parser.ml"
+# 3156 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -3155,21 +3161,21 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
     let (_endpos_e_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((e : (
-# 73 "flambda_parser.mly"
+# 79 "flambda_parser.mly"
        (string)
-# 3161 "flambda_parser.ml"
+# 3167 "flambda_parser.ml"
     )) : (
-# 73 "flambda_parser.mly"
+# 79 "flambda_parser.mly"
        (string)
-# 3165 "flambda_parser.ml"
+# 3171 "flambda_parser.ml"
     )) = _v in
     let (_startpos_e_ : Lexing.position) = _startpos in
     ((let _v : 'tv_symbol = let _endpos = _endpos_e_ in
     let _startpos = _startpos_e_ in
     
-# 293 "flambda_parser.mly"
-               ( e, (_startpos, _endpos) )
-# 3173 "flambda_parser.ml"
+# 299 "flambda_parser.mly"
+               ( e, make_loc (_startpos, _endpos) )
+# 3179 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv215) = _menhir_stack in
@@ -3185,9 +3191,9 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
         ((let ((_menhir_stack, _menhir_s), _, (s : 'tv_symbol)) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_program_body_elt = 
-# 95 "flambda_parser.mly"
+# 101 "flambda_parser.mly"
                                           ( Root s )
-# 3191 "flambda_parser.ml"
+# 3197 "flambda_parser.ml"
          in
         _menhir_goto_program_body_elt _menhir_env _menhir_stack _menhir_s _v) : 'freshtv182)) : 'freshtv184)
     | MenhirState5 ->
@@ -3197,9 +3203,9 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
         let (_menhir_stack : 'freshtv189 * _menhir_state * 'tv_symbol) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (s : 'tv_symbol)) = _menhir_stack in
         let _v : 'tv_func_sym = 
-# 289 "flambda_parser.mly"
+# 295 "flambda_parser.mly"
                ( s )
-# 3203 "flambda_parser.ml"
+# 3209 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv187) = _menhir_stack in
@@ -3226,13 +3232,13 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
         let (_menhir_stack : 'freshtv193 * _menhir_state * 'tv_symbol) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (s : 'tv_symbol)) = _menhir_stack in
         let _v : (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 3232 "flambda_parser.ml"
+# 3238 "flambda_parser.ml"
         ) = 
-# 278 "flambda_parser.mly"
+# 284 "flambda_parser.mly"
                ( Symbol s )
-# 3236 "flambda_parser.ml"
+# 3242 "flambda_parser.ml"
          in
         _menhir_goto_name _menhir_env _menhir_stack _menhir_s _v) : 'freshtv194)) : 'freshtv196)
     | MenhirState164 | MenhirState141 | MenhirState29 | MenhirState129 | MenhirState60 | MenhirState121 | MenhirState119 | MenhirState113 | MenhirState110 | MenhirState72 | MenhirState103 | MenhirState101 | MenhirState95 | MenhirState77 | MenhirState76 | MenhirState66 ->
@@ -3242,9 +3248,9 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
         let (_menhir_stack : 'freshtv197 * _menhir_state * 'tv_symbol) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (s : 'tv_symbol)) = _menhir_stack in
         let _v : 'tv_simple = 
-# 283 "flambda_parser.mly"
+# 289 "flambda_parser.mly"
                ( Symbol s )
-# 3248 "flambda_parser.ml"
+# 3254 "flambda_parser.ml"
          in
         _menhir_goto_simple _menhir_env _menhir_stack _menhir_s _v) : 'freshtv198)) : 'freshtv200)
     | MenhirState144 | MenhirState161 | MenhirState148 ->
@@ -3292,22 +3298,22 @@ and _menhir_run2 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state 
         let (_menhir_stack : 'freshtv211 * _menhir_state * 'tv_symbol) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, (s : 'tv_symbol)) = _menhir_stack in
         let _v : (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 3298 "flambda_parser.ml"
+# 3304 "flambda_parser.ml"
         ) = 
-# 250 "flambda_parser.mly"
+# 256 "flambda_parser.mly"
                ( Symbol s )
-# 3302 "flambda_parser.ml"
+# 3308 "flambda_parser.ml"
          in
         _menhir_goto_of_kind_value _menhir_env _menhir_stack _menhir_s _v) : 'freshtv212)) : 'freshtv214)
     | _ ->
         _menhir_fail ()) : 'freshtv216)) : 'freshtv218)
 
 and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state -> (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 3311 "flambda_parser.ml"
+# 3317 "flambda_parser.ml"
 ) -> Lexing.position -> 'ttv_return =
   fun _menhir_env _menhir_stack _endpos _menhir_s _v _startpos ->
     let _menhir_env = _menhir_discard _menhir_env in
@@ -3316,21 +3322,21 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
     let (_endpos_e_ : Lexing.position) = _endpos in
     let (_menhir_s : _menhir_state) = _menhir_s in
     let ((e : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 3322 "flambda_parser.ml"
+# 3328 "flambda_parser.ml"
     )) : (
-# 54 "flambda_parser.mly"
+# 60 "flambda_parser.mly"
        (string)
-# 3326 "flambda_parser.ml"
+# 3332 "flambda_parser.ml"
     )) = _v in
     let (_startpos_e_ : Lexing.position) = _startpos in
     ((let _v : 'tv_continuation = let _endpos = _endpos_e_ in
     let _startpos = _startpos_e_ in
     
-# 310 "flambda_parser.mly"
-               ( e, (_startpos, _endpos) )
-# 3334 "flambda_parser.ml"
+# 316 "flambda_parser.mly"
+               ( e, make_loc (_startpos, _endpos) )
+# 3340 "flambda_parser.ml"
      in
     let (_menhir_env : _menhir_env) = _menhir_env in
     let (_menhir_stack : 'freshtv177) = _menhir_stack in
@@ -3362,7 +3368,7 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
             ((let _v : 'tv_option_exn_continuation_ = 
 # 114 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( None )
-# 3366 "flambda_parser.ml"
+# 3372 "flambda_parser.ml"
              in
             _menhir_goto_option_exn_continuation_ _menhir_env _menhir_stack _v) : 'freshtv134)
         | _ ->
@@ -3380,9 +3386,9 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         ((let (_menhir_stack, _, (cont : 'tv_continuation)) = _menhir_stack in
         let _1 = () in
         let _v : 'tv_exn_continuation = 
-# 99 "flambda_parser.mly"
+# 105 "flambda_parser.mly"
                              ( cont )
-# 3386 "flambda_parser.ml"
+# 3392 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv143) = _menhir_stack in
@@ -3396,7 +3402,7 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         ((let _v : 'tv_option_exn_continuation_ = 
 # 116 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( Some x )
-# 3400 "flambda_parser.ml"
+# 3406 "flambda_parser.ml"
          in
         _menhir_goto_option_exn_continuation_ _menhir_env _menhir_stack _v) : 'freshtv140)) : 'freshtv142)) : 'freshtv144)) : 'freshtv146)) : 'freshtv148)
     | MenhirState41 ->
@@ -3407,9 +3413,9 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         ((let ((_menhir_stack, _menhir_s, (i : 'tv_tag)), _, (c : 'tv_continuation)) = _menhir_stack in
         let _2 = () in
         let _v : 'tv_switch_case = 
-# 139 "flambda_parser.mly"
+# 145 "flambda_parser.mly"
                                           ( i,c )
-# 3413 "flambda_parser.ml"
+# 3419 "flambda_parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv157) = _menhir_stack in
@@ -3442,9 +3448,9 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
             let (_menhir_stack : 'freshtv151 * _menhir_state * 'tv_switch_case) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, (c : 'tv_switch_case)) = _menhir_stack in
             let _v : 'tv_switch = 
-# 144 "flambda_parser.mly"
+# 150 "flambda_parser.mly"
                     ( [c] )
-# 3448 "flambda_parser.ml"
+# 3454 "flambda_parser.ml"
              in
             _menhir_goto_switch _menhir_env _menhir_stack _menhir_s _v) : 'freshtv152)
         | _ ->
@@ -3505,11 +3511,11 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
         let _2 = () in
         let _1 = () in
         let _v : (
-# 82 "flambda_parser.mly"
+# 88 "flambda_parser.mly"
       (Fexpr.expr)
-# 3511 "flambda_parser.ml"
+# 3517 "flambda_parser.ml"
         ) = 
-# 177 "flambda_parser.mly"
+# 183 "flambda_parser.mly"
      ( Apply {
           func = Symbol func;
           continuation = r;
@@ -3521,7 +3527,7 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
               return_arity = ra;
             };
        })
-# 3525 "flambda_parser.ml"
+# 3531 "flambda_parser.ml"
          in
         _menhir_goto_expr _menhir_env _menhir_stack _menhir_s _v) : 'freshtv170)) : 'freshtv172)
     | MenhirState133 ->
@@ -3558,9 +3564,9 @@ and _menhir_run18 : _menhir_env -> 'ttv_tail -> Lexing.position -> _menhir_state
 and _menhir_reduce71 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_recursive = 
-# 110 "flambda_parser.mly"
+# 116 "flambda_parser.mly"
     ( Nonrecursive )
-# 3564 "flambda_parser.ml"
+# 3570 "flambda_parser.ml"
      in
     _menhir_goto_recursive _menhir_env _menhir_stack _menhir_s _v
 
@@ -3572,9 +3578,9 @@ and _menhir_run51 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
     let (_menhir_s : _menhir_state) = _menhir_s in
     ((let _1 = () in
     let _v : 'tv_recursive = 
-# 111 "flambda_parser.mly"
+# 117 "flambda_parser.mly"
         ( Recursive )
-# 3578 "flambda_parser.ml"
+# 3584 "flambda_parser.ml"
      in
     _menhir_goto_recursive _menhir_env _menhir_stack _menhir_s _v) : 'freshtv130)
 
@@ -3594,18 +3600,18 @@ and _menhir_errorcase : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
     | MenhirState161 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv11 * _menhir_state * (
-# 81 "flambda_parser.mly"
+# 87 "flambda_parser.mly"
       (Fexpr.static_structure)
-# 3600 "flambda_parser.ml"
+# 3606 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv12)
     | MenhirState157 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv13 * _menhir_state * (
-# 84 "flambda_parser.mly"
+# 90 "flambda_parser.mly"
       (Fexpr.of_kind_value)
-# 3609 "flambda_parser.ml"
+# 3615 "flambda_parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv14)
@@ -3827,9 +3833,9 @@ and _menhir_errorcase : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
     | MenhirState37 ->
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : ((('freshtv101 * _menhir_state) * 'tv_is_tag) * _menhir_state * (
-# 83 "flambda_parser.mly"
+# 89 "flambda_parser.mly"
       (Fexpr.name)
-# 3833 "flambda_parser.ml"
+# 3839 "flambda_parser.ml"
         ))) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) _menhir_s) : 'freshtv102)
@@ -3902,7 +3908,7 @@ and _menhir_reduce43 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return 
     let _v : 'tv_list_program_body_elt_ = 
 # 211 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
     ( [] )
-# 3906 "flambda_parser.ml"
+# 3912 "flambda_parser.ml"
      in
     _menhir_goto_list_program_body_elt_ _menhir_env _menhir_stack _menhir_s _v
 
@@ -3986,9 +3992,9 @@ and _menhir_discard : _menhir_env -> _menhir_env =
     }
 
 and program : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (
-# 79 "flambda_parser.mly"
+# 85 "flambda_parser.mly"
       (Fexpr.program)
-# 3992 "flambda_parser.ml"
+# 3998 "flambda_parser.ml"
 ) =
   fun lexer lexbuf ->
     let _menhir_env =
@@ -4022,12 +4028,12 @@ and program : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (
         _menhir_env._menhir_error <- true;
         _menhir_errorcase _menhir_env (Obj.magic _menhir_stack) MenhirState0) : 'freshtv2))
 
-# 312 "flambda_parser.mly"
+# 318 "flambda_parser.mly"
   
 
-# 4029 "flambda_parser.ml"
+# 4035 "flambda_parser.ml"
 
 # 269 "/home/chambart/.opam/4.10.0+build-flambda2/lib/menhir/standard.mly"
   
 
-# 4034 "flambda_parser.ml"
+# 4040 "flambda_parser.ml"

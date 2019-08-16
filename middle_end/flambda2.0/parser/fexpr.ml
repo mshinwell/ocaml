@@ -1,6 +1,6 @@
 [@@@ocaml.warning "-30"]
 
-type location = Loc.location
+type location = Location.t
 
 type closure_id = string * location
 

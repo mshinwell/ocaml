@@ -6,7 +6,7 @@ module C = struct
     Format.fprintf ppf
       "%a : %a"
       Print_fexpr.continuation c
-      Loc.pp_location loc
+      Location.print_loc loc
   let compare ((c1, _):t) ((c2, _):t) =
     String.compare c1 c2
 end
@@ -181,7 +181,7 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
       let return_continuation, env = fresh_cont ~sort:Return env let_code.ret_cont 1 in
       let exn_cont, env =
         let cont = match let_code.exn_cont with
-          | None -> "*dummy*", Loc.none
+          | None -> "*dummy*", Location.none
           | Some c -> c
         in
         fresh_cont ~sort:Exn env cont 1
