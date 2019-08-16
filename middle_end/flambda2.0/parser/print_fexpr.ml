@@ -40,8 +40,12 @@ let variable_opt ppf s =
 let continuation ppf (s, _loc) =
   Format.fprintf ppf "%s" s
 
-let kinded_variable ppf (v, (_kind:unit)) =
-  variable ppf v
+let kinded_variable ppf (v, (kind:okind)) =
+  match kind with
+  | None ->
+    variable ppf v
+  | Some _k ->
+    failwith "TODO kinded_variable"
 
 let of_kind_value ppf : of_kind_value -> unit = function
   | Symbol s -> symbol ppf s
@@ -72,10 +76,14 @@ let static_part ppf : static_part -> _ = function
       (pp_space_list of_kind_value) elts
 
 
-let static_structure ppf (s, (_kind:unit), sp) =
-  Format.fprintf ppf "@[<2>%a =@ %a@]"
-    symbol s
-    static_part sp
+let static_structure ppf (s, (kind:okind), sp) =
+  match kind with
+  | None ->
+    Format.fprintf ppf "@[<2>%a =@ %a@]"
+      symbol s
+      static_part sp
+  | Some _k ->
+    failwith "Todo kind static_structure"
 
 let invalid ppf = function
   | Halt_and_catch_fire ->
@@ -169,16 +177,16 @@ let rec expr ppf = function
     Format.fprintf ppf "cont %a (@[<hov>%a@])"
       continuation cont
       (pp_space_list simple) args
-  | Let { var = None; kind = (); defining_expr; body } ->
+  | Let { var = None; kind = None; defining_expr; body } ->
     Format.fprintf ppf "@[<hov>@[<2>%a@];@]@,%a"
       named defining_expr
       expr body
-  | Let { var; kind = (); defining_expr; body } ->
+  | Let { var; kind = None; defining_expr; body } ->
     Format.fprintf ppf "@[<hov>@[<2>let %a =@ %a@]@ in@]@ %a"
       variable_opt var
       named defining_expr
       expr body
-  | Let_mutable { var; kind = (); initial_value; body } ->
+  | Let_mutable { var; kind = None; initial_value; body } ->
     Format.fprintf ppf "@[<hov>@[<2>let mut %a =@ %a@]@ in@]@ %a"
       variable var
       simple initial_value

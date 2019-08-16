@@ -104,7 +104,14 @@ let defining_expr env (named:Fexpr.named) : Ilambda.named =
   | _ ->
       failwith "defining expr"
 
-let value_kind () : Lambda.value_kind =
+let value_kind (kind : Fexpr.okind) : Lambda.value_kind =
+  match kind with
+  | None | Some Value ->
+    Pgenval
+  | Some (Naked_number _ | Fabricated) ->
+    Misc.fatal_error "Forbiden kind"
+
+let value_type_kind (() : Fexpr.flambda_type) : Lambda.value_kind =
   Pgenval
 
 let rec expr (env:env) (e : Fexpr.expr) : Ilambda.t =
@@ -137,7 +144,7 @@ let rec expr (env:env) (e : Fexpr.expr) : Ilambda.t =
           (fun ({ param; ty }:Fexpr.typed_parameter)
             (env, args) ->
             let var, env = fresh_var env param in
-            env, (var, Ilambda.User_visible, value_kind ty) :: args)
+            env, (var, Ilambda.User_visible, value_type_kind ty) :: args)
           handler.params (env, [])
       in
       let handler =
@@ -189,7 +196,7 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
       let env, params =
         List.fold_right (fun (arg : Fexpr.typed_parameter) (env, params) ->
             let var, env = fresh_var env arg.param in
-            env, (var, value_kind arg.ty) :: params)
+            env, (var, value_type_kind arg.ty) :: params)
           let_code.params (env, [])
       in
       let body = expr env let_code.expr in
