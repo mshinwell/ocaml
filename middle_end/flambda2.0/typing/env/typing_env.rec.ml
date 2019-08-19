@@ -393,6 +393,8 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
     end;
     add_symbol_definition t sym kind
 
+let invariant_for_new_equation _ _ _ = ()
+(* XXX guard
 (* CR mshinwell: This should check that precision is not decreasing. *)
 let invariant_for_new_equation t name ty =
   let defined_names = domain t in
@@ -405,6 +407,7 @@ let invariant_for_new_equation t name ty =
       Name_occurrences.print unbound_names
       print t
   end
+*)
 
 let add_equation0 t aliases name name_occurrence_kind ty =
   invariant_for_new_equation t name ty;
@@ -433,6 +436,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
   Type_printers.print ty;
   *)
   let name_occurrence_kind = find_name_occurrence_kind t name in
+  (* XXX Needs to be guarded
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset_domain free_names (domain t))
   then begin
@@ -446,6 +450,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
       Name_occurrences.print (domain t)
       print t
   end;
+  *)
   begin match Basic_type_ops.get_alias ty with
   | None -> ()
   | Some simple ->

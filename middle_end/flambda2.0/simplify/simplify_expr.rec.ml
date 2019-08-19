@@ -37,7 +37,6 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
-  Format.eprintf "Simplifying let %a\n%!" Bindable_let_bound.print bound_vars;
     let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
@@ -66,14 +65,12 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
-(*
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a@ "
   Continuation.print cont
   KP.List.print params
   (Format.pp_print_list T.print) param_types;
 Format.eprintf "handler:@.%a@."
   Expr.print handler;
-*)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~param_types)
@@ -87,6 +84,10 @@ Format.eprintf "handler:@.%a@."
           in
           handler, uacc
         else
+          let () =
+            Format.eprintf "For %a: simplified handler: %a\n%!"
+              Continuation.print cont Expr.print handler
+          in
           let free_names = Expr.free_names handler in
           let used_params =
             List.filter (fun param ->
@@ -97,6 +98,13 @@ Format.eprintf "handler:@.%a@."
             List.filter (fun extra_param ->
                 Name_occurrences.mem_var free_names (KP.var extra_param))
               extra_params_and_args.extra_params
+          in
+          let () =
+            Format.eprintf "For %a: used_params %a, EP %a, used_extra_params %a\n%!"
+              Continuation.print cont
+              KP.List.print used_params
+              KP.List.print extra_params_and_args.extra_params
+              KP.List.print used_extra_params
           in
           let handler =
             let params = used_extra_params @ used_params in

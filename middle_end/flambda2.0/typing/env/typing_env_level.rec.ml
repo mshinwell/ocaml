@@ -286,11 +286,7 @@ let meet_equation env t name typ =
   let t = { t with equations; } in
   t, env
 
-let meet env (t1 : t) (t2 : t) =
-  (* Care: the domains of [t1] and [t2] are treated as contravariant.
-     As such, since this is [meet], we perform unions on the domains.
-     So if one of them is bottom, the result of meeting it with any other
-     level is that level, not bottom. *)
+let meet0 env (t1 : t) (t2 : t) =
   let defined_vars =
     Variable.Map.merge (fun var data1 data2 ->
         match data1, data2 with
@@ -337,6 +333,15 @@ let meet env (t1 : t) (t2 : t) =
       t1.cse t2.cse
   in
   { t with cse; }
+
+let meet env t1 t2 =
+  (* Care: the domains of [t1] and [t2] are treated as contravariant.
+     As such, since this is [meet], we perform unions on the domains.
+     So if one of them is bottom, the result of meeting it with any other
+     level is that level, not bottom. *)
+  if is_empty t1 then t2
+  else if is_empty t2 then t1
+  else meet0 env t1 t2
 
 type cannot_use =
   | Equation_ok
@@ -409,14 +414,10 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
       cse
       EP.Map.empty
   in
-(*
 Format.eprintf "starting CSE\n%!";
-*)
   let cses_with_canonicalised_lhs =
     List.map (fun (env, id, t) ->
-(*
 Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
-*)
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -431,9 +432,7 @@ Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
         (EP.Map.keys cse)
         cses
   in
-(*
 Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_all_paths;
-*)
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
@@ -452,7 +451,7 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
           (Rhs_kind.Set.of_list (Apply_cont_rewrite_id.Map.data rhs_kinds))
       in
       match rhs_has_same_value_on_all_paths with
-      | None ->
+      | None | Some (Needs_extra_binding _) ->
         let prim_result_kind =
           Flambda_primitive.result_kind' (EP.to_primitive prim)
         in
@@ -463,12 +462,10 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
         let bound_to =
           Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
         in
-(*
 Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
   EP.print prim
   Kinded_parameter.print extra_param
   (Apply_cont_rewrite_id.Map.print Simple.print) bound_to;
-*)
         let cse =
           EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
         in
@@ -483,12 +480,10 @@ Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
             ~extra_args
         in
         cse, extra_bindings
-      | Some rhs_kind ->
-(*
+      | Some ((Rhs_in_scope _) as rhs_kind) ->
 Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
   EP.print prim
   Simple.print (Rhs_kind.bound_to rhs_kind);
-*)
         EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
