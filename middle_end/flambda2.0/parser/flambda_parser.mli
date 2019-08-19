@@ -28,6 +28,7 @@ type token =
   | LET
   | LBRACKET
   | LBRACE
+  | IS_INT
   | INT of (string * char option)
   | IN
   | HCF

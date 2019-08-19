@@ -52,6 +52,7 @@ let make_const_float (i, m) =
 %token <string * char option> FLOAT
 %token HCF   [@symbol "HCF"]
 %token IN    [@symbol "in"]
+%token IS_INT  [@symbol "is_int"]
 %token <string * char option> INT
 %token LBRACE [@symbol "{"]
 %token LBRACKET [@symbol "["]
@@ -86,7 +87,7 @@ let make_const_float (i, m) =
 %type <Fexpr.definition> definition
 %type <Fexpr.static_structure> static_structure
 %type <Fexpr.expr> expr
-%type <Fexpr.name> name
+(* %type <Fexpr.name> name *)
 %type <Fexpr.of_kind_value> of_kind_value
 %%
 
@@ -117,9 +118,22 @@ recursive:
   | REC { Recursive }
 ;
 
-is_tag:
-  | TAG { Fabricated }
-  | { Value }
+tag_to_size:
+  | tag = INT COLON size = INT {
+  let (tag, _) = tag in
+  let (size, _) = size in
+  int_of_string tag, int_of_string size
+}
+
+tags_to_sizes:
+  | { [] }
+  | tag_to_size = tag_to_size { [ tag_to_size ] }
+  | tag_to_size = tag_to_size COMMA tags_to_sizes = tags_to_sizes { tag_to_size :: tags_to_sizes }
+
+switch_sort:
+  | TAG LBRACKET tags_to_sizes = tags_to_sizes RBRACKET { Tag { tags_to_sizes } }
+  | { Int }
+  | IS_INT { Is_int }
 ;
 
 unop:
@@ -165,8 +179,8 @@ expr:
   | HCF { Invalid Halt_and_catch_fire }
   | UNREACHABLE { Invalid Treat_as_unreachable }
   | CONT c = continuation s = simple_args { Apply_cont (c, None, s) }
-  | SWITCH f = is_tag scrutinee = name LBRACE cases = switch RBRACE
-    { Switch {scrutinee; is_fabricated = f; cases} }
+  | SWITCH sort = switch_sort scrutinee = simple LBRACE cases = switch RBRACE
+    { Switch {scrutinee; sort; cases} }
   | LET v = kinded_variable_opt EQUAL defining_expr = named IN body = expr
       { let (var, kind) = v in
         Let { var; kind; defining_expr; body } }
@@ -280,10 +294,10 @@ const:
   | c = FLOAT { make_const_float c }
 ;
 
-name:
-  | s = symbol { Symbol s }
-  | v = variable { Var v }
-;
+(* name:
+ *   | s = symbol { Symbol s }
+ *   | v = variable { Var v }
+ * ; *)
 
 simple:
   | s = symbol { Symbol s }

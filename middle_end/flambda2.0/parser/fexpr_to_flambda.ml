@@ -1,6 +1,8 @@
 module Program_body = Flambda_static.Program_body
 module Named = Flambda.Named
 module E = Flambda.Expr
+module I = Flambda_kind.Standard_int
+module P = Flambda_primitive
 
 module C = struct
   type t = string
@@ -38,6 +40,14 @@ let fresh_var env (name, _loc) =
   { env with
     variables = VM.add name v env.variables }
 
+let find_cont env (c, loc) =
+  match CM.find_opt c env.continuations with
+  | None ->
+    Misc.fatal_errorf "Unbound continuation %s: %a"
+      c Location.print_loc loc
+  | Some c ->
+    c
+
 let const (c:Fexpr.const) : Simple.Const.t =
   match c with
   | Tagged_immediate i ->
@@ -74,6 +84,22 @@ let unop (unop:Fexpr.unop) : Flambda_primitive.unary_primitive =
   match unop with
   | Opaque_identity -> Opaque_identity
 
+let binop (unop:Fexpr.binop) : Flambda_primitive.binary_primitive =
+  match unop with
+  | Plus -> Int_arith (I.Tagged_immediate, Add)
+  | Minus -> Int_arith (I.Tagged_immediate, Sub)
+  | Plusdot
+  | Minusdot -> failwith "TODO binop"
+
+let convert_mutable_flag (flag : Fexpr.mutable_or_immutable)
+      : P.mutable_or_immutable =
+  match flag with
+  | Mutable -> Mutable
+  | Immutable -> Immutable
+
+let convert_block_shape ~num_fields =
+  List.init num_fields (fun _field : P.Value_kind.t -> Anything)
+
 let defining_expr env (named:Fexpr.named) : Named.t =
   match named with
   | Simple s ->
@@ -81,6 +107,24 @@ let defining_expr env (named:Fexpr.named) : Named.t =
   | Prim (Unop (u, arg)) ->
     let prim : Flambda_primitive.t =
       Unary (unop u, simple env arg)
+    in
+    Named.create_prim prim Debuginfo.none
+  | Prim (Binop (b, a1, a2)) ->
+    let prim : Flambda_primitive.t =
+      Binary (binop b, simple env a1, simple env a2)
+    in
+    Named.create_prim prim Debuginfo.none
+  | Prim (Block (tag, mutability, args)) ->
+    let mutability = convert_mutable_flag mutability in
+    let shape = convert_block_shape ~num_fields:(List.length args) in
+    let kind : P.make_block_kind =
+      Full_of_values (Tag.Scannable.create_exn tag, shape)
+    in
+    let prim : P.t =
+      P.Variadic (
+        Make_block (kind, mutability),
+        List.map (simple env) args
+      )
     in
     Named.create_prim prim Debuginfo.none
   | _ -> assert false
@@ -136,16 +180,52 @@ let rec expr env (e : Fexpr.expr) : E.t =
       match recursive with
       | Nonrecursive ->
         Flambda.Let_cont.create_non_recursive name handler ~body
-      | Recursive -> assert false
+      | Recursive ->
+        let handlers = Continuation.Map.singleton name handler in
+        Flambda.Let_cont.create_recursive handlers ~body
     end
 
-  | Apply_cont ((cont, _loc), None, args) ->
-    let c, arity = CM.find cont env.continuations in
+  | Apply_cont ((cont, _loc) as cont', None, args) ->
+    let c, arity = find_cont env cont' in
     if List.length args <> arity then
       Misc.fatal_errorf "wrong continuation arity %a" C.print cont;
     let args = List.map (simple env) args in
     let apply_cont = Flambda.Apply_cont.create c ~args in
     E.create_apply_cont apply_cont
+
+  | Switch { scrutinee; sort; cases } ->
+    let sort : Flambda.Switch.Sort.t =
+      match sort with
+      | Int -> Int
+      | Is_int -> Is_int
+      | Tag { tags_to_sizes } ->
+        Tag {
+          tags_to_sizes =
+            List.fold_left (fun acc (tag, size) ->
+              Tag.Scannable.Map.add
+                (Tag.Scannable.create_exn tag)
+                (Targetint.OCaml.of_int size) acc)
+              Tag.Scannable.Map.empty tags_to_sizes;
+        }
+    in
+    let arms =
+      let module D = Discriminant in
+      let sort : D.Sort.t =
+        match sort with
+        | Int -> Int
+        | Tag _ -> Tag
+        | Is_int -> Is_int
+      in
+      D.Map.of_list
+        (List.map (fun (case, (arm, _loc)) ->
+           let c, arity = CM.find arm env.continuations in
+           assert(arity = 0);
+           D.of_int_exn sort case, c)
+           cases)
+    in
+    Flambda.Expr.create_switch sort
+      ~scrutinee:(simple env scrutinee)
+      ~arms
   | _ ->
     failwith "TODO"
 
