@@ -95,9 +95,12 @@ Format.eprintf "handler:@.%a@."
               params
           in
           let used_extra_params =
+              extra_params_and_args.extra_params
+              (*
             List.filter (fun extra_param ->
                 Name_occurrences.mem_var free_names (KP.var extra_param))
               extra_params_and_args.extra_params
+              *)
           in
           let () =
             Format.eprintf "For %a: used_params %a, EP %a, used_extra_params %a\n%!"
@@ -782,21 +785,19 @@ and simplify_apply_cont
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
-(*
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Continuation.print (AC.continuation apply_cont)
   (Format.pp_print_list T.print) arg_types
   Apply_cont_rewrite_id.print rewrite_id;
-*)
+Format.eprintf "Apply_cont starts out being %a in env:@ %a\n%!"
+  Apply_cont.print apply_cont
+  DA.print dacc;
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
-(*
-Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
-*)
     let apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       (* CR mshinwell: Could remove the option type most likely if
@@ -807,16 +808,24 @@ Format.eprintf "Apply_cont starts out being %a\n%!" Apply_cont.print apply_cont;
         Expr.create_apply_cont apply_cont, apply_cont,
           Apply_cont.args apply_cont
       | Some rewrite ->
-(*
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
-*)
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
-(*
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
-*)
+    if !Clflags.flambda_invariant_checks then begin
+      Variable.Set.iter (fun var ->
+          let name = Name.var var in
+          if not (TE.mem (DE.typing_env (DA.denv dacc)) name) then begin
+            Misc.fatal_errorf "[Apply_cont]@ %a after rewrite@ %a \
+                contains unbound names in:@ %a"
+              Expr.print apply_cont_expr
+              (Misc.Stdlib.Option.print Apply_cont_rewrite.print) rewrite
+              DA.print dacc
+          end)
+        (Name_occurrences.variables (Expr.free_names apply_cont_expr))
+    end;
     let check_arity_against_args ~arity:_ = () in
 (*
       if not (Flambda_arity.equal args_arity arity) then begin

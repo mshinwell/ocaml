@@ -19,7 +19,6 @@
 module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
-module TEE = Flambda_type.Typing_env_extension
 
 module Use = struct
   type t = {
@@ -106,22 +105,6 @@ let env_and_param_types t ~definition_typing_env
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
   in
-  let cut_point = (* Scope.next *) definition_scope_level in
-(*
-Format.eprintf "Retrieving env + param types for %a; unknown >= level %a\n%!"
-  Continuation.print t.continuation
-  Scope.print cut_point;
-*)
-  let cut_use_environment use =
-    let env = Use.typing_env_at_use use in
-    let env_extension, _vars_in_scope =
-      TE.cut env ~unknown_if_defined_at_or_later_than:cut_point
-    in
-    env_extension
-  in
-(*
-Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typing_env;
-*)
   let process_use_arg_types use ~allowed = (* CR mshinwell: rename *)
     let env = Use.typing_env_at_use use in
     List.map (fun ty ->
@@ -131,22 +114,13 @@ Format.eprintf "The definition TE is:@ %a\n%!" T.Typing_env.print definition_typ
   match t.uses with
   | [] -> No_uses
   | (use :: uses) as all_uses ->
-    let use_envs_with_ids_and_extensions =
-      List.map (fun use ->
-          let typing_env = Use.typing_env_at_use use in
-          let id = Use.id use in
-          let env_extension = cut_use_environment use in
-          typing_env, id, env_extension)
-        all_uses
+    let use_envs_with_ids =
+      List.map (fun use -> Use.typing_env_at_use use, Use.id use) all_uses
     in
-    (* CR mshinwell: Maybe cutting should return a level rather than an
-       extension, to save opening all the extensions again? *)
-    let joined_env_extension, extra_cse_bindings =
-      TEE.n_way_join definition_typing_env use_envs_with_ids_and_extensions
+    let joined_env_extension, extra_params_and_args =
+      TE.cut_and_n_way_join definition_typing_env use_envs_with_ids
+        ~unknown_if_defined_at_or_later_than:definition_scope_level
     in
-(*
-Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
-*)
     let env = TE.add_env_extension definition_typing_env joined_env_extension in
     let env =
       List.fold_left (fun env extra_param ->
@@ -156,7 +130,7 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
           in
           TE.add_definition env name (KP.kind extra_param))
         env
-        extra_cse_bindings.extra_params
+        extra_params_and_args.extra_params
     in
     let allowed = TE.var_domain env in
     let first_param_types = process_use_arg_types use ~allowed in
@@ -184,7 +158,7 @@ Format.eprintf "joined env extension:@ %a\n%!" TEE.print joined_env_extension;
       typing_env = env;
       arg_types_by_use_id;
       param_types;
-      extra_params_and_args = extra_cse_bindings;
+      extra_params_and_args = extra_params_and_args;
     }
 
 let number_of_uses t = List.length t.uses

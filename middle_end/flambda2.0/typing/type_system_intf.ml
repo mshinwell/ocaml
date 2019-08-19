@@ -62,11 +62,6 @@ module type S = sig
     val one_equation : Name.t -> flambda_type -> t
 
     val mem : t -> Name.t -> bool
-
-    val n_way_join
-       : typing_env
-      -> (typing_env * Apply_cont_rewrite_id.t * t) list
-      -> t * Continuation_extra_params_and_args.t
   end
 
   module Typing_env : sig
@@ -140,10 +135,11 @@ module type S = sig
       -> Simple.t
       -> Simple.Set.t
 
-    val cut
+    val cut_and_n_way_join
        : t
+      -> (t * Apply_cont_rewrite_id.t) list
       -> unknown_if_defined_at_or_later_than:Scope.t
-      -> Typing_env_extension.t * Variable.Set.t
+      -> Typing_env_extension.t * Continuation_extra_params_and_args.t
   end
 
   val meet_shape
