@@ -18,14 +18,31 @@ module V = struct
 end
 module VM = Map.Make(V)
 
+module S = struct
+  type t = string
+  let print ppf c = Format.pp_print_string ppf c
+  let compare = String.compare
+end
+module SM = Map.Make(S)
+
+type func_env = {
+  symbols : Symbol.t SM.t;
+}
+
+let init_fenv = {
+  symbols = SM.empty;
+}
+
 type env = {
   continuations : (Continuation.t * int) CM.t;
   variables : Variable.t VM.t;
+  symbols : Symbol.t SM.t;
 }
 
-let init_env = {
+let init_env (func_env:func_env) = {
   continuations = CM.empty;
   variables = VM.empty;
+  symbols = func_env.symbols ;
 }
 
 let fresh_cont env ?sort (c, _loc) arity =
@@ -40,6 +57,30 @@ let fresh_var env (name, _loc) =
   { env with
     variables = VM.add name v env.variables }
 
+let declare_symbol ~backend:_ (env:func_env) (name, loc) =
+  if SM.mem name env.symbols then
+    Misc.fatal_errorf "Redefinition of symbol %s: %a"
+      name Location.print_loc loc
+  else
+    (* let module Backend = (val backend : Flambda2_backend_intf.S) in
+     * let symbol = Backend.symbol_for_global' (Ident.create_persistent name) in *)
+    let symbol =
+      Symbol.create
+        (Compilation_unit.get_current_exn ())
+        (Linkage_name.create name)
+    in
+    symbol,
+    { (* func_env with *)
+      symbols = SM.add name symbol env.symbols }
+
+let get_symbol (env:env) (name, loc) =
+  match SM.find_opt name env.symbols with
+  | None ->
+    Misc.fatal_errorf "Unbound symbol %s: %a"
+      name Location.print_loc loc
+  | Some s ->
+    s
+
 let find_cont env (c, loc) =
   match CM.find_opt c env.continuations with
   | None ->
@@ -47,6 +88,14 @@ let find_cont env (c, loc) =
       c Location.print_loc loc
   | Some c ->
     c
+
+let find_var env (v, loc) =
+  match VM.find_opt v env.variables with
+  | None ->
+    Misc.fatal_errorf "Unbound variable %s : %a" v
+      Location.print_loc loc
+  | Some var ->
+    var
 
 let const (c:Fexpr.const) : Simple.Const.t =
   match c with
@@ -80,6 +129,18 @@ let simple env (s:Fexpr.simple) : Simple.t =
     Misc.fatal_errorf "TODO simple %a"
       Print_fexpr.simple s
 
+let of_kind_value env (v:Fexpr.of_kind_value) : Flambda_static.Of_kind_value.t =
+  match v with
+  | Symbol s ->
+    Symbol (get_symbol env s)
+  | Tagged_immediate i ->
+    let i = Targetint.of_string i in
+    Tagged_immediate
+      (Immediate.int (Targetint.OCaml.of_targetint i))
+  | Dynamically_computed var ->
+    let var = find_var env var in
+    Dynamically_computed var
+
 let unop (unop:Fexpr.unop) : Flambda_primitive.unary_primitive =
   match unop with
   | Opaque_identity -> Opaque_identity
@@ -93,6 +154,12 @@ let binop (unop:Fexpr.binop) : Flambda_primitive.binary_primitive =
 
 let convert_mutable_flag (flag : Fexpr.mutable_or_immutable)
       : P.mutable_or_immutable =
+  match flag with
+  | Mutable -> Mutable
+  | Immutable -> Immutable
+
+let convert_static_mutable_flag (flag : Fexpr.mutable_or_immutable)
+      : Flambda_static.Static_part.mutable_or_immutable =
   match flag with
   | Mutable -> Mutable
   | Immutable -> Immutable
@@ -229,21 +296,23 @@ let rec expr env (e : Fexpr.expr) : E.t =
   | _ ->
     failwith "TODO"
 
-let rec conv_top ~backend func_env (prog : Fexpr.program) : Program_body.t =
+let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_body.t =
   match prog with
   | [] -> assert false
   | Root (_, _loc) :: _ :: _ ->
     Misc.fatal_errorf "Root must be the last construction of the file"
-  | [ Root (s, _loc) ] ->
-    let module Backend = (val backend : Flambda2_backend_intf.S) in
-    let symbol = Backend.symbol_for_global' (Ident.create_persistent s) in
+  | [ Root s ] ->
+    (* let module Backend = (val backend : Flambda2_backend_intf.S) in
+     * let symbol = Backend.symbol_for_global' (Ident.create_persistent s) in *)
+    let symbol = get_symbol (init_env func_env) s in
     Program_body.root symbol
   | Define_symbol
       (Nonrecursive,
        { computation = Some c;
          static_structure = [ ] }) :: tail ->
     let cont_arity = List.length c.computed_values in
-    let return_continuation, env = fresh_cont init_env ~sort:Return c.return_cont cont_arity in
+    let env = init_env func_env in
+    let return_continuation, env = fresh_cont env ~sort:Return c.return_cont cont_arity in
     let exn_handler, env = fresh_cont ~sort:Exn env c.exception_cont 1 in
     let exn_continuation = Exn_continuation.create ~exn_handler ~extra_args:[] in
     let computation_expr = expr env c.expr in
@@ -258,10 +327,69 @@ let rec conv_top ~backend func_env (prog : Fexpr.program) : Program_body.t =
       computation = Some computation;
       static_structure = S [];
     }
+  | Define_symbol
+      (Nonrecursive,
+       { computation;
+         static_structure }) :: tail ->
+    let prev_env, computation =
+      match computation with
+      | None -> init_env func_env, None
+      | Some c ->
+        let cont_arity = List.length c.computed_values in
+        let env = init_env func_env in
+        let return_continuation, env = fresh_cont env ~sort:Return c.return_cont cont_arity in
+        let exn_handler, env = fresh_cont ~sort:Exn env c.exception_cont 1 in
+        let exn_continuation = Exn_continuation.create ~exn_handler ~extra_args:[] in
+        let computation_expr = expr env c.expr in
+        let env, computed_values =
+          List.fold_right (fun (var, _kind) (env, acc) ->
+            let var, env = fresh_var env var in
+            let comp =
+              Kinded_parameter.create (Parameter.create (Name.var var)) Flambda_kind.value
+            in
+            env, comp :: acc)
+            c.computed_values (env, [])
+        in
+        let computation : Program_body.Computation.t = {
+          expr = computation_expr;
+          return_continuation;
+          exn_continuation;
+          computed_values;
+        } in
+        env, Some computation
+    in
+    let conv_static_structure (func_env, acc) (symbol, _kind, (def:Fexpr.static_part)) =
+      match def with
+      | Block (tag, mutability, args) ->
+        let symbol, func_env = declare_symbol ~backend func_env symbol in
+        (* let env = init_env func_env in *)
+        let mutability = convert_static_mutable_flag mutability in
+        let static_structure =
+          let tag = Tag.Scannable.create_exn tag in
+          Flambda_static.Static_part.Block
+            (tag, mutability,
+             List.map (of_kind_value prev_env) args)
+        in
+        let def =
+          Program_body.Bound_symbols.Singleton symbol, static_structure
+        in
+        func_env, def :: acc
+      (* | _ ->
+       *   assert false *)
+    in
+    let func_env, structure =
+      List.fold_left conv_static_structure (func_env, []) static_structure
+    in
+    let structure = List.rev structure in
+    let body = conv_top ~backend func_env tail in
+    Program_body.define_symbol ~body {
+      computation;
+      static_structure = S structure;
+    }
   | _ ->
     assert false
 
 let conv ~backend fexpr : Flambda_static.Program.t =
-  let body = conv_top ~backend () fexpr in
+  let body = conv_top ~backend init_fenv fexpr in
   { imported_symbols = Symbol.Map.empty;
     body; }
