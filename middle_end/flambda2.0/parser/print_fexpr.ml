@@ -11,6 +11,11 @@ let pp_semi_list f ppf =
     ~pp_sep:(fun ppf () -> Format.fprintf ppf ";")
     ppf
 
+let pp_comma_list f ppf =
+  Format.pp_print_list f
+    ~pp_sep:(fun ppf () -> Format.fprintf ppf ",")
+    ppf
+
 let recursive ppf = function
   | Nonrecursive -> ()
   | Recursive -> Format.fprintf ppf "@ rec"
@@ -153,9 +158,16 @@ let switch_case ppf (v, c) =
     v
     continuation c
 
-let fabricated_tag ppf = function
-  | Fabricated -> Format.fprintf ppf " tag"
-  | Value -> ()
+let switch_sort ppf = function
+  | Int -> ()
+  | Is_int -> Format.fprintf ppf " is_int"
+  | Tag { tags_to_sizes } ->
+    let s ppf (tag, size) =
+      Format.fprintf ppf "%i:%i" tag size
+    in
+    Format.fprintf ppf " tag[%a]"
+      (pp_comma_list s)
+      tags_to_sizes
 
 let simple_args ppf = function
   | [] -> ()
@@ -205,10 +217,10 @@ let rec expr ppf = function
       andk rem_cont
       expr body
 
-  | Switch { scrutinee; is_fabricated; cases } ->
+  | Switch { scrutinee; sort; cases } ->
     Format.fprintf ppf "@[<v>@[<v 2>switch%a %a {%a@]@ }@]"
-      fabricated_tag is_fabricated
-      name scrutinee
+      switch_sort sort
+      simple scrutinee
       (pp_semi_list switch_case) cases
       (* (fun ppf () -> if cases <> [] then Format.pp_print_cut ppf ()) () *)
 

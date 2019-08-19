@@ -137,6 +137,13 @@ type apply = {
      * specialise : specialise_attribute; *)
   }
 
+type size = int
+
+type switch_sort =
+  | Int
+  | Tag of { tags_to_sizes : (tag_scannable * size) list; }
+  | Is_int
+
 type expr =
   | Let of let_
   | Let_mutable of {
@@ -149,8 +156,8 @@ type expr =
   | Apply of apply
   | Apply_cont of continuation * trap_action option * simple list
   | Switch of {
-      scrutinee : name;
-      is_fabricated : is_fabricated;
+      scrutinee : simple;
+      sort : switch_sort;
       cases : (int * continuation) list;
     }
   | Invalid of invalid_term_semantics

@@ -48,6 +48,7 @@ let keyword_table =
     "effect", EFFECT;
     "exn", EXN;
     "in", IN;
+    "is_int", IS_INT;
     "let", LET;
     "letk", LETK;
     "mut", MUT;
@@ -106,6 +107,9 @@ rule token = parse
         token lexbuf }
   | blank +
       { token lexbuf }
+  | "(*"
+      { comment 1 lexbuf;
+        token lexbuf }
   | "let"
       { LET }
   | "_" { UNDERSCORE }
@@ -164,3 +168,15 @@ rule token = parse
       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
                      current_location lexbuf))
       }
+
+and comment n = parse
+  | newline
+         { update_loc lexbuf None ~line:1 ~absolute:false ~chars:0;
+           comment n lexbuf }
+  | "*)"
+         { if n = 1 then ()
+           else comment (n-1) lexbuf }
+  | "(*"
+         { comment (n+1) lexbuf }
+  | _
+         { comment n lexbuf }
