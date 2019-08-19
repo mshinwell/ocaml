@@ -380,16 +380,12 @@ end
 
 let cse_after_n_way_join envs_with_extensions ~allowed =
   let module EP = Flambda_primitive.Eligible_for_cse in
-  let canonicalise env simple =
+  let canonicalise env simple ~min_occurrence_kind =
     let canonical_simple =
-      Typing_env.get_canonical_simple env
-        ~min_occurrence_kind:Name_occurrence_kind.in_types
-        simple
+      Typing_env.get_canonical_simple env ~min_occurrence_kind simple
     in
     match canonical_simple with
-    | Bottom -> None
-    | Ok None -> (* CR mshinwell: Can this happen? *)
-      Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
+    | Bottom | Ok None -> None
     | Ok (Some simple) ->
       if Simple.allowed simple ~allowed then Some simple
       else None
@@ -404,7 +400,8 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
               match cannot_use with
               | Equation_ineligible -> Equation_ineligible, arg
               | Equation_ok ->
-                match canonicalise env arg with
+                let min_occurrence_kind = Name_occurrence_kind.in_types in
+                match canonicalise env arg ~min_occurrence_kind with
                 | None -> Equation_ineligible, arg
                 | Some arg -> Equation_ok, arg)
         in
@@ -424,9 +421,7 @@ Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
   let lhs_of_cses_valid_on_all_paths =
     match cses_with_canonicalised_lhs with
     | [] -> EP.Set.empty
-    | [_env, _id, cse] -> EP.Map.keys cse
-    | (env, _id, cse)::cses ->
-      let cse = canonicalise_lhs env cse in
+    | (_env, _id, cse)::cses ->
       List.fold_left (fun valid_on_all_paths (_env, _id, cse) ->
           EP.Set.inter (EP.Map.keys cse) valid_on_all_paths)
         (EP.Map.keys cse)
@@ -436,12 +431,28 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
+            Format.eprintf "Checking use ID %a in env:@ %a\n%!"
+              Apply_cont_rewrite_id.print id
+              Typing_env.print env;
             let bound_to = EP.Map.find prim cse in
             let rhs_kind : Rhs_kind.t =
-              match canonicalise env bound_to with
+              (* XXX This may not be sufficient---we may need to abort
+                 completely.  Or maybe CSE equations shouldn't exist that
+                 would require that, and we should have an earlier check? *)
+              let min_occurrence_kind = Name_occurrence_kind.normal in
+              match canonicalise env bound_to ~min_occurrence_kind with
               | None -> Needs_extra_binding { bound_to; }
               | Some bound_to -> Rhs_in_scope { bound_to; }
             in
+            begin match Simple.descr (Rhs_kind.bound_to rhs_kind) with
+            | Name name ->
+              if not (Typing_env.mem env name) then begin
+                Misc.fatal_errorf "Unbound name %a during CSE:@ %a"
+                  Name.print name
+                  Typing_env.print env
+              end;
+            | _ -> () (* add more *)
+            end;
             Apply_cont_rewrite_id.Map.add id rhs_kind rhs_kinds)
           Apply_cont_rewrite_id.Map.empty
           cses_with_canonicalised_lhs
@@ -551,5 +562,4 @@ typ
 let n_way_join env envs_with_extensions =
   match envs_with_extensions with
   | [] -> empty (), Continuation_extra_params_and_args.empty
-  | [_env, _id, t] -> t, Continuation_extra_params_and_args.empty
   | envs_with_extensions -> n_way_join0 env envs_with_extensions

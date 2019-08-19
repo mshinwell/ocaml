@@ -594,7 +594,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
   let original_t = t in
   if Scope.(>) min_scope current_scope then
-    Typing_env_extension.empty (), var_domain t
+    Typing_env_level.empty (), var_domain t
   else
     let all_levels =
       Scope.Map.add current_scope t.current_level t.prev_levels
@@ -649,10 +649,23 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
         at_or_after_cut
         (Typing_env_level.empty ())
     in
-    let env_extension = Typing_env_extension.create level in
 (* Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension; *)
     let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
-    env_extension, vars_in_scope_at_cut
+    level, vars_in_scope_at_cut
+
+let cut_and_n_way_join definition_typing_env ts_and_use_ids
+      ~unknown_if_defined_at_or_later_than =
+  let after_cuts =
+    List.map (fun (t, use_id) ->
+        let level, _in_scope = cut t ~unknown_if_defined_at_or_later_than in
+        t, use_id, level)
+      ts_and_use_ids
+  in
+  let level, extra_params_and_args =
+    Typing_env_level.n_way_join definition_typing_env after_cuts
+  in
+  let env_extension = Typing_env_extension.create level in
+  env_extension, extra_params_and_args
 
 let find_name_occurrence_kind_of_simple t simple =
   match Simple.descr simple with

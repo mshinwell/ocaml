@@ -79,6 +79,8 @@ let meet env (t1 : t) (t2 : t) : t =
   in
   { abst; }
 
+(* CR mshinwell: This is only used in [Meet_and_join_value].  Something is
+   probably wrong there. *)
 let n_way_join env envs_with_extensions : t * _ =
   let abst, extra_cse_bindings =
     let rec open_binders envs_with_extensions envs_with_levels =
@@ -92,7 +94,6 @@ let n_way_join env envs_with_extensions : t * _ =
         in
         abst, extra_cse_bindings
       | (_env, id, t)::envs_with_extensions ->
-        (* CR mshinwell: about _env, see CR in Continuation_uses *)
         A.pattern_match t.abst ~f:(fun _ level ->
           let env = Typing_env.add_env_extension_from_level env level in
           (* It doesn't matter that the list gets reversed. *)
