@@ -22,9 +22,11 @@ let simplify_make_block dacc _prim dbg
       ~(make_block_kind : P.make_block_kind)
       ~(mutable_or_immutable : P.mutable_or_immutable)
       args_with_tys ~result_var =
+      (*
 Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
   Variable.print result_var
   (List.length args_with_tys);
+  *)
   let denv = DA.denv dacc in
   let args, _arg_tys = List.split args_with_tys in
   let invalid () =
@@ -73,7 +75,6 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
         | Mutable -> T.any_value ()
       in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      let () = Format.eprintf "makeblock done\n%!" in
       Reachable.reachable term, env_extension, dacc
     end
   | Full_of_naked_floats -> Misc.fatal_error "Not yet implemented"

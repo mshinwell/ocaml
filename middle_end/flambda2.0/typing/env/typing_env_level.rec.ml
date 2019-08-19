@@ -411,10 +411,14 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
       cse
       EP.Map.empty
   in
+  (*
 Format.eprintf "starting CSE\n%!";
+*)
   let cses_with_canonicalised_lhs =
     List.map (fun (env, id, t) ->
+    (*
 Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
+*)
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -427,13 +431,17 @@ Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
         (EP.Map.keys cse)
         cses
   in
+  (*
 Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_all_paths;
+*)
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
+        (*
             Format.eprintf "Checking use ID %a in env:@ %a\n%!"
               Apply_cont_rewrite_id.print id
               Typing_env.print env;
+              *)
             let bound_to = EP.Map.find prim cse in
             let rhs_kind : Rhs_kind.t =
               (* XXX This may not be sufficient---we may need to abort
@@ -473,10 +481,10 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
         let bound_to =
           Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
         in
-Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
+(* Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
   EP.print prim
   Kinded_parameter.print extra_param
-  (Apply_cont_rewrite_id.Map.print Simple.print) bound_to;
+  (Apply_cont_rewrite_id.Map.print Simple.print) bound_to *)
         let cse =
           EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
         in
@@ -492,9 +500,11 @@ Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
         in
         cse, extra_bindings
       | Some ((Rhs_in_scope _) as rhs_kind) ->
+      (*
 Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
   EP.print prim
   Simple.print (Rhs_kind.bound_to rhs_kind);
+  *)
         EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
