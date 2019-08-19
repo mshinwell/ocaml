@@ -65,12 +65,14 @@ and simplify_one_continuation_handler
   let module CPH = Continuation_params_and_handler in
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
+    (*
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a@ "
   Continuation.print cont
   KP.List.print params
   (Format.pp_print_list T.print) param_types;
 Format.eprintf "handler:@.%a@."
   Expr.print handler;
+  *)
       let dacc =
         DA.map_denv dacc ~f:(fun denv ->
           DE.add_parameters denv params ~param_types)
@@ -84,10 +86,12 @@ Format.eprintf "handler:@.%a@."
           in
           handler, uacc
         else
+        (*
           let () =
             Format.eprintf "For %a: simplified handler: %a\n%!"
               Continuation.print cont Expr.print handler
           in
+          *)
           let free_names = Expr.free_names handler in
           let used_params =
             List.filter (fun param ->
@@ -95,13 +99,11 @@ Format.eprintf "handler:@.%a@."
               params
           in
           let used_extra_params =
-              extra_params_and_args.extra_params
-              (*
             List.filter (fun extra_param ->
                 Name_occurrences.mem_var free_names (KP.var extra_param))
               extra_params_and_args.extra_params
-              *)
           in
+          (*
           let () =
             Format.eprintf "For %a: used_params %a, EP %a, used_extra_params %a\n%!"
               Continuation.print cont
@@ -109,6 +111,7 @@ Format.eprintf "handler:@.%a@."
               KP.List.print extra_params_and_args.extra_params
               KP.List.print used_extra_params
           in
+          *)
           let handler =
             let params = used_extra_params @ used_params in
             CH.with_params_and_handler cont_handler
@@ -785,6 +788,7 @@ and simplify_apply_cont
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
+    (*
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Continuation.print (AC.continuation apply_cont)
   (Format.pp_print_list T.print) arg_types
@@ -792,6 +796,7 @@ Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
 Format.eprintf "Apply_cont starts out being %a in env:@ %a\n%!"
   Apply_cont.print apply_cont
   DA.print dacc;
+  *)
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
@@ -808,12 +813,16 @@ Format.eprintf "Apply_cont starts out being %a in env:@ %a\n%!"
         Expr.create_apply_cont apply_cont, apply_cont,
           Apply_cont.args apply_cont
       | Some rewrite ->
+      (*
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
+  *)
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
+    (*
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
+*)
     if !Clflags.flambda_invariant_checks then begin
       Variable.Set.iter (fun var ->
           let name = Name.var var in

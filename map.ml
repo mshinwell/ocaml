@@ -498,7 +498,7 @@ module Make(Ord: OrderedType) = struct
           concat_or_join (merge f l1 l2) v2 (f v2 d1 (Some d2)) (merge f r1 r2)
       | _ ->
           assert false
-(*
+
     let rec union f s1 s2 =
       match (s1, s2) with
       | (Empty, s) | (s, Empty) -> s
@@ -608,5 +608,4 @@ module Make(Ord: OrderedType) = struct
             end
       in
       seq_of_enum_ (aux low m End)
-      *)
 end
