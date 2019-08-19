@@ -367,6 +367,7 @@ let mark_as_recursive_static_catch cont =
 
 let rec simplify_primitive env (prim : L.primitive) args loc =
   match prim, args with
+  (*
   | (Pdivint Safe | Pmodint Safe
       | Pdivbint { is_safe = Safe; size = _; }
       | Pmodbint { is_safe = Safe; size = _; }),
@@ -432,6 +433,7 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
       | Pmodbint { is_safe = Safe; size = _; }), _
       when not !Clflags.unsafe ->
     Misc.fatal_error "Pdivint / Pmodint must have exactly two arguments"
+    *)
   | Pfloatcomp CFnlt, args ->
     L.Lprim (Pnot, [L.Lprim (Pfloatcomp CFlt, args, loc)], loc)
   | Pfloatcomp CFngt, args ->
