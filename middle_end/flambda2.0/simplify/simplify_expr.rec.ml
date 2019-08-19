@@ -37,6 +37,7 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
+  Format.eprintf "Simplifying let %a\n%!" Bindable_let_bound.print bound_vars;
     let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
