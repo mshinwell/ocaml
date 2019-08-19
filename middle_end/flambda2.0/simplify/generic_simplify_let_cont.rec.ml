@@ -64,7 +64,6 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
           | Uses { typing_env; arg_types_by_use_id; param_types;
                    extra_params_and_args; } ->
             let param_types, extra_params_and_args, typing_env =
-              let cannot_change_arity = true in
               if cannot_change_arity then
                 param_types, Continuation_extra_params_and_args.empty,
                   typing_env
