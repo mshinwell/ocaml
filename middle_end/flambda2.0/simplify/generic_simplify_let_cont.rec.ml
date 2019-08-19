@@ -63,20 +63,22 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
             cont_handler, user_data, uacc
           | Uses { typing_env; arg_types_by_use_id; param_types;
                    extra_params_and_args; } ->
-            let param_types, extra_params_and_args, dacc =
+            let param_types, extra_params_and_args, typing_env =
+              let cannot_change_arity = true in
               if cannot_change_arity then
-                param_types, Continuation_extra_params_and_args.empty, dacc
+                param_types, Continuation_extra_params_and_args.empty,
+                  typing_env
               else
-              let typing_env, param_types, extra_params_and_args =
-                Unbox_continuation_params.make_unboxing_decisions typing_env
-                  ~arg_types_by_use_id ~param_types extra_params_and_args
-              in
-              let dacc =
-                DA.create
-                  (DE.with_typing_environment definition_denv typing_env)
-                  cont_uses_env r
-              in
-              param_types, extra_params_and_args, dacc
+                let typing_env, param_types, extra_params_and_args =
+                  Unbox_continuation_params.make_unboxing_decisions typing_env
+                    ~arg_types_by_use_id ~param_types extra_params_and_args
+                in
+                param_types, extra_params_and_args, typing_env
+            in
+            let dacc =
+              DA.create
+                (DE.with_typing_environment definition_denv typing_env)
+                cont_uses_env r
             in
             try
               simplify_continuation_handler_like dacc ~param_types
