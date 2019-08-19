@@ -389,8 +389,10 @@ let box_bint bi (arg : expr_primitive) : expr_primitive =
 let unbox_bint bi (arg : simple_or_prim) : simple_or_prim =
   Prim (Unary (Unbox_number (boxable_number_of_boxed_integer bi), arg))
 
-let tagged_immediate_as_naked_nativeint (_arg : simple_or_prim) : simple_or_prim =
-  failwith "TODO add a primitive for that"
+let tagged_immediate_as_naked_nativeint (arg : simple_or_prim) : simple_or_prim =
+  arg
+  (* CR mshinwell: fix this! 
+  failwith "TODO add a primitive for that" *)
 
 let bint_binary_prim bi prim arg1 arg2 =
   box_bint bi
@@ -649,7 +651,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
     Ternary (Block_set (Block Naked_float, convert_init_or_assign init_or_assign),
       block, Simple field, value)
-
+  | Pdivint Unsafe, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2)
   | Pdivint Safe, [arg1; arg2] ->
     Checked {
       primitive =
@@ -736,7 +739,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   (*     dbg; *)
   (*   } *)
 
-  | ( Pdivint Unsafe | Pmodint Unsafe
+  | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
     | Praise _
