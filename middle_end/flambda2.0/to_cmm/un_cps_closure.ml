@@ -24,6 +24,11 @@ type env = {
 }
 (** Public state to store the mapping from elements of a closure to offset. *)
 
+let print_env fmt env =
+  Format.fprintf fmt "{@[<v>closures: @[<v>%a@]@,env_vars: @[<v>%a@]@]}"
+    (Closure_id.Map.print Numbers.Int.print) env.closure_offsets
+    (Var_within_closure.Map.print Numbers.Int.print) env.env_var_offsets
+
 let empty_env = {
   closure_offsets = Closure_id.Map.empty;
   env_var_offsets = Var_within_closure.Map.empty;
@@ -159,6 +164,19 @@ let layout env closures env_vars =
   let map = order env closures env_vars in
   layout_aux map [] 0
 
+let print_layout_slot fmt = function
+  | Env_var v -> Format.fprintf fmt "var %a" Var_within_closure.print v
+  | Infix_header -> Format.fprintf fmt "infix_header"
+  | Closure cid -> Format.fprintf fmt "closure %a" Closure_id.print cid
+
+let print_layout fmt l =
+  Format.fprintf fmt "@[<v>";
+  List.iter (fun (i, slot) ->
+      Format.fprintf fmt "@[<h>%d %a@]@," i print_layout_slot slot
+    ) l;
+  Format.fprintf fmt "@]"
+
+
 (* Greedy algorithm *)
 
 module Greedy = struct
@@ -236,8 +254,8 @@ module Greedy = struct
     sets_of_closures = [];
   }
 
-  (* printing *)
-(*
+  (*
+  (* debug printing *)
   let print_set_id fmt s = Format.fprintf fmt "%d" s.id
 
   let print_set_ids fmt l =
@@ -256,10 +274,14 @@ module Greedy = struct
         Format.fprintf fmt "%a,@ " print_slot_desc s
       ) l
 
+  let print_slot_pos fmt = function
+    | Assigned i -> Format.fprintf fmt "%d" i
+    | Unassigned -> Format.fprintf fmt "?"
+
   let print_slot fmt s =
     Format.fprintf fmt
-      "@[<hov>[pos: %d;@ size: %d;@ desc: %a;@ sets: %a]@]"
-      s.pos s.size print_desc s.desc print_set_ids s.sets
+      "@[<hov>[pos: %a;@ size: %d;@ desc: %a;@ sets: %a]@]"
+      print_slot_pos s.pos s.size print_desc s.desc print_set_ids s.sets
 
   let print_set fmt s =
     Format.fprintf fmt
@@ -277,10 +299,10 @@ module Greedy = struct
   let print fmt state =
     Format.fprintf fmt
       "@[<v 2>{ closures: @[<hov>%a@];@ env_vars: @[<hov>%a@];@ sets: @[<hov>%a@]@ }@]"
-      (Closure_id.Map.print print_slot_desc) state.closures
-      (Var_within_closure.Map.print print_slot_desc) state.env_vars
+      (Closure_id.Map.print print_slot) state.closures
+      (Var_within_closure.Map.print print_slot) state.env_vars
       print_sets state.sets_of_closures
-*)
+    *)
 
   (* Slots *)
 
