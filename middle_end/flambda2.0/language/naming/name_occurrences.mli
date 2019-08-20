@@ -42,6 +42,8 @@ val add_continuation : t -> Continuation.t -> t
 
 val count_continuation : t -> Continuation.t -> Num_occurrences.t
 
+val count_variable : t -> Variable.t -> Num_occurrences.t
+
 val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
 
 val add_variable : t -> Variable.t -> Name_occurrence_kind.t -> t

@@ -274,6 +274,9 @@ let add_continuation t cont =
 let count_continuation t cont =
   For_continuations.count t.continuations cont
 
+let count_variable t var =
+  For_variables.count t.variables var
+
 let singleton_variable var kind =
   { empty with
     variables = For_variables.singleton var kind;
