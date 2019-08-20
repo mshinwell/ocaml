@@ -311,9 +311,16 @@ module Greedy = struct
     | Closure _ -> true
     | Env_var _ -> false
 
+  let add_slot_offset_to_set offset slot set =
+    let map = set.allocated_slots in
+    assert (not (Numbers.Int.Map.mem offset map));
+    let map = Numbers.Int.Map.add offset slot map in
+    set.allocated_slots <- map
+
   let add_slot_offset env slot offset =
     assert (slot.pos = Unassigned);
     slot.pos <- Assigned offset;
+    List.iter (add_slot_offset_to_set offset slot) slot.sets;
     match slot.desc with
     | Closure c -> add_closure_offset env c offset
     | Env_var v -> add_env_var_offset env v offset
