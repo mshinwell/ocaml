@@ -50,7 +50,7 @@ let print_with_cache ~cache ppf
       } =
   fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
       @[<hov 1>(function_decls@ %a)@]@ \
-      @[<hov 1>(closure_elements@ %a)@]@ \
+      @[<hov 1>(closure_elements@ %a)@]\
       )@]"
     (Flambda_colours.prim_constructive ())
     (Flambda_colours.normal ())

@@ -35,8 +35,9 @@ let print ppf { callee; continuation; exn_continuation; args; call_kind;
       @[<hov 1>(%a\u{3008}%a\u{3009}\u{300a}%a\u{300b}(%a))@]@ \
       @[<hov 1>(call_kind@ %a)@]@ \
       @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
-      @[<hov 1>(inline@ %a)@])@]@ \
-      @[<hov 1>(inlining_depth@ %d)@])@]"
+      @[<hov 1>(inline@ %a)@]@ \
+      @[<hov 1>(inlining_depth@ %d)@]\
+      )@]"
     Simple.print callee
     Continuation.print continuation
     Exn_continuation.print exn_continuation

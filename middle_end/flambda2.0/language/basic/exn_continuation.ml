@@ -35,7 +35,8 @@ include Identifiable.Make (struct
     | _ ->
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(exn_handler@ %a)@]@ \
-          @[<hov 1>@<0>%s(extra_args@ @<0>%s(%a)@<0>%s@<0>)@<0>%s@])@]"
+          @[<hov 1>@<0>%s(extra_args@ @<0>%s(%a)@<0>%s@<0>)@<0>%s@]\
+          )@]"
         Continuation.print exn_handler
         (match extra_args with
          | [] -> Flambda_colours.elide ()

@@ -115,7 +115,8 @@ let empty =
 let print ppf { continuations; variables; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
-      @[<hov 1>(variables@ %a)@])@]"
+      @[<hov 1>(variables@ %a)@])\
+      @]"
     Continuations.print continuations
     Variables.print variables
 
