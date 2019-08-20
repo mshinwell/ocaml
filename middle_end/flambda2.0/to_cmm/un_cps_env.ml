@@ -20,8 +20,27 @@
 
 type cont =
   | Jump of Cmm.machtype list * int
-  | Inline of Backend_var.With_provenance.t list * Cmm.expression
+  | Inline of Kinded_parameter.t list * Flambda.Expr.t
 
+(* Delayed let-bindings. Let bindings are delayed in a stack in order
+   to allow for potentiel reordering of variables that are bound and
+   use exactly once, (without changing semantics), in order to optimize
+   the generated cmm code. There are tow main optimizations that are
+   targeted : arithmetic optimization of nested expressions (mainly
+   tagging/untagging), and potential optimizations performed later on
+   funciton applications which work better when arguments are not
+   let-bound.
+   Non-linear let bindings are also delayed to allow linear let-bound vars
+   to be permuted with non-linear let-bound vars.
+*)
+
+type binding = {
+  var : Variable.t;
+  effs : Effects_and_coeffects.t;
+  inline : bool;
+  cmm_var : Backend_var.With_provenance.t;
+  cmm_expr : Cmm.expression;
+}
 
 (* Translation environment *)
 
@@ -32,18 +51,23 @@ type t = {
   k_exn : Continuation.t;
   (* The exception continuation of the current context
      (used to determine where to insert try-with blocks) *)
-  vars  : Backend_var.t Variable.Map.t;
+  vars  : Cmm.expression Variable.Map.t;
   (* Map from flambda2 variables to backend_variables *)
   conts : cont Continuation.Map.t;
   (* Map from continuations to handlers (i.e variables bound by the
      continuation and expression of the continuation handler). *)
   offsets : Un_cps_closure.env;
   (* Offsets for closure_ids and var_within_closures. *)
+  bindings : binding list;
+  (* A list of let-bindings (with information about effects and coeffects),
+     in reverse order of encounter (i.e. the first element of the list is
+     the most recently seen). *)
 }
 
 
 let mk offsets k k_exn = {
   k; k_exn; offsets;
+  bindings = [];
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
 }
@@ -59,13 +83,22 @@ let exn_cont env = env.k_exn
 
 (* Variables *)
 
+let gen_variable v =
+  let name = Variable.unique_name v in
+  let v = Backend_var.create_local name in
+  let v = Backend_var.With_provenance.create v in
+  v
+
+let add_variable env v v' =
+  let v'' = Backend_var.With_provenance.var v' in
+  let vars = Variable.Map.add v (Un_cps_helper.var v'') env.vars in
+  { env with vars }
+
 let create_variable env v =
   assert (not (Variable.Map.mem v env.vars));
-  let name = Variable.unique_name v in
-  let v' = Backend_var.create_local name in
-  let vars = Variable.Map.add v v' env.vars in
-  let v'' = Backend_var.With_provenance.create v' in
-  { env with vars }, v''
+  let v' = gen_variable v in
+  let env = add_variable env v v' in
+  env, v'
 
 let create_variables env l =
   let env, l' =
@@ -124,4 +157,55 @@ let env_var_offset env env_var =
 
 let layout env closures env_vars =
   Un_cps_closure.layout env.offsets closures env_vars
+
+
+(* Inlining of let-bindings *)
+
+let bind_variable env var effs inline cmm_expr =
+  if inline && Effects_and_coeffects.is_pure effs then
+    { env with vars = Variable.Map.add var cmm_expr env.vars }
+  else begin
+    let cmm_var = gen_variable var in
+    let binding = { var; effs; inline; cmm_var; cmm_expr; } in
+    { env with bindings = binding :: env.bindings }
+  end
+
+let inline_variable env v =
+  let skip_inlining b =
+    let v = Backend_var.With_provenance.var b.cmm_var in
+    Un_cps_helper.var v, env
+  in
+  let rec commute b new_stack = function
+    | [] -> b.cmm_expr, { env with bindings = new_stack }
+    | b' :: r ->
+        if Effects_and_coeffects.commute b.effs b'.effs then
+          commute b (b' :: new_stack) r
+        else
+          skip_inlining b
+  in
+  let rec find v acc = function
+    | [] ->
+        Misc.fatal_errorf "Variable %a not found in env" Variable.print v
+    | b :: r ->
+        if Variable.compare v b.var = 0 then
+          if b.inline then
+            commute b r acc
+          else
+            skip_inlining b
+        else
+          find v (b :: acc) r
+  in
+  match Variable.Map.find v env.vars with
+  | e -> e, env
+  | exception Not_found -> find v [] env.bindings
+
+let flush_delayed_lets env =
+  (* Add the generated variable to the vars bindings, so that the
+     variables bound by the flushed let-bindings can be used. *)
+  let env_aux acc b = add_variable acc b.var b.cmm_var in
+  let env = List.fold_left env_aux env env.bindings in
+  (* generate a wrapper function to introduce the delayed let-bindings. *)
+  let wrap_aux acc b = Un_cps_helper.letin b.cmm_var b.cmm_expr acc in
+  let wrap e = List.fold_left wrap_aux e env.bindings in
+  wrap, { env with bindings = [] }
 

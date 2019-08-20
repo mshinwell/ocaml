@@ -48,9 +48,19 @@ val create_variable : t -> Variable.t -> t * Backend_var.With_provenance.t
 val create_variables : t -> Variable.t list -> t * Backend_var.With_provenance.t list
 (** Same as {!create_variable} but for a list of variables. *)
 
-val get_variable : t -> Variable.t -> Backend_var.t
+val bind_variable : t -> Variable.t -> Effects_and_coeffects.t -> bool -> Cmm.expression -> t
+(** Bind a variable to the given cmm expression, to allow for delaying the let-binding. *)
+
+val get_variable : t -> Variable.t -> Cmm.expression
 (** Get the cmm variable bound to a flambda2 variable.
     Will fail (i.e. assertion failure) if the variable is not bound. *)
+
+val inline_variable : t -> Variable.t -> Cmm.expression * t
+(** Try and inline an flambda2 variable using the delayed let-bindings. *)
+
+val flush_delayed_lets : t -> (Cmm.expression -> Cmm.expression) * t
+(** Wrap the given cmm expression with all the delayed let bindings accumulated
+    in the environment. *)
 
 
 (** {2 Continuation bindings} *)
@@ -59,9 +69,8 @@ type cont =
   | Jump of Cmm.machtype list * int
   (** Static jump, with the given id. The list of machtypes represent
       the types of arguments expected by the catch handler. *)
-  | Inline of Backend_var.With_provenance.t list * Cmm.expression
-  (** Inline the continuation, which has the given variables bound
-      in its body. *)
+  | Inline of Kinded_parameter.t list * Flambda.Expr.t
+  (** Inline the continuation. *)
 (** Translation information for continuations. A continuation may either
     be translated as a static jump, or inlined at its call site. *)
 
@@ -69,7 +78,7 @@ val add_jump_cont : t -> Cmm.machtype list -> Continuation.t -> int * t
 (** Bind the given continuation to a jump, creating a fresh jump id for it. *)
 
 val add_inline_cont :
-  t -> Continuation.t -> Backend_var.With_provenance.t list -> Cmm.expression -> t
+  t -> Continuation.t -> Kinded_parameter.t list -> Flambda.Expr.t -> t
 (** Bind the given continuation as an inline continuation, bound over
     the given variables. *)
 
