@@ -882,9 +882,18 @@ and switch env s =
   in
   let ints = Array.of_list ints in
   let exprs = Array.of_list exprs in
-  (* CR gbury: try and use cmm_helper's make_switch instead
-               (though make_switch uses cmmgen_state) ? *)
-  C.transl_switch_clambda Location.none e ints exprs
+  assert (Array.length ints = Array.length exprs);
+  match ints, exprs with
+  | [| 1; 0 |], [| then_; else_ |] ->
+      (* This switch is actually an if-then-else.
+         On such switches, transl_switch_clambda will actually generate
+         code that compare the scrutinee with 0 (or 1), whereas directly
+         generating an if-then-else on the scrutinee is better
+         (avoid a comparison, and even let selectgen/emit optimize away
+         the move from the condition register to a regular register). *)
+      wrap (C.ite e ~then_ ~else_)
+  | _ ->
+      wrap (C.transl_switch_clambda Location.none e ints exprs)
 
 and invalid _env _e =
   C.load Cmm.Word_int Asttypes.Mutable (C.int 0)
@@ -1232,5 +1241,6 @@ let program (p : Flambda_static.Program.t) =
   let functions = program_functions offsets p in
   let sym, res = program_body offsets [] p.body in
   let data, entry = R.to_cmm res in
-  (C.gc_root_table [symbol sym]) :: data @ functions @ [entry]
+  let cmm_data = C.flush_cmmgen_state () in
+  (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
 
