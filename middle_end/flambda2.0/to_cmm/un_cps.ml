@@ -122,8 +122,8 @@ let symbol s =
   Linkage_name.to_string (Symbol.linkage_name s)
 
 let name env = function
-  | Name.Var v -> C.var (Env.get_variable env v)
-  | Name.Symbol s -> C.symbol (symbol s)
+  | Name.Var v -> Env.inline_variable env v
+  | Name.Symbol s -> C.symbol (symbol s), env
 
 let name_static _env = function
   | Name.Var v -> `Var v
@@ -185,8 +185,8 @@ let function_name s =
 let simple env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name env n
-  | Const c -> const env c
-  | Discriminant d -> discriminant env d
+  | Const c -> const env c, env
+  | Discriminant d -> discriminant env d, env
 
 let simple_static env s =
   match (Simple.descr s : Simple.descr) with
@@ -495,16 +495,28 @@ let variadic_primitive _env dbg f args =
   | Bigarray_set (dimensions, kind, layout) ->
       C.bigarray_store ~dbg dimensions kind layout args
 
+let arg_list env l =
+  let aux (acc, env) x = let y, env = simple env x in (y :: acc, env) in
+  let args, env = List.fold_left aux ([], env) l in
+  List.rev args, env
+
 let prim env dbg p =
   match (p : Flambda_primitive.t) with
   | Unary (f, x) ->
-      unary_primitive env dbg f (simple env x)
+      let x, env = simple env x in
+      unary_primitive env dbg f x, env
   | Binary (f, x, y) ->
-      binary_primitive env dbg f (simple env x) (simple env y)
+      let x, env = simple env x in
+      let y, env = simple env y in
+      binary_primitive env dbg f x y, env
   | Ternary (f, x, y, z) ->
-      ternary_primitive env dbg f (simple env x) (simple env y) (simple env z)
+      let x, env = simple env x in
+      let y, env = simple env y in
+      let z, env = simple env z in
+      ternary_primitive env dbg f x y z, env
   | Variadic (f, l) ->
-      variadic_primitive env dbg f (List.map (simple env) l)
+      let args, env = arg_list env l in
+      variadic_primitive env dbg f args, env
 
 (* Kinds and types *)
 
@@ -542,6 +554,41 @@ let var_list env l =
     ) cmm_vars l in
   env, vars
 
+(* effects and co-effects *)
+
+let named_effs n =
+  match (n : Named.t) with
+  | Simple _ -> Effects_and_coeffects.pure
+  | Prim (p, _) -> Flambda_primitive.effects_and_coeffects p
+  | Set_of_closures _ -> Effects_and_coeffects.pure
+
+let has_one_occurrence num =
+  match (num : Name_occurrences.Num_occurrences.t) with
+  | One -> true
+  | More_than_one -> false
+  | Zero ->
+      Misc.fatal_errorf
+        "Found unused let-bound continuation, this should not happen"
+
+let occurs_one_time v body =
+  let free_names = Expr.free_names body in
+  has_one_occurrence (Name_occurrences.count_variable free_names v)
+
+type inlining_decision =
+  | Skip (* no use, the bound variable can be skipped/ignored *)
+  | Inline (* the variable is used once, we can try and inline its use *)
+  | Regular (* the variable is used multiple times, do not try and inline it. *)
+
+let decide_inline_let effs v body =
+  let free_names = Expr.free_names body in
+  match Name_occurrences.count_variable free_names v with
+  | Zero ->
+      if Effects_and_coeffects.has_commuting_effects effs
+      then Regular (* Could be Inline technically, but it's not clear the
+                      code would be better (nor more readable). *)
+      else Skip
+  | One -> Inline
+  | More_than_one -> Regular
 
 (* Expressions *)
 
@@ -558,60 +605,71 @@ and named env n =
   match (n : Named.t) with
   | Simple s -> simple env s
   | Prim (p, dbg) -> prim env dbg p
-  | Set_of_closures s -> set_of_closures env s
+  | Set_of_closures s -> set_of_closures env s, env
 
 and let_expr env t =
   Let.pattern_match t ~f:(fun ~bound_vars ~body ->
       let e = Let.defining_expr t in
-      match bound_vars with
-      | Singleton v ->
+      match bound_vars, e with
+      | Singleton v, _ ->
           let v = Var_in_binding_pos.var v in
-          let env', v' = Env.create_variable env v in
-          C.letin v' (named env' e) (expr env' body)
-      | Set_of_closures { closure_vars; _ } -> begin
-          match e with
-          | Simple _ | Prim _ ->
-              Misc.fatal_errorf
-                "Set_of_closures binding a non-Set_of_closures:@ %a"
-                Let.print t
-          | Set_of_closures soc ->
-              let csoc = set_of_closures env soc in
-              let soc_var =
-                Backend_var.create_local "*set_of_closures*"
-              in
-              let env, wrap_body =
-                Closure_id.Map.fold (fun cid v (env, wrap_body) ->
-                    let v = Var_in_binding_pos.var v in
-                    let env', v' = Env.create_variable env v in
-                    let wrap_body' body =
-                      C.letin v'
-                        (C.field_address (Cmm.Cvar soc_var)
-                           (Env.closure_offset env cid)
-                           Debuginfo.none)
-                        (wrap_body body)
-                    in
-                    env', wrap_body')
-                  closure_vars
-                  (env, fun body -> body)
-              in
-              C.letin (Backend_var.With_provenance.create soc_var) csoc
-                (wrap_body (expr env body))
-        end
+          let_expr_aux env v e body
+      | Set_of_closures _, (Simple _ | Prim _) ->
+          Misc.fatal_errorf
+            "Set_of_closures binding a non-Set_of_closures:@ %a"
+            Let.print t
+      | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
+          (* First translate the set of closures, and bind it in the env *)
+          let csoc = set_of_closures env soc in
+          let soc_var = Variable.create "*set_of_closures*" in
+          let effs = Effects_and_coeffects.all in
+          let env = Env.bind_variable env soc_var effs false csoc in
+          (* Then get from the env the cmm variable that was create and bound
+             to the compiled set of closures. *)
+          let soc_cmm_var, env = Env.inline_variable env soc_var in
+          (* Add to the env bindingsd for all the closure variables. *)
+          let effs = Effects_and_coeffects.pure in
+          let env =
+            Closure_id.Map.fold (fun cid v acc ->
+                let v = Var_in_binding_pos.var v in
+                let e =
+                  C.field_address soc_cmm_var
+                    (Env.closure_offset env cid)
+                    Debuginfo.none
+                in
+                let_expr_bind body acc v e effs
+              ) closure_vars env in
+          (* The set of closures, as well as the individual closures variables
+             are correctly set in the env, go on translating the body. *)
+          expr env body
     )
 
-and has_one_occurrence num =
-  match (num : Name_occurrences.Num_occurrences.t) with
-  | One -> true
-  | More_than_one -> false
-  | Zero ->
-      Misc.fatal_errorf
-        "Found unused let-bound continuation, this should not happen"
+and let_expr_bind body env v cmm_expr effs =
+  match decide_inline_let effs v body with
+  | Skip -> env
+  | Inline -> Env.bind_variable env v effs true cmm_expr
+  | Regular -> Env.bind_variable env v effs false cmm_expr
+
+and let_expr_env body env v e =
+  let effs = named_effs e in
+  match decide_inline_let effs v body with
+  | Skip ->
+      env
+  | Inline ->
+      let cmm_expr, env = named env e in
+      Env.bind_variable env v effs true cmm_expr
+  | Regular ->
+      let cmm_expr, env = named env e in
+      Env.bind_variable env v effs false cmm_expr
+
+and let_expr_aux env v e body =
+  let env = let_expr_env body env v e in
+  expr env body
 
 and decide_inline_cont h num_free_occurrences =
   Continuation_handler.stub h || has_one_occurrence num_free_occurrences
 
 and let_cont env = function
-  (* Single_use continuation, inlined at call site to avoid a needless jump *)
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
       Non_recursive_let_cont_handler.pattern_match handler ~f:(fun k ~body ->
           let h = Non_recursive_let_cont_handler.handler handler in
@@ -627,9 +685,8 @@ and let_cont env = function
         )
 
 and let_cont_inline env k h body =
-  let vars, handle = continuation_handler env h in
-  let vars = List.map fst vars in
-  let env = Env.add_inline_cont env k vars handle in
+  let args, handler = continuation_handler_split h in
+  let env = Env.add_inline_cont env k args handler in
   expr env body
 
 and let_cont_jump env k h body =
@@ -641,6 +698,7 @@ and let_cont_jump env k h body =
     ~handlers:[C.handler id vars handle]
 
 and let_cont_rec env conts body =
+  let wrap, env = Env.flush_delayed_lets env in
   (* Compute the environment for jump ids *)
   let map = Continuation_handlers.to_map conts in
   let env = Continuation.Map.fold (fun k h acc ->
@@ -653,47 +711,53 @@ and let_cont_rec env conts body =
       let id = Env.get_jump_id env k in
       C.handler id vars handle :: acc
     ) map [] in
-  C.ccatch
-    ~rec_flag:true
-    ~body:(expr env body)
-    ~handlers
+  wrap (C.ccatch
+          ~rec_flag:true
+          ~body:(expr env body)
+          ~handlers
+       )
 
-and continuation_arg_tys h =
-  let h = Continuation_handler.params_and_handler h in
-  Continuation_params_and_handler.pattern_match h ~f:(fun args ~handler:_ ->
-      List.map machtype_of_kinded_parameter args
-    )
-
-and continuation_handler env h =
+and continuation_handler_split h =
   let h = Continuation_handler.params_and_handler h in
   Continuation_params_and_handler.pattern_match h ~f:(fun args ~handler ->
-      let env, vars = var_list env args in
-      vars, expr env handler
+      args, handler
     )
 
+and continuation_arg_tys h =
+  let args, _ = continuation_handler_split h in
+  List.map machtype_of_kinded_parameter args
+
+and continuation_handler env h =
+  let args, handler = continuation_handler_split h in
+  let env, vars = var_list env args in
+  vars, expr env handler
+
 and apply_expr env e =
-  let res = apply_call env e in
-  wrap_cont env (wrap_exn env res e) e
+  let call, env = apply_call env e in
+  let wrap, env = Env.flush_delayed_lets env in
+  wrap (wrap_cont env (wrap_exn env call e) e)
 
 and apply_call env e =
   let f = Apply_expr.callee e in
-  let args = List.map (simple env) (Apply_expr.args e) in
   let dbg = Apply_expr.dbg e in
   match Apply_expr.call_kind e with
   | Call_kind.Function
       Call_kind.Function_call.Direct { closure_id; return_arity; } ->
       let f = Un_cps_closure.(closure_code (closure_name closure_id)) in
+      let args, env = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.direct_call ~dbg ty (C.symbol f) args
+      C.direct_call ~dbg ty (C.symbol f) args, env
   | Call_kind.Function
       Call_kind.Function_call.Indirect_unknown_arity ->
-      let f = simple env f in
-      C.indirect_call ~dbg typ_val f args
+      let f, env = simple env f in
+      let args, env = arg_list env (Apply_expr.args e) in
+      C.indirect_call ~dbg typ_val f args, env
   | Call_kind.Function
       Call_kind.Function_call.Indirect_known_arity { return_arity; _ } ->
-      let f = simple env f in
+      let f, env = simple env f in
+      let args, env = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.indirect_call ~dbg ty f args
+      C.indirect_call ~dbg ty f args, env
   | Call_kind.C_call { alloc; return_arity; _ } ->
       let f = function_name f in
       (* CR vlaviron: temporary hack to recover the right symbol *)
@@ -701,13 +765,15 @@ and apply_call env e =
       assert (len >= 9);
       assert (String.sub f 0 9 = ".extern__");
       let f = String.sub f 9 (len - 9) in
+      let args, env = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.extcall ~dbg ~alloc f ty args
+      C.extcall ~dbg ~alloc f ty args, env
   | Call_kind.Method { kind; obj; } ->
-      let meth = simple env f in
+      let obj, env = simple env obj in
+      let meth, env = simple env f in
       let kind = meth_kind kind in
-      let obj = simple env obj in
-      C.send kind meth obj args dbg
+      let args, env = arg_list env (Apply_expr.args e) in
+      C.send kind meth obj args dbg, env
 
 and wrap_cont env res e =
   let k = Apply_expr.continuation e in
@@ -717,8 +783,16 @@ and wrap_cont env res e =
     match Env.get_k env k with
     | Jump ([], id) -> C.sequence res (C.cexit id [])
     | Jump ([_], id) -> C.cexit id [res]
-    | Inline ([], body) -> C.sequence res body
-    | Inline ([v], body) -> C.letin v res body
+    | Inline ([], body) ->
+        C.sequence res (expr env body)
+    | Inline ([v], body) ->
+        let var = Kinded_parameter.var v in
+        (* Function calls can have any effects and coeffects by default.
+           CR Gbury: maybe annotate calls with effects ? *)
+        let effs = Effects_and_coeffects.all in
+        let inline = occurs_one_time var body in
+        let env = Env.bind_variable env var effs inline res in
+        expr env body
     | Jump _
     | Inline _ ->
         (* TODO: add support using unboxed tuples *)
@@ -740,7 +814,10 @@ and wrap_exn env res e =
           ~dbg:Debuginfo.none
           ~body:res ~exn_var
           ~handler:(C.cexit id [C.var v])
-    | Inline ([exn_var], handler) ->
+    | Inline ([v], h) ->
+        let var = Kinded_parameter.var v in
+        let env, exn_var = Env.create_variable env var in
+        let handler = expr env h in
         C.trywith ~dbg:Debuginfo.none ~body:res ~exn_var ~handler
     | Jump _
     | Inline _ ->
@@ -750,17 +827,23 @@ and wrap_exn env res e =
 
 and apply_cont env e =
   let k = Apply_cont_expr.continuation e in
-  let args = List.map (simple env) (Apply_cont_expr.args e) in
+  let args = Apply_cont_expr.args e in
   if Continuation.equal (Env.exn_cont env) k then begin
     match args with
-    | [res] -> C.raise_regular Debuginfo.none res
+    | [res] ->
+        let exn, env = simple env res in
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap (C.raise_regular Debuginfo.none exn)
     | _ ->
         Misc.fatal_errorf
           "Exception continuations should only applied to a single argument"
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
     | [] -> C.void
-    | [res] -> res
+    | [res] ->
+        let res, env = simple env res in
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap res
     | _ ->
         (* TODO: add support using unboxed tuples *)
         Misc.fatal_errorf
@@ -770,19 +853,25 @@ and apply_cont env e =
     | Jump (tys, id) ->
         (* The provided args should match the types in tys *)
         assert (List.compare_lengths tys args = 0);
-        C.cexit id args
-    | Inline (vars, body) ->
-        List.fold_left2 (fun acc v e -> C.letin v e acc) body vars args
+        let args, _ = arg_list env args in
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap (C.cexit id args)
+    | Inline (l, body) ->
+        let vars = List.map Kinded_parameter.var l in
+        let args = List.map Named.create_simple args in
+        let env = List.fold_left2 (let_expr_env body) env vars args in
+        expr env body
   end
 
 and switch env s =
-  let e = simple env (Switch.scrutinee s) in
+  let e, env = simple env (Switch.scrutinee s) in
+  let wrap, env = Env.flush_delayed_lets env in
   let ints, exprs =
     Discriminant.Map.fold (fun d k (ints, exprs) ->
       let i = Targetint.OCaml.to_int (Discriminant.to_int d) in
       let e = match Env.get_k env k with
         | Jump ([], id) -> C.cexit id []
-        | Inline ([], body) -> body
+        | Inline ([], body) -> expr env body
         | Jump _
         | Inline _ ->
             Misc.fatal_errorf
@@ -793,9 +882,18 @@ and switch env s =
   in
   let ints = Array.of_list ints in
   let exprs = Array.of_list exprs in
-  (* CR gbury: try and use cmm_helper's make_switch instead
-               (though make_switch uses cmmgen_state) ? *)
-  C.transl_switch_clambda Location.none e ints exprs
+  assert (Array.length ints = Array.length exprs);
+  match ints, exprs with
+  | [| 1; 0 |], [| then_; else_ |] ->
+      (* This switch is actually an if-then-else.
+         On such switches, transl_switch_clambda will actually generate
+         code that compare the scrutinee with 0 (or 1), whereas directly
+         generating an if-then-else on the scrutinee is better
+         (avoid a comparison, and even let selectgen/emit optimize away
+         the move from the condition register to a regular register). *)
+      wrap (C.ite e ~then_ ~else_)
+  | _ ->
+      wrap (C.transl_switch_clambda Location.none e ints exprs)
 
 and invalid _env _e =
   C.load Cmm.Word_int Asttypes.Mutable (C.int 0)
@@ -815,17 +913,17 @@ and fill_layout decls elts env acc i = function
   | [] -> List.rev acc
   | (j, slot) :: r ->
       let acc = fill_up_to j acc i in
-      let acc, offset = fill_slot decls elts env acc j slot in
+      let acc, offset, env = fill_slot decls elts env acc j slot in
       fill_layout decls elts env acc offset r
 
 and fill_slot decls elts env acc offset slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
       let field = C.alloc_infix_header offset Debuginfo.none in
-      field :: acc, offset + 1
+      field :: acc, offset + 1, env
   | Env_var v ->
-      let field = simple env (Var_within_closure.Map.find v elts) in
-      field :: acc, offset + 1
+      let field, env = simple env (Var_within_closure.Map.find v elts) in
+      field :: acc, offset + 1, env
   | Closure (c : Closure_id.t) ->
       let c : Closure_id.t = c in
       let decl = Closure_id.Map.find c decls in
@@ -839,7 +937,7 @@ and fill_slot decls elts env acc offset slot =
           C.symbol ~dbg name ::
           acc
         in
-        acc, offset + 2
+        acc, offset + 2, env
       end else begin
         let acc =
           C.symbol ~dbg name ::
@@ -847,7 +945,7 @@ and fill_slot decls elts env acc offset slot =
           C.symbol ~dbg (C.curry_function_sym arity) ::
           acc
         in
-        acc, offset + 3
+        acc, offset + 3, env
       end
 
 and fill_up_to j acc i =
@@ -874,7 +972,7 @@ let map_or_variable f default v =
   | Var _ -> default
 
 let make_update env kind symb var i =
-  let e = C.var (Env.get_variable env var) in
+  let e = Env.get_variable env var in
   let address = C.field_address symb i Debuginfo.none in
   C.store kind Lambda.Root_initialization address e
 
@@ -996,8 +1094,7 @@ let static_structure_item (type a) env r (symb, st) =
            the set of closures symbol, which now doesn't exist? *)
         (* CR vlaviron: The symbol is only needed if we need to update some
            fields after allocation. For now, I'll assume it never happens. *)
-        static_set_of_closures env
-          s.closure_symbols set
+        static_set_of_closures env s.closure_symbols set
       in
       R.wrap_init (C.sequence updates) (R.add_data data r)
   | Singleton s, Boxed_float v ->
@@ -1049,29 +1146,32 @@ let computation_wrapper offsets c =
   | None ->
       Env.dummy offsets, (fun x -> x)
   | Some (c : Flambda_static.Program_body.Computation.t) ->
-      let k = c.return_continuation in
+      (* The env for the computation is given a dummy continuation,
+         since the return continuation will be bound in the env. *)
+      let dummy_k = Continuation.create () in
       let k_exn = Exn_continuation.exn_handler c.exn_continuation in
-      let env = Env.mk offsets k k_exn in
-      let env, vars = var_list env c.computed_values in
-      let free_names = Expr.free_names c.expr in
-      let num_occurrences = Name_occurrences.count_continuation free_names k in
-      let wrap e =
-        if has_one_occurrence num_occurrences then begin
-          let vars = List.map fst vars in
-          let env = Env.add_inline_cont env k vars e in
-          expr env c.expr
-        end else begin
-          let tys = List.map snd vars in
-          let id, env = Env.add_jump_cont env tys k in
-          let body = expr env c.expr in
-          C.ccatch
-            ~rec_flag:false ~body
-            ~handlers:[C.handler id vars e]
-        end
+      let c_env = Env.mk offsets dummy_k k_exn in
+      (* The environment for the static structure update must contain the
+         variables produced by the computation *)
+      let s_env = Env.mk offsets dummy_k dummy_k in
+      let s_env, vars = var_list s_env c.computed_values in
+      (* Wrap the static structure update expression [e] by manually
+         translating the computation return continuation by a jump to
+         [e]. *)
+      let wrap (e : Cmm.expression) =
+        let k = c.return_continuation in
+        let tys = List.map snd vars in
+        let id, env = Env.add_jump_cont c_env tys k in
+        let body = expr env c.expr in
+        C.ccatch
+          ~rec_flag:false ~body
+          ~handlers:[C.handler id vars e]
       in
       (* CR gbury: for the future, try and rearrange the generated cmm
-         code to move assignments closer to the variable definitions *)
-      env, wrap
+         code to move assignments closer to the variable definitions
+         Or better: add traps to the env to insert assignemnts after
+         the variable definitions. *)
+      s_env, wrap
 
 let definition offsets (d : Flambda_static.Program_body.Definition.t) =
   let env, wrapper = computation_wrapper offsets d.computation in
@@ -1129,6 +1229,8 @@ let rec program_body offsets acc body =
 let program_functions offsets p =
   let fmap = Un_cps_closure.map_on_function_decl (function_decl offsets) p in
   let all_functions = Closure_id.Map.fold (fun _ x acc -> x :: acc) fmap [] in
+  (* This is to keep the current cmmgen behaviour which sorts functions by
+     debuginfo (and thus keeps the order of declaration). *)
   let sorted = List.sort
       (fun f f' -> Debuginfo.compare f.Cmm.fun_dbg f'.Cmm.fun_dbg) all_functions
   in
@@ -1139,5 +1241,6 @@ let program (p : Flambda_static.Program.t) =
   let functions = program_functions offsets p in
   let sym, res = program_body offsets [] p.body in
   let data, entry = R.to_cmm res in
-  (C.gc_root_table [symbol sym]) :: data @ functions @ [entry]
+  let cmm_data = C.flush_cmmgen_state () in
+  (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
 

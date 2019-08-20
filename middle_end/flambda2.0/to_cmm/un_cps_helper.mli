@@ -325,4 +325,7 @@ val cdata : Cmm.data_item list -> Cmm.phrase
 val gc_root_table : string list -> Cmm.phrase
 (** Create the gc root table from a list of root symbols. *)
 
+val flush_cmmgen_state : unit -> Cmm.phrase list
+(** Prepend constants that were populated in cmmgen_state (mostly by indirect use
+    through functions from Cmm_helpers). *)
 
