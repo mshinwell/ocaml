@@ -30,7 +30,8 @@ module Const = struct
 
   let const_int i = Tagged_immediate (Immediate.int i) 
 
-  let const_zero = const_false
+  let const_zero = const_int Targetint.OCaml.zero
+  let const_one = const_int Targetint.OCaml.one
   let const_unit = const_zero
 
   include Identifiable.Make (struct
@@ -142,6 +143,8 @@ let const_true = Const Const.const_true
 let const_false = Const Const.const_false
 
 let const_zero = Const Const.const_zero
+let const_one = Const Const.const_one
+
 let unit = Const Const.const_unit
 
 let discriminant t = Discriminant t
