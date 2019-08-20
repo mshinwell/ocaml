@@ -415,3 +415,26 @@ let gc_root_table syms =
     [ cint 0n ]
   )
 
+(* Get constant tables from cmmgen_state
+   The uncp translation uses functions from cmm_helpers which populate some mutable
+   state in cmmgen_state, so we have to get the created constants. *)
+
+let flush_cmmgen_state () =
+  let aux name cst acc =
+    match (cst : Cmmgen_state.constant) with
+    | Const_table (Local, l) ->
+        cdata (define_symbol ~global:false name @ l) :: acc
+    | Const_table (Global, l) ->
+        cdata (define_symbol ~global:true name @ l) :: acc
+    | Const_closure _ ->
+        Misc.fatal_errorf
+          "There shouldn't be any closure in cmmgen_state during flambda2 to cmm translation"
+  in
+  match Cmmgen_state.get_and_clear_data_items () with
+  | [] ->
+      let cst_map = Cmmgen_state.get_and_clear_constants () in
+      Misc.Stdlib.String.Map.fold aux cst_map []
+  | _ ->
+      Misc.fatal_errorf
+        "There shouldn't be any data item in cmmgen_state during flambda2 to cmm translation"
+
