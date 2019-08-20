@@ -72,7 +72,7 @@ let print_with_cache ~cache ppf t =
             (Continuation.Map.bindings handlers) @ let_conts, body)
     in
     let let_conts, body = gather_let_conts [] t in
-    fprintf ppf "@[<v 0>(%a@;" (Expr.print_with_cache ~cache) body;
+    fprintf ppf "@[<v 1>(%a@;" (Expr.print_with_cache ~cache) body;
     let first = ref true in
     List.iter (fun (cont, handler) ->
         Continuation_handler.print_using_where_with_cache ~cache

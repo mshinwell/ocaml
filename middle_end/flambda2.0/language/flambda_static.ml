@@ -170,7 +170,7 @@ module Static_part = struct
     in
     match t with
     | Block (tag, mut, fields) ->
-      fprintf ppf "@[(@<0>%s%sblock@<0>%s (tag %a) (%a))@]"
+      fprintf ppf "@[<hov 1>(@<0>%s%sblock@<0>%s (tag %a) (%a))@]"
         (Flambda_colours.static_part ())
         (match mut with Immutable -> "Immutable_" | Mutable -> "Mutable_")
         (Flambda_colours.normal ())
@@ -178,7 +178,7 @@ module Static_part = struct
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Of_kind_value.print) fields
     | Fabricated_block field ->
-      fprintf ppf "@[@<0>%sFabricated_block@<0>%s %a)@]"
+      fprintf ppf "@[<hov 1>@<0>%sFabricated_block@<0>%s %a)@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         Variable.print field
@@ -232,7 +232,7 @@ module Static_part = struct
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         (Format.pp_print_list
-           ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@[; ")
+           ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
            print_float_array_field)
         fields
     | Mutable_string { initial_value = Const s; } ->
@@ -321,7 +321,8 @@ module Program_body = struct
           @[<hov 1>(expr@ %a)@]@ \
           @[<hov 1>(return_continuation@ %a)@]@ \
           @[<hov 1>(exn_continuation@ %a)@]@ \
-          @[<hov 1>(computed_values@ (%a))@])@]"
+          @[<hov 1>(computed_values@ (%a))@]\
+          )@]"
         Flambda.Expr.print expr
         Continuation.print return_continuation
         Exn_continuation.print exn_continuation
@@ -458,7 +459,8 @@ module Program_body = struct
     let print_with_cache ~cache ppf { computation; static_structure; } =
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>@<0>%s(computation@ %a)@<0>%s@]@ \
-          @[<hov 1>(%a)@])@]"
+          @[<hov 1>(%a)@]\
+          )@]"
         (if Option.is_none computation then Flambda_colours.elide ()
          else Flambda_colours.normal ())
         (Misc.Stdlib.Option.print Computation.print) computation
