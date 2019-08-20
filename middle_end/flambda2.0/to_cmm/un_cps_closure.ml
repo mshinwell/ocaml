@@ -665,15 +665,21 @@ let compute_offsets program =
 (* Map on each function body once.
    This is useful to avoid a global state of translated function bodies *)
 
+
+(* CR Gbury: currently closure_name and closure_id_name **must** be in sync
+             (which is manual task somewhat complex). It would be better to
+             have a unique mapping from closure_id to linkage name somewhere. *)
 let closure_name id =
   let compunit = Closure_id.get_compilation_unit id in
   let name = Compilation_unit.get_linkage_name compunit in
-  Format.asprintf "%a_%s" Linkage_name.print name (Closure_id.unique_name id)
+  Format.asprintf "%a__%s" Linkage_name.print name (Closure_id.unique_name id)
 
 let closure_id_name o id =
   match o with
   | None -> closure_name id
   | Some map ->
+      (* CR Gbury: is this part really necessary ? why not always
+                   return closure_name id ? *)
       let s = Closure_id.Map.find id map in
       let name = Symbol.linkage_name s in
       Format.asprintf "%a" Linkage_name.print name
