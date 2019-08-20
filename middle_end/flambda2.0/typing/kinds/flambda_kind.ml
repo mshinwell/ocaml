@@ -91,7 +91,7 @@ include Identifiable.Make (struct
           Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d55a}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_float ->
-          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<01\u{1d557}@<0>%s"
+          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d557}@<0>%s"
             colour (Flambda_colours.normal ())
         | Naked_int32 ->
           Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d7db}@<1>\u{1d7da}@<0>%s"
