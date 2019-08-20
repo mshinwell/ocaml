@@ -35,6 +35,10 @@ let print ppf { k; args; trap_action; } =
     | Return, None, _::_ -> "return", None
     | Return, Some trap_action, [] -> "return", Some trap_action
     | Return, Some trap_action, _::_ -> "return", Some trap_action
+    | Toplevel_return, None, [] -> "toplevel_init", None
+    | Toplevel_return, None, _::_ -> "toplevel_init", None
+    | Toplevel_return, Some trap_action, [] -> "toplevel_init", Some trap_action
+    | Toplevel_return, Some trap_action, _::_ -> "toplevel_init", Some trap_action
     (* CR mshinwell: See CR on [create], below. *)
     | Exn, (None | Some (Push _)), []
     | Exn, (None | Some (Push _)), _::_ -> "apply_cont", trap_action (*assert false*)

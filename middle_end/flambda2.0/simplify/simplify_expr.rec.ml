@@ -79,6 +79,8 @@ Format.eprintf "handler:@.%a@."
       in
       let handler, user_data, uacc = simplify_expr dacc handler k in
       let handler, uacc =
+        (* CR mshinwell: assert that if [cannot_change_arity] then
+           [extra_params_and_args] is empty *)
         if cannot_change_arity then
           let handler =
             CH.with_params_and_handler cont_handler

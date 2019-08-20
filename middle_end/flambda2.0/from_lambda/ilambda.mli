@@ -97,10 +97,11 @@ and function_declarations = (Ident.t * function_declaration) list
 and let_cont = {
   name : Continuation.t;
   is_exn_handler : bool;
+  (* CR mshinwell: update comment *)
   (** Continuations that are exception handlers must be [Non_recursive] and
       have exactly one parameter. *)
   params : (Ident.t * user_visible * Lambda.value_kind) list;
-  recursive : Asttypes.rec_flag;
+  recursive : Asttypes.rec_flag; (* CR mshinwell: Recursive.t *)
   body : t;
   handler : t;
 }

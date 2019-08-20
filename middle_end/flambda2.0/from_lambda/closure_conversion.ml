@@ -785,7 +785,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let module_symbol = Backend.symbol_for_global' module_ident in
   let module_block_tag = Tag.Scannable.zero in
   let module_block_var = Variable.create "module_block" in
-  let return_cont = Continuation.create ~sort:Return () in
+  let return_cont = Continuation.create ~sort:Toplevel_return () in
   let field_vars =
     List.init size (fun pos ->
       let pos_str = string_of_int pos in
@@ -826,7 +826,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         ~handler:load_fields_body;
     in
     Flambda.Continuation_handler.create ~params_and_handler
-      ~stub:true
+      ~stub:false  (* CR mshinwell: remove "stub" notion *)
       ~is_exn_handler:false
   in
   let expr =
