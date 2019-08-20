@@ -69,7 +69,7 @@ let simple_ident env (s:Fexpr.simple) : Ident.t =
 let simple_idents env s =
   List.map (simple_ident env) s
 
-let binop (op:Fexpr.binop) : Lambda.primitive =
+let infix_binop (op:Fexpr.infix_binop) : Lambda.primitive =
   match op with
   | Plus -> Paddint
   | Minus -> Psubint
@@ -82,9 +82,9 @@ let defining_expr env (named:Fexpr.named) : Ilambda.named =
   | Simple (Const (Tagged_immediate i)) ->
       let i = int_of_string i in
       Const (Const_base (Const_int i))
-  | Prim (Binop (op, a1, a2)) ->
+  | Prim (Infix_binop (op, a1, a2)) ->
       Prim {
-        prim = binop op;
+        prim = infix_binop op;
         args = simple_idents env [a1; a2];
         loc = Location.none;
         exn_continuation = None;

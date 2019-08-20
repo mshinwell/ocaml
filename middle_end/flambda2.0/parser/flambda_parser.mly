@@ -46,10 +46,12 @@ let make_const_float (i, m) =
 %token COMMA  [@symbol ","]
 %token CONT  [@symbol "cont"]
 %token DEF   [@symbol "def"]
+%token DOT   [@symbol "."]
 %token EFFECT [@symbol "effect"]
 %token EQUAL [@symbol "="]
 %token EXN   [@symbol "exn"]
 %token <string * char option> FLOAT
+%token GET_FIELD
 %token HCF   [@symbol "HCF"]
 %token IN    [@symbol "in"]
 %token IS_INT  [@symbol "is_int"]
@@ -139,17 +141,22 @@ switch_sort:
 unop:
   | OPAQUE { Opaque_identity }
 
-binop:
+infix_binop:
   | PLUS { Plus }
   | PLUSDOT { Plusdot }
   | MINUS { Minus }
   | MINUSDOT { Minusdot }
 ;
 
+binop:
+  | a = simple DOT LPAREN f = simple RPAREN
+    { Binop (Block_load (Block Value, Immutable), a, f) }
+
 named:
   | s = simple { Simple s }
   | u = unop a = simple { Prim (Unop (u, a)) }
-  | a1 = simple b = binop a2 = simple { Prim (Binop (b, a1, a2)) }
+  | a1 = simple b = infix_binop a2 = simple { Prim (Infix_binop (b, a1, a2)) }
+  | b = binop { Prim b }
   | BLOCK t = tag LPAREN elts = simple* RPAREN { Prim (Block (t, Immutable, elts)) }
   | BANG v = variable { Read_mutable v }
   | v = variable COLONEQUAL s = simple { Assign { being_assigned = v; new_value = s } }

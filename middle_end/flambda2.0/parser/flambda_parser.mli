@@ -32,11 +32,13 @@ type token =
   | INT of (string * char option)
   | IN
   | HCF
+  | GET_FIELD
   | FLOAT of (string * char option)
   | EXN
   | EQUAL
   | EOF
   | EFFECT
+  | DOT
   | DEF
   | CONT
   | COMMA

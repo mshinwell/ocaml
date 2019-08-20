@@ -63,6 +63,7 @@ let ukeyword_table =
   create_hashtable [
     "Opaque", OPAQUE;
     "Block", BLOCK;
+    "Get_field", GET_FIELD;
     "HCF", HCF;
     "Unreachable", UNREACHABLE;
 ]
@@ -123,6 +124,8 @@ rule token = parse
       { COLON }
   | ":="
       { COLONEQUAL }
+  | "."
+      { DOT }
   | ";"
       { SEMICOLON }
   | "="

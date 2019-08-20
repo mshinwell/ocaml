@@ -106,7 +106,7 @@ let const (c:Fexpr.const) : Simple.Const.t =
     let i = Targetint.of_string i in
     Naked_immediate (Immediate.int (Targetint.OCaml.of_targetint i))
 
-  (* | Naked_immediate of Immediate.t
+  (*
    * | Naked_float of Numbers.Float_by_bit_pattern.t
    * | Naked_int32 of Int32.t
    * | Naked_int64 of Int64.t
@@ -125,9 +125,9 @@ let simple env (s:Fexpr.simple) : Simple.t =
     end
   | Const c ->
     Simple.const (const c)
-  | s ->
-    Misc.fatal_errorf "TODO simple %a"
-      Print_fexpr.simple s
+  | Symbol sym -> begin
+      Simple.symbol (get_symbol env sym)
+    end
 
 let of_kind_value env (v:Fexpr.of_kind_value) : Flambda_static.Of_kind_value.t =
   match v with
@@ -145,12 +145,19 @@ let unop (unop:Fexpr.unop) : Flambda_primitive.unary_primitive =
   match unop with
   | Opaque_identity -> Opaque_identity
 
-let binop (unop:Fexpr.binop) : Flambda_primitive.binary_primitive =
-  match unop with
+let infix_binop (binop:Fexpr.infix_binop) : Flambda_primitive.binary_primitive =
+  match binop with
   | Plus -> Int_arith (I.Tagged_immediate, Add)
   | Minus -> Int_arith (I.Tagged_immediate, Sub)
   | Plusdot
   | Minusdot -> failwith "TODO binop"
+
+let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
+  match binop with
+  | Block_load (Block Value, Immutable) ->
+    Block_load (Block (Value (Anything)), Immutable)
+  | Block_load (_, _) ->
+    failwith "TODO"
 
 let convert_mutable_flag (flag : Fexpr.mutable_or_immutable)
       : P.mutable_or_immutable =
@@ -174,6 +181,11 @@ let defining_expr env (named:Fexpr.named) : Named.t =
   | Prim (Unop (u, arg)) ->
     let prim : Flambda_primitive.t =
       Unary (unop u, simple env arg)
+    in
+    Named.create_prim prim Debuginfo.none
+  | Prim (Infix_binop (b, a1, a2)) ->
+    let prim : Flambda_primitive.t =
+      Binary (infix_binop b, simple env a1, simple env a2)
     in
     Named.create_prim prim Debuginfo.none
   | Prim (Binop (b, a1, a2)) ->

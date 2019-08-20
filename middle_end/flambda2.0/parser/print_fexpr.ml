@@ -96,7 +96,7 @@ let invalid ppf = function
   | Treat_as_unreachable ->
     Format.fprintf ppf "Unreachable"
 
-let binop ppf b =
+let infix_binop ppf b =
   let s =
     match b with
     | Plus -> "+"
@@ -105,6 +105,14 @@ let binop ppf b =
     | Minusdot -> "-."
   in
   Format.pp_print_string ppf s
+
+let binop ppf binop a b =
+  match binop with
+  | Block_load (Block Value, Immutable) ->
+    Format.fprintf ppf "%a.(%a)"
+      simple a simple b
+  | Block_load _ ->
+    failwith "TODO Block_load"
 
 let unop ppf u =
   let s =
@@ -118,11 +126,17 @@ let prim ppf = function
     Format.fprintf ppf "%a %a"
       unop u
       simple a
-  | Binop (b, a1, a2) ->
+  | Infix_binop (b, a1, a2) ->
     Format.fprintf ppf "%a %a %a"
       simple a1
-      binop b
+      infix_binop b
       simple a2
+  | Binop (b, a1, a2) ->
+    binop ppf b a1 a2
+    (* Format.fprintf ppf "%a %a %a"
+     *   binop b a b
+     *   simple a1
+     *   simple a2 *)
   | Block (tag, Immutable, elts) ->
     Format.fprintf ppf "Block %i (%a)"
       tag

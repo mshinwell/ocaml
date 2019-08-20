@@ -80,12 +80,27 @@ type simple =
 type unop =
   | Opaque_identity
 
+type generic_array_specialisation =
+  | No_specialisation
+  | Full_of_naked_floats
+  | Full_of_immediates
+  | Full_of_arbitrary_values_but_not_floats
+
+type block_access_kind =
+  | Block of kind
+  | Array of kind
+  | Generic_array of generic_array_specialisation
+
 type binop =
+  | Block_load of block_access_kind * mutable_or_immutable
+
+type infix_binop =
   | Plus | Plusdot
   | Minus | Minusdot
 
 type prim =
   | Unop of unop * simple
+  | Infix_binop of infix_binop * simple * simple
   | Binop of binop * simple * simple
   | Block of tag_scannable * mutable_or_immutable * simple list
 
