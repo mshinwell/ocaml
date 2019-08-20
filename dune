@@ -219,3 +219,10 @@
        toplevel/ocaml.byte
        toplevel/expunge.exe
        ))
+
+(install
+ (section bin)
+ (package ocaml)
+ (files
+  (ocamlc.byte as ocamlc)
+  (ocamlopt.byte as ocamlopt)))

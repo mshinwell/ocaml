@@ -16,6 +16,12 @@
  (names   make_opcodes cvt_emit)
  (modules make_opcodes cvt_emit))
 
+(executables
+ (names ocamlmklib ocamldep)
+ (modules ocamlmklib ocamlmklibconfig ocamldep)
+ (modes byte)
+ (libraries ocamlcommon runtime stdlib))
+
 (ocamllex
  (modules make_opcodes)
  (mode    fallback))
@@ -23,3 +29,15 @@
 (ocamllex
  (modules cvt_emit)
  (mode    fallback))
+
+(rule
+ (deps Makefile %{project_root}/Makefile.config)
+ (targets ocamlmklibconfig.ml)
+ (action (run make %{targets})))
+
+(install
+ (section bin)
+ (package ocaml)
+ (files
+  (ocamlmklib.exe as ocamlmklib)
+  (ocamldep.exe as ocamldep)))
