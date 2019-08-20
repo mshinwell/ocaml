@@ -643,7 +643,10 @@ let effects_and_coeffects_of_unary_primitive p =
   | Get_tag ->
     (* [Obj.truncate] has now been removed. *)
     Effects.No_effects, Coeffects.No_coeffects
-  | String_length _ -> reading_from_an_array_like_thing
+  | String_length _ ->
+    (* CR mshinwell: check this is right.  (Even with safe-string off, I
+       don't think changing the length of a string is possible.) *)
+    Effects.No_effects, Coeffects.No_coeffects
   | Int_as_pointer
   | Opaque_identity -> Effects.Arbitrary_effects, Coeffects.Has_coeffects
   | Int_arith (_, (Neg | Swap_byte_endianness))
@@ -1348,7 +1351,10 @@ module Eligible_for_cse = struct
         true
       | _, _ -> false
     in
-    assert ((not eligible) || effects_and_coeffects_ok);
+    if not (((not eligible) || effects_and_coeffects_ok)) then begin
+      Misc.fatal_errorf "Eligible_for_cse.create inconsistency: %a"
+        print t
+    end;
     if eligible then Some t
     else None
 
