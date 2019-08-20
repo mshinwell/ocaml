@@ -23,6 +23,7 @@ include Identifiable.S
 type sort =
   | Normal
   | Return
+  | Toplevel_return
   | Exn
 
 val create : ?sort:sort -> unit -> t

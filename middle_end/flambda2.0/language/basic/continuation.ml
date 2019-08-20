@@ -32,6 +32,7 @@ end;
 type sort =
   | Normal
   | Return
+  | Toplevel_return
   | Exn
 
 type t = {

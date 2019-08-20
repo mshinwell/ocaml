@@ -165,9 +165,14 @@ let number_of_uses t = List.length t.uses
 
 let arity t = t.arity
 
+(* CR mshinwell: Naming of this function still isn't ideal. *)
 let cannot_change_continuation's_arity t =
-  List.exists (fun use ->
-      match Use.kind use with
-      | Normal -> false
-      | Fixed_arity -> true)
-    t.uses
+  match Continuation.sort t.continuation with
+  | Return | Toplevel_return -> false
+  | Exn -> true (* CR mshinwell: this should go to [false] *)
+  | Normal ->
+    List.exists (fun use ->
+        match Use.kind use with
+        | Normal -> false
+        | Fixed_arity -> true)
+      t.uses
