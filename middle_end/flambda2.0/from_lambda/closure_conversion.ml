@@ -291,16 +291,16 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     match box_return_value with
     | None -> body, let_bound_var
     | Some box_return_value ->
-      let boxed_value = Variable.rename let_bound_var in
-      let boxed_value' = VB.create boxed_value Name_occurrence_kind.normal in
+      let let_bound_var' = VB.create let_bound_var Name_occurrence_kind.normal in
+      let handler_param = Variable.rename let_bound_var in
       let body =
-        Flambda.Expr.create_let boxed_value'
+        Flambda.Expr.create_let let_bound_var'
           (Named.create_prim
-            (Unary (box_return_value, Simple.var let_bound_var))
+            (Unary (box_return_value, Simple.var handler_param))
             dbg)
           body
       in
-      body, boxed_value
+      body, handler_param
   in
   let after_call =
     let params =
