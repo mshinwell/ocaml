@@ -462,7 +462,7 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
       (fun lam -> lam)
   | (Psequand | Psequor), _ ->
     Misc.fatal_error "Psequand / Psequor must have exactly two arguments"
-  | Pidentity, [arg] -> arg
+  | (Pidentity | Pbytes_to_string | Pbytes_of_string), [arg] -> arg
   | Pignore, [_arg] -> L.Lconst (Const_base (Const_int 0))
   | Pdirapply, [funct; arg]
   | Prevapply, [arg; funct] ->

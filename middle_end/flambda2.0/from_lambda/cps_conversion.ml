@@ -563,7 +563,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Ltrywith (body, id, handler) ->
     let body_result = Ident.create_local "body_result" in
     let body_continuation = Continuation.create () in
-    let handler_continuation = Continuation.create () in
+    let handler_continuation = Continuation.create ~sort:Exn () in
     let poptrap_continuation = Continuation.create () in
     let old_try_stack = !try_stack in
     try_stack := handler_continuation :: old_try_stack;

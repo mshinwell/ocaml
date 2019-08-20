@@ -77,6 +77,8 @@ val const_false : t
 (** The constant representating the number zero of type "int". *)
 val const_zero : t
 
+val const_one : t
+
 (** The constant representing the unit value. *)
 val unit : t
 

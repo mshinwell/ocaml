@@ -711,6 +711,30 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
+  | Pbytessets, [bytes; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bytes, Eight),
+          bytes, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Poffsetref n, [block] ->
+    Ternary (Block_set (Block (Value Anything), Assignment),
+      block,
+      Simple Simple.const_zero,
+      Prim (Binary (Int_arith (Tagged_immediate, Add),
+        Simple (Simple.const_int (Targetint.OCaml.of_int n)),
+        Prim (Binary (Block_load (Block (Value Anything), Immutable),
+          block,
+          Simple Simple.const_zero)))))
 
 
   (* | Pdivbint { size; is_safe = Safe }, [arg1; arg2] -> *)
@@ -763,6 +787,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pduparray _
     | Pfloatfield _
     | Pcvtbint _
+    | Poffsetref _
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -810,6 +835,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       print_list_of_simple_or_prim args
   | ( Pidentity | Pignore | Prevapply | Pdirapply | Psequand
     | Psequor
+    | Pbytes_of_string | Pbytes_to_string
     ), _ ->
     Misc.fatal_errorf "[%a] should have been removed by \
       [Prepare_lambda.prepare]"
@@ -829,10 +855,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     |(Pduparray (_, _), _::[]))
     -> failwith "TODO again"
 
-  | ( Pbytes_to_string
-    | Pbytes_of_string
-    | Poffsetref _
-    | Pbytessetu
+  | ( 
+      Pbytessetu
     | Pbytessets
     | Parrayrefu _
     | Parraysetu _
@@ -861,7 +885,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pbswap16
     | Pbbswap _
     | Pint_as_pointer ), _
-    -> failwith "TODO"
+    -> Misc.fatal_errorf "TODO (%a)" Printlambda.primitive prim
 
 let convert_and_bind ~backend
       exn_cont ~register_const_string
