@@ -88,10 +88,12 @@ Format.eprintf "handler:@.%a@."
           in
           handler, uacc
         else
+        (*
           let () =
             Format.eprintf "For %a: simplified handler: %a\n%!"
               Continuation.print cont Expr.print handler
           in
+          *)
           let free_names = Expr.free_names handler in
           let used_params =
             List.filter (fun param ->

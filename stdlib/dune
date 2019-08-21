@@ -38,4 +38,4 @@
 (alias
  (name runtest)
  (deps (package ocaml) (source_tree ..) (sandbox always))
- (action (chdir .. (run /Users/mark/dev/dune/dune.sh build stdlib/stdlib.cmxa --display short))))
+ (action (chdir .. (run /Users/mark/dev/dune/dune.sh build stdlib/stdlib.cmxa --display verbose))))
