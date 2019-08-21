@@ -24,19 +24,17 @@ type t = {
 
 let invariant _env _t = ()
 
-let print_using_where_with_cache ~cache ppf k
+let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
       ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
   if not first then begin
     fprintf ppf "@ "
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 1>@<0>%swhere@<0>%s %a@<0>%s@<0>%s %a"
+      fprintf ppf "@[<hov 1>@<0>%swhere%s@<0>%s %a@<0>%s@<0>%s %a"
         (Flambda_colours.expr_keyword ())
+        (match recursive with Non_recursive -> "" | Recursive -> " rec")
         (Flambda_colours.normal ())
-(*
-        (if first_and_non_recursive then "" else "and ")
-*)
         Continuation.print k
         (if stub then " *stub*" else "")
         (if is_exn_handler then " *exn*" else "")

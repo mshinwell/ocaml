@@ -59,7 +59,7 @@ let print_with_cache ~cache ppf t =
               | _ -> let_conts, body
             in
             let handler = Non_recursive_let_cont_handler.handler handler in
-            (k, handler) :: let_conts, body)
+            (k, Recursive.Non_recursive, handler) :: let_conts, body)
       | Recursive handlers ->
         Recursive_let_cont_handlers.pattern_match handlers
           ~f:(fun ~(body : Expr.t) handlers ->
@@ -69,13 +69,17 @@ let print_with_cache ~cache ppf t =
               | Let_cont let_cont -> gather_let_conts let_conts let_cont
               | _ -> let_conts, body
             in
-            (Continuation.Map.bindings handlers) @ let_conts, body)
+            let new_let_conts =
+              List.map (fun (k, handler) -> k, Recursive.Recursive, handler)
+                (Continuation.Map.bindings handlers)
+            in
+            new_let_conts @ let_conts, body)
     in
     let let_conts, body = gather_let_conts [] t in
     fprintf ppf "@[<v 1>(%a@;" (Expr.print_with_cache ~cache) body;
     let first = ref true in
-    List.iter (fun (cont, handler) ->
-        Continuation_handler.print_using_where_with_cache ~cache
+    List.iter (fun (cont, recursive, handler) ->
+        Continuation_handler.print_using_where_with_cache recursive ~cache
           ppf cont handler ~first:!first;
         first := false)
       (List.rev let_conts);
