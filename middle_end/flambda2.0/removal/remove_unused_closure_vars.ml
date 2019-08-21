@@ -33,9 +33,16 @@ let rec collect_vars_expr used_closure_vars expr =
       Continuation_params_and_handler.pattern_match
         (Continuation_handler.params_and_handler cont_handler)
         ~f:(fun _params ~handler -> collect_vars_expr used_closure_vars handler)
-    | Recursive _ ->
-      (* CR mshinwell: implement *)
-      Misc.fatal_error "Not yet implemented"
+    | Recursive rec_handlers ->
+      Recursive_let_cont_handlers.pattern_match rec_handlers
+        ~f:(fun ~body handlers ->
+          collect_vars_expr used_closure_vars body;
+          Continuation.Map.iter (fun _cont cont_handler ->
+              Continuation_params_and_handler.pattern_match
+                (Continuation_handler.params_and_handler cont_handler)
+                ~f:(fun _params ~handler ->
+                  collect_vars_expr used_closure_vars handler))
+            (Continuation_handlers.to_map handlers))
     end
   | Apply _
   | Apply_cont _
@@ -92,9 +99,24 @@ let rec remove_vars_expr used_closure_vars expr =
               params_and_handler
           in
           Let_cont.create_non_recursive cont cont_handler ~body)
-    | Recursive _ ->
-      (* CR mshinwell: implement *)
-      Misc.fatal_error "Not yet implemented"
+    | Recursive rec_handlers ->
+      Recursive_let_cont_handlers.pattern_match rec_handlers
+        ~f:(fun ~body handlers ->
+          let body = remove_vars_expr used_closure_vars body in
+          let handler_map =
+            Continuation.Map.map (fun cont_handler ->
+                let params_and_handler =
+                  Continuation_params_and_handler.pattern_match
+                    (Continuation_handler.params_and_handler cont_handler)
+                    ~f:(fun params ~handler ->
+                      let handler = remove_vars_expr used_closure_vars handler in
+                      Continuation_params_and_handler.create params ~handler)
+                in
+                Continuation_handler.with_params_and_handler cont_handler
+                  params_and_handler)
+              (Continuation_handlers.to_map handlers)
+          in
+          Let_cont.create_recursive handler_map ~body)
     end
   | Apply _
   | Apply_cont _

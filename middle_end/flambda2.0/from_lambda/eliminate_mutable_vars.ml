@@ -202,7 +202,26 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
   | Apply ({ exn_continuation; _ } as apply) ->
     let apply = transform_apply env apply in
     let exn_continuation = transform_exn_continuation env exn_continuation in
-    Apply { apply with exn_continuation; }
+    let extra_args = Env.extra_args_for_continuation env apply.continuation in
+    begin match extra_args with
+    | [] -> Apply { apply with exn_continuation; }
+    | _::_ ->
+      let wrapper_cont = Continuation.create () in
+      let return_value = Ident.create_local "return_val" in
+      Let_cont {
+        name = wrapper_cont;
+        is_exn_handler = false;
+        params = [return_value, Not_user_visible, Pgenval];
+        recursive = Nonrecursive;
+        body = Apply {
+          apply with
+          continuation = wrapper_cont;
+          exn_continuation;
+        };
+        handler =
+          Apply_cont (apply.continuation, None, return_value :: extra_args);
+      }
+    end
   | Apply_cont (cont, trap_action, args) ->
     let args = Env.rename_variables env args in
     let extra_args = Env.extra_args_for_continuation env cont in
