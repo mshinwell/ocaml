@@ -603,6 +603,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 sw_numblocks = sw_numblocks_tag_switch;
                 sw_blocks = [];
                 sw_failaction;
+                (* XXX What about the size for the failaction? ... *)
                 sw_tags_to_sizes = tags_to_sizes;
               }
             in

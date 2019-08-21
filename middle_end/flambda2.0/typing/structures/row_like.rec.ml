@@ -137,8 +137,7 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
           | Join -> Some maps_to1
           end
         | Some ((_tag_or_unknown, index2), from_at_least2) ->
-          assert (Index.compare index2 index1 <= 0);
-          (* XXX is [compare] right here? *)
+          assert (Index.subset index2 index1);
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env
               maps_to1
