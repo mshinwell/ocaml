@@ -36,7 +36,6 @@ _ocamltest
 _ocamltestd
 *.odoc
 .merlin
-.vscode
 _build
 
 # local to root directory
