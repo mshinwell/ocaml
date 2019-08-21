@@ -544,14 +544,20 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
 
   | Pstring_load_16 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_16 true (* unsafe *), [arg1; arg2] ->
+    (* XXX Looking at Cmm_helpers it looks like the quantity loaded is a
+       naked immediate.  We should check this and change the kinding in
+       [Flambda_primitive] if required *)
     Binary (String_or_bigstring_load (String, Sixteen), arg1, arg2)
   | Pstring_load_32 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_32 true (* unsafe *), [arg1; arg2] ->
-    Binary (String_or_bigstring_load (String, Thirty_two), arg1, arg2)
+    Unary (Box_number Naked_int32,
+      Prim (Binary (String_or_bigstring_load (String, Thirty_two),
+        arg1, arg2)))
   | Pstring_load_64 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_64 true (* unsafe *), [arg1; arg2] ->
-    Binary (String_or_bigstring_load (String, Sixty_four), arg1, arg2)
-
+    Unary (Box_number Naked_int64,
+      Prim (Binary (String_or_bigstring_load (String, Sixty_four),
+        arg1, arg2)))
   (* CR mshinwell: factor out *)
   | Pbytes_load_16 false, [bytes; index] ->
     Checked {
@@ -570,7 +576,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pbytes_load_32 false, [bytes; index] ->
     Checked {
       primitive =
-        Binary (String_or_bigstring_load (Bytes, Thirty_two), bytes, index);
+        Unary (Box_number Naked_int32,
+          Prim (Binary (String_or_bigstring_load (String, Thirty_two),
+            bytes, index)));
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
@@ -584,7 +592,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pbytes_load_64 false, [bytes; index] ->
     Checked {
       primitive =
-        Binary (String_or_bigstring_load (Bytes, Sixty_four), bytes, index);
+        Unary (Box_number Naked_int64,
+          Prim (Binary (String_or_bigstring_load (String, Sixty_four),
+            bytes, index)));
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate

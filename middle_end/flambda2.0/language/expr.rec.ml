@@ -319,17 +319,12 @@ let bind ~bindings ~body =
         | Name (Var rhs_var) ->
           begin match Simple.rec_info simple with
           | None ->
-            let fresh_var = Variable.fresh () in
-            let first =
+            let perm =
               Name_permutation.add_variable Name_permutation.empty
-                (Var_in_binding_pos.var var) fresh_var
+                (Var_in_binding_pos.var var) rhs_var
             in
-            let second =
-              Name_permutation.add_variable Name_permutation.empty
-                fresh_var rhs_var
-            in
-            let perm = Name_permutation.compose ~second ~first in
-            apply_name_permutation expr perm
+            (* CR mshinwell: Think more about this. *)
+            create_let var target (apply_name_permutation expr perm)
           | Some _ -> create_let var target expr
           end
         | _ -> create_let var target expr
