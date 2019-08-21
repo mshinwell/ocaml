@@ -160,17 +160,13 @@ and simplify_recursive_let_cont_handlers
     ~f:(fun ~body rec_handlers ->
       assert(not (Continuation_handlers.contains_exn_handler rec_handlers));
       let definition_denv = DA.denv dacc in
-      let wrapper_scope_level =
+      let original_cont_scope_level =
         DE.get_continuation_scope_level definition_denv
       in
-      let original_cont_scope_level = Scope.next wrapper_scope_level in
       (* let dacc' = dacc in *)
       let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.increment_continuation_scope_level
-            (DE.increment_continuation_scope_level denv))
+        DA.map_denv dacc ~f:DE.increment_continuation_scope_level
       in
-
       let handlers = Continuation_handlers.to_map rec_handlers in
       (* let set = Continuation_handlers.domain rec_handlers in *)
       let body, (handlers, user_data), uacc =
@@ -240,52 +236,6 @@ and simplify_recursive_let_cont_handlers
       in
       let expr = Flambda.Let_cont.create_recursive handlers ~body in
       expr, user_data, uacc)
-
-(*
-  Recursive_let_cont_handlers.pattern_match rec_handlers
-    ~f:(fun ~body cont_handlers ->
-      let cont_handlers = Continuation_handlers.to_map cont_handlers in
-
-        let dacc =
-          DA.map_denv dacc (fun denv ->
-            DE.increment_continuation_scope_level
-              (DE.add_continuation denv cont arity))
-        in
-
-      let denv =
-        Continuation.Map.fold (fun cont cont_handler (env, r) ->
-            let arity = Continuation_handler.arity cont_handler in
-            let env = DE.add_continuation env cont arity in
-            env, r)
-          cont_handlers
-          (env, r)
-      in
-
-      let body, uacc = simplify_expr dacc r body in
-      let cont_handlers, uacc =
-        Continuation.Map.fold
-          (fun cont cont_handler (cont_handlers, uacc) ->
-            let cont_handler, additional_cont_handlers, uacc =
-              simplify_one_continuation_handler denv uenv r cont cont_handler
-            in
-            let cont_handlers =
-              Continuation.Map.add cont cont_handler cont_handlers
-            in
-            (* CR-someday mshinwell: We won't yet remove invariant parameters
-               of recursive continuations. *)
-            let cont_handlers =
-              match additional_cont_handlers with
-              | None -> cont_handlers
-              | Some (additional_cont, additional_cont_handler) ->
-                Continuation.Map.add additional_cont additional_cont_handler
-                  cont_handlers
-            in
-            cont_handlers, uacc)
-          cont_handlers
-          (Continuation.Map.empty, uacc)
-      in
-      Let_cont.create_recursive cont_handlers ~body, uacc)
-*)
 
 and simplify_let_cont
   : 'a. DA.t -> Let_cont.t -> 'a k -> Expr.t * 'a * UA.t
