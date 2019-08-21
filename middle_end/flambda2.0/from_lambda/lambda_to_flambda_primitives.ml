@@ -176,6 +176,7 @@ type failure =
   | Index_out_of_bounds
 
 type expr_primitive =
+  | Simple of Simple.t
   | Unary of P.unary_primitive * simple_or_prim
   | Binary of P.binary_primitive * simple_or_prim * simple_or_prim
   | Ternary of P.ternary_primitive * simple_or_prim * simple_or_prim
@@ -193,6 +194,7 @@ and simple_or_prim =
 let rec print_expr_primitive ppf expr_primitive =
   let module W = Flambda_primitive.Without_args in
   match expr_primitive with
+  | Simple simple -> Simple.print ppf simple
   | Unary (prim, _) -> W.print ppf (Unary prim)
   | Binary (prim, _, _) -> W.print ppf (Binary prim)
   | Ternary (prim, _, _, _) -> W.print ppf (Ternary prim)
@@ -201,7 +203,7 @@ let rec print_expr_primitive ppf expr_primitive =
     Format.fprintf ppf "@[<hov 1>(Checked@ %a)@]"
       print_expr_primitive primitive
 
-let print_simple_or_prim ppf simple_or_prim =
+let print_simple_or_prim ppf (simple_or_prim : simple_or_prim) =
   match simple_or_prim with
   | Simple simple -> Simple.print ppf simple
   | Prim _ -> Format.pp_print_string ppf "<prim>"
@@ -268,6 +270,7 @@ let rec bind_rec ~backend exn_cont
           (cont : Named.t -> Expr.t)
   : Expr.t =
   match prim with
+  | Simple simple -> cont (Named.create_simple simple)
   | Unary (prim, arg) ->
     let cont (arg : Simple.t) =
       cont (Named.create_prim (Unary (prim, arg)) dbg)
@@ -421,7 +424,7 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
     dbg;
   }
 
-let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
+let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : expr_primitive =
   let args = List.map (fun arg : simple_or_prim -> Simple arg) args in
   match prim, args with
@@ -765,6 +768,29 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   (*     dbg; *)
   (*   } *)
 
+  | Pctconst const, _ ->
+    (* CR mshinwell: This doesn't seem to be zero-arity like it should be *)
+    (* CR pchambart: It's not obvious when this one should be converted.
+       mshinwell: Have put an implementation here for now. *)
+    let module B = (val backend : Flambda2_backend_intf.S) in
+    begin match const with
+    | Big_endian -> Simple (Simple.const_bool B.big_endian)
+    | Word_size ->
+      Simple (Simple.const_int (Targetint.OCaml.of_int (8*B.size_int)))
+    | Int_size ->
+      Simple (Simple.const_int (Targetint.OCaml.of_int (8*B.size_int - 1)))
+    | Max_wosize ->
+      (* CR mshinwell: This depends on the number of bits in the header
+         reserved for profinfo, no?  If this computation is wrong then
+         the one in [Closure] (and maybe Flambda 1) is wrong. *)
+      Simple (Simple.const_int (Targetint.OCaml.of_int
+        ((1 lsl ((8*B.size_int) - 10)) - 1)))
+    | Ostype_unix -> Simple (Simple.const_bool (Sys.os_type = "Unix"))
+    | Ostype_win32 -> Simple (Simple.const_bool (Sys.os_type = "Win32"))
+    | Ostype_cygwin -> Simple (Simple.const_bool (Sys.os_type = "Cygwin"))
+    | Backend_type ->
+      Simple (Simple.const_zero) (* constructor 0 is the same as Native here *)
+    end
   | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
@@ -848,10 +874,6 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       [Closure_conversion.close_primitive]"
       Printlambda.primitive prim
 
-  | Pctconst _, _
-    (* It's not obvious when this one should be converted. *)
-    -> failwith "TODO"
-
   | ((Pdivbint {is_safe=Safe; _ }, _::_::[])
     |(Pmodbint {is_safe=Safe; _ }, _::_::[])
     |(Pduparray (_, _), _::[]))
@@ -893,6 +915,6 @@ let convert_and_bind ~backend
       ~(args : Simple.t list)
       (dbg : Debuginfo.t)
       (cont : Named.t option -> Expr.t) : Expr.t =
-  let expr = convert_lprim prim args dbg in
+  let expr = convert_lprim ~backend prim args dbg in
   bind_rec ~backend exn_cont ~register_const_string expr dbg
     (fun named -> cont (Some named))
