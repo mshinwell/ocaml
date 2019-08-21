@@ -1,9 +1,21 @@
 {
     "tasks": [
         {
-            "label": "Build",
+            "label": "Build world",
             "type": "shell",
             "command": "/Users/mark/dev/dune/dune.sh build @world",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$ocamlc"
+            ]
+        },
+        {
+            "label": "Build ilambdac",
+            "type": "shell",
+            "command": "/Users/mark/dev/dune/dune.sh build ilambdac.exe",
             "group": {
                 "kind": "build",
                 "isDefault": true
