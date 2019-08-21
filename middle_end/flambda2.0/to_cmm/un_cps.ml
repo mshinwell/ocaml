@@ -562,17 +562,14 @@ let named_effs n =
   | Prim (p, _) -> Flambda_primitive.effects_and_coeffects p
   | Set_of_closures _ -> Effects_and_coeffects.pure
 
-let has_one_occurrence num =
+let cont_has_one_occurrence k num =
   match (num : Name_occurrences.Num_occurrences.t) with
   | One -> true
   | More_than_one -> false
   | Zero ->
       Misc.fatal_errorf
-        "Found unused let-bound continuation, this should not happen"
-
-let occurs_one_time v body =
-  let free_names = Expr.free_names body in
-  has_one_occurrence (Name_occurrences.count_variable free_names v)
+        "Found unused let-bound continuation %a, this should not happen"
+        Continuation.print k
 
 type inlining_decision =
   | Skip (* no use, the bound variable can be skipped/ignored *)
@@ -666,14 +663,14 @@ and let_expr_aux env v e body =
   let env = let_expr_env body env v e in
   expr env body
 
-and decide_inline_cont h num_free_occurrences =
-  Continuation_handler.stub h || has_one_occurrence num_free_occurrences
+and decide_inline_cont h k num_free_occurrences =
+  Continuation_handler.stub h || cont_has_one_occurrence k num_free_occurrences
 
 and let_cont env = function
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
       Non_recursive_let_cont_handler.pattern_match handler ~f:(fun k ~body ->
           let h = Non_recursive_let_cont_handler.handler handler in
-          if decide_inline_cont h num_free_occurrences then begin
+          if decide_inline_cont h k num_free_occurrences then begin
             let_cont_inline env k h body
           end else
             let_cont_jump env k h body
@@ -790,8 +787,7 @@ and wrap_cont env res e =
         (* Function calls can have any effects and coeffects by default.
            CR Gbury: maybe annotate calls with effects ? *)
         let effs = Effects_and_coeffects.all in
-        let inline = occurs_one_time var body in
-        let env = Env.bind_variable env var effs inline res in
+        let env = let_expr_bind body env var res effs in
         expr env body
     | Jump _
     | Inline _ ->
