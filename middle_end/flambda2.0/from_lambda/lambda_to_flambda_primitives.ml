@@ -552,23 +552,106 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pbytes_load_64 true (* unsafe *), [arg1; arg2] ->
     Binary (String_or_bigstring_load (String, Sixty_four), arg1, arg2)
 
-  (* TODO *)
-  (* | (Pstring_load_16 false) (\* safe *\), [arg1; arg2] -> *)
-  (*   Checked { *)
-  (*     primitive = Binary (String_load Sixteen, arg1, arg2); *)
-  (*     validity_condition = *)
-  (*       Binary (Int_comp_unsigned Lt, *)
-  (*               (\* CR pchambart: *)
-  (*                  Int_comp_unsigned assumes that the arguments are naked *)
-  (*                  integers, but it is correct for tagged integers too as *)
-  (*                  untagging of both arguments doesn't change the result. *\) *)
-  (*               tagged_immediate_as_naked_nativeint arg2, *)
-  (*               tagged_immediate_as_naked_nativeint *)
-  (*                 (Prim (Unary (String_length String, arg1)))); *)
-  (*     failure = Index_out_of_bound; *)
-  (*     dbg; *)
-  (*   } *)
-  (* | Pbittest, [arg1; arg2] -> *)
+  (* CR mshinwell: factor out *)
+  | Pbytes_load_16 false, [bytes; index] ->
+    Checked {
+      primitive =
+        Binary (String_or_bigstring_load (Bytes, Sixteen), bytes, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbytes_load_32 false, [bytes; index] ->
+    Checked {
+      primitive =
+        Binary (String_or_bigstring_load (Bytes, Thirty_two), bytes, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbytes_load_64 false, [bytes; index] ->
+    Checked {
+      primitive =
+        Binary (String_or_bigstring_load (Bytes, Sixty_four), bytes, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  (* CR mshinwell: Change [Lambda] to have a [Safe] / [Unsafe] variant *)
+  | Pbytes_set_16 true, [bytes; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
+      bytes, index, new_value)
+  | Pbytes_set_32 true, [bytes; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
+      bytes, index, new_value)
+  | Pbytes_set_64 true, [bytes; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
+      bytes, index, new_value)
+  | Pbytes_set_16 false, [bytes; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
+          bytes, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbytes_set_32 false, [bytes; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
+          bytes, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbytes_set_64 false, [bytes; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
+          bytes, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length Bytes, bytes)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+
+  (* CR mshinwell: To do: | Pbittest, [arg1; arg2] -> *)
   (*   Binary (Bit_test, arg1, arg2) *)
 
   | Pisint, [arg] ->
@@ -721,6 +804,8 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Eight),
           bytes, index, new_value);
+      (* CR mshinwell: Should this really be using Signed comparison?
+         (Same elsewhere.) *)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
@@ -791,6 +876,20 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Backend_type ->
       Simple (Simple.const_zero) (* constructor 0 is the same as Native here *)
     end
+  | Pbswap16, [arg] ->
+    Unary (Int_arith (Tagged_immediate, Swap_byte_endianness), arg)
+  | Pbbswap Pint32, [arg] ->
+    Unary (Box_number Naked_int32,
+      Prim (Unary (Int_arith (Naked_int32, Swap_byte_endianness),
+        Prim (Unary (Unbox_number Naked_int32, arg)))))
+  | Pbbswap Pint64, [arg] ->
+    Unary (Box_number Naked_int64,
+      Prim (Unary (Int_arith (Naked_int64, Swap_byte_endianness),
+        Prim (Unary (Unbox_number Naked_int64, arg)))))
+  | Pbbswap Pnativeint, [arg] ->
+    Unary (Box_number Naked_nativeint,
+      Prim (Unary (Int_arith (Naked_nativeint, Swap_byte_endianness),
+        Prim (Unary (Unbox_number Naked_nativeint, arg)))))
   | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
@@ -816,6 +915,8 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pfloatfield _
     | Pcvtbint _
     | Poffsetref _
+    | Pbswap16
+    | Pbbswap _
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -829,6 +930,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pdivfloat | Pfloatcomp _
     | Pstringrefu | Pbytesrefu
     | Pstringrefs | Pbytesrefs
+    | Pbytes_load_16 _
+    | Pbytes_load_32 _
+    | Pbytes_load_64 _
     | Pisout
     | Paddbint _
     | Psubbint _
@@ -855,6 +959,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   (*     Printlambda.primitive prim (List.length args) *)
 
   | ( Psetfield_computed _ | Pbytessetu | Pbytessets
+    | Pbytes_set_16 _
+    | Pbytes_set_32 _
+    | Pbytes_set_64 _
     ),
     ([] | [_] | [_;_] | _ :: _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -891,21 +998,12 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pstring_load_16 _
     | Pstring_load_32 _
     | Pstring_load_64 _
-    | Pbytes_load_16 _
-    | Pbytes_load_32 _
-    | Pbytes_load_64 _
-    | Pbytes_set_16 _
-    | Pbytes_set_32 _
-    | Pbytes_set_64 _
     | Pbigstring_load_16 _
     | Pbigstring_load_32 _
     | Pbigstring_load_64 _
     | Pbigstring_set_16 _
     | Pbigstring_set_32 _
     | Pbigstring_set_64 _
-
-    | Pbswap16
-    | Pbbswap _
     | Pint_as_pointer ), _
     -> Misc.fatal_errorf "TODO (%a)" Printlambda.primitive prim
 
