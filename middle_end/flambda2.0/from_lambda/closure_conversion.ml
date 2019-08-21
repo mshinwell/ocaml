@@ -486,29 +486,32 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let apply_cont = Flambda.Apply_cont.create ?trap_action cont ~args in
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
-    let module D = Discriminant in
-    let sort : D.Sort.t =
-      match sw.sort with
-      | Int -> Int
-      | Tag _ -> Tag
-      | Is_int -> Is_int
-    in
-    let arms =
-      List.map (fun (case, arm) -> D.of_int_exn sort case, arm) sw.consts
-    in
-    let arms =
-      match sw.failaction with
-      | None -> D.Map.of_list arms
-      | Some default ->
-        Numbers.Int.Set.fold (fun case cases ->
-            let case = D.of_int_exn sort case in
-            if D.Map.mem case cases then cases
-            else D.Map.add case default cases)
-          (Numbers.Int.zero_to_n (sw.numconsts - 1))
-          (D.Map.of_list arms)
-    in
-    let scrutinee = Simple.name (Env.find_name env scrutinee) in
-    Expr.create_switch sw.sort ~scrutinee ~arms
+    if List.length sw.consts < 1 then
+      Expr.create_invalid ()
+    else
+      let module D = Discriminant in
+      let sort : D.Sort.t =
+        match sw.sort with
+        | Int -> Int
+        | Tag _ -> Tag
+        | Is_int -> Is_int
+      in
+      let arms =
+        List.map (fun (case, arm) -> D.of_int_exn sort case, arm) sw.consts
+      in
+      let arms =
+        match sw.failaction with
+        | None -> D.Map.of_list arms
+        | Some default ->
+          Numbers.Int.Set.fold (fun case cases ->
+              let case = D.of_int_exn sort case in
+              if D.Map.mem case cases then cases
+              else D.Map.add case default cases)
+            (Numbers.Int.zero_to_n (sw.numconsts - 1))
+            (D.Map.of_list arms)
+      in
+      let scrutinee = Simple.name (Env.find_name env scrutinee) in
+      Expr.create_switch sw.sort ~scrutinee ~arms
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =

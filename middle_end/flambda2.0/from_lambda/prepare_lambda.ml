@@ -365,7 +365,21 @@ let mark_as_recursive_static_catch cont =
   end;
   recursive_static_catches := Numbers.Int.Set.add cont !recursive_static_catches
 
-let rec simplify_primitive env (prim : L.primitive) args loc =
+let switch_for_if_then_else ~cond ~ifso ~ifnot k =
+  (* CR mshinwell: What happens if [cond] is something other than
+      0 or 1?  Can this ever happen? *)
+  let switch : Lambda.lambda_switch =
+    { sw_numconsts = 2;
+      sw_consts = [0, ifnot; 1, ifso];
+      sw_numblocks = sw_numblocks_int_switch;
+      sw_blocks = [];
+      sw_failaction = None;
+      sw_tags_to_sizes = Tag.Scannable.Map.empty;
+    }
+  in
+  k (L.Lswitch (cond, switch, Location.none))
+
+let simplify_primitive (prim : L.primitive) args loc =
   match prim, args with
   (*
   | (Pdivint Safe | Pmodint Safe
@@ -445,21 +459,21 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
   | Psequor, [arg1; arg2] ->
     let const_true = Ident.create_local "const_true" in
     let cond = Ident.create_local "cond_sequor" in
-    prepare env (
-      L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
-        (L.Llet (Strict, Pgenval, cond, arg1,
-          (Lifthenelse (Lvar cond, Lvar const_true, arg2))))))
-      (fun lam -> lam)
+    L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
+      (L.Llet (Strict, Pgenval, cond, arg1,
+        switch_for_if_then_else ~cond:(L.Lvar cond)
+          ~ifso:(L.Lvar const_true)
+          ~ifnot:arg2
+          (fun lam -> lam))))
   | Psequand, [arg1; arg2] ->
     let const_false = Ident.create_local "const_false" in
     let cond = Ident.create_local "cond_sequand" in
-    (* CR mshinwell: This recursion is a bit ugly.  Factor out a helper
-       function for constructing if-then-else-like switches? *)
-    prepare env (
-      L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
-        (L.Llet (Strict, Pgenval, cond, arg1,
-          (Lifthenelse (Lvar cond, arg2, Lvar const_false))))))
-      (fun lam -> lam)
+    L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
+      (L.Llet (Strict, Pgenval, cond, arg1,
+        switch_for_if_then_else ~cond:(L.Lvar cond)
+          ~ifso:arg2
+          ~ifnot:(L.Lvar const_false)
+          (fun lam -> lam))))
   | (Psequand | Psequor), _ ->
     Misc.fatal_error "Psequand / Psequor must have exactly two arguments"
   | (Pidentity | Pbytes_to_string | Pbytes_of_string), [arg] -> arg
@@ -481,7 +495,7 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
     L.Lapply apply
   | _, _ -> L.Lprim (prim, args, loc)
 
-and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
+let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
   match lam with
   | Lvar _ | Lconst _ -> k lam
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall; ap_inlined;
@@ -537,7 +551,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     Misc.fatal_errorf "Pmakeblock with wrong or non-scannable block tag %d" tag
   | Lprim (prim, args, loc) ->
     prepare_list env args (fun args ->
-      k (simplify_primitive env prim args loc))
+      k (simplify_primitive prim args loc))
   | Lswitch (scrutinee, switch, loc) ->
     prepare env scrutinee (fun scrutinee ->
       let const_nums, sw_consts = List.split switch.sw_consts in
@@ -635,16 +649,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env cond (fun cond ->
       prepare env ifso (fun ifso ->
         prepare env ifnot (fun ifnot ->
-          let switch : Lambda.lambda_switch =
-            { sw_numconsts = 2;
-              sw_consts = [0, ifnot; 1, ifso];
-              sw_numblocks = sw_numblocks_int_switch;
-              sw_blocks = [];
-              sw_failaction = None;
-              sw_tags_to_sizes = Tag.Scannable.Map.empty;
-            }
-          in
-          k (L.Lswitch (cond, switch, Location.none)))))
+          switch_for_if_then_else ~cond ~ifso ~ifnot k)))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create_local "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k
