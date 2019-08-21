@@ -197,7 +197,7 @@
  (name optmain)
  (modes native)
  (flags (:standard -principal -nostdlib))
- (libraries ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
+ (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
  (modules optmain))
 
 (rule
@@ -215,7 +215,7 @@
        ocamlopt.opt
 ;       debugger/ocamldebug.byte
 ;       ocamldoc/ocamldoc.byte
-       ocamltest/ocamltest.byte
+;       ocamltest/ocamltest.byte
        toplevel/ocaml.byte
        toplevel/expunge.exe
        ))
@@ -225,4 +225,4 @@
  (package ocaml)
  (files
   (ocamlc.byte as ocamlc)
-  (ocamlopt.byte as ocamlopt)))
+  (ocamlopt.opt as ocamlopt)))
