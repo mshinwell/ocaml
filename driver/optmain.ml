@@ -260,7 +260,9 @@ let main () =
   | Some i ->
     match int_of_string i with
     | exception _ -> ()
-    | i -> Format.pp_set_margin Format.err_formatter i
+    | i ->
+      Format.pp_set_margin Format.std_formatter i;
+      Format.pp_set_margin Format.err_formatter i
   end;
   let ppf = Format.err_formatter in
   try
