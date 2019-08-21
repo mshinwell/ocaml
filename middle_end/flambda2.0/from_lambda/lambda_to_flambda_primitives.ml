@@ -711,6 +711,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
+  | Pbytessetu, [bytes; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bytes, Eight), bytes, index, new_value)
   | Pbytessets, [bytes; index; new_value] ->
     Checked {
       primitive =
@@ -826,7 +828,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   (*                      Wrong arity for %a: %i" *)
   (*     Printlambda.primitive prim (List.length args) *)
 
-  | ( Psetfield_computed _
+  | ( Psetfield_computed _ | Pbytessetu | Pbytessets
     ),
     ([] | [_] | [_;_] | _ :: _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -856,9 +858,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     -> failwith "TODO again"
 
   | ( 
-      Pbytessetu
-    | Pbytessets
-    | Parrayrefu _
+      Parrayrefu _
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
