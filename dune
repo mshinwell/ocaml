@@ -197,7 +197,7 @@
  (name ilambdac)
  (modes byte)
  (flags (:standard -principal -nostdlib))
- (libraries ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
+ (libraries ocamloptcommon ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
  (modules ilambdac))
 
 ;;;;;;;;;;;;;;;;
