@@ -215,6 +215,21 @@ let primitive_can_raise = function
   | Pstringrefs
   | Pbytesrefs
   | Pbytessets
+  | Pstring_load_16 false
+  | Pstring_load_32 false
+  | Pstring_load_64 false
+  | Pbytes_load_16 false
+  | Pbytes_load_32 false
+  | Pbytes_load_64 false
+  | Pbytes_set_16 false
+  | Pbytes_set_32 false
+  | Pbytes_set_64 false
+  | Pbigstring_load_16 false
+  | Pbigstring_load_32 false
+  | Pbigstring_load_64 false
+  | Pbigstring_set_16 false
+  | Pbigstring_set_32 false
+  | Pbigstring_set_64 false
     (* CR mshinwell: some more need to go here too *)
     -> true
   | Pidentity
@@ -272,21 +287,21 @@ let primitive_can_raise = function
   | Pbigarrayref _
   | Pbigarrayset _
   | Pbigarraydim _
-  | Pstring_load_16 _
-  | Pstring_load_32 _
-  | Pstring_load_64 _
-  | Pbytes_load_16 _
-  | Pbytes_load_32 _
-  | Pbytes_load_64 _
-  | Pbytes_set_16 _
-  | Pbytes_set_32 _
-  | Pbytes_set_64 _
-  | Pbigstring_load_16 _
-  | Pbigstring_load_32 _
-  | Pbigstring_load_64 _
-  | Pbigstring_set_16 _
-  | Pbigstring_set_32 _
-  | Pbigstring_set_64 _
+  | Pstring_load_16 true
+  | Pstring_load_32 true
+  | Pstring_load_64 true
+  | Pbytes_load_16 true
+  | Pbytes_load_32 true
+  | Pbytes_load_64 true
+  | Pbytes_set_16 true
+  | Pbytes_set_32 true
+  | Pbytes_set_64 true
+  | Pbigstring_load_16 true
+  | Pbigstring_load_32 true
+  | Pbigstring_load_64 true
+  | Pbigstring_set_16 true
+  | Pbigstring_set_32 true
+  | Pbigstring_set_64 true
   | Pctconst _
   | Pbswap16
   | Pbbswap _
