@@ -160,7 +160,7 @@ let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
     failwith "TODO"
 
 let convert_mutable_flag (flag : Fexpr.mutable_or_immutable)
-      : P.mutable_or_immutable =
+      : Effects.mutable_or_immutable =
   match flag with
   | Mutable -> Mutable
   | Immutable -> Immutable
