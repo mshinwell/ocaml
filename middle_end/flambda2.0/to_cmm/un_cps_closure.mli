@@ -18,6 +18,9 @@ type env
 (** Type for accumulating information about offsets of
     closure ids and var within closures. *)
 
+val print_env : Format.formatter -> env -> unit
+(** Printing function for environment. *)
+
 val empty_env : env
 (** Empty environment. *)
 
@@ -66,4 +69,8 @@ val layout :
 (** Order the given closure ids and env vars into a list of layout slots
     together with their respective offset. Note that there may be holes
     between the offsets. *)
+
+val print_layout : Format.formatter -> layout -> unit
+val print_layout_slot : Format.formatter -> layout_slot -> unit
+(** Printing functions for layout slots and layouts. *)
 
