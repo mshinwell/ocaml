@@ -40,4 +40,6 @@ val commute : t -> t -> bool
     without changing their semantics. *)
 
 val has_commuting_effects : t -> bool
-(** Does the given effects and coeffects has observable effects ? *)
+(** Does the given effects and coeffects has observable effects ?
+    Rather, does it have some effects with regards to whether it can
+    commute with other expressions. *)
