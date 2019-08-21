@@ -159,12 +159,29 @@ let layout env closures env_vars =
   Un_cps_closure.layout env.offsets closures env_vars
 
 
+(* Printing
+
+let print_binding fmt b =
+  Format.fprintf fmt "@[<hv>[%a : %a ->@ %a@ (%a)@,]@]"
+    Variable.print b.var
+    Backend_var.With_provenance.print b.cmm_var
+    Printcmm.expression b.cmm_expr
+    Effects_and_coeffects.print b.effs
+
+let print_binding_list fmt l =
+  Format.fprintf fmt "@[<v>";
+  List.iter (fun b ->
+      Format.fprintf fmt "%a@," print_binding b
+    ) l;
+  Format.fprintf fmt "@]"
+*)
+
 (* Inlining of let-bindings *)
 
 let bind_variable env var effs inline cmm_expr =
-  if inline && Effects_and_coeffects.is_pure effs then
+  if inline && Effects_and_coeffects.is_pure effs then begin
     { env with vars = Variable.Map.add var cmm_expr env.vars }
-  else begin
+  end else begin
     let cmm_var = gen_variable var in
     let binding = { var; effs; inline; cmm_var; cmm_expr; } in
     { env with bindings = binding :: env.bindings }
@@ -176,7 +193,8 @@ let inline_variable env v =
     Un_cps_helper.var v, env
   in
   let rec commute b new_stack = function
-    | [] -> b.cmm_expr, { env with bindings = new_stack }
+    | [] ->
+        b.cmm_expr, { env with bindings = new_stack }
     | b' :: r ->
         if Effects_and_coeffects.commute b.effs b'.effs then
           commute b (b' :: new_stack) r
@@ -188,16 +206,19 @@ let inline_variable env v =
         Misc.fatal_errorf "Variable %a not found in env" Variable.print v
     | b :: r ->
         if Variable.compare v b.var = 0 then
-          if b.inline then
+          if b.inline then begin
             commute b r acc
-          else
+          end else begin
             skip_inlining b
+          end
         else
           find v (b :: acc) r
   in
   match Variable.Map.find v env.vars with
-  | e -> e, env
-  | exception Not_found -> find v [] env.bindings
+  | e ->
+      e, env
+  | exception Not_found ->
+      find v [] env.bindings
 
 let flush_delayed_lets env =
   (* Add the generated variable to the vars bindings, so that the
