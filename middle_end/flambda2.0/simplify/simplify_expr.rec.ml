@@ -155,8 +155,91 @@ and simplify_non_recursive_let_cont_handler
    entry point -- could loop forever.  (Need to think about this again.) *)
 and simplify_recursive_let_cont_handlers
   : 'a. DA.t -> Recursive_let_cont_handlers.t -> 'a k -> Expr.t * 'a * UA.t
-= fun _dacc _rec_handlers _k ->
-  Misc.fatal_error "Needs reworking to match non-recursive case"
+= fun dacc rec_handlers k ->
+  Recursive_let_cont_handlers.pattern_match rec_handlers
+    ~f:(fun ~body rec_handlers ->
+      assert(not (Continuation_handlers.contains_exn_handler rec_handlers));
+      let definition_denv = DA.denv dacc in
+      let wrapper_scope_level =
+        DE.get_continuation_scope_level definition_denv
+      in
+      let original_cont_scope_level = Scope.next wrapper_scope_level in
+      (* let dacc' = dacc in *)
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv ->
+          DE.increment_continuation_scope_level
+            (DE.increment_continuation_scope_level denv))
+      in
+
+      let handlers = Continuation_handlers.to_map rec_handlers in
+      (* let set = Continuation_handlers.domain rec_handlers in *)
+
+        let body, user_data, uacc = simplify_expr dacc body (fun cont_uses_env r ->
+
+            let definition_denv =
+              DE.increment_continuation_scope_level definition_denv
+            in
+            let definition_denv =
+              (* Probably useless as the arguments types are cleaned
+                 of any information, hence can't refer to lifted
+                 constants from the body *)
+              DE.add_lifted_constants definition_denv
+                (R.get_lifted_constants r)
+            in
+
+            (* let user_data, uacc = k cont_uses_env r in
+             * let uenv = UA.uenv uacc in *)
+
+            let cont, cont_handler =
+              match Continuation.Map.bindings handlers with
+              | [] | _ :: _ :: _ -> failwith "TODO"
+              | [c] -> c
+              (* Only single continuation handler is supported right now *)
+            in
+
+            let arity = Continuation_handler.arity cont_handler in
+            let arg_types =
+              (* We can't know a good type from the call types *)
+              List.map T.unknown arity
+            in
+
+            let (cont_uses_env, _apply_cont_rewrite_id) :
+              Continuation_uses_env.t * Apply_cont_rewrite_id.t =
+              (* We don't know anything, it's like it was called
+                 with any argument ! *)
+              CUE.record_continuation_use cont_uses_env
+                cont
+                Fixed_arity (* Maybe simpler ? *)
+                ~typing_env_at_use:(
+                  (* not usefull as we will have only top *)
+                  DE.typing_env definition_denv
+                )
+                ~arg_types
+            in
+
+            let dacc = DA.create definition_denv cont_uses_env r in
+
+            let _result, user_data, uacc =
+              simplify_one_continuation_handler dacc
+                ~param_types:arg_types
+                ~extra_params_and_args:Continuation_extra_params_and_args.empty
+                ~cannot_change_arity:true
+                cont
+                cont_handler
+                (fun cont_uses_env r ->
+                   let user_data, uacc = k cont_uses_env r in
+                   let uacc =
+                     UA.map_uenv uacc ~f:(fun uenv ->
+                         UE.add_continuation uenv cont
+                           original_cont_scope_level
+                           arity)
+                   in
+                   user_data, uacc)
+            in
+            user_data, uacc) in
+        let expr = Flambda.Let_cont.create_recursive handlers ~body in
+        expr, user_data, uacc)
+
 (*
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body cont_handlers ->
