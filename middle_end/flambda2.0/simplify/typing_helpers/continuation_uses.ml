@@ -43,7 +43,6 @@ module Use = struct
       arg_types
 
   let id t = t.id
-  let kind t = t.kind
   let arg_types t = t.arg_types
   let typing_env_at_use t = t.typing_env
 end
@@ -170,9 +169,10 @@ let cannot_change_continuation's_arity t =
   match Continuation.sort t.continuation with
   | Return | Toplevel_return -> false
   | Exn -> true (* CR mshinwell: this should go to [false] *)
-  | Normal ->
+  | Normal -> false
+  (* XXX Tidy up
     List.exists (fun use ->
         match Use.kind use with
         | Normal -> false
         | Fixed_arity -> true)
-      t.uses
+      t.uses *)
