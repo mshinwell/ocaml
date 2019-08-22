@@ -963,6 +963,7 @@ and fill_slot decls elts env acc offset slot =
       end
 
 and fill_up_to j acc i =
+  assert (i <= j);
   if i = j then acc
   else fill_up_to j (C.int 1 :: acc) (i + 1)
 
