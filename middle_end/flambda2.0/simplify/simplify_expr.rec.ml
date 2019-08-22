@@ -969,7 +969,7 @@ and simplify_switch
               T.this_tagged_immediate imm
             | Is_int, Is_int ->
               T.this_discriminant arm
-            | Tag, Tag { tags_to_sizes; } ->
+            | Tag, Tag { tags_to_sizes = _; } ->
               let tag =
                 match Discriminant.to_tag arm with
                 | None -> None
@@ -981,14 +981,16 @@ and simplify_switch
                     converted to [Tag.Scannable.t]:@ %a"
                   Discriminant.print arm
                   Switch.print switch
-              | Some tag ->
+              | Some _tag ->
+              (* CR mshinwell: Decide what to do about [tags_to_sizes] *)
+              (*
                 match Tag.Scannable.Map.find tag tags_to_sizes with
                 | exception Not_found ->
                   Misc.fatal_errorf "Arm %a of this [Switch] is not listed \
                       in the [tags_to_sizes] map:@ %a"
                     Discriminant.print arm
                     Switch.print switch
-                | _size ->
+                | _size ->*)
                   (* CR mshinwell: Should [Tag] switches actually not be
                      working on the output of [Get_tag], and instead take
                      the block?  Otherwise we're not going to learn what the
