@@ -778,9 +778,11 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       failure = Division_by_zero;
       dbg;
     }
-  | Parrayrefu Pgenarray, [array; index] ->
+  | Parrayrefu (Pgenarray | Paddrarray | Pintarray), [array; index] ->
+    (* CR mshinwell: Review all these cases.  Isn't this supposed to
+       produce [Generic_array]? *)
     Binary (Block_load (Array (Value Anything), Mutable), array, index)
-  | Parrayrefs Pgenarray, [array; index] ->
+  | Parrayrefs (Pgenarray | Paddrarray | Pintarray), [array; index] ->
     Checked {
       primitive =
         Binary (Block_load (Array (Value Anything), Mutable), array, index);
@@ -794,10 +796,12 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
-  | Parraysetu Pgenarray, [array; index; new_value] ->
+  | Parraysetu (Pgenarray | Paddrarray | Pintarray),
+      [array; index; new_value] ->
     Ternary (Block_set (Array (Value Anything), Assignment),
       array, index, new_value)
-  | Parraysets Pgenarray, [array; index; new_value] ->
+  | Parraysets (Pgenarray | Paddrarray | Pintarray),
+      [array; index; new_value] ->
     Checked {
       primitive =
         Ternary (Block_set (Array (Value Anything), Assignment),

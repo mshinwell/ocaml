@@ -365,13 +365,17 @@ let mark_as_recursive_static_catch cont =
   end;
   recursive_static_catches := Numbers.Int.Set.add cont !recursive_static_catches
 
-let switch_for_if_then_else ~cond ~ifso ~ifnot k =
+let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
   (* CR mshinwell: What happens if [cond] is something other than
-      0 or 1?  Can this ever happen? *)
+     0 or 1?  Can this ever happen? *)
+  let sw_numblocks =
+    if is_int then sw_numblocks_isint_switch
+    else sw_numblocks_int_switch
+  in
   let switch : Lambda.lambda_switch =
     { sw_numconsts = 2;
       sw_consts = [0, ifnot; 1, ifso];
-      sw_numblocks = sw_numblocks_int_switch;
+      sw_numblocks;
       sw_blocks = [];
       sw_failaction = None;
       sw_tags_to_sizes = Tag.Scannable.Map.empty;
@@ -461,7 +465,8 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequor" in
     L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~cond:(L.Lvar cond)
+        switch_for_if_then_else ~is_int:false
+          ~cond:(L.Lvar cond)
           ~ifso:(L.Lvar const_true)
           ~ifnot:arg2
           (fun lam -> lam))))
@@ -470,7 +475,8 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequand" in
     L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~cond:(L.Lvar cond)
+        switch_for_if_then_else ~is_int:false
+          ~cond:(L.Lvar cond)
           ~ifso:arg2
           ~ifnot:(L.Lvar const_false)
           (fun lam -> lam))))
@@ -646,11 +652,18 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env body (fun body ->
       prepare env handler (fun handler ->
         k (L.Ltrywith (body, id, handler))))
+    (* CR mshinwell: Work out what to do about [Pisint] occurrences in
+      the Lambda code *)
+  | Lifthenelse ((Lprim (Pisint, _, _)) as cond, ifso, ifnot) ->
+    prepare env cond (fun cond ->
+      prepare env ifso (fun ifso ->
+        prepare env ifnot (fun ifnot ->
+          switch_for_if_then_else ~is_int:true ~cond ~ifso ~ifnot k)))
   | Lifthenelse (cond, ifso, ifnot) ->
     prepare env cond (fun cond ->
       prepare env ifso (fun ifso ->
         prepare env ifnot (fun ifnot ->
-          switch_for_if_then_else ~cond ~ifso ~ifnot k)))
+          switch_for_if_then_else ~is_int:false ~cond ~ifso ~ifnot k)))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create_local "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k

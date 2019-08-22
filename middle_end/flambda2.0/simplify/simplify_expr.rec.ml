@@ -1021,11 +1021,12 @@ and simplify_switch
             | Is_int, Is_int ->
               T.this_discriminant arm
             | Tag, Tag { tags_to_sizes = _; } ->
-              let tag =
+              let _tag =
                 match Discriminant.to_tag arm with
                 | None -> None
                 | Some tag -> Tag.Scannable.of_tag tag
               in
+              (* XXX We need to match on tags >= No_scan_tag
               begin match tag with
               | None ->
                 Misc.fatal_errorf "Arm %a of this [Switch] cannot be \
@@ -1033,6 +1034,7 @@ and simplify_switch
                   Discriminant.print arm
                   Switch.print switch
               | Some _tag ->
+              *)
               (* CR mshinwell: Decide what to do about [tags_to_sizes] *)
               (*
                 match Tag.Scannable.Map.find tag tags_to_sizes with
@@ -1052,7 +1054,7 @@ and simplify_switch
                   let fields = List.init size (fun _ -> T.any_value ()) in
                   T.immutable_block (Tag.Scannable.to_tag tag) ~fields
 *)
-              end
+(*              end*)
             | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch

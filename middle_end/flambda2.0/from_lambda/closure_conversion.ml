@@ -581,6 +581,7 @@ and close_let_rec t env ~defs ~body =
   in
   let body = close t env body in
   Expr.create_pattern_let
+    (* XXX closure_vars is not including vars for tupled call stubs *)
     (Bindable_let_bound.set_of_closures ~closure_vars)
     set_of_closures body
 
