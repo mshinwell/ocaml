@@ -166,6 +166,12 @@ let store ?(dbg=Debuginfo.none) kind init addr value =
 let extcall ?(dbg=Debuginfo.none) ?label ~alloc name typ_res args =
   Cmm.Cop (Cextcall (name, typ_res, alloc, label), args, dbg)
 
+(* unreachable/invalid expression *)
+
+let unreachable =
+  load Cmm.Word_int Asttypes.Mutable (int 0)
+
+
 (* Block creation *)
 
 let float_tag = function
