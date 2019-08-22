@@ -44,23 +44,20 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id ~around =
     match UE.find_apply_cont_rewrite uenv original_cont with
     | None -> None
     | Some rewrite ->
-      let extra_args =
-        List.map
-          (fun (extra_arg : Continuation_extra_params_and_args.Extra_arg.t) ->
-            match extra_arg with
-            | Already_in_scope simple -> simple)
-          (Apply_cont_rewrite.extra_args rewrite use_id)
+      let param = Variable.create "param" in
+      let params = [KP.create (Parameter.wrap param) K.value] in
+      let args = [Simple.var param] in
+      let apply_cont_expr, _apply_cont, _extra_args =
+        Apply_cont_rewrite.rewrite_use rewrite use_id
+          (Apply_cont.create cont ~args)
       in
-      (* CR mshinwell: Check arguments are not being deleted *)
+      (* CR mshinwell: Check arguments are not being deleted; in fact just
+         get the extra args rather than using [rewrite_use] *)
       let new_cont = Continuation.create () in
       let new_handler =
-        let param = Variable.create "param" in
-        let params = [KP.create (Parameter.wrap param) K.value] in
-        let args = (Simple.var param) :: extra_args in
-        let apply_cont = Apply_cont.create cont ~args in
         let params_and_handler =
           Continuation_params_and_handler.create params
-            ~handler:(Expr.create_apply_cont apply_cont)
+            ~handler:apply_cont_expr
         in
         Continuation_handler.create ~params_and_handler
           ~stub:false
