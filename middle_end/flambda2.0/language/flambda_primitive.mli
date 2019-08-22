@@ -31,7 +31,7 @@
 module Value_kind : sig
   type t =
     | Anything
-    | Definitely_pointer
+    | Definitely_pointer  (* CR mshinwell: Is this for "addr" arrays? Name? *)
     | Definitely_immediate
 
   val compare : t -> t -> int
