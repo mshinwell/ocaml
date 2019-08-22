@@ -778,6 +778,8 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       failure = Division_by_zero;
       dbg;
     }
+  | Parrayrefu Pgenarray, [array; index] ->
+    Binary (Block_load (Array (Value Anything), Mutable), array, index)
   | Parrayrefs Pgenarray, [array; index] ->
     Checked {
       primitive =
@@ -792,6 +794,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
+  | Parraysetu Pgenarray, [array; index; new_value] ->
+    Ternary (Block_set (Array (Value Anything), Assignment),
+      array, index, new_value)
   | Parraysets Pgenarray, [array; index; new_value] ->
     Checked {
       primitive =
