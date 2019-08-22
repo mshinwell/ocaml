@@ -880,11 +880,11 @@ and switch env s =
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
   in
-  let ints = Array.of_list ints in
-  let exprs = Array.of_list exprs in
+  let ints = Array.of_list (List.rev ints) in
+  let exprs = Array.of_list (List.rev exprs) in
   assert (Array.length ints = Array.length exprs);
   match ints, exprs with
-  | [| 1; 0 |], [| then_; else_ |] ->
+  | [| 0; 1 |], [| else_; then_ |] ->
       (* This switch is actually an if-then-else.
          On such switches, transl_switch_clambda will actually generate
          code that compare the scrutinee with 0 (or 1), whereas directly
@@ -893,10 +893,24 @@ and switch env s =
          the move from the condition register to a regular register). *)
       wrap (C.ite e ~then_ ~else_)
   | _ ->
-      wrap (C.transl_switch_clambda Location.none e ints exprs)
+      if Misc.Stdlib.Array.for_alli (=) ints then
+        wrap (C.transl_switch_clambda Location.none e ints exprs)
+      else begin
+        (* Add an unreachable case to the cases array *)
+        let c = Array.length exprs in
+        let cases = Array.append exprs [| C.unreachable |] in
+        (* The transl_switch_clambda expects an index array such that
+           index.(i) is the index in [cases] of the expression to
+           execute when [e] matches [i]. *)
+        let d, _ = Discriminant.Map.max_binding (Switch.arms s) in
+        let n = Targetint.OCaml.to_int (Discriminant.to_int d) in
+        let index = Array.make (n + 2) c in
+        Array.iteri (fun i j -> index.(j) <- i) ints;
+        wrap (C.transl_switch_clambda Location.none e index cases)
+      end
 
 and invalid _env _e =
-  C.load Cmm.Word_int Asttypes.Mutable (C.int 0)
+  C.unreachable
 
 and set_of_closures env s =
   let fun_decls = Set_of_closures.function_decls s in

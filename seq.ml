@@ -28,7 +28,7 @@ let return x () = Cons (x, empty)
 let rec map f seq () = match seq() with
   | Nil -> Nil
   | Cons (x, next) -> Cons (f x, map f next)
-(*
+
 let rec filter_map f seq () = match seq() with
   | Nil -> Nil
   | Cons (x, next) ->
@@ -71,4 +71,3 @@ let iter f seq =
         aux next
   in
   aux seq
-   *)

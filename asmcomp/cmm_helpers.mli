@@ -551,7 +551,11 @@ val transl_int_switch :
   Location.t -> expression -> int -> int ->
   (int * expression) list -> expression -> expression
 
-(** [transl_switch_clambda loc arg index cases] *)
+(** [transl_switch_clambda loc arg index cases]
+    - [cases] is an array of expressions
+    - [index] is an index used to determine which case to take depending on the
+      value matched by [arg]. If [arg] is equal to [i], then [cases.(index.(i))]
+      will be executed. *)
 val transl_switch_clambda :
   Location.t -> expression -> int array -> expression array -> expression
 
