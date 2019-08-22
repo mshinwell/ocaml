@@ -254,7 +254,6 @@ module Greedy = struct
     sets_of_closures = [];
   }
 
-  (*
   (* debug printing *)
   let print_set_id fmt s = Format.fprintf fmt "%d" s.id
 
@@ -302,14 +301,18 @@ module Greedy = struct
       (Closure_id.Map.print print_slot) state.closures
       (Var_within_closure.Map.print print_slot) state.env_vars
       print_sets state.sets_of_closures
-    *)
+  [@@warning "-32"]
 
   (* Slots *)
 
   let is_closure_slot slot =
     match slot.desc with
-    | Closure _ -> true
-    | Env_var _ -> false
+    | Closure _ ->
+        assert (slot.size = 2 || slot.size = 3);
+        true
+    | Env_var _ ->
+        assert (slot.size = 1);
+        false
 
   let add_slot_offset_to_set offset slot set =
     let map = set.allocated_slots in
@@ -363,10 +366,9 @@ module Greedy = struct
           match find_closure_slot state c with
           | Some s -> s, state
           | None ->
-              let size =
-                let arity = Function_declaration.params_arity def in
-                if List.length arity = 1 then 2 else 3
-              in
+              let parity = Function_declaration.params_arity def in
+              let arity = List.length parity in
+              let size = if arity = 1 then 2 else 3 in
               let s = create_slot size (Closure c) in
               s, add_closure_slot state c s
         in
@@ -468,6 +470,12 @@ module Greedy = struct
       | Assigned pos ->
           if is_closure_slot s && pos <> 0 then pos - 1 else pos
     in
+    (* first potentially free offset after a slot *)
+    let first_free_after slot =
+      match slot.pos with
+      | Unassigned -> assert false
+      | Assigned i -> i + slot.size
+    in
     (* Adjust a starting position to not point in the middle of a block. *)
     let adjust curr =
       match Numbers.Int.Map.find_last (fun i -> i <= curr) map with
@@ -487,7 +495,7 @@ module Greedy = struct
           if available_space >= needed_space curr then
             curr
           else
-            loop (curr + slot.size)
+            loop (first_free_after next_slot)
     in
     loop (adjust start)
 
