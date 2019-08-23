@@ -99,6 +99,7 @@ type primitive =
   | Parraysets of array_kind
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
+  | Pflambda_isint (* CR mshinwell: remove once Prepare_lambda removed *)
   (* Extract a block's tag *)
   | Pgettag
   (* Test if the (integer) argument is outside an interval *)

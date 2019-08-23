@@ -698,10 +698,11 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
     | None -> occurrence_kind
     | Some occurrence_kind -> occurrence_kind
   in
-  match
+  let result =
     Aliases.get_canonical_element (aliases t) alias
       ~min_order_within_equiv_class
-  with
+  in 
+  match result with
   | None -> Ok None, kind
   | Some alias ->
     let simple = Alias.simple alias in
