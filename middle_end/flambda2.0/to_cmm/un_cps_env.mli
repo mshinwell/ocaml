@@ -55,7 +55,7 @@ val get_variable : t -> Variable.t -> Cmm.expression
 (** Get the cmm variable bound to a flambda2 variable.
     Will fail (i.e. assertion failure) if the variable is not bound. *)
 
-val inline_variable : t -> Variable.t -> Cmm.expression * t
+val inline_variable : t -> Variable.t -> Cmm.expression * t * Effects_and_coeffects.t
 (** Try and inline an flambda2 variable using the delayed let-bindings. *)
 
 val flush_delayed_lets : t -> (Cmm.expression -> Cmm.expression) * t
