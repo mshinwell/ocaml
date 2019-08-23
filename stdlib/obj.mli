@@ -26,7 +26,7 @@ external magic : 'a -> 'b = "%identity"
 val [@inline always] is_block : t -> bool
 external is_int : t -> bool = "%obj_is_int"
 external tag : t -> int = "caml_obj_tag"
-external size : t -> int = "%obj_size"
+val size : t -> int
 external reachable_words : t -> int = "caml_obj_reachable_words"
   (**
      Computes the total size (in words, including the headers) of all
@@ -36,7 +36,7 @@ external reachable_words : t -> int = "caml_obj_reachable_words"
      @Since 4.04
   *)
 
-external field : t -> int -> t = "%obj_field"
+val field : t -> int -> t
 
 (** When using flambda:
 
@@ -53,7 +53,7 @@ external field : t -> int -> t = "%obj_field"
     {!Sys.opaque_identity}, so any information about its contents will not
     be propagated.
 *)
-external set_field : t -> int -> t -> unit = "%obj_set_field"
+val set_field : t -> int -> t -> unit
 external set_tag : t -> int -> unit = "caml_obj_set_tag"
   [@@ocaml.deprecated "Use with_tag instead."]
 

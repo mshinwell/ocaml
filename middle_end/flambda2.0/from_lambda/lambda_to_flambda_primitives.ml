@@ -664,7 +664,7 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   (* CR mshinwell: To do: | Pbittest, [arg1; arg2] -> *)
   (*   Binary (Bit_test, arg1, arg2) *)
 
-  | Pisint, [arg] ->
+  | Pflambda_isint, [arg] ->
     Unary (Is_int, arg)
   | Pgettag, [arg] ->
     Unary (Get_tag, arg)
@@ -923,7 +923,7 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
     | Pintoffloat | Pfloatofint
     | Pnegfloat | Pabsfloat | Pstringlength
-    | Pbyteslength | Pisint | Pgettag
+    | Pbyteslength | Pgettag
     | Pbintofint _
     | Pintofbint _
     | Pnegbint _
@@ -936,6 +936,7 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Poffsetref _
     | Pbswap16
     | Pbbswap _
+    | Pisint | Pflambda_isint
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -990,6 +991,7 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | ( Pidentity | Pignore | Prevapply | Pdirapply | Psequand
     | Psequor
     | Pbytes_of_string | Pbytes_to_string
+    | Pisint
     ), _ ->
     Misc.fatal_errorf "[%a] should have been removed by \
       [Prepare_lambda.prepare]"

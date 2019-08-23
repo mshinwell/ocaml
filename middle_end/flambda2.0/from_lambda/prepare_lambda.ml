@@ -482,6 +482,17 @@ let simplify_primitive (prim : L.primitive) args loc =
           (fun lam -> lam))))
   | (Psequand | Psequor), _ ->
     Misc.fatal_error "Psequand / Psequor must have exactly two arguments"
+  | Pflambda_isint, _ ->
+    Misc.fatal_error "[Pflambda_isint] should not exist at this stage"
+  | Pisint, [arg] ->
+    let is_int = Ident.create_local "is_int" in
+    L.Llet (Strict, Pgenval, is_int,
+      Lprim (Pflambda_isint, [arg], loc),
+      switch_for_if_then_else ~is_int:true
+        ~cond:(L.Lvar is_int)
+        ~ifso:(L.Lconst (Const_base (Const_int 1)))
+        ~ifnot:(L.Lconst (Const_base (Const_int 0)))
+        (fun lam -> lam))
   | (Pidentity | Pbytes_to_string | Pbytes_of_string), [arg] -> arg
   | Pignore, [_arg] -> L.Lconst (Const_base (Const_int 0))
   | Pdirapply, [funct; arg]
@@ -634,7 +645,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               if switch.sw_numconsts = 0 then blocks_switch
               else if switch.sw_numblocks = 0 then consts_switch
               else
-                L.Lswitch (L.Lprim (Pisint, [scrutinee], Location.none),
+                L.Lswitch (L.Lprim (Pflambda_isint, [scrutinee], Location.none),
                   isint_switch, loc)
             in
             k (wrap_switch switch)))))
@@ -652,13 +663,6 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env body (fun body ->
       prepare env handler (fun handler ->
         k (L.Ltrywith (body, id, handler))))
-    (* CR mshinwell: Work out what to do about [Pisint] occurrences in
-      the Lambda code *)
-  | Lifthenelse ((Lprim (Pisint, _, _)) as cond, ifso, ifnot) ->
-    prepare env cond (fun cond ->
-      prepare env ifso (fun ifso ->
-        prepare env ifnot (fun ifnot ->
-          switch_for_if_then_else ~is_int:true ~cond ~ifso ~ifnot k)))
   | Lifthenelse (cond, ifso, ifnot) ->
     prepare env cond (fun cond ->
       prepare env ifso (fun ifso ->

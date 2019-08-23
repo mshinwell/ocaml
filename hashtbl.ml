@@ -599,7 +599,7 @@ and ('a, 'b) bucketlist =
 *)
 
 let ongoing_traversal h =
-  Obj.size (Obj.repr (Sys.opaque_identity h)) < 4 (* compatibility with old hash tables *)
+  Obj.size (Obj.repr h) < 4 (* compatibility with old hash tables *)
   || h.initial_size < 0
 
 let flip_ongoing_traversal h =
