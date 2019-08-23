@@ -14,13 +14,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* XXX Remove this once the file has been updated to cope with the
-   change in type of Let patterns *)
-[@@@ocaml.warning "-32"]
-
 open! Flambda.Import
 
 module Env = Un_cps_env
+module Ece = Effects_and_coeffects
 
 (* Notes:
    - an int64 on a 32-bit host is represented across two registers,
@@ -123,7 +120,7 @@ let symbol s =
 
 let name env = function
   | Name.Var v -> Env.inline_variable env v
-  | Name.Symbol s -> C.symbol (symbol s), env
+  | Name.Symbol s -> C.symbol (symbol s), env, Ece.pure
 
 let name_static _env = function
   | Name.Var v -> `Var v
@@ -181,8 +178,8 @@ let function_name s =
 let simple env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name env n
-  | Const c -> const env c, env
-  | Discriminant d -> discriminant env d, env
+  | Const c -> const env c, env, Ece.pure
+  | Discriminant d -> discriminant env d, env, Ece.pure
 
 let simple_static env s =
   match (Simple.descr s : Simple.descr) with
@@ -492,27 +489,34 @@ let variadic_primitive _env dbg f args =
       C.bigarray_store ~dbg is_safe dimensions kind layout args
 
 let arg_list env l =
-  let aux (acc, env') x = let y, env'' = simple env' x in (y :: acc, env'') in
-  let args, env = List.fold_left aux ([], env) l in
-  List.rev args, env
+  let aux (list, env, effs) x =
+    let y, env, eff = simple env x in
+    (y :: list, env, Ece.join eff effs)
+  in
+  let args, env, effs = List.fold_left aux ([], env, Ece.pure) l in
+  List.rev args, env, effs
 
+(* CR Gbury: check the order in which the primitive arguments are
+             given to [Env.inline_variable]. *)
 let prim env dbg p =
   match (p : Flambda_primitive.t) with
   | Unary (f, x) ->
-      let x, env = simple env x in
-      unary_primitive env dbg f x, env
+      let x, env, eff = simple env x in
+      unary_primitive env dbg f x, env, eff
   | Binary (f, x, y) ->
-      let x, env = simple env x in
-      let y, env = simple env y in
-      binary_primitive env dbg f x y, env
+      let x, env, effx = simple env x in
+      let y, env, effy = simple env y in
+      let effs = Ece.join effx effy in
+      binary_primitive env dbg f x y, env, effs
   | Ternary (f, x, y, z) ->
-      let x, env = simple env x in
-      let y, env = simple env y in
-      let z, env = simple env z in
-      ternary_primitive env dbg f x y z, env
+      let x, env, effx = simple env x in
+      let y, env, effy = simple env y in
+      let z, env, effz = simple env z in
+      let effs = Ece.join (Ece.join effx effy) effz in
+      ternary_primitive env dbg f x y z, env, effs
   | Variadic (f, l) ->
-      let args, env = arg_list env l in
-      variadic_primitive env dbg f args, env
+      let args, env, effs = arg_list env l in
+      variadic_primitive env dbg f args, env, effs
 
 (* Kinds and types *)
 
@@ -551,12 +555,6 @@ let var_list env l =
   env, vars
 
 (* effects and co-effects *)
-
-let named_effs n =
-  match (n : Named.t) with
-  | Simple _ -> Effects_and_coeffects.pure
-  | Prim (p, _) -> Flambda_primitive.effects_and_coeffects p
-  | Set_of_closures _ -> Effects_and_coeffects.pure
 
 let cont_has_one_occurrence k num =
   match (num : Name_occurrences.Num_occurrences.t) with
@@ -597,8 +595,11 @@ let rec expr env e =
 and named env n =
   match (n : Named.t) with
   | Simple s -> simple env s
-  | Prim (p, dbg) -> prim env dbg p
   | Set_of_closures s -> set_of_closures env s
+  | Prim (p, dbg) ->
+      let prim_eff = Flambda_primitive.effects_and_coeffects p in
+      let t, env, effs = prim env dbg p in
+      t, env, Ece.join effs prim_eff
 
 and let_expr env t =
   Let.pattern_match t ~f:(fun ~bound_vars ~body ->
@@ -609,15 +610,15 @@ and let_expr env t =
           let_expr_aux env v e body
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
           (* First translate the set of closures, and bind it in the env *)
-          let csoc, env = set_of_closures env soc in
+          let csoc, env, effs = set_of_closures env soc in
           let soc_var = Variable.create "*set_of_closures*" in
-          let effs = Effects_and_coeffects.all in
           let env = Env.bind_variable env soc_var effs false csoc in
-          (* Then get from the env the cmm variable that was create and bound
+          (* Then get from the env the cmm variable that was created and bound
              to the compiled set of closures. *)
-          let soc_cmm_var, env = Env.inline_variable env soc_var in
-          (* Add to the env bindingsd for all the closure variables. *)
-          let effs = Effects_and_coeffects.pure in
+          let soc_cmm_var, env, peff = Env.inline_variable env soc_var in
+          assert (Ece.is_pure peff);
+          (* Add env bindings for all the closure variables. *)
+          let effs = Effects_and_coeffects.read in
           let env =
             Closure_id.Map.fold (fun cid v acc ->
                 let v = Var_in_binding_pos.var v in
@@ -643,16 +644,11 @@ and let_expr_bind body env v cmm_expr effs =
   | Regular -> Env.bind_variable env v effs false cmm_expr
 
 and let_expr_env body env v e =
-  let effs = named_effs e in
+  let cmm_expr, env, effs = named env e in
   match decide_inline_let effs v body with
-  | Skip ->
-      env
-  | Inline ->
-      let cmm_expr, env = named env e in
-      Env.bind_variable env v effs true cmm_expr
-  | Regular ->
-      let cmm_expr, env = named env e in
-      Env.bind_variable env v effs false cmm_expr
+  | Skip -> env
+  | Inline -> Env.bind_variable env v effs true cmm_expr
+  | Regular -> Env.bind_variable env v effs false cmm_expr
 
 and let_expr_aux env v e body =
   let env = let_expr_env body env v e in
@@ -725,31 +721,34 @@ and continuation_handler env h =
   vars, expr env handler
 
 and apply_expr env e =
-  let call, env = apply_call env e in
+  let call, env, effs = apply_call env e in
   let wrap, env = Env.flush_delayed_lets env in
-  wrap (wrap_cont env (wrap_exn env call e) e)
+  wrap (wrap_cont env effs (wrap_exn env call e) e)
 
 and apply_call env e =
   let f = Apply_expr.callee e in
   let dbg = Apply_expr.dbg e in
+  let effs = Ece.all in
   match Apply_expr.call_kind e with
+  (* Effects from arguments are ignored since a function call will always be
+     given arbitrary effects and coeffects. *)
   | Call_kind.Function
       Call_kind.Function_call.Direct { closure_id; return_arity; } ->
       let f = Un_cps_closure.(closure_code (closure_name closure_id)) in
-      let args, env = arg_list env (Apply_expr.args e) in
+      let args, env, _ = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.direct_call ~dbg ty (C.symbol f) args, env
+      C.direct_call ~dbg ty (C.symbol f) args, env, effs
   | Call_kind.Function
       Call_kind.Function_call.Indirect_unknown_arity ->
-      let f, env = simple env f in
-      let args, env = arg_list env (Apply_expr.args e) in
-      C.indirect_call ~dbg typ_val f args, env
+      let f, env, _ = simple env f in
+      let args, env, _ = arg_list env (Apply_expr.args e) in
+      C.indirect_call ~dbg typ_val f args, env, effs
   | Call_kind.Function
       Call_kind.Function_call.Indirect_known_arity { return_arity; _ } ->
-      let f, env = simple env f in
-      let args, env = arg_list env (Apply_expr.args e) in
+      let f, env, _ = simple env f in
+      let args, env, _ = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.indirect_call ~dbg ty f args, env
+      C.indirect_call ~dbg ty f args, env, effs
   | Call_kind.C_call { alloc; return_arity; _ } ->
       let f = function_name f in
       (* CR vlaviron: temporary hack to recover the right symbol *)
@@ -757,31 +756,34 @@ and apply_call env e =
       assert (len >= 9);
       assert (String.sub f 0 9 = ".extern__");
       let f = String.sub f 9 (len - 9) in
-      let args, env = arg_list env (Apply_expr.args e) in
+      let args, env, _ = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.extcall ~dbg ~alloc f ty args, env
+      C.extcall ~dbg ~alloc f ty args, env, effs
   | Call_kind.Method { kind; obj; } ->
-      let obj, env = simple env obj in
-      let meth, env = simple env f in
+      let obj, env, _ = simple env obj in
+      let meth, env, _ = simple env f in
       let kind = meth_kind kind in
-      let args, env = arg_list env (Apply_expr.args e) in
-      C.send kind meth obj args dbg, env
+      let args, env, _ = arg_list env (Apply_expr.args e) in
+      C.send kind meth obj args dbg, env, effs
 
-and wrap_cont env res e =
+and wrap_cont env effs res e =
   let k = Apply_expr.continuation e in
   if Continuation.equal (Env.return_cont env) k then
     res
   else begin
     match Env.get_k env k with
-    | Jump ([], id) -> C.sequence res (C.cexit id [])
-    | Jump ([_], id) -> C.cexit id [res]
+    | Jump ([], id) ->
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap (C.sequence res (C.cexit id []))
+    | Jump ([_], id) ->
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap (C.cexit id [res])
     | Inline ([], body) ->
-        C.sequence res (expr env body)
+        let var = Variable.create "*apply_res*" in
+        let env = let_expr_bind body env var res effs in
+        expr env body
     | Inline ([v], body) ->
         let var = Kinded_parameter.var v in
-        (* Function calls can have any effects and coeffects by default.
-           CR Gbury: maybe annotate calls with effects ? *)
-        let effs = Effects_and_coeffects.all in
         let env = let_expr_bind body env var res effs in
         expr env body
     | Jump _
@@ -831,7 +833,7 @@ and apply_cont env e =
   if Continuation.equal (Env.exn_cont env) k then begin
     match args with
     | [res] ->
-        let exn, env = simple env res in
+        let exn, env, _ = simple env res in
         let wrap, _ = Env.flush_delayed_lets env in
         wrap (C.raise_prim Raise_regular exn Debuginfo.none)
     | _ ->
@@ -843,7 +845,7 @@ and apply_cont env e =
     match args with
     | [] -> C.void
     | [res] ->
-        let res, env = simple env res in
+        let res, env, _ = simple env res in
         let wrap, _ = Env.flush_delayed_lets env in
         wrap res
     | _ ->
@@ -857,7 +859,7 @@ and apply_cont env e =
     | Jump (tys, id) ->
         (* The provided args should match the types in tys *)
         assert (List.compare_lengths tys args = 0);
-        let args, env = arg_list env args in
+        let args, env, _ = arg_list env args in
         let wrap, _ = Env.flush_delayed_lets env in
         wrap (C.cexit id args)
     | Inline (l, body) ->
@@ -872,8 +874,18 @@ and apply_cont env e =
         expr env body
   end
 
+and switch_scrutinee env sort s =
+  let e, env, _ = simple env s in
+  let e =
+    match (sort : Switch.Sort.t) with
+    | Int -> C.untag_int e Debuginfo.none
+    | Tag _ -> e (* get_tag already returns untagged integers *)
+    | Is_int -> e (* Is_int already returns untagged integers *)
+  in
+  e, env
+
 and switch env s =
-  let e, env = simple env (Switch.scrutinee s) in
+  let e, env = switch_scrutinee env (Switch.sort s) (Switch.scrutinee s) in
   let wrap, env = Env.flush_delayed_lets env in
   let ints, exprs =
     Discriminant.Map.fold (fun d k (ints, exprs) ->
@@ -930,24 +942,25 @@ and set_of_closures env s =
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
-  let l, env = fill_layout decls elts env [] 0 layout in
-  C.make_closure_block l, env
+  let l, env, effs = fill_layout decls elts env Ece.pure [] 0 layout in
+  C.make_closure_block l, env, effs
 
-and fill_layout decls elts env acc i = function
-  | [] -> List.rev acc, env
+and fill_layout decls elts env effs acc i = function
+  | [] -> List.rev acc, env, effs
   | (j, slot) :: r ->
       let acc = fill_up_to j acc i in
-      let acc, offset, env = fill_slot decls elts env acc j slot in
-      fill_layout decls elts env acc offset r
+      let acc, offset, env, eff = fill_slot decls elts env acc j slot in
+      let effs = Ece.join eff effs in
+      fill_layout decls elts env effs acc offset r
 
 and fill_slot decls elts env acc offset slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
       let field = C.alloc_infix_header offset Debuginfo.none in
-      field :: acc, offset + 1, env
+      field :: acc, offset + 1, env, Ece.pure
   | Env_var v ->
-      let field, env = simple env (Var_within_closure.Map.find v elts) in
-      field :: acc, offset + 1, env
+      let field, env, eff = simple env (Var_within_closure.Map.find v elts) in
+      field :: acc, offset + 1, env, eff
   | Closure (c : Closure_id.t) ->
       let c : Closure_id.t = c in
       let decl = Closure_id.Map.find c decls in
@@ -961,7 +974,7 @@ and fill_slot decls elts env acc offset slot =
           C.symbol ~dbg name ::
           acc
         in
-        acc, offset + 2, env
+        acc, offset + 2, env, Ece.pure
       end else begin
         let acc =
           C.symbol ~dbg name ::
@@ -969,7 +982,7 @@ and fill_slot decls elts env acc offset slot =
           C.symbol ~dbg (C.curry_function_sym arity) ::
           acc
         in
-        acc, offset + 3, env
+        acc, offset + 3, env, Ece.pure
       end
 
 and fill_up_to j acc i =
@@ -1067,7 +1080,14 @@ and fill_static_slot symbs decls elts env acc offset updates slot =
       let fields, updates =
         match simple_static env (Var_within_closure.Map.find v elts) with
         | `Data fields -> fields, updates
-        | `Var _v -> todo ()
+        | `Var v ->
+            (* Since whole sets of closures no longer have a dedicated symbol,
+               there should not be updates to them. If really necessary, it *could*
+               be possible to use the symbol of the first closure instead (which has
+               a defined symbol), but this seems like an unneeded hack. *)
+            Misc.fatal_errorf
+              "Invalid variable '%a' in static set of closures."
+              Variable.print v
       in
       List.rev fields @ acc, offset + 1, updates
   | Closure c ->
@@ -1112,15 +1132,10 @@ let static_structure_item (type a) env r (symb, st) =
       let e = static_block_updates (C.symbol name) env [] 0 fields in
       R.wrap_init (C.sequence e) (R.add_data block r)
   | Singleton _, Fabricated_block _ ->
+      (* CR Gbury: What are those ? *)
       todo()
   | Set_of_closures s, Set_of_closures set ->
-      let data, updates =
-        (* CR mshinwell: Which symbol should be chosen instead of
-           the set of closures symbol, which now doesn't exist? *)
-        (* CR vlaviron: The symbol is only needed if we need to update some
-           fields after allocation. For now, I'll assume it never happens. *)
-        static_set_of_closures env s.closure_symbols set
-      in
+      let data, updates = static_set_of_closures env s.closure_symbols set in
       R.wrap_init (C.sequence updates) (R.add_data data r)
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in

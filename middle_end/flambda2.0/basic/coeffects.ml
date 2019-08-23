@@ -29,3 +29,10 @@ let compare co1 co2 =
   | No_coeffects, Has_coeffects -> -1
   | Has_coeffects, Has_coeffects -> 0
   | Has_coeffects, No_coeffects -> 1
+
+let join co1 co2 =
+  match co1, co2 with
+  | No_coeffects, No_coeffects -> No_coeffects
+  | No_coeffects, Has_coeffects
+  | Has_coeffects, Has_coeffects
+  | Has_coeffects, No_coeffects -> Has_coeffects
