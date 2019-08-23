@@ -496,7 +496,7 @@ let variadic_primitive _env dbg f args =
       C.bigarray_store ~dbg dimensions kind layout args
 
 let arg_list env l =
-  let aux (acc, env) x = let y, env = simple env x in (y :: acc, env) in
+  let aux (acc, env') x = let y, env'' = simple env' x in (y :: acc, env'') in
   let args, env = List.fold_left aux ([], env) l in
   List.rev args, env
 
@@ -602,7 +602,7 @@ and named env n =
   match (n : Named.t) with
   | Simple s -> simple env s
   | Prim (p, dbg) -> prim env dbg p
-  | Set_of_closures s -> set_of_closures env s, env
+  | Set_of_closures s -> set_of_closures env s
 
 and let_expr env t =
   Let.pattern_match t ~f:(fun ~bound_vars ~body ->
@@ -611,13 +611,9 @@ and let_expr env t =
       | Singleton v, _ ->
           let v = Var_in_binding_pos.var v in
           let_expr_aux env v e body
-      | Set_of_closures _, (Simple _ | Prim _) ->
-          Misc.fatal_errorf
-            "Set_of_closures binding a non-Set_of_closures:@ %a"
-            Let.print t
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
           (* First translate the set of closures, and bind it in the env *)
-          let csoc = set_of_closures env soc in
+          let csoc, env = set_of_closures env soc in
           let soc_var = Variable.create "*set_of_closures*" in
           let effs = Effects_and_coeffects.all in
           let env = Env.bind_variable env soc_var effs false csoc in
@@ -639,6 +635,10 @@ and let_expr env t =
           (* The set of closures, as well as the individual closures variables
              are correctly set in the env, go on translating the body. *)
           expr env body
+      | Set_of_closures _, (Simple _ | Prim _) ->
+          Misc.fatal_errorf
+            "Set_of_closures binding a non-Set_of_closures:@ %a"
+            Let.print t
     )
 
 and let_expr_bind body env v cmm_expr effs =
@@ -849,10 +849,14 @@ and apply_cont env e =
     | Jump (tys, id) ->
         (* The provided args should match the types in tys *)
         assert (List.compare_lengths tys args = 0);
-        let args, _ = arg_list env args in
+        let args, env = arg_list env args in
         let wrap, _ = Env.flush_delayed_lets env in
         wrap (C.cexit id args)
     | Inline (l, body) ->
+        if not (List.length args = List.length l) then
+          Misc.fatal_errorf
+            "Wrong number of args supplied to %a. Expected %d but got %a."
+            Continuation.print k (List.length l) Apply_cont_expr.print e;
         let vars = List.map Kinded_parameter.var l in
         let args = List.map Named.create_simple args in
         let env = List.fold_left2 (let_expr_env body) env vars args in
@@ -876,11 +880,11 @@ and switch env s =
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
   in
-  let ints = Array.of_list ints in
-  let exprs = Array.of_list exprs in
+  let ints = Array.of_list (List.rev ints) in
+  let exprs = Array.of_list (List.rev exprs) in
   assert (Array.length ints = Array.length exprs);
   match ints, exprs with
-  | [| 1; 0 |], [| then_; else_ |] ->
+  | [| 0; 1 |], [| else_; then_ |] ->
       (* This switch is actually an if-then-else.
          On such switches, transl_switch_clambda will actually generate
          code that compare the scrutinee with 0 (or 1), whereas directly
@@ -889,10 +893,24 @@ and switch env s =
          the move from the condition register to a regular register). *)
       wrap (C.ite e ~then_ ~else_)
   | _ ->
-      wrap (C.transl_switch_clambda Location.none e ints exprs)
+      if Misc.Stdlib.Array.for_alli (=) ints then
+        wrap (C.transl_switch_clambda Location.none e ints exprs)
+      else begin
+        (* Add an unreachable case to the cases array *)
+        let c = Array.length exprs in
+        let cases = Array.append exprs [| C.unreachable |] in
+        (* The transl_switch_clambda expects an index array such that
+           index.(i) is the index in [cases] of the expression to
+           execute when [e] matches [i]. *)
+        let d, _ = Discriminant.Map.max_binding (Switch.arms s) in
+        let n = Targetint.OCaml.to_int (Discriminant.to_int d) in
+        let index = Array.make (n + 2) c in
+        Array.iteri (fun i j -> index.(j) <- i) ints;
+        wrap (C.transl_switch_clambda Location.none e index cases)
+      end
 
 and invalid _env _e =
-  C.load Cmm.Word_int Asttypes.Mutable (C.int 0)
+  C.unreachable
 
 and set_of_closures env s =
   let fun_decls = Set_of_closures.function_decls s in
@@ -902,11 +920,11 @@ and set_of_closures env s =
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
-  let l = fill_layout decls elts env [] 0 layout in
-  C.make_closure_block l
+  let l, env = fill_layout decls elts env [] 0 layout in
+  C.make_closure_block l, env
 
 and fill_layout decls elts env acc i = function
-  | [] -> List.rev acc
+  | [] -> List.rev acc, env
   | (j, slot) :: r ->
       let acc = fill_up_to j acc i in
       let acc, offset, env = fill_slot decls elts env acc j slot in
@@ -945,6 +963,7 @@ and fill_slot decls elts env acc offset slot =
       end
 
 and fill_up_to j acc i =
+  assert (i <= j);
   if i = j then acc
   else fill_up_to j (C.int 1 :: acc) (i + 1)
 
@@ -1153,7 +1172,10 @@ let computation_wrapper offsets c =
       let s_env, vars = var_list s_env c.computed_values in
       (* Wrap the static structure update expression [e] by manually
          translating the computation return continuation by a jump to
-         [e]. *)
+         [e]. In the case of a single-use continuation, using a jump
+         instead of inlining [e] at the continuation call site does not
+         change much, since - assuming the continuation is called at the
+         end of the body - the jump will be erased in linearize. *)
       let wrap (e : Cmm.expression) =
         let k = c.return_continuation in
         let tys = List.map snd vars in
