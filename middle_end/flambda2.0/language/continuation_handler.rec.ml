@@ -159,7 +159,7 @@ let behaviour t : behaviour =
             else
               Unknown { arity; }
           end
-        | Invalid _ -> Unreachable { arity; }
+        | Invalid Treat_as_unreachable -> Unreachable { arity; }
         | _ -> Unknown { arity; })
 
 let arity t =
