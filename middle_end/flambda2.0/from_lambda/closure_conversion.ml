@@ -579,11 +579,27 @@ and close_let_rec t env ~defs ~body =
   let set_of_closures =
     close_functions t env (Function_decls.create function_declarations)
   in
+  (* CR mshinwell: We should maybe have something more elegant here *)
+  let generated_closures =
+    Closure_id.Set.diff
+      (Closure_id.Map.keys (Flambda.Function_declarations.funs (
+        Flambda.Set_of_closures.function_decls set_of_closures)))
+      (Closure_id.Map.keys closure_vars)
+  in
+  let closure_vars =
+    Closure_id.Set.fold (fun closure_id closure_vars ->
+        let closure_var =
+          VB.create (Variable.create "generated") Name_occurrence_kind.normal
+        in
+        Closure_id.Map.add closure_id closure_var closure_vars)
+      generated_closures
+      closure_vars
+  in
   let body = close t env body in
   Expr.create_pattern_let
-    (* XXX closure_vars is not including vars for tupled call stubs *)
     (Bindable_let_bound.set_of_closures ~closure_vars)
-    set_of_closures body
+    (Flambda.Named.create_set_of_closures set_of_closures)
+    body
 
 and close_functions t external_env function_declarations =
   let all_free_idents =
@@ -623,10 +639,7 @@ and close_functions t external_env function_declarations =
       var_within_closures_from_idents
       Var_within_closure.Map.empty
   in
-  let set_of_closures =
-    Flambda.Set_of_closures.create function_decls ~closure_elements
-  in
-  Named.create_set_of_closures set_of_closures
+  Flambda.Set_of_closures.create function_decls ~closure_elements
 
 and close_one_function t ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
