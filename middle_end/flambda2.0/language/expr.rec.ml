@@ -222,7 +222,14 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
   else
     let bound_vars = Bindable_let_bound.singleton bound_var in
     let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
-    let free_names = Let_expr.free_names let_expr in
+    let free_names =
+      (* We avoid [Let_expr.free_names] since we already know the free names
+         of [body] -- and calling that function would cause an abstraction
+         to be opened. *)
+      Name_occurrences.union (Named.free_names defining_expr)
+        (Name_occurrences.remove_var free_names_of_body
+          (Var_in_binding_pos.var bound_var))
+    in
     let t =
       { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
