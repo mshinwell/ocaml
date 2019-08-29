@@ -69,7 +69,9 @@ let unicode = true  (* CR mshinwell: move elsewhere *)
 include Identifiable.Make (struct
   type nonrec t = t
 
-  let compare t1 t2 = Stdlib.compare t1 t2
+  let compare t1 t2 =
+    if t1 == t2 then 0
+    else Stdlib.compare t1 t2
 
   let equal t1 t2 = (compare t1 t2 = 0)
 

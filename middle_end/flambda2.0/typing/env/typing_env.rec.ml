@@ -19,10 +19,41 @@
 module Aliases = Aliases.Make (Alias)
 
 (* CR mshinwell: Add signatures to these submodules. *)
-module Cached = struct
+module Cached : sig
+  type t
+
+  val empty : t
+
+  val names_to_types
+     : t
+    -> (Type_grammar.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t
+
+  val aliases : t -> Aliases.t
+
+  val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
+
+  val binding_time : t -> Name.t -> Binding_time.t
+
+  val domain : t -> Name.Set.t
+
+  val var_domain : t -> Variable.Set.t
+
+  val add_or_replace_binding
+     : t
+    -> Name.t
+    -> Type_grammar.t
+    -> Binding_time.t
+    -> Name_occurrence_kind.t
+    -> new_aliases:Aliases.t
+    -> t
+
+  val with_cse : t -> cse:Simple.t Flambda_primitive.Eligible_for_cse.Map.t -> t
+end = struct
   type t = {
     names_to_types :
       (Type_grammar.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
+    domain : Name.Set.t;
+    var_domain : Variable.Set.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
@@ -54,21 +85,40 @@ module Cached = struct
       canonical_names
 *)
 
+  (* CR mshinwell: add [invariant] function *)
+
   let empty =
     { names_to_types = Name.Map.empty;
+      domain = Name.Set.empty;
+      var_domain = Variable.Set.empty;
       aliases = Aliases.empty;
       cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     }
 
-  let create ~names_to_types aliases ~cse =
-    { names_to_types;
-      aliases;
-      cse;
-    }
-
   let names_to_types t = t.names_to_types
+  let domain t = t.domain
+  let var_domain t = t.var_domain
   let aliases t = t.aliases
   let cse t = t.cse
+
+  let add_or_replace_binding t (name : Name.t) ty binding_time
+        name_occurrence_kind ~new_aliases =
+    let names_to_types =
+      Name.Map.add name (ty, binding_time, name_occurrence_kind)
+        t.names_to_types
+    in
+    let domain = Name.Set.add name t.domain in
+    let var_domain =
+      match name with
+      | Var var -> Variable.Set.add var t.var_domain
+      | Symbol _ -> t.var_domain
+    in
+    { names_to_types;
+      domain;
+      var_domain;
+      aliases = new_aliases;
+      cse = t.cse;
+    }
 
   (* CR mshinwell: Add type lookup function *)
 
@@ -77,8 +127,6 @@ module Cached = struct
     | exception Not_found ->
       Misc.fatal_errorf "Unbound name %a" Name.print name
     | (_ty, time, _name_occurrence_kind) -> time
-
-  let domain t = Name.Map.keys t.names_to_types
 
   let with_cse t ~cse = { t with cse; }
 end
@@ -248,7 +296,8 @@ let domain0 t =
 let domain t =
   Name_occurrences.create_names (domain0 t) Name_occurrence_kind.in_types
 
-let var_domain t = Name.set_to_var_set (domain0 t)
+let var_domain t =
+  Cached.var_domain (One_level.just_after_level t.current_level)
 
 let find t name =
   match Name.Map.find name (names_to_types t) with
@@ -320,16 +369,10 @@ let add_variable_definition t var kind name_occurrence_kind =
       in
       Aliases.add_canonical_element (aliases t) canonical
     in
-(*
-Format.eprintf "Aliases after defining %a:@ %a\n%!" Name.print name Aliases.print aliases;
-*)
-    let names_to_types =
-      Name.Map.add name
-        (Basic_type_ops.unknown kind, t.next_binding_time,
-          name_occurrence_kind)
-        (names_to_types t)
-    in
-    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
+    Cached.add_or_replace_binding (cached t)
+      name (Basic_type_ops.unknown kind)
+      t.next_binding_time name_occurrence_kind
+      ~new_aliases:aliases
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -348,13 +391,10 @@ let add_symbol_definition t sym kind =
       in
       Aliases.add_canonical_element (aliases t) canonical
     in
-    let names_to_types =
-      Name.Map.add name
-        (Basic_type_ops.unknown kind, Binding_time.symbols,
-          name_occurrence_kind)
-        (names_to_types t)
-    in
-    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
+    Cached.add_or_replace_binding (cached t)
+      name (Basic_type_ops.unknown kind)
+      Binding_time.symbols name_occurrence_kind
+      ~new_aliases:aliases
   in
   let current_level =
     One_level.create (current_scope t) (One_level.level t.current_level)
@@ -415,14 +455,13 @@ let add_equation0 t aliases name name_occurrence_kind ty =
     Typing_env_level.add_or_replace_equation
       (One_level.level t.current_level) name ty
   in
+  let just_after_level = One_level.just_after_level t.current_level in
   (* CR mshinwell: remove second lookup *)
-  let binding_time = Cached.binding_time (cached t) name in
+  let binding_time = Cached.binding_time just_after_level name in
   let just_after_level =
-    let names_to_types =
-      Name.Map.add name (ty, binding_time, name_occurrence_kind)
-        (names_to_types t)
-    in
-    Cached.create ~names_to_types aliases ~cse:(Cached.cse (cached t))
+    Cached.add_or_replace_binding just_after_level
+      name ty binding_time name_occurrence_kind
+      ~new_aliases:aliases
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level

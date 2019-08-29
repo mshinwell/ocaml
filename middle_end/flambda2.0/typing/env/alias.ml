@@ -26,22 +26,28 @@ type elt = t
 include Identifiable.Make (struct
   type nonrec t = t
 
-  let compare
-        { simple = simple1; kind = kind1; binding_time = binding_time1;
-          name_occurrence_kind = name_occurrence_kind1; }
-        { simple = simple2; kind = kind2; binding_time = binding_time2;
-          name_occurrence_kind = name_occurrence_kind2; } =
-    let c = Simple.compare simple1 simple2 in
-    if c <> 0 then c
+  let compare t1 t2 =
+    if t1 == t2 then 0
     else
-      let c = Flambda_kind.compare kind1 kind2 in
+      let { simple = simple1; kind = kind1; binding_time = binding_time1;
+            name_occurrence_kind = name_occurrence_kind1; } =
+        t1
+      in
+      let { simple = simple2; kind = kind2; binding_time = binding_time2;
+            name_occurrence_kind = name_occurrence_kind2; } =
+        t2
+      in
+      let c = Simple.compare simple1 simple2 in
       if c <> 0 then c
       else
-        let c = Binding_time.compare binding_time1 binding_time2 in
+        let c = Flambda_kind.compare kind1 kind2 in
         if c <> 0 then c
         else
-          Name_occurrence_kind.compare name_occurrence_kind1
-            name_occurrence_kind2
+          let c = Binding_time.compare binding_time1 binding_time2 in
+          if c <> 0 then c
+          else
+            Name_occurrence_kind.compare name_occurrence_kind1
+              name_occurrence_kind2
 
   let equal t1 t2 =
     compare t1 t2 = 0

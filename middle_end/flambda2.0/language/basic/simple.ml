@@ -262,20 +262,22 @@ module T0 = Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
-    match t1, t2 with
-    | Name n1, Name n2 -> Name.compare n1 n2
-    | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
-      let c = Name.compare n1 n2 in
-      if c <> 0 then c
-      else Rec_info.compare rec_info1 rec_info2
-    | Const c1, Const c2 -> Const.compare c1 c2
-    | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
-    | Name _, _ -> -1
-    | Rec_name _, Name _ -> 1
-    | Rec_name _, _ -> -1
-    | Const _, (Name _ | Rec_name _) -> 1
-    | Const _, _ -> -1
-    | Discriminant _, _ -> 1
+    if t1 == t2 then 0
+    else
+      match t1, t2 with
+      | Name n1, Name n2 -> Name.compare n1 n2
+      | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
+        let c = Name.compare n1 n2 in
+        if c <> 0 then c
+        else Rec_info.compare rec_info1 rec_info2
+      | Const c1, Const c2 -> Const.compare c1 c2
+      | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
+      | Name _, _ -> -1
+      | Rec_name _, Name _ -> 1
+      | Rec_name _, _ -> -1
+      | Const _, (Name _ | Rec_name _) -> 1
+      | Const _, _ -> -1
+      | Discriminant _, _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 

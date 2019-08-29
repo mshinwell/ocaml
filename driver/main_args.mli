@@ -186,6 +186,7 @@ module type Optcommon_options = sig
   val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
+  val _drawflambda2 : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
