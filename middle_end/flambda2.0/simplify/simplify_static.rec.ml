@@ -287,7 +287,7 @@ let simplify_static_structure dacc
   next_dacc, S (List.rev str_rev)
 
 let simplify_return_continuation_handler dacc ~param_types
-      ~extra_params_and_args:_ ~cannot_change_arity cont
+      ~extra_params_and_args:_ ~cannot_change_arity:_ cont
       (return_cont_handler : Return_cont_handler.t) _k =
   assert (List.compare_lengths param_types
     return_cont_handler.computed_values = 0);
@@ -308,36 +308,27 @@ let simplify_return_continuation_handler dacc ~param_types
     simplify_static_structure dacc return_cont_handler.static_structure
   in
   let handler, used_computed_values, uenv =
-    if cannot_change_arity then
-      let computed_values = return_cont_handler.computed_values in
-      let handler : Return_cont_handler.t =
-        { computed_values;
-          static_structure;
-        }
-      in
-      handler, computed_values, UE.empty
-    else
-      let free_variables = Static_structure.free_variables static_structure in
-      let original_computed_values = return_cont_handler.computed_values in
-      let used_computed_values =
-        List.filter (fun param ->
-            Variable.Set.mem (KP.var param) free_variables)
-          original_computed_values
-      in
-      let handler : Return_cont_handler.t =
-        { computed_values = used_computed_values;
-          static_structure;
-        }
-      in
-      let rewrite =
-        Apply_cont_rewrite.create ~original_params:original_computed_values
-          ~used_params:(KP.Set.of_list used_computed_values)
-          ~extra_params:[]
-          ~extra_args:Apply_cont_rewrite_id.Map.empty
-          ~used_extra_params:KP.Set.empty
-      in
-      let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
-      handler, used_computed_values, uenv
+    let free_variables = Static_structure.free_variables static_structure in
+    let original_computed_values = return_cont_handler.computed_values in
+    let used_computed_values =
+      List.filter (fun param ->
+          Variable.Set.mem (KP.var param) free_variables)
+        original_computed_values
+    in
+    let handler : Return_cont_handler.t =
+      { computed_values = used_computed_values;
+        static_structure;
+      }
+    in
+    let rewrite =
+      Apply_cont_rewrite.create ~original_params:original_computed_values
+        ~used_params:(KP.Set.of_list used_computed_values)
+        ~extra_params:[]
+        ~extra_args:Apply_cont_rewrite_id.Map.empty
+        ~used_extra_params:KP.Set.empty
+    in
+    let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
+    handler, used_computed_values, uenv
   in
   let uacc = UA.create uenv (DA.r dacc) in
   handler, (used_computed_values, static_structure, dacc), uacc
