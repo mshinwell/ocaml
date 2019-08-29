@@ -925,6 +925,7 @@ let defined_earlier t simple ~than =
 let create_using_resolver_and_symbol_bindings_from t =
   (* CR mshinwell: Maybe the environment constructed here should be maintained
      all the time, so this is a constant-time fast operation? *)
+  let original_t = t in
   let names_to_types = names_to_types t in
   let t =
     Name.Map.fold
@@ -944,7 +945,7 @@ let create_using_resolver_and_symbol_bindings_from t =
       | Symbol _ ->
         let typ =
           let bound_name = Some name in
-          Type_erase_aliases.erase_aliases t ~bound_name
+          Type_erase_aliases.erase_aliases original_t ~bound_name
             ~already_seen:Simple.Set.empty
             ~allowed:Variable.Set.empty typ
         in
