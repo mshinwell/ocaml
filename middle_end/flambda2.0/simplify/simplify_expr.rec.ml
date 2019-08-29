@@ -336,7 +336,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
 *)
     simplify_expr dacc inlined k
   | None ->
-    let dacc, _id =
+    let dacc, use_id =
       DA.record_continuation_use dacc (Apply.continuation apply) Normal
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
@@ -358,7 +358,8 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         (Apply.exn_continuation apply)
     in
     let apply = Apply.with_continuations apply return_cont exn_cont in
-    Expr.create_apply apply, user_data, uacc
+    let expr = add_wrapper_for_fixed_arity_apply uacc ~use_id apply in
+    expr, user_data, uacc
 
 and simplify_direct_partial_application
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
