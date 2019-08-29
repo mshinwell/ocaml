@@ -793,6 +793,8 @@ and wrap_cont env res e =
     | Inline _ ->
         (* TODO: add support using unboxed tuples *)
         Misc.fatal_errorf
+          "Continuation %a should not handle multiple return values in@\n%a@\n%s"
+          Continuation.print k Apply_expr.print e
           "Multi-arguments continuation across function calls are not yet supported"
   end
 
@@ -818,7 +820,9 @@ and wrap_exn env res e =
     | Jump _
     | Inline _ ->
         Misc.fatal_errorf
-          "Exception continuations should take exactly one argument"
+          "Continuation %a should have a single argument in@\n%a@\n%s"
+          Continuation.print k_exn Apply_expr.print e
+          "Exception continuation %a should take exactly one argument"
   end
 
 and apply_cont env e =
@@ -832,6 +836,8 @@ and apply_cont env e =
         wrap (C.raise_regular Debuginfo.none exn)
     | _ ->
         Misc.fatal_errorf
+          "Continuation %a (exn cont) should be applied to a single argument in@\n%a@\n%s"
+          Continuation.print k Apply_cont_expr.print e
           "Exception continuations should only applied to a single argument"
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
@@ -843,6 +849,8 @@ and apply_cont env e =
     | _ ->
         (* TODO: add support using unboxed tuples *)
         Misc.fatal_errorf
+          "Continuation %a (return cont) should be applied to a single argument in@\n%a@\n%s"
+          Continuation.print k Apply_cont_expr.print e
           "Multi-arguments continuation across function calls are not yet supported"
   end else begin
     match Env.get_k env k with
@@ -855,8 +863,9 @@ and apply_cont env e =
     | Inline (l, body) ->
         if not (List.length args = List.length l) then
           Misc.fatal_errorf
-            "Wrong number of args supplied to %a. Expected %d but got %a."
-            Continuation.print k (List.length l) Apply_cont_expr.print e;
+            "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
+            Continuation.print k Apply_cont_expr.print e
+            (List.length l) Apply_cont_expr.print e;
         let vars = List.map Kinded_parameter.var l in
         let args = List.map Named.create_simple args in
         let env = List.fold_left2 (let_expr_env body) env vars args in
@@ -875,7 +884,8 @@ and switch env s =
         | Jump _
         | Inline _ ->
             Misc.fatal_errorf
-              "Switch branches should be goto (zero arguments) continuations"
+              "In@\n%a@\nSwitch branches should be goto (zero arguments) continuations"
+              Switch.print s
       in
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
