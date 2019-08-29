@@ -97,48 +97,69 @@ end) = struct
 
   let is_empty = N.Map.is_empty
 
-  let add0 t name kind ~update_num_occurrences =
-    N.Map.update name (function
-        | None ->
-          let num_occurrences =
-            if update_num_occurrences then 1 else 0
-          in
-          let for_one_name : For_one_name.t =
-            { num_occurrences;
-              by_kind = Kind.Map.singleton kind 1;
-            }
-          in
-          Some for_one_name
-        | Some for_one_name ->
-          let num_occurrences =
-            if update_num_occurrences then
-               For_one_name.num_occurrences for_one_name + 1
-            else
-               For_one_name.num_occurrences for_one_name
-          in
-          let by_kind =
-            Kind.Map.update kind (function
-                | None -> Some 1
-                | Some count -> Some (count + 1))
-              (For_one_name.by_kind for_one_name)
-          in
-          let for_one_name : For_one_name.t =
-            { num_occurrences;
-              by_kind;
-            }
-          in
-          Some for_one_name)
+  let update_for_one_name ~actual_kind kind for_one_name_opt =
+    let update_num_occurrences = Kind.equal actual_kind kind in
+    match for_one_name_opt with
+    | None ->
+      let num_occurrences =
+        if update_num_occurrences then 1 else 0
+      in
+      let for_one_name : For_one_name.t =
+        { num_occurrences;
+          by_kind = Kind.Map.singleton kind 1;
+        }
+      in
+      Some for_one_name
+    | Some for_one_name ->
+      let num_occurrences =
+        if update_num_occurrences then
+           For_one_name.num_occurrences for_one_name + 1
+        else
+           For_one_name.num_occurrences for_one_name
+      in
+      let by_kind =
+        Kind.Map.update kind (function
+            | None -> Some 1
+            | Some count -> Some (count + 1))
+          (For_one_name.by_kind for_one_name)
+      in
+      let for_one_name : For_one_name.t =
+        { num_occurrences;
+          by_kind;
+        }
+      in
+      Some for_one_name
+
+  let add t name actual_kind =
+    N.Map.update name (fun for_one_name_opt ->
+        Kind.Set.fold (fun kind for_one_name_opt ->
+            update_for_one_name ~actual_kind kind for_one_name_opt)
+          (Kind.all_less_than_or_equal_to actual_kind)
+          for_one_name_opt)
       t
 
-  let add t name kind =
-    Kind.Set.fold (fun kind' t ->
-        let update_num_occurrences = Name_occurrence_kind.equal kind kind' in
-        add0 t name kind' ~update_num_occurrences)
-      (Kind.all_less_than_or_equal_to kind)
-      t
+  let singleton_for_one_names =
+    let by_kind =
+      List.map (fun actual_kind ->
+          let for_one_name_opt =
+            Kind.Set.fold (fun kind for_one_name_opt ->
+                update_for_one_name ~actual_kind kind for_one_name_opt)
+              (Kind.all_less_than_or_equal_to actual_kind)
+              None
+          in
+          match for_one_name_opt with
+          | None -> assert false
+          | Some for_one_name -> actual_kind, for_one_name)
+        (Kind.Set.elements Kind.all)
+    in
+    Kind.Map.of_list by_kind
 
   let singleton name kind =
-    add empty name kind
+    match Kind.Map.find kind singleton_for_one_names with
+    | exception Not_found ->
+      Misc.fatal_errorf "No singleton [For_one_name] for %a"
+        Kind.print kind
+    | for_one_name -> N.Map.singleton name for_one_name
 
   let apply_name_permutation t perm =
     N.Map.fold (fun name for_one_name result ->
@@ -155,34 +176,33 @@ end) = struct
   let union t1 t2 =
     let t =
       N.Map.merge (fun _name for_one_name1 for_one_name2 ->
-          let for_one_name1 =
-            Option.value for_one_name1 ~default:For_one_name.empty
-          in
-          let for_one_name2 =
-            Option.value for_one_name2 ~default:For_one_name.empty
-          in
-          let by_kind1 = For_one_name.by_kind for_one_name1 in
-          let by_kind2 = For_one_name.by_kind for_one_name2 in
-          let by_kind =
-            Kind.Map.merge (fun _kind count1 count2 ->
-                let count1 = Option.value count1 ~default:0 in
-                let count2 = Option.value count2 ~default:0 in
-                let count = count1 + count2 in
-                if count < 1 then None
-                else Some count)
-              by_kind1 by_kind2
-          in
-          assert (not (Kind.Map.is_empty by_kind));
-          let num_occurrences =
-            For_one_name.num_occurrences for_one_name1
-              + For_one_name.num_occurrences for_one_name2
-          in
-          let for_one_name : For_one_name.t =
-            { num_occurrences;
-              by_kind;
-            }
-          in
-          Some for_one_name)
+          match for_one_name1, for_one_name2 with
+          | None, None -> None
+          | None, Some _ -> for_one_name2
+          | Some _, None -> for_one_name1
+          | Some for_one_name1, Some for_one_name2 ->
+            let by_kind1 = For_one_name.by_kind for_one_name1 in
+            let by_kind2 = For_one_name.by_kind for_one_name2 in
+            let by_kind =
+              Kind.Map.merge (fun _kind count1 count2 ->
+                  let count1 = Option.value count1 ~default:0 in
+                  let count2 = Option.value count2 ~default:0 in
+                  let count = count1 + count2 in
+                  if count < 1 then None
+                  else Some count)
+                by_kind1 by_kind2
+            in
+            assert (not (Kind.Map.is_empty by_kind));
+            let num_occurrences =
+              For_one_name.num_occurrences for_one_name1
+                + For_one_name.num_occurrences for_one_name2
+            in
+            let for_one_name : For_one_name.t =
+              { num_occurrences;
+                by_kind;
+              }
+            in
+            Some for_one_name)
         t1 t2
     in
     invariant t;
@@ -321,20 +341,22 @@ let create_names names kind =
     names
     empty
 
-let apply_name_permutation { variables; continuations; symbols; } perm =
-  let variables =
-    For_variables.apply_name_permutation variables perm
-  in
-  let continuations =
-    For_continuations.apply_name_permutation continuations perm
-  in
-  let symbols =
-    For_symbols.apply_name_permutation symbols perm
-  in
-  { variables;
-    continuations;
-    symbols;
-  }
+let apply_name_permutation ({ variables; continuations; symbols; } as t) perm =
+  if Name_permutation.is_empty perm then t
+  else
+    let variables =
+      For_variables.apply_name_permutation variables perm
+    in
+    let continuations =
+      For_continuations.apply_name_permutation continuations perm
+    in
+    let symbols =
+      For_symbols.apply_name_permutation symbols perm
+    in
+    { variables;
+      continuations;
+      symbols;
+    }
 
 let binary_predicate ~for_variables ~for_continuations ~for_symbols
       { variables = variables1;

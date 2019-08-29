@@ -66,6 +66,9 @@ include Identifiable.Make (struct
     compare t1 t2 = 0
 end)
 
+let all =
+  Set.of_list [Normal; In_types; Phantom]
+
 let all_less_than_or_equal_to t =
   match t with
   | Normal -> Set.of_list [Normal; In_types; Phantom]

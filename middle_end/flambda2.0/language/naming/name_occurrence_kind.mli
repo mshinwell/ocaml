@@ -39,6 +39,8 @@ val min : t
 
 include Identifiable.S with type t := t
 
+val all : Set.t
+
 val all_less_than_or_equal_to : t -> Set.t
 
 type descr = private
