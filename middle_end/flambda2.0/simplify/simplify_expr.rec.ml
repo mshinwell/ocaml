@@ -43,6 +43,7 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
         resolving the aliases? *)
     match UE.find_apply_cont_rewrite uenv original_cont with
     | None -> None
+    | Some rewrite when Apply_cont_rewrite.does_nothing rewrite -> None
     | Some rewrite ->
       let params = List.map (fun _kind -> Variable.create "param") arity in
       let kinded_params =

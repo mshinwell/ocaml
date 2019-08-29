@@ -45,3 +45,5 @@ val rewrite_use
   -> Apply_cont_rewrite_id.t
   -> Flambda.Apply_cont.t
   -> Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list
+
+val does_nothing : t -> bool
