@@ -923,28 +923,31 @@ let defined_earlier t simple ~than =
       (find_name_occurrence_kind_of_simple t than))
 
 let create_using_resolver_and_symbol_bindings_from t =
-  let names_to_types =
-    Name.Map.filter_map (names_to_types t)
-      ~f:(fun (name : Name.t) (typ, binding_time, occurrence_kind) ->
-        match name with
-        | Var _ -> None
-        | Symbol _ ->
-          let typ =
-            let bound_name = Some name in
-            Type_erase_aliases.erase_aliases t ~bound_name
-              ~already_seen:Simple.Set.empty
-              ~allowed:Variable.Set.empty typ
-          in
-          Some (typ, binding_time, occurrence_kind))
-  in
+  (* CR mshinwell: Maybe the environment constructed here should be maintained
+     all the time, so this is a constant-time fast operation? *)
+  let names_to_types = names_to_types t in
   let t =
-    Name.Map.fold (fun name (typ, _binding_time, occurrence_kind) t ->
-        let name = Name_in_binding_pos.create name occurrence_kind in
-        add_definition t name (Basic_type_ops.kind typ))
+    Name.Map.fold
+      (fun (name : Name.t) (typ, _binding_time, occurrence_kind) t ->
+        match name with
+        | Var _ -> t
+        | Symbol _ ->
+          let name = Name_in_binding_pos.create name occurrence_kind in
+          add_definition t name (Basic_type_ops.kind typ))
       names_to_types
       (create_using_resolver_from t)
   in
-  Name.Map.fold (fun name (typ, _binding_time, _occurrence_kind) t ->
-      add_equation t name typ)
+  Name.Map.fold
+    (fun (name : Name.t) (typ, _binding_time, _occurrence_kind) t ->
+      match name with
+      | Var _ -> t
+      | Symbol _ ->
+        let typ =
+          let bound_name = Some name in
+          Type_erase_aliases.erase_aliases t ~bound_name
+            ~already_seen:Simple.Set.empty
+            ~allowed:Variable.Set.empty typ
+        in
+        add_equation t name typ)
     names_to_types
     t

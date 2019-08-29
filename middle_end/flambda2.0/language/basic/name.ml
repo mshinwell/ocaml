@@ -73,11 +73,13 @@ module With_map =
       | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
 
     let compare t1 t2 =
-      match t1, t2 with
-      | Var var1, Var var2 -> Variable.compare var1 var2
-      | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
-      | Var _, Symbol _ -> -1
-      | Symbol _, Var _ -> 1
+      if t1 == t2 then 0
+      else
+        match t1, t2 with
+        | Var var1, Var var2 -> Variable.compare var1 var2
+        | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
+        | Var _, Symbol _ -> -1
+        | Symbol _, Var _ -> 1
 
     let equal t1 t2 = (compare t1 t2 = 0)
   end)
