@@ -219,6 +219,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _drawclambda = set dump_rawclambda
   let _dclambda = set dump_clambda
   let _drawflambda = set dump_rawflambda
+  let _dprepared_lambda = set dump_prepared_lambda
+  let _dilambda = set dump_ilambda
   let _dflambda = set dump_flambda
   let _dflambda_let stamp = dump_flambda_let := Some stamp
   let _dflambda_verbose () =

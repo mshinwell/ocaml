@@ -694,6 +694,14 @@ let mk_dclambda f =
   "-dclambda", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_dprepared_lambda f =
+  "-dprepared-lambda", Arg.Unit f, " Print terms after [Prepare_lambda]"
+;;
+
+let mk_dilambda f =
+  "-dilambda", Arg.Unit f, " Print Ilambda terms"
+;;
+
 let mk_dflambda f =
   "-dflambda", Arg.Unit f, " Print Flambda terms"
 ;;
@@ -1016,6 +1024,8 @@ module type Optcommon_options = sig
   val _no_insn_sched : unit -> unit
 
   val _clambda_checks : unit -> unit
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
   val _dflambda_invariants : unit -> unit
@@ -1369,6 +1379,8 @@ struct
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
+    mk_dprepared_lambda F._dprepared_lambda;
+    mk_dilambda F._dilambda;
     mk_dflambda F._dflambda;
     mk_drawflambda F._drawflambda;
     mk_dflambda_invariants F._dflambda_invariants;

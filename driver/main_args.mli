@@ -182,6 +182,8 @@ module type Optcommon_options = sig
   val _no_insn_sched : unit -> unit
 
   val _clambda_checks : unit -> unit
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
   val _dflambda_invariants : unit -> unit
