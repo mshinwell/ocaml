@@ -41,6 +41,10 @@ let print ppf { original_params; used_params; used_extra_params;
     KP.List.print used_extra_params
     (Id.Map.print EA.List.print) extra_args
 
+let does_nothing t =
+  List.length t.original_params = KP.Set.cardinal t.used_params
+    && Id.Map.is_empty t.extra_args
+
 let create ~original_params ~used_params ~extra_params ~extra_args
       ~used_extra_params =
   (* CR mshinwell: check there weren't any duplicates in the param lists too *)
