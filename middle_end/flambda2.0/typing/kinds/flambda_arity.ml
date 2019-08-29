@@ -35,8 +35,9 @@ include Identifiable.Make (struct
     match t with
     | [] -> Format.pp_print_string ppf "Nullary"
     | _ ->
-      Format.fprintf ppf "@[(%a)@]"
-        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+      Format.fprintf ppf "@[%a@]"
+        (Format.pp_print_list
+          ~pp_sep:(fun ppf () -> Format.fprintf ppf " @<1>\u{2a2f} ")
           Flambda_kind.print)
         t
 

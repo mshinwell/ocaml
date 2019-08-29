@@ -32,7 +32,7 @@ end
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
 
 (* CR mshinwell: Make the [Switch] case use this function *)
-let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id ~around =
+let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
   let uenv = UA.uenv uacc in
   let new_let_cont =
     let original_cont = cont in
@@ -44,9 +44,12 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id ~around =
     match UE.find_apply_cont_rewrite uenv original_cont with
     | None -> None
     | Some rewrite ->
-      let param = Variable.create "param" in
-      let params = [KP.create (Parameter.wrap param) K.value] in
-      let args = [Simple.var param] in
+      let params = List.map (fun _kind -> Variable.create "param") arity in
+      let kinded_params =
+        List.map2 (fun param kind -> KP.create (Parameter.wrap param) kind)
+          params arity
+      in
+      let args = List.map (fun param -> Simple.var param) params in
       let apply_cont_expr, _apply_cont, _extra_args =
         Apply_cont_rewrite.rewrite_use rewrite use_id
           (Apply_cont.create cont ~args)
@@ -56,7 +59,7 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id ~around =
       let new_cont = Continuation.create () in
       let new_handler =
         let params_and_handler =
-          Continuation_params_and_handler.create params
+          Continuation_params_and_handler.create kinded_params
             ~handler:apply_cont_expr
         in
         Continuation_handler.create ~params_and_handler
@@ -71,9 +74,9 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id ~around =
     Let_cont.create_non_recursive new_cont new_handler
       ~body:(around new_cont)
 
-let add_wrapper_for_fixed_arity_apply uacc ~use_id apply =
+let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
   let cont = Apply.continuation apply in
-  add_wrapper_for_fixed_arity_continuation uacc cont ~use_id
+  add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity
     ~around:(fun new_cont ->
       Expr.create_apply (Apply.with_continuation apply new_cont))
 
@@ -358,7 +361,9 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         (Apply.exn_continuation apply)
     in
     let apply = Apply.with_continuations apply return_cont exn_cont in
-    let expr = add_wrapper_for_fixed_arity_apply uacc ~use_id apply in
+    let expr =
+      add_wrapper_for_fixed_arity_apply uacc ~use_id result_arity apply
+    in
     expr, user_data, uacc
 
 and simplify_direct_partial_application
@@ -650,7 +655,10 @@ and simplify_function_call_where_callee's_type_unavailable
   in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let apply = Apply.with_call_kind apply call_kind in
-  let expr = add_wrapper_for_fixed_arity_apply uacc ~use_id apply in
+  let expr =
+    add_wrapper_for_fixed_arity_apply uacc ~use_id
+      (Call_kind.return_arity call_kind) apply
+  in
   expr, user_data, uacc
 
 and simplify_function_call
@@ -787,7 +795,10 @@ and simplify_method_call
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-  let expr = add_wrapper_for_fixed_arity_apply uacc ~use_id apply in
+  let expr =
+    add_wrapper_for_fixed_arity_apply uacc ~use_id
+      (Flambda_arity.create [K.value]) apply
+  in
   expr, user_data, uacc
 
 and simplify_c_call
@@ -838,7 +849,9 @@ and simplify_c_call
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
      called before building of any term that contains a continuation *)
-  let expr = add_wrapper_for_fixed_arity_apply uacc ~use_id apply in
+  let expr =
+    add_wrapper_for_fixed_arity_apply uacc ~use_id return_arity apply
+  in
   expr, user_data, uacc
 
 and simplify_apply
