@@ -164,11 +164,11 @@ let number_of_uses t = List.length t.uses
 
 let arity t = t.arity
 
-(* CR mshinwell: Naming of this function still isn't ideal.
-   mshinwell: should be able to delete it *)
+(* CR mshinwell: Naming of this function still isn't ideal. *)
 let cannot_change_continuation's_arity t =
   match Continuation.sort t.continuation with
-  | Return | Toplevel_return -> false
+  | Return -> true
+  | Toplevel_return -> false
   | Exn -> true (* CR mshinwell: this should go to [false] *)
   | Normal -> false
   (* XXX Tidy up

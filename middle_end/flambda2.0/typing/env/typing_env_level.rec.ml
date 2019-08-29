@@ -572,4 +572,11 @@ typ
 let n_way_join env envs_with_extensions =
   match envs_with_extensions with
   | [] -> empty (), Continuation_extra_params_and_args.empty
+  | [_env, _id, t] ->
+    let allowed = Typing_env.var_domain env in
+    let cse, extra_cse_bindings =
+      cse_after_n_way_join envs_with_extensions ~allowed
+    in
+    let t : t = { t with cse; } in
+    t, extra_cse_bindings
   | envs_with_extensions -> n_way_join0 env envs_with_extensions
