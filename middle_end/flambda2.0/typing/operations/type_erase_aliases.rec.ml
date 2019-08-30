@@ -32,6 +32,8 @@ let erase_aliases_unknown_or_join erase_aliases_contents env ~bound_name
     if contents == contents' then o
     else Ok contents'
 
+(* CR mshinwell: [bound_name] may be unused *)
+
 let erase_aliases_ty env ~bound_name ~already_seen
       ~allowed erase_aliases_of_kind_foo
       ~force_to_kind ~print_ty ~apply_rec_info
@@ -83,6 +85,51 @@ let erase_aliases_of_kind_naked_number (type n) _env ~bound_name:_
       ~already_seen:_ ~allowed:_
       (ty : n Type_grammar.of_kind_naked_number) = ty
 
+let erase_aliases env ~allowed (t : Type_grammar.t) : Type_grammar.t =
+  let delayed_allowed_vars =
+    Variable.Set.inter allowed t.delayed_allowed_vars
+  in
+  { t with
+    delayed_allowed_vars;
+  }
+
+let erase_aliases env ~allowed (t : Type_grammar.t) : Type_grammar.t =
+  match t with
+  | Value ty ->
+    let ty' =
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:Basic_type_ops.force_to_kind_value
+        ~print_ty:Type_printers.print_ty_value
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_value
+        erase_aliases_of_kind_value
+        ty
+    in
+    if ty == ty' then t
+    else Value ty'
+  | Naked_number (ty, kind) ->
+    let ty' =
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:(Basic_type_ops.force_to_kind_naked_number kind)
+        ~print_ty:Type_printers.print_ty_naked_number
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_naked_number
+        erase_aliases_of_kind_naked_number
+        ty
+    in
+    if ty == ty' then t
+    else Naked_number (ty', kind)
+  | Fabricated ty ->
+    let ty' =
+      erase_aliases_ty env ~allowed
+        ~force_to_kind:Basic_type_ops.force_to_kind_fabricated
+        ~print_ty:Type_printers.print_ty_fabricated
+        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_fabricated
+        erase_aliases_of_kind_fabricated
+        ty
+    in
+    if ty == ty' then t
+    else Fabricated ty'
+
+(*
 let rec erase_aliases env ~bound_name ~already_seen ~allowed
       (t : Type_grammar.t) : Type_grammar.t =
 (*
@@ -124,6 +171,7 @@ Format.eprintf "erase_aliases (allowed %a) %a\n%!"
     in
     if ty == ty' then t
     else Fabricated ty'
+*)
 
 and erase_aliases_of_kind_value env ~bound_name ~already_seen ~allowed
       (of_kind : Type_grammar.of_kind_value)

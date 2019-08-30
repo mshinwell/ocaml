@@ -939,17 +939,18 @@ let create_using_resolver_and_symbol_bindings_from t =
       names_to_types
       (create_using_resolver_from t)
   in
+  let vars_to_black_hole = var_domain original_t in
+  let perm =
+    Variable.Set.fold (fun var perm ->
+        Name_permutation.add_black_hole perm var)
+      vars_to_black_hole
+      Name_permutation.empty
+  in
   Name.Map.fold
     (fun (name : Name.t) (typ, _binding_time, _occurrence_kind) t ->
       match name with
       | Var _ -> t
       | Symbol _ ->
-        let typ =
-          let bound_name = Some name in
-          Type_erase_aliases.erase_aliases original_t ~bound_name
-            ~already_seen:Simple.Set.empty
-            ~allowed:Variable.Set.empty typ
-        in
-        add_equation t name typ)
+        add_equation t name (Basic_type_ops.apply_name_permutation perm typ))
     names_to_types
     t

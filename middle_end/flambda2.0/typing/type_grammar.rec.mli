@@ -18,8 +18,16 @@
 
 type 'a or_alias =
   | No_alias of 'a
-  | Type of Export_id.t
   | Equals of Simple.t
+  | Type of Export_id.t
+
+type 'a with_delayed = {
+  head : 'a;
+  delayed_permutation : Name_permutation.t;
+  (* CR mshinwell: add [free_names] here too? *)
+  (* CR mshinwell: Like [Expr] we should make sure that you cannot get the
+     [head] without applying the permutation. *)
+}
 
 type t =
   | Value of ty_value
@@ -32,12 +40,13 @@ and ty_value = of_kind_value ty
 and 'a ty_naked_number = 'a of_kind_naked_number ty
 and ty_fabricated = of_kind_fabricated ty
 
-and 'a ty = 'a unknown_or_join or_alias
+and 'a ty = 'a head or_alias with_delayed
 
 (** For each kind there is a lattice of types.
     Unknown = "Any value can flow to this point": the top element.
+    Bottom = "No value can flow to this point": the least element.
  *)
-and 'a unknown_or_join = 'a Or_unknown_or_bottom.t
+and 'a head = 'a Or_unknown_or_bottom.t
 
 and resolved =
   | Const of Simple.Const.t
@@ -52,9 +61,9 @@ and resolved_t =
       -> resolved_t
   | Resolved_fabricated of resolved_ty_fabricated
 
-and resolved_ty_value = of_kind_value unknown_or_join
-and 'a resolved_ty_naked_number = 'a of_kind_naked_number unknown_or_join
-and resolved_ty_fabricated = of_kind_fabricated unknown_or_join
+and resolved_ty_value = of_kind_value head
+and 'a resolved_ty_naked_number = 'a of_kind_naked_number head
+and resolved_ty_fabricated = of_kind_fabricated head
 
 and of_kind_value =
   | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
