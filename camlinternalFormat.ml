@@ -1545,6 +1545,8 @@ fun pad prec fmtty -> match prec, type_padding pad fmtty with
     Padprec_fmtty_EBB (pad, Arg_precision, rest)
   | _, Padding_fmtty_EBB (_, _) -> raise Type_mismatch
 
+(* OK HERE *)
+
 (* Type a format according to an fmtty. *)
 (* If typing succeed, generate a copy of the format with the same
     type parameters as the fmtty. *)
@@ -2062,6 +2064,7 @@ let string_of_fmtty fmtty =
      o: the output stream (see k, %a and %t).
      acc: rev list of printing entities (string, char, flush, formatting, ...).
      fmt: the format. *)
+(*
 let rec make_printf : type a b c d e f .
     ((b, c) acc -> f) -> (b, c) acc ->
     (a, b, c, d, e, f) fmt -> a =
@@ -2330,7 +2333,9 @@ and make_custom : type x y a b c d e f .
   | Custom_succ arity ->
     fun x ->
       make_custom k acc rest arity (f x)
+*)
 
+(*
 let const x _ = x
 
 let rec make_iprintf : type a b c d e f state.
@@ -3546,3 +3551,4 @@ let format_of_string_format str (Format (fmt', str')) =
   with Type_mismatch ->
     failwith_message
       "bad input: format type mismatch between %S and %S" str str'
+*)

@@ -315,6 +315,7 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
 
 let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
       set_of_closures =
+Format.eprintf "simplifying SOC %a\n%!" Bindable_let_bound.print bound_vars;
   let closure_bound_vars =
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in

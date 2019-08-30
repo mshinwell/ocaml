@@ -440,17 +440,22 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
     body
     lifted_constants
 
-let rec simplify_program_body dacc (body : Program_body.t) =
+let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
   | Define_symbol (defn, body) ->
+Format.eprintf "Simplifying Define_symbol %a\n%!"
+  Static_structure.print defn.static_structure;
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in
-    let body, dacc = simplify_program_body dacc body in
-    let body = Program_body.define_symbol defn ~body in
-    let body = define_lifted_constants (R.get_lifted_constants r) body in
-    body, dacc
-  | Root _ -> body, dacc
+    simplify_program_body0 dacc body (fun body dacc ->
+      let body = Program_body.define_symbol defn ~body in
+      let body = define_lifted_constants (R.get_lifted_constants r) body in
+      k body dacc)
+  | Root _ -> k body dacc
+
+let simplify_program_body dacc body =
+  simplify_program_body0 dacc body (fun body dacc -> body, dacc)
 
 let check_imported_symbols_don't_overlap_predef_exns
       ~imported_symbols ~predef_exn_symbols ~descr =

@@ -93,6 +93,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
   TEE.print !env_extension
   TEE.print env_extension';
   *)
+              (* XXX bad performance! *)
               env_extension := TEE.meet env !env_extension env_extension';
               Some ty
             end)
