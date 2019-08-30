@@ -1009,7 +1009,6 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
               let env_extension = TEE.one_equation (Name.var result_var') ty in
               Reachable.reachable named, env_extension, dacc
         in
-Format.eprintf "Simplifying %a\n%!" P.print (P.Binary (prim, arg1, arg2));
         let defining_expr, env_extension, dacc =
           simplifier dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
             ~result_var

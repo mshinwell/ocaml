@@ -443,8 +443,6 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
 let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
   | Define_symbol (defn, body) ->
-Format.eprintf "Simplifying Define_symbol %a\n%!"
-  Static_structure.print defn.static_structure;
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in

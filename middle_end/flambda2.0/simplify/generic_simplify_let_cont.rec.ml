@@ -50,10 +50,10 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
         let cannot_change_arity =
           CUE.cannot_change_continuation's_arity cont_uses_env cont
         in
-        (*
+(*
         Format.eprintf "Getting param types for %a\n%!"
           Continuation.print cont;
-          *)
+*)
         let handler, user_data, uacc =
           match
             CUE.continuation_env_and_param_types cont_uses_env
