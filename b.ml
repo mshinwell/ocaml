@@ -13,14 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Byte sequence operations *)
-
-(* WARNING: Some functions in this file are duplicated in string.ml for
-   efficiency reasons. When you modify the one in this file you need to
-   modify its duplicate in string.ml.
-   These functions have a "duplicated" comment above their definition.
-*)
-
 external raise : exn -> 'a = "%raise"
 external raise_notrace : exn -> 'a = "%raise_notrace"
 external ( |> ) : 'a -> ('a -> 'b) -> 'b = "%revapply"
@@ -120,6 +112,7 @@ external sys_exit : int -> 'a = "caml_sys_exit"
 let failwith s = raise(Failure s)
 let invalid_arg s = raise(Invalid_argument s)
 
+(*
 external length : bytes -> int = "%bytes_length"
 external string_length : string -> int = "%string_length"
 external get : bytes -> int -> char = "%bytes_safe_get"
@@ -152,3 +145,22 @@ let trim s len =
     s
   else
     empty
+*)
+
+type t =
+ {mutable buffer : bytes;
+  mutable position : int;
+  mutable length : int;
+  initial_buffer : bytes}
+
+let [@inline never] resize _b _more = ()
+
+let [@inline always] add_substring b s offset len =
+  if b.position > b.length then resize b len;
+  b.position <- b.position
+
+let [@inline always] add_subbytes b s offset len =
+  add_substring b (Bytes.unsafe_to_string s) offset len
+
+let add_buffer b bs =
+  add_subbytes b bs.buffer 0 bs.position

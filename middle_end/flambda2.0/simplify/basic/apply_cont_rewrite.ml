@@ -129,3 +129,6 @@ let rewrite_use t id apply_cont =
   in
   let expr = Flambda.Expr.create_apply_cont apply_cont in
   expr, apply_cont, args
+
+let original_params_arity t =
+  KP.List.arity t.original_params

@@ -25,6 +25,8 @@ type t = Flambda_kind.t list
 
 val create : Flambda_kind.t list -> t
 
+val nullary : t
+
 val length : t -> int
 
 val is_all_values : t -> bool
