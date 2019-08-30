@@ -110,10 +110,12 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
     let fresh_term1 = Term.apply_name_permutation term1 perm1 in
     f fresh_name fresh_term0 fresh_term1
 
-  let apply_name_permutation (name, term) perm =
-    let name = Bindable.apply_name_permutation name perm in
-    let term = Term.apply_name_permutation term perm in
-    name, term
+  let apply_name_permutation ((name, term) as t) perm =
+    if Name_permutation.is_empty perm then t
+    else
+      let name = Bindable.apply_name_permutation name perm in
+      let term = Term.apply_name_permutation term perm in
+      name, term
 
   let free_names (name, term) =
     let in_binding_position = Bindable.singleton_occurrence_in_terms name in
@@ -135,19 +137,22 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
     names, term
 
   let pattern_match (names, term) ~f =
-    let fresh_names_rev, perm =
-      List.fold_left (fun (fresh_names_rev, perm) stale_name ->
-          let fresh_name = Bindable.rename stale_name in
-          let perm =
-            Bindable.add_to_name_permutation fresh_name stale_name perm
-          in
-          fresh_name :: fresh_names_rev, perm)
-        ([], Name_permutation.empty)
-        names
-    in
-    let fresh_names = List.rev fresh_names_rev in
-    let fresh_term = Term.apply_name_permutation term perm in
-    f fresh_names fresh_term
+    match names with
+    | [] -> f [] term
+    | _ ->
+      let fresh_names_rev, perm =
+        List.fold_left (fun (fresh_names_rev, perm) stale_name ->
+            let fresh_name = Bindable.rename stale_name in
+            let perm =
+              Bindable.add_to_name_permutation fresh_name stale_name perm
+            in
+            fresh_name :: fresh_names_rev, perm)
+          ([], Name_permutation.empty)
+          names
+      in
+      let fresh_names = List.rev fresh_names_rev in
+      let fresh_term = Term.apply_name_permutation term perm in
+      f fresh_names fresh_term
 
   let print_bindable_name_list ppf bns =
     let style = !printing_style in

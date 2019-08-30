@@ -45,11 +45,6 @@ module type Map = sig
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
 
-  (** Like [map], but the returned map will be physically equal to the input
-      map if every call [f a] made during the mapping returns a value
-      physically equal to [a]. *)
-  val map_sharing: ('a -> 'a) -> 'a t -> 'a t
-
   val get_singleton : 'a t -> (key * 'a) option
 
   val disjoint_union :
@@ -127,10 +122,6 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
         match f id v with
         | None -> map
         | Some r -> add id r map) t empty
-
-  (* CR mshinwell: Implement this properly.  We should move things like
-     [get_singleton] into the stdlib at the same time. *)
-  let map_sharing = map
 
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l

@@ -93,6 +93,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
   TEE.print !env_extension
   TEE.print env_extension';
   *)
+              (* XXX bad performance! *)
               env_extension := TEE.meet env !env_extension env_extension';
               Some ty
             end)
@@ -127,14 +128,15 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
     in
     { components_by_index; }
 
-  let erase_aliases { components_by_index; } env ~already_seen ~allowed =
-    let components_by_index =
-      Index.Map.map (fun typ ->
+  let erase_aliases ({ components_by_index; } as t) env ~already_seen ~allowed =
+    let components_by_index' =
+      Index.Map.map_sharing (fun typ ->
           Type_erase_aliases.erase_aliases env ~bound_name:None
             ~already_seen ~allowed typ)
         components_by_index
     in
-    { components_by_index; }
+    if components_by_index == components_by_index' then t
+    else { components_by_index = components_by_index'; }
 
   let apply_name_permutation ({ components_by_index; } as t) perm =
     let components_by_index' =

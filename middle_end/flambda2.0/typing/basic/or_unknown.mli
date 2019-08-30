@@ -32,6 +32,8 @@ val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
 val map : 'a t -> f:('a -> 'b) -> 'b t
 
+val map_sharing : 'a t -> f:('a -> 'a) -> 'a t
+
 val free_names : ('a -> Name_occurrences.t) -> 'a t -> Name_occurrences.t
 
 module Lift (I : Identifiable.S) : sig

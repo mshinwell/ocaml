@@ -103,10 +103,22 @@ let rec simplify_let
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
+(*
+Format.eprintf "Simplifying let on %a\n%!"
+  Bindable_let_bound.print bound_vars;
+*)
     let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
+(*
+Format.eprintf "Simplifying let on %a: defining expr done. body is:@ %a\n%!"
+  Bindable_let_bound.print bound_vars Expr.print body;
+*)
     let body, user_data, uacc = simplify_expr dacc body k in
+(*
+Format.eprintf "Simplifying let on %a: body done\n%!"
+  Bindable_let_bound.print bound_vars;
+*)
     List.fold_left
       (fun (expr, user_data, uacc)
            (bound_vars, (defining_expr : Reachable.t)) ->
@@ -132,6 +144,8 @@ and simplify_one_continuation_handler
   CPH.pattern_match (CH.params_and_handler cont_handler)
     ~f:(fun params ~handler ->
 (*
+Format.eprintf "About to simplify handler %a\n%!"
+  Continuation.print cont;
 Format.eprintf "About to simplify handler %a: params %a, param types@ %a@ "
   Continuation.print cont
   KP.List.print params
@@ -198,6 +212,10 @@ Format.eprintf "handler:@.%a@."
             UA.map_uenv uacc ~f:(fun uenv ->
               UE.add_apply_cont_rewrite uenv cont rewrite)
           in
+(*
+Format.eprintf "Finished simplifying handler %a\n%!"
+  Continuation.print cont;
+*)
           handler, uacc
       in
       handler, user_data, uacc)
@@ -900,15 +918,14 @@ and simplify_apply_cont
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
-    (*
+(*
 Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
   Continuation.print (AC.continuation apply_cont)
   (Format.pp_print_list T.print) arg_types
   Apply_cont_rewrite_id.print rewrite_id;
-Format.eprintf "Apply_cont starts out being %a in env:@ %a\n%!"
-  Apply_cont.print apply_cont
-  DA.print dacc;
-  *)
+Format.eprintf "Apply_cont starts out being %a\n%!"
+  Apply_cont.print apply_cont;
+*)
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
@@ -925,14 +942,14 @@ Format.eprintf "Apply_cont starts out being %a in env:@ %a\n%!"
         Expr.create_apply_cont apply_cont, apply_cont,
           Apply_cont.args apply_cont
       | Some rewrite ->
-      (*
+(*
 Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
   Apply_cont_rewrite_id.print rewrite_id
   Apply_cont_rewrite.print rewrite;
-  *)
+*)
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
     in
-    (*
+(*
 Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
 *)
     if !Clflags.flambda_invariant_checks then begin

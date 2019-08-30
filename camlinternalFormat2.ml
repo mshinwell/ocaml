@@ -15,8 +15,7 @@
 
 open CamlinternalFormatBasics
 
-(*module Stdlib = struct *)
-
+module Stdlib = struct
 
 external register_named_value : string -> 'a -> unit
                               = "caml_register_named_value"
@@ -563,11 +562,9 @@ let exit retcode =
   sys_exit retcode
 
 let _ = register_named_value "Pervasives.do_at_exit" do_at_exit
-(*
 end
 
 open Stdlib
-*)
 
 (******************************************************************************)
            (* Tools to manipulate scanning set of chars (see %[...]) *)
@@ -1546,6 +1543,8 @@ fun pad prec fmtty -> match prec, type_padding pad fmtty with
     Padprec_fmtty_EBB (pad, Arg_precision, rest)
   | _, Padding_fmtty_EBB (_, _) -> raise Type_mismatch
 
+(* OK HERE *)
+
 (* Type a format according to an fmtty. *)
 (* If typing succeed, generate a copy of the format with the same
     type parameters as the fmtty. *)
@@ -2052,7 +2051,7 @@ let string_of_fmtty fmtty =
   let buf = buffer_create 16 in
   bprint_fmtty buf fmtty;
   buffer_contents buf
-
+(* OK HERE *)
 (******************************************************************************)
                         (* Generic printing function *)
 
@@ -2067,6 +2066,7 @@ let rec make_printf : type a b c d e f .
     ((b, c) acc -> f) -> (b, c) acc ->
     (a, b, c, d, e, f) fmt -> a =
 fun k acc fmt -> match fmt with
+(*
   | Char rest ->
     fun c ->
       let new_acc = Acc_data_char (acc, c) in
@@ -2089,10 +2089,12 @@ fun k acc fmt -> match fmt with
     make_int_padding_precision k acc rest pad prec convert_int64 iconv
   | Float (fconv, pad, prec, rest) ->
     make_float_padding_precision k acc rest pad prec fconv
+*)
   | Bool (pad, rest) ->
     make_padding k acc rest pad string_of_bool
   | Alpha rest ->
     fun f x -> make_printf k (Acc_delay (acc, fun o -> f o x)) rest
+(*
   | Theta rest ->
     fun f -> make_printf k (Acc_delay (acc, f)) rest
   | Custom (arity, f, rest) ->
@@ -2109,7 +2111,6 @@ fun k acc fmt -> match fmt with
     assert false
   | Flush rest ->
     make_printf k (Acc_flush acc) rest
-
   | String_literal (str, rest) ->
     make_printf k (Acc_string_literal (acc, str)) rest
   | Char_literal (chr, rest) ->
@@ -2151,10 +2152,54 @@ fun k acc fmt -> match fmt with
     let k' kacc =
       make_printf k (Acc_formatting_gen (acc, Acc_open_box kacc)) rest in
     make_printf k' End_of_acc fmt'
-
   | End_of_format ->
     k acc
+*)
+  | _ -> assert false
 
+and make_ignored_param : type x y a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, y, x) ignored ->
+    (x, b, c, y, e, f) fmt -> a =
+fun k acc ign fmt -> assert false
+
+and make_from_fmtty : type x y a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, y, x) fmtty ->
+    (x, b, c, y, e, f) fmt -> a =
+fun k acc fmtty fmt -> assert false
+
+and make_invalid_arg : type a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, e, f) fmt -> a =
+fun k acc fmt -> assert false
+
+and make_padding : type x z a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, e, f) fmt ->
+    (x, z -> a) padding -> (z -> string) -> x =
+  fun k acc fmt pad trans -> assert false
+
+and make_int_padding_precision : type x y z a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, e, f) fmt ->
+    (x, y) padding -> (y, z -> a) precision -> (int_conv -> z -> string) ->
+    int_conv -> x =
+  fun k acc fmt pad prec trans iconv -> assert false
+
+and make_float_padding_precision : type x y a b c d e f .
+    ((b, c) acc -> f) -> (b, c) acc ->
+    (a, b, c, d, e, f) fmt ->
+    (x, y) padding -> (y, float -> a) precision -> float_conv -> x =
+  fun k acc fmt pad prec fconv -> assert false
+
+and make_custom : type x y a b c d e f .
+  ((b, c) acc -> f) -> (b, c) acc ->
+  (a, b, c, d, e, f) fmt ->
+  (a, x, y) custom_arity -> x -> y =
+  fun k acc rest arity f -> assert false
+
+(*
 (* Delay the error (Invalid_argument "Printf: bad conversion %_"). *)
 (* Generate functions to take remaining arguments (after the "%_"). *)
 and make_ignored_param : type x y a b c d e f .
@@ -2332,6 +2377,11 @@ and make_custom : type x y a b c d e f .
     fun x ->
       make_custom k acc rest arity (f x)
 
+*)
+
+(* ---------------------------------- *)
+
+(*
 let const x _ = x
 
 let rec make_iprintf : type a b c d e f state.
@@ -3547,3 +3597,4 @@ let format_of_string_format str (Format (fmt', str')) =
   with Type_mismatch ->
     failwith_message
       "bad input: format type mismatch between %S and %S" str str'
+*)
