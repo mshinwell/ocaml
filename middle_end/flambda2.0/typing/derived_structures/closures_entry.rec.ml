@@ -82,16 +82,26 @@ let join env t1 t2 =
   | Ok (t, _env_extension) -> t
   | Bottom -> create_bottom ()
 
-let erase_aliases ({ function_decls; closure_types; closure_var_types; } : t)
+let erase_aliases
+      (({ function_decls; closure_types; closure_var_types; } as t) : t)
       env ~already_seen ~allowed : t =
-  { function_decls;
-    closure_types =
-      Types_by_closure_id.erase_aliases closure_types
-        env ~already_seen ~allowed;
-    closure_var_types =
-      Types_by_var_within_closure.erase_aliases closure_var_types
-        env ~already_seen ~allowed;
-  }
+  let closure_types' =
+    Types_by_closure_id.erase_aliases closure_types
+      env ~already_seen ~allowed
+  in
+  let closure_var_types' =
+    Types_by_var_within_closure.erase_aliases closure_var_types
+      env ~already_seen ~allowed
+  in
+  if closure_types == closure_types'
+    && closure_var_types == closure_var_types'
+  then
+    t
+  else
+    { function_decls;
+      closure_types = closure_types';
+      closure_var_types = closure_var_types';
+    }
 
 let apply_name_permutation
       ({ function_decls; closure_types; closure_var_types; } : t) perm : t =

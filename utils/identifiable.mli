@@ -55,11 +55,6 @@ module type Map = sig
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
 
-  (** Like [map], but the returned map will be physically equal to the input
-      map if every call [f a] made during the mapping returns a value
-      physically equal to [a]. *)
-  val map_sharing: ('a -> 'a) -> 'a t -> 'a t
-
   val get_singleton : 'a t -> (key * 'a) option
 
   (** [disjoint_union m1 m2] contains all bindings from [m1] and

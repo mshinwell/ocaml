@@ -753,6 +753,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
       match Simple.descr simple with
       | Const _ | Discriminant _ -> Ok (Some (simple, rec_info)), kind
       | Name name ->
+        (* CR mshinwell: Do we have to return [Bottom]? *)
         let ty = find t name in
         if Basic_type_ops.is_obviously_bottom ty
         then Bottom, kind

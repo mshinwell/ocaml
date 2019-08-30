@@ -306,6 +306,11 @@ module type S =
     (** Same as {!Map.S.map}, but the function receives as arguments both the
        key and the associated value for each binding of the map. *)
 
+    val map_sharing: ('a -> 'a) -> 'a t -> 'a t
+    (** Like [map], but the returned map will be physically equal to the input
+        map if every call [f a] made during the mapping returns a value
+        physically equal to [a]. *)
+
     (** {1 Iterators} *)
 
     val to_seq : 'a t -> (key * 'a) Seq.t
