@@ -18,6 +18,8 @@
 
 type t = Flambda_kind.t list
 
+let nullary = []
+
 let create t = t
 
 let length t = List.length t

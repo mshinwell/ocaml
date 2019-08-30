@@ -46,4 +46,6 @@ val rewrite_use
   -> Flambda.Apply_cont.t
   -> Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list
 
+val original_params_arity : t -> Flambda_arity.t
+
 val does_nothing : t -> bool

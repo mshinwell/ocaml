@@ -21,6 +21,9 @@ open! Simplify_import
 (* CR mshinwell: Need to simplify each [dbg] we come across. *)
 (* CR mshinwell: Consider defunctionalising to remove the [k]. *)
 (* CR mshinwell: May in any case be able to remove the polymorphic recursion. *)
+(* CR mshinwell: See whether resolution of continuation aliases can be made
+   more transparent (e.g. through [find_continuation]).  Tricky potentially in
+   conjunction with the rewrites. *)
 
 type 'a k = CUE.t -> R.t -> ('a * UA.t)
 
@@ -31,43 +34,48 @@ end
 
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
 
-(* CR mshinwell: Make the [Switch] case use this function *)
-let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
+let add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity =
   let uenv = UA.uenv uacc in
+  let original_cont = cont in
+  let cont = UE.resolve_continuation_aliases uenv cont in
+  match UE.find_apply_cont_rewrite uenv original_cont with
+  | None -> None
+  | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
+    let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite in
+    if not (Flambda_arity.equal arity arity_in_rewrite) then begin
+      Misc.fatal_errorf "Arity %a provided to fixed-arity-wrapper \
+          addition function does not match arity %a in rewrite:@ %a"
+        Flambda_arity.print arity
+        Flambda_arity.print arity_in_rewrite
+        Apply_cont_rewrite.print rewrite
+    end;
+    None
+  | Some rewrite ->
+    let params = List.map (fun _kind -> Variable.create "param") arity in
+    let kinded_params =
+      List.map2 (fun param kind -> KP.create (Parameter.wrap param) kind)
+        params arity
+    in
+    let args = List.map (fun param -> Simple.var param) params in
+    let apply_cont_expr, _apply_cont, _extra_args =
+      Apply_cont_rewrite.rewrite_use rewrite use_id
+        (Apply_cont.create cont ~args)
+    in
+    let new_cont = Continuation.create () in
+    let new_handler =
+      let params_and_handler =
+        Continuation_params_and_handler.create kinded_params
+          ~handler:apply_cont_expr
+      in
+      Continuation_handler.create ~params_and_handler
+        ~stub:false
+        ~is_exn_handler:false
+    in
+    Some (new_cont, new_handler)
+
+let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
   let new_let_cont =
-    let original_cont = cont in
-    let cont = UE.resolve_continuation_aliases uenv cont in
-    (* CR mshinwell: There's something slightly subtle going on here
-        with rewrites and continuation aliases -- think some more and
-        try to clarify.  Also, should [find_continuation] not be
-        resolving the aliases? *)
-    match UE.find_apply_cont_rewrite uenv original_cont with
-    | None -> None
-    | Some rewrite when Apply_cont_rewrite.does_nothing rewrite -> None
-    | Some rewrite ->
-      let params = List.map (fun _kind -> Variable.create "param") arity in
-      let kinded_params =
-        List.map2 (fun param kind -> KP.create (Parameter.wrap param) kind)
-          params arity
-      in
-      let args = List.map (fun param -> Simple.var param) params in
-      let apply_cont_expr, _apply_cont, _extra_args =
-        Apply_cont_rewrite.rewrite_use rewrite use_id
-          (Apply_cont.create cont ~args)
-      in
-      (* CR mshinwell: Check arguments are not being deleted; in fact just
-         get the extra args rather than using [rewrite_use] *)
-      let new_cont = Continuation.create () in
-      let new_handler =
-        let params_and_handler =
-          Continuation_params_and_handler.create kinded_params
-            ~handler:apply_cont_expr
-        in
-        Continuation_handler.create ~params_and_handler
-          ~stub:false
-          ~is_exn_handler:false
-      in
-      Some (new_cont, new_handler)
+    add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity
   in
   match new_let_cont with
   | None -> around cont
@@ -78,8 +86,16 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
 let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
   let cont = Apply.continuation apply in
   add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity
-    ~around:(fun new_cont ->
-      Expr.create_apply (Apply.with_continuation apply new_cont))
+    ~around:(fun return_cont ->
+      let return_cont =
+        UE.resolve_continuation_aliases (UA.uenv uacc) return_cont
+      in
+      let exn_cont =
+        UE.resolve_exn_continuation_aliases (UA.uenv uacc)
+          (Apply.exn_continuation apply)
+      in
+      let apply = Apply.with_continuations apply return_cont exn_cont in
+      Expr.create_apply apply)
 
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
@@ -354,14 +370,6 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-    let return_cont =
-      UE.resolve_continuation_aliases (UA.uenv uacc) (Apply.continuation apply)
-    in
-    let exn_cont =
-      UE.resolve_exn_continuation_aliases (UA.uenv uacc)
-        (Apply.exn_continuation apply)
-    in
-    let apply = Apply.with_continuations apply return_cont exn_cont in
     let expr =
       add_wrapper_for_fixed_arity_apply uacc ~use_id result_arity apply
     in
@@ -1096,8 +1104,6 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
   Continuation.print cont
   TE.print typing_env_at_use;
  *)
-              (* [Normal] not [Normal] because we can cope with the
-                 addition of extra continuation parameters. *)
               DA.record_continuation_use dacc cont Normal
                 ~typing_env_at_use
                 ~arg_types:[]
@@ -1110,46 +1116,24 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let new_let_conts, arms =
-      (* CR mshinwell: Test this all works *)
-      Discriminant.Map.fold (fun arm (cont, id) (new_let_conts, arms) ->
-          let original_cont = cont in
-          let cont = UE.resolve_continuation_aliases uenv cont in
-          match UE.find_continuation uenv cont with
-          | Unreachable _ -> new_let_conts, arms
-          | Unknown _ | Inline _ ->
-            (* CR mshinwell: There's something slightly subtle going on here
-               with rewrites and continuation aliases -- think some more and
-               try to clarify. *)
-            match UE.find_apply_cont_rewrite uenv original_cont with
-            | None ->
+      Discriminant.Map.fold (fun arm (cont, use_id) (new_let_conts, arms) ->
+          let new_let_cont =
+            add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id
+              Flambda_arity.nullary
+          in
+          match new_let_cont with
+          | None ->
+            let cont = UE.resolve_continuation_aliases uenv cont in
+            begin match UE.find_continuation uenv cont with
+            | Unreachable _ -> new_let_conts, arms
+            | Unknown _ | Inline _ ->
               let arms = Discriminant.Map.add arm cont arms in
               new_let_conts, arms
-            | Some rewrite ->
-              (* CR mshinwell: check no parameters were deleted (!) *)
-              let apply_cont_expr, apply_cont, _args =
-                Apply_cont_rewrite.rewrite_use rewrite id (Apply_cont.goto cont)
-              in
-              (* CR mshinwell: try to remove this next bit? *)
-              match Apply_cont.to_goto apply_cont with
-              | Some cont ->
-                (* If this is a goto, there is no bindings around the
-                   apply_cont so we can drop apply_cont_expr *)
-                let arms = Discriminant.Map.add arm cont arms in
-                new_let_conts, arms
-              | None ->
-                let new_cont = Continuation.create () in
-                let new_handler =
-                  let params_and_handler =
-                    Continuation_params_and_handler.create []
-                      ~handler:apply_cont_expr
-                  in
-                  Continuation_handler.create ~params_and_handler
-                    ~stub:false
-                    ~is_exn_handler:false
-                in
-                let new_let_conts = (new_cont, new_handler) :: new_let_conts in
-                let arms = Discriminant.Map.add arm new_cont arms in
-                new_let_conts, arms)
+            end
+          | Some ((new_cont, _new_handler) as new_let_cont) ->
+            let new_let_conts = new_let_cont :: new_let_conts in
+            let arms = Discriminant.Map.add arm new_cont arms in
+            new_let_conts, arms)
         arms
         ([], Discriminant.Map.empty)
     in
