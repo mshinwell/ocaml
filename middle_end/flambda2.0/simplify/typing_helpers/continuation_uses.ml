@@ -104,30 +104,11 @@ let env_and_param_types t ~definition_typing_env
   let definition_scope_level =
     T.Typing_env.current_scope definition_typing_env
   in
-  let free_vars_at_definition_point =
-    T.Typing_env.var_domain definition_typing_env
-  in
-  let process_use_arg_types use ~allowed perm = (* CR mshinwell: rename *)
+  let process_use_arg_types use ~allowed = (* CR mshinwell: rename *)
     let env = Use.typing_env_at_use use in
-    let arg_types_rev, perm =
-      List.fold_left (fun (arg_types_rev, perm) arg_type ->
-          let free_vars, arg_type =
-            T.reduce_then_return_free_vars env ~allowed arg_type
-          in
-          let free_vars_to_black_hole =
-            Variable.Set.diff free_vars free_vars_at_definition_point
-          in
-          let perm =
-            Variable.Set.fold (fun var perm ->
-                Name_permutation.add_black_hole perm var)
-              free_vars_to_black_hole
-              perm
-          in
-          arg_ty :: arg_types_rev, perm)
-        ([], perm)
-        (Use.arg_types use)
-    in
-    List.rev arg_types_rev, perm
+    List.map (fun ty ->
+        T.erase_aliases env ~bound_name:None ~allowed ty)
+      (Use.arg_types use)
   in
   match t.uses with
   | [] -> No_uses
@@ -152,12 +133,12 @@ let env_and_param_types t ~definition_typing_env
     in
     let allowed = TE.var_domain env in
     let first_param_types = process_use_arg_types use ~allowed in
-    (* XXX need to process all use arg types and collect perm. *)
     let param_types =
-      List.fold_left (fun joined_arg_types use ->
-          List.map2 (fun arg_type arg_type' -> T.join env arg_type arg_type')
+      List.fold_left (fun joined_arg_types (use:Use.t) ->
+          List.map2 (fun arg_type arg_type' ->
+              T.join env arg_type arg_type')
             joined_arg_types
-            (process_use_arg_types use ~allowed ~black_hole))
+            (process_use_arg_types use ~allowed))
         first_param_types
         uses
     in
