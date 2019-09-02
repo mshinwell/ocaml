@@ -170,6 +170,27 @@ let erase_aliases t ~allowed =
     if length == length' then of_kind
     else Array { length = length'; }
 
+let apply_rec_info t rec_info : _ Or_bottom.t =
+  match t with
+  | Closures { by_closure_id; } ->
+    Or_bottom.map
+      (Closures_entry_by_set_of_closures_contents.map_function_decl_types
+        by_closure_id
+        ~f:(fun (decl : Type_grammar.function_declaration)
+              : Type_grammar.function_declaration Or_bottom.t ->
+          match decl with
+          | Non_inlinable _ -> Ok decl
+          | Inlinable { function_decl; rec_info = old_rec_info; } ->
+            let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
+            Ok (Inlinable { function_decl; rec_info; })))
+      ~f:(fun by_closure_id -> Closures { by_closure_id; })
+  | Blocks_and_tagged_immediates _
+  | Boxed_number _
+  | String _
+  | Array _ ->
+    if Rec_info.is_initial rec_info then Ok of_kind_value
+    else Bottom
+
 module Make_meet_and_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t

@@ -129,6 +129,33 @@ end) = struct
         Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
     | Ok contents -> print_contents ppf contents
 
+  let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
+        (unknown_or_join : _ Type_grammar.unknown_or_join) perm
+        : _ Type_grammar.unknown_or_join =
+    match unknown_or_join with
+    | Unknown | Bottom -> unknown_or_join
+    | Ok of_kind_foo ->
+      let of_kind_foo' = apply_name_permutation_of_kind_foo of_kind_foo perm in
+      if of_kind_foo == of_kind_foo' then unknown_or_join
+      else Ok of_kind_foo'
+  
+  let apply_name_permutation_ty apply_name_permutation_of_kind_foo
+        (ty : _ Type_grammar.ty) perm
+        : _ Type_grammar.ty =
+    match ty with
+    | No_alias unknown_or_join ->
+      let unknown_or_join' =
+        apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
+          unknown_or_join perm
+      in
+      if unknown_or_join == unknown_or_join' then ty
+      else No_alias unknown_or_join'
+    | Type _ -> ty
+    | Equals simple ->
+      let simple' = Simple.apply_name_permutation simple perm in
+      if simple == simple' then ty
+      else Equals simple'
+
   let apply_name_permutation t perm =
 
 
@@ -203,6 +230,26 @@ end) = struct
           let already_seen = Simple.Set.add simple already_seen in
           No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
             ~bound_name ~already_seen ~allowed unknown_or_join)
+  
+  let apply_rec_info_ty (type of_kind_foo)
+        (apply_rec_info_of_kind_foo :
+          (of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t))
+        (ty : of_kind_foo Type_grammar.ty)
+        rec_info : of_kind_foo Type_grammar.ty Or_bottom.t =
+    match ty with
+    | Equals simple ->
+      let newer_rec_info = Some rec_info in
+      begin match Simple.merge_rec_info simple ~newer_rec_info with
+      | None -> Bottom
+      | Some simple -> Ok (Equals simple)
+      end
+    | Type _ -> Misc.fatal_error "Not yet implemented"
+    | No_alias Unknown -> Ok ty
+    | No_alias Bottom -> Bottom
+    | No_alias (Ok of_kind_foo) ->
+      match apply_rec_info_of_kind_foo of_kind_foo rec_info with
+      | Bottom -> Bottom
+      | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
   let meet_unknown meet_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)

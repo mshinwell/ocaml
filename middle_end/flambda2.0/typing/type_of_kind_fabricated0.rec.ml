@@ -41,7 +41,9 @@ let erase_aliases t ~allowed =
   | Discriminants discrs ->
     Discriminants (Discriminants.erase_aliases discrs ~allowed)
 
-let apply_rec_info t _rec_info : _ Or_bottom.t = Bottom
+let apply_rec_info t rec_info : _ Or_bottom.t =
+  if Rec_info.is_initial rec_info then Ok t
+  else Bottom
 
 module Make_meet_or_join
   (E : Lattice_ops_intf.S

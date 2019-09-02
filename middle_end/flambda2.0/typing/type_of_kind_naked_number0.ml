@@ -53,4 +53,6 @@ let free_names _t = Name_occurrences.empty
 
 let erase_aliases t ~allowed:_ = t
 
-let apply_rec_info t _rec_info : _ Or_bottom.t = Ok t
+let apply_rec_info t rec_info : _ Or_bottom.t =
+  if Rec_info.is_initial rec_info then Ok t
+  else Bottom

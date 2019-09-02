@@ -6,7 +6,8 @@
     type_grammar.rec.ml
     type_of_kind_value.rec.ml
     type_of_kind_value0.rec.ml
-    basic_type_ops.rec.ml
+    type_of_kind_fabricated.rec.ml
+    type_of_kind_fabricated0.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closures_entry.rec.ml
     derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
@@ -18,28 +19,16 @@
     env/typing_env_level.rec.ml
     env/typing_env.rec.ml
     equality/type_equality_env.rec.ml
-    meet_and_join/api_meet_and_join.rec.ml
     meet_and_join/lattice_ops.rec.ml
-    meet_and_join/kind_independent_meet_or_join.rec.ml
-    meet_and_join/meet_and_join_fabricated.rec.ml
-    meet_and_join/meet_and_join_naked_float.rec.ml
-    meet_and_join/meet_and_join_naked_immediate.rec.ml
-    meet_and_join/meet_and_join_naked_int32.rec.ml
-    meet_and_join/meet_and_join_naked_int64.rec.ml
-    meet_and_join/meet_and_join_naked_nativeint.rec.ml
-    meet_and_join/meet_and_join_value.rec.ml
     meet_and_join/meet_env.rec.ml
-    meet_and_join/meet_or_join.rec.ml
-    operations/type_erase_aliases.rec.ml
-    operations/type_free_names.rec.ml
-    operations/type_printers.rec.ml
     structures/product.rec.ml
     structures/row_like.rec.ml
     structures/trivial_row_like.rec.ml
     type_grammar.rec.mli
-    basic_type_ops.rec.mli
     type_of_kind_value.rec.mli
     type_of_kind_value0.rec.mli
+    type_of_kind_fabricated.rec.mli
+    type_of_kind_fabricated0.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_set_of_closures_contents.rec.mli
@@ -51,21 +40,8 @@
     env/typing_env_level.rec.mli
     env/typing_env.rec.mli
     equality/type_equality_env.rec.mli
-    meet_and_join/api_meet_and_join.rec.mli
     meet_and_join/lattice_ops.rec.mli
-    meet_and_join/kind_independent_meet_or_join.rec.mli
-    meet_and_join/meet_and_join_fabricated.rec.mli
-    meet_and_join/meet_and_join_naked_float.rec.mli
-    meet_and_join/meet_and_join_naked_immediate.rec.mli
-    meet_and_join/meet_and_join_naked_int32.rec.mli
-    meet_and_join/meet_and_join_naked_int64.rec.mli
-    meet_and_join/meet_and_join_naked_nativeint.rec.mli
-    meet_and_join/meet_and_join_value.rec.mli
     meet_and_join/meet_env.rec.mli
-    meet_and_join/meet_or_join.rec.mli
-    operations/type_erase_aliases.rec.mli
-    operations/type_free_names.rec.mli
-    operations/type_printers.rec.mli
     structures/product.rec.mli
     structures/row_like.rec.mli
     structures/trivial_row_like.rec.mli
