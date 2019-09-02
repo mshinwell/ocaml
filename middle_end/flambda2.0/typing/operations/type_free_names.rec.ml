@@ -36,33 +36,7 @@ let free_names_of_kind_naked_number (type n)
       (_ty : n Type_grammar.of_kind_naked_number) =
   Name_occurrences.empty
 
-let rec free_names (t : Type_grammar.t) =
-  match t with
-  | Value ty -> free_names_ty free_names_of_kind_value ty
-  | Naked_number (ty, _kind) ->
-    free_names_ty free_names_of_kind_naked_number ty
-  | Fabricated ty -> free_names_ty free_names_of_kind_fabricated ty
 
-and free_names_of_kind_value (of_kind : Type_grammar.of_kind_value)
-      : Name_occurrences.t =
-  match of_kind with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
-    Name_occurrences.union
-      (Or_unknown.free_names Blocks.free_names blocks)
-      (Or_unknown.free_names Immediates.free_names immediates)
-  | Boxed_number (Boxed_float n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_int32 n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_int64 n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_nativeint n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Closures { by_closure_id; } ->
-    Closures_entry_by_set_of_closures_contents.free_names by_closure_id
-  | String _ -> Name_occurrences.empty
-  | Array { length; } ->
-    free_names_ty free_names_of_kind_value length
 
 and free_names_of_kind_fabricated
       (of_kind : Type_grammar.of_kind_fabricated) =

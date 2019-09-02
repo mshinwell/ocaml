@@ -33,3 +33,11 @@ let equal eq_contents t1 t2 =
   | Ok contents1, Ok contents2 -> eq_contents contents1 contents2
   | Bottom, Bottom -> true
   | (Unknown | Ok _ | Bottom), _ -> false
+
+let map_sharing t ~f =
+  match t with
+  | Unknown | Bottom -> t
+  | Ok contents ->
+    let contents' = f contents in
+    if contents == contents' then t
+    else Ok contents'

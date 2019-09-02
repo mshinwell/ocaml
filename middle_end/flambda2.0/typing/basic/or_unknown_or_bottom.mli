@@ -28,3 +28,8 @@ val print
   -> unit
 
 val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+
+val map_sharing
+   : 'a t
+  -> f:('a -> 'a)
+  -> 'a t

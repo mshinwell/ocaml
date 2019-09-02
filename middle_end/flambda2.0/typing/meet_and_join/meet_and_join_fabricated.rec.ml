@@ -32,12 +32,4 @@ struct
   let print_ty = Type_printers.print_ty_fabricated_with_cache
   let apply_rec_info = Basic_type_ops.apply_rec_info_of_kind_fabricated
 
-  let meet_or_join_of_kind_foo env ~meet_or_join_ty:_
-        (of_kind1 : T.of_kind_fabricated) (of_kind2 : T.of_kind_fabricated) =
-    match of_kind1, of_kind2 with
-    | Discriminants discrs1, Discriminants discrs2 ->
-      Or_bottom_or_absorbing.of_or_bottom
-        (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
-        ~f:(fun (discrs, env_extension) : (T.of_kind_fabricated * _) ->
-          Discriminants discrs, env_extension)
 end

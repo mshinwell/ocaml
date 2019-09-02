@@ -14,21 +14,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** For documentation on this module please see [Type_system_intf]. *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+(** Types of kind [Fabricated].  No source-level values are of this kind. *)
 
-val apply_rec_info_of_kind_value
-   : Type_grammar.of_kind_value
-  -> Rec_info.t
-  -> Type_grammar.of_kind_value Or_bottom.t
-
-val apply_rec_info_of_kind_naked_number
-   : 'a Type_grammar.of_kind_naked_number
-  -> Rec_info.t
-  -> 'a Type_grammar.of_kind_naked_number Or_bottom.t
-
-val apply_rec_info_of_kind_fabricated
-   : Type_grammar.of_kind_fabricated
-  -> Rec_info.t
-  -> Type_grammar.of_kind_fabricated Or_bottom.t
+type t =
+  (* CR mshinwell: Work out how to do the dependent-discriminant thing
+     properly. *)
+  | Discriminants of Discriminants.t
+    (* CR mshinwell: update comment.  It's now either a tag, or the
+       result of Pisint *)
+    (** A discriminant is either:
+        - a block tag, as returned by the [Get_tag] primitive; or
+        - a constant constructor which has undergone a kind-cast to kind
+          [Fabricated] using the [Discriminant_of_int] primitive. *)

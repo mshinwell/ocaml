@@ -17,18 +17,3 @@
 (** The external interface of the meet_and_join/ directory. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
-
-(** Greatest lower bound of two types. *)
-val meet
-   : Meet_env.t
-  -> Type_grammar.t
-  -> Type_grammar.t
-  -> Type_grammar.t * Typing_env_extension.t
-
-(** Least upper bound of two types. *)
-val join
-   : ?bound_name:Name.t
-  -> Typing_env.t
-  -> Type_grammar.t
-  -> Type_grammar.t
-  -> Type_grammar.t

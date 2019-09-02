@@ -16,18 +16,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: Move the definition of type [t] here then remove all the
-   " : t" type annotations. *)
-type t = Type_grammar.closures_entry
+type t = {
+  function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t;
+  closure_types : Types_by_closure_id.t;
+  closure_var_types : Types_by_var_within_closure.t;
+}
 
-let create_bottom () : t =
+let create_bottom () =
   { function_decls = Closure_id.Map.empty;
     closure_types = Types_by_closure_id.bottom;
     closure_var_types = Types_by_var_within_closure.bottom;
   }
 
 let print_with_cache ~cache ppf
-      ({ function_decls; closure_types; closure_var_types; } : t) =
+      { function_decls; closure_types; closure_var_types; } =
   Format.fprintf ppf
     "@[<hov 1>(\
       @[<hov 1>(function_decls@ %a)@]@ \
@@ -36,7 +38,7 @@ let print_with_cache ~cache ppf
       )@]"
     (Closure_id.Map.print
       (Or_unknown.print
-        (Type_printers.print_function_declaration_with_cache ~cache)))
+        (Function_declaration_type.print_with_cache ~cache)))
     function_decls
     (Types_by_closure_id.print_with_cache ~cache) closure_types
     (Types_by_var_within_closure.print_with_cache ~cache) closure_var_types
@@ -45,7 +47,7 @@ let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let equal _ _ = Misc.fatal_error "Closures_entry.equal not yet implemented"
 
-let widen (t : t) ~(to_match : t) : t =
+let widen t ~to_match =
   let missing_function_decls =
     Closure_id.Set.diff (Closure_id.Map.keys to_match.function_decls)
       (Closure_id.Map.keys t.function_decls)
@@ -69,29 +71,147 @@ let widen (t : t) ~(to_match : t) : t =
     closure_var_types;
   }
 
-module Meet_value = Meet_and_join_value.Make (Lattice_ops.For_meet)
-module Join_value = Meet_and_join_value.Make (Lattice_ops.For_join)
+module Make_meet_and_join
+  (E : Lattice_ops_intf.S
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
+struct
+  let meet_or_join env
+        { function_decls = function_decls1;
+          closure_types = closure_types1;
+          closure_var_types = closure_var_types1;
+        }
+        { function_decls = function_decls2;
+          closure_types = closure_types2;
+          closure_var_types = closure_var_types2;
+        } =
+    let meet_or_join_function_decl
+          (function_decl1 : T.function_declaration Or_unknown.t)
+          (function_decl2 : T.function_declaration Or_unknown.t)
+          : T.function_declaration Or_unknown.t =
+      match function_decl1, function_decl2 with
+      | Unknown, Unknown -> Unknown
+      | Known _, Unknown ->
+        begin match E.op () with
+        | Join -> Unknown
+        | Meet -> function_decl1
+        end
+      | Unknown, Known _ ->
+        begin match E.op () with
+        | Join -> Unknown
+        | Meet -> function_decl2
+        end
+      | Known decl1, Known decl2 ->
+        match decl1, decl2 with
+        | Non_inlinable {
+            param_arity = param_arity1; result_arity = result_arity1;
+            recursive = recursive1;
+          }, Non_inlinable {
+            param_arity = param_arity2; result_arity = result_arity2;
+            recursive = recursive2;
+          } ->
+          (* CR mshinwell: Are fatal errors right here?  Given the arbitrary
+             choice below, it would seem so, but unsure.  Also, the error
+             message is currently poor. *)
+          if Flambda_arity.equal param_arity1 param_arity2
+            && Flambda_arity.equal result_arity1 result_arity2
+            && Recursive.equal recursive1 recursive2
+          then
+            Known decl1
+          else
+            Misc.fatal_error "Mismatched Non_inlinable arities"
+        | Non_inlinable _ , Inlinable _
+        | Inlinable _, Non_inlinable _ ->
+          (* CR mshinwell: This should presumably return [Non_inlinable] if
+             the arities match. *)
+          Unknown
+        | Inlinable { function_decl = decl1; rec_info = _rec_info1; },
+            Inlinable { function_decl = decl2; rec_info = _rec_info2; } ->
+          (* CR mshinwell: Assertions about other properties of
+             [decl1] versus [decl2]? *)
+          (* CR mshinwell: What about [rec_info]? *)
+          let module TFD = Term_language_function_declaration in
+          match E.op () with
+          | Join ->
+            (* CR mshinwell: As mentioned in [Function_declaration], [Code_id]
+               is a misnomer at present. *)
+            if Code_id.equal (TFD.code_id decl1) (TFD.code_id decl2)
+            then function_decl1
+            else Unknown
+          | Meet ->
+            (* We can arbitrarily pick one of the functions, since they must
+               both behave in the same way, even if we cannot prove it. *)
+            function_decl1
+    in
+    let function_decls =
+      Closure_id.Map.merge (fun _closure_id func_decl1 func_decl2 ->
+          match func_decl1, func_decl2 with
+          | None, None | Some _, None | None, Some _ -> None
+          | Some func_decl1, Some func_decl2 ->
+            let func_decl = meet_or_join_function_decl func_decl1 func_decl2 in
+            Some func_decl)
+        function_decls1 function_decls2
+    in
+    let closure_types =
+      E.switch Types_by_closure_id.meet Types_by_closure_id.join
+        env closure_types1 closure_types2
+    in
+    let closure_var_types =
+      E.switch Types_by_var_within_closure.meet Types_by_var_within_closure.join
+        env closure_var_types1 closure_var_types2
+    in
+    Or_bottom.both closure_types closure_var_types
+      ~f:(fun (closure_types, env_extension1)
+              (closure_var_types, env_extension2) ->
+        let closures_entry =
+          { function_decls;
+            closure_types;
+            closure_var_types;
+          }
+        in
+        let env_extension =
+          (* XXX This should use the proper environments from both sides, no?
+             See if we can avoid needing that *)
+          let left_env = Meet_env.env env in
+          let right_env = Meet_env.env env in
+          (* CR mshinwell: Move to [TEE] *)
+          let join_extensions env ext1 ext2 =
+            let env_extension, _ =
+              TEE.n_way_join env [
+                left_env, Apply_cont_rewrite_id.create (), ext1;
+                right_env, Apply_cont_rewrite_id.create (), ext2;
+              ]
+            in
+            env_extension
+          in
+          E.switch0 TEE.meet join_extensions env
+            env_extension1 env_extension2
+        in
+        closures_entry, env_extension)
+end
+
+module Meet = Meet_and_join.Make (Lattice_ops.For_meet)
+module Join = Meet_and_join.Make (Lattice_ops.For_join)
 
 let meet env t1 t2 : _ Or_bottom.t =
   (* CR mshinwell: Move the code to here *)
-  Meet_value.meet_or_join_closures_entry env t1 t2
+  Meet.meet_or_join env t1 t2
 
 let join env t1 t2 =
   let env = Meet_env.create env in
-  match Join_value.meet_or_join_closures_entry env t1 t2 with
+  match Join.meet_or_join env t1 t2 with
   | Ok (t, _env_extension) -> t
   | Bottom -> create_bottom ()
 
 let erase_aliases
-      (({ function_decls; closure_types; closure_var_types; } as t) : t)
-      env ~already_seen ~allowed : t =
+      ({ function_decls; closure_types; closure_var_types; } as t)
+      ~allowed =
   let closure_types' =
-    Types_by_closure_id.erase_aliases closure_types
-      env ~already_seen ~allowed
+    Types_by_closure_id.erase_aliases closure_types ~allowed
   in
   let closure_var_types' =
-    Types_by_var_within_closure.erase_aliases closure_var_types
-      env ~already_seen ~allowed
+    Types_by_var_within_closure.erase_aliases closure_var_types ~allowed
   in
   if closure_types == closure_types'
     && closure_var_types == closure_var_types'
@@ -104,7 +224,7 @@ let erase_aliases
     }
 
 let apply_name_permutation
-      ({ function_decls; closure_types; closure_var_types; } : t) perm : t =
+      { function_decls; closure_types; closure_var_types; } perm =
   { function_decls; (* XXX is this correct? *)
     closure_types =
       Types_by_closure_id.apply_name_permutation closure_types perm;
@@ -112,13 +232,13 @@ let apply_name_permutation
       Types_by_var_within_closure.apply_name_permutation closure_var_types perm;
   }
 
-let free_names ({ function_decls = _; closure_types; closure_var_types; } : t) =
+let free_names { function_decls = _; closure_types; closure_var_types; } =
   Name_occurrences.union
     (Types_by_closure_id.free_names closure_types)
     (Types_by_var_within_closure.free_names closure_var_types)
 
 let map_function_decl_types
-      ({ function_decls; closure_types; closure_var_types; } : t)
+      { function_decls; closure_types; closure_var_types; }
       ~(f : Type_grammar.function_declaration
         -> Type_grammar.function_declaration Or_bottom.t)
       : _ Or_bottom.t =
@@ -140,7 +260,7 @@ let map_function_decl_types
   in
   if !bottom then Bottom
   else
-    let t : t =
+    let t =
       { function_decls;
         closure_types;
         closure_var_types;
@@ -148,7 +268,7 @@ let map_function_decl_types
     in
     Ok t
 
-let find_function_declaration (t : t) closure_id =
+let find_function_declaration t closure_id =
   match Closure_id.Map.find closure_id t.function_decls with
   | exception Not_found ->
     (* CR mshinwell: Add [invariant] check. *)

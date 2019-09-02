@@ -14,21 +14,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** For documentation on this module please see [Type_system_intf]. *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+type t =
+  | Discriminants of Discriminants.t
 
-val apply_rec_info_of_kind_value
-   : Type_grammar.of_kind_value
-  -> Rec_info.t
-  -> Type_grammar.of_kind_value Or_bottom.t
+let print_with_cache ~cache ppf t =
+  match t with
+  | Discriminants discriminants ->
+    Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
+      (Discriminants.print_with_cache ~cache) discriminants
 
-val apply_rec_info_of_kind_naked_number
-   : 'a Type_grammar.of_kind_naked_number
-  -> Rec_info.t
-  -> 'a Type_grammar.of_kind_naked_number Or_bottom.t
-
-val apply_rec_info_of_kind_fabricated
-   : Type_grammar.of_kind_fabricated
-  -> Rec_info.t
-  -> Type_grammar.of_kind_fabricated Or_bottom.t
+module Make_meet_or_join
+  (E : Lattice_ops_intf.S
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
+struct
+  let meet_or_join env t1 t2 =
+    match t1, t2 with
+    | Discriminants discrs1, Discriminants discrs2 ->
+      Or_bottom_or_absorbing.of_or_bottom
+        (E.switch Discriminants.meet Discriminants.join env discrs1 discrs2)
+        ~f:(fun (discrs, env_extension) -> Discriminants discrs, env_extension)
+end

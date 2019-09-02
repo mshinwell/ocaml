@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Type_grammar.closures_entry
+type t
 
 val create_bottom : unit -> t
 
@@ -24,14 +24,14 @@ val widen : t -> to_match:t -> t
 
 val map_function_decl_types
    : t
-  -> f:(Type_grammar.function_declaration
-    -> Type_grammar.function_declaration Or_bottom.t)
+  -> f:(Function_declaration_type.t
+    -> Function_declaration_type.t Or_bottom.t)
   -> t Or_bottom.t
 
 val find_function_declaration
    : t
   -> Closure_id.t
-  -> Type_grammar.function_declaration Or_unknown.t
+  -> Function_declaration_type.t Or_unknown.t
 
 include Type_structure_intf.S
   with type t := t

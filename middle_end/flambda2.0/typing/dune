@@ -4,6 +4,8 @@
     rec_modules
     flambda_type0.templ.ml
     type_grammar.rec.ml
+    type_of_kind_value.rec.ml
+    type_of_kind_value0.rec.ml
     basic_type_ops.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closures_entry.rec.ml
@@ -36,6 +38,8 @@
     structures/trivial_row_like.rec.ml
     type_grammar.rec.mli
     basic_type_ops.rec.mli
+    type_of_kind_value.rec.mli
+    type_of_kind_value0.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_set_of_closures_contents.rec.mli

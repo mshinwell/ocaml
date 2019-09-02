@@ -1,5 +1,7 @@
 type_grammar.rec.ml
 basic_type_ops.rec.ml
+type_of_kind_value.rec.ml
+type_of_kind_value0.rec.ml
 derived_structures/blocks.rec.ml
 derived_structures/closures_entry.rec.ml
 derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
