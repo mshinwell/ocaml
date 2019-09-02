@@ -129,6 +129,81 @@ end) = struct
         Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
     | Ok contents -> print_contents ppf contents
 
+  let apply_name_permutation t perm =
+
+
+  let free_names t =
+
+
+  let erase_aliases_unknown_or_join erase_aliases_contents env ~bound_name
+        ~already_seen ~allowed (o : _ Type_grammar.unknown_or_join)
+        : _ Type_grammar.unknown_or_join =
+    match o with
+    | Unknown | Bottom -> o
+    | Ok contents ->
+      let contents' =
+        erase_aliases_contents env ~bound_name ~already_seen
+          ~allowed contents
+      in
+      if contents == contents' then o
+      else Ok contents'
+
+
+    let delayed_allowed_vars =
+    Variable.Set.inter allowed t.delayed_allowed_vars
+  in
+  { t with
+    delayed_allowed_vars;
+  }
+  (* CR mshinwell: [bound_name] may be unused *)
+  
+  let erase_aliases_ty env ~bound_name ~already_seen
+        ~allowed erase_aliases_of_kind_foo
+        ~force_to_kind ~print_ty ~apply_rec_info
+        (ty : _ Type_grammar.ty) : _ Type_grammar.ty =
+    match ty with
+    | No_alias unknown_or_join ->
+      let unknown_or_join' =
+        erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
+          ~bound_name ~already_seen ~allowed unknown_or_join
+      in
+      if unknown_or_join == unknown_or_join' then ty
+      else No_alias unknown_or_join'
+    | Type _export_id -> ty
+    | Equals simple ->
+      (* First of all, make sure we're not going around in a loop, which can
+         happen for closure or set-of-closures recursive types.
+         Then try to find an alias that's in the [allowed] set and is eligible
+         to appear in types.
+         If that fails, expand the head of the type, and then recursively erase
+         aliases on the result (returning a non-alias type). *)
+      let canonical_simple =
+        Typing_env.get_canonical_simple env
+          ~min_occurrence_kind:Name_occurrence_kind.in_types
+          simple
+      in
+      match canonical_simple with
+      | Bottom -> No_alias Bottom
+      | Ok None -> (* CR mshinwell: Can this happen? *)
+        Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
+      | Ok (Some simple) ->
+  (*
+  Format.eprintf "checking canonical simple %a.  allowed? %b  mem? %b\n%!"
+    Simple.print simple
+    (Simple.allowed simple ~allowed)
+    (Simple.Set.mem simple already_seen);
+  *)
+        if Simple.allowed simple ~allowed then Equals simple
+        else if Simple.Set.mem simple already_seen then No_alias Unknown
+        else
+          let unknown_or_join =
+            Typing_env.expand_head_ty env ~force_to_kind ~print_ty ~apply_rec_info
+              ty
+          in
+          let already_seen = Simple.Set.add simple already_seen in
+          No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
+            ~bound_name ~already_seen ~allowed unknown_or_join)
+
   let meet_unknown meet_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
       : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =

@@ -25,9 +25,23 @@ let print_with_cache ~cache ppf t =
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
       (Discriminants.print_with_cache ~cache) discriminants
 
-let free_names_of_kind_fabricated t =
+let apply_name_permutation t perm =
+  match t with
+  | Discriminants discrs ->
+    let discrs' = Discriminants.apply_name_permutation discrs perm in
+    if discrs == discrs' then t
+    else Discriminants discrs'
+
+let free_names t =
   match t with
   | Discriminants discrs -> Discriminants.free_names discrs
+
+let erase_aliases t ~allowed =
+  match t with
+  | Discriminants discrs ->
+    Discriminants (Discriminants.erase_aliases discrs ~allowed)
+
+let apply_rec_info t _rec_info : _ Or_bottom.t = Bottom
 
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
