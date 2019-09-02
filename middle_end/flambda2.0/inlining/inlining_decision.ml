@@ -69,6 +69,11 @@ module Call_site_decision = struct
     | Unroll
     | Always
 
+  let print_attribute_causing_inlining ppf attr =
+    match attr with
+    | Unroll -> Format.fprintf ppf "Unroll"
+    | Always -> Format.fprintf ppf "Always"
+
   type t =
     | Environment_says_never_inline
     | Unrolling_depth_exceeded
@@ -79,6 +84,26 @@ module Call_site_decision = struct
         attribute : attribute_causing_inlining option;
         unroll_to : int option;
       }
+
+  let print ppf t =
+    match t with
+    | Environment_says_never_inline ->
+      Format.fprintf ppf "Environment_says_never_inline"
+    | Unrolling_depth_exceeded ->
+      Format.fprintf ppf "Unrolling_depth_exceeded"
+    | Max_inlining_depth_exceeded ->
+      Format.fprintf ppf "Max_inlining_depth_exceeded"
+    | Recursion_depth_exceeded ->
+      Format.fprintf ppf "Recursion_depth_exceeded"
+    | Never_inline_attribute ->
+      Format.fprintf ppf "Never_inline_attribute"
+    | Inline { attribute; unroll_to; } ->
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(attribute@ %a)@]@ \
+          @[<hov 1>(unroll_to@ %a)@]\
+          )@]"
+        (Misc.Stdlib.Option.print print_attribute_causing_inlining) attribute
+        (Misc.Stdlib.Option.print Numbers.Int.print) unroll_to
 
   type can_inline =
     | Do_not_inline

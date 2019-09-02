@@ -27,7 +27,6 @@ let rec chop k l =
     | _ -> assert false
   end
 
-(*
 let sort_uniq cmp l =
   let rec rev_merge l1 l2 accu =
     match l1, l2 with
@@ -126,7 +125,6 @@ let sort_uniq cmp l =
   in
   let len = length l in
   if len < 2 then l else sort len l
-*)
 
 let foo cmp l =
   let rec sort n l = rev_sort n l

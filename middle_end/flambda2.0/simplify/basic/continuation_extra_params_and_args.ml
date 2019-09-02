@@ -53,6 +53,13 @@ let empty = {
   extra_args = Apply_cont_rewrite_id.Map.empty;
 }
 
+let is_empty t =
+  match t.extra_params with
+  | [] ->
+    assert (Apply_cont_rewrite_id.Map.is_empty t.extra_args);
+    true
+  | _::_ -> false
+
 let add t ~extra_param ~extra_args =
   let extra_args =
     if Apply_cont_rewrite_id.Map.is_empty t.extra_args then

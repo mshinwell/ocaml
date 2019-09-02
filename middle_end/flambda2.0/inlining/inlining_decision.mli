@@ -49,6 +49,8 @@ module Call_site_decision : sig
         unroll_to : int option;
       }
 
+  val print : Format.formatter -> t -> unit
+
   type can_inline = private
     | Do_not_inline
     | Inline of { unroll_to : int option; }

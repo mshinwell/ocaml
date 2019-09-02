@@ -38,6 +38,8 @@ val print : Format.formatter -> t -> unit
 
 val empty : t
 
+val is_empty : t -> bool
+
 val add
    : t
   -> extra_param:Kinded_parameter.t

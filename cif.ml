@@ -1544,7 +1544,7 @@ fun pad prec fmtty -> match prec, type_padding pad fmtty with
   | Arg_precision, Padding_fmtty_EBB (pad, Int_ty rest) ->
     Padprec_fmtty_EBB (pad, Arg_precision, rest)
   | _, Padding_fmtty_EBB (_, _) -> raise Type_mismatch
-(*
+
 (* Type a format according to an fmtty. *)
 (* If typing succeed, generate a copy of the format with the same
     type parameters as the fmtty. *)
@@ -3546,4 +3546,4 @@ let format_of_string_format str (Format (fmt', str')) =
   with Type_mismatch ->
     failwith_message
       "bad input: format type mismatch between %S and %S" str str'
-*)
+

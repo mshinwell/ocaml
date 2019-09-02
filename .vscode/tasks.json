@@ -4,10 +4,7 @@
             "label": "Build world",
             "type": "shell",
             "command": "/Users/mark/dev/dune/dune.sh build @world",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
+            "group": "build",
             "problemMatcher": [
                 "$ocamlc"
             ]
@@ -31,7 +28,7 @@
             "options": {
                 "env": {
                     "FLAMBDA2": "yes"
-                },
+                }
             },
             "group": {
                 "kind": "build",

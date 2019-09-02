@@ -18,12 +18,37 @@
 
 open! Simplify_import
 
-type pre_simplification_types_of_my_closures = {
-  closure_types_via_aliases : T.t Closure_id.Map.t;
-  closure_types : T.t Closure_id.Map.t;
-}
+let compute_closure_element_types_inside_function ~env_outside_function
+      ~env_inside_function ~closure_element_types =
+  Var_within_closure.Map.fold
+    (fun clos_var type_outside_function
+         (env_inside_function, types_inside_function) ->
+      let var = Variable.create "clos_var" in
+      let env_inside_function =
+        let var = Var_in_binding_pos.create var NOK.in_types in
+        TE.add_definition env_inside_function
+          (Name_in_binding_pos.var var)
+          K.value
+      in
+      let env_extension =
+        T.make_suitable_for_environment type_outside_function
+          env_outside_function
+          ~suitable_for:env_inside_function
+          ~bind_to:var
+      in
+      let env_inside_function =
+        TE.add_env_extension env_inside_function ~env_extension
+      in
+      let types_inside_function =
+        Var_within_closure.Map.add clos_var
+          (T.alias_type_of K.value (Simple.var var))
+          types_inside_function
+      in
+      env_inside_function, types_inside_function)
+    closure_element_types
+    (env_inside_function, Var_within_closure.Map.empty)
 
-let function_decl_type denv function_decl rec_info =
+let function_decl_type ~denv_outside_function:denv function_decl rec_info =
   let decision =
     Inlining_decision.make_decision_for_function_declaration denv function_decl
   in
@@ -35,197 +60,178 @@ let function_decl_type denv function_decl rec_info =
       ~result_arity:(FD.result_arity function_decl)
       ~recursive:(FD.recursive function_decl)
 
-let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
-      ~closure_element_types =
-  let closure_element_types =
-    Var_within_closure.Map.map (fun ty_value ->
-        T.erase_aliases_ty_value (DE.typing_env denv)
-          ~bound_name:None ~allowed:Variable.Set.empty ty_value)
-      closure_element_types
+let compute_closure_types_inside_function ~denv_outside_function
+     ~all_function_decls_in_set ~closure_bound_names
+     ~closure_element_types_inside_function =
+  let closure_bound_names_inside =
+    Closure_id.Map.map Name_in_binding_pos.rename closure_bound_names
   in
   let closure_types_via_aliases =
     Closure_id.Map.map (fun name ->
         T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
-      closure_bound_names
+      closure_bound_names_inside
   in
   let all_function_decls_in_set =
     (* CR mshinwell: Is this [Rec_info] correct for functions that
        aren't the one being simplified (i.e. others in the same
        mutually-recursive set)? *)
     Closure_id.Map.map (fun function_decl ->
-        function_decl_type denv function_decl
+        function_decl_type ~denv_outside_function function_decl
           (Rec_info.create ~depth:1 ~unroll_to:None))
-      funs
+      all_function_decls_in_set
   in
-  let closure_types =
+  let closure_types_inside_function =
     Closure_id.Map.mapi (fun closure_id _function_decl ->
         T.exactly_this_closure closure_id
           ~all_function_decls_in_set
           ~all_closures_in_set:closure_types_via_aliases
-          ~all_closure_vars_in_set:closure_element_types)
-      funs
+          ~all_closure_vars_in_set:closure_element_types_inside_function)
+      all_function_decls_in_set
   in
-  { closure_types_via_aliases;
-    closure_types;
-  }
+  closure_bound_names_inside, closure_types_inside_function
 
-let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
-      set_of_closures =
-  (* By computing the types of the closure elements, attempt to show that
-     the set of closures can be lifted, and hence statically allocated.
-     Note that simplifying the bodies of the functions won't change the
-     set-of-closures' eligibility for lifting.  That this is so follows
-     from the fact that closure elements cannot be deleted without a global
-     analysis, as an inlined function's body may reference them out of
-     scope of the closure declaration. *)
-  let closure_elements, closure_element_types =
-    Var_within_closure.Map.fold
-      (fun closure_var simple (closure_elements, closure_element_types) ->
-        let simple, ty =
-          match S.simplify_simple dacc simple ~min_occurrence_kind with
-          | Bottom, ty ->
-            assert (K.equal (T.kind ty) K.value);
-            simple, ty
-          | Ok simple, ty -> simple, ty
-        in
-        let closure_elements =
-          Var_within_closure.Map.add closure_var simple closure_elements
-        in
-        let ty_value = T.force_to_kind_value ty in
-        let closure_element_types =
-          Var_within_closure.Map.add closure_var ty_value closure_element_types
-        in
-        closure_elements, closure_element_types)
-      (Set_of_closures.closure_elements set_of_closures)
-      (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
+let bind_closure_types_inside_function ~denv_outside_function
+      ~denv_inside_function:denv ~all_function_decls_in_set ~closure_bound_names
+      ~closure_element_types_inside_function =
+  let closure_bound_names_inside, closure_types_inside_function =
+    compute_closure_types_inside_function ~denv_outside_function
+      ~all_function_decls_in_set ~closure_bound_names
+      ~closure_element_types_inside_function
   in
-  let can_lift =
-    Var_within_closure.Map.for_all (fun _ simple -> Simple.is_symbol simple)
-      closure_elements
+  let denv =
+    Closure_id.Map.fold (fun _closure_id bound_name denv ->
+        let name = Name_in_binding_pos.name bound_name in
+        let irrelevant = not (Name_in_binding_pos.is_symbol bound_name) in
+        let bound_name =
+          Name_in_binding_pos.create name
+            (if irrelevant then NOK.in_types else NOK.normal)
+        in
+        DE.define_name denv bound_name K.value)
+      closure_bound_names_inside
+      denv
   in
-  can_lift, closure_elements, closure_element_types
+  let denv =
+    Closure_id.Map.fold (fun closure_id closure_type denv ->
+        match Closure_id.Map.find closure_id closure_bound_names_inside with
+        | exception Not_found ->
+          Misc.fatal_errorf "No bound variable for closure ID %a"
+            Closure_id.print closure_id
+        | bound_name ->
+          DE.add_equation_on_name denv
+            (Name_in_binding_pos.name bound_name)
+            closure_type)
+      closure_types_inside_function
+      denv
+  in
+  closure_bound_names_inside, denv
 
-let simplify_function dacc closure_id_this_function function_decl
-      pre_simplification_types_of_my_closures ~closure_bound_names =
-  let denv = DA.denv dacc in
+let denv_inside_function ~denv_outside_function ~denv_after_enter_closure
+      ~params ~my_closure closure_id ~all_function_decls_in_set
+      ~closure_bound_names ~closure_element_types =
+  let env_outside_function = DE.typing_env denv_outside_function in
+  let denv =
+    DE.increment_continuation_scope_level_twice denv_after_enter_closure
+  in
+  let env_inside_function, closure_element_types_inside_function =
+    compute_closure_element_types_inside_function ~env_outside_function
+      ~env_inside_function:(DE.typing_env denv) ~closure_element_types
+  in
+  let denv = DE.with_typing_env denv env_inside_function in
+  let closure_bound_names_inside, denv =
+    bind_closure_types_inside_function ~denv_outside_function
+      ~denv_inside_function:denv ~all_function_decls_in_set ~closure_bound_names
+      ~closure_element_types_inside_function
+  in
+  let denv = DE.add_parameters_with_unknown_types denv params in
+  match Closure_id.Map.find closure_id closure_bound_names_inside with
+  | exception Not_found ->
+    Misc.fatal_errorf "No closure name for closure ID %a"
+      Closure_id.print closure_id
+  | name ->
+    let name = Name_in_binding_pos.name name in
+    DE.add_variable denv
+      (Var_in_binding_pos.create my_closure NOK.normal)
+      (T.alias_type_of K.value (Simple.name name))
+
+let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
+      ~closure_bound_names ~closure_element_types =
+  let denv_after_enter_closure = DE.enter_closure (DA.denv dacc) in
   let params_and_body, r =
     Function_params_and_body.pattern_match (FD.params_and_body function_decl)
       ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-        let denv = DE.enter_closure denv in
-        let return_cont_scope = Scope.initial in
-        let exn_cont_scope = Scope.next return_cont_scope in
-        assert (Scope.equal return_cont_scope
-          (DE.get_continuation_scope_level denv));
-        let denv = DE.increment_continuation_scope_level_twice denv in
-        let denv = DE.add_parameters_with_unknown_types denv params in
-        (* XXX Need to add back the code for the irrelevant closure vars,
-           then remove hack below *)
-        let denv =
-          Closure_id.Map.fold (fun _closure_id bound_name denv ->
-              (* Hack start *)
-              let name = Name_in_binding_pos.name bound_name in
-              let is_var =
-                match Name_in_binding_pos.to_var bound_name with
-                | None -> false
-                | Some _ -> true
-              in
-              let bound_name =
-                Name_in_binding_pos.create name
-                  (if is_var then Name_occurrence_kind.in_types
-                   else Name_occurrence_kind.normal)
-              in
-              (* Hack end *)
-              DE.define_name denv bound_name K.value)
-            closure_bound_names
-            denv
+        let dacc =
+          DA.map_denv dacc ~f:(fun denv_outside_function ->
+            denv_inside_function ~denv_outside_function
+              ~denv_after_enter_closure ~params ~my_closure
+              closure_id ~all_function_decls_in_set ~closure_bound_names
+              ~closure_element_types)
         in
-        let denv =
-          Closure_id.Map.fold (fun closure_id closure_type denv ->
-              match Closure_id.Map.find closure_id closure_bound_names with
-              | exception Not_found ->
-                Misc.fatal_errorf "No bound variable for closure ID %a"
-                  Closure_id.print closure_id
-              | bound_name ->
-                DE.add_equation_on_name denv
-                  (Name_in_binding_pos.name bound_name)
-                  closure_type)
-            pre_simplification_types_of_my_closures.closure_types
-            denv
-        in
-        let denv =
-          match Closure_id.Map.find closure_id_this_function
-            closure_bound_names
-          with
-          | exception Not_found ->
-            Misc.fatal_errorf "No bound variable for this function \
-                (closure ID %a)"
-              Closure_id.print closure_id_this_function
-          | name ->
-            let name = Name_in_binding_pos.name name in
-            DE.add_variable denv
-              (Var_in_binding_pos.create my_closure Name_occurrence_kind.normal)
-              (T.alias_type_of K.value (Simple.name name))
-        in
-        let dacc = DA.with_denv dacc denv in
-        (* CR mshinwell: Should probably look at [cont_uses]? *)
-        let body, _cont_uses, r =
-          try
-            Simplify_toplevel.simplify_toplevel dacc body
-              ~return_continuation
-              ~return_arity:(FD.result_arity function_decl)
-              exn_continuation
-              ~return_cont_scope
-              ~exn_cont_scope
-          with Misc.Fatal_error -> begin
-            Format.eprintf "\n%sContext is:%s simplifying function \
-                with closure ID %a,@ params %a,@ return continuation %a,@ \
-                exn continuation %a,@ my_closure %a,@ body:@ %a@ \
-                with downwards accumulator:@ %a\n"
-              (Flambda_colours.error ())
-              (Flambda_colours.normal ())
-              Closure_id.print closure_id_this_function
-              Kinded_parameter.List.print params
-              Continuation.print return_continuation
-              Exn_continuation.print exn_continuation
-              Variable.print my_closure
-              Expr.print body
-              DA.print dacc;
-            raise Misc.Fatal_error
-          end
-        in
-        let function_decl =
-          Function_params_and_body.create ~return_continuation
-            exn_continuation params ~body ~my_closure
-        in
-        function_decl, r)
+        match
+          Simplify_toplevel.simplify_toplevel dacc body
+            ~return_continuation
+            ~return_arity:(FD.result_arity function_decl)
+            exn_continuation
+            ~return_cont_scope:Scope.initial
+            ~exn_cont_scope:(Scope.next Scope.initial)
+        with
+        | body, _cont_uses, r ->
+          (* CR mshinwell: Should probably look at [cont_uses]? *)
+          let function_decl =
+            Function_params_and_body.create ~return_continuation
+              exn_continuation params ~body ~my_closure
+          in
+          function_decl, r
+        | exception Misc.Fatal_error ->
+          Format.eprintf "\n%sContext is:%s simplifying function \
+              with closure ID %a,@ params %a,@ return continuation %a,@ \
+              exn continuation %a,@ my_closure %a,@ body:@ %a@ \
+              with downwards accumulator:@ %a\n"
+            (Flambda_colours.error ())
+            (Flambda_colours.normal ())
+            Closure_id.print closure_id
+            Kinded_parameter.List.print params
+            Continuation.print return_continuation
+            Exn_continuation.print exn_continuation
+            Variable.print my_closure
+            Expr.print body
+            DA.print dacc;
+          raise Misc.Fatal_error)
   in
   let function_decl = FD.update_params_and_body function_decl params_and_body in
-  function_decl, function_decl_type denv function_decl Rec_info.initial, r
+  let ty =
+    function_decl_type ~denv_outside_function:(DA.denv dacc) function_decl
+      Rec_info.initial
+  in
+  function_decl, ty, r
 
 let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types =
   let function_decls = Set_of_closures.function_decls set_of_closures in
-  let funs = Function_declarations.funs function_decls in
-  let pre_simplification_types_of_my_closures =
-    pre_simplification_types_of_my_closures (DA.denv dacc)
-      ~funs ~closure_bound_names ~closure_element_types
-  in
-  let all_closures_in_set =
-    pre_simplification_types_of_my_closures.closure_types_via_aliases
-  in
-  let funs, fun_types, r =
-    Closure_id.Map.fold (fun closure_id function_decl (funs, fun_types, r) ->
+  let all_function_decls_in_set = Function_declarations.funs function_decls in
+  let all_function_decls_in_set, fun_types, r =
+    Closure_id.Map.fold
+      (fun closure_id function_decl
+           (result_function_decls_in_set, fun_types, r) ->
         let function_decl, ty, r =
           simplify_function (DA.with_r dacc r) closure_id function_decl
-            pre_simplification_types_of_my_closures ~closure_bound_names
+            ~all_function_decls_in_set ~closure_bound_names
+            ~closure_element_types
         in
-        let funs = Closure_id.Map.add closure_id function_decl funs in
+        let result_function_decls_in_set =
+          Closure_id.Map.add closure_id function_decl
+            result_function_decls_in_set
+        in
         let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        funs, fun_types, r)
-      funs
+        result_function_decls_in_set, fun_types, r)
+      all_function_decls_in_set
       (Closure_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
   in
   let closure_types_by_bound_name =
+    let closure_types_via_aliases =
+      Closure_id.Map.map (fun name ->
+          T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
+        closure_bound_names
+    in
     Closure_id.Map.fold (fun closure_id _function_decl_type closure_types ->
         match Closure_id.Map.find closure_id closure_bound_names with
         | exception Not_found ->
@@ -235,7 +241,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           let closure_type =
             T.exactly_this_closure closure_id
               ~all_function_decls_in_set:fun_types
-              ~all_closures_in_set
+              ~all_closures_in_set:closure_types_via_aliases
               ~all_closure_vars_in_set:closure_element_types
           in
           Name_in_binding_pos.Map.add bound_name closure_type closure_types)
@@ -257,7 +263,9 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
         denv)
   in
   let set_of_closures =
-    Set_of_closures.create (Function_declarations.create funs) ~closure_elements
+    Set_of_closures.create
+      (Function_declarations.create all_function_decls_in_set)
+      ~closure_elements
   in
   set_of_closures, closure_types_by_bound_name, dacc
 
@@ -276,7 +284,9 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
   in
   let r =
     let lifted_constants =  (* CR mshinwell: Add "s" to "Lifted_constant" *)
-      Lifted_constant.create_from_static_structure static_structure_types
+      Lifted_constant.create_from_static_structure
+        (DE.typing_env (DA.denv dacc))
+        static_structure_types
         static_structure
     in
     List.fold_left R.new_lifted_constant (DA.r dacc) lifted_constants
@@ -312,6 +322,41 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
     Reachable.reachable (Named.create_set_of_closures set_of_closures)
   in
   [bound_vars, defining_expr], dacc
+
+let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
+      set_of_closures =
+  (* By computing the types of the closure elements, attempt to show that
+     the set of closures can be lifted, and hence statically allocated.
+     Note that simplifying the bodies of the functions won't change the
+     set-of-closures' eligibility for lifting.  That this is so follows
+     from the fact that closure elements cannot be deleted without a global
+     analysis, as an inlined function's body may reference them out of
+     scope of the closure declaration. *)
+  let closure_elements, closure_element_types =
+    Var_within_closure.Map.fold
+      (fun closure_var simple (closure_elements, closure_element_types) ->
+        let simple, ty =
+          match S.simplify_simple dacc simple ~min_occurrence_kind with
+          | Bottom, ty ->
+            assert (K.equal (T.kind ty) K.value);
+            simple, ty
+          | Ok simple, ty -> simple, ty
+        in
+        let closure_elements =
+          Var_within_closure.Map.add closure_var simple closure_elements
+        in
+        let closure_element_types =
+          Var_within_closure.Map.add closure_var ty closure_element_types
+        in
+        closure_elements, closure_element_types)
+      (Set_of_closures.closure_elements set_of_closures)
+      (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
+  in
+  let can_lift =
+    Var_within_closure.Map.for_all (fun _ simple -> Simple.is_symbol simple)
+      closure_elements
+  in
+  can_lift, closure_elements, closure_element_types
 
 let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
       set_of_closures =

@@ -30,6 +30,22 @@ type 'a k = CUE.t -> R.t -> ('a * UA.t)
 module Continuation_handler = struct
   include Continuation_handler
   let real_handler t = Some t
+
+  module Opened = struct
+    type nonrec t = {
+      params : KP.t list;
+      handler : Expr.t;
+      original : t;
+    }
+
+    let create ~params ~handler original = { params; handler; original; }
+    let params t = t.params
+    let original t = t.original
+  end
+
+  let pattern_match t ~f =
+    Continuation_params_and_handler.pattern_match (params_and_handler t)
+      ~f:(fun params ~handler -> f (Opened.create ~params ~handler t))
 end
 
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
@@ -131,94 +147,88 @@ Format.eprintf "Simplifying let on %a: body done\n%!"
       (List.rev bindings))
 
 and simplify_one_continuation_handler
-  : 'a. DA.t -> param_types:T.t list
+  : 'a. DA.t
     -> extra_params_and_args:Continuation_extra_params_and_args.t
-    -> cannot_change_arity:bool
-    -> Continuation.t -> Continuation_handler.t -> 'a k 
+    -> Continuation.t
+    -> Continuation_handler.Opened.t
+    -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
-= fun dacc ~param_types
-      ~(extra_params_and_args : Continuation_extra_params_and_args.t)
-      ~cannot_change_arity cont cont_handler k ->
+= fun dacc ~(extra_params_and_args : EPA.t)
+      cont (cont_handler : Continuation_handler.Opened.t) k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
-  CPH.pattern_match (CH.params_and_handler cont_handler)
-    ~f:(fun params ~handler ->
-(*
-Format.eprintf "About to simplify handler %a\n%!"
-  Continuation.print cont;
-Format.eprintf "About to simplify handler %a: params %a, param types@ %a@ "
+  (* 
+Format.eprintf "handler:@.%a@."
+  Expr.print cont_handler.handler;
+  *)
+  let params = cont_handler.params in
+  (*
+Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
   Continuation.print cont
   KP.List.print params
-  (Format.pp_print_list T.print) param_types;
-Format.eprintf "handler:@.%a@."
-  Expr.print handler;
+  EPA.print extra_params_and_args;
+  *)
+  let handler, user_data, uacc = simplify_expr dacc cont_handler.handler k in
+  let handler, uacc =
+  (*
+    let () =
+      Format.eprintf "For %a: simplified handler: %a\n%!"
+        Continuation.print cont Expr.print handler
+    in
+    *)
+    let free_names = Expr.free_names handler in
+    let used_params =
+      (* CR mshinwell: See note in Un_cps about this.  We need to fix that
+         so it can accept exception continuations with any number of
+         parameters; then this can be deleted. *)
+      if Continuation.is_exn cont then params
+      else
+        List.filter (fun param ->
+            Name_occurrences.mem_var free_names (KP.var param))
+          params
+    in
+    let used_extra_params =
+      List.filter (fun extra_param ->
+          Name_occurrences.mem_var free_names (KP.var extra_param))
+        extra_params_and_args.extra_params
+    in
+    (*
+    let () =
+      Format.eprintf "For %a: free names %a, \
+          used_params %a, EP %a, used_extra_params %a\n%!"
+        Continuation.print cont
+        Name_occurrences.print free_names
+        KP.List.print used_params
+        KP.List.print extra_params_and_args.extra_params
+        KP.List.print used_extra_params
+    in
+    *)
+    let handler =
+      let params = used_extra_params @ used_params in
+      CH.with_params_and_handler (CH.Opened.original cont_handler)
+        (CPH.create params ~handler)
+    in
+    let rewrite =
+      Apply_cont_rewrite.create ~original_params:params
+        ~used_params:(KP.Set.of_list used_params)
+        ~extra_params:extra_params_and_args.extra_params
+        ~extra_args:extra_params_and_args.extra_args
+        ~used_extra_params:(KP.Set.of_list used_extra_params)
+    in
+    (*
+Format.eprintf "Rewrite:@ %a\n%!" Apply_cont_rewrite.print rewrite;
 *)
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.add_parameters denv params ~param_types)
-      in
-      let handler, user_data, uacc = simplify_expr dacc handler k in
-      let handler, uacc =
-        (* CR mshinwell: assert that if [cannot_change_arity] then
-           [extra_params_and_args] is empty *)
-        if cannot_change_arity then
-          let handler =
-            CH.with_params_and_handler cont_handler
-              (CPH.create params ~handler)
-          in
-          handler, uacc
-        else
-(*
-          let () =
-            Format.eprintf "For %a: simplified handler: %a\n%!"
-              Continuation.print cont Expr.print handler
-          in
-*)
-          let free_names = Expr.free_names handler in
-          let used_params =
-            List.filter (fun param ->
-                Name_occurrences.mem_var free_names (KP.var param))
-              params
-          in
-          let used_extra_params =
-            List.filter (fun extra_param ->
-                Name_occurrences.mem_var free_names (KP.var extra_param))
-              extra_params_and_args.extra_params
-          in
-          (*
-          let () =
-            Format.eprintf "For %a: free names %a, \
-                used_params %a, EP %a, used_extra_params %a\n%!"
-              Continuation.print cont
-              Name_occurrences.print free_names
-              KP.List.print used_params
-              KP.List.print extra_params_and_args.extra_params
-              KP.List.print used_extra_params
-          in
-          *)
-          let handler =
-            let params = used_extra_params @ used_params in
-            CH.with_params_and_handler cont_handler
-              (CPH.create params ~handler)
-          in
-          let rewrite =
-            Apply_cont_rewrite.create ~original_params:params
-              ~used_params:(KP.Set.of_list used_params)
-              ~extra_params:extra_params_and_args.extra_params
-              ~extra_args:extra_params_and_args.extra_args
-              ~used_extra_params:(KP.Set.of_list used_extra_params)
-          in
-          let uacc =
-            UA.map_uenv uacc ~f:(fun uenv ->
-              UE.add_apply_cont_rewrite uenv cont rewrite)
-          in
+    let uacc =
+      UA.map_uenv uacc ~f:(fun uenv ->
+        UE.add_apply_cont_rewrite uenv cont rewrite)
+    in
 (*
 Format.eprintf "Finished simplifying handler %a\n%!"
-  Continuation.print cont;
+Continuation.print cont;
 *)
-          handler, uacc
-      in
-      handler, user_data, uacc)
+    handler, uacc
+  in
+  handler, user_data, uacc
 
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
@@ -242,86 +252,82 @@ and simplify_non_recursive_let_cont_handler
 and simplify_recursive_let_cont_handlers
   : 'a. DA.t -> Recursive_let_cont_handlers.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc rec_handlers k ->
+  let module CH = Continuation_handler in
+  let module CPH = Continuation_params_and_handler in
   Recursive_let_cont_handlers.pattern_match rec_handlers
     ~f:(fun ~body rec_handlers ->
-      assert(not (Continuation_handlers.contains_exn_handler rec_handlers));
+      assert (not (Continuation_handlers.contains_exn_handler rec_handlers));
       let definition_denv = DA.denv dacc in
       let original_cont_scope_level =
         DE.get_continuation_scope_level definition_denv
       in
-      (* let dacc' = dacc in *)
-      let dacc =
-        DA.map_denv dacc ~f:DE.increment_continuation_scope_level
-      in
       let handlers = Continuation_handlers.to_map rec_handlers in
-      (* let set = Continuation_handlers.domain rec_handlers in *)
-      let body, (handlers, user_data), uacc =
-        simplify_expr dacc body (fun cont_uses_env r ->
-          let definition_denv =
-            DE.increment_continuation_scope_level definition_denv
+      let cont, cont_handler =
+        match Continuation.Map.bindings handlers with
+        | [] | _ :: _ :: _ -> failwith "TODO" (* CR mshinwell: fix this *)
+        | [c] -> c
+        (* Only single continuation handler is supported right now *)
+      in
+      CH.pattern_match cont_handler ~f:(fun cont_handler ->
+          let params = CH.Opened.params cont_handler in
+          let arity = KP.List.arity params in
+          let dacc =
+            DA.map_denv dacc ~f:DE.increment_continuation_scope_level
           in
-          let definition_denv =
-            (* Probably useless as the arguments types are cleaned
-                of any information, hence can't refer to lifted
-                constants from the body *)
-            DE.add_lifted_constants definition_denv
-              (R.get_lifted_constants r)
-          in
-
-          (* let user_data, uacc = k cont_uses_env r in
-            * let uenv = UA.uenv uacc in *)
-
-          let cont, cont_handler =
-            match Continuation.Map.bindings handlers with
-            | [] | _ :: _ :: _ -> failwith "TODO"
-            | [c] -> c
-            (* Only single continuation handler is supported right now *)
-          in
-
-          let arity = Continuation_handler.arity cont_handler in
-          let arg_types =
-            (* We can't know a good type from the call types *)
-            List.map T.unknown arity
-          in
-
-          let (cont_uses_env, _apply_cont_rewrite_id) :
-            Continuation_uses_env.t * Apply_cont_rewrite_id.t =
-            (* We don't know anything, it's like it was called
-                with any argument ! *)
-            CUE.record_continuation_use cont_uses_env
-              cont
-              Normal (* Maybe simpler ? *)
-              ~typing_env_at_use:(
-                (* not usefull as we will have only top *)
-                DE.typing_env definition_denv
-              )
-              ~arg_types
-          in
-
-          let dacc = DA.create definition_denv cont_uses_env r in
-
-          let handler, user_data, uacc =
-            simplify_one_continuation_handler dacc
-              ~param_types:arg_types
-              ~extra_params_and_args:Continuation_extra_params_and_args.empty
-              ~cannot_change_arity:true
-              cont
-              cont_handler
-              (fun cont_uses_env r ->
-                  let user_data, uacc = k cont_uses_env r in
-                  let uacc =
-                    UA.map_uenv uacc ~f:(fun uenv ->
+          (* let set = Continuation_handlers.domain rec_handlers in *)
+          let body, (handlers, user_data), uacc =
+            simplify_expr dacc body (fun cont_uses_env r ->
+              let definition_denv =
+                (* Probably useless as the arguments types are cleaned
+                    of any information, hence can't refer to lifted
+                    constants from the body *)
+                DE.add_lifted_constants definition_denv
+                  ~lifted:(R.get_lifted_constants r)
+              in
+              let arg_types =
+                (* We can't know a good type from the call types *)
+                List.map T.unknown arity
+              in
+              let (cont_uses_env, _apply_cont_rewrite_id) :
+                Continuation_uses_env.t * Apply_cont_rewrite_id.t =
+                (* We don't know anything, it's like it was called
+                    with any argument ! *)
+                CUE.record_continuation_use cont_uses_env
+                  cont
+                  Normal (* Maybe simpler ? *)
+                  ~typing_env_at_use:(
+                    (* not usefull as we will have only top *)
+                    DE.typing_env definition_denv
+                  )
+                  ~arg_types
+              in
+              let denv =
+                (* XXX These don't have the same scope level as the
+                   non-recursive case *)
+                DE.add_parameters definition_denv params ~param_types:arg_types
+              in
+              let dacc = DA.create denv cont_uses_env r in
+              let handler, user_data, uacc =
+                simplify_one_continuation_handler dacc
+                  ~extra_params_and_args:
+                    Continuation_extra_params_and_args.empty
+                  cont
+                  cont_handler
+                  (fun cont_uses_env r ->
+                    let user_data, uacc = k cont_uses_env r in
+                    let uacc =
+                      UA.map_uenv uacc ~f:(fun uenv ->
                         UE.add_continuation uenv cont
                           original_cont_scope_level
                           arity)
-                  in
-                  user_data, uacc)
+                    in
+                    user_data, uacc)
+              in
+              let handlers = Continuation.Map.singleton cont handler in
+              (handlers, user_data), uacc)
           in
-          let handlers = Continuation.Map.singleton cont handler in
-          (handlers, user_data), uacc)
-      in
-      let expr = Flambda.Let_cont.create_recursive handlers ~body in
-      expr, user_data, uacc)
+          let expr = Flambda.Let_cont.create_recursive handlers ~body in
+          expr, user_data, uacc))
 
 and simplify_let_cont
   : 'a. DA.t -> Let_cont.t -> 'a k -> Expr.t * 'a * UA.t
@@ -351,11 +357,14 @@ and simplify_direct_full_application
           (Apply.inline apply)
       in
       match Inlining_decision.Call_site_decision.can_inline decision with
-      | Do_not_inline -> None
-      | Inline { unroll_to; } ->
+      | Do_not_inline ->
 (*
-Format.eprintf "Environment before inlining:@ %a\n%!" DA.print dacc;
+Format.eprintf "Not inlining (%a) %a\n%!"
+  Inlining_decision.Call_site_decision.print decision
+  Apply.print apply;
 *)
+        None
+      | Inline { unroll_to; } ->
         let dacc, inlined =
           Inlining_transforms.inline dacc ~callee
             ~args function_decl
@@ -1111,7 +1120,7 @@ Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
   T.print scrutinee_ty T.print shape T.print _meet_ty;
 *)
             let typing_env_at_use =
-              TE.add_env_extension typing_env_at_use env_extension
+              TE.add_env_extension typing_env_at_use ~env_extension
             in
             let dacc, id =
 (*

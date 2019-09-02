@@ -92,6 +92,8 @@ module Stdlib : sig
   module List : sig
     type 'a t = 'a list
 
+    val is_singleton : 'a t -> bool
+
     val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** The lexicographic order supported by the provided order.
         There is no constraint on the relative lengths of the lists. *)

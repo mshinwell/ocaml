@@ -73,7 +73,7 @@ module Make (U : Unboxing_spec) = struct
             TE.add_definition typing_env_at_use field_name param_kind
           in
           let typing_env_at_use =
-            TE.add_env_extension typing_env_at_use env_extension
+            TE.add_env_extension typing_env_at_use ~env_extension
           in
           let field_type = T.alias_type_of param_kind field in
           let field_types_by_id =
@@ -165,14 +165,7 @@ module Make (U : Unboxing_spec) = struct
     in
     let block_type = U.make_boxed_value tag ~fields in
     let typing_env =
-      List.fold_left (fun typing_env param ->
-          let name =
-            Name_in_binding_pos.create (KP.name param)
-              Name_occurrence_kind.normal
-          in
-          TE.add_definition typing_env name (KP.kind param))
-        typing_env
-        new_param_vars
+      TE.add_definitions_of_params typing_env ~params:new_param_vars
     in
     match T.meet typing_env block_type param_type with
     | Bottom ->
@@ -183,7 +176,7 @@ module Make (U : Unboxing_spec) = struct
       (* CR mshinwell: We can remove [New_let_binding] if we are always going to
          restrict ourselves to types where the field components are known
          [Simple]s. *)
-      let typing_env = TE.add_env_extension typing_env env_extension in
+      let typing_env = TE.add_env_extension typing_env ~env_extension in
       assert (List.compare_lengths fields all_field_types_by_id = 0);
       let typing_env, extra_params_and_args =
         List.fold_left2
@@ -317,8 +310,9 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
       in
       try_unboxing unboxed_number_decisions
 
-let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
+let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params ~param_types
       extra_params_and_args =
+  assert (List.compare_lengths params param_types = 0);
   let typing_env, param_types_rev, extra_params_and_args =
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
               (arg_types_by_use_id, param_type) ->
@@ -330,4 +324,8 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~param_types
       (typing_env, [], extra_params_and_args)
       (List.combine arg_types_by_use_id param_types)
   in
-  typing_env, List.rev param_types_rev, extra_params_and_args
+  let typing_env =
+    TE.add_equations_on_params typing_env
+      ~params ~param_types:(List.rev param_types_rev)
+  in
+  typing_env, extra_params_and_args

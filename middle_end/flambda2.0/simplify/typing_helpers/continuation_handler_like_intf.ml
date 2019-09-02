@@ -37,4 +37,12 @@ module type S = sig
   val behaviour : t -> behaviour
 
   val real_handler : t -> Flambda.Continuation_handler.t option
+
+  module Opened : sig
+    type t
+
+    val params : t -> Kinded_parameter.List.t
+  end
+
+  val pattern_match : t -> f:(Opened.t -> 'a) -> 'a
 end

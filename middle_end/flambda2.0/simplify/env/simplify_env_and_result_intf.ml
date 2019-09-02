@@ -75,6 +75,8 @@ module type Downwards_env = sig
 
   val add_equation_on_name : t -> Name.t -> Flambda_type.t -> t
 
+  val define_parameters : t -> params:Kinded_parameter.t list -> t
+
   val add_parameters
      : t
     -> Kinded_parameter.t list
@@ -85,7 +87,12 @@ module type Downwards_env = sig
 
   val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
-  val with_typing_environment : t -> Flambda_type.Typing_env.t -> t
+  val with_typing_env : t -> Flambda_type.Typing_env.t -> t
+
+  val map_typing_env
+     : t
+    -> f:(Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t)
+    -> t
 
   val check_variable_is_bound : t -> Variable.t -> unit
 
@@ -109,7 +116,7 @@ module type Downwards_env = sig
 
   (** Add the given lifted constants to the environment.  Symbols that are
       already defined in the environment are ignored. *)
-  val add_lifted_constants : t -> Lifted_constant.t list -> t
+  val add_lifted_constants : t -> lifted:Lifted_constant.t list -> t
 
   (** Like [add_lifted_constants], but takes the constants from the given
       result structure. *)

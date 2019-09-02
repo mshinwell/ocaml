@@ -20,7 +20,6 @@ type +'a node =
   | Cons of 'a * 'a t
 
 and 'a t = unit -> 'a node
-
 let empty () = Nil
 
 let return x () = Cons (x, empty)

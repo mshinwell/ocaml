@@ -485,14 +485,11 @@ let simplify_primitive (prim : L.primitive) args loc =
   | Pflambda_isint, _ ->
     Misc.fatal_error "[Pflambda_isint] should not exist at this stage"
   | Pisint, [arg] ->
-    let is_int = Ident.create_local "is_int" in
-    L.Llet (Strict, Pgenval, is_int,
-      Lprim (Pflambda_isint, [arg], loc),
-      switch_for_if_then_else ~is_int:true
-        ~cond:(L.Lvar is_int)
-        ~ifso:(L.Lconst (Const_base (Const_int 1)))
-        ~ifnot:(L.Lconst (Const_base (Const_int 0)))
-        (fun lam -> lam))
+    switch_for_if_then_else ~is_int:true
+      ~cond:(Lprim (Pflambda_isint, [arg], loc))
+      ~ifso:(L.Lconst (Const_base (Const_int 1)))
+      ~ifnot:(L.Lconst (Const_base (Const_int 0)))
+      (fun lam -> lam)
   | (Pidentity | Pbytes_to_string | Pbytes_of_string), [arg] -> arg
   | Pignore, [_arg] -> L.Lconst (Const_base (Const_int 0))
   | Pdirapply, [funct; arg]

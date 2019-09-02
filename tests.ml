@@ -31,12 +31,12 @@ let f' c m n x' y' =
     | Some b ->
       to_inline' (x + y) (a + b)
 
+(*
 let rec length_aux len = function
     [] -> len
   | _::l -> length_aux (len + 1) l
 
 let length l = (length_aux [@unrolled 3]) 0 l
-
 let [@inline always] to_inline' x y = x + y
 
 let foo_length =
@@ -45,6 +45,8 @@ let foo_length =
   match param with
     [] -> len
   | _::_ -> 42
+
+*)
 
 let length_aux len = function
     [] -> len
@@ -72,7 +74,6 @@ module Int64 = struct
 
   let succ x = mul (add x 1L) 2L
 end
-
 type t =
   | A
   | B of int
@@ -92,7 +93,7 @@ let bar () =
   | B _ -> 1
   | C _ -> 2
 
-let foo x =
+let foo2 x =
   match x with
   | A ->
     begin match x with
@@ -111,7 +112,7 @@ let repeated_comparisons x _a =
   else
     2
 
-let foo arr f i =
+let foo3 arr f i =
   array_set arr i (f (array_get arr i))
 
 let f c m n x' y' =

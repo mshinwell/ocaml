@@ -19,10 +19,9 @@
 type t =
   | No_uses
   | Uses of {
-      typing_env : Flambda_type.Typing_env.t;
+      handler_typing_env : Flambda_type.Typing_env.t;
       arg_types_by_use_id : 
         (Flambda_type.Typing_env.t * Flambda_type.t)
           Apply_cont_rewrite_id.Map.t list;
-      param_types : Flambda_type.t list;
       extra_params_and_args : Continuation_extra_params_and_args.t;
     }

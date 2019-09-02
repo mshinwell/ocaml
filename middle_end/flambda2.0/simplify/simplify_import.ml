@@ -41,6 +41,7 @@ module EPA = Continuation_extra_params_and_args
 module FD = Function_declaration
 module K = Flambda_kind
 module KP = Kinded_parameter
+module NOK = Name_occurrence_kind
 module P = Flambda_primitive
 module R = Simplify_env_and_result.Result
 module S = Simplify_simple

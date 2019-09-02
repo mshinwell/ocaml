@@ -91,10 +91,33 @@ let convert_integer_comparison_prim (comp : Lambda.integer_comparison)
   match comp with
   | Ceq -> Phys_equal (K.value, Eq)
   | Cne -> Phys_equal (K.value, Neq)
-  | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
-  | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
-  | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
-  | Cge -> Int_comp (I.Tagged_immediate, Signed, Ge)
+  | Clt -> Int_comp (Tagged_immediate, Signed, Lt)
+  | Cgt -> Int_comp (Tagged_immediate, Signed, Gt)
+  | Cle -> Int_comp (Tagged_immediate, Signed, Le)
+  | Cge -> Int_comp (Tagged_immediate, Signed, Ge)
+
+let convert_boxed_integer_comparison_prim
+      (kind : Lambda.boxed_integer) (comp : Lambda.integer_comparison)
+      : P.binary_primitive =
+  match kind, comp with
+  | Pint32, Ceq -> Phys_equal (K.naked_int32, Eq)
+  | Pint32, Cne -> Phys_equal (K.naked_int32, Neq)
+  | Pint32, Clt -> Int_comp (Naked_int32, Signed, Lt)
+  | Pint32, Cgt -> Int_comp (Naked_int32, Signed, Gt)
+  | Pint32, Cle -> Int_comp (Naked_int32, Signed, Le)
+  | Pint32, Cge -> Int_comp (Naked_int32, Signed, Ge)
+  | Pint64, Ceq -> Phys_equal (K.naked_int64, Eq)
+  | Pint64, Cne -> Phys_equal (K.naked_int64, Neq)
+  | Pint64, Clt -> Int_comp (Naked_int64, Signed, Lt)
+  | Pint64, Cgt -> Int_comp (Naked_int64, Signed, Gt)
+  | Pint64, Cle -> Int_comp (Naked_int64, Signed, Le)
+  | Pint64, Cge -> Int_comp (Naked_int64, Signed, Ge)
+  | Pnativeint, Ceq -> Phys_equal (K.naked_nativeint, Eq)
+  | Pnativeint, Cne -> Phys_equal (K.naked_nativeint, Neq)
+  | Pnativeint, Clt -> Int_comp (Naked_nativeint, Signed, Lt)
+  | Pnativeint, Cgt -> Int_comp (Naked_nativeint, Signed, Gt)
+  | Pnativeint, Cle -> Int_comp (Naked_nativeint, Signed, Le)
+  | Pnativeint, Cge -> Int_comp (Naked_nativeint, Signed, Ge)
 
 let convert_float_comparison (comp : Lambda.float_comparison) : P.comparison =
   match comp with
@@ -404,7 +427,7 @@ let bint_binary_prim bi prim arg1 arg2 =
 let bint_shift bi prim arg1 arg2 =
   box_bint bi
     (Binary (Int_shift (standard_int_of_boxed_integer bi, prim),
-             unbox_bint bi arg1, unbox_bint bi arg2))
+             unbox_bint bi arg1, arg2))
 
 let string_or_bytes_ref kind arg1 arg2 dbg =
   Checked {
@@ -490,6 +513,10 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->
     Binary (convert_integer_comparison_prim comp, arg1, arg2)
+  | Pbintcomp (kind, comp), [arg1; arg2] ->
+    let arg1 = unbox_bint kind arg1 in
+    let arg2 = unbox_bint kind arg2 in
+    Binary (convert_boxed_integer_comparison_prim kind comp, arg1, arg2)
   | Pintoffloat, [arg] ->
     let src = K.Standard_int_or_float.Naked_float in
     let dst = K.Standard_int_or_float.Tagged_immediate in
@@ -778,6 +805,93 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       failure = Division_by_zero;
       dbg;
     }
+  | Pdivbint { size = Pint32; is_safe = Safe; }, [arg1; arg2] ->
+    (* The duplicate unboxing generated in the Pdivbint/Pmodbint cases will
+       be removed by the simplifier. *)
+    (* CR mshinwell: Factor these cases out *)
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_int32, Div),
+          unbox_bint Pint32 arg1, unbox_bint Pint32 arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_int32 0l)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
+  | Pmodbint { size = Pint32; is_safe = Safe; }, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_int32, Mod),
+          unbox_bint Pint32 arg1, unbox_bint Pint32 arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_int32 0l)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
+  | Pdivbint { size = Pint64; is_safe = Safe; }, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_int64, Div),
+          unbox_bint Pint64 arg1, unbox_bint Pint64 arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_int64 0L)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
+  | Pmodbint { size = Pint64; is_safe = Safe; }, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_int64, Mod),
+          unbox_bint Pint64 arg1, unbox_bint Pint64 arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_int64 0L)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
+  | Pdivbint { size = Pnativeint; is_safe = Safe; }, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_nativeint, Div),
+          unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_nativeint Targetint.zero)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
+  | Pmodbint { size = Pnativeint; is_safe = Safe; }, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Naked_nativeint, Mod),
+          unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2);
+      validity_conditions = [
+        Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Naked_nativeint Targetint.zero)));
+      ];
+      failure = Division_by_zero;
+      dbg;
+    }
   | Parrayrefu (Pgenarray | Paddrarray | Pintarray), [array; index] ->
     (* CR mshinwell: Review all these cases.  Isn't this supposed to
        produce [Generic_array]? *)
@@ -844,34 +958,6 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
         Prim (Binary (Block_load (Block (Value Anything), Immutable),
           block,
           Simple Simple.const_zero)))))
-
-
-  (* | Pdivbint { size; is_safe = Safe }, [arg1; arg2] -> *)
-  (*   let bi = standard_int_of_boxed_integer size in *)
-  (*   Checked { *)
-  (*     primitive = *)
-  (*       bint_binary_prim size Div arg1 arg2; *)
-  (*     validity_condition = *)
-  (*       Binary (Int_comp (bi, Eq), unbox_bint size arg2, *)
-  (*               Simple (Simple.const *)
-  (*                 (const_of_boxed_integer 0l size))); *)
-  (*     failure = Division_by_zero; *)
-  (*     dbg; *)
-  (*   } *)
-
-  (* | Pmodbint { size; is_safe = Safe }, [arg1; arg2] -> *)
-  (*   let bi = standard_int_of_boxed_integer size in *)
-  (*   Checked { *)
-  (*     primitive = *)
-  (*       bint_binary_prim size Mod arg1 arg2; *)
-  (*     validity_condition = *)
-  (*       Binary (Int_comp (bi, Eq), unbox_bint size arg2, *)
-  (*               Simple (Simple.const *)
-  (*                 (const_of_boxed_integer 0l size))); *)
-  (*     failure = Division_by_zero; *)
-  (*     dbg; *)
-  (*   } *)
-
   | Pctconst const, _ ->
     (* CR mshinwell: This doesn't seem to be zero-arity like it should be *)
     (* CR pchambart: It's not obvious when this one should be converted.
@@ -967,6 +1053,7 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pdivbint _
     | Pmodbint _
     | Psetfloatfield _
+    | Pbintcomp _
     ),
     ([] | [_] | _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -1002,17 +1089,14 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
       [Closure_conversion.close_primitive]"
       Printlambda.primitive prim
 
-  | ((Pdivbint {is_safe=Safe; _ }, _::_::[])
-    |(Pmodbint {is_safe=Safe; _ }, _::_::[])
-    |(Pduparray (_, _), _::[]))
-    -> failwith "TODO again"
+  | (Pduparray (_, _), _::[])
+    -> Misc.fatal_errorf "TODO again (%a)" Printlambda.primitive prim
 
   | ( 
       Parrayrefu _
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
-    | Pbintcomp _
     | Pbigarrayref _
     | Pbigarrayset _
     | Pbigarraydim _

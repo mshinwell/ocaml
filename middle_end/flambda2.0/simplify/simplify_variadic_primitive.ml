@@ -51,8 +51,8 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
            found_bottom := true
           end;
           match Simple.descr arg with
-          | Const _ -> T.force_to_kind_value arg_ty
-          | Name name -> T.alias_type_of_as_ty_value (Simple.name name)
+          | Const _ -> arg_ty
+          | Name name -> T.alias_type_of K.value (Simple.name name)
           | Discriminant _ -> assert false  (* CR mshinwell: proper error! *) )
         args_with_tys value_kinds
     in
@@ -71,7 +71,7 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
       let tag = Tag.Scannable.to_tag tag in
       let ty =
         match mutable_or_immutable with
-        | Immutable -> T.immutable_block_of_values tag ~fields
+        | Immutable -> T.immutable_block tag ~fields
         | Mutable -> T.any_value ()
       in
       let env_extension = TEE.one_equation (Name.var result_var) ty in

@@ -27,6 +27,8 @@ let tagged_immediate () = C.fg_256 70
 
 let kind () = C.fg_256 37
 
+let top_or_bottom_type () = C.fg_256 37
+
 let debuginfo () = C.fg_256 243
 
 let discriminant () = C.fg_256 111

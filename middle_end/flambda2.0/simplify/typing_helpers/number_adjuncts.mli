@@ -108,10 +108,6 @@ module type Boxable = sig
   val box : Flambda_type.t -> Flambda_type.t
 
   type naked_number_kind
-
-  val t_of_ty
-     : naked_number_kind Flambda_type.ty_naked_number
-    -> Flambda_type.t
 end
 
 module type Boxable_number_kind = sig

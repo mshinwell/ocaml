@@ -13,6 +13,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Byte sequence operations *)
+
+(* WARNING: Some functions in this file are duplicated in string.ml for
+   efficiency reasons. When you modify the one in this file you need to
+   modify its duplicate in string.ml.
+   These functions have a "duplicated" comment above their definition.
+*)
+
 external raise : exn -> 'a = "%raise"
 external raise_notrace : exn -> 'a = "%raise_notrace"
 external ( |> ) : 'a -> ('a -> 'b) -> 'b = "%revapply"
@@ -108,11 +116,6 @@ external int_of_string : string -> int = "caml_int_of_string"
 external string_get : string -> int -> char = "%string_safe_get"
 external float_of_string : string -> float = "caml_float_of_string"
 external sys_exit : int -> 'a = "caml_sys_exit"
-
-let failwith s = raise(Failure s)
-let invalid_arg s = raise(Invalid_argument s)
-
-(*
 external length : bytes -> int = "%bytes_length"
 external string_length : string -> int = "%string_length"
 external get : bytes -> int -> char = "%bytes_safe_get"
@@ -130,37 +133,12 @@ external unsafe_blit : bytes -> int -> bytes -> int -> int -> unit
 external unsafe_blit_string : string -> int -> bytes -> int -> int -> unit
                      = "caml_blit_string" [@@noalloc]
 
-let empty = create 0
-
-let trim s len =
-  let i = ref 0 in
-  while !i < len do
-    incr i
-  done;
-  let j = ref (len - 1) in
-  while !j >= !i do
-    decr j
-  done;
-  if !j >= !i then
-    s
-  else
-    empty
-*)
-
-type t =
- {mutable buffer : bytes;
-  mutable position : int;
-  mutable length : int;
-  initial_buffer : bytes}
-
-let [@inline never] resize _b _more = ()
-
-let [@inline always] add_substring b s offset len =
-  if b.position > b.length then resize b len;
-  b.position <- b.position
-
-let [@inline always] add_subbytes b s offset len =
-  add_substring b (Bytes.unsafe_to_string s) offset len
-
-let add_buffer b bs =
-  add_subbytes b bs.buffer 0 bs.position
+let extend s left right =
+  let invalid_arg s = raise(Invalid_argument s) in
+  let (++) a b =
+    match a < 0, b < 0 with
+    | true , true -> 42
+    | _ -> invalid_arg "foo"
+  in
+  let x = s ++ left ++ right in
+  if left < 0 then 0 else x

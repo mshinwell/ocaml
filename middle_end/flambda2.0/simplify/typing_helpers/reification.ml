@@ -60,7 +60,8 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
       Variable.print bound_to
   end;
   let lifted_constant =
-    Lifted_constant.create (Symbol.Map.singleton symbol ty)
+    Lifted_constant.create (DE.typing_env (DA.denv dacc))
+      (Symbol.Map.singleton symbol ty)
       (Singleton symbol)
       static_part
   in

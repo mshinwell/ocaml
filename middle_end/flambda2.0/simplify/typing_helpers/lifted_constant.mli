@@ -28,13 +28,15 @@ type t
 val print : Format.formatter -> t -> unit
 
 val create
-   : Flambda_type.t Symbol.Map.t
+   : Flambda_type.Typing_env.t
+  -> Flambda_type.t Symbol.Map.t
   -> 'k Flambda_static.Program_body.Bound_symbols.t
   -> 'k Flambda_static.Static_part.t
   -> t
 
 val create_from_static_structure
-   : Flambda_type.t Symbol.Map.t
+   : Flambda_type.Typing_env.t
+  -> Flambda_type.t Symbol.Map.t
   -> Flambda_static.Program_body.Static_structure.t
   -> t list
 

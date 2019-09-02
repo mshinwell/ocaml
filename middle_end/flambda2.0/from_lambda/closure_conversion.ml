@@ -806,7 +806,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   let field_vars =
     List.init size (fun pos ->
       let pos_str = string_of_int pos in
-      Variable.create ("block_field_" ^ pos_str), K.value)
+      Variable.create ("cv_field_" ^ pos_str), K.value)
   in
   (* For review, skip down to "let expr =" below, read the comment then
      come back here. *)
@@ -814,7 +814,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     let field_vars =
       List.init size (fun pos ->
         let pos_str = string_of_int pos in
-        pos, Variable.create ("block_field_" ^ pos_str))
+        pos, Variable.create ("field_" ^ pos_str))
     in
     let body : Expr.t =
       let fields = List.map (fun (_, var) -> Simple.var var) field_vars in

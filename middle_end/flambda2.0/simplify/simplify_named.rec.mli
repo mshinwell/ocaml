@@ -32,7 +32,7 @@ val simplify_set_of_closures0
   -> Flambda.Set_of_closures.t
   -> closure_bound_names:Name_in_binding_pos.t Closure_id.Map.t
   -> closure_elements:Simple.t Var_within_closure.Map.t
-  -> closure_element_types:Flambda_type.ty_value Var_within_closure.Map.t
+  -> closure_element_types:Flambda_type.t Var_within_closure.Map.t
   -> Flambda.Set_of_closures.t
        * Flambda_type.t Name_in_binding_pos.Map.t
        * Downwards_acc.t
@@ -42,4 +42,4 @@ val type_closure_elements_and_make_lifting_decision
   -> min_occurrence_kind:Name_occurrence_kind.t
   -> Flambda.Set_of_closures.t
   -> bool * Simple.t Var_within_closure.Map.t
-       * Flambda_type.ty_value Var_within_closure.Map.t
+       * Flambda_type.t Var_within_closure.Map.t

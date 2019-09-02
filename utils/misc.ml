@@ -276,6 +276,11 @@ module Stdlib = struct
   module List = struct
     type 'a t = 'a list
 
+    let is_singleton t =
+      match t with
+      | [_] -> true
+      | [] | _::_ -> false
+
     let rec compare cmp l1 l2 =
       match l1, l2 with
       | [], [] -> 0

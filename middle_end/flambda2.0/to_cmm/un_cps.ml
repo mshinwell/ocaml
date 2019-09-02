@@ -811,6 +811,11 @@ and wrap_exn env res e =
           ~dbg:Debuginfo.none
           ~body:res ~exn_var
           ~handler:(C.cexit id [C.var v])
+    (* CR mshinwell: This will need to support exception continuations
+       with any number of parameters (including zero).  For the moment I've
+       stopped the simplifier from deleting parameters of exception
+       continuations, but this will still go wrong if it adds some (e.g. as
+       a result of mutable variable conversion). *)
     | Inline ([v], h) ->
         let var = Kinded_parameter.var v in
         let env, exn_var = Env.create_variable env var in
@@ -819,9 +824,9 @@ and wrap_exn env res e =
     | Jump _
     | Inline _ ->
         Misc.fatal_errorf
-          "Continuation %a should have a single argument in@\n%a@\n%s"
-          Continuation.print k_exn Apply_expr.print e
-          "Exception continuation %a should take exactly one argument"
+          "Exception continuation %a should take exactly one argument:@ %a"
+          Continuation.print k_exn
+          Apply_expr.print e
   end
 
 and apply_cont env e =
@@ -1234,14 +1239,22 @@ let function_decl offsets fun_name _ d =
   let p = Function_declaration.params_and_body d in
   Function_params_and_body.pattern_match p
     ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
-        let args = function_args vars my_closure body in
-        let k_exn = Exn_continuation.exn_handler k_exn in
-        let env = Env.mk offsets k k_exn in
-        let env, fun_args = var_list env args in
-        let fun_body = expr env body in
-        let fun_flags = function_flags () in
-        C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
-      )
+        try
+          let args = function_args vars my_closure body in
+          let k_exn = Exn_continuation.exn_handler k_exn in
+          let env = Env.mk offsets k k_exn in
+          let env, fun_args = var_list env args in
+          let fun_body = expr env body in
+          let fun_flags = function_flags () in
+          C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
+        with Misc.Fatal_error ->
+          Format.eprintf "\n%sContext is:%s translating function %s to Cmm \
+              with body@ %a\n"
+            (Flambda_colours.error ())
+            (Flambda_colours.normal ())
+            fun_name
+            Expr.print body;
+          raise Misc.Fatal_error)
 
 (* Programs *)
 

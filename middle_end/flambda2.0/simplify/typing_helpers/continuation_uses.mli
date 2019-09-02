@@ -19,7 +19,7 @@
     corresponding argument types across the recorded uses; and the environment
     to be used for simplifying the continuation itself. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t
 
@@ -38,13 +38,12 @@ val add_use
   -> arg_types:Flambda_type.t list
   -> t
 
-val env_and_param_types
+val compute_handler_env
    : t
-  -> definition_typing_env:Flambda_type.Typing_env.t
+  -> definition_typing_env_with_params_defined:Flambda_type.Typing_env.t
+  -> params:Kinded_parameter.t list
   -> Continuation_env_and_param_types.t
 
 val number_of_uses : t -> int
 
 val arity : t -> Flambda_arity.t
-
-val cannot_change_continuation's_arity : t -> bool

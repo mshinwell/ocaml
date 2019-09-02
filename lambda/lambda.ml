@@ -231,6 +231,8 @@ let primitive_can_raise = function
   | Pbigstring_set_16 false
   | Pbigstring_set_32 false
   | Pbigstring_set_64 false
+  | Pdivbint { is_safe = Safe; _ }
+  | Pmodbint { is_safe = Safe; _ }
     (* CR mshinwell: some more need to go here too *)
     -> true
   | Pidentity

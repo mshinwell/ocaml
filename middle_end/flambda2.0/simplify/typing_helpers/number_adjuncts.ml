@@ -111,10 +111,6 @@ module type Boxable = sig
   val box : Flambda_type.t -> Flambda_type.t
 
   type naked_number_kind
-
-  val t_of_ty
-     : naked_number_kind Flambda_type.ty_naked_number
-    -> Flambda_type.t
 end
 
 module type Boxable_number_kind = sig
@@ -239,8 +235,6 @@ module For_floats : Boxable_number_kind = struct
     Named.create_simple (Simple.const (Naked_float f))
 
   type naked_number_kind = K.naked_float
-
-  let t_of_ty ty = T.of_ty_naked_number ty K.Naked_number.Naked_float
 end
 
 module For_int32s : Boxable_int_number_kind = struct
@@ -298,8 +292,6 @@ module For_int32s : Boxable_int_number_kind = struct
     Named.create_simple (Simple.const (Naked_int32 i))
 
   type naked_number_kind = K.naked_int32
-
-  let t_of_ty ty = T.of_ty_naked_number ty K.Naked_number.Naked_int32
 end
 
 module For_int64s : Boxable_int_number_kind = struct
@@ -357,8 +349,6 @@ module For_int64s : Boxable_int_number_kind = struct
     Named.create_simple (Simple.const (Naked_int64 i))
 
   type naked_number_kind = K.naked_int64
-
-  let t_of_ty ty = T.of_ty_naked_number ty K.Naked_number.Naked_int64
 end
 
 module For_nativeints : Boxable_int_number_kind = struct
@@ -416,6 +406,4 @@ module For_nativeints : Boxable_int_number_kind = struct
     Named.create_simple (Simple.const (Naked_nativeint i))
 
   type naked_number_kind = K.naked_nativeint
-
-  let t_of_ty ty = T.of_ty_naked_number ty K.Naked_number.Naked_nativeint
 end

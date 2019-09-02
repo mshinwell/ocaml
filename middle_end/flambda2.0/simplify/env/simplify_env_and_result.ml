@@ -198,6 +198,15 @@ end = struct
     else add_symbol t sym ty
 *)
 
+  let define_parameters t ~params =
+    List.fold_left (fun t param ->
+        let var =
+          Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
+        in
+        define_variable t var (KP.kind param))
+      t
+      params
+
   let add_parameters t params ~param_types =
     if List.compare_lengths params param_types <> 0 then begin
       Misc.fatal_errorf "Mismatch between number of [params] and \
@@ -220,15 +229,17 @@ end = struct
     add_parameters t params ~param_types
 
   let extend_typing_environment t env_extension =
-    let typing_env = TE.add_env_extension t.typing_env env_extension in
+    let typing_env = TE.add_env_extension t.typing_env ~env_extension in
     { t with
       typing_env;
     }
 
-  let with_typing_environment t typing_env =
+  let with_typing_env t typing_env =
     { t with
       typing_env;
     }
+
+  let map_typing_env t ~f = with_typing_env t (f t.typing_env)
 
   let check_variable_is_bound t var =
     if not (TE.mem t.typing_env (Name.var var)) then begin
@@ -270,18 +281,18 @@ end = struct
       can_inline = false;
     }
 
-  let add_lifted_constants t lifted =
+  let add_lifted_constants t ~lifted =
     let typing_env =
       List.fold_left (fun typing_env lifted_constant ->
           Lifted_constant.introduce lifted_constant typing_env)
         (typing_env t)
         lifted
     in
-    with_typing_environment t typing_env
+    with_typing_env t typing_env
 
   (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
   let add_lifted_constants_from_r t r =
-    add_lifted_constants t (Result.get_lifted_constants r)
+    add_lifted_constants t ~lifted:(Result.get_lifted_constants r)
 end and Upwards_env : sig
   include Simplify_env_and_result_intf.Upwards_env
     with type downwards_env := Downwards_env.t

@@ -63,7 +63,7 @@ let inline dacc ~callee ~args function_decl
         match typing_env with
         | Bottom -> dacc, Expr.create_invalid ()
         | Ok typing_env ->
-          let denv = DE.with_typing_environment denv typing_env in
+          let denv = DE.with_typing_env denv typing_env in
           let denv =
             DE.set_inlining_depth_increment
               (DE.add_inlined_debuginfo denv dbg)

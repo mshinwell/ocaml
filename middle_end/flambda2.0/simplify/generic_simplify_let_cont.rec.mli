@@ -42,11 +42,9 @@ module Make (Continuation_handler_like : Continuation_handler_like_intf.S) : sig
     -> simplify_body:'body simplify_body
     -> body:'body
     -> simplify_continuation_handler_like:(Downwards_acc.t
-      -> param_types:Flambda_type.t list
       -> extra_params_and_args:Continuation_extra_params_and_args.t
-      -> cannot_change_arity:bool
       -> Continuation.t
-      -> Continuation_handler_like.t
+      -> Continuation_handler_like.Opened.t
       -> (Continuation_uses_env.t
         -> Simplify_env_and_result.Result.t
         -> ('a * Upwards_acc.t))
