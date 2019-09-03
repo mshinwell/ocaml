@@ -722,3 +722,6 @@ let join ?bound_name env t1 t2 =
       TEE.print env_extension
   end;
   joined
+
+let make_suitable_for_environment t env =
+  ...

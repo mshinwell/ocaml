@@ -96,9 +96,11 @@ end) = struct
            It should return:
            (a) a new type
            (b) a list of irrelevant variables to be bound to Unknown
-           such that the free varibles in the returned type do not exceed
+           such that the free variables in the returned type do not exceed
            the allowed set.  The permutations to the irrelevant vars will be
            applied by this function.
+           In fact, it could maybe take an env and return an augmented one
+           instead of (b).
       *)
       delayed_allowed_vars : allowed list;
       (* [delayed_allowed_vars] entries are always applied after the
@@ -454,4 +456,81 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
     match descr t with
     | Equals alias -> Some alias
     | No_alias _ | Type _ -> None
+
+  let make_suitable_for_environment t env =
+    let free_vars = Name_occurrences.variables (free_names t) in
+    if Variable.Set.is_empty free_vars then t, env
+    else
+      let allowed = Typing_env.var_domain env in
+      let to_erase = Variable.Set.diff free_vars allowed in
+      if Variable.Set.is_empty to_erase then t, env
+      else
+        let env, perm =
+          Variable.Set.fold (fun to_erase (env, perm) ->
+              let fresh_var = Variable.rename to_erase in
+              let fresh_var_name = Name.var fresh_var in
+              let env =
+                let kind = Typing_env.find_kind env to_erase in
+                let name =
+                  Name_in_binding_pos.create fresh_var_name
+                    Name_occurrence_kind.in_types
+                in
+                Typing_env.add_definition env name kind
+              in
+              let canonical_simple =
+                Typing_env.get_canonical_simple env
+                  ~min_occurrence_kind:Name_occurrence_kind.in_types
+                  (Simple.var to_erase)
+              in
+              let env =
+                match Typing_env.find_simple_opt env canonical_simple with
+                | None -> env
+                | Some simple ->
+                  if not (Simple.allowed simple ~allowed) then env
+                  else
+                    let ty = T.alias_type_of simple kind in
+                    Typing_env.add_equation env fresh_var_name ty
+              in
+              let perm =
+                Name_permutation.add_variable perm to_erase fresh_var
+              in
+              env, perm)
+            to_erase
+            (env, Name_permutation.empty)
+        in
+        let t = apply_name_permutation perm t in
+        env, t
+
+
+    match descr t with
+    | No_alias head ->
+      let head' =
+        Or_unknown_or_bottom.map_sharing head
+          ~f:(fun head -> Head.erase_aliases head env ~allowed)
+      in
+      if head == head' then descr
+      else No_alias head'
+    | Type _ -> descr
+    | Equals simple ->
+      let canonical_simple =
+        Typing_env.get_canonical_simple env
+          ~min_occurrence_kind:Name_occurrence_kind.in_types
+          simple
+      in
+      match canonical_simple with
+      | Bottom -> No_alias Bottom
+      | Ok None -> (* CR mshinwell: Can this happen? *)
+        Misc.fatal_errorf "No canonical simple for %a"
+          Simple.print simple
+      | Ok (Some simple) ->
+        if Simple.allowed simple ~allowed then Equals simple
+        else
+          let head =
+            Typing_env.expand_head_from_descr env
+              ~force_to_kind:Head.force_to_kind
+              ~print:Head.print
+              ~apply_rec_info:Head.apply_rec_info
+              descr
+          in
+          No_alias (Head.erase_aliases head env ~allowed))
 end
