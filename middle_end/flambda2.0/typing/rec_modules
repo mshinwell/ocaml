@@ -13,9 +13,8 @@ derived_structures/types_by_var_within_closure.rec.ml
 env/typing_env_extension.rec.ml
 env/typing_env_level.rec.ml
 env/typing_env.rec.ml
-equality/type_equality_env.rec.ml
-meet_and_join/lattice_ops.rec.ml
-meet_and_join/meet_env.rec.ml
-structures/product.rec.ml
-structures/row_like.rec.ml
-structures/trivial_row_like.rec.ml
+env/meet_env.rec.ml
+generic_structures/lattice_ops.rec.ml
+generic_structures/product.rec.ml
+generic_structures/row_like.rec.ml
+generic_structures/trivial_row_like.rec.ml

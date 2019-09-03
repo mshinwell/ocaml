@@ -18,6 +18,42 @@
 
 (* Descriptions of types of a particular kind. *)
 
+(*
+  spec_intf:
+  type flambda_type
+  type 'a ty
+  type meet_env
+  type typing_env_extension
+  type of_kind_foo
+
+  val kind : Flambda_kind.t
+
+  val to_type : of_kind_foo ty -> flambda_type
+
+  val force_to_kind : flambda_type -> of_kind_foo ty
+
+  (* CR mshinwell: Rename to [print_ty_with_cache]. *)
+  val print_ty
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> of_kind_foo ty
+    -> unit
+
+  val apply_rec_info : of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t
+
+  val meet_or_join_of_kind_foo
+     : meet_env
+    -> meet_or_join_ty:
+         (?bound_name:Name.t
+      -> meet_env
+      -> of_kind_foo ty
+      -> of_kind_foo ty
+      -> (of_kind_foo ty * typing_env_extension) Or_bottom.t)
+    -> of_kind_foo
+    -> of_kind_foo
+    -> (of_kind_foo * typing_env_extension) Or_bottom_or_absorbing.t
+*)
+
 module Make (Head : sig
   include Contains_names.S
 
