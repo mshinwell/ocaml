@@ -57,38 +57,44 @@
 module Make (Head : sig
   include Contains_names.S
 
-  module Make_meet_or_join (E : Lattice_ops_intf.S) : sig
+  module Make_meet_or_join (E : Lattice_ops_intf.S
+    with type meet_env = Meet_env.t
+    with type typing_env_extension = Typing_env_extension.t)
+  : sig
     val meet_or_join
-       : E.meet_env
+       : Meet_env.t
       -> t
       -> t
-      -> (t * E.typing_env_extension) Or_bottom_or_absorbing.t
+      -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
   end
 
+  val force_to_kind : Type_grammar.t -> t
   val erase_aliases : t -> allowed:Variable.Set.t -> t
-
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 end) : sig
-  type descr = private
-    | No_alias of Head.t Or_unknown_or_bottom.t
-      (** For each kind there is a lattice of types.
-          Unknown = "Any value can flow to this point": the top element.
-          Bottom = "No value can flow to this point": the least element.
-      *)
-    | Equals of Simple.t
-    | Type of Export_id.t
+  module Descr : sig
+    type t = private
+      | No_alias of Head.t Or_unknown_or_bottom.t
+        (** For each kind there is a lattice of types.
+            Unknown = "Any value can flow to this point": the top element.
+            Bottom = "No value can flow to this point": the least element.
+        *)
+      | Equals of Simple.t
+      | Type of Export_id.t
+  end
 
   type t
 
   val create_no_alias : Head.t Or_unknown_or_bottom.t -> t
-  val create : Head.t -> t
   val create_equals : Simple.t -> t
   val create_type : Export_id.t -> t
+
+  val create : Head.t -> t
 
   val unknown : t
   val bottom : t
 
-  val descr : t -> descr
+  val descr : t -> Descr.t
 
   val get_alias : t -> Simple.t option
 

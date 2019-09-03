@@ -18,16 +18,58 @@
 
 module Make (Head : sig
   include Contains_names.S
-  val erase_aliases : t -> allowed:Variable.Set.t -> t
+
+  module Make_meet_or_join (E : Lattice_ops_intf.S
+    with type meet_env = Meet_env.t
+    with type typing_env_extension = Typing_env_extension.t)
+  : sig
+    val meet_or_join
+       : Meet_env.t
+      -> t
+      -> t
+      -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
+  end
+
+  val force_to_kind : Type_grammar.t -> t
+  val erase_aliases : t -> Typing_env.t -> allowed:Variable.Set.t -> t
+  val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 end) = struct
-  type descr =
-    | No_alias of Head.t Or_unknown_or_bottom.t
-    | Equals of Simple.t
-    | Type of Export_id.t
+  module Descr = struct
+    type t =
+      | No_alias of Head.t Or_unknown_or_bottom.t
+      | Equals of Simple.t
+      | Type of Export_id.t
+
+    let print ppf t =
+      match t with
+      | No_alias Unknown ->
+        if !Clflags.flambda2_unicode then
+          Format.fprintf ppf "%s\u{22a4}%s" colour (Flambda_colours.normal ())
+        else
+          Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())
+      | No_alias Bottom ->
+        if !Clflags.flambda2_unicode then
+          Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
+        else
+          Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
+      | No_alias (Ok head) -> Head.print ppf head
+      | Equals simple ->
+        Format.fprintf ppf "@[(%s=%s %a)@]"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Simple.print simple
+      | Type export_id ->
+        Format.fprintf ppf "@[(%s=export_id%s %a)@]"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Export_id.print export_id
+  end
 
   module T : sig
     (* This signature ensures that we don't accidentally fail to apply the
-       delayed permutation and/or allowed variables set. *)
+       delayed permutation and/or allowed variables set (or break their
+       invariants). *)
+    (* CR mshinwell: Do the same in [Expr]. *)
 
     type t
 
@@ -35,22 +77,39 @@ end) = struct
     val create_equals : Simple.t -> t
     val create_type : Export_id.t -> t
 
-    val descr : t -> descr
+    val descr : t -> Descr.t
 
     include Contains_names.S with type t := t
   end = struct
+    type allowed = {
+      env : Typing_env.t;
+      allowed : Variable.Set.t;
+    }
+
     type t = {
-      descr : descr;
+      descr : Descr.t;
       delayed_permutation : Name_permutation.t;
-      delayed_allowed_vars : Variable.Set.t;
-      (* [delayed_allowed_vars] is always applied after the
-         [delayed_permutation]. *)
+      (* To remove allowed_vars:
+
+         - Add free_names here so it's quick to calculate
+         - Add a function that takes a type and the allowed variables.
+           It should return:
+           (a) a new type
+           (b) a list of irrelevant variables to be bound to Unknown
+           such that the free varibles in the returned type do not exceed
+           the allowed set.  The permutations to the irrelevant vars will be
+           applied by this function.
+      *)
+      delayed_allowed_vars : allowed list;
+      (* [delayed_allowed_vars] entries are always applied after the
+         [delayed_permutation].  The entry at the start of the list is
+         applied last. *)
     }
 
     let create descr =
       { descr;
         delayed_permutation = Name_permutation.empty;
-        delayed_allowed_vars = Variable.Set.empty;
+        delayed_allowed_vars = [];
       }
 
     let create_no_alias head = create (No_alias head)
@@ -76,116 +135,80 @@ end) = struct
             else Equals simple'
           | Type _ -> t.descr
       in
-      let allowed = t.delayed_allowed_vars in
-      if Variable.Set.is_empty allowed then descr
-      else
-        match descr with
-        | No_alias head ->
-          let head' =
-            Or_unknown_or_bottom.map_sharing head
-              ~f:(fun head -> Head.erase_aliases head ~allowed)
-          in
-          if head == head' then descr
-          else No_alias head'
-        | Equals simple ->
-          begin match Simple.must_be_var simple with
-          | None -> descr
-          | Some var ->
-            if Variable.Set.mem var allowed then descr
-            else No_alias Unknown
-          end
-        | Type _ -> descr
+      match t.delayed_allowed_vars with
+      | [] -> descr
+      | allowed ->
+        List.fold_left (fun { env; allowed; } descr ->
+            match descr with
+            | No_alias head ->
+              let head' =
+                Or_unknown_or_bottom.map_sharing head
+                  ~f:(fun head -> Head.erase_aliases head env ~allowed)
+              in
+              if head == head' then descr
+              else No_alias head'
+            | Type _ -> descr
+            | Equals simple ->
+              let canonical_simple =
+                Typing_env.get_canonical_simple env
+                  ~min_occurrence_kind:Name_occurrence_kind.in_types
+                  simple
+              in
+              match canonical_simple with
+              | Bottom -> No_alias Bottom
+              | Ok None -> (* CR mshinwell: Can this happen? *)
+                Misc.fatal_errorf "No canonical simple for %a"
+                  Simple.print simple
+              | Ok (Some simple) ->
+                if Simple.allowed simple ~allowed then Equals simple
+                else
+                  let head =
+                    Typing_env.expand_head_from_descr env
+                      ~force_to_kind:Head.force_to_kind
+                      ~print:Head.print
+                      ~apply_rec_info:Head.apply_rec_info
+                      descr
+                  in
+                  No_alias (Head.erase_aliases head env ~allowed))
+          descr
+          (List.rev allowed)
+
+    let apply_name_permutation t perm =
+      let delayed_permutation =
+        Name_permutation.compose ~second:perm ~first:t.delayed_permutation
+      in
+      let delayed_allowed_vars =
+        List.map (fun { env; allowed; } ->
+            let allowed = Name_permutation.apply_variable_set perm allowed in
+            { env; allowed; })
+          t.delayed_allowed_vars
+      in
+      { t with
+        delayed_permutation;
+        delayed_allowed_vars;
+      }
+
+    let erase_aliases t env ~allowed =
+      let delayed_allowed_vars = { env; allowed; } :: t.delayed_allowed_vars in
+      { t with delayed_allowed_vars; }
   end
 
   include T
 
+  let print ppf t = Descr.print ppf (descr t)
+
   let create head = create_no_alias (Ok head)
-  
-  let print_or_alias print_descr ppf (or_alias : _ Type_grammar.or_alias) =
-    match or_alias with
-    | No_alias descr -> print_descr ppf descr
-    | Equals simple ->
-      Format.fprintf ppf "@[(%s=%s %a)@]"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Simple.print simple
-    | Type export_id ->
-      Format.fprintf ppf "@[(%s=export_id%s %a)@]"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Export_id.print export_id
-
-  let print_unknown_or_join print_contents ppf
-        (o : _ Type_grammar.unknown_or_join) =
-    let colour = Flambda_colours.error () in
-    match o with
-    | Unknown ->
-      if !Config.flambda2_unicode then
-        Format.fprintf ppf "%s\u{22a4}%s" colour (Flambda_colours.normal ())
-      else
-        Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())
-    | Bottom ->
-      if unicode then
-        Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
-      else
-        Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
-    | Ok contents -> print_contents ppf contents
-
-  let apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
-        (unknown_or_join : _ Type_grammar.unknown_or_join) perm
-        : _ Type_grammar.unknown_or_join =
-    match unknown_or_join with
-    | Unknown | Bottom -> unknown_or_join
-    | Ok of_kind_foo ->
-      let of_kind_foo' = apply_name_permutation_of_kind_foo of_kind_foo perm in
-      if of_kind_foo == of_kind_foo' then unknown_or_join
-      else Ok of_kind_foo'
-  
-  let apply_name_permutation_ty apply_name_permutation_of_kind_foo
-        (ty : _ Type_grammar.ty) perm
-        : _ Type_grammar.ty =
-    match ty with
-    | No_alias unknown_or_join ->
-      let unknown_or_join' =
-        apply_name_permutation_unknown_or_join apply_name_permutation_of_kind_foo
-          unknown_or_join perm
-      in
-      if unknown_or_join == unknown_or_join' then ty
-      else No_alias unknown_or_join'
-    | Type _ -> ty
-    | Equals simple ->
-      let simple' = Simple.apply_name_permutation simple perm in
-      if simple == simple' then ty
-      else Equals simple'
-
-  let apply_name_permutation t perm =
-
 
   let free_names t =
+    match descr t with
+    | No_alias Bottom | No_alias Unknown -> Name_occurrences.empty
+    | No_alias ok -> Head.free_names ok
+    | Equals simple -> Simple.free_names simple
+    | Type _ -> Name_occurrences.empty
 
+ 
 
-  let erase_aliases_unknown_or_join erase_aliases_contents env ~bound_name
-        ~already_seen ~allowed (o : _ Type_grammar.unknown_or_join)
-        : _ Type_grammar.unknown_or_join =
-    match o with
-    | Unknown | Bottom -> o
-    | Ok contents ->
-      let contents' =
-        erase_aliases_contents env ~bound_name ~already_seen
-          ~allowed contents
-      in
-      if contents == contents' then o
-      else Ok contents'
-
-
-    let delayed_allowed_vars =
-    Variable.Set.inter allowed t.delayed_allowed_vars
-  in
-  { t with
-    delayed_allowed_vars;
-  }
-  (* CR mshinwell: [bound_name] may be unused *)
-  
+ 
   let erase_aliases_ty env ~bound_name ~already_seen
         ~allowed erase_aliases_of_kind_foo
         ~force_to_kind ~print_ty ~apply_rec_info
@@ -200,38 +223,6 @@ end) = struct
       else No_alias unknown_or_join'
     | Type _export_id -> ty
     | Equals simple ->
-      (* First of all, make sure we're not going around in a loop, which can
-         happen for closure or set-of-closures recursive types.
-         Then try to find an alias that's in the [allowed] set and is eligible
-         to appear in types.
-         If that fails, expand the head of the type, and then recursively erase
-         aliases on the result (returning a non-alias type). *)
-      let canonical_simple =
-        Typing_env.get_canonical_simple env
-          ~min_occurrence_kind:Name_occurrence_kind.in_types
-          simple
-      in
-      match canonical_simple with
-      | Bottom -> No_alias Bottom
-      | Ok None -> (* CR mshinwell: Can this happen? *)
-        Misc.fatal_errorf "No canonical simple for %a" Simple.print simple
-      | Ok (Some simple) ->
-  (*
-  Format.eprintf "checking canonical simple %a.  allowed? %b  mem? %b\n%!"
-    Simple.print simple
-    (Simple.allowed simple ~allowed)
-    (Simple.Set.mem simple already_seen);
-  *)
-        if Simple.allowed simple ~allowed then Equals simple
-        else if Simple.Set.mem simple already_seen then No_alias Unknown
-        else
-          let unknown_or_join =
-            Typing_env.expand_head_ty env ~force_to_kind ~print_ty ~apply_rec_info
-              ty
-          in
-          let already_seen = Simple.Set.add simple already_seen in
-          No_alias (erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
-            ~bound_name ~already_seen ~allowed unknown_or_join)
   
   let apply_rec_info_ty (type of_kind_foo)
         (apply_rec_info_of_kind_foo :

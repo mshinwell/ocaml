@@ -357,6 +357,8 @@ let o3_arguments = {
   inline_toplevel_threshold = Some (50 * inline_toplevel_multiplier);
 }
 
+let flambda2_unicode = ref true
+
 let all_passes = ref []
 let dumped_passes_list = ref []
 let dumped_pass s =
