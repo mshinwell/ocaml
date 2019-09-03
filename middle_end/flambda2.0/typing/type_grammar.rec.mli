@@ -19,7 +19,7 @@
 (** The definition of types together with their constructors and operations
     upon them. *)
 
-type t =
+type t = private
   | Value of Type_of_kind_value.t
   | Naked_immediate of Type_of_kind_naked_immediate.t
   | Naked_float of Type_of_kind_naked_float.t
@@ -44,31 +44,30 @@ val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 (** Least upper bound of two types. *)
 val join : ?bound_name:Name.t -> Typing_env.t -> t -> t -> t
 
-val get_alias : Type_grammar.t -> Simple.t option
+val get_alias : t -> Simple.t option
 
-val is_obviously_bottom : Type_grammar.t -> bool
+val is_obviously_bottom : t -> bool
 
 val bottom : Flambda_kind.t -> t
 val bottom_like : t -> t
 
 val unknown : Flambda_kind.t -> t
 val unknown_like : t -> t
-val unknown_as_ty_fabricated : unit -> Type_of_kind_fabricated.t
 
-val any_value : unit -> t
+val any_value : t
 
-val any_fabricated : unit -> t
+val any_fabricated : t
 
-val any_tagged_immediate : unit -> t
-val any_tagged_bool : unit -> t
+val any_tagged_immediate : t
+val any_tagged_bool : t
 
-val any_boxed_float : unit -> t
-val any_boxed_int32 : unit -> t
-val any_boxed_int64 : unit -> t
-val any_boxed_nativeint : unit -> t
+val any_boxed_float : t
+val any_boxed_int32 : t
+val any_boxed_int64 : t
+val any_boxed_nativeint : t
 
-val any_naked_immediate : unit -> t
-val any_naked_float : unit -> t
+val any_naked_immediate : t
+val any_naked_float : t
 
 val this_tagged_immediate : Immediate.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
@@ -106,10 +105,10 @@ val boxed_int32_alias_to : naked_int32:Variable.t -> t
 val boxed_int64_alias_to : naked_int64:Variable.t -> t
 val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> t
 
-val box_float : Type_grammar.t -> t
-val box_int32 : Type_grammar.t -> t
-val box_int64 : Type_grammar.t -> t
-val box_nativeint : Type_grammar.t -> t
+val box_float : t -> t
+val box_int32 : t -> t
+val box_int64 : t -> t
+val box_nativeint : t -> t
 
 val this_discriminant : Discriminant.t -> t
 val this_discriminant_without_alias : Discriminant.t -> t
@@ -134,18 +133,17 @@ val kind_for_const : Simple.Const.t -> Flambda_kind.t
 val create_inlinable_function_declaration
    : Term_language_function_declaration.t
   -> Rec_info.t
-  -> Closures_entry.function_declaration
+  -> Function_declaration_type.t
 
 val create_non_inlinable_function_declaration
    : param_arity:Flambda_arity.t
   -> result_arity:Flambda_arity.t
   -> recursive:Recursive.t
-  -> Closures_entry.function_declaration
+  -> Function_declaration_type.t
 
 val exactly_this_closure
    : Closure_id.t
-  -> all_function_decls_in_set:
-       Type_grammar.function_declaration Closure_id.Map.t
+  -> all_function_decls_in_set:Function_declaration_type.t Closure_id.Map.t
   -> all_closures_in_set:t Closure_id.Map.t
   -> all_closure_vars_in_set:Type_of_kind_value.t Var_within_closure.Map.t
   -> t
@@ -160,37 +158,16 @@ val closure_with_at_least_this_closure_var
   -> closure_element_var:Variable.t
   -> t
 
-val array_of_length : length:Type_grammar.ty_value -> t
+val array_of_length : length:ty_value -> t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
-val kind : Type_grammar.t -> Flambda_kind.t
+val kind : t -> Flambda_kind.t
 
-val force_to_kind_value : Type_grammar.t -> Type_grammar.ty_value
-
-val force_to_kind_naked_number
-   : 'kind Flambda_kind.Naked_number.t
-  -> t
-  -> 'kind Type_grammar.ty_naked_number
-
-val force_to_kind_naked_float
-   : Type_grammar.t
-  -> Flambda_kind.naked_float Type_grammar.ty_naked_number
-
-val force_to_kind_naked_int32
-   : Type_grammar.t
-  -> Flambda_kind.naked_int32 Type_grammar.ty_naked_number
-
-val force_to_kind_naked_int64
-   : Type_grammar.t
-  -> Flambda_kind.naked_int64 Type_grammar.ty_naked_number
-
-val force_to_kind_naked_nativeint
-   : Type_grammar.t
-  -> Flambda_kind.naked_nativeint Type_grammar.ty_naked_number
-
-val force_to_kind_naked_immediate
-   : Type_grammar.t
-  -> Flambda_kind.naked_immediate Type_grammar.ty_naked_number
-
-val force_to_kind_fabricated : Type_grammar.t -> Type_grammar.ty_fabricated
+val force_to_kind_value : t -> Type_of_kind_value.t
+val force_to_kind_naked_immediate : t -> Type_of_kind_naked_immediate.t
+val force_to_kind_naked_float : t -> Type_of_kind_naked_float.t
+val force_to_kind_naked_int32 : t -> Type_of_kind_naked_int32.t
+val force_to_kind_naked_int64 : t -> Type_of_kind_naked_int64.t
+val force_to_kind_naked_nativeint : t -> Type_of_kind_naked_nativeint.t
+val force_to_kind_fabricated : t -> Type_of_kind_fabricated.t

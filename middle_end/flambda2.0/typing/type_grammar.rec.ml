@@ -278,11 +278,11 @@ let bottom (kind : K.t) =
 let bottom_like t = bottom (kind t)
 
 let any_value = Value T_V.unknown
-let any_naked_immediate = Naked_immediate T_NI.any
+let any_naked_immediate = Naked_immediate T_NI.unknown
 let any_naked_float = Naked_float T_Nf.unknown
 let any_naked_int32 = Naked_int32 T_N32.unknown
 let any_naked_int64 = Naked_int64 T_N64.unknown
-let any_naked_nativeint = Naked_nativeint T_NN.any
+let any_naked_nativeint = Naked_nativeint T_NN.unknown
 let any_fabricated = Fabricated T_F.unknown
 
 let unknown (kind : K.t) =
@@ -404,7 +404,7 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
-let any_tagged_immediate () : t =
+let any_tagged_immediate : t =
   Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
     immediates = Unknown;
     blocks = Known (Blocks.create_bottom ());
@@ -452,12 +452,7 @@ let these_discriminants discrs =
 let this_discriminant_without_alias discr : t =
   these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
 
-let any_tagged_bool () =
-  let bools =
-    Immediate.Set.add Immediate.bool_false
-      (Immediate.Set.add Immediate.bool_true Immediate.Set.empty)
-  in
-  these_tagged_immediates bools
+let any_tagged_bool = these_tagged_immediates Immediate.all_bools
 
 let this_boxed_float f = box_float (this_naked_float f)
 let this_boxed_int32 i = box_int32 (this_naked_int32 i)
@@ -470,20 +465,17 @@ let these_boxed_int64s is = box_int64 (these_naked_int64s is)
 let these_boxed_nativeints is = box_nativeint (these_naked_nativeints is)
 
 let boxed_float_alias_to ~naked_float =
-  box_float (Naked_float (
-    Type_of_kind_naked_float.create_equals (Simple.var naked_float)))
+  box_float (Naked_float (T_NF.create_equals (Simple.var naked_float)))
 
 let boxed_int32_alias_to ~naked_int32 =
-  box_int32 (Naked_int32 (
-    Type_of_kind_naked_int32.create_equals (Simple.var naked_int32)))
+  box_int32 (Naked_int32 (T_N32.create_equals (Simple.var naked_int32)))
 
 let boxed_int64_alias_to ~naked_int64 =
-  box_int64 (Naked_int64 (
-    Type_of_kind_naked_int64.create_equals (Simple.var naked_int64)))
+  box_int64 (Naked_int64 (T_N64.create_equals (Simple.var naked_int64)))
 
 let boxed_nativeint_alias_to ~naked_nativeint =
   box_nativeint (Naked_nativeint (
-    Type_of_kind_naked_nativeint.create_equals (Simple.var naked_nativeint)))
+    T.NN.create_equals (Simple.var naked_nativeint)))
 
 let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
@@ -665,82 +657,59 @@ let type_for_const (const : Simple.Const.t) =
 
 let kind_for_const const = kind (type_for_const const)
 
-(* The following was Meet_or_join: *)
+module Make_meet_and_join
+  (E : Lattice_ops_intf.S
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
+struct
+  let meet_or_join ?bound_name env t1 t2 =
+    match t1, t2 with
+    | Value ty1, Value ty2 ->
+      begin match T_V.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Value ty, env_extension
+      | Bottom -> bottom_value, TEE.empty ()
+      end
+    | Naked_immediate ty1, Naked_immediate ty2 ->
+      begin match T_NI.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
+      | Bottom -> bottom_naked_immediate, TEE.empty ()
+      end
+    | Naked_float ty1, Naked_float ty2 ->
+      begin match T_Nf.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Naked_float ty, env_extension
+      | Bottom -> bottom_naked_float, TEE.empty ()
+      end
+    | Naked_int32 ty1, Naked_int32 ty2 ->
+      begin match T_N32.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
+      | Bottom -> bottom_naked_int32, TEE.empty ()
+      end
+    | Naked_int64 ty1, Naked_int64 ty2 ->
+      begin match T_N64.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
+      | Bottom -> bottom_naked_int64, TEE.empty ()
+      end
+    | Naked_nativeint ty1, Naked_nativeint ty2 ->
+      begin match T_NN.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
+      | Bottom -> bottom_naked_nativeint, TEE.empty ()
+      end
+    | Fabricated ty1, Fabricated ty2 ->
+      begin match T_F.meet_or_join ?bound_name env ty1 ty2 with
+      | Ok (ty, env_extension) -> Fabricated ty, env_extension
+      | Bottom -> bottom_fabricated, TEE.empty ()
+      end
+    | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+        | Naked_int64 _ | Naked_nativeint _ | Fabricated _), _ ->
+      Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
+        (E.name ())
+        print t1
+        print t2
+end
 
-(* First specialise generic meet-and-join code to either meet or join. *)
-module Of_kind_value = Meet_and_join_value.Make (E)
-module Of_kind_naked_immediate = Meet_and_join_naked_immediate.Make (E)
-module Of_kind_naked_float = Meet_and_join_naked_float.Make (E)
-module Of_kind_naked_int32 = Meet_and_join_naked_int32.Make (E)
-module Of_kind_naked_int64 = Meet_and_join_naked_int64.Make (E)
-module Of_kind_naked_nativeint = Meet_and_join_naked_nativeint.Make (E)
-module Of_kind_fabricated = Meet_and_join_fabricated.Make (E)
-
-(* Next lift the meet or join operations from "of_kind_..." to "ty_...". *)
-module Value = KI.Make (E) (Of_kind_value)
-module Naked_immediate = KI.Make (E) (Of_kind_naked_immediate)
-module Naked_float = KI.Make (E) (Of_kind_naked_float)
-module Naked_int32 = KI.Make (E) (Of_kind_naked_int32)
-module Naked_int64 = KI.Make (E) (Of_kind_naked_int64)
-module Naked_nativeint = KI.Make (E) (Of_kind_naked_nativeint)
-module Fabricated = KI.Make (E) (Of_kind_fabricated)
-
-(* This function then lifts the meet or join operation from "ty_..." to
-   Flambda types. *)
-let meet_or_join ?bound_name env (t1 : T.t) (t2 : T.t) : T.t * _ =
-  match t1, t2 with
-  | Value ty1, Value ty2 ->
-    begin match Value.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) -> Value ty, env_extension
-    | Bottom -> Basic_type_ops.bottom K.value, TEE.empty ()
-    end
-  | Naked_number (ty1, Naked_immediate),
-      Naked_number (ty2, Naked_immediate) ->
-    begin match Naked_immediate.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) ->
-      Naked_number (ty, Naked_immediate), env_extension
-    | Bottom -> Basic_type_ops.bottom K.naked_immediate, TEE.empty ()
-    end
-  | Naked_number (ty1, Naked_float), Naked_number (ty2, Naked_float) ->
-    begin match Naked_float.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) ->
-      Naked_number (ty, Naked_float), env_extension
-    | Bottom -> Basic_type_ops.bottom K.naked_float, TEE.empty ()
-    end
-  | Naked_number (ty1, Naked_int32), Naked_number (ty2, Naked_int32) ->
-    begin match Naked_int32.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) ->
-      Naked_number (ty, Naked_int32), env_extension
-    | Bottom -> Basic_type_ops.bottom K.naked_int32, TEE.empty ()
-    end
-  | Naked_number (ty1, Naked_int64), Naked_number (ty2, Naked_int64) ->
-    begin match Naked_int64.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) ->
-      Naked_number (ty, Naked_int64), env_extension
-    | Bottom -> Basic_type_ops.bottom K.naked_int64, TEE.empty ()
-    end
-  | Naked_number (ty1, Naked_nativeint),
-      Naked_number (ty2, Naked_nativeint) ->
-    begin match Naked_nativeint.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) ->
-      Naked_number (ty, Naked_nativeint), env_extension
-    | Bottom -> Basic_type_ops.bottom K.naked_nativeint, TEE.empty ()
-    end
-  | Fabricated ty1, Fabricated ty2 ->
-    begin match Fabricated.meet_or_join_ty ?bound_name env ty1 ty2 with
-    | Ok (ty, env_extension) -> Fabricated ty, env_extension
-    | Bottom -> Basic_type_ops.bottom K.fabricated, TEE.empty ()
-    end
-  | (Value _ | Naked_number _ | Fabricated _), _ ->
-    Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
-      (E.name ())
-      Type_printers.print t1
-      Type_printers.print t2
-
-(* ---- *)
-
-module Meet = Meet_or_join.Make (Lattice_ops.For_meet)
-module Join = Meet_or_join.Make (Lattice_ops.For_join)
+module Meet = Make_meet_or_join (Lattice_ops.For_meet)
+module Join = Make_meet_or_join (Lattice_ops.For_join)
 
 let meet env t1 t2 = Meet.meet_or_join env t1 t2
 

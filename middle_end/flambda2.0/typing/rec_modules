@@ -8,6 +8,7 @@ derived_structures/blocks.rec.ml
 derived_structures/closures_entry.rec.ml
 derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
 derived_structures/discriminants.rec.ml
+derived_structures/function_declaration_type.rec.ml
 derived_structures/immediates.rec.ml
 derived_structures/types_by_closure_id.rec.ml
 derived_structures/types_by_var_within_closure.rec.ml
