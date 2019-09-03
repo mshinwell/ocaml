@@ -171,3 +171,9 @@ val force_to_kind_naked_int32 : t -> Type_of_kind_naked_int32.t
 val force_to_kind_naked_int64 : t -> Type_of_kind_naked_int64.t
 val force_to_kind_naked_nativeint : t -> Type_of_kind_naked_nativeint.t
 val force_to_kind_fabricated : t -> Type_of_kind_fabricated.t
+
+val make_suitable_for_environment
+   : t
+  -> Typing_env.t
+  -> suitable_for:Typing_env.t
+  -> t * Typing_env.t

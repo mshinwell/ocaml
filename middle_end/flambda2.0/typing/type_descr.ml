@@ -31,7 +31,6 @@ module Make (Head : sig
   end
 
   val force_to_kind : Type_grammar.t -> t
-  val erase_aliases : t -> Typing_env.t -> allowed:Variable.Set.t -> t
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 end) = struct
   module Descr = struct
@@ -63,175 +62,51 @@ end) = struct
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Export_id.print export_id
-  end
-
-  module T : sig
-    (* This signature ensures that we don't accidentally fail to apply the
-       delayed permutation and/or allowed variables set (or break their
-       invariants). *)
-    (* CR mshinwell: Do the same in [Expr]. *)
-
-    type t
-
-    val create_no_alias : Head.t Or_unknown_or_bottom.t -> t
-    val create_equals : Simple.t -> t
-    val create_type : Export_id.t -> t
-
-    val descr : t -> Descr.t
-
-    include Contains_names.S with type t := t
-  end = struct
-    type allowed = {
-      env : Typing_env.t;
-      allowed : Variable.Set.t;
-    }
-
-    type t = {
-      descr : Descr.t;
-      delayed_permutation : Name_permutation.t;
-      (* To remove allowed_vars:
-
-         - Add free_names here so it's quick to calculate
-         - Add a function that takes a type and the allowed variables.
-           It should return:
-           (a) a new type
-           (b) a list of irrelevant variables to be bound to Unknown
-           such that the free variables in the returned type do not exceed
-           the allowed set.  The permutations to the irrelevant vars will be
-           applied by this function.
-           In fact, it could maybe take an env and return an augmented one
-           instead of (b).
-      *)
-      delayed_allowed_vars : allowed list;
-      (* [delayed_allowed_vars] entries are always applied after the
-         [delayed_permutation].  The entry at the start of the list is
-         applied last. *)
-    }
-
-    let create descr =
-      { descr;
-        delayed_permutation = Name_permutation.empty;
-        delayed_allowed_vars = [];
-      }
-
-    let create_no_alias head = create (No_alias head)
-    let create_equals simple = create (Equals simple)
-    let create_type export_id = create (Type export_id)
-
-    let descr t =
-      let descr =
-        let perm = t.delayed_permutation in
-        if Name_permutation.is_empty perm then t.descr
-        else
-          match t.descr with
-          | No_alias head ->
-            let head' =
-              Or_unknown_or_bottom.map_sharing head
-                ~f:(fun head -> Head.apply_name_permutation head perm)
-            in
-            if head == head' then t.descr
-            else No_alias head'
-          | Equals simple ->
-            let simple' = Simple.apply_name_permutation simple perm in
-            if simple == simple' then t.descr
-            else Equals simple'
-          | Type _ -> t.descr
-      in
-      match t.delayed_allowed_vars with
-      | [] -> descr
-      | allowed ->
-        List.fold_left (fun { env; allowed; } descr ->
-            match descr with
-            | No_alias head ->
-              let head' =
-                Or_unknown_or_bottom.map_sharing head
-                  ~f:(fun head -> Head.erase_aliases head env ~allowed)
-              in
-              if head == head' then descr
-              else No_alias head'
-            | Type _ -> descr
-            | Equals simple ->
-              let canonical_simple =
-                Typing_env.get_canonical_simple env
-                  ~min_occurrence_kind:Name_occurrence_kind.in_types
-                  simple
-              in
-              match canonical_simple with
-              | Bottom -> No_alias Bottom
-              | Ok None -> (* CR mshinwell: Can this happen? *)
-                Misc.fatal_errorf "No canonical simple for %a"
-                  Simple.print simple
-              | Ok (Some simple) ->
-                if Simple.allowed simple ~allowed then Equals simple
-                else
-                  let head =
-                    Typing_env.expand_head_from_descr env
-                      ~force_to_kind:Head.force_to_kind
-                      ~print:Head.print
-                      ~apply_rec_info:Head.apply_rec_info
-                      descr
-                  in
-                  No_alias (Head.erase_aliases head env ~allowed))
-          descr
-          (List.rev allowed)
 
     let apply_name_permutation t perm =
-      let delayed_permutation =
-        Name_permutation.compose ~second:perm ~first:t.delayed_permutation
-      in
-      let delayed_allowed_vars =
-        List.map (fun { env; allowed; } ->
-            let allowed = Name_permutation.apply_variable_set perm allowed in
-            { env; allowed; })
-          t.delayed_allowed_vars
-      in
-      { t with
-        delayed_permutation;
-        delayed_allowed_vars;
-      }
+      if Name_permutation.is_empty perm then t
+      else
+        match t with
+        | No_alias head ->
+          let head' =
+            Or_unknown_or_bottom.map_sharing head
+              ~f:(fun head -> Head.apply_name_permutation head perm)
+          in
+          if head == head' then t
+          else No_alias head'
+        | Equals simple ->
+          let simple' = Simple.apply_name_permutation simple perm in
+          if simple == simple' then t
+          else Equals simple'
+        | Type _ -> t
 
-    let erase_aliases t env ~allowed =
-      let delayed_allowed_vars = { env; allowed; } :: t.delayed_allowed_vars in
-      { t with delayed_allowed_vars; }
+    let free_names t =
+      ...
   end
 
-  include T
+  include With_delayed_permutation.Make (Descr)
 
   let print ppf t = Descr.print ppf (descr t)
 
+  let create_no_alias head = create (No_alias head)
+  let create_equals simple = create (Equals simple)
+  let create_type export_id = create (Type export_id)
+
   let create head = create_no_alias (Ok head)
 
-  let free_names t =
+  let is_obviously_bottom t =
     match descr t with
-    | No_alias Bottom | No_alias Unknown -> Name_occurrences.empty
-    | No_alias ok -> Head.free_names ok
-    | Equals simple -> Simple.free_names simple
-    | Type _ -> Name_occurrences.empty
+    | No_alias Bottom -> true
+    | No_alias (Ok _ | Unknown _)
+    | Equals _ | Type _ -> false
 
+  let get_alias t =
+    match descr t with
+    | Equals alias -> Some alias
+    | No_alias _ | Type _ -> None
  
-
- 
-  let erase_aliases_ty env ~bound_name ~already_seen
-        ~allowed erase_aliases_of_kind_foo
-        ~force_to_kind ~print_ty ~apply_rec_info
-        (ty : _ Type_grammar.ty) : _ Type_grammar.ty =
-    match ty with
-    | No_alias unknown_or_join ->
-      let unknown_or_join' =
-        erase_aliases_unknown_or_join erase_aliases_of_kind_foo env
-          ~bound_name ~already_seen ~allowed unknown_or_join
-      in
-      if unknown_or_join == unknown_or_join' then ty
-      else No_alias unknown_or_join'
-    | Type _export_id -> ty
-    | Equals simple ->
-  
-  let apply_rec_info_ty (type of_kind_foo)
-        (apply_rec_info_of_kind_foo :
-          (of_kind_foo -> Rec_info.t -> of_kind_foo Or_bottom.t))
-        (ty : of_kind_foo Type_grammar.ty)
-        rec_info : of_kind_foo Type_grammar.ty Or_bottom.t =
-    match ty with
+  let apply_rec_info t rec_info : _ Or_bottom.t =
+    match descr t with
     | Equals simple ->
       let newer_rec_info = Some rec_info in
       begin match Simple.merge_rec_info simple ~newer_rec_info with
@@ -446,91 +321,46 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
     if Basic_type_ops.ty_is_obviously_bottom ty then Bottom
     else Ok (ty, env_extension)
 
-  let is_obviously_bottom t =
-    match descr t with
-    | No_alias Bottom -> true
-    | No_alias (Ok _ | Unknown _)
-    | Equals _ | Type _ -> false
-
-  let get_alias t =
-    match descr t with
-    | Equals alias -> Some alias
-    | No_alias _ | Type _ -> None
-
-  let make_suitable_for_environment t env =
+  let make_suitable_for_environment t env ~suitable_for =
     let free_vars = Name_occurrences.variables (free_names t) in
-    if Variable.Set.is_empty free_vars then t, env
+    if Variable.Set.is_empty free_vars then t, suitable_for
     else
-      let allowed = Typing_env.var_domain env in
+      let allowed = Typing_env.var_domain suitable_for in
       let to_erase = Variable.Set.diff free_vars allowed in
-      if Variable.Set.is_empty to_erase then t, env
+      if Variable.Set.is_empty to_erase then t, suitable_for
       else
-        let env, perm =
-          Variable.Set.fold (fun to_erase (env, perm) ->
+        let result_env, perm =
+          Variable.Set.fold (fun to_erase (result_env, perm) ->
+              let kind = Typing_env.find_kind env to_erase in
               let fresh_var = Variable.rename to_erase in
               let fresh_var_name = Name.var fresh_var in
-              let env =
-                let kind = Typing_env.find_kind env to_erase in
+              let result_env =
                 let name =
                   Name_in_binding_pos.create fresh_var_name
                     Name_occurrence_kind.in_types
                 in
-                Typing_env.add_definition env name kind
+                Typing_env.add_definition result_env name kind
               in
               let canonical_simple =
                 Typing_env.get_canonical_simple env
                   ~min_occurrence_kind:Name_occurrence_kind.in_types
                   (Simple.var to_erase)
               in
-              let env =
+              let result_env =
                 match Typing_env.find_simple_opt env canonical_simple with
-                | None -> env
+                | None -> result_env
                 | Some simple ->
-                  if not (Simple.allowed simple ~allowed) then env
+                  if not (Simple.allowed simple ~allowed) then result_env
                   else
-                    let ty = T.alias_type_of simple kind in
-                    Typing_env.add_equation env fresh_var_name ty
+                    let ty = Type_grammar.alias_type_of simple kind in
+                    Typing_env.add_equation result_env fresh_var_name ty
               in
               let perm =
                 Name_permutation.add_variable perm to_erase fresh_var
               in
-              env, perm)
+              result_env, perm)
             to_erase
-            (env, Name_permutation.empty)
+            (suitable_for, Name_permutation.empty)
         in
-        let t = apply_name_permutation perm t in
-        env, t
-
-
-    match descr t with
-    | No_alias head ->
-      let head' =
-        Or_unknown_or_bottom.map_sharing head
-          ~f:(fun head -> Head.erase_aliases head env ~allowed)
-      in
-      if head == head' then descr
-      else No_alias head'
-    | Type _ -> descr
-    | Equals simple ->
-      let canonical_simple =
-        Typing_env.get_canonical_simple env
-          ~min_occurrence_kind:Name_occurrence_kind.in_types
-          simple
-      in
-      match canonical_simple with
-      | Bottom -> No_alias Bottom
-      | Ok None -> (* CR mshinwell: Can this happen? *)
-        Misc.fatal_errorf "No canonical simple for %a"
-          Simple.print simple
-      | Ok (Some simple) ->
-        if Simple.allowed simple ~allowed then Equals simple
-        else
-          let head =
-            Typing_env.expand_head_from_descr env
-              ~force_to_kind:Head.force_to_kind
-              ~print:Head.print
-              ~apply_rec_info:Head.apply_rec_info
-              descr
-          in
-          No_alias (Head.erase_aliases head env ~allowed))
+        result_env, apply_name_permutation t perm
 end

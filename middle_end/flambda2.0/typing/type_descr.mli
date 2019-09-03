@@ -107,4 +107,10 @@ end) : sig
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
   val is_obviously_bottom : t -> bool
+
+  val make_suitable_for_environment
+     : t
+    -> Typing_env.t
+    -> suitable_for:Typing_env.t
+    -> t * Typing_env.t
 end

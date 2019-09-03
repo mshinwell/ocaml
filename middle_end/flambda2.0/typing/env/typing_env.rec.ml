@@ -76,7 +76,7 @@ end = struct
           Misc.fatal_errorf "Canonical name %a not in [names_to_types]"
             Name.print name
         | ty ->
-          match Basic_type_ops.get_alias ty with
+          match Type_grammar.get_alias ty with
           | None -> ()
           | Some alias_of ->
             Misc.fatal_errorf "Canonical name %a has an alias type: =%a"
@@ -370,7 +370,7 @@ let add_variable_definition t var kind name_occurrence_kind =
       Aliases.add_canonical_element (aliases t) canonical
     in
     Cached.add_or_replace_binding (cached t)
-      name (Basic_type_ops.unknown kind)
+      name (Type_grammar.unknown kind)
       t.next_binding_time name_occurrence_kind
       ~new_aliases:aliases
   in
@@ -392,7 +392,7 @@ let add_symbol_definition t sym kind =
       Aliases.add_canonical_element (aliases t) canonical
     in
     Cached.add_or_replace_binding (cached t)
-      name (Basic_type_ops.unknown kind)
+      name (Type_grammar.unknown kind)
       Binding_time.symbols name_occurrence_kind
       ~new_aliases:aliases
   in
@@ -409,13 +409,13 @@ let alias_of_simple t simple =
   let kind, binding_time =
     match Simple.descr simple with
     | Const const ->
-      Basic_type_ops.kind_for_const const,
+      Type_grammar.kind_for_const const,
         Binding_time.consts_and_discriminants
     | Discriminant _ ->
       K.fabricated, Binding_time.consts_and_discriminants
     | Name name ->
       let ty, binding_time = find_with_binding_time t name in
-      Basic_type_ops.kind ty, binding_time
+      Type_grammar.kind ty, binding_time
   in
   Alias.create kind simple binding_time
 
@@ -490,7 +490,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
       print t
   end;
   *)
-  begin match Basic_type_ops.get_alias ty with
+  begin match Type_grammar.get_alias ty with
   | None -> ()
   | Some simple ->
     match Simple.descr simple with
@@ -513,10 +513,10 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
   *)
   let aliases, simple, rec_info, ty =
     let aliases = aliases t in
-    match Basic_type_ops.get_alias ty with
+    match Type_grammar.get_alias ty with
     | None -> aliases, Simple.name name, None, ty
     | Some alias_of ->
-      let kind = Basic_type_ops.kind ty in
+      let kind = Type_grammar.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
         Alias.create_name kind name binding_time name_occurrence_kind
@@ -539,9 +539,9 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
    Alias.print canonical_element
    Alias.print alias_of; 
    *)
-        let kind = Basic_type_ops.kind ty in
+        let kind = Type_grammar.kind ty in
         let ty =
-          Basic_type_ops.alias_type_of kind
+          Type_grammar.alias_type_of kind
             (Alias.simple canonical_element)
         in
         aliases, Alias.simple alias_of, rec_info, ty
@@ -550,8 +550,8 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
     match rec_info with
     | None -> ty
     | Some rec_info ->
-      match Basic_type_ops.apply_rec_info ty rec_info with
-      | Bottom -> Basic_type_ops.bottom (Basic_type_ops.kind ty)
+      match Type_grammar.apply_rec_info ty rec_info with
+      | Bottom -> Type_grammar.bottom (Type_grammar.kind ty)
       | Ok ty -> ty
   in
 (*
@@ -718,7 +718,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
     | Const _ | Discriminant _ -> newer_rec_info
     | Name name ->
       let ty = find t name in
-      match Basic_type_ops.get_alias ty with
+      match Type_grammar.get_alias ty with
       | None -> newer_rec_info
       | Some simple ->
         match Simple.rec_info simple with
@@ -755,7 +755,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
       | Name name ->
         (* CR mshinwell: Do we have to return [Bottom]? *)
         let ty = find t name in
-        if Basic_type_ops.is_obviously_bottom ty
+        if Type_grammar.is_obviously_bottom ty
         then Bottom, kind
         else Ok (Some (simple, rec_info)), kind
 
@@ -771,13 +771,13 @@ let get_canonical_simple t ?min_occurrence_kind simple =
   fst (get_canonical_simple_with_kind t ?min_occurrence_kind simple)
 
 let get_alias_then_canonical_simple t ?min_occurrence_kind typ : _ Or_bottom.t =
-  match Basic_type_ops.get_alias typ with
+  match Type_grammar.get_alias typ with
   | None -> Ok None
   | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
 let get_alias_ty_then_canonical_simple t ?min_occurrence_kind typ
       : _ Or_bottom.t =
-  match Basic_type_ops.get_alias_ty typ with
+  match Type_grammar.get_alias_ty typ with
   | None -> Ok None
   | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
@@ -814,17 +814,17 @@ let expand_head_ty (type a) t
         let typ =
           match const with
           | Naked_immediate imm ->
-            Basic_type_ops.this_naked_immediate_without_alias imm
+            Type_grammar.this_naked_immediate_without_alias imm
           | Tagged_immediate imm ->
-            Basic_type_ops.this_tagged_immediate_without_alias imm
+            Type_grammar.this_tagged_immediate_without_alias imm
           | Naked_float f ->
-            Basic_type_ops.this_naked_float_without_alias f
+            Type_grammar.this_naked_float_without_alias f
           | Naked_int32 i ->
-            Basic_type_ops.this_naked_int32_without_alias i
+            Type_grammar.this_naked_int32_without_alias i
           | Naked_int64 i ->
-            Basic_type_ops.this_naked_int64_without_alias i
+            Type_grammar.this_naked_int64_without_alias i
           | Naked_nativeint i ->
-            Basic_type_ops.this_naked_nativeint_without_alias i
+            Type_grammar.this_naked_nativeint_without_alias i
         in
         force_to_unknown_or_join typ
       | Discriminant discr ->
@@ -832,9 +832,9 @@ let expand_head_ty (type a) t
           match Discriminant.sort discr with
           | Int ->
             let imm = Immediate.int (Discriminant.to_int discr) in
-            Basic_type_ops.this_tagged_immediate_without_alias imm
+            Type_grammar.this_tagged_immediate_without_alias imm
           | Is_int | Tag ->
-            Basic_type_ops.this_discriminant_without_alias discr
+            Type_grammar.this_discriminant_without_alias discr
         in
         force_to_unknown_or_join typ
       | Name name ->
@@ -870,8 +870,8 @@ let expand_head t (ty : Type_grammar.t) : Type_grammar.resolved =
   | Value ty_value ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:Basic_type_ops.force_to_kind_value
-        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_value
+        ~force_to_kind:Type_grammar.force_to_kind_value
+        ~apply_rec_info:Type_grammar.apply_rec_info_of_kind_value
         ~print_ty:Type_printers.print_ty_value
         ty_value
     in
@@ -879,18 +879,18 @@ let expand_head t (ty : Type_grammar.t) : Type_grammar.resolved =
   | Naked_number (ty_naked_number, kind) ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:(Basic_type_ops.force_to_kind_naked_number kind)
+        ~force_to_kind:(Type_grammar.force_to_kind_naked_number kind)
         ~print_ty:Type_printers.print_ty_naked_number
-        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_naked_number
+        ~apply_rec_info:Type_grammar.apply_rec_info_of_kind_naked_number
         ty_naked_number
     in
     Resolved (Resolved_naked_number (unknown_or_join, kind))
   | Fabricated ty_fabricated ->
     let unknown_or_join =
       expand_head_ty t
-        ~force_to_kind:Basic_type_ops.force_to_kind_fabricated
+        ~force_to_kind:Type_grammar.force_to_kind_fabricated
         ~print_ty:Type_printers.print_ty_fabricated
-        ~apply_rec_info:Basic_type_ops.apply_rec_info_of_kind_fabricated
+        ~apply_rec_info:Type_grammar.apply_rec_info_of_kind_fabricated
         ty_fabricated
     in
     Resolved (Resolved_fabricated unknown_or_join)
@@ -924,8 +924,6 @@ let defined_earlier t simple ~than =
       (find_name_occurrence_kind_of_simple t than))
 
 let create_using_resolver_and_symbol_bindings_from t =
-  (* CR mshinwell: Maybe the environment constructed here should be maintained
-     all the time, so this is a constant-time fast operation? *)
   let original_t = t in
   let names_to_types = names_to_types t in
   let t =
@@ -935,7 +933,7 @@ let create_using_resolver_and_symbol_bindings_from t =
         | Var _ -> t
         | Symbol _ ->
           let name = Name_in_binding_pos.create name occurrence_kind in
-          add_definition t name (Basic_type_ops.kind typ))
+          add_definition t name (Type_grammar.kind typ))
       names_to_types
       (create_using_resolver_from t)
   in
@@ -944,11 +942,9 @@ let create_using_resolver_and_symbol_bindings_from t =
       match name with
       | Var _ -> t
       | Symbol _ ->
-        let typ =
-          let bound_name = Some name in
-          Type_erase_aliases.erase_aliases original_t ~bound_name
-            ~already_seen:Simple.Set.empty
-            ~allowed:Variable.Set.empty typ
+        let typ, t =
+          Type_grammar.make_suitable_for_environment typ original_t
+            ~suitable_for:t
         in
         add_equation t name typ)
     names_to_types

@@ -723,5 +723,26 @@ let join ?bound_name env t1 t2 =
   end;
   joined
 
-let make_suitable_for_environment t env =
-  ...
+let make_suitable_for_environment t env ~suitable_for =
+  match t with
+  | Value ty ->
+    let ty, env = T_V.make_suitable_for_environment ty env ~suitable_for in
+    Value ty, env
+  | Naked_immediate ty ->
+    let ty, env = T_NI.make_suitable_for_environment ty env ~suitable_for in
+    Naked_immediate ty, env 
+  | Naked_float ty ->
+    let ty, env = T_Nf.make_suitable_for_environment ty env ~suitable_for in
+    Naked_float ty, env 
+  | Naked_int32 ty ->
+    let ty, env = T_N32.make_suitable_for_environment ty env ~suitable_for in
+    Naked_int32 ty, env 
+  | Naked_int64 ty ->
+    let ty, env = T_N64.make_suitable_for_environment ty env ~suitable_for in
+    Naked_int64 ty, env 
+  | Naked_nativeint ty ->
+    let ty, env = T_NN.make_suitable_for_environment ty env ~suitable_for in
+    Naked_nativeint ty, env 
+  | Fabricated ty ->
+    let ty, env = T_F.make_suitable_for_environment ty env ~suitable_for in
+    Fabricated ty, env
