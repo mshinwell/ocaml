@@ -21,7 +21,11 @@
 
 type t =
   | Value of Type_of_kind_value.t
-  | Naked_number of Type_of_kind_naked_number.t
+  | Naked_immediate of Type_of_kind_naked_immediate.t
+  | Naked_float of Type_of_kind_naked_float.t
+  | Naked_int32 of Type_of_kind_naked_int32.t
+  | Naked_int64 of Type_of_kind_naked_int64.t
+  | Naked_nativeint of Type_of_kind_naked_nativeint.t
   | Fabricated of Type_of_kind_fabricated.t
 
 include Contains_names.S with type t := t

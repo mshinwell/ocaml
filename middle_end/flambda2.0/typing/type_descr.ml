@@ -98,6 +98,8 @@ end) = struct
   end
 
   include T
+
+  let create head = create_no_alias (Ok head)
   
   let print_or_alias print_descr ppf (or_alias : _ Type_grammar.or_alias) =
     match or_alias with
@@ -450,4 +452,15 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
     in
     if Basic_type_ops.ty_is_obviously_bottom ty then Bottom
     else Ok (ty, env_extension)
+
+  let is_obviously_bottom t =
+    match descr t with
+    | No_alias Bottom -> true
+    | No_alias (Ok _ | Unknown _)
+    | Equals _ | Type _ -> false
+
+  let get_alias t =
+    match descr t with
+    | Equals alias -> Some alias
+    | No_alias _ | Type _ -> None
 end

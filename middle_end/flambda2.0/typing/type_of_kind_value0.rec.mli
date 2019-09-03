@@ -16,39 +16,31 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type blocks_and_tagged_immediates = {
-  immediates : Immediates.t Or_unknown.t;
-  blocks : Blocks.t Or_unknown.t;
-}
-
-type inlinable_function_declaration = {
-  function_decl : Term_language_function_declaration.t;
-  rec_info : Rec_info.t;
-}
-
-type function_declaration =
-  | Non_inlinable of {
-      param_arity : Flambda_arity.t;
-      result_arity : Flambda_arity.t;
-      recursive : Recursive.t;
-    }
-  | Inlinable of inlinable_function_declaration
-
-type closures_entry = {
-  function_decls : function_declaration Or_unknown.t Closure_id.Map.t;
-  closure_types : Types_by_closure_id.t;
-  closure_var_types : Types_by_var_within_closure.t;
-}
-
-type closures = {
-  by_closure_id : Closures_entry_by_set_of_closures_contents.t;
-}
-
 type t =
-  | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
+  | Blocks_and_tagged_immediates of {
+      immediates : Immediates.t Or_unknown.t;
+      blocks : Blocks.t Or_unknown.t;
+    }
   | Boxed_number of Type_of_kind_naked_number.t
-  | Closures of closures
+  | Closures of {
+      by_closure_id : Closures_entry_by_set_of_closures_contents.t;
+    }
   | String of String_info.Set.t
   | Array of { length : Type_of_kind_value.t; }
 
+include Contains_names.S
+
+module Make_meet_or_join (E : Lattice_ops_intf.S
+  with type meet_env = Meet_env.t
+  with type typing_env_extension = Typing_env_extension.t)
+: sig
+  val meet_or_join
+     : Meet_env.t
+    -> t
+    -> t
+    -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
+end
+
 val erase_aliases : t -> allowed:Variable.Set.t -> t
+
+val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t

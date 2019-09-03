@@ -16,13 +16,12 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-(** Unboxed ("naked") integer and floating-point numbers. *)
+type resolved_t =
+  | Value of Type_of_kind_value0.t
+  | Naked_number of Type_of_kind_naked_number0.t
+  | Fabricated of Type_of_kind_fabricated0.t
 
-type 'k t0 =
-  | Immediate : Immediate.Set.t -> Flambda_kind.naked_immediate t0
-  | Float : Numbers.Float_by_bit_pattern.Set.t -> Flambda_kind.naked_float t0
-  | Int32 : Numbers.Int32.Set.t -> Flambda_kind.naked_int32 t0
-  | Int64 : Numbers.Int64.Set.t -> Flambda_kind.naked_int64 t0
-  | Nativeint : Targetint.Set.t -> Flambda_kind.naked_nativeint t0
-
-type t = N : 'k t0 * 'k Flambda_kind.Naked_number.t -> t
+type t =
+  | Const of Simple.Const.t
+  | Discriminant of Discriminant.t
+  | Resolved of resolved_t Or_unknown_or_bottom.t

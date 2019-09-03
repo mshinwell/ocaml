@@ -81,10 +81,16 @@ end) : sig
   type t
 
   val create_no_alias : Head.t Or_unknown_or_bottom.t -> t
+  val create : Head.t -> t
   val create_equals : Simple.t -> t
   val create_type : Export_id.t -> t
 
+  val unknown : t
+  val bottom : t
+
   val descr : t -> descr
+
+  val get_alias : t -> Simple.t option
 
   (* CR mshinwell: Try to use [Type_structure_intf] or similar *)
 
@@ -93,4 +99,6 @@ end) : sig
   val erase_aliases : t -> allowed:Variable.Set.t -> t
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
+
+  val is_obviously_bottom : t -> bool
 end

@@ -16,6 +16,11 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module Float = Numbers.Float_by_bit_pattern
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
+module TEE = Typing_env_extension
+
 type 'k t0 =
   | Immediate : Immediate.Set.t -> Flambda_kind.naked_immediate t0
   | Float : Float.Set.t -> Flambda_kind.naked_float t0
@@ -56,10 +61,6 @@ let erase_aliases t ~allowed:_ = t
 let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t
   else Bottom
-
-[@@@ocaml.warning "+a-4-30-40-41-42"]
-
-module TEE = Typing_env_extension
 
 module Make
   (E : Lattice_ops_intf.S

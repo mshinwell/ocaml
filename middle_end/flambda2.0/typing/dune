@@ -8,6 +8,7 @@
     type_of_kind_value0.rec.ml
     type_of_kind_fabricated.rec.ml
     type_of_kind_fabricated0.rec.ml
+    resolved_type.rec.ml
     derived_structures/blocks.rec.ml
     derived_structures/closures_entry.rec.ml
     derived_structures/closures_entry_by_set_of_closures_contents.rec.ml
@@ -28,6 +29,7 @@
     type_of_kind_value0.rec.mli
     type_of_kind_fabricated.rec.mli
     type_of_kind_fabricated0.rec.mli
+    resolved_type.rec.mli
     derived_structures/blocks.rec.mli
     derived_structures/closures_entry.rec.mli
     derived_structures/closures_entry_by_set_of_closures_contents.rec.mli

@@ -16,22 +16,46 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module T_V = Type_of_kind_value
+module T_NI = Type_of_kind_naked_immediate
+module T_Nf = Type_of_kind_naked_float
+module T_N32 = Type_of_kind_naked_int32
+module T_N64 = Type_of_kind_naked_int64
+module T_NN = Type_of_kind_naked_nativeint
+module T_F = Type_of_kind_fabricated
+
 type t =
-  | Value of Type_of_kind_value.t
-  | Naked_number of Type_of_kind_naked_number.t
-  | Fabricated of Type_of_kind_fabricated.t
+  | Value of T_V.t
+  | Naked_immediate of T_NI.t
+  | Naked_float of T_Nf.t
+  | Naked_int32 of T_N32.t
+  | Naked_int64 of T_N64.t
+  | Naked_nativeint of T_NN.t
+  | Fabricated of T_F.t
 
 let print_with_cache ~cache ppf (t : Type_grammar.t) =
   match t with
   | Value ty ->
     Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
-      (Type_of_kind_value.print_with_cache ~cache) ty
-  | Naked_number ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked@ %a)@]"
-      (Type_of_kind_naked_number.print_with_cache ~cache) ty
+      (T_V.print_with_cache ~cache) ty
+  | Naked_immediate ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
+      (T_NI.print_with_cache ~cache) ty
+  | Naked_float ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
+      (T_Nf.print_with_cache ~cache) ty
+  | Naked_int32 ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_int32@ %a)@]"
+      (T_N32.print_with_cache ~cache) ty
+  | Naked_int64 ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_int64@ %a)@]"
+      (T_N64.print_with_cache ~cache) ty
+  | Naked_nativeint ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
+      (T_NN.print_with_cache ~cache) ty
   | Fabricated ty ->
     Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
-      (Type_of_kind_fabricated.print_with_cache ~cache) ty
+      (T_F.print_with_cache ~cache) ty
 
 let print ppf t =
   let cache : Printing_cache.t = Printing_cache.create () in
@@ -40,50 +64,111 @@ let print ppf t =
 let apply_name_permutation t perm =
   match t with
   | Value ty ->
-    let ty' = Type_of_kind_value.apply_name_permutation ty perm in
+    let ty' = T_V.apply_name_permutation ty perm in
     if ty == ty' then t
     else Value ty'
-  | Naked_number ty ->
-    let ty' = Type_of_kind_naked_number.apply_name_permutation ty perm in
+  | Naked_immediate ty ->
+    let ty' = T_NI.apply_name_permutation ty perm in
     if ty == ty' then t
-    else Naked_number ty'
+    else Naked_immediate ty'
+  | Naked_float ty ->
+    let ty' = T_Nf.apply_name_permutation ty perm in
+    if ty == ty' then t
+    else Naked_float ty'
+  | Naked_int32 ty ->
+    let ty' = T_N32.apply_name_permutation ty perm in
+    if ty == ty' then t
+    else Naked_int32 ty'
+  | Naked_int64 ty ->
+    let ty' = T_N64.apply_name_permutation ty perm in
+    if ty == ty' then t
+    else Naked_int64 ty'
+  | Naked_nativeint ty ->
+    let ty' = T_NN.apply_name_permutation ty perm in
+    if ty == ty' then t
+    else Naked_nativeint ty'
   | Fabricated ty ->
-    let ty' = Type_of_kind_fabricated.apply_name_permutation ty perm in
+    let ty' = T_F.apply_name_permutation ty perm in
     if ty == ty' then t
     else Fabricated ty'
 
 let free_names t =
   match t with
-  | Value ty -> Type_of_kind_value.free_names ty
-  | Naked_number ty -> Type_of_kind_naked_number.free_names ty
-  | Fabricated ty -> Type_of_kind_fabricated.free_names ty
+  | Value ty -> T_V.free_names ty
+  | Naked_immediate ty -> T_NI.free_names ty
+  | Naked_float ty -> T_Nf.free_names ty
+  | Naked_int32 ty -> T_N32.free_names ty
+  | Naked_int64 ty -> T_N64.free_names ty
+  | Naked_nativeint ty -> T_NN.free_names ty
+  | Fabricated ty -> T_F.free_names ty
 
 let erase_aliases t ~allowed =
   match t with
-  | Value ty ->
-    Value (Type_of_kind_value.erase_aliases ty ~allowed)
-  | Naked_number ty ->
-    Naked_number (Type_of_kind_naked_number.erase_aliases ty ~allowed)
-  | Fabricated ty ->
-    Fabricated (Type_of_kind_fabricated.erase_aliases ty ~allowed)
+  | Value ty -> Value (T_V.erase_aliases ty ~allowed)
+  | Naked_immediate ty -> Naked_immediate (T_NI.erase_aliases ty ~allowed)
+  | Naked_float ty -> Naked_float (T_Nf.erase_aliases ty ~allowed)
+  | Naked_int32 ty -> Naked_int32 (T_N32.erase_aliases ty ~allowed)
+  | Naked_int64 ty -> Naked_int64 (T_N64.erase_aliases ty ~allowed)
+  | Naked_nativeint ty -> Naked_nativeint (T_NN.erase_aliases ty ~allowed)
+  | Fabricated ty -> Fabricated (T_F.erase_aliases ty ~allowed)
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
   | Value ty ->
-    begin match Type_of_kind_value.apply_rec_info ty rec_info with
+    begin match T_V.apply_rec_info ty rec_info with
     | Ok ty -> Ok (Value ty)
     | Bottom -> Bottom
     end
-  | Naked_number (ty_naked_number, kind) ->
-    begin match Type_of_kind_naked_number.apply_rec_info ty rec_info with
-    | Ok ty -> Ok (Naked_number ty)
+  | Naked_immediate ty ->
+    begin match T_NI.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_immediate ty)
+    | Bottom -> Bottom
+    end
+  | Naked_float ty ->
+    begin match T_Nf.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_float ty)
+    | Bottom -> Bottom
+    end
+  | Naked_int32 ty ->
+    begin match T_N32.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_int32 ty)
+    | Bottom -> Bottom
+    end
+  | Naked_int64 ty ->
+    begin match T_N64.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_int64 ty)
+    | Bottom -> Bottom
+    end
+  | Naked_nativeint ty ->
+    begin match T_NN.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_nativeint ty)
     | Bottom -> Bottom
     end
   | Fabricated ty ->
-    begin match Type_of_kind_fabricated.apply_rec_info ty rec_info with
+    begin match T_F.apply_rec_info ty rec_info with
     | Ok ty -> Ok (Fabricated ty)
     | Bottom -> Bottom
     end
+
+let kind t =
+  match t with
+  | Value _ -> K.value
+  | Naked_immediate -> K.naked_immediate
+  | Naked_float _ -> K.naked_float
+  | Naked_int32 _ -> K.naked_int32
+  | Naked_int64 _ -> K.naked_int64
+  | Naked_nativeint _ -> K.naked_nativeint
+  | Fabricated _ -> K.fabricated
+
+let get_alias t =
+  match t with
+  | Value ty -> T_V.get_alias ty
+  | Naked_immediate ty -> T_NI.get_alias ty
+  | Naked_float ty -> T_Nf.get_alias ty
+  | Naked_int32 ty -> T_N32.get_alias ty
+  | Naked_int64 ty -> T_N64.get_alias ty
+  | Naked_nativeint ty -> T_NN.get_alias ty
+  | Fabricated ty -> T_F.get_alias ty
 
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
@@ -92,266 +177,175 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
    a single immediate.  Although this state needs to exist during [meet]
    or whenever heads are expanded. *)
 
-let force_to_kind_value (t : t) =
+let force_to_kind_value t =
   match t with
   | Value ty -> ty
-  | Naked_number _
-  | Fabricated _ ->
+  | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a" print t
 
-let force_to_kind_naked_immediate (t : t) : K.naked_immediate ty_naked_number =
+let force_to_kind_naked_immediate t =
   match t with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
-    ty_naked_number
-  | Naked_number _
-  | Fabricated _
-  | Value _ ->
+  | Naked_immediate ty -> ty
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
+      "Type has wrong kind (expected [Naked_immediate]):@ %a"
       print t
 
-let force_to_kind_naked_float (t : t) : K.naked_float ty_naked_number =
+let force_to_kind_naked_float t =
   match t with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
-    ty_naked_number
-  | Naked_number _
-  | Fabricated _
-  | Value _ ->
+  | Naked_float ty -> ty
+  | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_number Float]):@ %a"
+      "Type has wrong kind (expected [Naked_float]):@ %a"
       print t
 
-let force_to_kind_naked_int32 (t : t) : K.naked_int32 ty_naked_number =
+let force_to_kind_naked_int32 t =
   match t with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
-    ty_naked_number
-  | Naked_number _
-  | Fabricated _
-  | Value _ ->
+  | Naked_int32 ty -> ty
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_number Int32]):@ %a"
+      "Type has wrong kind (expected [Naked_int32]):@ %a"
       print t
 
-let force_to_kind_naked_int64 (t : t) : K.naked_int64 ty_naked_number =
+let force_to_kind_naked_int64 t =
   match t with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
-    ty_naked_number
-  | Naked_number _
-  | Fabricated _
-  | Value _ ->
+  | Naked_int64 ty -> ty
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Int64]):@ %a"
       print t
 
-let force_to_kind_naked_nativeint (t : t) : K.naked_nativeint ty_naked_number =
+let force_to_kind_naked_nativeint t =
   match t with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
-    ty_naked_number
-  | Naked_number _
-  | Fabricated _
-  | Value _ ->
+  | Naked_nativeint ty -> ty
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+  | Naked_int64 _ | Fabricated _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
       print t
 
-let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
-      : n ty_naked_number =
-  match t, kind with
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate),
-      K.Naked_number.Naked_immediate ->
-    ty_naked_number
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_float),
-      K.Naked_number.Naked_float ->
-    ty_naked_number
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_int32),
-      K.Naked_number.Naked_int32 ->
-    ty_naked_number
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_int64),
-      K.Naked_number.Naked_int64 ->
-    ty_naked_number
-  | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint),
-      K.Naked_number.Naked_nativeint ->
-    ty_naked_number
-  | Naked_number _, _
-  | Fabricated _, _
-  | Value _, _ ->
-    Misc.fatal_errorf "Type has wrong kind (expected \
-        [Naked_number %a]):@ %a"
-      K.Naked_number.print kind
-      print t
-
-let force_to_kind_fabricated (t : t) =
+let force_to_kind_fabricated t =
   match t with
-  | Fabricated ty_fabricated -> ty_fabricated
-  | Value _
-  | Naked_number _ ->
+  | Fabricated ty -> ty
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+  | Naked_int64 _ | Naked_nativeint _ ->
     Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
       print t
 
-let ty_is_obviously_bottom (ty : _ ty) =
-  match ty with
-  | No_alias Bottom -> true
-  | _ -> false
-
 let is_obviously_bottom (t : t) =
   match t with
-  | Value ty -> ty_is_obviously_bottom ty
-  | Naked_number (ty, _) -> ty_is_obviously_bottom ty
-  | Fabricated ty -> ty_is_obviously_bottom ty
+  | Value ty -> T_V.is_obviously_bottom ty
+  | Naked_immediate ty -> T_NI.is_obviously_bottom ty
+  | Naked_float ty -> T_Nf.is_obviously_bottom ty
+  | Naked_int32 ty -> T_N32.is_obviously_bottom ty
+  | Naked_int64 ty -> T_N64.is_obviously_bottom ty
+  | Naked_nativeint ty -> T_NN.is_obviously_bottom ty
+  | Fabricated ty -> T_F.is_obviously_bottom ty
 
 let alias_type_of (kind : K.t) name : t =
   match kind with
-  | Value ->
-    Value (Equals name)
-  | Naked_number Naked_immediate ->
-    Naked_number (Equals name, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (Equals name, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (Equals name, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (Equals name, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (Equals name, K.Naked_number.Naked_nativeint)
-  | Fabricated ->
-    Fabricated (Equals name)
+  | Value -> Value (T_V.create_equals name)
+  | Naked_number Naked_immediate -> Naked_immediate (T_NI.create_equals name)
+  | Naked_number Naked_float -> Naked_float (T_Nf.create_equals name)
+  | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
+  | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
+  | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
+  | Fabricated -> Fabricated (T_F.create_equals name)
 
-let alias_type_of_as_ty_value name : ty_value = Equals name
+let bottom_value = Value T_V.bottom
+let bottom_naked_immediate = Naked_immediate T_NI.bottom
+let bottom_naked_float = Naked_float T_Nf.bottom
+let bottom_naked_int32 = Naked_int32 T_N32.bottom
+let bottom_naked_int64 = Naked_int64 T_N64.bottom
+let bottom_naked_nativeint = Naked_nativeint T_NN.bottom
+let bottom_fabricated = Fabricated T_F.bottom
 
-let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
-
-let bottom (kind : K.t) : t =
+let bottom (kind : K.t) =
   match kind with
-  | Value ->
-    Value (No_alias Bottom)
-  | Naked_number Naked_immediate ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
-  | Fabricated ->
-    Fabricated (No_alias Bottom)
+  | Value -> bottom_value
+  | Naked_number Naked_immediate -> bottom_naked_immediate
+  | Naked_number Naked_float -> bottom_naked_float
+  | Naked_number Naked_int32 -> bottom_naked_int32
+  | Naked_number Naked_int64 -> bottom_naked_int64
+  | Naked_number Naked_nativeint -> bottom_naked_nativeint
+  | Fabricated -> bottom_fabricated
 
-let any_value_as_ty_value () : ty_value =
-  No_alias Unknown
+let bottom_like t = bottom (kind t)
 
-let any_value () : t =
-  Value (any_value_as_ty_value ())
+let any_value = Value T_V.unknown
+let any_naked_immediate = Naked_immediate T_NI.any
+let any_naked_float = Naked_float T_Nf.unknown
+let any_naked_int32 = Naked_int32 T_N32.unknown
+let any_naked_int64 = Naked_int64 T_N64.unknown
+let any_naked_nativeint = Naked_nativeint T_NN.any
+let any_fabricated = Fabricated T_F.unknown
 
-let any_tagged_immediate () : t =
-  Value (No_alias (Ok (Blocks_and_tagged_immediates {
-    immediates = Unknown;
-    (* CR mshinwell: Again, here, should this allow [Bottom] as well as
-       [Unknown]? *)
-    blocks = Known (Blocks.create_bottom ());
-  })))
-
-let any_naked_immediate () : t =
-  Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
-
-let any_naked_float () : t =
-  Naked_number (No_alias Unknown, K.Naked_number.Naked_float)
-
-let any_naked_int32 () : t =
-  Naked_number (No_alias Unknown, K.Naked_number.Naked_int32)
-
-let any_naked_int64 () : t =
-  Naked_number (No_alias Unknown, K.Naked_number.Naked_int64)
-
-let any_naked_nativeint () : t =
-  Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint)
-
-let any_fabricated () : t =
-  Fabricated (No_alias Unknown)
-
-let unknown (kind : K.t) : t =
+let unknown (kind : K.t) =
   match kind with
-  | Value ->
-    Value (No_alias Unknown)
-  | Naked_number Naked_immediate ->
-    Naked_number (No_alias Unknown, K.Naked_number.Naked_immediate)
-  | Naked_number Naked_float ->
-    Naked_number (No_alias Unknown, K.Naked_number.Naked_float)
-  | Naked_number Naked_int32 ->
-    Naked_number (No_alias Unknown, K.Naked_number.Naked_int32)
-  | Naked_number Naked_int64 ->
-    Naked_number (No_alias Unknown, K.Naked_number.Naked_int64)
-  | Naked_number Naked_nativeint ->
-    Naked_number (No_alias Unknown, K.Naked_number.Naked_nativeint)
-  | Fabricated ->
-    Fabricated (No_alias Unknown)
+  | Value -> any_value
+  | Naked_number Naked_immediate -> any_naked_immediate
+  | Naked_number Naked_float -> any_naked_float
+  | Naked_number Naked_int32 -> any_naked_int32
+  | Naked_number Naked_int64 -> any_naked_int64
+  | Naked_number Naked_nativeint -> any_naked_nativeint
+  | Fabricated -> any_fabricated
 
-let unknown_as_ty_fabricated () : ty_fabricated = No_alias Unknown
+let unknown_like t = unknown (kind t)
 
 let this_naked_immediate i : t =
-  Naked_number (Equals (Simple.const (Naked_immediate i)),
-    K.Naked_number.Naked_immediate)
+  Naked_immediate (T_NI.create_equals (Simple.const (Naked_immediate i)))
 
 let this_naked_float f : t =
-  Naked_number (Equals (Simple.const (Naked_float f)),
-    K.Naked_number.Naked_float)
+  Naked_float (T_Nf.create_equals (Simple.const (Naked_float i)))
 
 let this_naked_int32 i : t =
-  Naked_number (Equals (Simple.const (Naked_int32 i)),
-    K.Naked_number.Naked_int32)
+  Naked_int32 (T_N32.create_equals (Simple.const (Naked_int32 i)))
 
 let this_naked_int64 i : t =
-  Naked_number (Equals (Simple.const (Naked_int64 i)),
-    K.Naked_number.Naked_int64)
+  Naked_int64 (T_N64.create_equals (Simple.const (Naked_int64 i)))
 
 let this_naked_nativeint i : t =
-  Naked_number (Equals (Simple.const (Naked_nativeint i)),
-    K.Naked_number.Naked_nativeint)
+  Naked_nativeint (T_NN.create_equals (Simple.const (Naked_nativeint i)))
 
-let these_naked_immediates0 ~no_alias (is : Immediate.Set.t) : t =
+let these_naked_immediates0 ~no_alias is =
   match Immediate.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_immediate i
   | _ ->
     if Immediate.Set.is_empty is then bottom K.naked_immediate
-    else
-      let of_kind : _ of_kind_naked_number = Immediate is in
-      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_immediate)
+    else Naked_immediate (T_NI.create_no_alias (Ok (Immediate is)))
 
-let these_naked_floats0 ~no_alias (fs : Float.Set.t) : t =
-  match Float.Set.get_singleton fs with
-  | Some f when not no_alias -> this_naked_float f
+let these_naked_floats0 ~no_alias fs =
+  match Float.Set.get_singleton is with
+  | Some i when not no_alias -> this_naked_float i
   | _ ->
-    if Float.Set.is_empty fs then bottom K.naked_float
-    else
-      let of_kind : _ of_kind_naked_number = Float fs in
-      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_float)
+    if Float.Set.is_empty is then bottom K.naked_float
+    else Naked_float (T_Nf.create_no_alias (Ok (Float is)))
 
-let these_naked_int32s0 ~no_alias (is : Int32.Set.t) : t =
+let these_naked_int32s0 ~no_alias is =
   match Int32.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int32 i
   | _ ->
     if Int32.Set.is_empty is then bottom K.naked_int32
-    else
-      let of_kind : _ of_kind_naked_number = Int32 is in
-      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int32)
+    else Naked_int32 (T_N32.create_no_alias (Ok (Int32 is)))
 
-let these_naked_int64s0 ~no_alias (is : Int64.Set.t) : t =
+let these_naked_int64s0 ~no_alias is =
   match Int64.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int64 i
   | _ ->
     if Int64.Set.is_empty is then bottom K.naked_int64
-    else
-      let of_kind : _ of_kind_naked_number = Int64 is in
-      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_int64)
+    else Naked_int64 (T_N64.create_no_alias (Ok (Int64 is)))
 
-let these_naked_nativeints0 ~no_alias (is : Targetint.Set.t) : t =
-  match Targetint.Set.get_singleton is with
+let these_naked_nativeints0 ~no_alias is =
+  match Nativeint.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
-    if Targetint.Set.is_empty is then bottom K.naked_nativeint
-    else
-      let of_kind : _ of_kind_naked_number = Nativeint is in
-      Naked_number (No_alias (Ok of_kind), K.Naked_number.Naked_nativeint)
+    if Nativeint.Set.is_empty is then bottom K.naked_nativeint
+    else Naked_nativeint (T_NN.create_no_alias (Ok (Nativeint is)))
 
 let this_naked_immediate_without_alias i =
   these_naked_immediates0 ~no_alias:true (Immediate.Set.singleton i)
@@ -368,63 +362,56 @@ let this_naked_int64_without_alias i =
 let this_naked_nativeint_without_alias i =
   these_naked_nativeints0 ~no_alias:true (Targetint.Set.singleton i)
 
-let these_naked_immediates is =
-  these_naked_immediates0 ~no_alias:false is
-
-let these_naked_floats fs =
-  these_naked_floats0 ~no_alias:false fs
-
-let these_naked_int32s is =
-  these_naked_int32s0 ~no_alias:false is
-
-let these_naked_int64s is =
-  these_naked_int64s0 ~no_alias:false is
-
-let these_naked_nativeints is =
-  these_naked_nativeints0 ~no_alias:false is
+let these_naked_immediates is = these_naked_immediates0 ~no_alias:false is
+let these_naked_floats fs = these_naked_floats0 ~no_alias:false fs
+let these_naked_int32s is = these_naked_int32s0 ~no_alias:false is
+let these_naked_int64s is = these_naked_int64s0 ~no_alias:false is
+let these_naked_nativeints is = these_naked_nativeints0 ~no_alias:false is
 
 let box_float (t : t) : t =
   match t with
-  | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
-    Value (No_alias (Ok (Boxed_number (Boxed_float ty_naked_float))))
-  | Value _
-  | Naked_number _
-  | Fabricated _ ->
+  | Naked_float ty ->
+    Value (T_V.create (Boxed_number (Boxed_float ty)))
+  | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
       print t
 
 let box_int32 (t : t) : t =
   match t with
-  | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
-    Value (No_alias (Ok (Boxed_number (Boxed_int32 ty_naked_int32))))
-  | Value _
-  | Naked_number _
-  | Fabricated _ ->
+  | Naked_int32 ty ->
+    Value (T_V.create (Boxed_number (Boxed_int32 ty)))
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
       print t
 
 let box_int64 (t : t) : t =
   match t with
-  | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
-    Value (No_alias (Ok (Boxed_number (Boxed_int64 ty_naked_int64))))
-  | Value _
-  | Naked_number _
-  | Fabricated _ ->
+  | Naked_int64 ty ->
+    Value (T_V.create (Boxed_number (Boxed_int64 ty)))
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+  | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
       print t
 
 let box_nativeint (t : t) : t =
   match t with
-  | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
-    Value (No_alias (Ok (Boxed_number (Boxed_nativeint ty_naked_nativeint))))
-  | Value _
-  | Naked_number _
-  | Fabricated _ ->
+  | Naked_nativeint ty ->
+    Value (T_V.create (Boxed_number (Boxed_nativeint ty)))
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+  | Naked_int64 _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
+let any_tagged_immediate () : t =
+  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+    immediates = Unknown;
+    blocks = Known (Blocks.create_bottom ());
+  })))
+
 let this_tagged_immediate imm : t =
-  Value (Equals (Simple.const (Tagged_immediate imm)))
+  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
 
 let these_tagged_immediates0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
@@ -433,13 +420,11 @@ let these_tagged_immediates0 ~no_alias imms : t =
     if Immediate.Set.is_empty imms then bottom K.value
     else
       let immediates = Immediates.create imms in
-      let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-        { immediates = Known immediates;
+      Value (T_V.create_no_alias (
+        Ok (Blocks_and_tagged_immediates {
+          immediates = Known immediates;
           blocks = Known (Blocks.create_bottom ());
-        }
-      in
-      Value (No_alias (Ok (
-        Blocks_and_tagged_immediates blocks_and_tagged_immediates)))
+        })))
 
 let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
@@ -447,11 +432,8 @@ let these_tagged_immediates imms =
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
-let this_discriminant_as_ty_fabricated discr : ty_fabricated =
-  Equals (Simple.discriminant discr)
-
 let this_discriminant discr : t =
-  Fabricated (this_discriminant_as_ty_fabricated discr)
+  Fabricated (T_F.create_equals (Simple.discriminant discr))
 
 (* CR mshinwell: Same code pattern as the tagged immediates cases above,
    factor out. *)
@@ -488,60 +470,49 @@ let these_boxed_int64s is = box_int64 (these_naked_int64s is)
 let these_boxed_nativeints is = box_nativeint (these_naked_nativeints is)
 
 let boxed_float_alias_to ~naked_float =
-  box_float (Naked_number (Equals (Simple.var naked_float), Naked_float))
+  box_float (Naked_float (
+    Type_of_kind_naked_float.create_equals (Simple.var naked_float)))
 
 let boxed_int32_alias_to ~naked_int32 =
-  box_int32 (Naked_number (Equals (Simple.var naked_int32), Naked_int32))
+  box_int32 (Naked_int32 (
+    Type_of_kind_naked_int32.create_equals (Simple.var naked_int32)))
 
 let boxed_int64_alias_to ~naked_int64 =
-  box_int64 (Naked_number (Equals (Simple.var naked_int64), Naked_int64))
+  box_int64 (Naked_int64 (
+    Type_of_kind_naked_int64.create_equals (Simple.var naked_int64)))
 
 let boxed_nativeint_alias_to ~naked_nativeint =
-  box_nativeint (Naked_number (Equals (Simple.var naked_nativeint),
-    Naked_nativeint))
+  box_nativeint (Naked_nativeint (
+    Type_of_kind_naked_nativeint.create_equals (Simple.var naked_nativeint)))
 
-let kind (t : t) =
-  match t with
-  | Value _ -> K.value
-  | Naked_number (_, K.Naked_number.Naked_immediate) -> K.naked_immediate
-  | Naked_number (_, K.Naked_number.Naked_float) -> K.naked_float
-  | Naked_number (_, K.Naked_number.Naked_int32) -> K.naked_int32
-  | Naked_number (_, K.Naked_number.Naked_int64) -> K.naked_int64
-  | Naked_number (_, K.Naked_number.Naked_nativeint) -> K.naked_nativeint
-  | Fabricated _ -> K.fabricated
-
-let immutable_block tag ~(fields : t list) : t =
+let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
+    (* CR mshinwell: This should be a special kind of error. *)
     Misc.fatal_error "Block too long for target"
   | Some _size ->
-    let blocks = Blocks.create ~field_tys:fields (Closed tag) in
-    let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Known (Immediates.create_bottom ());
-        blocks = Known blocks;
-      }
-    in
-    Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
+    Value (T_V.create_no_alias (Ok (
+      Blocks_and_tagged_immediates {
+        immediates = Known (Immediates.create_bottom ());
+        blocks = Known (Blocks.create ~field_tys:fields (Closed tag));
+      })))
 
 let immutable_block_of_values tag ~fields =
-  let fields = List.map (fun ty_value : t -> Value ty_value) fields in
-  immutable_block tag ~fields
+  immutable_block tag ~fields:(List.map (fun ty -> Value ty) fields)
 
-let immutable_block_with_size_at_least ~n ~field_n_minus_one : t =
+let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
         if index < n - 1 then any_value ()
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
-  let blocks = Blocks.create ~field_tys Open in
-  let blocks_imms : blocks_and_tagged_immediates =
-    { immediates = Known (Immediates.create_bottom ());
-      blocks = Known blocks;
-    }
-  in
-  Value (No_alias (Ok (Blocks_and_tagged_immediates blocks_imms)))
+  Value (T_V.create_no_alias (Ok (
+    Blocks_and_tagged_immediates {
+      immediates = Known (Immediates.create_bottom ());
+      blocks = Known (Blocks.create ~field_tys Open);
+    })))
 
 let this_immutable_string str =
   (* CR mshinwell: Use "length" not "size" for strings *)
@@ -550,7 +521,7 @@ let this_immutable_string str =
     String_info.Set.singleton
       (String_info.create ~contents:(Contents str) ~size)
   in
-  Value (No_alias (Ok (String string_info)))
+  Value (T_V.create (String string_info))
 
 let mutable_string ~size =
   let size = Targetint.OCaml.of_int size in
@@ -558,25 +529,22 @@ let mutable_string ~size =
     String_info.Set.singleton
       (String_info.create ~contents:Unknown_or_mutable ~size)
   in
-  Value (No_alias (Ok (String string_info)))
+  Value (T_V.create (String string_info))
 
 let any_boxed_float () = box_float (any_naked_float ())
 let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
 let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-let bottom_like t = bottom (kind t)
-let unknown_like t = unknown (kind t)
-
 let create_inlinable_function_declaration function_decl rec_info
-      : function_declaration =
+      : Function_declaration_type.t =
   Inlinable {
     function_decl;
     rec_info;
   }
 
 let create_non_inlinable_function_declaration ~param_arity ~result_arity
-      ~recursive : function_declaration =
+      ~recursive : Function_declaration_type.t =
   Non_inlinable {
     param_arity;
     result_arity;
@@ -585,8 +553,7 @@ let create_non_inlinable_function_declaration ~param_arity ~result_arity
 
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types
-      ~all_closure_vars_in_set:closure_var_types
-      : t =
+      ~all_closure_vars_in_set:closure_var_types =
   let closure_types = Types_by_closure_id.create closure_types in
   let closures_entry : closures_entry =
     let closure_var_types =
@@ -616,13 +583,9 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
     Closures_entry_by_set_of_closures_contents.create_exactly_multiple
       set_of_closures_contents_to_closures_entry
   in
-  let closures : closures =
-    { by_closure_id;
-    }
-  in
-  Value (No_alias (Ok (Closures closures)))
+  Value (T_V.create (Closures { by_closure_id; }))
 
-let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings : t =
+let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   let closure_ids_and_types =
     Closure_id.Map.map (fun bound_to -> alias_type_of K.value bound_to)
       closure_ids_and_bindings
@@ -652,14 +615,9 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings : t =
     Closures_entry_by_set_of_closures_contents.create_at_least_multiple
       set_of_closures_contents_to_closures_entry
   in
-  let closures : closures =
-    { by_closure_id;
-    }
-  in
-  Value (No_alias (Ok (Closures closures)))
+  Value (T_V.create (Closures { by_closure_id; }))
 
-let closure_with_at_least_this_closure_var closure_var ~closure_element_var
-      : t =
+let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
   let closure_var_types =
     let closure_var_type =
       alias_type_of K.value (Simple.var closure_element_var)
@@ -691,10 +649,10 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var
     { by_closure_id;
     }
   in
-  Value (No_alias (Ok (Closures closures)))
+  Value (T_V.create (Closures { by_closure_id; }))
 
 let array_of_length ~length =
-  Value (No_alias (Ok (Array { length; })))
+  Value (T_V.create (Array { length; }))
 
 let type_for_const (const : Simple.Const.t) =
   match const with
@@ -706,20 +664,6 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_nativeint n -> this_naked_nativeint n
 
 let kind_for_const const = kind (type_for_const const)
-
-let get_alias t =
-  match t with
-  | Value (Equals simple) -> Some simple
-  | Value _ -> None
-  | Naked_number (Equals simple, _) -> Some simple
-  | Naked_number _ -> None
-  | Fabricated (Equals simple) -> Some simple
-  | Fabricated _ -> None
-
-let get_alias_ty ty =
-  match ty with
-  | Equals simple -> Some simple
-  | _ -> None
 
 (* The following was Meet_or_join: *)
 
@@ -798,18 +742,7 @@ let meet_or_join ?bound_name env (t1 : T.t) (t2 : T.t) : T.t * _ =
 module Meet = Meet_or_join.Make (Lattice_ops.For_meet)
 module Join = Meet_or_join.Make (Lattice_ops.For_join)
 
-let meet env t1 t2 =
-let ty, ext =
-  Meet.meet_or_join env t1 t2
-in
-(*
-Format.eprintf "meet:@ %a@ and@ %a@ =@ %a@ with extension:@ %a\n%!"
-  Type_printers.print t1
-  Type_printers.print t2
-  Type_printers.print ty
-  TEE.print ext;
-*)
-ty, ext
+let meet env t1 t2 = Meet.meet_or_join env t1 t2
 
 let join ?bound_name env t1 t2 =
   let env = Meet_env.create env in
