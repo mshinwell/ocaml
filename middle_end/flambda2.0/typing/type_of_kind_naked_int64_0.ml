@@ -16,13 +16,29 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-(** Unboxed ("naked") integer and floating-point numbers. *)
+module Int64 = Numbers.Int64
 
-type 'k t0 =
-  | Immediate : Immediate.Set.t -> Flambda_kind.naked_immediate t0
-  | Float : Numbers.Float_by_bit_pattern.Set.t -> Flambda_kind.naked_float t0
-  | Int32 : Numbers.Int32.Set.t -> Flambda_kind.naked_int32 t0
-  | Int64 : Numbers.Int64.Set.t -> Flambda_kind.naked_int64 t0
-  | Nativeint : Targetint.Set.t -> Flambda_kind.naked_nativeint t0
+type t = Int64.Set.t
 
-type t = N : 'k t0 * 'k Flambda_kind.Naked_number.t -> t
+let print0 ppf t =
+  Format.fprintf ppf "@[(Naked_int64s@ (%a))@]" Int64.Set.print t
+
+let apply_name_permutation t _perm = t
+
+let free_names _t = Name_occurrences.empty
+
+let apply_rec_info t rec_info : _ Or_bottom.t =
+  if Rec_info.is_initial rec_info then Ok t
+  else Bottom
+
+module Make
+  (E : Lattice_ops_intf.S
+    with type meet_env := Meet_env.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t) =
+struct
+  let meet_or_join _env t1 t2 =
+    let t = E.Int64.Set.union_or_inter t1 t2 in
+    if Int64.Set.is_empty t then Bottom
+    else Ok (t, TEE.empty ())
+end

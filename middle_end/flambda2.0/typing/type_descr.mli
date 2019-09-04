@@ -18,24 +18,11 @@
 
 (** Descriptions of types of a particular kind. *)
 
-module Make (Head : sig
-  include Contains_names.S
-
-  module Make_meet_or_join (E : Lattice_ops_intf.S
-    with type meet_env = Meet_env.t
-    with type typing_env_extension = Typing_env_extension.t)
-  : sig
-    val meet_or_join
-       : Meet_env.t
-      -> t
-      -> t
-      -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
-  end
-
-  val force_to_kind : Type_grammar.t -> t
-  val erase_aliases : t -> allowed:Variable.Set.t -> t
-  val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
-end) : sig
+module Make (Head : Type_head_intf.S
+  with type meet_env := Meet_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type type_grammar := Type_grammar.t)
+: sig
   module Descr : sig
     type t = private
       | No_alias of Head.t Or_unknown_or_bottom.t

@@ -16,4 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include Type_descr.Make (Type_of_kind_naked_number0)
+type t = Int64.Set.t
+
+include Type_head_intf.S with type t := t

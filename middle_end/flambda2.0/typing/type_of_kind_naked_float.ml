@@ -16,6 +16,4 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include module type of struct
-  include Type_descr.Make (Type_of_kind_naked_number0)
-end
+include Type_descr.Make (Type_of_kind_naked_float0)
