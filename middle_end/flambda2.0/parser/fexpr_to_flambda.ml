@@ -26,10 +26,12 @@ end
 module SM = Map.Make(S)
 
 type func_env = {
+  code : Fexpr.let_code SM.t;
   symbols : Symbol.t SM.t;
 }
 
 let init_fenv = {
+  code = SM.empty;
   symbols = SM.empty;
 }
 
@@ -70,7 +72,7 @@ let declare_symbol ~backend:_ (env:func_env) (name, loc) =
         (Linkage_name.create name)
     in
     symbol,
-    { (* func_env with *)
+    { env with
       symbols = SM.add name symbol env.symbols }
 
 let get_symbol (env:env) (name, loc) =
@@ -394,6 +396,14 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
       computation;
       static_structure = S structure;
     }
+
+  | Let_code code :: tail ->
+    let (name, _loc) = code.name in
+    let func_env = {
+      func_env with code = SM.add name code func_env.code;
+    } in
+    conv_top ~backend func_env tail
+
   | _ ->
     assert false
 
