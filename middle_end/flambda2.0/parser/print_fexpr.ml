@@ -45,6 +45,11 @@ let variable_opt ppf s =
 let continuation ppf (s, _loc) =
   Format.fprintf ppf "%s" s
 
+let exn_continuation ppf = function
+  | None -> ()
+  | Some c ->
+    Format.fprintf ppf " * %a" continuation c
+
 let kinded_variable ppf (v, (kind:okind)) =
   match kind with
   | None ->
@@ -167,6 +172,12 @@ let typed_parameters ppf = function
     Format.fprintf ppf "@ (@[<hov>%a@])"
       (pp_space_list parameter) args
 
+let closed_elts ppf = function
+  | [] -> ()
+  | params ->
+    Format.fprintf ppf "@ [@[<hov>%a@]]"
+      (pp_space_list variable) params
+
 let switch_case ppf (v, c) =
   Format.fprintf ppf "@ %i -> %a"
     v
@@ -252,8 +263,38 @@ let rec expr ppf = function
       simple_args args
       continuation ret
       continuation exn_continuation
+
+  | Let_closure { closures = closure :: rem_closures; body } ->
+    let { name; params; closure_vars; ret_cont; exn_cont; ret_arity; expr = e } = closure in
+    Format.fprintf ppf "@[<v>@[<v 2>@[<hov 2>closure %a%a%a -> %a%a%a@] {@ %a@]@,}%a@ %a@]"
+      variable name
+      typed_parameters params
+      closed_elts closure_vars
+
+      continuation ret_cont
+      exn_continuation exn_cont
+      return_arity ret_arity
+      expr e
+
+      andclosure rem_closures
+
+      expr body
   | _ ->
     failwith "TODO"
+
+and andclosure ppf l =
+  let closure { name; params; closure_vars; ret_cont; exn_cont; ret_arity; expr = e } =
+    Format.fprintf ppf "@[<v 2>@[<hov 2>@ and %a%a%a -> %a%a%a@] {@ %a@]@,}"
+      variable name
+      typed_parameters params
+      closed_elts closure_vars
+
+      continuation ret_cont
+      exn_continuation exn_cont
+      return_arity ret_arity
+      expr e
+  in
+  List.iter closure l
 
 and andk ppf l =
   let cont { name; params; stub; is_exn_handler; handler } =
@@ -293,11 +334,6 @@ let program_body_elt ppf = function
       expr computation.expr
 
   | Let_code { name; params; ret_cont; exn_cont; ret_arity; expr = e } ->
-      let exn_continuation ppf = function
-        | None -> ()
-        | Some c ->
-            Format.fprintf ppf " * %a" continuation c
-    in
     Format.fprintf ppf "@[<v 2>@[<hov 2>let code %a%a -> %a%a%a =@]@ %a@]"
       symbol name
       typed_parameters params
