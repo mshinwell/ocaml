@@ -14,9 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** The interface to [Flambda_type0] once the type system has been
-    instantiated for a particular expression language (typically
-    [Flambda0]). *)
+(** The interface to the type system once instantiated for a particular
+    expression language (typically [Flambda]). *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
@@ -157,13 +156,6 @@ module type S = sig
   (* CR mshinwell: Substitute out this alias once it's finalised *)
   type 'a type_accessor = Typing_env.t -> 'a
 
-  type 'a ty
-  type 'a unknown_or_join
-
-  type ty_value
-  type 'a ty_naked_number
-  type ty_fabricated
-
   (* CR mshinwell: The function declaration types should probably be abstract *)
 
   type inlinable_function_declaration = private {
@@ -179,26 +171,18 @@ module type S = sig
       }
     | Inlinable of inlinable_function_declaration
 
-  val erase_aliases
-     : Typing_env.t
-    -> bound_name:Name.t option
-    -> allowed:Variable.Set.t
-    -> t
-    -> t
+  val make_suitable_for_environment
+     : t
+    -> Typing_env.t
+    -> suitable_for:Typing_env.t
+    -> t * Typing_env.t
 
-  val erase_aliases_ty_value
-     : Typing_env.t
-    -> bound_name:Name.t option
-    -> allowed:Variable.Set.t
-    -> ty_value
-    -> ty_value
+  val apply_rec_info : flambda_type -> Rec_info.t -> flambda_type Or_bottom.t
 
   val bottom : Flambda_kind.t -> t
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
-
-  val unknown_as_ty_fabricated : unit -> ty_fabricated
 
   val any_value : unit -> t
 
@@ -269,13 +253,6 @@ module type S = sig
     -> fields:t list
     -> t
 
-  (** Like [immutable_block], except that the field types are statically
-      known to be of kind [Value]). *)
-  val immutable_block_of_values
-     : Tag.t
-    -> fields:ty_value list
-    -> t
-
   (** The type of an immutable block with at least [n] fields and an unknown
       tag.
 
@@ -316,7 +293,7 @@ module type S = sig
      : Closure_id.t
     -> all_function_decls_in_set:function_declaration Closure_id.Map.t
     -> all_closures_in_set:t Closure_id.Map.t
-    -> all_closure_vars_in_set:ty_value Var_within_closure.Map.t
+    -> all_closure_vars_in_set:flambda_type Var_within_closure.Map.t
     -> flambda_type
 
   val at_least_the_closures_with_ids
@@ -329,23 +306,14 @@ module type S = sig
     -> closure_element_var:Variable.t
     -> flambda_type
 
-  val array_of_length : length:ty_value -> flambda_type
+  val array_of_length : length:flambda_type -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
-  val alias_type_of_as_ty_value : Simple.t -> ty_value
-
-  (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
-  val alias_type_of_as_ty_fabricated : Simple.t -> ty_fabricated
-
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
-
-  (** Enforce that a type is of kind [Value], returning the corresponding
-      [ty]. *)
-  val force_to_kind_value : t -> ty_value
 
   (** For each of the kinds in an arity, create an "unknown" type. *)
   val unknown_types_from_arity : Flambda_arity.t -> t list
@@ -356,34 +324,6 @@ module type S = sig
 
   val type_for_const : Simple.Const.t -> t
   val kind_for_const : Simple.Const.t -> Flambda_kind.t
-
-  val of_ty_naked_number
-     : 'a ty_naked_number
-    -> 'a Flambda_kind.Naked_number.t
-    -> t
-
-  type symbol_or_tagged_immediate = private
-    | Symbol of Symbol.t
-    | Tagged_immediate of Immediate.t
-
-  type to_lift = (* private *) (* CR mshinwell: resurrect *)
-    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
-    | Boxed_float of Float.t
-    | Boxed_int32 of Int32.t
-    | Boxed_int64 of Int64.t
-    | Boxed_nativeint of Targetint.t
-
-  type reification_result = private
-    | Lift of to_lift
-    | Simple of Simple.t
-    | Cannot_reify
-    | Invalid
-
-  val reify
-     : Typing_env.t
-    -> min_occurrence_kind:Name_occurrence_kind.t
-    -> t
-    -> reification_result
 
   type 'a proof = private
     | Proved of 'a
@@ -417,20 +357,11 @@ module type S = sig
     -> t
     -> Numbers.Float_by_bit_pattern.Set.t proof
 
-  val prove_naked_int32s
-     : Typing_env.t
-    -> t
-    -> Numbers.Int32.Set.t proof
+  val prove_naked_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
 
-  val prove_naked_int64s
-     : Typing_env.t
-    -> t
-    -> Numbers.Int64.Set.t proof
+  val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 
-  val prove_naked_nativeints
-     : Typing_env.t
-    -> t
-    -> Targetint.Set.t proof
+  val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
   val prove_is_a_boxed_float
      : Typing_env.t
@@ -467,10 +398,7 @@ module type S = sig
     -> t
     -> (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch
 
-  val prove_is_int
-     : Typing_env.t
-    -> t
-    -> bool proof
+  val prove_is_int : Typing_env.t -> t -> bool proof
 
   (** Prove that the given type, of kind [Value], is a closures type
       describing exactly one closure.  The function declaration corresponding
@@ -481,13 +409,28 @@ module type S = sig
     -> t
     -> (Closure_id.t * function_declaration Or_unknown.t) proof
 
-  val prove_strings
-     : Typing_env.t
-    -> t
-    -> String_info.Set.t proof
+  val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 
-  val apply_rec_info
-     : flambda_type
-    -> Rec_info.t
-    -> flambda_type Or_bottom.t
+  type symbol_or_tagged_immediate = private
+    | Symbol of Symbol.t
+    | Tagged_immediate of Immediate.t
+
+  type to_lift = (* private *) (* CR mshinwell: resurrect *)
+    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
+    | Boxed_float of Float.t
+    | Boxed_int32 of Int32.t
+    | Boxed_int64 of Int64.t
+    | Boxed_nativeint of Targetint.t
+
+  type reification_result = private
+    | Lift of to_lift
+    | Simple of Simple.t
+    | Cannot_reify
+    | Invalid
+
+  val reify
+     : Typing_env.t
+    -> min_occurrence_kind:Name_occurrence_kind.t
+    -> t
+    -> reification_result
 end

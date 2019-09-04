@@ -91,9 +91,8 @@ let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
         let closure_elements =
           Var_within_closure.Map.add closure_var simple closure_elements
         in
-        let ty_value = T.force_to_kind_value ty in
         let closure_element_types =
-          Var_within_closure.Map.add closure_var ty_value closure_element_types
+          Var_within_closure.Map.add closure_var ty closure_element_types
         in
         closure_elements, closure_element_types)
       (Set_of_closures.closure_elements set_of_closures)

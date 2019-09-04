@@ -612,23 +612,6 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
               try_canonical_simple ()
           | _, _ -> try_canonical_simple ()
           end
-  (*
-        | Resolved_value (Ok (Boxed_number (Boxed_int64 ty_naked_int64))) ->
-          let unknown_or_join, _canonical_simple =
-            Typing_env.resolve_any_toplevel_alias_on_ty0 env
-              ~force_to_kind:force_to_kind_naked_int64
-              ~print_ty:Type_printers.print_ty_naked_int64
-              ty_naked_int64
-          in
-          begin match unknown_or_join with
-          | Ok (Int64 ints) ->
-            begin match Int64.Set.get_singleton ints with
-            | Some i -> Lift (Boxed_int64 i)
-            | None -> Cannot_reify
-            end
-          | _ -> Cannot_reify
-          end
-  *)
         | Resolved_value Bottom
         | Resolved_naked_number (Bottom, _)
         | Resolved_fabricated Bottom -> Invalid

@@ -34,7 +34,9 @@ val print : Format.formatter -> t -> unit
 
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-val erase_aliases : t -> allowed:Variable.Set.t -> t
+val kind : t -> Flambda_kind.t
+
+val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
 val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
@@ -153,18 +155,6 @@ val closure_with_at_least_this_closure_var
   -> t
 
 val array_of_length : length:ty_value -> t
-
-val alias_type_of : Flambda_kind.t -> Simple.t -> t
-
-val kind : t -> Flambda_kind.t
-
-val force_to_kind_value : t -> Type_of_kind_value.t
-val force_to_kind_naked_immediate : t -> Type_of_kind_naked_immediate.t
-val force_to_kind_naked_float : t -> Type_of_kind_naked_float.t
-val force_to_kind_naked_int32 : t -> Type_of_kind_naked_int32.t
-val force_to_kind_naked_int64 : t -> Type_of_kind_naked_int64.t
-val force_to_kind_naked_nativeint : t -> Type_of_kind_naked_nativeint.t
-val force_to_kind_fabricated : t -> Type_of_kind_fabricated.t
 
 val make_suitable_for_environment
    : t
