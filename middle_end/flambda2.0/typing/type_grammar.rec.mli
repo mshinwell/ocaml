@@ -38,12 +38,6 @@ val erase_aliases : t -> allowed:Variable.Set.t -> t
 
 val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
-(** Greatest lower bound of two types. *)
-val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
-
-(** Least upper bound of two types. *)
-val join : ?bound_name:Name.t -> Typing_env.t -> t -> t -> t
-
 val get_alias : t -> Simple.t option
 
 val is_obviously_bottom : t -> bool
@@ -179,3 +173,9 @@ val make_suitable_for_environment
   -> t * Typing_env.t
 
 val expand_head : t -> Typing_env.t -> Resolved_type.t
+
+(** Greatest lower bound of two types. *)
+val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
+
+(** Least upper bound of two types. *)
+val join : ?bound_name:Name.t -> Typing_env.t -> t -> t -> t

@@ -72,19 +72,27 @@ end) : sig
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
-  val expand_head
-     : t
-    -> Typing_env.t
-    -> force_to_kind:(Type_grammar.t -> t)
-    -> Head.t Or_unknown_or_bottom.t
-
-  val meet : Meet_env.t -> t -> t -> t Or_bottom.t
-
-  val join : ?bound_name:Name.t -> Meet_env.t -> t -> t -> t Or_bottom.t
-
   val make_suitable_for_environment
      : t
     -> Typing_env.t
     -> suitable_for:Typing_env.t
     -> t * Typing_env.t
+
+  module Make_operations (S :
+    val force_to_kind : Type_grammar.t -> t
+    val to_type : t -> Type_grammar.t
+  end) : sig
+    val expand_head : t -> Typing_env.t -> Head.t Or_unknown_or_bottom.t
+
+    module Make_meet_or_join (E : Lattice_ops_intf.S
+      with type meet_env = Meet_env.t
+      with type typing_env_extension = Typing_env_extension.t)
+    : sig
+      val meet_or_join
+         : Meet_env.t
+        -> t
+        -> t
+        -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
+    end
+  end
 end

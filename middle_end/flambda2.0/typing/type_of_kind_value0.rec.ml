@@ -197,93 +197,115 @@ module Make_meet_and_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join_blocks_and_tagged_immediates env
-        ~blocks1 ~imms1 ~blocks2 ~imms2 : _ Or_bottom.t =
-    let blocks =
-      E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
-        env blocks1 blocks2
-    in
-    let imms =
-      E.switch (meet_unknown Immediates.meet) (join_unknown Immediates.join)
-        env imms1 imms2
-    in
-    match blocks, imms with
-    | Bottom, Bottom -> Bottom
-    | Ok (blocks, env_extension), Bottom ->
-      let immediates : _ Or_unknown.t = Known (Immediates.create_bottom ()) in
-      Ok (blocks, immediates, env_extension)
-    | Bottom, Ok (immediates, env_extension) ->
-      let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in
-      Ok (blocks, immediates, env_extension)
-    | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
-      let env_extension =
-        (* XXX *)
-        let left_env = Meet_env.env env in
-        let right_env = Meet_env.env env in
-        (* CR mshinwell: Move to [TEE] *)
-        let join_extensions env ext1 ext2 =
-          let env_extension, _ =
-            TEE.n_way_join env [
-              left_env, Apply_cont_rewrite_id.create (), ext1;
-              right_env, Apply_cont_rewrite_id.create (), ext2;
-            ]
-          in
-          env_extension
+  let meet_unknown meet_contents env
+      (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
+      : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
+    match or_unknown1, or_unknown2 with
+    | Unknown, Unknown -> Ok (Unknown, TEE.empty ())
+    | _, Unknown -> Ok (or_unknown1, TEE.empty ())
+    | Unknown, _ -> Ok (or_unknown2, TEE.empty ())
+    | Known contents1, Known contents2 ->
+      Or_bottom.map (meet_contents env contents1 contents2)
+        ~f:(fun (contents, env_extension) ->
+          Or_unknown.Known contents, env_extension)
+
+  let join_unknown join_contents env
+      (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
+      : _ Or_unknown.t =
+    match or_unknown1, or_unknown2 with
+    | Unknown, Unknown
+    | _, Unknown
+    | Unknown, _ -> Unknown
+    | Known contents1, Known contents2 ->
+      Known (join_contents env contents1 contents2)
+
+let meet_or_join_blocks_and_tagged_immediates env
+      ~blocks1 ~imms1 ~blocks2 ~imms2 : _ Or_bottom.t =
+  let blocks =
+    E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
+      env blocks1 blocks2
+  in
+  let imms =
+    E.switch (meet_unknown Immediates.meet) (join_unknown Immediates.join)
+      env imms1 imms2
+  in
+  match blocks, imms with
+  | Bottom, Bottom -> Bottom
+  | Ok (blocks, env_extension), Bottom ->
+    let immediates : _ Or_unknown.t = Known (Immediates.create_bottom ()) in
+    Ok (blocks, immediates, env_extension)
+  | Bottom, Ok (immediates, env_extension) ->
+    let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in
+    Ok (blocks, immediates, env_extension)
+  | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
+    let env_extension =
+      (* XXX *)
+      let left_env = Meet_env.env env in
+      let right_env = Meet_env.env env in
+      (* CR mshinwell: Move to [TEE] *)
+      let join_extensions env ext1 ext2 =
+        let env_extension, _ =
+          TEE.n_way_join env [
+            left_env, Apply_cont_rewrite_id.create (), ext1;
+            right_env, Apply_cont_rewrite_id.create (), ext2;
+          ]
         in
-        E.switch0 TEE.meet join_extensions env
-          env_extension1 env_extension2
+        env_extension
       in
-      Ok (blocks, immediates, env_extension)
+      E.switch0 TEE.meet join_extensions env
+        env_extension1 env_extension2
+    in
+    Ok (blocks, immediates, env_extension)
 
-  let meet_or_join_naked_number env n1 n2 meet_or_join_ty box =
-    Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
-      ~f:(fun (n, env_extension) -> T.Boxed_number (box n), env_extension)
+let meet_or_join_naked_number env n1 n2 meet_or_join_ty box =
+  Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
+    ~f:(fun (n, env_extension) -> T.Boxed_number (box n), env_extension)
 
-  let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
-    match of_kind1, of_kind2 with
-    | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
-      Blocks_and_tagged_immediates { blocks = blocks2; immediates = imms2; } ->
-      Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_blocks_and_tagged_immediates env
-          ~blocks1 ~imms1 ~blocks2 ~imms2)
-        ~f:(fun (blocks, immediates, env_extension) ->
-          T.Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
-    | Boxed_number (Boxed_float n1),
-      Boxed_number (Boxed_float n2) ->
-      meet_or_join_naked_number env n1 n2
-        (* CR mshinwell: Sort out this [bound_name] stuff *)
-        (Naked_float.meet_or_join_ty ?bound_name:None)
-        (fun n -> T.Boxed_float n)
-    | Boxed_number (Boxed_int32 n1), Boxed_number (Boxed_int32 n2) ->
-      meet_or_join_naked_number env n1 n2
-        (Naked_int32.meet_or_join_ty ?bound_name:None)
-        (fun n -> T.Boxed_int32 n)
-    | Boxed_number (Boxed_int64 n1), Boxed_number (Boxed_int64 n2) ->
-      meet_or_join_naked_number env n1 n2
-        (Naked_int64.meet_or_join_ty ?bound_name:None)
-        (fun n -> T.Boxed_int64 n)
-    | Boxed_number (Boxed_nativeint n1), Boxed_number (Boxed_nativeint n2) ->
-      meet_or_join_naked_number env n1 n2
-        (Naked_nativeint.meet_or_join_ty ?bound_name:None)
-        (fun n -> T.Boxed_nativeint n)
-    | Closures { by_closure_id = by_closure_id1; },
-        Closures { by_closure_id = by_closure_id2; } ->
-      let module C = Closures_entry_by_set_of_closures_contents in
-      Or_bottom_or_absorbing.of_or_bottom
-        (E.switch C.meet C.join env by_closure_id1 by_closure_id2)
-        ~f:(fun (by_closure_id, env_extension) ->
-          T.Closures { by_closure_id; }, env_extension)
-    | String strs1, String strs2 ->
-      let strs = E.String_info.Set.union_or_inter strs1 strs2 in
-      if String_info.Set.is_empty strs then Bottom
-      else Or_bottom_or_absorbing.Ok (String strs, TEE.empty ())
-    | Array { length = length1; }, Array { length = length2; } ->
-      Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_ty ?bound_name:None env length1 length2)
-        ~f:(fun (length, env_extension) -> T.Array { length }, env_extension)
-    | (Blocks_and_tagged_immediates _
-        | Boxed_number _
-        | Closures _
-        | String _
-        | Array _), _ -> Absorbing
+let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
+  match of_kind1, of_kind2 with
+  | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
+    Blocks_and_tagged_immediates { blocks = blocks2; immediates = imms2; } ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (meet_or_join_blocks_and_tagged_immediates env
+        ~blocks1 ~imms1 ~blocks2 ~imms2)
+      ~f:(fun (blocks, immediates, env_extension) ->
+        T.Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
+  | Boxed_number (Boxed_float n1),
+    Boxed_number (Boxed_float n2) ->
+    meet_or_join_naked_number env n1 n2
+      (* CR mshinwell: Sort out this [bound_name] stuff *)
+      (Naked_float.meet_or_join_ty ?bound_name:None)
+      (fun n -> T.Boxed_float n)
+  | Boxed_number (Boxed_int32 n1), Boxed_number (Boxed_int32 n2) ->
+    meet_or_join_naked_number env n1 n2
+      (Naked_int32.meet_or_join_ty ?bound_name:None)
+      (fun n -> T.Boxed_int32 n)
+  | Boxed_number (Boxed_int64 n1), Boxed_number (Boxed_int64 n2) ->
+    meet_or_join_naked_number env n1 n2
+      (Naked_int64.meet_or_join_ty ?bound_name:None)
+      (fun n -> T.Boxed_int64 n)
+  | Boxed_number (Boxed_nativeint n1), Boxed_number (Boxed_nativeint n2) ->
+    meet_or_join_naked_number env n1 n2
+      (Naked_nativeint.meet_or_join_ty ?bound_name:None)
+      (fun n -> T.Boxed_nativeint n)
+  | Closures { by_closure_id = by_closure_id1; },
+      Closures { by_closure_id = by_closure_id2; } ->
+    let module C = Closures_entry_by_set_of_closures_contents in
+    Or_bottom_or_absorbing.of_or_bottom
+      (E.switch C.meet C.join env by_closure_id1 by_closure_id2)
+      ~f:(fun (by_closure_id, env_extension) ->
+        T.Closures { by_closure_id; }, env_extension)
+  | String strs1, String strs2 ->
+    let strs = E.String_info.Set.union_or_inter strs1 strs2 in
+    if String_info.Set.is_empty strs then Bottom
+    else Or_bottom_or_absorbing.Ok (String strs, TEE.empty ())
+  | Array { length = length1; }, Array { length = length2; } ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (meet_or_join_ty ?bound_name:None env length1 length2)
+      ~f:(fun (length, env_extension) -> T.Array { length }, env_extension)
+  | (Blocks_and_tagged_immediates _
+      | Boxed_number _
+      | Closures _
+      | String _
+      | Array _), _ -> Absorbing
 end
