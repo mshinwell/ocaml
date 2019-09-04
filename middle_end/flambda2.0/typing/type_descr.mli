@@ -62,6 +62,8 @@ end) : sig
 
   val get_alias : t -> Simple.t option
 
+  val is_obviously_bottom : t -> bool
+
   (* CR mshinwell: Try to use [Type_structure_intf] or similar *)
 
   include Contains_names.S with type t := t
@@ -70,7 +72,11 @@ end) : sig
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
-  val is_obviously_bottom : t -> bool
+  val expand_head
+     : t
+    -> Typing_env.t
+    -> force_to_kind:(Type_grammar.t -> t)
+    -> Head.t Or_unknown_or_bottom.t
 
   val meet : Meet_env.t -> t -> t -> t Or_bottom.t
 
@@ -81,6 +87,4 @@ end) : sig
     -> Typing_env.t
     -> suitable_for:Typing_env.t
     -> t * Typing_env.t
-
-  val expand_head : t -> Typing_env.t -> ???
 end

@@ -126,13 +126,13 @@ end) = struct
       | Bottom -> Bottom
       | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
-  let force_to_head t =
-    match descr t with
+  let force_to_head t ~force_to_kind =
+    match descr (force_to_kind t) with
     | No_alias head -> head
     | Type _ | Equals _ ->
       Misc.fatal_errorf "Expected [No_alias]:@ %a" print t
 
-  let expand_head t env : _ Or_unknown_or_bottom.t =
+  let expand_head t env ~force_to_kind : _ Or_unknown_or_bottom.t =
     match descr t with
     | No_alias head -> head
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
@@ -160,7 +160,7 @@ end) = struct
             | Naked_int64 i -> T.this_naked_int64_without_alias i
             | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
           in
-          force_to_head typ
+          force_to_head typ ~force_to_kind
         | Discriminant discr ->
           let typ =
             match Discriminant.sort discr with
@@ -169,7 +169,7 @@ end) = struct
               T.this_tagged_immediate_without_alias imm
             | Is_int | Tag -> T.this_discriminant_without_alias discr
           in
-          force_to_head typ
+          force_to_head typ ~force_to_kind
         | Name name ->
           let t = force_to_kind (find t name) in
           match t with
