@@ -45,6 +45,7 @@ type token =
   | COLONEQUAL
   | COLON
   | CODE
+  | CLOSURE
   | CCALL
   | BLOCK
   | BANG

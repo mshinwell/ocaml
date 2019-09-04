@@ -42,6 +42,7 @@ let keyword_table =
     "and", AND;
     "apply", APPLY;
     "ccall", CCALL;
+    "closure", CLOSURE;
     "code", CODE;
     "cont", CONT;
     "def", DEF;

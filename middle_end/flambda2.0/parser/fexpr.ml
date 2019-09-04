@@ -161,6 +161,7 @@ type switch_sort =
 
 type expr =
   | Let of let_
+  | Let_closure of let_closure
   | Let_mutable of {
       var : variable;
       initial_value : simple;
@@ -176,6 +177,21 @@ type expr =
       cases : (int * continuation) list;
     }
   | Invalid of invalid_term_semantics
+
+and closure = {
+  name : variable;
+  params : typed_parameter list;
+  closure_vars : variable list;
+  ret_cont : continuation;
+  exn_cont : continuation option;
+  ret_arity : flambda_arity option;
+  expr : expr;
+}
+
+and let_closure = {
+  closures : closure list;
+  body : expr;
+}
 
 and let_ = {
     var : variable_opt;

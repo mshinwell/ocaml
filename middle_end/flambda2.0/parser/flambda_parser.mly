@@ -40,6 +40,7 @@ let make_const_float (i, m) =
 %token BANG [@symbol "!"]
 %token BLOCK [@symbol "Block"]
 %token CCALL  [@symbol "ccall"]
+%token CLOSURE  [@symbol "closure"]
 %token CODE  [@symbol "code"]
 %token COLON  [@symbol ":"]
 %token COLONEQUAL  [@symbol ":="]
@@ -212,7 +213,16 @@ expr:
               return_arity = ra;
             };
        }}
+  | CLOSURE c = separated_nonempty_list(AND, closure) body = expr
+    { Let_closure { closures = c; body } }
 ;
+
+closure:
+  | name = variable params = typed_args closure_vars = closure_elements
+    MINUSGREATER ret_cont = continuation
+    exn_cont = option(exn_continuation)
+    ret_arity = return_arity LBRACE expr = expr RBRACE
+    { { name; params; closure_vars; ret_cont; exn_cont; ret_arity; expr } }
 
 exn_and_stub:
   | { false, false }
@@ -255,6 +265,10 @@ effect:
         in
         { computation = Some computation; static_structure = [] } }
 ;
+
+closure_elements:
+  | LBRACKET v = variable* RBRACKET { v }
+  | { [] }
 
 typed_args:
   | LPAREN v = typed_variable* RPAREN { v }
