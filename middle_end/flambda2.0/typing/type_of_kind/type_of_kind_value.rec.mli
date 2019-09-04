@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include module type of struct
-  include Type_descr.Make (Type_of_kind_value0)
-end
+include Type_descr_intf.S
+  with type flambda_type := Type_grammar.t
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type head := Type_of_kind_value0.t

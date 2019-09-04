@@ -3,6 +3,7 @@
   (deps
     rec_modules
     flambda_type0.templ.ml
+    type_descr.rec.ml
     type_grammar.rec.ml
     type_of_kind/type_of_kind_value.rec.ml
     type_of_kind/type_of_kind_value0.rec.ml
@@ -35,6 +36,7 @@
     generic_structures/product.rec.ml
     generic_structures/row_like.rec.ml
     generic_structures/trivial_row_like.rec.ml
+    type_descr.rec.mli
     type_grammar.rec.mli
     type_of_kind/type_of_kind_value.rec.mli
     type_of_kind/type_of_kind_value0.rec.mli

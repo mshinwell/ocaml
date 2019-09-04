@@ -16,9 +16,17 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include Type_descr_intf.S
-  with type flambda_type := Type_grammar.t
-  with type typing_env := Typing_env.t
-  with type typing_env_extension := Typing_env_extension.t
-  with type meet_env := Meet_env.t
-  with type head := Type_of_kind_naked_float0.t
+type inlinable = {
+  function_decl : Term_language_function_declaration.t;
+  rec_info : Rec_info.t;
+}
+
+type t =
+  | Non_inlinable of {
+      param_arity : Flambda_arity.t;
+      result_arity : Flambda_arity.t;
+      recursive : Recursive.t;
+    }
+  | Inlinable of inlinable
+
+val print_with_cache : cache:Printing_cache.t -> t -> unit

@@ -129,7 +129,7 @@ module type S = sig
       rec_info : Rec_info.t;
     }
 
-    type function_declaration = private
+    type t = private
       | Non_inlinable of {
           param_arity : Flambda_arity.t;
           result_arity : Flambda_arity.t;
@@ -254,7 +254,7 @@ module type S = sig
   val create_inlinable_function_declaration
      : term_language_function_declaration
     -> Rec_info.t
-    -> function_declaration
+    -> Function_declaration_type.t
 
   (** Create a description of a function declaration whose code is unknown.
       Such declarations cannot be inlined, but can be direct called. *)
@@ -262,11 +262,11 @@ module type S = sig
      : param_arity:Flambda_arity.t
     -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t
-    -> function_declaration
+    -> Function_declaration_type.t
 
   val exactly_this_closure
      : Closure_id.t
-    -> all_function_decls_in_set:function_declaration Closure_id.Map.t
+    -> all_function_decls_in_set:Function_declaration_type.t Closure_id.Map.t
     -> all_closures_in_set:t Closure_id.Map.t
     -> all_closure_vars_in_set:flambda_type Var_within_closure.Map.t
     -> flambda_type
@@ -382,7 +382,7 @@ module type S = sig
   val prove_single_closures_entry
      : Typing_env.t
     -> t
-    -> (Closure_id.t * function_declaration Or_unknown.t) proof
+    -> (Closure_id.t * Function_declaration_type.t Or_unknown.t) proof
 
   val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 

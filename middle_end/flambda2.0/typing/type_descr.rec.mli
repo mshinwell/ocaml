@@ -16,9 +16,15 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include Type_descr_intf.S
+(** Descriptions of types of a particular kind. *)
+
+module Make (Head : Type_head_intf.S
+  with type meet_env := Meet_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type type_grammar := Type_grammar.t)
+: Type_descr_intf.S
   with type flambda_type := Type_grammar.t
   with type typing_env := Typing_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type meet_env := Meet_env.t
-  with type head := Type_of_kind_naked_float0.t
+  with type head := Head.t

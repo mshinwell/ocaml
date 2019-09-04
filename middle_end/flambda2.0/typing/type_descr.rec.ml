@@ -163,10 +163,10 @@ module Make (Head : Type_head_intf.S
 
   (* The [Make_operations] functor enables operations that involve
      [Type_grammar.t] values to be obtained. *)
-  module Make_operations (S :
+  module Make_operations (S : sig
     val force_to_kind : Type_grammar.t -> t
     val to_type : t -> Type_grammar.t
-  end) : sig
+  end) = struct
     let force_to_head t =
       match descr (S.force_to_kind t) with
       | No_alias head -> head

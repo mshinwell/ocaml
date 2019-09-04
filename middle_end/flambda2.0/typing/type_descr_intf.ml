@@ -16,16 +16,16 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-(** Descriptions of types of a particular kind. *)
+module type S = sig
+  type flambda_type
+  type typing_env
+  type typing_env_extension
+  type meet_env
+  type head
 
-module Make (Head : Type_head_intf.S
-  with type meet_env := Meet_env.t
-  with type typing_env_extension := Typing_env_extension.t
-  with type type_grammar := Type_grammar.t)
-: sig
   module Descr : sig
     type t = private
-      | No_alias of Head.t Or_unknown_or_bottom.t
+      | No_alias of head Or_unknown_or_bottom.t
         (** For each kind there is a lattice of types.
             Unknown = "Any value can flow to this point": the top element.
             Bottom = "No value can flow to this point": the least element.
@@ -36,11 +36,11 @@ module Make (Head : Type_head_intf.S
 
   type t
 
-  val create_no_alias : Head.t Or_unknown_or_bottom.t -> t
+  val create_no_alias : head Or_unknown_or_bottom.t -> t
   val create_equals : Simple.t -> t
   val create_type : Export_id.t -> t
 
-  val create : Head.t -> t
+  val create : head -> t
 
   val unknown : t
   val bottom : t
@@ -61,25 +61,25 @@ module Make (Head : Type_head_intf.S
 
   val make_suitable_for_environment
      : t
-    -> Typing_env.t
-    -> suitable_for:Typing_env.t
-    -> t * Typing_env.t
+    -> typing_env
+    -> suitable_for:typing_env
+    -> t * typing_env
 
-  module Make_operations (S :
-    val force_to_kind : Type_grammar.t -> t
-    val to_type : t -> Type_grammar.t
+  module Make_operations (S : sig
+    val force_to_kind : flambda_type -> t
+    val to_type : t -> flambda_type
   end) : sig
-    val expand_head : t -> Typing_env.t -> Head.t Or_unknown_or_bottom.t
+    val expand_head : t -> typing_env -> head Or_unknown_or_bottom.t
 
     module Make_meet_or_join (E : Lattice_ops_intf.S
-      with type meet_env = Meet_env.t
-      with type typing_env_extension = Typing_env_extension.t)
+      with type meet_env = meet_env
+      with type typing_env_extension = typing_env_extension)
     : sig
       val meet_or_join
-         : Meet_env.t
+         : meet_env
         -> t
         -> t
-        -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
+        -> (t * typing_env_extension) Or_bottom_or_absorbing.t
     end
   end
 end
