@@ -18,7 +18,11 @@
 
 type resolved_t =
   | Value of Type_of_kind_value0.t
-  | Naked_number of Type_of_kind_naked_number0.t
+  | Naked_immediate of Type_of_kind_naked_immediate0.t
+  | Naked_float of Type_of_kind_naked_float0.t
+  | Naked_int32 of Type_of_kind_naked_int32_0.t
+  | Naked_int64 of Type_of_kind_naked_int64_0.t
+  | Naked_nativeint of Type_of_kind_naked_nativeint0.t
   | Fabricated of Type_of_kind_fabricated0.t
 
 type t =

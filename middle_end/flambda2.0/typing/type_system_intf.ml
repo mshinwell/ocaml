@@ -68,6 +68,8 @@ module type S = sig
 
     val resolver : t -> (Export_id.t -> flambda_type option)
 
+    val var_domain : t -> Variable.Set.t
+
     val current_scope : t -> Scope.t
 
     val increment_scope_to : t -> Scope.t -> t
@@ -81,6 +83,8 @@ module type S = sig
       -> Flambda_primitive.Eligible_for_cse.t
       -> bound_to:Simple.t
       -> t
+
+    val mem : t -> Name.t -> bool
 
     val find : t -> Name.t -> flambda_type
 
