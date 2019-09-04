@@ -18,6 +18,24 @@
 
 open! Simplify_import
 
+let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
+  let result = Name_in_binding_pos.var result_var in
+  let env = Typing_env.add_definition env result result_kind in
+  let env = Meet_env.create env in
+(*
+Format.eprintf "Meeting: %a@ and@ %a\n%!"
+Type_printers.print t
+Type_printers.print shape;
+*)
+  let meet_ty, env_extension = meet env t shape in
+(*
+Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
+Type_printers.print meet_ty
+Typing_env_extension.print env_extension;
+*)
+  if is_obviously_bottom meet_ty then Bottom
+  else Ok env_extension
+
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DE.typing_env (DA.denv dacc) in
@@ -27,7 +45,7 @@ Format.eprintf "simplify_projection: original_term %a@ shape:@ %a@ deconstructin
   T.print shape
   T.print deconstructing;
 *)
-  match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
+  match meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty (), dacc
   | Ok env_extension ->
 (*

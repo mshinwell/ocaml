@@ -41,41 +41,12 @@ module Make
   include Basic_type_ops
   include Type_grammar
 
-  let meet env t1 t2 = Api_meet_and_join.meet env t1 t2
-  let join env t1 t2 = Api_meet_and_join.join env t1 t2
-
-  let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
-    let result = Name_in_binding_pos.var result_var in
-    let env = Typing_env.add_definition env result result_kind in
-    let env = Meet_env.create env in
-(*
-Format.eprintf "Meeting: %a@ and@ %a\n%!"
-  Type_printers.print t
-  Type_printers.print shape;
-*)
-    let meet_ty, env_extension = meet env t shape in
-(*
-Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
-  Type_printers.print meet_ty
-  Typing_env_extension.print env_extension;
-*)
-    if is_obviously_bottom meet_ty then Bottom
-    else Ok env_extension
-
   let meet env t1 t2 : _ Or_bottom.t =
     let meet_env = Meet_env.create env in
     (* CR mshinwell: We shouldn't need to do this Or_bottom.t recovery *)
     let meet_ty, env_extension = meet meet_env t1 t2 in
     if is_obviously_bottom meet_ty then Bottom
     else Ok (meet_ty, env_extension)
-
-  let erase_aliases env ~bound_name ~allowed t =
-    Type_erase_aliases.erase_aliases env ~bound_name
-      ~already_seen:Simple.Set.empty ~allowed t
-
-  let erase_aliases_ty_value env ~bound_name ~allowed ty_value =
-    Type_erase_aliases.erase_aliases_ty_value env ~bound_name
-      ~already_seen:Simple.Set.empty ~allowed ty_value
 
   let arity_of_list ts =
     Flambda_arity.create (List.map kind ts)
@@ -92,9 +63,6 @@ Format.eprintf "meet_ty: %a@ TEE: %a\n%!"
 
   let unknown_types_from_arity arity =
     List.map (fun kind -> unknown kind) arity
-
-  let of_ty_naked_number ty_naked_number kind : t =
-    Naked_number (ty_naked_number, kind)
 
   let is_bottom env t =
     match Typing_env.expand_head env t with

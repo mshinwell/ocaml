@@ -46,12 +46,6 @@ module type S = sig
   module Typing_env_extension : sig
     type t = typing_env_extension
 
-    val print_with_cache
-       : cache:Printing_cache.t
-      -> Format.formatter
-      -> t
-      -> unit
-
     val print : Format.formatter -> t -> unit
 
     val invariant : t -> unit
@@ -59,8 +53,6 @@ module type S = sig
     val empty : unit -> t
 
     val one_equation : Name.t -> flambda_type -> t
-
-    val mem : t -> Name.t -> bool
   end
 
   module Typing_env : sig
@@ -72,37 +64,25 @@ module type S = sig
 
     val create : resolver:(Export_id.t -> flambda_type option) -> t
 
-    val create_using_resolver_from : t -> t
-
     val create_using_resolver_and_symbol_bindings_from : t -> t
 
     val resolver : t -> (Export_id.t -> flambda_type option)
 
-    val is_empty : t -> bool
-
     val current_scope : t -> Scope.t
 
-    val increment_scope : t -> t
-
     val increment_scope_to : t -> Scope.t -> t
-
-    val domain : t -> Name_occurrences.t
-
-    val var_domain : t -> Variable.Set.t
 
     val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
     val add_equation : t -> Name.t -> flambda_type -> t
-
-    val mem : t -> Name.t -> bool
-
-    val find : t -> Name.t -> flambda_type
 
     val add_cse
        : t
       -> Flambda_primitive.Eligible_for_cse.t
       -> bound_to:Simple.t
       -> t
+
+    val find : t -> Name.t -> flambda_type
 
     val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
 
@@ -128,26 +108,12 @@ module type S = sig
       -> Simple.t
       -> Simple.t option Or_bottom.t * Flambda_kind.t
 
-    val aliases_of_simple
-       : t
-      -> min_occurrence_kind:Name_occurrence_kind.t
-      -> Simple.t
-      -> Simple.Set.t
-
     val cut_and_n_way_join
        : t
       -> (t * Apply_cont_rewrite_id.t) list
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Continuation_extra_params_and_args.t
   end
-
-  val meet_shape
-     : Typing_env.t
-    -> flambda_type
-    -> shape:flambda_type
-    -> result_var:Var_in_binding_pos.t
-    -> result_kind:Flambda_kind.t
-    -> Typing_env_extension.t Or_bottom.t
 
   val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
 
@@ -156,21 +122,34 @@ module type S = sig
   (* CR mshinwell: Substitute out this alias once it's finalised *)
   type 'a type_accessor = Typing_env.t -> 'a
 
-  (* CR mshinwell: The function declaration types should probably be abstract *)
+  (* CR mshinwell: The function declaration types should be abstract *)
+  module Function_declaration_type : sig
+    type inlinable = private {
+      function_decl : term_language_function_declaration;
+      rec_info : Rec_info.t;
+    }
 
-  type inlinable_function_declaration = private {
-    function_decl : term_language_function_declaration;
-    rec_info : Rec_info.t;
-  }
+    type function_declaration = private
+      | Non_inlinable of {
+          param_arity : Flambda_arity.t;
+          result_arity : Flambda_arity.t;
+          recursive : Recursive.t;
+        }
+      | Inlinable of inlinable
+  end
 
-  type function_declaration = private
-    | Non_inlinable of {
-        param_arity : Flambda_arity.t;
-        result_arity : Flambda_arity.t;
-        recursive : Recursive.t;
-      }
-    | Inlinable of inlinable_function_declaration
-
+  (** This function takes a type [t] and an environment [env] that assigns types
+      to all the free names of [t].  It also takes an environment, called
+      [suitable_for], in which we would like to use [t].  The function
+      identifies which free names (if any) of [t] would be unbound in
+      [suitable_for].  For each such name a fresh variable is assigned and
+      irrelevantly bound in [suitable_for]; the returned type is like [t]
+      except that the names that would otherwise be unbound are replaced by
+      these fresh variables.  The fresh variables are assigned types in the
+      returned environment, which is an augmented version of [suitable_for],
+      on a best effort basis.  (In particular aliases found in [t] are
+      resolved in [env] to try to get to canonical representatives that are
+      also in the supplied [suitable_for].) *)
   val make_suitable_for_environment
      : t
     -> Typing_env.t
@@ -179,10 +158,17 @@ module type S = sig
 
   val apply_rec_info : flambda_type -> Rec_info.t -> flambda_type Or_bottom.t
 
+  (** Construct a bottom type of the given kind. *)
   val bottom : Flambda_kind.t -> t
 
-  (** Construction of top types. *)
+  (** Construct a top ("unknown") type of the given kind. *)
   val unknown : Flambda_kind.t -> t
+
+  (** Create an bottom type with the same kind as the given type. *)
+  val bottom_like : t -> t
+
+  (** Create an "unknown" type with the same kind as the given type. *)
+  val unknown_like : t -> t
 
   val any_value : unit -> t
 
@@ -248,15 +234,10 @@ module type S = sig
   (* CR mshinwell: decide on exact strategy for mutable blocks *)
 
   (** The type of an immutable block with a known tag, size and field types. *)
-  val immutable_block
-     : Tag.t
-    -> fields:t list
-    -> t
+  val immutable_block : Tag.t -> fields:t list -> t
 
   (** The type of an immutable block with at least [n] fields and an unknown
-      tag.
-
-      The type of the [n - 1]th field is taken to be an [Equals] to the
+      tag. The type of the [n - 1]th field is taken to be an [Equals] to the
       given variable. *)
   (* CR mshinwell: Should add "kind" argument?  Implementation assumes
      "value" at the moment *)
@@ -268,12 +249,6 @@ module type S = sig
   val this_immutable_string : string -> t
 
   val mutable_string : size:int -> t
-
-  (** Create an "bottom" type with the same kind as the given type. *)
-  val bottom_like : t -> t
-
-  (** Create an "unknown" type with the same kind as the given type. *)
-  val unknown_like : t -> t
 
   (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration

@@ -16,25 +16,34 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val simplify_projection
-   : Downwards_acc.t
-  -> original_term:Flambda.Named.t
-  -> deconstructing:Flambda_type.t
-  -> shape:Flambda_type.t
+open! Simplify_common
+
+val meet_shape
+   : TE.t
+  -> T.t
+  -> shape:T.t
   -> result_var:Var_in_binding_pos.t
-  -> result_kind:Flambda_kind.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
+  -> result_kind:K.t
+  -> TEE.t Or_bottom.t
+
+val simplify_projection
+   : DA.t
+  -> original_term:Flambda.Named.t
+  -> deconstructing:T.t
+  -> shape:T.t
+  -> result_var:Var_in_binding_pos.t
+  -> result_kind:K.t
+  -> Reachable.t * TEE.t * DA.t
 
 type cse =
-  | Invalid of Flambda_type.t
-  | Applied of
-      (Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t)
-  | Not_applied of Downwards_acc.t
+  | Invalid of T.t
+  | Applied of (Reachable.t * TEE.t * DA.t)
+  | Not_applied of DA.t
 
 val try_cse
-   : Downwards_acc.t
-  -> original_prim:Flambda_primitive.t
-  -> result_kind:Flambda_kind.t
+   : DA.t
+  -> original_prim:P.t
+  -> result_kind:K.t
   -> min_occurrence_kind:Name_occurrence_kind.t
   -> result_var:Variable.t
   -> cse
