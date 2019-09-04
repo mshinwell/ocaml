@@ -101,16 +101,6 @@ val get_alias_then_canonical_simple
   -> Type_grammar.t
   -> Simple.t option Or_bottom.t
 
-val expand_head_ty
-   : t
-  -> force_to_kind:(Type_grammar.t -> 'a Type_grammar.ty)
-  -> apply_rec_info:('a -> Rec_info.t -> 'a Or_bottom.t)
-  -> print_ty:(Format.formatter -> 'a Type_grammar.ty -> unit)
-  -> 'a Type_grammar.ty
-  -> 'a Type_grammar.unknown_or_join
-
-val expand_head : t -> Type_grammar.t -> Type_grammar.resolved
-
 val aliases_of_simple
    : t
   -> min_occurrence_kind:Name_occurrence_kind.t

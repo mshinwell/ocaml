@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module T = Type_grammar
+module TE = Typing_env
+
 module Make (Head : sig
   include Contains_names.S
 
@@ -30,7 +33,7 @@ module Make (Head : sig
       -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
   end
 
-  val force_to_kind : Type_grammar.t -> t
+  val force_to_kind : T.t -> t
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 end) = struct
   module Descr = struct
@@ -67,11 +70,9 @@ end) = struct
       if Name_permutation.is_empty perm then t
       else
         match t with
-        | No_alias head ->
-          let head' =
-            Or_unknown_or_bottom.map_sharing head
-              ~f:(fun head -> Head.apply_name_permutation head perm)
-          in
+        | No_alias Bottom | No_alias Unknown -> t
+        | No_alias (Ok head) ->
+          let head' = Head.apply_name_permutation head perm in
           if head == head' then t
           else No_alias head'
         | Equals simple ->
@@ -81,7 +82,11 @@ end) = struct
         | Type _ -> t
 
     let free_names t =
-      ...
+      match t with
+      | No_alias Bottom | No_alias Unknown -> Name_occurrences.empty
+      | No_alias (Ok head) -> Head.free_names head
+      | Equals simple -> Simple.free_names simple
+      | Type _ -> Name_occurrences.empty
   end
 
   include With_delayed_permutation.Make (Descr)
@@ -121,6 +126,76 @@ end) = struct
       | Bottom -> Bottom
       | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
+  let force_to_head t =
+    match descr t with
+    | No_alias head -> head
+    | Type _ | Equals _ ->
+      Misc.fatal_errorf "Expected [No_alias]:@ %a" print t
+
+  let expand_head t env : _ Or_unknown_or_bottom.t =
+    match descr t with
+    | No_alias head -> head
+    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
+    | Equals simple ->
+      let min_occurrence_kind = Name_occurrence_kind.min in
+      (* We must get the canonical simple with the least occurrence kind,
+         since that's the one that is guaranteed not to have an [Equals]
+         type. *)
+      match TE.get_canonical_simple0 env simple ~min_occurrence_kind with
+      | Bottom, _kind -> Bottom
+      | Ok None, _kind ->
+        Misc.fatal_errorf "There should always be a canonical simple for %a \
+            in environment:@ %a"
+          Simple.print simple
+          TE.print env
+      | Ok (Some (simple, rec_info)), _kind ->
+        match Simple.descr simple with
+        | Const const ->
+          let typ =
+            match const with
+            | Naked_immediate imm -> T.this_naked_immediate_without_alias imm
+            | Tagged_immediate imm -> T.this_tagged_immediate_without_alias imm
+            | Naked_float f -> T.this_naked_float_without_alias f
+            | Naked_int32 i -> T.this_naked_int32_without_alias i
+            | Naked_int64 i -> T.this_naked_int64_without_alias i
+            | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
+          in
+          force_to_head typ
+        | Discriminant discr ->
+          let typ =
+            match Discriminant.sort discr with
+            | Int ->
+              let imm = Immediate.int (Discriminant.to_int discr) in
+              T.this_tagged_immediate_without_alias imm
+            | Is_int | Tag -> T.this_discriminant_without_alias discr
+          in
+          force_to_head typ
+        | Name name ->
+          let t = force_to_kind (find t name) in
+          match t with
+          | No_alias Bottom -> Bottom
+          | No_alias Unknown -> Unknown
+          | No_alias (Ok head) ->
+            begin match rec_info with
+            | None -> Ok head
+            | Some rec_info ->
+              (* CR mshinwell: check rec_info handling is correct, after recent
+                 changes in this area *)
+              (* [simple] already has [rec_info] applied to it (see
+                 [get_canonical_simple], above).  However we also need to apply
+                 it to the expanded head of the type. *)
+              match Head.apply_rec_info head rec_info with
+              | Bottom -> Bottom
+              | Ok head -> Ok head
+            end
+          | Type _export_id ->
+            Misc.fatal_error ".cmx loading not yet implemented"
+          | Equals _ ->
+            Misc.fatal_errorf "Canonical alias %a should never have \
+                [Equals] type:%s@ %a"
+              Simple.print simple
+              TE.print env
+
   let meet_unknown meet_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
       : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
@@ -153,29 +228,18 @@ end) = struct
     match simple_opt with
     | None -> Simple.Set.empty
     | Some simple ->
-      Simple.Set.add simple
-        (Typing_env.aliases_of_simple_allowable_in_types env simple)
+      Simple.Set.add simple (TE.aliases_of_simple_allowable_in_types env simple)
 
-  let get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2 =
+  let get_canonical_simples_and_expand_heads typing_env t1 t2 =
     let canonical_simple1 =
-      Typing_env.get_alias_ty_then_canonical_simple typing_env or_alias1
+      TE.get_alias_ty_then_canonical_simple typing_env t1
     in
-    let unknown_or_join1 =
-      Typing_env.expand_head_ty typing_env
-        ~force_to_kind:S.force_to_kind ~print_ty
-        ~apply_rec_info:S.apply_rec_info
-        or_alias1
-    in
+    let head1 = expand_head t1 typing_env in
     let canonical_simple2 =
-      Typing_env.get_alias_ty_then_canonical_simple typing_env or_alias2
+      TE.get_alias_ty_then_canonical_simple typing_env t2
     in
-    let unknown_or_join2 =
-      Typing_env.expand_head_ty typing_env
-        ~force_to_kind:S.force_to_kind
-        ~apply_rec_info:S.apply_rec_info
-        ~print_ty or_alias2
-    in
-    canonical_simple1, unknown_or_join1, canonical_simple2, unknown_or_join2
+    let head2 = expand_head t2 typing_env in
+    canonical_simple1, head1, canonical_simple2, head2
 
   let meet_on_unknown_or_join env ~meet_or_join_ty
         (ou1 : S.of_kind_foo T.unknown_or_join)
@@ -211,127 +275,119 @@ end) = struct
       | Bottom -> Bottom
       | Absorbing -> Unknown
 
-  let rec meet_ty env
-        (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
-        : S.of_kind_foo T.ty * TEE.t =
-    let canonical_simple1, unknown_or_join1,
-        canonical_simple2, unknown_or_join2 =
-      let typing_env = Meet_env.env env in
-      get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
-    in
-    match canonical_simple1, canonical_simple2 with
-    | Bottom, _ | _, Bottom -> No_alias Bottom, TEE.empty ()
-    | Ok None, Ok None ->
-      let unknown_or_join, env_extension =
-        meet_on_unknown_or_join env ~meet_or_join_ty
-          unknown_or_join1 unknown_or_join2
+  module Make_meet_and_join
+    (E : Lattice_ops_intf.S
+     with type meet_env := Meet_env.t
+     with type typing_env := TE.t
+     with type typing_env_extension := Typing_env_extension.t) =
+  struct
+    let rec meet env t1 t2 =
+      let canonical_simple1, unknown_or_join1,
+          canonical_simple2, unknown_or_join2 =
+        let typing_env = Meet_env.env env in
+        get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
       in
-      No_alias unknown_or_join, env_extension
-    | Ok (Some simple1), Ok (Some simple2)
-        when Simple.equal simple1 simple2
-               || Meet_env.already_meeting env simple1 simple2 ->
-      Equals simple1, TEE.empty ()
-    | Ok (Some simple1), Ok (Some simple2) ->
-      (* XXX Think about how to handle this properly. *)
-      begin match Simple.descr simple1, Simple.descr simple2 with
-      | Const const1, Const const2
-          when not (Simple.Const.equal const1 const2) ->
-        No_alias Bottom, TEE.empty ()
-      | Discriminant discriminant1, Discriminant discriminant2
-          when not (Discriminant.equal discriminant1 discriminant2) ->
-        No_alias Bottom, TEE.empty ()
-      | _, _ ->
-(*
-Format.eprintf "Meeting simples: %a and %a\n%!"
-  Simple.print simple1
-  Simple.print simple2;
-*)
+      match canonical_simple1, canonical_simple2 with
+      | Bottom, _ | _, Bottom -> No_alias Bottom, TEE.empty ()
+      | Ok None, Ok None ->
         let unknown_or_join, env_extension =
-          let env = Meet_env.now_meeting env simple1 simple2 in
           meet_on_unknown_or_join env ~meet_or_join_ty
             unknown_or_join1 unknown_or_join2
         in
-(*
-Format.eprintf "TEE from meeting simples (1): %a\n%!"
-  Typing_env_extension.print env_extension;
-*)
-        let env_extension =
-          if Typing_env.defined_earlier (Meet_env.env env) simple1 ~than:simple2
-          then
-            env_extension
-            |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
-            |> add_equation env simple2 (S.to_type (Equals simple1))
-          else
-            env_extension
-            |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
-            |> add_equation env simple1 (S.to_type (Equals simple2))
+        No_alias unknown_or_join, env_extension
+      | Ok (Some simple1), Ok (Some simple2)
+          when Simple.equal simple1 simple2
+                 || Meet_env.already_meeting env simple1 simple2 ->
+        Equals simple1, TEE.empty ()
+      | Ok (Some simple1), Ok (Some simple2) ->
+        (* XXX Think about how to handle this properly. *)
+        begin match Simple.descr simple1, Simple.descr simple2 with
+        | Const const1, Const const2
+            when not (Simple.Const.equal const1 const2) ->
+          No_alias Bottom, TEE.empty ()
+        | Discriminant discriminant1, Discriminant discriminant2
+            when not (Discriminant.equal discriminant1 discriminant2) ->
+          No_alias Bottom, TEE.empty ()
+        | _, _ ->
+          let unknown_or_join, env_extension =
+            let env = Meet_env.now_meeting env simple1 simple2 in
+            meet_on_unknown_or_join env ~meet_or_join_ty
+              unknown_or_join1 unknown_or_join2
+          in
+          let env_extension =
+            if TE.defined_earlier (Meet_env.env env)
+                 simple1 ~than:simple2
+            then
+              env_extension
+              |> add_equation env simple1 (S.to_type (No_alias unknown_or_join))
+              |> add_equation env simple2 (S.to_type (Equals simple1))
+            else
+              env_extension
+              |> add_equation env simple2 (S.to_type (No_alias unknown_or_join))
+              |> add_equation env simple1 (S.to_type (Equals simple2))
+          in
+          (* It doesn't matter whether [simple1] or [simple2] is returned. *)
+          Equals simple1, env_extension
+        end
+      | Ok (Some simple), Ok None | Ok None, Ok (Some simple) ->
+        let unknown_or_join, env_extension =
+          meet_on_unknown_or_join env ~meet_or_join_ty
+            unknown_or_join1 unknown_or_join2
         in
-(*
-Format.eprintf "TEE from meeting simples (2): %a\n%!"
-  Typing_env_extension.print env_extension;
-*)
-      (* It doesn't matter whether [simple1] or [simple2] is returned here. *)
-(*
-Format.eprintf "Returning =%a\n%!" Simple.print simple1;
-*)
-        Equals simple1, env_extension
-      end
-    | Ok (Some simple), Ok None | Ok None, Ok (Some simple) ->
-      let unknown_or_join, env_extension =
-        meet_on_unknown_or_join env ~meet_or_join_ty
-          unknown_or_join1 unknown_or_join2
-      in
-      let env_extension =
-        env_extension
-        |> add_equation env simple (S.to_type (No_alias unknown_or_join))
-      in
-      (* XXX Not sure we want to return [Equals] when it's Bottom *)
-      Equals simple, env_extension
+        let env_extension =
+          env_extension
+          |> add_equation env simple (S.to_type (No_alias unknown_or_join))
+        in
+        (* XXX Not sure we want to return [Equals] when it's Bottom *)
+        Equals simple, env_extension
 
-  and join_ty ?bound_name typing_env
-        (or_alias1 : S.of_kind_foo T.ty) (or_alias2 : S.of_kind_foo T.ty)
-        : S.of_kind_foo T.ty =
-    let canonical_simple1, unknown_or_join1,
-        canonical_simple2, unknown_or_join2 =
-      get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
-    in
-    match canonical_simple1, canonical_simple2 with
-    | Bottom, _ -> or_alias2
-    | _, Bottom -> or_alias1
-    | Ok canonical_simple1, Ok canonical_simple2 ->
-      (* CR mshinwell: Think further about this "bound name" stuff. *)
-      let shared_aliases_not_aliasing_bound_name =
-        Simple.Set.diff
-          (Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
-            (all_aliases_of typing_env canonical_simple2))
-          (all_aliases_of typing_env (Option.map Simple.name bound_name))
+    and join ?bound_name typing_env t1 t2 =
+      let canonical_simple1, unknown_or_join1,
+          canonical_simple2, unknown_or_join2 =
+        get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
       in
-      match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
-      | Some simple -> Equals simple
-      | None ->
-        No_alias (join_on_unknown_or_join typing_env ~meet_or_join_ty
-          unknown_or_join1 unknown_or_join2)
+      match canonical_simple1, canonical_simple2 with
+      | Bottom, _ -> or_alias2
+      | _, Bottom -> or_alias1
+      | Ok canonical_simple1, Ok canonical_simple2 ->
+        (* CR mshinwell: Think further about this "bound name" stuff. *)
+        let shared_aliases_not_aliasing_bound_name =
+          Simple.Set.diff
+            (Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
+              (all_aliases_of typing_env canonical_simple2))
+            (all_aliases_of typing_env (Option.map Simple.name bound_name))
+        in
+        match Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name with
+        | Some simple -> Equals simple
+        | None ->
+          No_alias (join_on_unknown_or_join typing_env ~meet_or_join_ty
+            unknown_or_join1 unknown_or_join2)
 
-  and meet_or_join_ty ?bound_name env
-        (or_alias1 : S.of_kind_foo T.ty)
-        (or_alias2 : S.of_kind_foo T.ty) : _ Or_bottom.t =
-    let ty, env_extension =
-      E.switch_no_bottom meet_ty (join_ty ?bound_name) env or_alias1 or_alias2
-    in
-    if Basic_type_ops.ty_is_obviously_bottom ty then Bottom
-    else Ok (ty, env_extension)
+    let meet_or_join ?bound_name env t1 t2 : _ Or_bottom.t =
+      let t, env_extension =
+        E.switch_no_bottom meet (join ?bound_name) env t1 t2
+      in
+      if is_obviously_bottom t then Bottom
+      else Ok (t, env_extension)
+  end
+
+  module Meet = Make_meet_or_join (Lattice_ops.Meet)
+  module Join = Make_meet_or_join (Lattice_ops.Join)
+
+  let meet env t1 t2 = Meet.meet_or_join env t1 t2
+  let join ?bound_name env t1 t2 = Join.meet_or_join ?bound_name env t1 t2
 
   let make_suitable_for_environment t env ~suitable_for =
     let free_vars = Name_occurrences.variables (free_names t) in
     if Variable.Set.is_empty free_vars then t, suitable_for
     else
-      let allowed = Typing_env.var_domain suitable_for in
+      let allowed = TE.var_domain suitable_for in
       let to_erase = Variable.Set.diff free_vars allowed in
       if Variable.Set.is_empty to_erase then t, suitable_for
       else
         let result_env, perm =
           Variable.Set.fold (fun to_erase (result_env, perm) ->
-              let kind = Typing_env.find_kind env to_erase in
+              let kind = TE.find_kind env to_erase in
               let fresh_var = Variable.rename to_erase in
               let fresh_var_name = Name.var fresh_var in
               let result_env =
@@ -339,21 +395,21 @@ Format.eprintf "Returning =%a\n%!" Simple.print simple1;
                   Name_in_binding_pos.create fresh_var_name
                     Name_occurrence_kind.in_types
                 in
-                Typing_env.add_definition result_env name kind
+                TE.add_definition result_env name kind
               in
               let canonical_simple =
-                Typing_env.get_canonical_simple env
+                TE.get_canonical_simple env
                   ~min_occurrence_kind:Name_occurrence_kind.in_types
                   (Simple.var to_erase)
               in
               let result_env =
-                match Typing_env.find_simple_opt env canonical_simple with
+                match TE.find_simple_opt env canonical_simple with
                 | None -> result_env
                 | Some simple ->
                   if not (Simple.allowed simple ~allowed) then result_env
                   else
-                    let ty = Type_grammar.alias_type_of simple kind in
-                    Typing_env.add_equation result_env fresh_var_name ty
+                    let ty = T.alias_type_of simple kind in
+                    TE.add_equation result_env fresh_var_name ty
               in
               let perm =
                 Name_permutation.add_variable perm to_erase fresh_var

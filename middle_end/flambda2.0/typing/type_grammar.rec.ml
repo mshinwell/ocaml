@@ -657,6 +657,30 @@ let type_for_const (const : Simple.Const.t) =
 
 let kind_for_const const = kind (type_for_const const)
 
+let expand_head t env : Resolved_type.t =
+  match t with
+  | Value ty ->
+    let head = Type_of_kind_value.expand_head ty env in
+    Resolved (Value head)
+  | Naked_immediate ty ->
+    let head = Type_of_kind_naked_immediate.expand_head ty env in
+    Resolved (Naked_immediate head)
+  | Naked_float ty ->
+    let head = Type_of_kind_naked_float.expand_head ty env in
+    Resolved (Naked_float head)
+  | Naked_int32 ty ->
+    let head = Type_of_kind_naked_int32.expand_head ty env in
+    Resolved (Naked_int32 head)
+  | Naked_int64 ty ->
+    let head = Type_of_kind_naked_int64.expand_head ty env in
+    Resolved (Naked_int64 head)
+  | Naked_nativeint ty ->
+    let head = Type_of_kind_naked_nativeint.expand_head ty env in
+    Resolved (Naked_nativeint head)
+  | Fabricated ty ->
+    let head = Type_of_kind_fabricated.expand_head ty env in
+    Resolved (Fabricated head)
+
 module Make_meet_and_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t
@@ -726,23 +750,30 @@ let join ?bound_name env t1 t2 =
 let make_suitable_for_environment t env ~suitable_for =
   match t with
   | Value ty ->
-    let ty, env = T_V.make_suitable_for_environment ty env ~suitable_for in
-    Value ty, env
+    let ty', env = T_V.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    else Value ty', env
   | Naked_immediate ty ->
-    let ty, env = T_NI.make_suitable_for_environment ty env ~suitable_for in
-    Naked_immediate ty, env 
+    let ty', env = T_NI.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    else Naked_immediate ty', env 
   | Naked_float ty ->
-    let ty, env = T_Nf.make_suitable_for_environment ty env ~suitable_for in
-    Naked_float ty, env 
+    let ty', env = T_Nf.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    else Naked_float ty', env 
   | Naked_int32 ty ->
-    let ty, env = T_N32.make_suitable_for_environment ty env ~suitable_for in
-    Naked_int32 ty, env 
+    let ty', env = T_N32.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    else Naked_int32 ty', env 
   | Naked_int64 ty ->
-    let ty, env = T_N64.make_suitable_for_environment ty env ~suitable_for in
-    Naked_int64 ty, env 
+    let ty', env = T_N64.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    Naked_int64 ty', env 
   | Naked_nativeint ty ->
-    let ty, env = T_NN.make_suitable_for_environment ty env ~suitable_for in
-    Naked_nativeint ty, env 
+    let ty', env = T_NN.make_suitable_for_environment ty env ~suitable_for in
+    if ty == ty' then t, env
+    Naked_nativeint ty', env 
   | Fabricated ty ->
     let ty, env = T_F.make_suitable_for_environment ty env ~suitable_for in
-    Fabricated ty, env
+    if ty == ty' then t, env
+    Fabricated ty', env
