@@ -48,7 +48,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                     Name_in_binding_pos.create (KP.name param)
                       Name_occurrence_kind.normal
                   in
-                  TE.add_definition typing_env name (KP.kind extra_param))
+                  TE.add_definition typing_env name (KP.kind param))
                 typing_env
                 params))
         in

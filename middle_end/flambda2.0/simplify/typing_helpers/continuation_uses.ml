@@ -108,6 +108,10 @@ Format.eprintf "For %a, recording use:@ %a\n%!"
        Otherwise unknown.
      - Don't produce any existentials in the resulting extension if there is
        more than one path
+
+   -- Think about transitive fv calculation.  Needed, but won't need to
+      traverse into types if cached.  Transitive fvs cannot be cached.
+
    2. For the "=x" case, if no name can be found in scope in the destination
       env equal to x, then expand the head of x recursively, to obtain a
       better type.  Propagate this.
@@ -121,7 +125,7 @@ let introduce_params typing_env ~params =
       let name =
         Name_in_binding_pos.create (KP.name param) Name_occurrence_kind.normal
       in
-      TE.add_definition typing_env name (KP.kind extra_param))
+      TE.add_definition typing_env name (KP.kind param))
     typing_env
     params
 
@@ -137,6 +141,11 @@ let compute_handler_env t ~definition_typing_env ~params
       List.map (fun use ->
           let typing_env =
             List.fold_left2 (fun env param arg_type ->
+                (* The erasure needs to happen:
+                   If there's only one element in the join, then we don't need
+                   to erase anything.
+                   Otherwise, we know there won't be any existentials, so
+                   erase back to [definition_typing_env]. *)
                 TE.add_equation typing_env (KP.name param) arg_type)
               typing_env
               params (Use.arg_types use)
@@ -181,9 +190,3 @@ let cannot_change_continuation's_arity t =
   | Toplevel_return -> false
   | Exn -> true (* CR mshinwell: this should go to [false] *)
   | Normal -> false
-  (* XXX Tidy up
-    List.exists (fun use ->
-        match Use.kind use with
-        | Normal -> false
-        | Fixed_arity -> true)
-      t.uses *)
