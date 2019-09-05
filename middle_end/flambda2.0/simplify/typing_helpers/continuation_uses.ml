@@ -111,6 +111,7 @@ Format.eprintf "For %a, recording use:@ %a\n%!"
 
    -- Think about transitive fv calculation.  Needed, but won't need to
       traverse into types if cached.  Transitive fvs cannot be cached.
+      See comment below re. this being needed.
 
    2. For the "=x" case, if no name can be found in scope in the destination
       env equal to x, then expand the head of x recursively, to obtain a
@@ -146,6 +147,9 @@ let compute_handler_env t ~definition_typing_env ~params
                    to erase anything.
                    Otherwise, we know there won't be any existentials, so
                    erase back to [definition_typing_env]. *)
+                (* Also: we shouldn't generate existentials, in the one-path
+                   case, when they aren't needed.  This is why we need the
+                   transitive closure of the fvs of [arg_type]. *)
                 TE.add_equation typing_env (KP.name param) arg_type)
               typing_env
               params (Use.arg_types use)
