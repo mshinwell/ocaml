@@ -144,6 +144,11 @@ let compute_handler_env t
   | [] -> No_uses
   | uses ->
     let definition_scope_level = TE.current_scope handler_typing_env in
+    let join_is_trivial =
+      match uses with
+      | [_] -> true
+      | _::_ -> false
+    in
     let use_envs_with_ids =
       List.map (fun use ->
           let typing_env =
@@ -152,10 +157,20 @@ let compute_handler_env t
               typing_env
               params (Use.arg_types use)
           in
-          typing_env, Use.id use)
+          let interesting_vars =
+            if not join_is_trivial then Variable.Set.empty
+            else
+              List.fold_left (fun interesting_vars arg_type ->
+                  Variable.Set.union interesting_vars
+                    (T.free_variables_transitive arg_type))
+                (Use.arg_types use)
+                Variable.Set.empty
+          in
+          typing_env, Use.id use, interesting_vars)
         uses
     in
     let joined_env_extension, extra_params_and_args =
+      (* This should return a TE.t *)
       TE.cut_and_n_way_join handler_typing_env use_envs_with_ids
         ~unknown_if_defined_at_or_later_than:definition_scope_level
     in

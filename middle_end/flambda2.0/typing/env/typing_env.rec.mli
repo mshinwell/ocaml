@@ -114,6 +114,6 @@ val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
 (* CR mshinwell: Consider labelling arguments e.g. [definition_typing_env] *)
 val cut_and_n_way_join
    : t
-  -> (t * Apply_cont_rewrite_id.t) list
+  -> (t * Apply_cont_rewrite_id.t * Variable.Set.t) list
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t * Continuation_extra_params_and_args.t

@@ -486,24 +486,47 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
 
-let n_way_join0 ~initial_env_at_join envs_with_levels =
-  let join_env =
-    match envs_with_levels with
-    | [env, _id, t] ->
-      Typing_env.add_extension_from_level initial_env_at_join env
-    | [] | _::_ -> initial_env_at_join
+let trivial_join t ~initial_env_at_join ~interesting_vars =
+  (* For trivial joins we allow variables defined in the level [t] to be
+     treated as existential.  However we only do this for variables that
+     may be "interesting" (typically the transitive closure, via the
+     type environment, of those occurring in the argument types at the
+     single continuation use site). *)
+  let allowed =
+    Variable.Set.union (Typing_env.var_domain initial_env_at_join)
+      interesting_vars
   in
+  let defined_vars =
+    Variable.Map.filter (fun var _ -> Variable.Set.mem var allowed)
+      t.defined_vars
+  in
+  let equations =
+    Name.Map.filter (fun (name : Name.t) _ ->
+        match name with
+        | Var var -> Variable.Set.mem var allowed
+        | Symbol _ -> true)
+      t.defined_vars
+  in
+  let cse, extra_cse_bindings =
+    cse_after_n_way_join envs_with_levels ~allowed
+  in
+  let t =
+    { defined_vars;
+      equations;
+      cse;
+    }
+  in
+  t, extra_cse_bindings
 
-
+let n_way_join0 ~initial_env_at_join:env envs_with_levels =
+  assert (List.length envs_with_levels > 1);
   let names_with_equations_in_join =
-    List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
+    List.fold_left (fun names_with_equations_in_join (_env, _id, _vars, t) ->
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
       allowed_names
       envs_with_levels
   in
-
-
   let get_type t env name =
     Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
@@ -514,9 +537,9 @@ let n_way_join0 ~initial_env_at_join envs_with_levels =
         assert (not (Name.Map.mem name result.equations));
         match envs_with_levels with
         | [] -> result
-        | (first_env, _id, t) :: envs_with_levels ->
+        | (first_env, _id, _vars, t) :: envs_with_levels ->
           let join_ty =
-            List.fold_left (fun join_ty (one_env, _id, t) ->
+            List.fold_left (fun join_ty (one_env, _id, _vars, t) ->
                 let ty = get_type t one_env name in
                 Api_meet_and_join.join ~bound_name:name env join_ty ty)
               (get_type t first_env name)
@@ -536,11 +559,6 @@ let n_way_join0 ~initial_env_at_join envs_with_levels =
 let n_way_join ~initial_env_at_join:env envs_with_levels =
   match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
-  | [_env, _id, t] ->
-    let allowed = Typing_env.var_domain env in
-    let cse, extra_cse_bindings =
-      cse_after_n_way_join envs_with_levels ~allowed
-    in
-    let t : t = { t with cse; } in
-    t, extra_cse_bindings
+  | [_env, _id, interesting_vars, t] ->
+    trivial_join t ~initial_env_at_join ~interesting_vars
   | envs_with_levels -> n_way_join0 env envs_with_levels
