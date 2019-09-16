@@ -518,19 +518,24 @@ let trivial_join t ~initial_env_at_join ~interesting_vars =
   in
   t, extra_cse_bindings
 
-let n_way_join0 ~initial_env_at_join:env envs_with_levels =
+let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
   assert (List.length envs_with_levels > 1);
+  (* For non-trivial joins, no existentials are currently propagated. *)
   let names_with_equations_in_join =
+    let names_at_join =
+      Name.set_of_var_set (Typing_env.var_domain env_at_join)
+    in
     List.fold_left (fun names_with_equations_in_join (_env, _id, _vars, t) ->
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
-      allowed_names
+      names_at_join
       envs_with_levels
   in
-  let get_type t env name =
-    Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
-      ~already_seen:Simple.Set.empty ~allowed
-      (find_equation t name)
+  let get_type t env =
+    (* XXX This returns an environment, which needs accumulating, and then
+       returning (instead of an extension). *)
+    Type_grammar.make_suitable_for_environment (find_equation t name)
+      env ~suitable_for:env_at_join
   in
   let t =
     Name.Set.fold (fun name result ->
@@ -540,7 +545,7 @@ let n_way_join0 ~initial_env_at_join:env envs_with_levels =
         | (first_env, _id, _vars, t) :: envs_with_levels ->
           let join_ty =
             List.fold_left (fun join_ty (one_env, _id, _vars, t) ->
-                let ty = get_type t one_env name in
+                let ty = get_type t one_env in
                 Api_meet_and_join.join ~bound_name:name env join_ty ty)
               (get_type t first_env name)
               envs_with_levels
@@ -556,9 +561,9 @@ let n_way_join0 ~initial_env_at_join:env envs_with_levels =
   assert (Variable.Map.is_empty t.defined_vars);
   t, extra_cse_bindings
 
-let n_way_join ~initial_env_at_join:env envs_with_levels =
+let n_way_join ~initial_env_at_join envs_with_levels =
   match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
   | [_env, _id, interesting_vars, t] ->
     trivial_join t ~initial_env_at_join ~interesting_vars
-  | envs_with_levels -> n_way_join0 env envs_with_levels
+  | envs_with_levels -> non_trivial_join ~initial_env_at_join envs_with_levels

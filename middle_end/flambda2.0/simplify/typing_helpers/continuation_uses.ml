@@ -170,7 +170,6 @@ let compute_handler_env t
         uses
     in
     let joined_env_extension, extra_params_and_args =
-      (* This should return a TE.t *)
       TE.cut_and_n_way_join handler_typing_env use_envs_with_ids
         ~unknown_if_defined_at_or_later_than:definition_scope_level
     in
