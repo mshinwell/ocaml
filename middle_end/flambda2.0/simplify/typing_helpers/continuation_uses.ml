@@ -99,6 +99,18 @@ Format.eprintf "For %a, recording use:@ %a\n%!"
     raise Misc.Fatal_error
   end
 
+let number_of_uses t = List.length t.uses
+
+let arity t = t.arity
+
+(* CR mshinwell: Naming of this function still isn't ideal. *)
+let cannot_change_continuation's_arity t =
+  match Continuation.sort t.continuation with
+  | Return -> true
+  | Toplevel_return -> false
+  | Exn -> true (* CR mshinwell: this should go to [false] *)
+  | Normal -> false
+
 (* Four possible stages of join:
 
    1. Simple erasure policy
@@ -182,15 +194,3 @@ let compute_handler_env t ~definition_typing_env ~params
       arg_types_by_use_id;
       extra_params_and_args = extra_params_and_args;
     }
-
-let number_of_uses t = List.length t.uses
-
-let arity t = t.arity
-
-(* CR mshinwell: Naming of this function still isn't ideal. *)
-let cannot_change_continuation's_arity t =
-  match Continuation.sort t.continuation with
-  | Return -> true
-  | Toplevel_return -> false
-  | Exn -> true (* CR mshinwell: this should go to [false] *)
-  | Normal -> false

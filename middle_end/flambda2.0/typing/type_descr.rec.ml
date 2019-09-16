@@ -119,9 +119,6 @@ module Make (Head : Type_head_intf.S
       | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
   let make_suitable_for_environment t env ~suitable_for =
-    (* This is very similar to [cut]
-       Should presumably return an environment extension?  Although there's
-       a problem given that the returned type may reference the bound vars... *)
     let free_vars = Name_occurrences.variables (free_names t) in
     if Variable.Set.is_empty free_vars then t, suitable_for
     else

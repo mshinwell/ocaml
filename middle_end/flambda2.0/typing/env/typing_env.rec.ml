@@ -835,3 +835,19 @@ let create_using_resolver_and_symbol_bindings_from t =
         add_equation t name typ)
     names_to_types
     t
+
+let free_variables_transitive t typ =
+  let rec free_variables_transitive typ ~seen =
+    let free_variables =
+      Name_occurrences.variables (Type_grammar.free_names typ)
+    in
+    let seen = Variable.Set.union seen free_variables in
+    Variable.Set.fold (fun var result ->
+        if Variable.Set.mem var seen then result
+        else
+          let typ = find t (Name.var var) in
+          Variable.Set.union (free_variables_transitive typ ~seen) result)
+      free_variables
+      free_variables
+  in
+  free_variables_transitive typ ~seen:Variable.Set.empty

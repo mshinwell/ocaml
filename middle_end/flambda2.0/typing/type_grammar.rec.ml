@@ -204,16 +204,6 @@ let free_names t =
   | Naked_nativeint ty -> T_NN.free_names ty
   | Fabricated ty -> T_F.free_names ty
 
-let erase_aliases t ~allowed =
-  match t with
-  | Value ty -> Value (T_V.erase_aliases ty ~allowed)
-  | Naked_immediate ty -> Naked_immediate (T_NI.erase_aliases ty ~allowed)
-  | Naked_float ty -> Naked_float (T_Nf.erase_aliases ty ~allowed)
-  | Naked_int32 ty -> Naked_int32 (T_N32.erase_aliases ty ~allowed)
-  | Naked_int64 ty -> Naked_int64 (T_N64.erase_aliases ty ~allowed)
-  | Naked_nativeint ty -> Naked_nativeint (T_NN.erase_aliases ty ~allowed)
-  | Fabricated ty -> Fabricated (T_F.erase_aliases ty ~allowed)
-
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
   | Value ty ->

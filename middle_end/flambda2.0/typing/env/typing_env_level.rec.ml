@@ -393,7 +393,7 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
   let canonicalise_lhs env cse =
     EP.Map.fold (fun prim bound_to cse ->
         let cannot_use, prim =
-          (* CR mshinwell: share code with type_erase_aliases.ml *)
+          (* CR mshinwell: share code with [make_suitable_for_environment]? *)
           EP.fold_args prim
             ~init:Equation_ok
             ~f:(fun cannot_use arg ->

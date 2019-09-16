@@ -138,38 +138,6 @@ let free_names t =
   | String _ -> Name_occurrences.empty
   | Array { length; } -> Type_of_kind_value.free_names length
 
-let erase_aliases t ~allowed =
-  match of_kind with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
-    let blocks' =
-      Or_unknown.map_sharing blocks ~f:(fun blocks ->
-        Blocks.erase_aliases blocks ~allowed)
-    in
-    let immediates' =
-      Or_unknown.map_sharing immediates ~f:(fun immediates ->
-        Immediates.erase_aliases immediates ~allowed);
-    in
-    if blocks == blocks' && immediates == immediates' then of_kind
-    else
-      Blocks_and_tagged_immediates {
-        blocks = blocks';
-        immediates = immediates';
-      }
-  | Boxed_number type_of_kind_naked_number ->
-    Type_of_kind_naked_number.erase_aliases type_of_kind_naked_number ~allowed
-  | Closures { by_closure_id; } ->
-    let by_closure_id' =
-      Closures_entry_by_set_of_closures_contents.erase_aliases by_closure_id
-        ~allowed
-    in
-    if by_closure_id == by_closure_id' then of_kind
-    else Closures { by_closure_id = by_closure_id'; }
-  | String _ -> of_kind
-  | Array { length; } ->
-    let length' = Type_of_kind_value.erase_aliases length ~allowed in
-    if length == length' then of_kind
-    else Array { length = length'; }
-
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
   | Closures { by_closure_id; } ->

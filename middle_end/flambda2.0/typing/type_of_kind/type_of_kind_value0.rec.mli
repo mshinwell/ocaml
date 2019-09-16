@@ -41,6 +41,4 @@ module Make_meet_or_join (E : Lattice_ops_intf.S
     -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
 end
 
-val erase_aliases : t -> allowed:Variable.Set.t -> t
-
 val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t

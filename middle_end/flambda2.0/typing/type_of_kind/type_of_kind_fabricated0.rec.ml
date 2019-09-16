@@ -36,11 +36,6 @@ let free_names t =
   match t with
   | Discriminants discrs -> Discriminants.free_names discrs
 
-let erase_aliases t ~allowed =
-  match t with
-  | Discriminants discrs ->
-    Discriminants (Discriminants.erase_aliases discrs ~allowed)
-
 let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t
   else Bottom

@@ -237,23 +237,6 @@ Format.eprintf "RL meet is returning bottom\n%!";
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
     else Known (Tag_and_index.Map.keys known)
 
-  let erase_aliases ({ known; at_least; } as t) env ~already_seen ~allowed =
-    let known' =
-      Tag_and_index.Map.map_sharing (fun maps_to ->
-          Maps_to.erase_aliases maps_to env ~already_seen ~allowed)
-        known
-    in
-    let at_least' =
-      Tag_or_unknown_and_index.Map.map_sharing (fun maps_to ->
-          Maps_to.erase_aliases maps_to env ~already_seen ~allowed)
-        at_least
-    in
-    if known == known' && at_least == at_least' then t
-    else
-      { known = known';
-        at_least = at_least';
-      }
-
   let free_names { known; at_least; } =
     let from_known =
       Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->

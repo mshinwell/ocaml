@@ -28,11 +28,13 @@ type t = private
   | Naked_nativeint of Type_of_kind_naked_nativeint.t
   | Fabricated of Type_of_kind_fabricated.t
 
-include Contains_names.S with type t := t
-
 val print : Format.formatter -> t -> unit
 
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+include Contains_names.S with type t := t
+
+val free_variables_transitive : t -> Variable.Set.t
 
 val kind : t -> Flambda_kind.t
 

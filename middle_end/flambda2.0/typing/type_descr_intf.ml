@@ -55,8 +55,6 @@ module type S = sig
 
   include Contains_names.S with type t := t
 
-  val erase_aliases : t -> allowed:Variable.Set.t -> t
-
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
   val make_suitable_for_environment
