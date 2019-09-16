@@ -111,7 +111,7 @@ let cannot_change_continuation's_arity t =
   | Exn -> true (* CR mshinwell: this should go to [false] *)
   | Normal -> false
 
-(* Four possible stages of join:
+(* CR mshinwell: Four possible stages of join (turn into proper comment):
 
    1. Simple erasure policy
      - If the type has no free variables, propagate it
@@ -120,11 +120,6 @@ let cannot_change_continuation's_arity t =
        Otherwise unknown.
      - Don't produce any existentials in the resulting extension if there is
        more than one path
-
-   -- Think about transitive fv calculation.  Needed, but won't need to
-      traverse into types if cached.  Transitive fvs cannot be cached.
-      See comment below re. this being needed.
-
    2. For the "=x" case, if no name can be found in scope in the destination
       env equal to x, then expand the head of x recursively, to obtain a
       better type.  Propagate this.
@@ -142,55 +137,47 @@ let introduce_params typing_env ~params =
     typing_env
     params
 
-let compute_handler_env t ~definition_typing_env ~params
-      : Continuation_env_and_param_types.t =
+let compute_handler_env t
+      ~definition_typing_env_with_params_defined:handler_typing_env
+      ~params : Continuation_env_and_param_types.t =
   match t.uses with
   | [] -> No_uses
-  | (use :: uses) as all_uses ->
-    let definition_scope_level =
-      T.Typing_env.current_scope definition_typing_env
-    in
+  | uses ->
+    let definition_scope_level = TE.current_scope handler_typing_env in
     let use_envs_with_ids =
       List.map (fun use ->
           let typing_env =
             List.fold_left2 (fun env param arg_type ->
-                (* The erasure needs to happen:
-                   If there's only one element in the join, then we don't need
-                   to erase anything.
-                   Otherwise, we know there won't be any existentials, so
-                   erase back to [definition_typing_env]. *)
-                (* Also: we shouldn't generate existentials, in the one-path
-                   case, when they aren't needed.  This is why we need the
-                   transitive closure of the fvs of [arg_type]. *)
                 TE.add_equation typing_env (KP.name param) arg_type)
               typing_env
               params (Use.arg_types use)
           in
           typing_env, Use.id use)
-        all_uses
+        uses
     in
     let joined_env_extension, extra_params_and_args =
-      TE.cut_and_n_way_join definition_typing_env use_envs_with_ids
+      TE.cut_and_n_way_join handler_typing_env use_envs_with_ids
         ~unknown_if_defined_at_or_later_than:definition_scope_level
     in
     let handler_typing_env =
       TE.add_env_extension
-        (introduce_params handler_typing_env extra_params_and_args.extra_params)
+        (introduce_params handler_typing_env
+          ~params:extra_params_and_args.extra_params)
         joined_env_extension
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
           List.map2 (fun arg_map arg_type ->
-              let env = Use.typing_env_at_use use in
               Apply_cont_rewrite_id.Map.add (Use.id use)
-                (env, arg_type) arg_map)
+                (Use.typing_env_at_use use, arg_type)
+                arg_map)
             args
             (Use.arg_types use))
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
-        all_uses
+        uses
     in
     Uses {
       handler_typing_env;
       arg_types_by_use_id;
-      extra_params_and_args = extra_params_and_args;
+      extra_params_and_args;
     }

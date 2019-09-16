@@ -411,14 +411,8 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
       cse
       EP.Map.empty
   in
-  (*
-Format.eprintf "starting CSE\n%!";
-*)
   let cses_with_canonicalised_lhs =
     List.map (fun (env, id, t) ->
-    (*
-Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
-*)
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -431,17 +425,9 @@ Format.eprintf "CSE:@ %a\n%!" (EP.Map.print Simple.print) t.cse;
         (EP.Map.keys cse)
         cses
   in
-  (*
-Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_all_paths;
-*)
   EP.Set.fold (fun prim (cse, extra_bindings) ->
       let rhs_kinds =
         List.fold_left (fun rhs_kinds (env, id, cse) ->
-        (*
-            Format.eprintf "Checking use ID %a in env:@ %a\n%!"
-              Apply_cont_rewrite_id.print id
-              Typing_env.print env;
-              *)
             let bound_to = EP.Map.find prim cse in
             let rhs_kind : Rhs_kind.t =
               (* XXX This may not be sufficient---we may need to abort
@@ -481,10 +467,6 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
         let bound_to =
           Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds
         in
-(* Format.eprintf "With LHS %a, RHS binds param %a to %a\n%!"
-  EP.print prim
-  Kinded_parameter.print extra_param
-  (Apply_cont_rewrite_id.Map.print Simple.print) bound_to *)
         let cse =
           EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
         in
@@ -500,83 +482,65 @@ Format.eprintf "valid on all paths:@ %a\n%!" EP.Set.print lhs_of_cses_valid_on_a
         in
         cse, extra_bindings
       | Some ((Rhs_in_scope _) as rhs_kind) ->
-      (*
-Format.eprintf "Equation %a = %a valid on all paths, no extra param\n%!"
-  EP.print prim
-  Simple.print (Rhs_kind.bound_to rhs_kind);
-  *)
         EP.Map.add prim (Rhs_kind.bound_to rhs_kind) cse, extra_bindings)
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
 
-(* CR mshinwell: Consider resurrecting [Join_env] to encapsulate the three
-   environments, even though it doesn't need to go down through [T.join]
-   at the moment.  (Actually, check a couple of places e.g. closures_entry
-   where it looks like these may still be needed...) *)
+let n_way_join0 ~initial_env_at_join envs_with_levels =
+  let join_env =
+    match envs_with_levels with
+    | [env, _id, t] ->
+      Typing_env.add_extension_from_level initial_env_at_join env
+    | [] | _::_ -> initial_env_at_join
+  in
 
-let n_way_join0 env envs_with_extensions =
-  let allowed = Typing_env.var_domain env in
-(*
-Format.eprintf "Allowed vars %a\n%!" Variable.Set.print allowed;
-*)
-  let allowed_names = Name.set_of_var_set allowed in
+
   let names_with_equations_in_join =
     List.fold_left (fun names_with_equations_in_join (_env, _id, t) ->
-(*
-Format.eprintf "Level in n_way_join:@ %a\n%!" print t;
-*)
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
       allowed_names
-      envs_with_extensions
+      envs_with_levels
   in
+
+
   let get_type t env name =
-(*
-Format.eprintf "get_type %a: starting type %a\n%!" Name.print name
-  Type_printers.print (find_equation t name);
-let typ =
-*)
     Type_erase_aliases.erase_aliases env ~bound_name:(Some name)
       ~already_seen:Simple.Set.empty ~allowed
       (find_equation t name)
-(*
-in
-Format.eprintf "...and after: %a\n%!" Type_printers.print typ;
-typ
-*)
   in
   let t =
     Name.Set.fold (fun name result ->
         assert (not (Name.Map.mem name result.equations));
-        match envs_with_extensions with
+        match envs_with_levels with
         | [] -> result
-        | (first_env, _id, t) :: envs_with_extensions ->
+        | (first_env, _id, t) :: envs_with_levels ->
           let join_ty =
             List.fold_left (fun join_ty (one_env, _id, t) ->
                 let ty = get_type t one_env name in
                 Api_meet_and_join.join ~bound_name:name env join_ty ty)
               (get_type t first_env name)
-              envs_with_extensions
+              envs_with_levels
           in
           add_or_replace_equation result name join_ty)
       names_with_equations_in_join
       (empty ())
   in
   let cse, extra_cse_bindings =
-    cse_after_n_way_join envs_with_extensions ~allowed
+    cse_after_n_way_join envs_with_levels ~allowed
   in
   let t : t = { t with cse; } in
   assert (Variable.Map.is_empty t.defined_vars);
   t, extra_cse_bindings
 
-let n_way_join env envs_with_extensions =
-  match envs_with_extensions with
+let n_way_join ~initial_env_at_join:env envs_with_levels =
+  match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
   | [_env, _id, t] ->
     let allowed = Typing_env.var_domain env in
     let cse, extra_cse_bindings =
-      cse_after_n_way_join envs_with_extensions ~allowed
+      cse_after_n_way_join envs_with_levels ~allowed
     in
     let t : t = { t with cse; } in
     t, extra_cse_bindings
-  | envs_with_extensions -> n_way_join0 env envs_with_extensions
+  | envs_with_levels -> n_way_join0 env envs_with_levels
