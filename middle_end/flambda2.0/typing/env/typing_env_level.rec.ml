@@ -546,7 +546,7 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
           let join_ty =
             List.fold_left (fun join_ty (one_env, _id, _vars, t) ->
                 let ty = get_type t one_env in
-                Api_meet_and_join.join ~bound_name:name env join_ty ty)
+                Type_grammar.join ~bound_name:name env join_ty ty)
               (get_type t first_env name)
               envs_with_levels
           in
