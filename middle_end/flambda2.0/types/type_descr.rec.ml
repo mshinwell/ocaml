@@ -19,6 +19,7 @@
 module T = Type_grammar
 module TE = Typing_env
 module TEE = Typing_env_extension
+module TEL = Typing_env_level
 
 module Make (Head : Type_head_intf.S
   with type meet_env := Meet_env.t
@@ -118,48 +119,58 @@ module Make (Head : Type_head_intf.S
       | Bottom -> Bottom
       | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
 
-  let make_suitable_for_environment t env ~suitable_for =
+  let make_suitable_for_environment0 t env ~suitable_for level =
     let free_vars = Name_occurrences.variables (free_names t) in
-    if Variable.Set.is_empty free_vars then t, suitable_for
+    if Variable.Set.is_empty free_vars then t, level
     else
       let allowed = TE.var_domain suitable_for in
       let to_erase = Variable.Set.diff free_vars allowed in
-      if Variable.Set.is_empty to_erase then t, suitable_for
+      if Variable.Set.is_empty to_erase then t, level
       else
-        let result_env, perm =
-          Variable.Set.fold (fun to_erase (result_env, perm) ->
+        let result_level, perm =
+          (* To avoid writing an erasure operation, we define irrelevant fresh
+             variables in the returned [Typing_env_level], and swap them with
+             the variables that we wish to erase throughout the type. *)
+          Variable.Set.fold (fun to_erase (result_level, perm) ->
               let kind = TE.find_kind env to_erase in
               let fresh_var = Variable.rename to_erase in
               let fresh_var_name = Name.var fresh_var in
-              let result_env =
+              let result_level =
                 let name =
                   Name_in_binding_pos.create fresh_var_name
                     Name_occurrence_kind.in_types
                 in
-                TE.add_definition result_env name kind
+                TEL.add_definition result_level name kind
               in
               let canonical_simple =
                 TE.get_canonical_simple env
                   ~min_occurrence_kind:Name_occurrence_kind.in_types
                   (Simple.var to_erase)
               in
-              let result_env =
+              let result_level =
                 match TE.find_simple_opt env canonical_simple with
-                | None -> result_env
+                | None -> result_level
                 | Some simple ->
-                  if not (Simple.allowed simple ~allowed) then result_env
+                  if not (Simple.allowed simple ~allowed) then result_level
                   else
                     let ty = T.alias_type_of simple kind in
-                    TE.add_equation result_env fresh_var_name ty
+                    TEL.add_equation result_level fresh_var_name ty
               in
               let perm =
                 Name_permutation.add_variable perm to_erase fresh_var
               in
-              result_env, perm)
+              result_level, perm)
             to_erase
-            (suitable_for, Name_permutation.empty)
+            (level, Name_permutation.empty)
         in
-        result_env, apply_name_permutation t perm
+        result_level, apply_name_permutation t perm
+
+  let make_suitable_for_environment t env ~suitable_for =
+    let level, ty =
+      make_suitable_for_environment0 t env ~suitable_for (TEL.empty ())
+    in
+    let env_extension = TEE.create level in
+    env_extension, ty
 
   (* The [Make_operations] functor enables operations that involve
      [Type_grammar.t] values to be obtained. *)

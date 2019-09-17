@@ -20,6 +20,7 @@ module type S = sig
   type flambda_type
   type typing_env
   type typing_env_extension
+  type typing_env_level
   type meet_env
   type head
 
@@ -57,11 +58,18 @@ module type S = sig
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
+  val make_suitable_for_environment0
+     : t
+    -> typing_env
+    -> suitable_for:typing_env
+    -> typing_env_level
+    -> typing_env_level * t
+
   val make_suitable_for_environment
      : t
     -> typing_env
     -> suitable_for:typing_env
-    -> t * typing_env
+    -> typing_env_extension * t
 
   module Make_operations (S : sig
     val force_to_kind : flambda_type -> t

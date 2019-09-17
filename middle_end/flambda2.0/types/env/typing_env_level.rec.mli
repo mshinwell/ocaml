@@ -32,6 +32,8 @@ val empty : unit -> t
 
 val is_empty : t -> bool
 
+val has_no_defined_vars : t -> bool
+
 val defined_vars_in_order : t -> (Variable.t * Flambda_kind.t) list
 
 val defined_vars_in_order' : t -> Variable.t list
@@ -57,7 +59,7 @@ val meet : Meet_env.t -> t -> t -> t
 val n_way_join
    : Typing_env.t
   -> (Typing_env.t * Apply_cont_rewrite_id.t * Variable.Set.t * t) list
-  -> Typing_env.t * Continuation_extra_params_and_args.t
+  -> t * Continuation_extra_params_and_args.t
 
 val mem : t -> Name.t -> bool
 
