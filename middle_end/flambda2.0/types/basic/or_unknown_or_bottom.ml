@@ -34,6 +34,11 @@ let equal eq_contents t1 t2 =
   | Bottom, Bottom -> true
   | (Unknown | Ok _ | Bottom), _ -> false
 
+let map t ~f =
+  match t with
+  | Unknown | Bottom -> t
+  | Ok contents -> Ok (f contents)
+
 let map_sharing t ~f =
   match t with
   | Unknown | Bottom -> t

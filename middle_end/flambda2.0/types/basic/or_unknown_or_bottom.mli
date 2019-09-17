@@ -29,7 +29,6 @@ val print
 
 val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
-val map_sharing
-   : 'a t
-  -> f:('a -> 'a)
-  -> 'a t
+val map : 'a t -> f:('a -> 'b) -> 'b t
+
+val map_sharing : 'a t -> f:('a -> 'a) -> 'a t

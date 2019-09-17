@@ -86,7 +86,8 @@ module type S = sig
       with type typing_env_extension = typing_env_extension)
     : sig
       val meet_or_join
-         : meet_env
+         : ?bound_name:Name.t
+        -> meet_env
         -> t
         -> t
         -> (t * typing_env_extension) Or_bottom_or_absorbing.t

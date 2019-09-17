@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module TEE = Typing_env_extension
+
 module T_V = Type_of_kind_value
 module T_NI = Type_of_kind_naked_immediate
 module T_Nf = Type_of_kind_naked_float
@@ -724,39 +726,46 @@ let expand_head t env : Resolved_type.t =
   match t with
   | Value ty ->
     let head = T_V_ops.expand_head ty env in
-    Resolved (Value head)
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Value head))
   | Naked_immediate ty ->
     let head = T_NI_ops.expand_head ty env in
-    Resolved (Naked_immediate head)
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Naked_immediate head))
   | Naked_float ty ->
-    let head = T_NF_ops.expand_head ty env in
-    Resolved (Naked_float head)
+    let head = T_Nf_ops.expand_head ty env in
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Naked_float head))
   | Naked_int32 ty ->
     let head = T_N32_ops.expand_head ty env in
-    Resolved (Naked_int32 head)
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Naked_int32 head))
   | Naked_int64 ty ->
     let head = T_N64_ops.expand_head ty env in
-    Resolved (Naked_int64 head)
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Naked_int64 head))
   | Naked_nativeint ty ->
-    let head = T_NNI_ops.expand_head ty env in
-    Resolved (Naked_nativeint head)
+    let head = T_NN_ops.expand_head ty env in
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Naked_nativeint head))
   | Fabricated ty ->
     let head = T_F_ops.expand_head ty env in
-    Resolved (Fabricated head)
+    Resolved (Or_unknown_or_bottom.map head
+      ~f:(fun head : Resolved_type.resolved_t -> Fabricated head))
 
-module Make_meet_and_join
+module Make_meet_or_join
   (E : Lattice_ops_intf.S
-   with type meet_env := Meet_env.t
-   with type typing_env := Typing_env.t
-   with type typing_env_extension := Typing_env_extension.t) =
+   with type meet_env = Meet_env.t
+   with type typing_env = Typing_env.t
+   with type typing_env_extension = Typing_env_extension.t) =
 struct
-  module T_V_meet_or_join = T_V_ops.Make_meet_and_join (E)
-  module T_NI_meet_or_join = T_NI_ops.Make_meet_and_join (E)
-  module T_Nf_meet_or_join = T_Nf_ops.Make_meet_and_join (E)
-  module T_N32_meet_or_join = T_N32_ops.Make_meet_and_join (E)
-  module T_N64_meet_or_join = T_N64_ops.Make_meet_and_join (E)
-  module T_NN_meet_or_join = T_NN_ops.Make_meet_and_join (E)
-  module T_F_meet_or_join = T_F_ops.Make_meet_and_join (E)
+  module T_V_meet_or_join = T_V_ops.Make_meet_or_join (E)
+  module T_NI_meet_or_join = T_NI_ops.Make_meet_or_join (E)
+  module T_Nf_meet_or_join = T_Nf_ops.Make_meet_or_join (E)
+  module T_N32_meet_or_join = T_N32_ops.Make_meet_or_join (E)
+  module T_N64_meet_or_join = T_N64_ops.Make_meet_or_join (E)
+  module T_NN_meet_or_join = T_NN_ops.Make_meet_or_join (E)
+  module T_F_meet_or_join = T_F_ops.Make_meet_or_join (E)
 
   let meet_or_join ?bound_name env t1 t2 =
     match t1, t2 with
@@ -764,36 +773,57 @@ struct
       begin match T_V_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Value ty, env_extension
       | Bottom -> bottom_value, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_value, TEE.empty ()
+        else bottom_value, TEE.empty ()
       end
     | Naked_immediate ty1, Naked_immediate ty2 ->
       begin match T_NI_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
       | Bottom -> bottom_naked_immediate, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_naked_immediate, TEE.empty ()
+        else bottom_naked_immediate, TEE.empty ()
       end
     | Naked_float ty1, Naked_float ty2 ->
       begin match T_Nf_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_float ty, env_extension
       | Bottom -> bottom_naked_float, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_naked_float, TEE.empty ()
+        else bottom_naked_float, TEE.empty ()
       end
     | Naked_int32 ty1, Naked_int32 ty2 ->
       begin match T_N32_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
       | Bottom -> bottom_naked_int32, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_naked_int32, TEE.empty ()
+        else bottom_naked_int32, TEE.empty ()
       end
     | Naked_int64 ty1, Naked_int64 ty2 ->
       begin match T_N64_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
       | Bottom -> bottom_naked_int64, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_naked_int64, TEE.empty ()
+        else bottom_naked_int64, TEE.empty ()
       end
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
       begin match T_NN_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
       | Bottom -> bottom_naked_nativeint, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_naked_nativeint, TEE.empty ()
+        else bottom_naked_nativeint, TEE.empty ()
       end
     | Fabricated ty1, Fabricated ty2 ->
       begin match T_F_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
       | Ok (ty, env_extension) -> Fabricated ty, env_extension
       | Bottom -> bottom_fabricated, TEE.empty ()
+      | Absorbing ->
+        if E.unknown_is_absorbing () then any_fabricated, TEE.empty ()
+        else bottom_fabricated, TEE.empty ()
       end
     | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
         | Naked_int64 _ | Naked_nativeint _ | Fabricated _), _ ->
