@@ -18,7 +18,17 @@
 
 (* CR mshinwell: Use this module in [Expr] *)
 
-module Make (Descr : Contains_names.S) = struct
+module Make (Descr : sig
+  include Contains_names.S
+
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
+
+  val print : Format.formatter -> t -> unit
+end) = struct
   type t = {
     descr : Descr.t;
     delayed_permutation : Name_permutation.t;
@@ -47,4 +57,8 @@ module Make (Descr : Contains_names.S) = struct
     }
 
   let free_names t = t.free_names
+
+  let print_with_cache ~cache ppf t = Descr.print_with_cache ~cache ppf t.descr
+
+  let print ppf t = Descr.print ppf t.descr
 end

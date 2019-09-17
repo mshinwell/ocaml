@@ -19,7 +19,6 @@
 module type S = sig
   type typing_env
   type meet_env
-  type type_equality_env
   type typing_env_extension
   type flambda_type
 
@@ -30,8 +29,6 @@ module type S = sig
   val print : Format.formatter -> t -> unit
 
   (* CR mshinwell: Add [bottom] here?  Probably [is_bottom] too *)
-
-  val equal : type_equality_env -> t -> t -> bool
 
   val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
 

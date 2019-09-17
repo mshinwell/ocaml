@@ -25,6 +25,7 @@ module Make (Head : Type_head_intf.S
 : Type_descr_intf.S
   with type flambda_type := Type_grammar.t
   with type typing_env := Typing_env.t
+  with type typing_env_level := Typing_env_level.t
   with type typing_env_extension := Typing_env_extension.t
   with type meet_env := Meet_env.t
   with type head := Head.t

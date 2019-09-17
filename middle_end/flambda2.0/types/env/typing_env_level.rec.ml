@@ -48,7 +48,7 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
           Format.fprintf ppf
             "@[<hov 1>%a@ :@ %a@]"
             Name.print name
-            (Type_printers.print_with_cache ~cache) ty)
+            (Type_grammar.print_with_cache ~cache) ty)
         ppf equations;
       Format.pp_print_string ppf ")"
   in
@@ -94,7 +94,7 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
   let equations' =
     Name.Map.fold (fun name typ equations ->
         let name' = Name_permutation.apply_name perm name in
-        let typ' = Basic_type_ops.apply_name_permutation typ perm in
+        let typ' = Type_grammar.apply_name_permutation typ perm in
         if not (name == name' && typ == typ') then begin
           equations_changed := true
         end;
@@ -134,7 +134,7 @@ let free_names { defined_vars; equations; cse; } =
   let free_names_equations =
     Name.Map.fold (fun name typ free_names ->
         let free_names' = 
-          Name_occurrences.add_name (Type_free_names.free_names typ)
+          Name_occurrences.add_name (Type_grammar.free_names typ)
             name Name_occurrence_kind.in_types
         in
         Name_occurrences.union free_names free_names')
@@ -182,7 +182,7 @@ let add_definition t var kind binding_time =
   }
 
 let check_equation t name ty =
-  match Basic_type_ops.get_alias ty with
+  match Type_grammar.get_alias ty with
   | None -> ()
   | Some simple ->
     match Simple.descr simple with
@@ -191,7 +191,7 @@ let check_equation t name ty =
         Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
             disallowed (Typing_env_level):@ %a"
           Name.print name
-          Type_printers.print ty
+          Type_grammar.print ty
           print t
       end
     | _ -> ()
@@ -266,7 +266,7 @@ let meet_equation env t name typ =
   let meet_typ, env_extension =
     match Name.Map.find name t.equations with
     | exception Not_found -> typ, Typing_env_extension.empty ()
-    | existing_typ -> Api_meet_and_join.meet env typ existing_typ
+    | existing_typ -> Type_grammar.meet env typ existing_typ
   in
   let env =
     Meet_env.map_env env ~f:(fun typing_env ->
@@ -415,7 +415,7 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
       EP.Map.empty
   in
   let cses_with_canonicalised_lhs =
-    List.map (fun (env, id, t) ->
+    List.map (fun (env, id, _interesting_vars, t) ->
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -489,7 +489,7 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
     lhs_of_cses_valid_on_all_paths
     (EP.Map.empty, Continuation_extra_params_and_args.empty)
 
-let trivial_join t ~initial_env_at_join ~interesting_vars =
+let trivial_join t ~initial_env_at_join ~interesting_vars envs_with_levels =
   (* For trivial joins we allow variables defined in the level [t] to be
      treated as existential.  However we only do this for variables that
      may be "interesting" (typically the transitive closure, via the
@@ -555,19 +555,18 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
                     env_at_use ~suitable_for:env_at_join
                     result_t
                 in
-                let join_ty =
-                  Type_grammar.join ~bound_name:name env_at_join join_ty ty
-                in
+                let join_ty = Type_grammar.join env_at_join join_ty ty in
                 result_t, ty)
               (result_t, join_ty)
               envs_with_levels
           in
           add_or_replace_equation result_t name join_ty)
       names_with_equations_in_join
-      (env_at_join, empty ())
+      (empty ())
   in
   let cse, extra_cse_bindings =
-    cse_after_n_way_join envs_with_levels ~allowed
+    cse_after_n_way_join envs_with_levels
+      ~allowed:(Typing_env.var_domain env_at_join)
   in
   let t : t = { t with cse; } in
   assert (Variable.Map.is_empty t.defined_vars);
@@ -576,6 +575,6 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
 let n_way_join ~initial_env_at_join envs_with_levels =
   match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
-  | [_env, _id, interesting_vars, t] ->
-    trivial_join t ~initial_env_at_join ~interesting_vars
+  | [_env, _id, interesting_vars, t] as envs_with_levels ->
+    trivial_join t ~initial_env_at_join ~interesting_vars envs_with_levels
   | envs_with_levels -> non_trivial_join ~initial_env_at_join envs_with_levels

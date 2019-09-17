@@ -31,7 +31,7 @@ module Make (Index : Identifiable.S) = struct
       "@[<hov 1>(\
         @[<hov 1>(components_by_index@ %a)@]\
         )@]"
-      (Index.Map.print Type_printers.print) components_by_index
+      (Index.Map.print Type_grammar.print) components_by_index
 
   let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -83,9 +83,9 @@ module Make (Index : Identifiable.S) = struct
           match ty1_opt, ty2_opt with
           | None, None | Some _, None | None, Some _ -> None
           | Some ty1, Some ty2 ->
-            let ty, env_extension' = Api_meet_and_join.meet env ty1 ty2 in
-            if Basic_type_ops.is_obviously_bottom ty then begin
-              Some (Basic_type_ops.bottom K.value)
+            let ty, env_extension' = Type_grammar.meet env ty1 ty2 in
+            if Type_grammar.is_obviously_bottom ty then begin
+              Some (Type_grammar.bottom K.value)
             end else begin
               all_bottom := false;
               (*
@@ -111,7 +111,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
           match ty1_opt, ty2_opt with
           | None, None -> None
           | Some ty, None | None, Some ty -> Some ty
-          | Some ty1, Some ty2 -> Some (Api_meet_and_join.join env ty1 ty2))
+          | Some ty1, Some ty2 -> Some (Type_grammar.join env ty1 ty2))
         components_by_index1
         components_by_index2
     in
@@ -121,7 +121,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
     let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
     let components_by_index =
       Index.Set.fold (fun index components_by_index ->
-          Index.Map.add index (Basic_type_ops.any_value ())
+          Index.Map.add index Type_grammar.any_value
             components_by_index)
         missing_indexes
         t.components_by_index
@@ -131,7 +131,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
   let apply_name_permutation ({ components_by_index; } as t) perm =
     let components_by_index' =
       Index.Map.map_sharing (fun typ ->
-          Basic_type_ops.apply_name_permutation typ perm)
+          Type_grammar.apply_name_permutation typ perm)
         components_by_index
     in
     if components_by_index == components_by_index' then t
@@ -139,7 +139,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
 
   let free_names { components_by_index; } =
     Index.Map.fold (fun _index ty free_names ->
-        Name_occurrences.union (Type_free_names.free_names ty) free_names)
+        Name_occurrences.union (Type_grammar.free_names ty) free_names)
       components_by_index
       Name_occurrences.empty
 

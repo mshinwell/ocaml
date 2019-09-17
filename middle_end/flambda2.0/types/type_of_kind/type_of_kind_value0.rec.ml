@@ -242,19 +242,19 @@ struct
         ~f:(fun (blocks, immediates, env_extension) ->
           Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
     | Boxed_float n1, Boxed_float n2 ->
-      Or_bottom_or_absorbing.map
+      Or_bottom_or_absorbing.of_or_bottom
         (T_Nf_meet_or_join.meet_or_join env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_float n, env_extension)
     | Boxed_int32 n1, Boxed_int32 n2 ->
-      Or_bottom_or_absorbing.map
+      Or_bottom_or_absorbing.of_or_bottom
         (T_N32_meet_or_join.meet_or_join env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_int32 n, env_extension)
     | Boxed_int64 n1, Boxed_int64 n2 ->
-      Or_bottom_or_absorbing.map
+      Or_bottom_or_absorbing.of_or_bottom
         (T_N64_meet_or_join.meet_or_join env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_int64 n, env_extension)
     | Boxed_nativeint n1, Boxed_nativeint n2 ->
-      Or_bottom_or_absorbing.map
+      Or_bottom_or_absorbing.of_or_bottom
         (T_NN_meet_or_join.meet_or_join env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_nativeint n, env_extension)
     | Closures { by_closure_id = by_closure_id1; },
@@ -269,7 +269,7 @@ struct
       if String_info.Set.is_empty strs then Bottom
       else Or_bottom_or_absorbing.Ok (String strs, TEE.empty ())
     | Array { length = length1; }, Array { length = length2; } ->
-      Or_bottom_or_absorbing.map
+      Or_bottom_or_absorbing.of_or_bottom
         (T_V_meet_or_join.meet_or_join env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
     | (Blocks_and_tagged_immediates _

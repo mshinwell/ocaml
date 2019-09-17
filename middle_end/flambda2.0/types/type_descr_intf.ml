@@ -27,13 +27,14 @@ module type S_ops = sig
 
   module Make_meet_or_join (E : Lattice_ops_intf.S
     with type meet_env = meet_env
+    with type typing_env = typing_env
     with type typing_env_extension = typing_env_extension)
   : sig
     val meet_or_join
        : meet_env
       -> descr
       -> descr
-      -> (descr * typing_env_extension) Or_bottom_or_absorbing.t
+      -> (descr * typing_env_extension) Or_bottom.t
   end
 end
 
@@ -97,6 +98,7 @@ module type S = sig
     -> typing_env_extension * t
 
   module Make_operations (S : sig
+    val print : Format.formatter -> flambda_type -> unit
     val force_to_kind : flambda_type -> t
     val to_type : t -> flambda_type
   end) : S_ops

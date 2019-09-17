@@ -36,7 +36,6 @@ module Make
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
-    with type type_equality_env := Type_equality_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
   type t = {
@@ -84,26 +83,6 @@ struct
     { known = Tag_and_index.Map.empty;
       at_least;
     }
-
-  let equal env
-        { known = known1; at_least = at_least1; }
-        { known = known2; at_least = at_least2; } =
-    match
-      Tag_and_index.Map.fold2_stop_on_key_mismatch
-        (fun _index maps_to1 maps_to2 result ->
-          result && Maps_to.equal env maps_to1 maps_to2)
-        known1 known2 true
-    with
-    | None | Some false -> false
-    | Some true ->
-      match
-        Tag_or_unknown_and_index.Map.fold2_stop_on_key_mismatch
-          (fun _tag_and_index maps_to1 maps_to2 result ->
-            result && Maps_to.equal env maps_to1 maps_to2)
-          at_least1 at_least2 true
-      with
-      | None | Some false -> false
-      | Some true -> true
 
   module Row_like_meet_or_join
     (E : Lattice_ops_intf.S

@@ -123,44 +123,53 @@ let force_to_kind_fabricated t =
     Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
       print t
 
+let print_type = print
+
 module T_V_ops = T_V.Make_operations (struct
   include T_V
+  let print = print_type
   let force_to_kind = force_to_kind_value
   let to_type ty = Value ty
 end)
 
 module T_NI_ops = T_NI.Make_operations (struct
   include T_NI
+  let print = print_type
   let force_to_kind = force_to_kind_naked_immediate
   let to_type ty = Naked_immediate ty
 end)
 
 module T_Nf_ops = T_Nf.Make_operations (struct
   include T_Nf
+  let print = print_type
   let force_to_kind = force_to_kind_naked_float
   let to_type ty = Naked_float ty
 end)
 
 module T_N32_ops = T_N32.Make_operations (struct
   include T_N32
+  let print = print_type
   let force_to_kind = force_to_kind_naked_int32
   let to_type ty = Naked_int32 ty
 end)
 
 module T_N64_ops = T_N64.Make_operations (struct
   include T_N64
+  let print = print_type
   let force_to_kind = force_to_kind_naked_int64
   let to_type ty = Naked_int64 ty
 end)
 
 module T_NN_ops = T_NN.Make_operations (struct
   include T_NN
+  let print = print_type
   let force_to_kind = force_to_kind_naked_nativeint
   let to_type ty = Naked_nativeint ty
 end)
 
 module T_F_ops = T_F.Make_operations (struct
   include T_F
+  let print = print_type
   let force_to_kind = force_to_kind_fabricated
   let to_type ty = Fabricated ty
 end)
@@ -664,6 +673,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
   Value (T_V.create (Closures { by_closure_id; }))
 
 let array_of_length ~length =
+  let length = force_to_kind_value length in
   Value (T_V.create (Array { length; }))
 
 let type_for_const (const : Simple.Const.t) =
@@ -676,6 +686,52 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_nativeint n -> this_naked_nativeint n
 
 let kind_for_const const = kind (type_for_const const)
+
+(* CR mshinwell: Having to have this here is a bit of a nuisance. *)
+let make_suitable_for_environment0 t env ~suitable_for level =
+  match t with
+  | Value ty ->
+    let level, ty' =
+      T_V.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Value ty'
+  | Naked_immediate ty ->
+    let level, ty' =
+      T_NI.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_immediate ty'
+  | Naked_float ty ->
+    let level, ty' =
+      T_Nf.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_float ty'
+  | Naked_int32 ty ->
+    let level, ty' =
+      T_N32.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_int32 ty'
+  | Naked_int64 ty ->
+    let level, ty' =
+      T_N64.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_int64 ty'
+  | Naked_nativeint ty ->
+    let level, ty' =
+      T_NN.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_nativeint ty'
+  | Fabricated ty ->
+    let level, ty' =
+      T_F.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Fabricated ty'
 
 let make_suitable_for_environment t env ~suitable_for =
   match t with
@@ -773,57 +829,36 @@ struct
       begin match T_V_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Value ty, env_extension
       | Bottom -> bottom_value, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_value, TEE.empty ()
-        else bottom_value, TEE.empty ()
       end
     | Naked_immediate ty1, Naked_immediate ty2 ->
       begin match T_NI_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
       | Bottom -> bottom_naked_immediate, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_naked_immediate, TEE.empty ()
-        else bottom_naked_immediate, TEE.empty ()
       end
     | Naked_float ty1, Naked_float ty2 ->
       begin match T_Nf_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_float ty, env_extension
       | Bottom -> bottom_naked_float, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_naked_float, TEE.empty ()
-        else bottom_naked_float, TEE.empty ()
       end
     | Naked_int32 ty1, Naked_int32 ty2 ->
       begin match T_N32_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
       | Bottom -> bottom_naked_int32, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_naked_int32, TEE.empty ()
-        else bottom_naked_int32, TEE.empty ()
       end
     | Naked_int64 ty1, Naked_int64 ty2 ->
       begin match T_N64_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
       | Bottom -> bottom_naked_int64, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_naked_int64, TEE.empty ()
-        else bottom_naked_int64, TEE.empty ()
       end
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
       begin match T_NN_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
       | Bottom -> bottom_naked_nativeint, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_naked_nativeint, TEE.empty ()
-        else bottom_naked_nativeint, TEE.empty ()
       end
     | Fabricated ty1, Fabricated ty2 ->
       begin match T_F_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Fabricated ty, env_extension
       | Bottom -> bottom_fabricated, TEE.empty ()
-      | Absorbing ->
-        if E.unknown_is_absorbing () then any_fabricated, TEE.empty ()
-        else bottom_fabricated, TEE.empty ()
       end
     | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
         | Naked_int64 _ | Naked_nativeint _ | Fabricated _), _ ->

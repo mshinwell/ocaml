@@ -18,7 +18,17 @@
 
 (** Management of delayed permutations and cached free names. *)
 
-module Make (Descr : Contains_names.S) : sig
+module Make (Descr : sig
+  include Contains_names.S
+
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
+
+  val print : Format.formatter -> t -> unit
+end) : sig
   type t
 
   val create : Descr.t -> t
@@ -26,4 +36,12 @@ module Make (Descr : Contains_names.S) : sig
   val descr : t -> Descr.t
 
   include Contains_names.S with type t := t
+
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
+
+  val print : Format.formatter -> t -> unit
 end

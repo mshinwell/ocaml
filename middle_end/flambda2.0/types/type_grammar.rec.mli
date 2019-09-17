@@ -34,8 +34,6 @@ val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
 include Contains_names.S with type t := t
 
-val free_variables_transitive : t -> Variable.Set.t
-
 val kind : t -> Flambda_kind.t
 
 val alias_type_of : Flambda_kind.t -> Simple.t -> t
@@ -158,6 +156,13 @@ val closure_with_at_least_this_closure_var
 
 val array_of_length : length:t -> t
 
+val make_suitable_for_environment0
+   : t
+  -> Typing_env.t
+  -> suitable_for:Typing_env.t
+  -> Typing_env_level.t
+  -> Typing_env_level.t * t
+
 val make_suitable_for_environment
    : t
   -> Typing_env.t
@@ -170,7 +175,7 @@ val expand_head : t -> Typing_env.t -> Resolved_type.t
 val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 
 (** Least upper bound of two types. *)
-val join : ?bound_name:Name.t -> Typing_env.t -> t -> t -> t
+val join : Typing_env.t -> t -> t -> t
 
 val force_to_kind_naked_float : t -> Type_of_kind_naked_float.t
 

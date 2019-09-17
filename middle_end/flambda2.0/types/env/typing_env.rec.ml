@@ -65,7 +65,7 @@ end = struct
         @[<hov 1>(names_to_types@ %a)@]@ \
         @[<hov 1>(aliases@ %a)@]\
         )@]"
-      (Name.Map.print (Type_printers.print_with_cache ~cache)) names_to_types
+      (Name.Map.print (Type_grammar.print_with_cache ~cache)) names_to_types
       Aliases.print aliases
 
   let _invariant t =
@@ -443,7 +443,7 @@ let invariant_for_new_equation t name ty =
     let unbound_names = Name_occurrences.diff free_names (domain t) in
     Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names@ (%a):@ %a"
       Name.print name
-      Type_printers.print ty
+      Type_grammar.print ty
       Name_occurrences.print unbound_names
       print t
   end
@@ -472,7 +472,7 @@ let add_equation t name ty =
 (*
 Format.eprintf "Adding equation %a : %a\n%!"
   Name.print name
-  Type_printers.print ty;
+  Type_grammar.print ty;
   *)
   let name_occurrence_kind = find_name_occurrence_kind t name in
   (* XXX Needs to be guarded
@@ -484,7 +484,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
         name@ %a =@ %a@ (free names %a) in environment with domain %a:@ %a"
       Name_occurrences.print unbound_names
       Name.print name
-      Type_printers.print ty
+      Type_grammar.print ty
       Name_occurrences.print free_names
       Name_occurrences.print (domain t)
       print t
@@ -499,7 +499,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
         Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
             disallowed:@ %a"
           Name.print name
-          Type_printers.print ty
+          Type_grammar.print ty
           print t
       end
     | _ -> ()
@@ -507,7 +507,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
   (*
 Format.eprintf "Trying to add equation %a = %a\n%!"
   Name.print name
-  Type_printers.print ty;
+  Type_grammar.print ty;
 Format.eprintf "Aliases before adding equation:@ %a\n%!"
   Aliases.print (aliases t);
   *)
@@ -557,12 +557,12 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
 (*
 Format.eprintf "Now really adding equation %a = %a\n%!"
   Simple.print simple
-  Type_printers.print ty;
+  Type_grammar.print ty;
   *)
 (*
  * Format.eprintf "Aliases after adding equation %a = %a:@ %a\n%!"
  *   Simple.print simple
- *   Type_printers.print ty
+ *   Type_grammar.print ty
  *   Aliases.print aliases; *)
   match Simple.descr simple with
   | Const _ | Discriminant _ -> t
@@ -695,9 +695,9 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
 let cut_and_n_way_join definition_typing_env ts_and_use_ids
       ~unknown_if_defined_at_or_later_than =
   let after_cuts =
-    List.map (fun (t, use_id) ->
+    List.map (fun (t, use_id, interesting_vars) ->
         let level, _in_scope = cut t ~unknown_if_defined_at_or_later_than in
-        t, use_id, level)
+        t, use_id, interesting_vars, level)
       ts_and_use_ids
   in
   let level, extra_params_and_args =
@@ -775,12 +775,6 @@ let get_alias_then_canonical_simple t ?min_occurrence_kind typ : _ Or_bottom.t =
   | None -> Ok None
   | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
 
-let get_alias_ty_then_canonical_simple t ?min_occurrence_kind typ
-      : _ Or_bottom.t =
-  match Type_grammar.get_alias_ty typ with
-  | None -> Ok None
-  | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
-
 let aliases_of_simple t ~min_occurrence_kind simple =
   let name_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
   let alias = alias_of_simple t simple name_occurrence_kind in
@@ -828,10 +822,11 @@ let create_using_resolver_and_symbol_bindings_from t =
       match name with
       | Var _ -> t
       | Symbol _ ->
-        let typ, t =
+        let env_extension, typ =
           Type_grammar.make_suitable_for_environment typ original_t
             ~suitable_for:t
         in
+        let t = add_env_extension t env_extension in
         add_equation t name typ)
     names_to_types
     t

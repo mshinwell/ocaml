@@ -32,7 +32,7 @@ module Make (Head : Type_head_intf.S
       | Equals of Simple.t
       | Type of Export_id.t
 
-    let print ppf t =
+    let print_with_cache ~cache ppf t =
       let colour = Flambda_colours.top_or_bottom_type () in
       match t with
       | No_alias Unknown ->
@@ -45,7 +45,7 @@ module Make (Head : Type_head_intf.S
           Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
         else
           Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
-      | No_alias (Ok head) -> Head.print ppf head
+      | No_alias (Ok head) -> Head.print_with_cache ~cache ppf head
       | Equals simple ->
         Format.fprintf ppf "@[(%s=%s %a)@]"
           (Flambda_colours.error ())
@@ -56,6 +56,9 @@ module Make (Head : Type_head_intf.S
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Export_id.print export_id
+
+    let print ppf t =
+      print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let apply_name_permutation t perm =
       if Name_permutation.is_empty perm then t
@@ -82,7 +85,11 @@ module Make (Head : Type_head_intf.S
 
   include With_delayed_permutation.Make (Descr)
 
-  let print ppf t = Descr.print ppf (descr t)
+  let print_with_cache ~cache ppf t =
+    Descr.print_with_cache ~cache ppf (descr t)
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let create_no_alias head = create (No_alias head)
   let create_equals simple = create (Equals simple)
@@ -285,7 +292,7 @@ module Make (Head : Type_head_intf.S
       let head2 = expand_head t1 typing_env in
       canonical_simple1, head1, canonical_simple2, head2
 
-    module Make_meet_and_join
+    module Make_meet_or_join
       (E : Lattice_ops_intf.S
        with type meet_env = Meet_env.t
        with type typing_env = TE.t

@@ -94,11 +94,13 @@ let n_way_join env envs_with_extensions : t * _ =
           A.create (Typing_env_level.defined_vars_in_order' level) level
         in
         abst, extra_cse_bindings
-      | (_env, id, t)::envs_with_extensions ->
+      | (_env, id, interesting_vars, t)::envs_with_extensions ->
         A.pattern_match t.abst ~f:(fun _ level ->
           let env = Typing_env.add_env_extension_from_level env level in
           (* It doesn't matter that the list gets reversed. *)
-          let envs_with_levels = (env, id, level) :: envs_with_levels in
+          let envs_with_levels =
+            (env, id, interesting_vars, level) :: envs_with_levels
+          in
           open_binders envs_with_extensions envs_with_levels)
     in
     open_binders envs_with_extensions []

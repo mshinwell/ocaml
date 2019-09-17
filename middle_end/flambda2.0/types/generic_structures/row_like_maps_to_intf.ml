@@ -23,7 +23,6 @@ module type S = sig
   type flambda_type
   type typing_env
   type meet_env
-  type type_equality_env
   type typing_env_extension
 
   type t
@@ -37,6 +36,5 @@ module type S = sig
     with type flambda_type := flambda_type
     with type typing_env := typing_env
     with type meet_env := meet_env
-    with type type_equality_env := type_equality_env
     with type typing_env_extension := typing_env_extension
 end
