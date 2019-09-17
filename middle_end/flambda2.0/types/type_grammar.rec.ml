@@ -588,9 +588,7 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
   let closure_types = Types_by_closure_id.create closure_types in
   let closures_entry =
     let closure_var_types =
-      Types_by_var_within_closure.create
-        (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
-          closure_var_types)
+      Types_by_var_within_closure.create closure_var_types
     in
     let function_decls =
       Closure_id.Map.map (fun func_decl -> Or_unknown.Known func_decl)
@@ -782,38 +780,31 @@ let expand_head t env : Resolved_type.t =
   match t with
   | Value ty ->
     let head = T_V_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Value head))
+    Resolved (Value head)
   | Naked_immediate ty ->
     let head = T_NI_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Naked_immediate head))
+    Resolved (Naked_immediate head)
   | Naked_float ty ->
     let head = T_Nf_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Naked_float head))
+    Resolved (Naked_float head)
   | Naked_int32 ty ->
     let head = T_N32_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Naked_int32 head))
+    Resolved (Naked_int32 head)
   | Naked_int64 ty ->
     let head = T_N64_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Naked_int64 head))
+    Resolved (Naked_int64 head)
   | Naked_nativeint ty ->
     let head = T_NN_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Naked_nativeint head))
+    Resolved (Naked_nativeint head)
   | Fabricated ty ->
     let head = T_F_ops.expand_head ty env in
-    Resolved (Or_unknown_or_bottom.map head
-      ~f:(fun head : Resolved_type.resolved_t -> Fabricated head))
+    Resolved (Fabricated head)
 
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
-   with type meet_env = Meet_env.t
-   with type typing_env = Typing_env.t
-   with type typing_env_extension = Typing_env_extension.t) =
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
 struct
   module T_V_meet_or_join = T_V_ops.Make_meet_or_join (E)
   module T_NI_meet_or_join = T_NI_ops.Make_meet_or_join (E)

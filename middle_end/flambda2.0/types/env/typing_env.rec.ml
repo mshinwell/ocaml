@@ -337,6 +337,11 @@ let find_name_occurrence_kind t name =
 let mem t name =
   Name.Map.mem name (names_to_types t)
 
+let mem_simple t simple =
+  match Simple.descr simple with
+  | Name name -> mem t name
+  | Const _ | Discriminant _ -> true
+
 let with_current_level t ~current_level =
   let t = { t with current_level; } in
   invariant t;
@@ -502,7 +507,7 @@ Format.eprintf "Adding equation %a : %a\n%!"
           Type_grammar.print ty
           print t
       end
-    | _ -> ()
+    | Const _ | Discriminant _ -> ()
   end;
   (*
 Format.eprintf "Trying to add equation %a = %a\n%!"
@@ -701,7 +706,8 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids
       ts_and_use_ids
   in
   let level, extra_params_and_args =
-    Typing_env_level.n_way_join definition_typing_env after_cuts
+    Typing_env_level.n_way_join ~initial_env_at_join:definition_typing_env
+      after_cuts
   in
   let env_extension = Typing_env_extension.create level in
   env_extension, extra_params_and_args

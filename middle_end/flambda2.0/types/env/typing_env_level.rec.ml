@@ -194,7 +194,7 @@ let check_equation t name ty =
           Type_grammar.print ty
           print t
       end
-    | _ -> ()
+    | Const _ | Discriminant _ -> ()
 
 let one_equation name ty =
   check_equation (empty ()) name ty;
@@ -448,7 +448,7 @@ let cse_after_n_way_join envs_with_extensions ~allowed =
                   Name.print name
                   Typing_env.print env
               end;
-            | _ -> () (* add more *)
+            | Const _ | Discriminant _ -> () (* CR mshinwell: add more *)
             end;
             Apply_cont_rewrite_id.Map.add id rhs_kind rhs_kinds)
           Apply_cont_rewrite_id.Map.empty

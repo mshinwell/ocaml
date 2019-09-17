@@ -21,8 +21,10 @@ module TEE = Typing_env_extension
 
 type t = Int64.Set.t
 
-let print0 ppf t =
+let print ppf t =
   Format.fprintf ppf "@[(Naked_int64s@ (%a))@]" Int64.Set.print t
+
+let print_with_cache ~cache:_ ppf t = print ppf t
 
 let apply_name_permutation t _perm = t
 
@@ -32,7 +34,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t
   else Bottom
 
-module Make
+module Make_meet_or_join
   (E : Lattice_ops_intf.S
     with type meet_env := Meet_env.t
     with type typing_env := Typing_env.t

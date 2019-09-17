@@ -26,9 +26,9 @@ module type S_ops = sig
   val expand_head : descr -> typing_env -> head Or_unknown_or_bottom.t
 
   module Make_meet_or_join (E : Lattice_ops_intf.S
-    with type meet_env = meet_env
-    with type typing_env = typing_env
-    with type typing_env_extension = typing_env_extension)
+    with type meet_env := meet_env
+    with type typing_env := typing_env
+    with type typing_env_extension := typing_env_extension)
   : sig
     val meet_or_join
        : meet_env

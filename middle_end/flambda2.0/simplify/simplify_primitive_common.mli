@@ -16,14 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val meet_shape
-   : Flambda_type.Typing_env.t
-  -> Flambda_type.t
-  -> shape:Flambda_type.t
-  -> result_var:Var_in_binding_pos.t
-  -> result_kind:Flambda_kind.t
-  -> Flambda_type.Typing_env_extension.t Or_bottom.t
-
 val simplify_projection
    : Downwards_acc.t
   -> original_term:Flambda.Named.t

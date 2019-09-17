@@ -183,12 +183,14 @@ struct
              See if we can avoid needing that *)
           let left_env = Meet_env.env env in
           let right_env = Meet_env.env env in
-          (* CR mshinwell: Move to [TEE] *)
+          (* CR mshinwell: Move to [TEE].  Also used in [Type_of_kind_value0] *)
           let join_extensions env ext1 ext2 =
             let env_extension, _ =
-              TEE.n_way_join env [
-                left_env, Apply_cont_rewrite_id.create (), ext1;
-                right_env, Apply_cont_rewrite_id.create (), ext2;
+              TEE.n_way_join ~initial_env_at_join:env [
+                left_env, Apply_cont_rewrite_id.create (),
+                  Variable.Set.empty, ext1;
+                right_env, Apply_cont_rewrite_id.create (),
+                  Variable.Set.empty, ext2;
               ]
             in
             env_extension

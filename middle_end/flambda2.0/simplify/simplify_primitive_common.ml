@@ -18,17 +18,10 @@
 
 open! Simplify_import
 
-let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
-  let result = Name_in_binding_pos.var result_var in
-  let env = TE.add_definition env result result_kind in
-  match T.meet env t shape with
-  | Bottom -> Bottom
-  | Ok (_meet_ty, env_extension) -> Ok env_extension
-
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DE.typing_env (DA.denv dacc) in
-  match meet_shape env deconstructing ~shape ~result_var ~result_kind with
+  match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
   | Bottom -> Reachable.invalid (), TEE.empty (), dacc
   | Ok env_extension ->
     Reachable.reachable original_term, env_extension, dacc

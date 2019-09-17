@@ -17,15 +17,15 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type resolved_t =
-  | Value of Type_of_kind_value0.t
-  | Naked_immediate of Type_of_kind_naked_immediate0.t
-  | Naked_float of Type_of_kind_naked_float0.t
-  | Naked_int32 of Type_of_kind_naked_int32_0.t
-  | Naked_int64 of Type_of_kind_naked_int64_0.t
-  | Naked_nativeint of Type_of_kind_naked_nativeint0.t
-  | Fabricated of Type_of_kind_fabricated0.t
+  | Value of Type_of_kind_value0.t Or_unknown_or_bottom.t
+  | Naked_immediate of Type_of_kind_naked_immediate0.t Or_unknown_or_bottom.t
+  | Naked_float of Type_of_kind_naked_float0.t Or_unknown_or_bottom.t
+  | Naked_int32 of Type_of_kind_naked_int32_0.t Or_unknown_or_bottom.t
+  | Naked_int64 of Type_of_kind_naked_int64_0.t Or_unknown_or_bottom.t
+  | Naked_nativeint of Type_of_kind_naked_nativeint0.t Or_unknown_or_bottom.t
+  | Fabricated of Type_of_kind_fabricated0.t Or_unknown_or_bottom.t
 
 type t =
   | Const of Simple.Const.t
   | Discriminant of Discriminant.t
-  | Resolved of resolved_t Or_unknown_or_bottom.t
+  | Resolved of resolved_t

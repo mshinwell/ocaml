@@ -25,6 +25,8 @@ let print_with_cache ~cache ppf t =
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
       (Discriminants.print_with_cache ~cache) discriminants
 
+let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
 let apply_name_permutation t perm =
   match t with
   | Discriminants discrs ->

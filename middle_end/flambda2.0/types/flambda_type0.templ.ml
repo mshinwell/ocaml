@@ -29,17 +29,14 @@ module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
-(* CR mshinwell: Should there be a different [Name_occurrences] used for
-   types?  It would remove most of the "everything_must_only_be_names"
-   stuff. *)
-
 module Make
   (Term_language_function_declaration : Term_language_function_declaration.S)
 = struct
   (* -- module rec binding here -- *)
 
-  include Basic_type_ops
   include Type_grammar
+
+  type flambda_type = t
 
   let meet env t1 t2 : _ Or_bottom.t =
     let meet_env = Meet_env.create env in
@@ -48,14 +45,18 @@ module Make
     if is_obviously_bottom meet_ty then Bottom
     else Ok (meet_ty, env_extension)
 
+  let meet_shape env t ~shape ~result_var ~result_kind : _ Or_bottom.t =
+    let result = Name_in_binding_pos.var result_var in
+    let env = Typing_env.add_definition env result result_kind in
+    match meet env t shape with
+    | Bottom -> Bottom
+    | Ok (_meet_ty, env_extension) -> Ok env_extension
+
   let arity_of_list ts =
     Flambda_arity.create (List.map kind ts)
 
   type typing_env = Typing_env.t
   type typing_env_extension = Typing_env_extension.t
-
-  let print = Type_printers.print
-  let print_with_cache = Type_printers.print_with_cache
 
   let invariant _env _t = ()  (* CR mshinwell: implement *)
 
@@ -65,14 +66,22 @@ module Make
     List.map (fun kind -> unknown kind) arity
 
   let is_bottom env t =
-    match Typing_env.expand_head env t with
-    | Resolved (Resolved_value Bottom)
-    | Resolved (Resolved_naked_number (Bottom, _))
-    | Resolved (Resolved_fabricated Bottom) -> true
+    match expand_head t env with
+    | Resolved (Value Bottom)
+    | Resolved (Naked_immediate Bottom)
+    | Resolved (Naked_float Bottom)
+    | Resolved (Naked_int32 Bottom)
+    | Resolved (Naked_int64 Bottom)
+    | Resolved (Naked_nativeint Bottom)
+    | Resolved (Fabricated Bottom) -> true
     | Const _ | Discriminant _
-    | Resolved (Resolved_value _)
-    | Resolved (Resolved_naked_number _)
-    | Resolved (Resolved_fabricated _) -> false
+    | Resolved (Value _)
+    | Resolved (Naked_immediate _)
+    | Resolved (Naked_float _)
+    | Resolved (Naked_int32 _)
+    | Resolved (Naked_int64 _)
+    | Resolved (Naked_nativeint _)
+    | Resolved (Fabricated _) -> false
 
   type 'a proof =
     | Proved of 'a
@@ -94,7 +103,7 @@ module Make
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
       Misc.fatal_errorf "Type %a is not of kind value"
-        Type_printers.print t
+        print t
     end;
     (* XXX This probably shouldn't be using [get_alias] *)
     match get_alias t with
@@ -107,7 +116,7 @@ module Make
             different from that returned by [kind] (%a):@ %a"
           Simple.print simple
           K.print original_kind
-          Type_printers.print t
+          print t
       | Name _ ->
         match
           Typing_env.get_canonical_simple env simple
@@ -129,15 +138,15 @@ module Make
                 doesn't match the kind of the returned [Simple] %a:@ %a"
               K.print kind
               Simple.print simple
-              Type_printers.print t
+              print t
 
   let prove_single_closures_entry env t : _ proof =
     let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ | Discriminant _ -> Invalid
     | Resolved resolved ->
       match resolved with
-      | Resolved_value (Ok (Closures closures)) ->
+      | Value (Ok (Closures closures)) ->
         begin
           match Closures_entry_by_set_of_closures_contents.get_singleton
             closures.by_closure_id
@@ -149,24 +158,28 @@ module Make
           in
           Proved (closure_id, function_decl)
         end
-      | Resolved_value (Ok _) -> Invalid
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value Bottom -> Invalid
-      | Resolved_naked_number _ -> wrong_kind ()
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_equals_tagged_immediates env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
     | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
@@ -177,10 +190,15 @@ module Make
           else
             Invalid
         end
-      | Resolved_value (Ok _) -> Invalid
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value Bottom -> Invalid
-      | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_equals_single_tagged_immediate env t : _ proof =
     match prove_equals_tagged_immediates env t with
@@ -198,82 +216,96 @@ module Make
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_float]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Naked_float f) -> Proved (Float.Set.singleton f)
     | Const (Tagged_immediate _ | Naked_immediate _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_naked_number (Ok (Float fs), Naked_float) -> Proved fs
-      | Resolved_naked_number (Unknown, Naked_float) -> Unknown
-      | Resolved_naked_number (Bottom, Naked_float) -> Invalid
-      | Resolved_value _ | Resolved_naked_number _
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Naked_float (Ok fs) -> Proved fs
+      | Naked_float Unknown -> Unknown
+      | Naked_float Bottom -> Invalid
+      | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_naked_int32s env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int32]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
     | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_naked_number (Ok (Int32 is), Naked_int32) -> Proved is
-      | Resolved_naked_number (Unknown, Naked_int32) -> Unknown
-      | Resolved_naked_number (Bottom, Naked_int32) -> Invalid
-      | Resolved_value _ | Resolved_naked_number _
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Naked_int32 (Ok is) -> Proved is
+      | Naked_int32 Unknown -> Unknown
+      | Naked_int32 Bottom -> Invalid
+      | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_naked_int64s env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
     | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_naked_number (Ok (Int64 is), Naked_int64) -> Proved is
-      | Resolved_naked_number (Unknown, Naked_int64) -> Unknown
-      | Resolved_naked_number (Bottom, Naked_int64) -> Invalid
-      | Resolved_value _ | Resolved_naked_number _
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Naked_int64 (Ok is) -> Proved is
+      | Naked_int64 Unknown -> Unknown
+      | Naked_int64 Bottom -> Invalid
+      | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_naked_nativeints env t : _ proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
     | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_naked_number (Ok (Nativeint is), Naked_nativeint) -> Proved is
-      | Resolved_naked_number (Unknown, Naked_nativeint) -> Unknown
-      | Resolved_naked_number (Bottom, Naked_nativeint) -> Invalid
-      | Resolved_value _ | Resolved_naked_number _
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Naked_nativeint (Ok is) -> Proved is
+      | Naked_nativeint Unknown -> Unknown
+      | Naked_nativeint Bottom -> Invalid
+      | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_is_int env t : bool proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Tagged_immediate _) -> Proved true
-    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
-      | Naked_int64 _ | Naked_nativeint _)
-    | Discriminant _ -> wrong_kind ()
+    | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
@@ -286,23 +318,26 @@ module Make
             if Immediates.is_bottom imms then Proved false
             else Unknown
         end
-      | Resolved_value (Ok _) -> Invalid
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value Bottom -> Invalid
-      | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_tags_and_sizes env t : Targetint.OCaml.t Tag.Map.t proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const (Tagged_immediate _) -> Unknown
-    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
-      | Naked_int64 _ | Naked_nativeint _)
-    | Discriminant _ -> wrong_kind ()
+    | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.immediates with
         | Unknown -> Unknown
         | Known _ ->
@@ -313,10 +348,16 @@ module Make
             | Unknown -> Unknown
             | Known tags_and_sizes -> Proved tags_and_sizes
         end
-      | Resolved_value (Ok _) -> Invalid
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value Bottom -> Invalid
-      | Resolved_naked_number _ | Resolved_fabricated _ -> wrong_kind ()
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      (* CR mshinwell: Here and elsewhere, use or-patterns. *)
+      | Naked_immediate _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
 
   let prove_unique_tag_and_size env t
        : (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch =
@@ -332,43 +373,43 @@ module Make
         | Some (tag, size) -> Proved (tag, size)
 
   let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ | Discriminant _ -> Wrong_kind
     | Resolved resolved ->
       match resolved with
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value (Ok (Boxed_number (Boxed_float _))) -> Proved ()
-      | Resolved_value _ -> Invalid
+      | Value Unknown -> Unknown
+      | Value (Ok (Boxed_float _)) -> Proved ()
+      | Value _ -> Invalid
       | _ -> Wrong_kind
 
   let prove_is_a_boxed_int32 env t : _ proof_allowing_kind_mismatch =
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ | Discriminant _ -> Wrong_kind
     | Resolved resolved ->
       match resolved with
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value (Ok (Boxed_number (Boxed_int32 _))) -> Proved ()
-      | Resolved_value _ -> Invalid
+      | Value Unknown -> Unknown
+      | Value (Ok (Boxed_int32 _)) -> Proved ()
+      | Value _ -> Invalid
       | _ -> Wrong_kind
 
   let prove_is_a_boxed_int64 env t : _ proof_allowing_kind_mismatch =
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ | Discriminant _ -> Wrong_kind
     | Resolved resolved ->
       match resolved with
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value (Ok (Boxed_number (Boxed_int64 _))) -> Proved ()
-      | Resolved_value _ -> Invalid
+      | Value Unknown -> Unknown
+      | Value (Ok (Boxed_int64 _)) -> Proved ()
+      | Value _ -> Invalid
       | _ -> Wrong_kind
 
   let prove_is_a_boxed_nativeint env t : _ proof_allowing_kind_mismatch =
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ | Discriminant _ -> Wrong_kind
     | Resolved resolved ->
       match resolved with
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value (Ok (Boxed_number (Boxed_nativeint _))) -> Proved ()
-      | Resolved_value _ -> Invalid
+      | Value Unknown -> Unknown
+      | Value (Ok (Boxed_nativeint _)) -> Proved ()
+      | Value _ -> Invalid
       | _ -> Wrong_kind
 
   (* CR mshinwell: Factor out code from the following. *)
@@ -382,7 +423,7 @@ module Make
     let result_kind = K.naked_float in
     let shape = box_float (alias_type_of result_kind result_simple) in
 Format.eprintf "shape for boxed float proof:@ %a\n%!"
-  Type_printers.print shape;
+  print shape;
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
@@ -395,7 +436,7 @@ Format.eprintf "shape for boxed float proof:@ %a\n%!"
       let env = Typing_env.add_env_extension env env_extension in
       let t = Typing_env.find env (Name.var result_var) in
 Format.eprintf "result type for boxed float proof:@ %a\n%!"
-  Type_printers.print t;
+  print t;
       prove_naked_floats env t
 
   let prove_boxed_int32s env t : _ proof =
@@ -465,37 +506,38 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Fabricated]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ -> wrong_kind ()
     | Discriminant discr -> Proved (Discriminant.Set.singleton discr)
     | Resolved resolved ->
       match resolved with
-      | Resolved_value _ | Resolved_naked_number _ -> wrong_kind ()
-      | Resolved_fabricated (Ok (Discriminants discrs)) ->
+      | Value _ | Naked_immediate _ | Naked_float _
+      | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated (Ok (Discriminants discrs)) ->
         begin match Discriminants.all discrs with
         | Known discrs -> Proved discrs
         | Unknown -> Unknown
         end
-      | Resolved_fabricated Unknown -> Unknown
-      | Resolved_fabricated Bottom -> Invalid
+      | Fabricated Unknown -> Unknown
+      | Fabricated Bottom -> Invalid
 
   let prove_strings env t : String_info.Set.t proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
-    match Typing_env.expand_head env t with
+    match expand_head t env with
     | Const _ ->
       if K.equal (kind t) K.value then Invalid
       else wrong_kind ()
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Resolved_value (Ok (String strs)) -> Proved strs      
-      | Resolved_value (Ok _) -> Invalid
-      | Resolved_value Unknown -> Unknown
-      | Resolved_value Bottom -> Invalid
-      | Resolved_naked_number _
-      | Resolved_fabricated _ -> wrong_kind ()
+      | Value (Ok (String strs)) -> Proved strs      
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+      | Naked_nativeint _ | Fabricated _ -> wrong_kind ()
 
   type to_lift =
     | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
@@ -512,7 +554,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
 
   let reify env ~min_occurrence_kind t : reification_result =
 (*
-Format.eprintf "reifying %a\n%!" Type_printers.print t;
+Format.eprintf "reifying %a\n%!" print t;
 *)
     match
       Typing_env.get_alias_then_canonical_simple env ~min_occurrence_kind t
@@ -528,7 +570,7 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
          currently forbidden (every symbol has the same binding time). *)
       Cannot_reify
     | Ok canonical_simple_opt ->
-      match Typing_env.expand_head env t with
+      match expand_head t env with
       | Const const -> Simple (Simple.const const)
       | Discriminant discr -> Simple (Simple.discriminant discr)
       | Resolved resolved ->
@@ -538,7 +580,7 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
           | Some canonical_simple -> Simple canonical_simple
         in
         match resolved with
-        | Resolved_value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
           begin match blocks_imms.blocks, blocks_imms.immediates with
           | Known blocks, Known imms ->
             if Immediates.is_bottom imms then
@@ -580,8 +622,9 @@ Format.eprintf "reifying %a\n%!" Type_printers.print t;
               try_canonical_simple ()
           | _, _ -> try_canonical_simple ()
           end
-        | Resolved_value Bottom
-        | Resolved_naked_number (Bottom, _)
-        | Resolved_fabricated Bottom -> Invalid
+        | Value Bottom
+        | Naked_immediate Bottom | Naked_float Bottom
+        | Naked_int32 Bottom | Naked_int64 Bottom | Naked_nativeint Bottom
+        | Fabricated Bottom -> Invalid
         | _ -> try_canonical_simple ()
 end

@@ -141,7 +141,7 @@ val exactly_this_closure
    : Closure_id.t
   -> all_function_decls_in_set:Function_declaration_type.t Closure_id.Map.t
   -> all_closures_in_set:t Closure_id.Map.t
-  -> all_closure_vars_in_set:Type_of_kind_value.t Var_within_closure.Map.t
+  -> all_closure_vars_in_set:t Var_within_closure.Map.t
   -> t
 
 val at_least_the_closures_with_ids
@@ -176,8 +176,6 @@ val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 
 (** Least upper bound of two types. *)
 val join : Typing_env.t -> t -> t -> t
-
-val force_to_kind_naked_float : t -> Type_of_kind_naked_float.t
 
 module T_V_ops : Type_descr_intf.S_ops
   with type typing_env := Typing_env.t

@@ -20,6 +20,7 @@
 
 module Make (Head : Type_head_intf.S
   with type meet_env := Meet_env.t
+  with type typing_env := Typing_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type type_grammar := Type_grammar.t)
 : Type_descr_intf.S

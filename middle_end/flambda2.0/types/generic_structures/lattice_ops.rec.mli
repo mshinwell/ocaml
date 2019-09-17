@@ -21,11 +21,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module For_meet : Lattice_ops_intf.S
-  with type typing_env = Typing_env.t
-  with type meet_env = Meet_env.t
-  with type typing_env_extension = Typing_env_extension.t
+  with type typing_env := Typing_env.t
+  with type meet_env := Meet_env.t
+  with type typing_env_extension := Typing_env_extension.t
 
 module For_join : Lattice_ops_intf.S
-  with type typing_env = Typing_env.t
-  with type meet_env = Meet_env.t
-  with type typing_env_extension = Typing_env_extension.t
+  with type typing_env := Typing_env.t
+  with type meet_env := Meet_env.t
+  with type typing_env_extension := Typing_env_extension.t

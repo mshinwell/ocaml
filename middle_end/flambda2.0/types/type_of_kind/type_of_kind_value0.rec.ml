@@ -68,6 +68,8 @@ let print_with_cache ~cache ppf t =
     Format.fprintf ppf "@[<hov 1>(Array@ (length@ %a))@]"
       (Type_of_kind_value.print_with_cache ~cache) length
 
+let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
 let apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm =
   let immediates' =
     Or_unknown.map immediates ~f:(fun immediates ->
@@ -160,11 +162,11 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     if Rec_info.is_initial rec_info then Ok t
     else Bottom
 
-module Make_meet_and_join
+module Make_meet_or_join
   (E : Lattice_ops_intf.S
-   with type meet_env = Meet_env.t
-   with type typing_env = Typing_env.t
-   with type typing_env_extension = Typing_env_extension.t) =
+   with type meet_env := Meet_env.t
+   with type typing_env := Typing_env.t
+   with type typing_env_extension := Typing_env_extension.t) =
 struct
   let meet_unknown meet_contents env
       (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
@@ -214,9 +216,11 @@ struct
         (* CR mshinwell: Move to [TEE] *)
         let join_extensions env ext1 ext2 =
           let env_extension, _ =
-            TEE.n_way_join env [
-              left_env, Apply_cont_rewrite_id.create (), ext1;
-              right_env, Apply_cont_rewrite_id.create (), ext2;
+            TEE.n_way_join ~initial_env_at_join:env [
+              left_env, Apply_cont_rewrite_id.create (),
+                Variable.Set.empty, ext1;
+              right_env, Apply_cont_rewrite_id.create (),
+                Variable.Set.empty, ext2;
             ]
           in
           env_extension

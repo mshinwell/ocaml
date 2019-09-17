@@ -23,6 +23,7 @@ module TEL = Typing_env_level
 
 module Make (Head : Type_head_intf.S
   with type meet_env := Meet_env.t
+  with type typing_env := Typing_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type type_grammar := Type_grammar.t)
 = struct
@@ -294,9 +295,9 @@ module Make (Head : Type_head_intf.S
 
     module Make_meet_or_join
       (E : Lattice_ops_intf.S
-       with type meet_env = Meet_env.t
-       with type typing_env = TE.t
-       with type typing_env_extension = TEE.t) =
+       with type meet_env := Meet_env.t
+       with type typing_env := TE.t
+       with type typing_env_extension := TEE.t) =
     struct
       module Head_meet_or_join = Head.Make_meet_or_join (E)
 
@@ -358,7 +359,7 @@ module Make (Head : Type_head_intf.S
           | Discriminant discriminant1, Discriminant discriminant2
               when not (Discriminant.equal discriminant1 discriminant2) ->
             bottom, TEE.empty ()
-          | _, _ ->
+          | (Const _ | Discriminant _ | Name _), _ ->
             let head, env_extension =
               let env = Meet_env.now_meeting env simple1 simple2 in
               meet_head_or_unknown_or_bottom env head1 head2

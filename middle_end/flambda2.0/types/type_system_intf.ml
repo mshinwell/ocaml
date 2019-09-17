@@ -114,12 +114,20 @@ module type S = sig
 
     val cut_and_n_way_join
        : t
-      -> (t * Apply_cont_rewrite_id.t) list
+      -> (t * Apply_cont_rewrite_id.t * Variable.Set.t) list
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Continuation_extra_params_and_args.t
   end
 
   val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+
+  val meet_shape
+     : Typing_env.t
+    -> t
+    -> shape:t
+    -> result_var:Var_in_binding_pos.t
+    -> result_kind:Flambda_kind.t
+    -> Typing_env_extension.t Or_bottom.t
 
   val join : Typing_env.t -> t -> t -> t
 
@@ -150,15 +158,12 @@ module type S = sig
       irrelevantly bound in [suitable_for]; the returned type is like [t]
       except that the names that would otherwise be unbound are replaced by
       these fresh variables.  The fresh variables are assigned types in the
-      returned environment, which is an augmented version of [suitable_for],
-      on a best effort basis.  (In particular aliases found in [t] are
-      resolved in [env] to try to get to canonical representatives that are
-      also in the supplied [suitable_for].) *)
+      returned environment extension on a best effort basis. *)
   val make_suitable_for_environment
      : t
     -> Typing_env.t
     -> suitable_for:Typing_env.t
-    -> t * Typing_env.t
+    -> Typing_env_extension.t * t
 
   val apply_rec_info : flambda_type -> Rec_info.t -> flambda_type Or_bottom.t
 
@@ -174,20 +179,20 @@ module type S = sig
   (** Create an "unknown" type with the same kind as the given type. *)
   val unknown_like : t -> t
 
-  val any_value : unit -> t
+  val any_value : t
 
-  val any_fabricated : unit -> t
+  val any_fabricated : t
 
-  val any_tagged_immediate : unit -> t
-  val any_tagged_bool : unit -> t
+  val any_tagged_immediate : t
+  val any_tagged_bool : t
 
-  val any_boxed_float : unit -> t
-  val any_boxed_int32 : unit -> t
-  val any_boxed_int64 : unit -> t
-  val any_boxed_nativeint : unit -> t
+  val any_boxed_float : t
+  val any_boxed_int32 : t
+  val any_boxed_int64 : t
+  val any_boxed_nativeint : t
 
-  val any_naked_immediate : unit -> t
-  val any_naked_float : unit -> t
+  val any_naked_immediate : t
+  val any_naked_float : t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
