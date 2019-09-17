@@ -164,8 +164,6 @@ module One_level = struct
   let just_after_level t = t.just_after_level
 
   let is_empty t = Typing_env_level.is_empty t.level
-
-  let next_scope t = Scope.next t.scope
 end
 
 type t = {

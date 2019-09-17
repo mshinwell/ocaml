@@ -529,9 +529,6 @@ let immutable_block tag ~fields =
         blocks = Known (Blocks.create ~field_tys:fields (Closed tag));
       })))
 
-let immutable_block_of_values tag ~fields =
-  immutable_block tag ~fields:(List.map (fun ty -> Value ty) fields)
-
 let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =

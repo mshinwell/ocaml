@@ -112,8 +112,6 @@ val these_discriminants : Discriminant.Set.t -> t
 
 val immutable_block : Tag.t -> fields:t list -> t
 
-val immutable_block_of_values : Tag.t -> fields:Type_of_kind_value.t list -> t
-
 val immutable_block_with_size_at_least
    : n:Targetint.OCaml.t
   -> field_n_minus_one:Variable.t
