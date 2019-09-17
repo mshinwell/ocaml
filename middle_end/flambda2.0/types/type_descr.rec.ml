@@ -278,18 +278,18 @@ module Make (Head : Type_head_intf.S
       let canonical_simple1 =
         TE.get_alias_then_canonical_simple typing_env t1
       in
-      let head1 = expand_head t1 typing_env in
+      let head1 = expand_head (S.force_to_kind t1) typing_env in
       let canonical_simple2 =
         TE.get_alias_then_canonical_simple typing_env t2
       in
-      let head2 = expand_head t2 typing_env in
+      let head2 = expand_head (S.force_to_kind t2) typing_env in
       canonical_simple1, head1, canonical_simple2, head2
 
     module Make_meet_and_join
       (E : Lattice_ops_intf.S
-       with type meet_env := Meet_env.t
-       with type typing_env := TE.t
-       with type typing_env_extension := TEE.t) =
+       with type meet_env = Meet_env.t
+       with type typing_env = TE.t
+       with type typing_env_extension = TEE.t) =
     struct
       module Head_meet_or_join = Head.Make_meet_or_join (E)
 
@@ -308,20 +308,22 @@ module Make (Head : Type_head_intf.S
 
       let join_head_or_unknown_or_bottom env
             (head1 : _ Or_unknown_or_bottom.t)
-            (head2 : _ Or_unknown_or_bottom.t)
-            : _ Or_unknown_or_bottom.t * TEE.t =
-        match head1, head2 with
-        | Bottom, head2 -> head2
-        | head1, Bottom -> head1
-        | Unknown, _ | _, Unknown -> Unknown
-        | Ok of_kind_foo1, Ok of_kind_foo2 ->
-          let env = Meet_env.create env in
-          match Head_meet_or_join.meet_or_join env head1 head2 with
-          | Ok (head, env_extension) ->
-            assert (TEE.is_empty env_extension);
-            Ok head
-          | Bottom -> Bottom
-          | Absorbing -> Unknown
+            (head2 : _ Or_unknown_or_bottom.t) =
+        let head : _ Or_unknown_or_bottom.t =
+          match head1, head2 with
+          | Bottom, head2 -> head2
+          | head1, Bottom -> head1
+          | Unknown, _ | _, Unknown -> Unknown
+          | Ok head1, Ok head2 ->
+            let env = Meet_env.create env in
+            match Head_meet_or_join.meet_or_join env head1 head2 with
+            | Ok (head, env_extension) ->
+              assert (TEE.is_empty env_extension);
+              Ok head
+            | Bottom -> Bottom
+            | Absorbing -> Unknown
+        in
+        head, TEE.empty ()
 
       let meet env t1 t2 =
         let canonical_simple1, head1, canonical_simple2, head2 =
