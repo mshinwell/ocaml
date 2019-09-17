@@ -29,7 +29,7 @@ type t =
         - a constant constructor which has undergone a kind-cast to kind
           [Fabricated] using the [Discriminant_of_int] primitive. *)
 
-include Contains_names.S
+include Contains_names.S with type t := t
 
 module Make_meet_or_join (E : Lattice_ops_intf.S
   with type meet_env = Meet_env.t

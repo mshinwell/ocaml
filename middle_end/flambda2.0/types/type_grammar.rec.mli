@@ -156,7 +156,7 @@ val closure_with_at_least_this_closure_var
   -> closure_element_var:Variable.t
   -> t
 
-val array_of_length : length:ty_value -> t
+val array_of_length : length:t -> t
 
 val make_suitable_for_environment
    : t

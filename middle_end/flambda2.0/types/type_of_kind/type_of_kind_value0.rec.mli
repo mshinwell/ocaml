@@ -21,14 +21,17 @@ type t =
       immediates : Immediates.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
-  | Boxed_number of Type_of_kind_naked_number.t
+  | Boxed_float of Type_of_kind_naked_float.t
+  | Boxed_int32 of Type_of_kind_naked_int32.t
+  | Boxed_int64 of Type_of_kind_naked_int64.t
+  | Boxed_nativeint of Type_of_kind_naked_nativeint.t
   | Closures of {
       by_closure_id : Closures_entry_by_set_of_closures_contents.t;
     }
   | String of String_info.Set.t
   | Array of { length : Type_of_kind_value.t; }
 
-include Contains_names.S
+include Contains_names.S with type t := t
 
 module Make_meet_or_join (E : Lattice_ops_intf.S
   with type meet_env = Meet_env.t

@@ -23,6 +23,8 @@ module type S = sig
 
   include Contains_names.S
 
+  val print : Format.formatter -> t -> unit
+
   module Make_meet_or_join (E : Lattice_ops_intf.S
     with type meet_env = meet_env
     with type typing_env_extension = typing_env_extension)

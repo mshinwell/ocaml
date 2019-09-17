@@ -16,6 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = Nativeint.Set.t
+type t = Targetint.Set.t
 
 include Type_head_intf.S with type t := t

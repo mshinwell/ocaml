@@ -25,6 +25,8 @@ val tagged_immediate : unit -> string
 
 val kind : unit -> string
 
+val top_or_bottom_type : unit -> string
+
 val debuginfo : unit -> string
 
 val discriminant : unit -> string

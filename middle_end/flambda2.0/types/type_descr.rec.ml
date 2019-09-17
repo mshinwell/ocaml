@@ -33,6 +33,7 @@ module Make (Head : Type_head_intf.S
       | Type of Export_id.t
 
     let print ppf t =
+      let colour = Flambda_colours.top_or_bottom_type () in
       match t with
       | No_alias Unknown ->
         if !Clflags.flambda2_unicode then
@@ -64,7 +65,7 @@ module Make (Head : Type_head_intf.S
         | No_alias (Ok head) ->
           let head' = Head.apply_name_permutation head perm in
           if head == head' then t
-          else No_alias head'
+          else No_alias (Ok head')
         | Equals simple ->
           let simple' = Simple.apply_name_permutation simple perm in
           if simple == simple' then t
@@ -95,7 +96,7 @@ module Make (Head : Type_head_intf.S
   let is_obviously_bottom t =
     match descr t with
     | No_alias Bottom -> true
-    | No_alias (Ok _ | Unknown _)
+    | No_alias (Ok _ | Unknown)
     | Equals _ | Type _ -> false
 
   let get_alias t =
@@ -109,38 +110,33 @@ module Make (Head : Type_head_intf.S
       let newer_rec_info = Some rec_info in
       begin match Simple.merge_rec_info simple ~newer_rec_info with
       | None -> Bottom
-      | Some simple -> Ok (Equals simple)
+      | Some simple -> Ok (create_equals simple)
       end
     | Type _ -> Misc.fatal_error "Not yet implemented"
-    | No_alias Unknown -> Ok ty
+    | No_alias Unknown -> Ok t
     | No_alias Bottom -> Bottom
-    | No_alias (Ok of_kind_foo) ->
-      match apply_rec_info_of_kind_foo of_kind_foo rec_info with
-      | Bottom -> Bottom
-      | Ok of_kind_foo -> Ok (No_alias (Ok of_kind_foo))
+    | No_alias (Ok head) ->
+      Or_bottom.map (Head.apply_rec_info head rec_info)
+        ~f:(fun head -> create head)
 
   let make_suitable_for_environment0 t env ~suitable_for level =
     let free_vars = Name_occurrences.variables (free_names t) in
-    if Variable.Set.is_empty free_vars then t, level
+    if Variable.Set.is_empty free_vars then level, t
     else
       let allowed = TE.var_domain suitable_for in
       let to_erase = Variable.Set.diff free_vars allowed in
-      if Variable.Set.is_empty to_erase then t, level
+      if Variable.Set.is_empty to_erase then level, t
       else
-        let result_level, perm =
+        let result_level, perm, _binding_time =
           (* To avoid writing an erasure operation, we define irrelevant fresh
              variables in the returned [Typing_env_level], and swap them with
              the variables that we wish to erase throughout the type. *)
-          Variable.Set.fold (fun to_erase (result_level, perm) ->
-              let kind = TE.find_kind env to_erase in
+          Variable.Set.fold (fun to_erase (result_level, perm, binding_time) ->
+              let kind = T.kind (TE.find env (Name.var to_erase)) in
               let fresh_var = Variable.rename to_erase in
               let fresh_var_name = Name.var fresh_var in
               let result_level =
-                let name =
-                  Name_in_binding_pos.create fresh_var_name
-                    Name_occurrence_kind.in_types
-                in
-                TEL.add_definition result_level name kind
+                TEL.add_definition result_level fresh_var kind binding_time
               in
               let canonical_simple =
                 TE.get_canonical_simple env
@@ -148,25 +144,34 @@ module Make (Head : Type_head_intf.S
                   (Simple.var to_erase)
               in
               let result_level =
-                match TE.find_simple_opt env canonical_simple with
-                | None -> result_level
-                | Some simple ->
-                  if not (Simple.allowed simple ~allowed) then result_level
-                  else
-                    let ty = T.alias_type_of simple kind in
-                    TEL.add_equation result_level fresh_var_name ty
+                let ty =
+                  match canonical_simple with
+                  | Bottom -> T.bottom kind
+                  | Ok None -> T.unknown kind
+                  | Ok (Some canonical_simple) ->
+                    (* CR-someday: If we can't find a [Simple] in [suitable_for]
+                       then we could expand the head of [ty], with a view to
+                       returning something better than [Unknown]. *)
+                    if TE.mem_simple suitable_for canonical_simple then
+                      T.alias_type_of kind canonical_simple
+                    else
+                      T.unknown kind
+                in
+                TEL.add_or_replace_equation result_level fresh_var_name ty
               in
               let perm =
                 Name_permutation.add_variable perm to_erase fresh_var
               in
-              result_level, perm)
+              result_level, perm, Binding_time.succ binding_time)
             to_erase
-            (level, Name_permutation.empty)
+            (level, Name_permutation.empty, Binding_time.earliest_var)
         in
         result_level, apply_name_permutation t perm
 
   let make_suitable_for_environment t env ~suitable_for =
-    let level, ty = make_suitable_for_environment0 t env ~suitable_for in
+    let level, ty =
+      make_suitable_for_environment0 t env ~suitable_for (TEL.empty ())
+    in
     if not (TEL.has_no_defined_vars level) then begin
       Misc.fatal_errorf "Typing environment level cannot define variables \
           in this context:@ %a"
@@ -175,11 +180,12 @@ module Make (Head : Type_head_intf.S
     (* CR-someday mshinwell: In the future we might want a concept of
        "type in the context of an extension" (i.e. under the existential
        binder). *)
-    env_extension, ty
+    TEE.create level, ty
 
   (* The [Make_operations] functor enables operations that involve
      [Type_grammar.t] values to be obtained. *)
   module Make_operations (S : sig
+    val print : Format.formatter -> Type_grammar.t -> unit
     val force_to_kind : Type_grammar.t -> t
     val to_type : t -> Type_grammar.t
   end) = struct
@@ -187,7 +193,7 @@ module Make (Head : Type_head_intf.S
       match descr (S.force_to_kind t) with
       | No_alias head -> head
       | Type _ | Equals _ ->
-        Misc.fatal_errorf "Expected [No_alias]:@ %a" print t
+        Misc.fatal_errorf "Expected [No_alias]:@ %a" S.print t
 
     let expand_head t env ~force_to_kind : _ Or_unknown_or_bottom.t =
       match descr t with
@@ -198,14 +204,14 @@ module Make (Head : Type_head_intf.S
         (* We must get the canonical simple with the least occurrence kind,
            since that's the one that is guaranteed not to have an [Equals]
            type. *)
-        match TE.get_canonical_simple0 env simple ~min_occurrence_kind with
-        | Bottom, _kind -> Bottom
-        | Ok None, _kind ->
+        match TE.get_canonical_simple env simple ~min_occurrence_kind with
+        | Bottom -> Bottom
+        | Ok None ->
           Misc.fatal_errorf "There should always be a canonical simple for %a \
               in environment:@ %a"
             Simple.print simple
             TE.print env
-        | Ok (Some (simple, rec_info)), _kind ->
+        | Ok (Some simple) ->
           match Simple.descr simple with
           | Const const ->
             let typ =
@@ -217,7 +223,7 @@ module Make (Head : Type_head_intf.S
               | Naked_int64 i -> T.this_naked_int64_without_alias i
               | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
             in
-            force_to_head typ ~force_to_kind
+            force_to_head typ
           | Discriminant discr ->
             let typ =
               match Discriminant.sort discr with
@@ -226,13 +232,14 @@ module Make (Head : Type_head_intf.S
                 T.this_tagged_immediate_without_alias imm
               | Is_int | Tag -> T.this_discriminant_without_alias discr
             in
-            force_to_head typ ~force_to_kind
+            force_to_head typ
           | Name name ->
-            let t = S.force_to_kind (find t name) in
-            match t with
+            let t = S.force_to_kind (TE.find env name) in
+            match descr t with
             | No_alias Bottom -> Bottom
             | No_alias Unknown -> Unknown
-            | No_alias (Ok head) ->
+            | No_alias (Ok head) -> Ok head
+(* CR mshinwell: Fix Rec_info
               begin match rec_info with
               | None -> Ok head
               | Some rec_info ->
@@ -245,11 +252,12 @@ module Make (Head : Type_head_intf.S
                 | Bottom -> Bottom
                 | Ok head -> Ok head
               end
+*)
             | Type _export_id ->
               Misc.fatal_error ".cmx loading not yet implemented"
             | Equals _ ->
               Misc.fatal_errorf "Canonical alias %a should never have \
-                  [Equals] type:%s@ %a"
+                  [Equals] type:@ %a"
                 Simple.print simple
                 TE.print env
 
@@ -268,11 +276,11 @@ module Make (Head : Type_head_intf.S
 
     let get_canonical_simples_and_expand_heads typing_env t1 t2 =
       let canonical_simple1 =
-        TE.get_alias_ty_then_canonical_simple typing_env t1
+        TE.get_alias_then_canonical_simple typing_env t1
       in
       let head1 = expand_head t1 typing_env in
       let canonical_simple2 =
-        TE.get_alias_ty_then_canonical_simple typing_env t2
+        TE.get_alias_then_canonical_simple typing_env t2
       in
       let head2 = expand_head t2 typing_env in
       canonical_simple1, head1, canonical_simple2, head2

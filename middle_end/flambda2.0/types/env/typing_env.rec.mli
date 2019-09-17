@@ -50,6 +50,8 @@ val find : t -> Name.t -> Type_grammar.t
 
 val mem : t -> Name.t -> bool
 
+val mem_simple : t -> Simple.t -> bool
+
 val add_cse
    : t
   -> Flambda_primitive.Eligible_for_cse.t
@@ -88,12 +90,6 @@ val get_canonical_simple_with_kind
   -> ?min_occurrence_kind:Name_occurrence_kind.t
   -> Simple.t
   -> Simple.t option Or_bottom.t * Flambda_kind.t
-
-val get_alias_ty_then_canonical_simple
-   : t
-  -> ?min_occurrence_kind:Name_occurrence_kind.t
-  -> _ Type_grammar.ty
-  -> Simple.t option Or_bottom.t
 
 val get_alias_then_canonical_simple
    : t

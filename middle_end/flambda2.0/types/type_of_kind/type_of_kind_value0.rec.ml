@@ -21,7 +21,10 @@ type t =
       immediates : Immediates.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
-  | Boxed_number of Type_of_kind_naked_number.t
+  | Boxed_float of Type_of_kind_naked_float.t
+  | Boxed_int32 of Type_of_kind_naked_int32.t
+  | Boxed_int64 of Type_of_kind_naked_int64.t
+  | Boxed_nativeint of Type_of_kind_naked_nativeint.t
   | Closures of {
       by_closure_id : Closures_entry_by_set_of_closures_contents.t;
     }
@@ -40,9 +43,18 @@ let print_with_cache ~cache ppf t =
         )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
       (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
-  | Boxed_number naked_ty ->
-    Format.fprintf ppf "@[<hov 1>(Boxed_number@ %a)@]"
-      (Type_of_kind_naked_number.print_with_cache ~cache) naked_ty
+  | Boxed_float naked_ty ->
+    Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
+      (Type_of_kind_naked_float.print_with_cache ~cache) naked_ty
+  | Boxed_int32 naked_ty ->
+    Format.fprintf ppf "@[<hov 1>(Boxed_int32@ %a)@]"
+      (Type_of_kind_naked_int32.print_with_cache ~cache) naked_ty
+  | Boxed_int64 naked_ty ->
+    Format.fprintf ppf "@[<hov 1>(Boxed_int64@ %a)@]"
+      (Type_of_kind_naked_int64.print_with_cache ~cache) naked_ty
+  | Boxed_nativeint naked_ty ->
+    Format.fprintf ppf "@[<hov 1>(Boxed_nativeint@ %a)@]"
+      (Type_of_kind_naked_nativeint.print_with_cache ~cache) naked_ty
   | Closures { by_closure_id; } ->
     Closures_entry_by_set_of_closures_contents.print_with_cache ~cache
       ppf by_closure_id
@@ -78,34 +90,38 @@ let apply_name_permutation t perm =
       of_kind_value
     else
       Blocks_and_tagged_immediates blocks_and_tagged_immediates'
-  | Boxed_number (Boxed_float ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number perm
+  | Boxed_float ty ->
+    let ty' =
+      apply_name_permutation_ty
+        Type_of_kind_naked_float.apply_name_permutation
+        ty perm
     in
-    if ty_naked_number == ty_naked_number' then of_kind_value
-    else Boxed_number (Boxed_float ty_naked_number')
-  | Boxed_number (Boxed_int32 ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number perm
+    if ty == ty' then of_kind_value
+    else Boxed_float ty'
+  | Boxed_int32 ty_naked_number ->
+    let ty' =
+      apply_name_permutation_ty
+        Type_of_kind_naked_int32.apply_name_permutation
+        ty perm
     in
-    if ty_naked_number == ty_naked_number' then of_kind_value
-    else Boxed_number (Boxed_int32 ty_naked_number')
-  | Boxed_number (Boxed_int64 ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number perm
+    if ty == ty' then of_kind_value
+    else Boxed_int32 ty'
+  | Boxed_int64 ty ->
+    let ty' =
+      apply_name_permutation_ty
+        Type_of_kind_naked_int64.apply_name_permutation
+        ty perm
     in
-    if ty_naked_number == ty_naked_number' then of_kind_value
-    else Boxed_number (Boxed_int64 ty_naked_number')
-  | Boxed_number (Boxed_nativeint ty_naked_number) ->
-    let ty_naked_number' =
-      apply_name_permutation_ty apply_name_permutation_of_kind_naked_number
-        ty_naked_number perm
+    if ty == ty' then of_kind_value
+    else Boxed_int64 ty'
+  | Boxed_nativeint ty ->
+    let ty' =
+      apply_name_permutation_ty
+        Type_of_kind_naked_nativeint.apply_name_permutation
+        ty perm
     in
-    if ty_naked_number == ty_naked_number' then of_kind_value
-    else Boxed_number (Boxed_nativeint ty_naked_number')
+    if ty == ty' then of_kind_value
+    else Boxed_nativeint ty'
   | Closures { by_closure_id; } ->
     let by_closure_id' =
       Closures_entry_by_set_of_closures_contents.apply_name_permutation
@@ -125,14 +141,10 @@ let free_names t =
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
       (Or_unknown.free_names Immediates.free_names immediates)
-  | Boxed_number (Boxed_float n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_int32 n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_int64 n) ->
-    free_names_ty free_names_of_kind_naked_number n
-  | Boxed_number (Boxed_nativeint n) ->
-    free_names_ty free_names_of_kind_naked_number n
+  | Boxed_float ty -> Type_of_kind_naked_float.free_names ty
+  | Boxed_int32 ty -> Type_of_kind_naked_int32.free_names ty
+  | Boxed_int64 ty -> Type_of_kind_naked_int64.free_names ty
+  | Boxed_nativeint ty -> Type_of_kind_naked_nativeint.free_names ty
   | Closures { by_closure_id; } ->
     Closures_entry_by_set_of_closures_contents.free_names by_closure_id
   | String _ -> Name_occurrences.empty
@@ -153,7 +165,10 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
             Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Blocks_and_tagged_immediates _
-  | Boxed_number _
+  | Boxed_float _
+  | Boxed_int32 _
+  | Boxed_int64 _
+  | Boxed_nativeint _
   | String _
   | Array _ ->
     if Rec_info.is_initial rec_info then Ok of_kind_value
@@ -225,10 +240,6 @@ let meet_or_join_blocks_and_tagged_immediates env
     in
     Ok (blocks, immediates, env_extension)
 
-let meet_or_join_naked_number env n1 n2 meet_or_join_ty box =
-  Or_bottom_or_absorbing.of_or_bottom (meet_or_join_ty env n1 n2)
-    ~f:(fun (n, env_extension) -> T.Boxed_number (box n), env_extension)
-
 let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
   match of_kind1, of_kind2 with
   | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
@@ -238,24 +249,22 @@ let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
         ~blocks1 ~imms1 ~blocks2 ~imms2)
       ~f:(fun (blocks, immediates, env_extension) ->
         T.Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
-  | Boxed_number (Boxed_float n1),
-    Boxed_number (Boxed_float n2) ->
-    meet_or_join_naked_number env n1 n2
-      (* CR mshinwell: Sort out this [bound_name] stuff *)
-      (Naked_float.meet_or_join_ty ?bound_name:None)
-      (fun n -> T.Boxed_float n)
-  | Boxed_number (Boxed_int32 n1), Boxed_number (Boxed_int32 n2) ->
-    meet_or_join_naked_number env n1 n2
-      (Naked_int32.meet_or_join_ty ?bound_name:None)
-      (fun n -> T.Boxed_int32 n)
-  | Boxed_number (Boxed_int64 n1), Boxed_number (Boxed_int64 n2) ->
-    meet_or_join_naked_number env n1 n2
-      (Naked_int64.meet_or_join_ty ?bound_name:None)
-      (fun n -> T.Boxed_int64 n)
-  | Boxed_number (Boxed_nativeint n1), Boxed_number (Boxed_nativeint n2) ->
-    meet_or_join_naked_number env n1 n2
-      (Naked_nativeint.meet_or_join_ty ?bound_name:None)
-      (fun n -> T.Boxed_nativeint n)
+  | Boxed_float n1, Boxed_float n2 ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (Naked_float.meet_or_join_ty env n1 n2)
+      ~f:(fun (n, env_extension) -> T.Boxed_float (box n), env_extension)
+  | Boxed_int32 n1, Boxed_int32 n2 ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (Naked_int32.meet_or_join_ty env n1 n2)
+      ~f:(fun (n, env_extension) -> T.Boxed_int32 (box n), env_extension)
+  | Boxed_int64 n1, Boxed_int64 n2 ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (Naked_int64.meet_or_join_ty env n1 n2)
+      ~f:(fun (n, env_extension) -> T.Boxed_int64 (box n), env_extension)
+  | Boxed_nativeint n1, Boxed_nativeint n2 ->
+    Or_bottom_or_absorbing.of_or_bottom
+      (Naked_nativeint.meet_or_join_ty env n1 n2)
+      ~f:(fun (n, env_extension) -> T.Boxed_nativeint (box n), env_extension)
   | Closures { by_closure_id = by_closure_id1; },
       Closures { by_closure_id = by_closure_id2; } ->
     let module C = Closures_entry_by_set_of_closures_contents in
@@ -272,7 +281,10 @@ let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
       (meet_or_join_ty ?bound_name:None env length1 length2)
       ~f:(fun (length, env_extension) -> T.Array { length }, env_extension)
   | (Blocks_and_tagged_immediates _
-      | Boxed_number _
+      | Boxed_float _
+      | Boxed_int32 _
+      | Boxed_int64 _
+      | Boxed_nativeint _
       | Closures _
       | String _
       | Array _), _ -> Absorbing
