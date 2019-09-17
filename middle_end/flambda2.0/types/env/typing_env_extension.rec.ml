@@ -16,19 +16,91 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Typing_env_level
+module A =
+  Name_abstraction.Make_list (Bindable_variable_in_types) (Typing_env_level)
 
-(* In the future, typing environment extensions might contain existential
-   binders -- but these are not needed at present.  Any introduction of
-   existentials in the present version is immediately succeeded by opening
-   of such existentials to construct a joined typing environment (for
-   simplifying a continuation handler).  As such, there is no need to do the
-   packaging up under a binder, then subsequent opening.  We elide both. *)
+(* The record is here to avoid the double vision problem.  (Otherwise
+   there would already be an equality
+     t = Name_abstraction.Make_list ...
+   meaning that the equality
+     t = Typing_env_extension.t
+   could not be added by the type checker.) *)
+type t = {
+  abst : A.t;
+} [@@unboxed]
 
+let print_with_cache ~cache ppf { abst; } =
+  Name_abstraction.with_printing_style Existential ~f:(fun () ->
+    A.print_with_cache ~cache ppf abst)
+
+let print ppf { abst; } =
+  Name_abstraction.with_printing_style Existential ~f:(fun () ->
+    A.print ppf abst)
+
+let invariant { abst; } =
+  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
+
+let empty () =
+  { abst = A.create [] (Typing_env_level.empty ()); }
+
+let is_empty { abst; } =
+  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
+
+(* CR mshinwell: It might be worth adding a parameter here that asserts
+   whether the [defined_vars] of the level are expected to be empty.  This
+   should always be the case for extensions generated from [meet]. *)
 let create level =
-  if not (has_no_defined_vars level) then begin
-    Misc.fatal_errorf "Typing environment extensions cannot define \
-        variables:@ %a"
-      print level
-  end;
-  level
+  let abst =
+    A.create (Typing_env_level.defined_vars_in_order' level) level
+  in
+  { abst; }
+
+let pattern_match { abst; } ~f =
+  A.pattern_match abst ~f:(fun _ level -> f level)
+
+let one_equation name ty =
+  let abst = A.create [] (Typing_env_level.one_equation name ty) in
+  { abst; }
+
+let add_or_replace_equation { abst; } name ty =
+  let abst =
+    A.pattern_match abst ~f:(fun _defined_names level ->
+      let level = Typing_env_level.add_or_replace_equation level name ty in
+      A.create (Typing_env_level.defined_vars_in_order' level) level)
+  in
+  { abst; }
+
+let mem { abst; } name =
+  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.mem level name)
+
+let meet env (t1 : t) (t2 : t) : t =
+  let abst =
+    A.pattern_match t1.abst ~f:(fun _ level_1 ->
+      A.pattern_match t2.abst ~f:(fun _ level_2 ->
+        let level = Typing_env_level.meet env level_1 level_2 in
+        A.create (Typing_env_level.defined_vars_in_order' level) level))
+  in
+  { abst; }
+
+let n_way_join env envs_with_extensions : t * _ =
+  let abst, extra_cse_bindings =
+    let rec open_binders envs_with_extensions envs_with_levels =
+      match envs_with_extensions with
+      | [] ->
+        let level, extra_cse_bindings =
+          Typing_env_level.n_way_join env envs_with_levels
+        in
+        let abst =
+          A.create (Typing_env_level.defined_vars_in_order' level) level
+        in
+        abst, extra_cse_bindings
+      | (_env, id, t)::envs_with_extensions ->
+        A.pattern_match t.abst ~f:(fun _ level ->
+          let env = Typing_env.add_env_extension_from_level env level in
+          (* It doesn't matter that the list gets reversed. *)
+          let envs_with_levels = (env, id, level) :: envs_with_levels in
+          open_binders envs_with_extensions envs_with_levels)
+    in
+    open_binders envs_with_extensions []
+  in
+  { abst; }, extra_cse_bindings

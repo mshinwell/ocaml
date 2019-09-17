@@ -166,10 +166,15 @@ module Make (Head : Type_head_intf.S
         result_level, apply_name_permutation t perm
 
   let make_suitable_for_environment t env ~suitable_for =
-    let level, ty =
-      make_suitable_for_environment0 t env ~suitable_for (TEL.empty ())
-    in
-    let env_extension = TEE.create level in
+    let level, ty = make_suitable_for_environment0 t env ~suitable_for in
+    if not (TEL.has_no_defined_vars level) then begin
+      Misc.fatal_errorf "Typing environment level cannot define variables \
+          in this context:@ %a"
+        Typing_env_level.print level
+    end;
+    (* CR-someday mshinwell: In the future we might want a concept of
+       "type in the context of an extension" (i.e. under the existential
+       binder). *)
     env_extension, ty
 
   (* The [Make_operations] functor enables operations that involve
