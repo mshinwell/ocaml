@@ -171,3 +171,54 @@ val meet : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 
 (** Least upper bound of two types. *)
 val join : ?bound_name:Name.t -> Typing_env.t -> t -> t -> t
+
+val force_to_kind_naked_float : t -> Type_of_kind_naked_float.t
+
+module T_V_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_value.t
+  with type head := Type_of_kind_value0.t
+
+module T_NI_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_naked_immediate.t
+  with type head := Type_of_kind_naked_immediate0.t
+
+module T_Nf_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_naked_float.t
+  with type head := Type_of_kind_naked_float0.t
+
+module T_N32_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_naked_int32.t
+  with type head := Type_of_kind_naked_int32_0.t
+
+module T_N64_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_naked_int64.t
+  with type head := Type_of_kind_naked_int64_0.t
+
+module T_NN_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_naked_nativeint.t
+  with type head := Type_of_kind_naked_nativeint0.t
+
+module T_F_ops : Type_descr_intf.S_ops
+  with type typing_env := Typing_env.t
+  with type typing_env_extension := Typing_env_extension.t
+  with type meet_env := Meet_env.t
+  with type descr := Type_of_kind_fabricated.t
+  with type head := Type_of_kind_fabricated0.t

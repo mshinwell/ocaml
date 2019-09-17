@@ -767,10 +767,10 @@ struct
   module T_NN_meet_or_join = T_NN_ops.Make_meet_or_join (E)
   module T_F_meet_or_join = T_F_ops.Make_meet_or_join (E)
 
-  let meet_or_join ?bound_name env t1 t2 =
+  let meet_or_join env t1 t2 =
     match t1, t2 with
     | Value ty1, Value ty2 ->
-      begin match T_V_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_V_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Value ty, env_extension
       | Bottom -> bottom_value, TEE.empty ()
       | Absorbing ->
@@ -778,7 +778,7 @@ struct
         else bottom_value, TEE.empty ()
       end
     | Naked_immediate ty1, Naked_immediate ty2 ->
-      begin match T_NI_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_NI_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
       | Bottom -> bottom_naked_immediate, TEE.empty ()
       | Absorbing ->
@@ -786,7 +786,7 @@ struct
         else bottom_naked_immediate, TEE.empty ()
       end
     | Naked_float ty1, Naked_float ty2 ->
-      begin match T_Nf_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_Nf_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_float ty, env_extension
       | Bottom -> bottom_naked_float, TEE.empty ()
       | Absorbing ->
@@ -794,7 +794,7 @@ struct
         else bottom_naked_float, TEE.empty ()
       end
     | Naked_int32 ty1, Naked_int32 ty2 ->
-      begin match T_N32_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_N32_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
       | Bottom -> bottom_naked_int32, TEE.empty ()
       | Absorbing ->
@@ -802,7 +802,7 @@ struct
         else bottom_naked_int32, TEE.empty ()
       end
     | Naked_int64 ty1, Naked_int64 ty2 ->
-      begin match T_N64_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_N64_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
       | Bottom -> bottom_naked_int64, TEE.empty ()
       | Absorbing ->
@@ -810,7 +810,7 @@ struct
         else bottom_naked_int64, TEE.empty ()
       end
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
-      begin match T_NN_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_NN_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
       | Bottom -> bottom_naked_nativeint, TEE.empty ()
       | Absorbing ->
@@ -818,7 +818,7 @@ struct
         else bottom_naked_nativeint, TEE.empty ()
       end
     | Fabricated ty1, Fabricated ty2 ->
-      begin match T_F_meet_or_join.meet_or_join ?bound_name env ty1 ty2 with
+      begin match T_F_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Fabricated ty, env_extension
       | Bottom -> bottom_fabricated, TEE.empty ()
       | Absorbing ->
@@ -838,9 +838,9 @@ module Join = Make_meet_or_join (Lattice_ops.For_join)
 
 let meet env t1 t2 = Meet.meet_or_join env t1 t2
 
-let join ?bound_name env t1 t2 =
+let join env t1 t2 =
   let env = Meet_env.create env in
-  let joined, env_extension = Join.meet_or_join ?bound_name env t1 t2 in
+  let joined, env_extension = Join.meet_or_join env t1 t2 in
   if not (TEE.is_empty env_extension) then begin
     Misc.fatal_errorf "Non-empty environment extension produced from a \
         [join] operation:@ %a"

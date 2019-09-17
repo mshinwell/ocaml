@@ -29,17 +29,8 @@ type t =
         - a constant constructor which has undergone a kind-cast to kind
           [Fabricated] using the [Discriminant_of_int] primitive. *)
 
-include Contains_names.S with type t := t
-
-module Make_meet_or_join (E : Lattice_ops_intf.S
+include Type_head_intf.S
+  with type t := t
+  with type type_grammar = Type_grammar.t
+  with type typing_env_extension = Typing_env_extension.t
   with type meet_env = Meet_env.t
-  with type typing_env_extension = Typing_env_extension.t)
-: sig
-  val meet_or_join
-     : Meet_env.t
-    -> t
-    -> t
-    -> (t * Typing_env_extension.t) Or_bottom_or_absorbing.t
-end
-
-val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t

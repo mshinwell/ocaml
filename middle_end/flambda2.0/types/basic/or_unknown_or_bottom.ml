@@ -36,7 +36,8 @@ let equal eq_contents t1 t2 =
 
 let map t ~f =
   match t with
-  | Unknown | Bottom -> t
+  | Unknown -> Unknown
+  | Bottom -> Bottom
   | Ok contents -> Ok (f contents)
 
 let map_sharing t ~f =

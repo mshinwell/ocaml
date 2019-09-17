@@ -381,7 +381,7 @@ module Make (Head : Type_head_intf.S
           (* XXX Not sure we want to return [Equals] when it's Bottom *)
           create_equals simple, env_extension
 
-      let join ?bound_name typing_env t1 t2 =
+      let join typing_env t1 t2 =
         let canonical_simple1, head1, canonical_simple2, head2 =
           get_canonical_simples_and_expand_heads typing_env t1 t2
         in
@@ -389,16 +389,11 @@ module Make (Head : Type_head_intf.S
         | Bottom, _ -> t2
         | _, Bottom -> t1
         | Ok canonical_simple1, Ok canonical_simple2 ->
-          (* CR mshinwell: Think further about this "bound name" stuff. *)
-          let shared_aliases_not_aliasing_bound_name =
-            Simple.Set.diff
-              (Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
-                (all_aliases_of typing_env canonical_simple2))
-              (all_aliases_of typing_env (Option.map Simple.name bound_name))
+          let shared_aliases =
+            Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
+              (all_aliases_of typing_env canonical_simple2)
           in
-          match
-            Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name
-          with
+          match Simple.Set.choose_opt shared_aliases with
           | Some simple -> create_equals simple
           | None ->
             let head, env_extension =
@@ -414,10 +409,8 @@ module Make (Head : Type_head_intf.S
             | Unknown -> unknown
             | Ok head -> create head
 
-      let meet_or_join ?bound_name env t1 t2 : _ Or_bottom.t =
-        let t, env_extension =
-          E.switch_no_bottom meet (join ?bound_name) env t1 t2
-        in
+      let meet_or_join env t1 t2 : _ Or_bottom.t =
+        let t, env_extension = E.switch_no_bottom meet join env t1 t2 in
         if is_obviously_bottom t then Bottom
         else Ok (t, env_extension)
     end

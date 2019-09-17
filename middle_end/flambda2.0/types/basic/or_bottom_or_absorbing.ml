@@ -31,3 +31,9 @@ let of_or_bottom (or_bottom : _ Or_bottom.t) ~f : _ t =
   match or_bottom with
   | Ok contents -> Ok (f contents)
   | Bottom -> Bottom
+
+let map t ~f =
+  match t with
+  | Ok contents -> Ok (f contents)
+  | Bottom -> Bottom
+  | Absorbing -> Absorbing

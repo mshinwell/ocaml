@@ -29,3 +29,5 @@ val print
 
 (* CR mshinwell: Misleading name, given the presence of [f]. *)
 val of_or_bottom : 'a Or_bottom.t -> f:('a -> 'b) -> 'b t
+
+val map : 'a t -> f:('a -> 'b) -> 'b t
