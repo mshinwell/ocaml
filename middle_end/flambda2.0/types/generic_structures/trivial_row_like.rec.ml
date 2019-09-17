@@ -37,7 +37,6 @@ module Make (Thing : Identifiable.S) = struct
     let print_with_cache ~cache:_ ppf () = print ppf ()
     let meet _env () () = Or_bottom.Ok ((), TEE.empty ())
     let join _env () () = ()
-    let equal _env () () = true
     let create_bottom () = ()
     let widen () ~to_match:() = ()
   end

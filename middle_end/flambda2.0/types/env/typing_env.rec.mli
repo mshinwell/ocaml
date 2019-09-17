@@ -24,21 +24,13 @@ val print : Format.formatter -> t -> unit
 
 val create : resolver:(Export_id.t -> Type_grammar.t option) -> t
 
-val create_using_resolver_from : t -> t
-
 val create_using_resolver_and_symbol_bindings_from : t -> t
 
 val resolver : t -> (Export_id.t -> Type_grammar.t option)
 
-val is_empty : t -> bool
-
 val current_scope : t -> Scope.t
 
-val increment_scope : t -> t
-
 val increment_scope_to : t -> Scope.t -> t
-
-val domain : t -> Name_occurrences.t
 
 val var_domain : t -> Variable.Set.t
 
@@ -96,12 +88,6 @@ val get_alias_then_canonical_simple
   -> ?min_occurrence_kind:Name_occurrence_kind.t
   -> Type_grammar.t
   -> Simple.t option Or_bottom.t
-
-val aliases_of_simple
-   : t
-  -> min_occurrence_kind:Name_occurrence_kind.t
-  -> Simple.t
-  -> Simple.Set.t
 
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
 

@@ -117,6 +117,8 @@ module type S = sig
       -> (t * Apply_cont_rewrite_id.t * Variable.Set.t) list
       -> unknown_if_defined_at_or_later_than:Scope.t
       -> Typing_env_extension.t * Continuation_extra_params_and_args.t
+
+    val free_variables_transitive : t -> flambda_type -> Variable.Set.t
   end
 
   val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t

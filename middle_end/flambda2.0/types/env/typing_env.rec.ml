@@ -241,10 +241,6 @@ let invariant0 ?force _t =
 *)
   end
 
-let invariant_should_fail t =
-  invariant0 ~force:() t;
-  Misc.fatal_errorf "[invariant] should have failed:@ %a" print t
-
 let invariant t : unit = invariant0 t
 
 let resolver t = t.resolver
@@ -287,14 +283,8 @@ let increment_scope_to t scope =
     current_level;
   }
 
-let increment_scope t =
-  increment_scope_to t (One_level.next_scope t.current_level)
-
 let domain0 t =
   Cached.domain (One_level.just_after_level t.current_level)
-
-let domain t =
-  Name_occurrences.create_names (domain0 t) Name_occurrence_kind.in_types
 
 let var_domain t =
   Cached.var_domain (One_level.just_after_level t.current_level)

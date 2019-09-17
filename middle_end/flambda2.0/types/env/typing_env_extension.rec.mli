@@ -21,12 +21,6 @@
 
 type t
 
-val print_with_cache
-   : cache:Printing_cache.t
-  -> Format.formatter
-  -> t
-  -> unit
-
 val print : Format.formatter -> t -> unit
 
 val invariant : t -> unit
@@ -49,5 +43,3 @@ val n_way_join
    : initial_env_at_join:Typing_env.t
   -> (Typing_env.t * Apply_cont_rewrite_id.t * Variable.Set.t * t) list
   -> t * Continuation_extra_params_and_args.t
-
-val mem : t -> Name.t -> bool

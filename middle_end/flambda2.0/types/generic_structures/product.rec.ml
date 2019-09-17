@@ -54,8 +54,6 @@ module Make (Index : Identifiable.S) = struct
     | Some true -> true
 *)
 
-  let equal _ _ = Misc.fatal_error "To implement"
-
   let create components_by_index =
     { components_by_index;
     }

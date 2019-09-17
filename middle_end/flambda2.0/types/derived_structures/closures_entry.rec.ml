@@ -53,8 +53,6 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let equal _ _ = Misc.fatal_error "Closures_entry.equal not yet implemented"
-
 let widen t ~to_match =
   let missing_function_decls =
     Closure_id.Set.diff (Closure_id.Map.keys to_match.function_decls)

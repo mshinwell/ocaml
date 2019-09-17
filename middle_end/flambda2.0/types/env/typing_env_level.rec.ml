@@ -209,10 +209,6 @@ let add_or_replace_equation t name ty =
     equations = Name.Map.add name ty t.equations;
   }
 
-(* CR mshinwell: [mem] -> [mem_equation] *)
-let mem t name =
-  Name.Map.mem name t.equations
-
 let find_equation t name =
   match Name.Map.find name t.equations with
   | exception Not_found ->
@@ -556,7 +552,7 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
                     result_t
                 in
                 let join_ty = Type_grammar.join env_at_join join_ty ty in
-                result_t, ty)
+                result_t, join_ty)
               (result_t, join_ty)
               envs_with_levels
           in

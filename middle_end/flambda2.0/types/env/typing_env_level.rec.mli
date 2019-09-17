@@ -62,8 +62,6 @@ val n_way_join
   -> (Typing_env.t * Apply_cont_rewrite_id.t * Variable.Set.t * t) list
   -> t * Continuation_extra_params_and_args.t
 
-val mem : t -> Name.t -> bool
-
 val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
 
 include Contains_names.S with type t := t

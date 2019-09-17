@@ -96,11 +96,8 @@ module Make (Head : Type_head_intf.S
   let create_equals simple = create (Equals simple)
   let create_type export_id = create (Type export_id)
 
-  let bottom = create (No_alias Bottom)
-  let unknown = create (No_alias Unknown)
-
-  let bottom () = bottom
-  let unknown () = unknown
+  let bottom () = create (No_alias Bottom)
+  let unknown () = create (No_alias Unknown)
 
   let create head = create_no_alias (Ok head)
 

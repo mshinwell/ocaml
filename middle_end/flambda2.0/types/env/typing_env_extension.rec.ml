@@ -29,10 +29,6 @@ type t = {
   abst : A.t;
 } [@@unboxed]
 
-let print_with_cache ~cache ppf { abst; } =
-  Name_abstraction.with_printing_style Existential ~f:(fun () ->
-    A.print_with_cache ~cache ppf abst)
-
 let print ppf { abst; } =
   Name_abstraction.with_printing_style Existential ~f:(fun () ->
     A.print ppf abst)
@@ -69,9 +65,6 @@ let add_or_replace_equation { abst; } name ty =
       A.create (Typing_env_level.defined_vars_in_order' level) level)
   in
   { abst; }
-
-let mem { abst; } name =
-  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.mem level name)
 
 let meet env (t1 : t) (t2 : t) : t =
   let abst =
