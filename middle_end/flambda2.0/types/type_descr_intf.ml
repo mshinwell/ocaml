@@ -37,6 +37,10 @@ module type S = sig
 
   type t
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val print : Format.formatter -> t -> unit
+
   val create_no_alias : head Or_unknown_or_bottom.t -> t
   val create_equals : Simple.t -> t
   val create_type : Export_id.t -> t

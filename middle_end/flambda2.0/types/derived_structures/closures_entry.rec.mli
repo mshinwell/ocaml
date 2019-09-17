@@ -18,6 +18,12 @@
 
 type t
 
+val create
+   : function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t
+  -> closure_types : Types_by_closure_id.t
+  -> closure_var_types : Types_by_var_within_closure.t
+  -> t
+
 val create_bottom : unit -> t
 
 val widen : t -> to_match:t -> t

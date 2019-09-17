@@ -33,6 +33,34 @@ type t =
   | Naked_nativeint of T_NN.t
   | Fabricated of T_F.t
 
+let print_with_cache ~cache ppf (t : Type_grammar.t) =
+  match t with
+  | Value ty ->
+    Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
+      (T_V.print_with_cache ~cache) ty
+  | Naked_immediate ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
+      (T_NI.print_with_cache ~cache) ty
+  | Naked_float ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
+      (T_Nf.print_with_cache ~cache) ty
+  | Naked_int32 ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_int32@ %a)@]"
+      (T_N32.print_with_cache ~cache) ty
+  | Naked_int64 ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_int64@ %a)@]"
+      (T_N64.print_with_cache ~cache) ty
+  | Naked_nativeint ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
+      (T_NN.print_with_cache ~cache) ty
+  | Fabricated ty ->
+    Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
+      (T_F.print_with_cache ~cache) ty
+
+let print ppf t =
+  let cache : Printing_cache.t = Printing_cache.create () in
+  print_with_cache ~cache ppf t
+
 let force_to_kind_value t =
   match t with
   | Value ty -> ty
@@ -135,34 +163,6 @@ module T_F_ops = T_F.Make_operations (struct
   let to_type ty = Fabricated ty
 end)
 
-let print_with_cache ~cache ppf (t : Type_grammar.t) =
-  match t with
-  | Value ty ->
-    Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
-      (T_V.print_with_cache ~cache) ty
-  | Naked_immediate ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
-      (T_NI.print_with_cache ~cache) ty
-  | Naked_float ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
-      (T_Nf.print_with_cache ~cache) ty
-  | Naked_int32 ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_int32@ %a)@]"
-      (T_N32.print_with_cache ~cache) ty
-  | Naked_int64 ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_int64@ %a)@]"
-      (T_N64.print_with_cache ~cache) ty
-  | Naked_nativeint ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
-      (T_NN.print_with_cache ~cache) ty
-  | Fabricated ty ->
-    Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
-      (T_F.print_with_cache ~cache) ty
-
-let print ppf t =
-  let cache : Printing_cache.t = Printing_cache.create () in
-  print_with_cache ~cache ppf t
-
 let apply_name_permutation t perm =
   match t with
   | Value ty ->
@@ -245,7 +245,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
 let kind t =
   match t with
   | Value _ -> K.value
-  | Naked_immediate -> K.naked_immediate
+  | Naked_immediate _ -> K.naked_immediate
   | Naked_float _ -> K.naked_float
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
@@ -333,7 +333,7 @@ let this_naked_immediate i : t =
   Naked_immediate (T_NI.create_equals (Simple.const (Naked_immediate i)))
 
 let this_naked_float f : t =
-  Naked_float (T_Nf.create_equals (Simple.const (Naked_float i)))
+  Naked_float (T_Nf.create_equals (Simple.const (Naked_float f)))
 
 let this_naked_int32 i : t =
   Naked_int32 (T_N32.create_equals (Simple.const (Naked_int32 i)))
@@ -349,35 +349,35 @@ let these_naked_immediates0 ~no_alias is =
   | Some i when not no_alias -> this_naked_immediate i
   | _ ->
     if Immediate.Set.is_empty is then bottom K.naked_immediate
-    else Naked_immediate (T_NI.create_no_alias (Ok (Immediate is)))
+    else Naked_immediate (T_NI.create_no_alias (Ok is))
 
 let these_naked_floats0 ~no_alias fs =
-  match Float.Set.get_singleton is with
-  | Some i when not no_alias -> this_naked_float i
+  match Float.Set.get_singleton fs with
+  | Some f when not no_alias -> this_naked_float f
   | _ ->
-    if Float.Set.is_empty is then bottom K.naked_float
-    else Naked_float (T_Nf.create_no_alias (Ok (Float is)))
+    if Float.Set.is_empty fs then bottom K.naked_float
+    else Naked_float (T_Nf.create_no_alias (Ok fs))
 
 let these_naked_int32s0 ~no_alias is =
   match Int32.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int32 i
   | _ ->
     if Int32.Set.is_empty is then bottom K.naked_int32
-    else Naked_int32 (T_N32.create_no_alias (Ok (Int32 is)))
+    else Naked_int32 (T_N32.create_no_alias (Ok is))
 
 let these_naked_int64s0 ~no_alias is =
   match Int64.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_int64 i
   | _ ->
     if Int64.Set.is_empty is then bottom K.naked_int64
-    else Naked_int64 (T_N64.create_no_alias (Ok (Int64 is)))
+    else Naked_int64 (T_N64.create_no_alias (Ok is))
 
 let these_naked_nativeints0 ~no_alias is =
-  match Nativeint.Set.get_singleton is with
+  match Targetint.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
-    if Nativeint.Set.is_empty is then bottom K.naked_nativeint
-    else Naked_nativeint (T_NN.create_no_alias (Ok (Nativeint is)))
+    if Targetint.Set.is_empty is then bottom K.naked_nativeint
+    else Naked_nativeint (T_NN.create_no_alias (Ok is))
 
 let this_naked_immediate_without_alias i =
   these_naked_immediates0 ~no_alias:true (Immediate.Set.singleton i)
@@ -402,8 +402,7 @@ let these_naked_nativeints is = these_naked_nativeints0 ~no_alias:false is
 
 let box_float (t : t) : t =
   match t with
-  | Naked_float ty ->
-    Value (T_V.create (Boxed_number (Boxed_float ty)))
+  | Naked_float ty -> Value (T_V.create (Boxed_float ty))
   | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
   | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
@@ -411,8 +410,7 @@ let box_float (t : t) : t =
 
 let box_int32 (t : t) : t =
   match t with
-  | Naked_int32 ty ->
-    Value (T_V.create (Boxed_number (Boxed_int32 ty)))
+  | Naked_int32 ty -> Value (T_V.create (Boxed_int32 ty))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
   | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
@@ -420,8 +418,7 @@ let box_int32 (t : t) : t =
 
 let box_int64 (t : t) : t =
   match t with
-  | Naked_int64 ty ->
-    Value (T_V.create (Boxed_number (Boxed_int64 ty)))
+  | Naked_int64 ty -> Value (T_V.create (Boxed_int64 ty))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_nativeint _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
@@ -429,8 +426,7 @@ let box_int64 (t : t) : t =
 
 let box_nativeint (t : t) : t =
   match t with
-  | Naked_nativeint ty ->
-    Value (T_V.create (Boxed_number (Boxed_nativeint ty)))
+  | Naked_nativeint ty -> Value (T_V.create (Boxed_nativeint ty))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_int64 _ | Fabricated _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
@@ -476,7 +472,7 @@ let these_discriminants0 ~no_alias discrs : t =
     if Discriminant.Set.is_empty discrs then bottom K.fabricated
     else
       let discrs = Discriminants.create discrs in
-      Fabricated (No_alias (Ok (Discriminants discrs)))
+      Fabricated (T_F.create (Discriminants discrs))
 
 let these_discriminants discrs =
   these_discriminants0 ~no_alias:false discrs
@@ -497,7 +493,7 @@ let these_boxed_int64s is = box_int64 (these_naked_int64s is)
 let these_boxed_nativeints is = box_nativeint (these_naked_nativeints is)
 
 let boxed_float_alias_to ~naked_float =
-  box_float (Naked_float (T_NF.create_equals (Simple.var naked_float)))
+  box_float (Naked_float (T_Nf.create_equals (Simple.var naked_float)))
 
 let boxed_int32_alias_to ~naked_int32 =
   box_int32 (Naked_int32 (T_N32.create_equals (Simple.var naked_int32)))
@@ -507,7 +503,7 @@ let boxed_int64_alias_to ~naked_int64 =
 
 let boxed_nativeint_alias_to ~naked_nativeint =
   box_nativeint (Naked_nativeint (
-    T.NN.create_equals (Simple.var naked_nativeint)))
+    T_NN.create_equals (Simple.var naked_nativeint)))
 
 let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
@@ -529,7 +525,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
-        if index < n - 1 then any_value ()
+        if index < n - 1 then any_value
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (
@@ -555,10 +551,10 @@ let mutable_string ~size =
   in
   Value (T_V.create (String string_info))
 
-let any_boxed_float () = box_float (any_naked_float ())
-let any_boxed_int32 () = box_int32 (any_naked_int32 ())
-let any_boxed_int64 () = box_int64 (any_naked_int64 ())
-let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
+let any_boxed_float = box_float any_naked_float
+let any_boxed_int32 = box_int32 any_naked_int32
+let any_boxed_int64 = box_int64 any_naked_int64
+let any_boxed_nativeint = box_nativeint any_naked_nativeint
 
 let create_inlinable_function_declaration function_decl rec_info
       : Function_declaration_type.t =
@@ -579,7 +575,7 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types
       ~all_closure_vars_in_set:closure_var_types =
   let closure_types = Types_by_closure_id.create closure_types in
-  let closures_entry : closures_entry =
+  let closures_entry =
     let closure_var_types =
       Types_by_var_within_closure.create
         (Var_within_closure.Map.map (fun ty_value : t -> Value ty_value)
@@ -589,10 +585,7 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       Closure_id.Map.map (fun func_decl -> Or_unknown.Known func_decl)
         function_decls
     in
-    { function_decls;
-      closure_types;
-      closure_var_types;
-    }
+    Closures_entry.create ~function_decls ~closure_types ~closure_var_types
   in
   let by_closure_id =
     let set_of_closures_contents =
@@ -619,11 +612,9 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
       closure_ids_and_bindings
   in
   let closure_types = Types_by_closure_id.create closure_ids_and_types in
-  let closures_entry : closures_entry =
-    { function_decls;
-      closure_types;
-      closure_var_types = Types_by_var_within_closure.bottom;
-    }
+  let closures_entry =
+    Closures_entry.create ~function_decls ~closure_types
+      ~closure_var_types:Types_by_var_within_closure.bottom
   in
   let by_closure_id =
     let set_of_closures_contents =
@@ -649,11 +640,10 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
     Types_by_var_within_closure.create
       (Var_within_closure.Map.singleton closure_var closure_var_type)
   in
-  let closures_entry : closures_entry =
-    { function_decls = Closure_id.Map.empty;
-      closure_types = Types_by_closure_id.bottom;
-      closure_var_types;
-    }
+  let closures_entry =
+    Closures_entry.create ~function_decls:Closure_id.Map.empty
+      ~closure_types:Types_by_closure_id.bottom
+      ~closure_var_types
   in
   let by_closure_id =
     let set_of_closures_contents =
@@ -668,10 +658,6 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
     in
     Closures_entry_by_set_of_closures_contents.create_at_least_multiple
       set_of_closures_contents_to_closures_entry
-  in
-  let closures : closures =
-    { by_closure_id;
-    }
   in
   Value (T_V.create (Closures { by_closure_id; }))
 
@@ -692,33 +678,47 @@ let kind_for_const const = kind (type_for_const const)
 let make_suitable_for_environment t env ~suitable_for =
   match t with
   | Value ty ->
-    let ty', env = T_V.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    else Value ty', env
+    let env_extension, ty' =
+      T_V.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Value ty'
   | Naked_immediate ty ->
-    let ty', env = T_NI.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    else Naked_immediate ty', env 
+    let env_extension, ty' =
+      T_NI.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Naked_immediate ty'
   | Naked_float ty ->
-    let ty', env = T_Nf.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    else Naked_float ty', env 
+    let env_extension, ty' =
+      T_Nf.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Naked_float ty'
   | Naked_int32 ty ->
-    let ty', env = T_N32.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    else Naked_int32 ty', env 
+    let env_extension, ty' =
+      T_N32.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Naked_int32 ty'
   | Naked_int64 ty ->
-    let ty', env = T_N64.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    Naked_int64 ty', env 
+    let env_extension, ty' =
+      T_N64.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Naked_int64 ty'
   | Naked_nativeint ty ->
-    let ty', env = T_NN.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    Naked_nativeint ty', env 
+    let env_extension, ty' =
+      T_NN.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Naked_nativeint ty'
   | Fabricated ty ->
-    let ty, env = T_F.make_suitable_for_environment ty env ~suitable_for in
-    if ty == ty' then t, env
-    Fabricated ty', env
+    let env_extension, ty' =
+      T_F.make_suitable_for_environment ty env ~suitable_for
+    in
+    if ty == ty' then env_extension, t
+    else env_extension, Fabricated ty'
 
 let expand_head t env : Resolved_type.t =
   match t with

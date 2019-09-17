@@ -17,13 +17,15 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module type S = sig
-  type meet_env
-  type typing_env_extension
   type type_grammar
+  type typing_env_extension
+  type meet_env
 
   include Contains_names.S
 
   val print : Format.formatter -> t -> unit
+
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   module Make_meet_or_join (E : Lattice_ops_intf.S
     with type meet_env = meet_env

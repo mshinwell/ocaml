@@ -404,7 +404,11 @@ module Make (Head : Type_head_intf.S
             let head, env_extension =
               join_head_or_unknown_or_bottom typing_env head1 head2
             in
-            assert (TEE.is_empty env_extension);
+            if not (TEE.is_empty env_extension) then begin
+              Misc.fatal_errorf "Non-empty environment extension produced \
+                  from a [join] operation:@ %a"
+                TEE.print env_extension
+            end;
             match head with
             | Bottom -> bottom
             | Unknown -> unknown

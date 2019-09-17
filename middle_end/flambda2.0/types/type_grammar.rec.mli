@@ -162,7 +162,7 @@ val make_suitable_for_environment
    : t
   -> Typing_env.t
   -> suitable_for:Typing_env.t
-  -> t * Typing_env.t
+  -> Typing_env_extension.t * t
 
 val expand_head : t -> Typing_env.t -> Resolved_type.t
 
