@@ -300,43 +300,43 @@ let alias_type_of (kind : K.t) name : t =
   | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
   | Fabricated -> Fabricated (T_F.create_equals name)
 
-let bottom_value = Value T_V.bottom
-let bottom_naked_immediate = Naked_immediate T_NI.bottom
-let bottom_naked_float = Naked_float T_Nf.bottom
-let bottom_naked_int32 = Naked_int32 T_N32.bottom
-let bottom_naked_int64 = Naked_int64 T_N64.bottom
-let bottom_naked_nativeint = Naked_nativeint T_NN.bottom
-let bottom_fabricated = Fabricated T_F.bottom
+let bottom_value () = Value (T_V.bottom ())
+let bottom_naked_immediate () = Naked_immediate (T_NI.bottom ())
+let bottom_naked_float () = Naked_float (T_Nf.bottom ())
+let bottom_naked_int32 () = Naked_int32 (T_N32.bottom ())
+let bottom_naked_int64 () = Naked_int64 (T_N64.bottom ())
+let bottom_naked_nativeint () = Naked_nativeint (T_NN.bottom ())
+let bottom_fabricated () = Fabricated (T_F.bottom ())
 
 let bottom (kind : K.t) =
   match kind with
-  | Value -> bottom_value
-  | Naked_number Naked_immediate -> bottom_naked_immediate
-  | Naked_number Naked_float -> bottom_naked_float
-  | Naked_number Naked_int32 -> bottom_naked_int32
-  | Naked_number Naked_int64 -> bottom_naked_int64
-  | Naked_number Naked_nativeint -> bottom_naked_nativeint
-  | Fabricated -> bottom_fabricated
+  | Value -> bottom_value ()
+  | Naked_number Naked_immediate -> bottom_naked_immediate ()
+  | Naked_number Naked_float -> bottom_naked_float ()
+  | Naked_number Naked_int32 -> bottom_naked_int32 ()
+  | Naked_number Naked_int64 -> bottom_naked_int64 ()
+  | Naked_number Naked_nativeint -> bottom_naked_nativeint ()
+  | Fabricated -> bottom_fabricated ()
 
 let bottom_like t = bottom (kind t)
 
-let any_value = Value T_V.unknown
-let any_naked_immediate = Naked_immediate T_NI.unknown
-let any_naked_float = Naked_float T_Nf.unknown
-let any_naked_int32 = Naked_int32 T_N32.unknown
-let any_naked_int64 = Naked_int64 T_N64.unknown
-let any_naked_nativeint = Naked_nativeint T_NN.unknown
-let any_fabricated = Fabricated T_F.unknown
+let any_value () = Value (T_V.unknown ())
+let any_naked_immediate () = Naked_immediate (T_NI.unknown ())
+let any_naked_float () = Naked_float (T_Nf.unknown ())
+let any_naked_int32 () = Naked_int32 (T_N32.unknown ())
+let any_naked_int64 () = Naked_int64 (T_N64.unknown ())
+let any_naked_nativeint () = Naked_nativeint (T_NN.unknown ())
+let any_fabricated () = Fabricated (T_F.unknown ())
 
 let unknown (kind : K.t) =
   match kind with
-  | Value -> any_value
-  | Naked_number Naked_immediate -> any_naked_immediate
-  | Naked_number Naked_float -> any_naked_float
-  | Naked_number Naked_int32 -> any_naked_int32
-  | Naked_number Naked_int64 -> any_naked_int64
-  | Naked_number Naked_nativeint -> any_naked_nativeint
-  | Fabricated -> any_fabricated
+  | Value -> any_value ()
+  | Naked_number Naked_immediate -> any_naked_immediate ()
+  | Naked_number Naked_float -> any_naked_float ()
+  | Naked_number Naked_int32 -> any_naked_int32 ()
+  | Naked_number Naked_int64 -> any_naked_int64 ()
+  | Naked_number Naked_nativeint -> any_naked_nativeint ()
+  | Fabricated -> any_fabricated ()
 
 let unknown_like t = unknown (kind t)
 
@@ -443,7 +443,7 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
-let any_tagged_immediate : t =
+let any_tagged_immediate () : t =
   Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
     immediates = Unknown;
     blocks = Known (Blocks.create_bottom ());
@@ -491,7 +491,7 @@ let these_discriminants discrs =
 let this_discriminant_without_alias discr : t =
   these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
 
-let any_tagged_bool = these_tagged_immediates Immediate.all_bools
+let any_tagged_bool () = these_tagged_immediates Immediate.all_bools
 
 let this_boxed_float f = box_float (this_naked_float f)
 let this_boxed_int32 i = box_int32 (this_naked_int32 i)
@@ -536,7 +536,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
-        if index < n - 1 then any_value
+        if index < n - 1 then any_value ()
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (
@@ -562,10 +562,10 @@ let mutable_string ~size =
   in
   Value (T_V.create (String string_info))
 
-let any_boxed_float = box_float any_naked_float
-let any_boxed_int32 = box_int32 any_naked_int32
-let any_boxed_int64 = box_int64 any_naked_int64
-let any_boxed_nativeint = box_nativeint any_naked_nativeint
+let any_boxed_float () = box_float (any_naked_float ())
+let any_boxed_int32 () = box_int32 (any_naked_int32 ())
+let any_boxed_int64 () = box_int64 (any_naked_int64 ())
+let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
 let create_inlinable_function_declaration function_decl rec_info
       : Function_declaration_type.t =
@@ -819,37 +819,37 @@ struct
     | Value ty1, Value ty2 ->
       begin match T_V_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Value ty, env_extension
-      | Bottom -> bottom_value, TEE.empty ()
+      | Bottom -> bottom_value (), TEE.empty ()
       end
     | Naked_immediate ty1, Naked_immediate ty2 ->
       begin match T_NI_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
-      | Bottom -> bottom_naked_immediate, TEE.empty ()
+      | Bottom -> bottom_naked_immediate (), TEE.empty ()
       end
     | Naked_float ty1, Naked_float ty2 ->
       begin match T_Nf_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_float ty, env_extension
-      | Bottom -> bottom_naked_float, TEE.empty ()
+      | Bottom -> bottom_naked_float (), TEE.empty ()
       end
     | Naked_int32 ty1, Naked_int32 ty2 ->
       begin match T_N32_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
-      | Bottom -> bottom_naked_int32, TEE.empty ()
+      | Bottom -> bottom_naked_int32 (), TEE.empty ()
       end
     | Naked_int64 ty1, Naked_int64 ty2 ->
       begin match T_N64_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
-      | Bottom -> bottom_naked_int64, TEE.empty ()
+      | Bottom -> bottom_naked_int64 (), TEE.empty ()
       end
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
       begin match T_NN_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
-      | Bottom -> bottom_naked_nativeint, TEE.empty ()
+      | Bottom -> bottom_naked_nativeint (), TEE.empty ()
       end
     | Fabricated ty1, Fabricated ty2 ->
       begin match T_F_meet_or_join.meet_or_join env ty1 ty2 with
       | Ok (ty, env_extension) -> Fabricated ty, env_extension
-      | Bottom -> bottom_fabricated, TEE.empty ()
+      | Bottom -> bottom_fabricated (), TEE.empty ()
       end
     | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
         | Naked_int64 _ | Naked_nativeint _ | Fabricated _), _ ->

@@ -121,7 +121,7 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
     let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
     let components_by_index =
       Index.Set.fold (fun index components_by_index ->
-          Index.Map.add index Type_grammar.any_value
+          Index.Map.add index (Type_grammar.any_value ())
             components_by_index)
         missing_indexes
         t.components_by_index

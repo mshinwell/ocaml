@@ -99,6 +99,9 @@ module Make (Head : Type_head_intf.S
   let bottom = create (No_alias Bottom)
   let unknown = create (No_alias Unknown)
 
+  let bottom () = bottom
+  let unknown () = unknown
+
   let create head = create_no_alias (Ok head)
 
   let is_obviously_bottom t =
@@ -339,11 +342,11 @@ module Make (Head : Type_head_intf.S
           get_canonical_simples_and_expand_heads typing_env t1 t2
         in
         match canonical_simple1, canonical_simple2 with
-        | Bottom, _ | _, Bottom -> bottom, TEE.empty ()
+        | Bottom, _ | _, Bottom -> bottom (), TEE.empty ()
         | Ok None, Ok None ->
           begin match meet_head_or_unknown_or_bottom env head1 head2 with
-          | Bottom, env_extension -> bottom, env_extension
-          | Unknown, env_extension -> unknown, env_extension
+          | Bottom, env_extension -> bottom (), env_extension
+          | Unknown, env_extension -> unknown (), env_extension
           | Ok head, env_extension -> create head, env_extension
           end
         | Ok (Some simple1), Ok (Some simple2)
@@ -355,10 +358,10 @@ module Make (Head : Type_head_intf.S
           begin match Simple.descr simple1, Simple.descr simple2 with
           | Const const1, Const const2
               when not (Simple.Const.equal const1 const2) ->
-            bottom, TEE.empty ()
+            bottom (), TEE.empty ()
           | Discriminant discriminant1, Discriminant discriminant2
               when not (Discriminant.equal discriminant1 discriminant2) ->
-            bottom, TEE.empty ()
+            bottom (), TEE.empty ()
           | (Const _ | Discriminant _ | Name _), _ ->
             let head, env_extension =
               let env = Meet_env.now_meeting env simple1 simple2 in
@@ -413,8 +416,8 @@ module Make (Head : Type_head_intf.S
                 TEE.print env_extension
             end;
             match head with
-            | Bottom -> bottom
-            | Unknown -> unknown
+            | Bottom -> bottom ()
+            | Unknown -> unknown ()
             | Ok head -> create head
 
       let meet_or_join env t1 t2 : _ Or_bottom.t =

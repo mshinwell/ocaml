@@ -179,20 +179,20 @@ module type S = sig
   (** Create an "unknown" type with the same kind as the given type. *)
   val unknown_like : t -> t
 
-  val any_value : t
+  val any_value : unit -> t
 
-  val any_fabricated : t
+  val any_fabricated : unit -> t
 
-  val any_tagged_immediate : t
-  val any_tagged_bool : t
+  val any_tagged_immediate : unit -> t
+  val any_tagged_bool : unit -> t
 
-  val any_boxed_float : t
-  val any_boxed_int32 : t
-  val any_boxed_int64 : t
-  val any_boxed_nativeint : t
+  val any_boxed_float : unit -> t
+  val any_boxed_int32 : unit -> t
+  val any_boxed_int64 : unit -> t
+  val any_boxed_nativeint : unit -> t
 
-  val any_naked_immediate : t
-  val any_naked_float : t
+  val any_naked_immediate : unit -> t
+  val any_naked_float : unit -> t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)

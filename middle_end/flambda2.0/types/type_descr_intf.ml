@@ -69,8 +69,8 @@ module type S = sig
 
   val create : head -> t
 
-  val unknown : t
-  val bottom : t
+  val unknown : unit -> t
+  val bottom : unit -> t
 
   val descr : t -> Descr.t
 
