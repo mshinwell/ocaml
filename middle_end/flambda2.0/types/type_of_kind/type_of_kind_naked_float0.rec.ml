@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module Float = Numbers.Float_by_bit_pattern
+module TEE = Typing_env_extension
 
 type t = Float.Set.t
 
@@ -37,7 +38,7 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join _env t1 t2 =
+  let meet_or_join _env t1 t2 : _ Or_bottom_or_absorbing.t =
     let t = E.Float.Set.union_or_inter t1 t2 in
     if Float.Set.is_empty t then Bottom
     else Ok (t, TEE.empty ())

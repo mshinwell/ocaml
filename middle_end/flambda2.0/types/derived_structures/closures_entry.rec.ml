@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module TEE = Typing_env_extension
+
 type t = {
   function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t;
   closure_types : Types_by_closure_id.t;
@@ -77,7 +79,7 @@ let widen t ~to_match =
     closure_var_types;
   }
 
-module Make_meet_and_join
+module Make_meet_or_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t
    with type typing_env := Typing_env.t
@@ -93,9 +95,9 @@ struct
           closure_var_types = closure_var_types2;
         } =
     let meet_or_join_function_decl
-          (function_decl1 : T.function_declaration Or_unknown.t)
-          (function_decl2 : T.function_declaration Or_unknown.t)
-          : T.function_declaration Or_unknown.t =
+          (function_decl1 : Function_declaration_type.t Or_unknown.t)
+          (function_decl2 : Function_declaration_type.t Or_unknown.t)
+          : Function_declaration_type.t Or_unknown.t =
       match function_decl1, function_decl2 with
       | Unknown, Unknown -> Unknown
       | Known _, Unknown ->
@@ -197,8 +199,8 @@ struct
         closures_entry, env_extension)
 end
 
-module Meet = Meet_and_join.Make (Lattice_ops.For_meet)
-module Join = Meet_and_join.Make (Lattice_ops.For_join)
+module Meet = Make_meet_or_join (Lattice_ops.For_meet)
+module Join = Make_meet_or_join (Lattice_ops.For_join)
 
 let meet env t1 t2 : _ Or_bottom.t =
   (* CR mshinwell: Move the code to here *)
@@ -226,8 +228,8 @@ let free_names { function_decls = _; closure_types; closure_var_types; } =
 
 let map_function_decl_types
       { function_decls; closure_types; closure_var_types; }
-      ~(f : Type_grammar.function_declaration
-        -> Type_grammar.function_declaration Or_bottom.t)
+      ~(f : Function_declaration_type.t
+        -> Function_declaration_type.t Or_bottom.t)
       : _ Or_bottom.t =
   (* CR mshinwell: This needs to deal with [closure_types] too.
      Deferring until new approach for [Rec_info] is sorted out. *)

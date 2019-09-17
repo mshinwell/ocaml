@@ -31,4 +31,4 @@ type t =
 
 (* CR mshinwell: Add [create] and make [private]. *)
 
-val print_with_cache : cache:Printing_cache.t -> t -> unit
+val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit

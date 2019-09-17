@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module Int32 = Numbers.Int32
+module TEE = Typing_env_extension
 
 type t = Int32.Set.t
 
@@ -37,7 +38,7 @@ module Make
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join _env t1 t2 =
+  let meet_or_join _env t1 t2 : _ Or_bottom_or_absorbing.t =
     let t = E.Int32.Set.union_or_inter t1 t2 in
     if Int32.Set.is_empty t then Bottom
     else Ok (t, TEE.empty ())
