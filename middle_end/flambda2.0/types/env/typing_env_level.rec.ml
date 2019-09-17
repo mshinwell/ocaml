@@ -516,7 +516,10 @@ let trivial_join t ~initial_env_at_join ~interesting_vars =
       cse;
     }
   in
-  t, extra_cse_bindings
+  let env_at_join =
+    Typing_env.add_extension_from_level initial_env_at_join t
+  in
+  env_at_join, extra_cse_bindings
 
 let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
   assert (List.length envs_with_levels > 1);
@@ -531,39 +534,47 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
       names_at_join
       envs_with_levels
   in
-  let get_type t env =
-    (* XXX This returns an environment, which needs accumulating, and then
-       returning (instead of an extension). *)
-    Type_grammar.make_suitable_for_environment (find_equation t name)
-      env ~suitable_for:env_at_join
-  in
-  let t =
-    Name.Set.fold (fun name result ->
+  let env_at_join, t =
+    Name.Set.fold (fun name (env_at_join, result_t) ->
         assert (not (Name.Map.mem name result.equations));
         match envs_with_levels with
         | [] -> result
-        | (first_env, _id, _vars, t) :: envs_with_levels ->
-          let join_ty =
-            List.fold_left (fun join_ty (one_env, _id, _vars, t) ->
-                let ty = get_type t one_env in
-                Type_grammar.join ~bound_name:name env join_ty ty)
-              (get_type t first_env name)
+        | (first_env_at_use, _id, _vars, first_t) :: envs_with_levels ->
+          let env_at_join, join_ty =
+            Type_grammar.make_suitable_for_environment
+              (find_equation first_t name)
+              first_env_at_use ~suitable_for:env_at_join
+          in
+          let env_at_join, join_ty =
+            List.fold_left
+              (fun (env_at_join, join_ty) (env_at_use, _id, _vars, t) ->
+                let env_at_join, ty =
+                  Type_grammar.make_suitable_for_environment
+                    (find_equation t name)
+                    env_at_use ~suitable_for:env_at_join
+                in
+                let join_ty =
+                  Type_grammar.join ~bound_name:name env_at_join join_ty ty
+                in
+                env_at_join, ty)
+              (env_at_join, join_ty)
               envs_with_levels
           in
-          add_or_replace_equation result name join_ty)
+          env_at_join, add_or_replace_equation result name join_ty)
       names_with_equations_in_join
-      (empty ())
+      (env_at_join, empty ())
   in
   let cse, extra_cse_bindings =
     cse_after_n_way_join envs_with_levels ~allowed
   in
   let t : t = { t with cse; } in
   assert (Variable.Map.is_empty t.defined_vars);
-  t, extra_cse_bindings
+  let env_at_join = Typing_env.add_extension_from_level env_at_join t in
+  env_at_join, extra_cse_bindings
 
 let n_way_join ~initial_env_at_join envs_with_levels =
   match envs_with_levels with
-  | [] -> empty (), Continuation_extra_params_and_args.empty
+  | [] -> initial_env_at_join, Continuation_extra_params_and_args.empty
   | [_env, _id, interesting_vars, t] ->
     trivial_join t ~initial_env_at_join ~interesting_vars
   | envs_with_levels -> non_trivial_join ~initial_env_at_join envs_with_levels
