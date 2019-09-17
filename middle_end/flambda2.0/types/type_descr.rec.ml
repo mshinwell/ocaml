@@ -195,7 +195,7 @@ module Make (Head : Type_head_intf.S
       | Type _ | Equals _ ->
         Misc.fatal_errorf "Expected [No_alias]:@ %a" S.print t
 
-    let expand_head t env ~force_to_kind : _ Or_unknown_or_bottom.t =
+    let expand_head t env : _ Or_unknown_or_bottom.t =
       match descr t with
       | No_alias head -> head
       | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
@@ -239,7 +239,7 @@ module Make (Head : Type_head_intf.S
             | No_alias Bottom -> Bottom
             | No_alias Unknown -> Unknown
             | No_alias (Ok head) -> Ok head
-(* CR mshinwell: Fix Rec_info
+              (* CR mshinwell: Fix Rec_info
               begin match rec_info with
               | None -> Ok head
               | Some rec_info ->
@@ -252,7 +252,7 @@ module Make (Head : Type_head_intf.S
                 | Bottom -> Bottom
                 | Ok head -> Ok head
               end
-*)
+              *)
             | Type _export_id ->
               Misc.fatal_error ".cmx loading not yet implemented"
             | Equals _ ->
@@ -276,13 +276,13 @@ module Make (Head : Type_head_intf.S
 
     let get_canonical_simples_and_expand_heads typing_env t1 t2 =
       let canonical_simple1 =
-        TE.get_alias_then_canonical_simple typing_env t1
+        TE.get_alias_then_canonical_simple typing_env (S.to_type t1)
       in
-      let head1 = expand_head (S.force_to_kind t1) typing_env in
+      let head1 = expand_head t1 typing_env in
       let canonical_simple2 =
-        TE.get_alias_then_canonical_simple typing_env t2
+        TE.get_alias_then_canonical_simple typing_env (S.to_type t2)
       in
-      let head2 = expand_head (S.force_to_kind t2) typing_env in
+      let head2 = expand_head t1 typing_env in
       canonical_simple1, head1, canonical_simple2, head2
 
     module Make_meet_and_join
@@ -328,15 +328,16 @@ module Make (Head : Type_head_intf.S
       let meet env t1 t2 =
         let canonical_simple1, head1, canonical_simple2, head2 =
           let typing_env = Meet_env.env env in
-          get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
+          get_canonical_simples_and_expand_heads typing_env t1 t2
         in
         match canonical_simple1, canonical_simple2 with
         | Bottom, _ | _, Bottom -> bottom, TEE.empty ()
         | Ok None, Ok None ->
-          let head, env_extension =
-            meet_head_or_unknown_or_bottom env head1 head2
-          in
-          create head, env_extension
+          begin match meet_head_or_unknown_or_bottom env head1 head2 with
+          | Bottom, env_extension -> bottom, env_extension
+          | Unknown, env_extension -> unknown, env_extension
+          | Ok head, env_extension -> create head, env_extension
+          end
         | Ok (Some simple1), Ok (Some simple2)
             when Simple.equal simple1 simple2
                    || Meet_env.already_meeting env simple1 simple2 ->
@@ -353,7 +354,7 @@ module Make (Head : Type_head_intf.S
           | _, _ ->
             let head, env_extension =
               let env = Meet_env.now_meeting env simple1 simple2 in
-              meet_ env head1 head2
+              meet_head_or_unknown_or_bottom env head1 head2
             in
             let env_extension =
               if TE.defined_earlier (Meet_env.env env) simple1 ~than:simple2
@@ -382,7 +383,7 @@ module Make (Head : Type_head_intf.S
 
       let join ?bound_name typing_env t1 t2 =
         let canonical_simple1, head1, canonical_simple2, head2 =
-          get_canonical_simples_and_expand_heads typing_env or_alias1 or_alias2
+          get_canonical_simples_and_expand_heads typing_env t1 t2
         in
         match canonical_simple1, canonical_simple2 with
         | Bottom, _ -> t2
@@ -399,7 +400,15 @@ module Make (Head : Type_head_intf.S
             Simple.Set.choose_opt shared_aliases_not_aliasing_bound_name
           with
           | Some simple -> create_equals simple
-          | None -> create (join_head_or_unknown_or_bottom env head1 head2)
+          | None ->
+            let head, env_extension =
+              join_head_or_unknown_or_bottom typing_env head1 head2
+            in
+            assert (TEE.is_empty env_extension);
+            match head with
+            | Bottom -> bottom
+            | Unknown -> unknown
+            | Ok head -> create head
 
       let meet_or_join ?bound_name env t1 t2 : _ Or_bottom.t =
         let t, env_extension =
