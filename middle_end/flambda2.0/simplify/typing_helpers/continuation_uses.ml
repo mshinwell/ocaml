@@ -129,7 +129,7 @@ let cannot_change_continuation's_arity t =
 *)
 
 let introduce_params typing_env ~params =
-  List.fold_left (fun env param ->
+  List.fold_left (fun typing_env param ->
       let name =
         Name_in_binding_pos.create (KP.name param) Name_occurrence_kind.normal
       in
@@ -138,44 +138,45 @@ let introduce_params typing_env ~params =
     params
 
 let compute_handler_env t
-      ~definition_typing_env_with_params_defined:handler_typing_env
+      ~definition_typing_env_with_params_defined:typing_env
       ~params : Continuation_env_and_param_types.t =
   match t.uses with
   | [] -> No_uses
   | uses ->
-    let definition_scope_level = TE.current_scope handler_typing_env in
+    let definition_scope_level = TE.current_scope typing_env in
     let join_is_trivial =
       match uses with
       | [_] -> true
-      | _::_ -> false
+      | [] | _::_ -> false
     in
     let use_envs_with_ids =
       List.map (fun use ->
           let typing_env =
-            List.fold_left2 (fun env param arg_type ->
+            List.fold_left2 (fun typing_env param arg_type ->
                 TE.add_equation typing_env (KP.name param) arg_type)
               typing_env
               params (Use.arg_types use)
           in
+          let use_env = Use.typing_env_at_use use in
           let interesting_vars =
             if not join_is_trivial then Variable.Set.empty
             else
               List.fold_left (fun interesting_vars arg_type ->
                   Variable.Set.union interesting_vars
-                    (T.free_variables_transitive arg_type))
-                (Use.arg_types use)
+                    (TE.free_variables_transitive use_env arg_type))
                 Variable.Set.empty
+                (Use.arg_types use)
           in
           typing_env, Use.id use, interesting_vars)
         uses
     in
     let joined_env_extension, extra_params_and_args =
-      TE.cut_and_n_way_join handler_typing_env use_envs_with_ids
+      TE.cut_and_n_way_join typing_env use_envs_with_ids
         ~unknown_if_defined_at_or_later_than:definition_scope_level
     in
     let handler_typing_env =
       TE.add_env_extension
-        (introduce_params handler_typing_env
+        (introduce_params typing_env
           ~params:extra_params_and_args.extra_params)
         joined_env_extension
     in

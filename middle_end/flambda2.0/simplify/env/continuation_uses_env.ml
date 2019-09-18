@@ -53,11 +53,13 @@ let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
   in
   t, id
 
-let continuation_env_and_param_types t ~definition_typing_env cont
-      : Continuation_env_and_param_types.t =
+let compute_handler_env t ~definition_typing_env_with_params_defined cont
+      ~params : Continuation_env_and_param_types.t =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found -> No_uses
-  | uses -> Continuation_uses.env_and_param_types uses ~definition_typing_env
+  | uses ->
+    Continuation_uses.compute_handler_env uses ~params
+      ~definition_typing_env_with_params_defined
 
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with

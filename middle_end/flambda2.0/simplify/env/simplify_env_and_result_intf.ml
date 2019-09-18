@@ -87,6 +87,11 @@ module type Downwards_env = sig
 
   val with_typing_environment : t -> Flambda_type.Typing_env.t -> t
 
+  val map_typing_env
+     : t
+    -> f:(Flambda_type.Typing_env.t -> Flambda_type.Typing_env.t)
+    -> t
+
   val check_variable_is_bound : t -> Variable.t -> unit
 
   val check_symbol_is_bound : t -> Symbol.t -> unit

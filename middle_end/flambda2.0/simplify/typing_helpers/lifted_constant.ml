@@ -78,10 +78,11 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
   Symbol.Map.fold (fun sym typ typing_env ->
       let sym = Name.symbol sym in
       if not (TE.mem typing_env sym) then
-        let typing_env, typ =
+        let env_extension, typ =
           T.make_suitable_for_environment typ orig_typing_env
             ~suitable_for:typing_env
         in
+        let typing_env = TE.add_env_extension typing_env env_extension in
         TE.add_equation typing_env sym typ
       else
         typing_env)

@@ -36,10 +36,11 @@ module type S = sig
 
   val cannot_change_continuation's_arity : t -> Continuation.t -> bool
 
-  val continuation_env_and_param_types
+  val compute_handler_env
      : t
-    -> definition_typing_env:Flambda_type.Typing_env.t
+    -> definition_typing_env_with_params_defined:Flambda_type.Typing_env.t
     -> Continuation.t
+    -> params:Kinded_parameter.t list
     -> Continuation_env_and_param_types.t
 
   val num_continuation_uses : t -> Continuation.t -> int

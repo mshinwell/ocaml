@@ -230,6 +230,8 @@ end = struct
       typing_env;
     }
 
+  let map_typing_env t ~f = with_typing_environment t (f t.typing_env)
+
   let check_variable_is_bound t var =
     if not (TE.mem t.typing_env (Name.var var)) then begin
       Misc.fatal_errorf "Unbound variable %a in environment:@ %a"

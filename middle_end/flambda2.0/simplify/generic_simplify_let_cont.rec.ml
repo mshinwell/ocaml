@@ -72,8 +72,9 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
   *)
           let handler, user_data, uacc =
             match
-              CUE.continuation_env_and_param_types cont_uses_env
-                ~definition_typing_env:(DE.typing_env definition_denv)
+              CUE.compute_handler_env cont_uses_env
+                ~definition_typing_env_with_params_defined:
+                  (DE.typing_env definition_denv)
                 cont ~params
             with
             | No_uses ->

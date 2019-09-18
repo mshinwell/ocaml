@@ -124,7 +124,7 @@ let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
   let result = Simple.var (Var_in_binding_pos.var result_var) in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:array_ty
-    ~shape:(T.array_of_length ~length:(T.alias_type_of_as_ty_value result))
+    ~shape:(T.array_of_length ~length:(T.alias_type_of K.value result))
     ~result_var ~result_kind:K.value
 
 (* CR-someday mshinwell: Consider whether "string length" should be treated

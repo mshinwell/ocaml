@@ -81,9 +81,10 @@ let record_continuation_use t cont use_kind ~typing_env_at_use ~arg_types =
 let cannot_change_continuation's_arity t cont =
   CUE.cannot_change_continuation's_arity t.continuation_uses_env cont
 
-let continuation_env_and_param_types t ~definition_typing_env cont =
-  CUE.continuation_env_and_param_types t.continuation_uses_env
-    ~definition_typing_env cont
+let compute_handler_env t ~definition_typing_env_with_params_defined cont
+      ~params =
+  CUE.compute_handler_env t.continuation_uses_env
+    ~definition_typing_env_with_params_defined cont ~params
 
 let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont
