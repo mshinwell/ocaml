@@ -30,6 +30,16 @@ type 'a k = CUE.t -> R.t -> ('a * UA.t)
 module Continuation_handler = struct
   include Continuation_handler
   let real_handler t = Some t
+
+  module Opened = struct
+    type t = {
+      params : KP.t list;
+      handler : Expr.t;
+    }
+
+    let params t = t.params
+    let handler t = t.handler
+  end
 end
 
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
@@ -135,12 +145,11 @@ and simplify_one_continuation_handler
     -> extra_params_and_args:Continuation_extra_params_and_args.t
     -> cannot_change_arity:bool
     -> Continuation.t
-    -> params:Kinded_parameter.t list
-    -> handler:Flambda.Expr.t
+    -> Continuation_handler.t
     -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
 = fun dacc ~(extra_params_and_args : Continuation_extra_params_and_args.t)
-      ~cannot_change_arity cont ~params ~handler k ->
+      ~cannot_change_arity cont (handler : Continuation_handler.Opened.t) k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
 (*
@@ -152,7 +161,8 @@ Format.eprintf "About to simplify handler %a: params %a@ "
 Format.eprintf "handler:@.%a@."
   Expr.print handler;
 *)
-  let handler, user_data, uacc = simplify_expr dacc handler k in
+  let params = handler.params in
+  let handler, user_data, uacc = simplify_expr dacc handler.handler k in
   let handler, uacc =
     (* CR mshinwell: assert that if [cannot_change_arity] then
        [extra_params_and_args] is empty *)

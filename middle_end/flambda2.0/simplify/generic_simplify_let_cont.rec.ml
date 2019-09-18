@@ -37,7 +37,8 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
       let original_cont_scope_level =
         DE.get_continuation_scope_level definition_denv
       in
-      open_continuation_handler_like cont_handler ~f:(fun params cont_handler ->
+      open_continuation_handler_like cont_handler ~f:(fun handler ->
+        let params = CHL.Opened.params handler in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
             (* CR mshinwell: This parameter introduction stanza should be
@@ -115,7 +116,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               try
                 simplify_continuation_handler_like dacc
                   ~extra_params_and_args ~cannot_change_arity
-                  cont ~params ~handler:cont_handler k
+                  cont handler k
               with Misc.Fatal_error -> begin
                 Format.eprintf "\n%sContext is:%s simplifying continuation \
                     handler@ %a@ \

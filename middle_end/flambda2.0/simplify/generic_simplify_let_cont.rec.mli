@@ -45,8 +45,7 @@ module Make (Continuation_handler_like : Continuation_handler_like_intf.S) : sig
       -> extra_params_and_args:Continuation_extra_params_and_args.t
       -> cannot_change_arity:bool
       -> Continuation.t
-      -> params:Kinded_parameter.t list
-      -> handler:Flambda.Expr.t
+      -> Continuation_handler_like.Opened.t
       -> (Continuation_uses_env.t
         -> Simplify_env_and_result.Result.t
         -> ('a * Upwards_acc.t))
