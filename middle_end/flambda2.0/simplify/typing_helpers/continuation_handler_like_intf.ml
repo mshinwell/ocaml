@@ -43,4 +43,6 @@ module type S = sig
 
     val params : t -> Kinded_parameter.List.t
   end
+
+  val pattern_match : t -> f:(Opened.t -> 'a) -> 'a
 end

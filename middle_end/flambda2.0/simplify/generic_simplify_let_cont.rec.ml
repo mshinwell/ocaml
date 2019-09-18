@@ -31,13 +31,13 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
 
   let simplify_body_of_non_recursive_let_cont
         dacc cont cont_handler ~(simplify_body : _ simplify_body) ~body
-        ~open_continuation_handler_like ~simplify_continuation_handler_like k =
+        ~simplify_continuation_handler_like k =
     let definition_denv = DA.denv dacc in
     let body, (result, uenv', user_data), uacc =
       let original_cont_scope_level =
         DE.get_continuation_scope_level definition_denv
       in
-      open_continuation_handler_like cont_handler ~f:(fun handler ->
+      CHL.pattern_match cont_handler ~f:(fun handler ->
         let params = CHL.Opened.params handler in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->

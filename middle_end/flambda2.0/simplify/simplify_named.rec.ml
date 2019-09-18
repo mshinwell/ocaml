@@ -21,7 +21,7 @@ open! Simplify_import
 type pre_simplification_types_of_my_closures = {
   closure_types_via_aliases : T.t Closure_id.Map.t;
   closure_types : T.t Closure_id.Map.t;
-  typing_env_inside_function : TE.t;
+  env_extensions : TEE.t list;
 }
 
 let function_decl_type denv function_decl rec_info =
@@ -37,21 +37,23 @@ let function_decl_type denv function_decl rec_info =
       ~recursive:(FD.recursive function_decl)
 
 let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
-      ~closure_element_types ~typing_env_inside_function =
-  let closure_element_types, typing_env_inside_function =
+      ~closure_element_types =
+  (* CR mshinwell: Avoid doing [enter_closure] both here and in
+     [simplify_function] *)
+  let typing_env_inside_function = DE.typing_env (DE.enter_closure denv) in
+  let closure_element_types, env_extensions =
     Var_within_closure.Map.fold
-      (fun closure_var ty
-           (closure_element_types, typing_env_inside_function) ->
-        let ty, typing_env_inside_function =
+      (fun closure_var ty (closure_element_types, env_extensions) ->
+        let env_extension, ty =
           T.make_suitable_for_environment ty (DE.typing_env denv)
             ~suitable_for:typing_env_inside_function
         in
         let closure_element_types =
           Var_within_closure.Map.add closure_var ty closure_element_types
         in
-        closure_element_types, typing_env_inside_function)
+        closure_element_types, env_extension :: env_extensions)
       closure_element_types
-      (Var_within_closure.Map.empty, typing_env_inside_function)
+      (Var_within_closure.Map.empty, [])
   in
   let closure_types_via_aliases =
     Closure_id.Map.map (fun name ->
@@ -77,7 +79,7 @@ let pre_simplification_types_of_my_closures denv ~funs ~closure_bound_names
   in
   { closure_types_via_aliases;
     closure_types;
-    typing_env_inside_function;
+    env_extensions;
   }
 
 let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
@@ -121,8 +123,6 @@ let simplify_function dacc closure_id_this_function function_decl
   let params_and_body, r =
     Function_params_and_body.pattern_match (FD.params_and_body function_decl)
       ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-        (* XXX XXX This needs to start from the env in
-           the pre_simp_types *)
         let denv = DE.enter_closure denv in
         let return_cont_scope = Scope.initial in
         let exn_cont_scope = Scope.next return_cont_scope in
@@ -130,6 +130,13 @@ let simplify_function dacc closure_id_this_function function_decl
           (DE.get_continuation_scope_level denv));
         let denv = DE.increment_continuation_scope_level_twice denv in
         let denv = DE.add_parameters_with_unknown_types denv params in
+        let denv =
+          DE.map_typing_env denv ~f:(fun typing_env ->
+            List.fold_left (fun typing_env env_extension ->
+                TE.add_env_extension typing_env env_extension)
+              typing_env
+              pre_simplification_types_of_my_closures.env_extensions)
+        in
         (* XXX Need to add back the code for the irrelevant closure vars,
            then remove hack below *)
         let denv =
@@ -288,7 +295,9 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
   in
   let r =
     let lifted_constants =  (* CR mshinwell: Add "s" to "Lifted_constant" *)
-      Lifted_constant.create_from_static_structure static_structure_types
+      Lifted_constant.create_from_static_structure
+        (DE.typing_env (DA.denv dacc))
+        static_structure_types
         static_structure
     in
     List.fold_left R.new_lifted_constant (DA.r dacc) lifted_constants

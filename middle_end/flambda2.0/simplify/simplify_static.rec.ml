@@ -55,6 +55,14 @@ module Return_cont_handler = struct
   let behaviour t = Unknown { arity = arity t; }
 
   let real_handler _t = None
+
+  module Opened = struct
+    type nonrec t = t
+    (* CR mshinwell: Document why these aren't freshened *)
+    let params t = t.computed_values
+  end
+
+  let pattern_match t ~f = f t
 end
 
 module Exn_cont_handler = struct
@@ -79,6 +87,14 @@ module Exn_cont_handler = struct
   let behaviour t = Unknown { arity = arity t; }
 
   let real_handler _t = None
+
+  module Opened = struct
+    type nonrec t = KP.t
+    let params t = [t]
+  end
+
+  let pattern_match _t ~f =
+    f (KP.create (Parameter.wrap (Variable.create "exn")) K.value)
 end
 
 module Simplify_return_cont =
@@ -286,24 +302,9 @@ let simplify_static_structure dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler dacc ~param_types
+let simplify_return_continuation_handler dacc
       ~extra_params_and_args:_ ~cannot_change_arity:_ cont
-      (return_cont_handler : Return_cont_handler.t) _k =
-  assert (List.compare_lengths param_types
-    return_cont_handler.computed_values = 0);
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv ->
-      List.fold_left2 (fun denv ty param ->
-          let var =
-            Var_in_binding_pos.create (KP.var param)
-              Name_occurrence_kind.normal
-          in
-          let kind = KP.kind param in
-          assert (Flambda_kind.equal (T.kind ty) kind);
-          DE.add_variable denv var ty)
-        denv
-        param_types return_cont_handler.computed_values)
-  in
+      (return_cont_handler : Return_cont_handler.Opened.t) _k =
   let dacc, static_structure =
     simplify_static_structure dacc return_cont_handler.static_structure
   in
@@ -333,11 +334,9 @@ let simplify_return_continuation_handler dacc ~param_types
   let uacc = UA.create uenv (DA.r dacc) in
   handler, (used_computed_values, static_structure, dacc), uacc
 
-let simplify_exn_continuation_handler dacc ~param_types
+let simplify_exn_continuation_handler dacc
       ~extra_params_and_args:_ ~cannot_change_arity:_ _cont
-      ~params ~handler:_ k =
-  (* CR mshinwell: Change assertion to proper error.  Check no extra params. *)
-  assert (List.length params = 1);
+      (_handler : Exn_cont_handler.Opened.t) k =
   let handler : Exn_cont_handler.t = () in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   handler, user_data, uacc
