@@ -16,6 +16,16 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module type S0 = sig
+  include Contains_names.S
+
+  val print : Format.formatter -> t -> unit
+
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
+end
+
 module type S = sig
   type type_grammar
   type typing_env

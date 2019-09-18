@@ -38,12 +38,7 @@ module type S_ops = sig
   end
 end
 
-module type S = sig
-  type flambda_type
-  type typing_env
-  type typing_env_extension
-  type typing_env_level
-  type meet_env
+module type S0 = sig
   type head
 
   module Descr : sig
@@ -74,15 +69,26 @@ module type S = sig
 
   val descr : t -> Descr.t
 
-  val get_alias : t -> Simple.t option
-
-  val is_obviously_bottom : t -> bool
-
   (* CR mshinwell: Try to use [Type_structure_intf] or similar *)
 
   include Contains_names.S with type t := t
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
+end
+
+module type S = sig
+  type flambda_type
+  type typing_env
+  type typing_env_extension
+  type typing_env_level
+  type meet_env
+  type head
+
+  include S0 with type head = head
+
+  val get_alias : t -> Simple.t option
+
+  val is_obviously_bottom : t -> bool
 
   val make_suitable_for_environment0
      : t

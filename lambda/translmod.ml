@@ -219,8 +219,7 @@ let init_shape id modl =
     | Mty_signature sg ->
         Const_block(0, [Const_block(0, init_shape_struct env sg)])
     | Mty_functor _ ->
-        (* can we do better? *)
-        raise (Initialization_failure {reason=Unsafe_functor;loc;subid})
+        Const_pointer 0 (* camlinternalMod.Function *)
   and init_shape_struct env sg =
     match sg with
       [] -> []
