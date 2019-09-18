@@ -620,7 +620,7 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   let closure_types = Types_by_closure_id.create closure_ids_and_types in
   let closures_entry =
     Closures_entry.create ~function_decls ~closure_types
-      ~closure_var_types:Types_by_var_within_closure.bottom
+      ~closure_var_types:(Types_by_var_within_closure.bottom ())
   in
   let by_closure_id =
     let set_of_closures_contents =
@@ -648,7 +648,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
   in
   let closures_entry =
     Closures_entry.create ~function_decls:Closure_id.Map.empty
-      ~closure_types:Types_by_closure_id.bottom
+      ~closure_types:(Types_by_closure_id.bottom ())
       ~closure_var_types
   in
   let by_closure_id =

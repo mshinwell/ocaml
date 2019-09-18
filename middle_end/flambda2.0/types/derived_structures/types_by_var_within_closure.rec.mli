@@ -20,7 +20,7 @@ type t
 
 val create : Type_grammar.t Closure_id.Map.t -> t
 
-val bottom : t
+val bottom : unit -> t
 
 val widen : t -> to_match:t -> t
 

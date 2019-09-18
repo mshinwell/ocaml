@@ -32,8 +32,8 @@ let create ~function_decls ~closure_types ~closure_var_types =
 
 let create_bottom () =
   { function_decls = Closure_id.Map.empty;
-    closure_types = Types_by_closure_id.bottom;
-    closure_var_types = Types_by_var_within_closure.bottom;
+    closure_types = Types_by_closure_id.bottom ();
+    closure_var_types = Types_by_var_within_closure.bottom ();
   }
 
 let print_with_cache ~cache ppf
