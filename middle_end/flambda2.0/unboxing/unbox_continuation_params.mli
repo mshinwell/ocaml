@@ -23,4 +23,5 @@ val make_unboxing_decisions
   -> arg_types_by_use_id:(TE.t * T.t) Apply_cont_rewrite_id.Map.t list
   -> param_types:T.t list
   -> Continuation_extra_params_and_args.t
+  (* CR mshinwell: Return a record. *)
   -> TE.t * (T.t list) * Continuation_extra_params_and_args.t

@@ -83,18 +83,29 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                  collected during its simplification will remain. *)
               let user_data, uacc = k cont_uses_env r in
               cont_handler, user_data, uacc
-            | Uses { typing_env; arg_types_by_use_id; param_types;
+            | Uses { handler_typing_env; arg_types_by_use_id;
                      extra_params_and_args; } ->
-              let param_types, extra_params_and_args, typing_env =
+              let typing_env, extra_params_and_args =
                 if cannot_change_arity then
-                  param_types, Continuation_extra_params_and_args.empty,
-                    typing_env
+                  handler_typing_env, Continuation_extra_params_and_args.empty
                 else
-                  let typing_env, param_types, extra_params_and_args =
-                    Unbox_continuation_params.make_unboxing_decisions typing_env
-                      ~arg_types_by_use_id ~param_types extra_params_and_args
+                  let param_types =
+                    List.map (fun param ->
+                        TE.find handler_typing_env (KP.name param))
+                      params
                   in
-                  param_types, extra_params_and_args, typing_env
+                  let typing_env, improved_param_types, extra_params_and_args =
+                    Unbox_continuation_params.make_unboxing_decisions
+                      handler_typing_env ~arg_types_by_use_id ~param_types
+                      extra_params_and_args
+                  in
+                  let typing_env =
+                    List.fold_left2 (fun typing_env param typ ->
+                        TE.add_equation typing_env (KP.name param) typ)
+                      typing_env
+                      params improved_param_types
+                  in
+                  typing_env, extra_params_and_args
               in
               let dacc =
                 DA.create
@@ -102,9 +113,9 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                   cont_uses_env r
               in
               try
-                simplify_continuation_handler_like dacc ~param_types
+                simplify_continuation_handler_like dacc
                   ~extra_params_and_args ~cannot_change_arity
-                  cont cont_handler k
+                  cont ~params ~handler:cont_handler k
               with Misc.Fatal_error -> begin
                 Format.eprintf "\n%sContext is:%s simplifying continuation \
                     handler@ %a@ \

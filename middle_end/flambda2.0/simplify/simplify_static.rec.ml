@@ -335,9 +335,9 @@ let simplify_return_continuation_handler dacc ~param_types
 
 let simplify_exn_continuation_handler dacc ~param_types
       ~extra_params_and_args:_ ~cannot_change_arity:_ _cont
-      (_exn_cont_handler : Exn_cont_handler.t) k =
+      ~params ~handler:_ k =
   (* CR mshinwell: Change assertion to proper error.  Check no extra params. *)
-  assert (List.length param_types = 1);
+  assert (List.length params = 1);
   let handler : Exn_cont_handler.t = () in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   handler, user_data, uacc
