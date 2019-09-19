@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module type S = sig
-  type type_grammar
   type typing_env
   type typing_env_extension
   type meet_env

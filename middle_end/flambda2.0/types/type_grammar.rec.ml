@@ -18,161 +18,175 @@
 
 module TEE = Typing_env_extension
 
-module T_V = Type_of_kind_value
-module T_NI = Type_of_kind_naked_immediate
-module T_Nf = Type_of_kind_naked_float
-module T_N32 = Type_of_kind_naked_int32
-module T_N64 = Type_of_kind_naked_int64
-module T_NN = Type_of_kind_naked_nativeint
-module T_F = Type_of_kind_fabricated
+module T_V0 = Type_descr.Make0 (Type_of_kind_value0)
+module T_NI0 = Type_descr.Make0 (Type_of_kind_naked_immediate0)
+module T_Nf0 = Type_descr.Make0 (Type_of_kind_naked_float0)
+module T_N32_0 = Type_descr.Make0 (Type_of_kind_naked_int32_0)
+module T_N64_0 = Type_descr.Make0 (Type_of_kind_naked_int64_0)
+module T_NN0 = Type_descr.Make0 (Type_of_kind_naked_nativeint0)
+module T_F0 = Type_descr.Make0 (Type_of_kind_fabricated0)
 
-type t =
-  | Value of T_V.t
-  | Naked_immediate of T_NI.t
-  | Naked_float of T_Nf.t
-  | Naked_int32 of T_N32.t
-  | Naked_int64 of T_N64.t
-  | Naked_nativeint of T_NN.t
-  | Fabricated of T_F.t
+module rec T_V : Type_descr_intf.S
+  with type head := Type_of_kind_value0.t
+  with type t = T_V0.t
+  = T_V0.Make
+      (struct
+        let force_to_kind (t : T.t) =
+          match t with
+          | Value ty -> ty
+          | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+          | Naked_nativeint _ | Fabricated _ ->
+            Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
+              T.print t
 
-let print_with_cache ~cache ppf (t : Type_grammar.t) =
-  match t with
-  | Value ty ->
-    Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
-      (T_V.print_with_cache ~cache) ty
-  | Naked_immediate ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
-      (T_NI.print_with_cache ~cache) ty
-  | Naked_float ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
-      (T_Nf.print_with_cache ~cache) ty
-  | Naked_int32 ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_int32@ %a)@]"
-      (T_N32.print_with_cache ~cache) ty
-  | Naked_int64 ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_int64@ %a)@]"
-      (T_N64.print_with_cache ~cache) ty
-  | Naked_nativeint ty ->
-    Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
-      (T_NN.print_with_cache ~cache) ty
-  | Fabricated ty ->
-    Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
-      (T_F.print_with_cache ~cache) ty
+        let to_type ty : T.t = Value ty
+      end)
+and T_NI : Type_descr_intf.S
+  with type head := Type_of_kind_naked_immediate0.t
+  = Type_descr.Make (Type_of_kind_naked_immediate0)
+      (struct
+        let force_to_kind = force_to_kind_naked_immediate
+        let to_type ty = Naked_immediate ty
+      end)
+and T_Nf : Type_descr_intf.S
+  with type head := Type_of_kind_naked_float0.t
+  = Type_descr.Make (Type_of_kind_naked_float0)
+      (struct
+        let force_to_kind = force_to_kind_naked_float
+        let to_type ty = Naked_float ty
+      end)
+and T_N32 : Type_descr_intf.S
+  with type head := Type_of_kind_naked_int32_0.t
+  = Type_descr.Make (Type_of_kind_naked_int32_0)
+      (struct
+        let force_to_kind = force_to_kind_naked_int32
+        let to_type ty = Naked_int32 ty
+      end)
+and T_N64 : Type_descr_intf.S
+  with type head := Type_of_kind_naked_int64_0.t
+  = Type_descr.Make (Type_of_kind_naked_int64_0)
+      (struct
+        let force_to_kind = force_to_kind_naked_int64
+        let to_type ty = Naked_int64 ty
+      end)
+and T_NN : Type_descr_intf.S
+  with type head := Type_of_kind_naked_nativeint0.t
+  = Type_descr.Make (Type_of_kind_naked_nativeint0)
+      (struct
+        let force_to_kind = force_to_kind_naked_nativeint
+        let to_type ty = Naked_nativeint ty
+      end)
+and T_F : Type_descr_intf.S
+  with type head := Type_of_kind_fabricated0.t
+  = Type_descr.Make (Type_of_kind_fabricated0)
+      (struct
+        let force_to_kind = force_to_kind_fabricated
+        let to_type ty = Fabricated ty
+      end)
+and T : sig
+  type t =
+    | Value of T_V.t
+    | Naked_immediate of T_NI.t
+    | Naked_float of T_Nf.t
+    | Naked_int32 of T_N32.t
+    | Naked_int64 of T_N64.t
+    | Naked_nativeint of T_NN.t
+    | Fabricated of T_F.t
 
-let print ppf t =
-  let cache : Printing_cache.t = Printing_cache.create () in
-  print_with_cache ~cache ppf t
+  include Type_grammar_intf.S with type t := t
+end = struct
+  type t =
+    | Value of T_V.t
+    | Naked_immediate of T_NI.t
+    | Naked_float of T_Nf.t
+    | Naked_int32 of T_N32.t
+    | Naked_int64 of T_N64.t
+    | Naked_nativeint of T_NN.t
+    | Fabricated of T_F.t
 
-let force_to_kind_value t =
-  match t with
-  | Value ty -> ty
-  | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
-    Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a" print t
+  let print_with_cache ~cache ppf (t : Type_grammar.t) =
+    match t with
+    | Value ty ->
+      Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
+        (T_V.print_with_cache ~cache) ty
+    | Naked_immediate ty ->
+      Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
+        (T_NI.print_with_cache ~cache) ty
+    | Naked_float ty ->
+      Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
+        (T_Nf.print_with_cache ~cache) ty
+    | Naked_int32 ty ->
+      Format.fprintf ppf "@[<hov 1>(Naked_int32@ %a)@]"
+        (T_N32.print_with_cache ~cache) ty
+    | Naked_int64 ty ->
+      Format.fprintf ppf "@[<hov 1>(Naked_int64@ %a)@]"
+        (T_N64.print_with_cache ~cache) ty
+    | Naked_nativeint ty ->
+      Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
+        (T_NN.print_with_cache ~cache) ty
+    | Fabricated ty ->
+      Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
+        (T_F.print_with_cache ~cache) ty
 
-let force_to_kind_naked_immediate t =
-  match t with
-  | Naked_immediate ty -> ty
-  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
-    Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_immediate]):@ %a"
-      print t
+  let print ppf t =
+    let cache : Printing_cache.t = Printing_cache.create () in
+    print_with_cache ~cache ppf t
 
-let force_to_kind_naked_float t =
-  match t with
-  | Naked_float ty -> ty
-  | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
-    Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_float]):@ %a"
-      print t
+  let force_to_kind_naked_immediate t =
+    match t with
+    | Naked_immediate ty -> ty
+    | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+    | Naked_nativeint _ | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_immediate]):@ %a"
+        print t
 
-let force_to_kind_naked_int32 t =
-  match t with
-  | Naked_int32 ty -> ty
-  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
-    Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_int32]):@ %a"
-      print t
+  let force_to_kind_naked_float t =
+    match t with
+    | Naked_float ty -> ty
+    | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
+    | Naked_nativeint _ | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_float]):@ %a"
+        print t
 
-let force_to_kind_naked_int64 t =
-  match t with
-  | Naked_int64 ty -> ty
-  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_nativeint _ | Fabricated _ ->
-    Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_number Int64]):@ %a"
-      print t
+  let force_to_kind_naked_int32 t =
+    match t with
+    | Naked_int32 ty -> ty
+    | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
+    | Naked_nativeint _ | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_int32]):@ %a"
+        print t
 
-let force_to_kind_naked_nativeint t =
-  match t with
-  | Naked_nativeint ty -> ty
-  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Fabricated _ ->
-    Misc.fatal_errorf
-      "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
-      print t
+  let force_to_kind_naked_int64 t =
+    match t with
+    | Naked_int64 ty -> ty
+    | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+    | Naked_nativeint _ | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Int64]):@ %a"
+        print t
 
-let force_to_kind_fabricated t =
-  match t with
-  | Fabricated ty -> ty
-  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Naked_nativeint _ ->
-    Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
-      print t
+  let force_to_kind_naked_nativeint t =
+    match t with
+    | Naked_nativeint ty -> ty
+    | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+    | Naked_int64 _ | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
+        print t
 
-let print_type = print
+  let force_to_kind_fabricated t =
+    match t with
+    | Fabricated ty -> ty
+    | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
+    | Naked_int64 _ | Naked_nativeint _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
+        print t
+end
 
-module T_V_ops = T_V.Make_operations (struct
-  include T_V
-  let print = print_type
-  let force_to_kind = force_to_kind_value
-  let to_type ty = Value ty
-end)
-
-module T_NI_ops = T_NI.Make_operations (struct
-  include T_NI
-  let print = print_type
-  let force_to_kind = force_to_kind_naked_immediate
-  let to_type ty = Naked_immediate ty
-end)
-
-module T_Nf_ops = T_Nf.Make_operations (struct
-  include T_Nf
-  let print = print_type
-  let force_to_kind = force_to_kind_naked_float
-  let to_type ty = Naked_float ty
-end)
-
-module T_N32_ops = T_N32.Make_operations (struct
-  include T_N32
-  let print = print_type
-  let force_to_kind = force_to_kind_naked_int32
-  let to_type ty = Naked_int32 ty
-end)
-
-module T_N64_ops = T_N64.Make_operations (struct
-  include T_N64
-  let print = print_type
-  let force_to_kind = force_to_kind_naked_int64
-  let to_type ty = Naked_int64 ty
-end)
-
-module T_NN_ops = T_NN.Make_operations (struct
-  include T_NN
-  let print = print_type
-  let force_to_kind = force_to_kind_naked_nativeint
-  let to_type ty = Naked_nativeint ty
-end)
-
-module T_F_ops = T_F.Make_operations (struct
-  include T_F
-  let print = print_type
-  let force_to_kind = force_to_kind_fabricated
-  let to_type ty = Fabricated ty
-end)
+include T
 
 let apply_name_permutation t perm =
   match t with
@@ -803,13 +817,13 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  module T_V_meet_or_join = T_V_ops.Make_meet_or_join (E)
-  module T_NI_meet_or_join = T_NI_ops.Make_meet_or_join (E)
-  module T_Nf_meet_or_join = T_Nf_ops.Make_meet_or_join (E)
-  module T_N32_meet_or_join = T_N32_ops.Make_meet_or_join (E)
-  module T_N64_meet_or_join = T_N64_ops.Make_meet_or_join (E)
-  module T_NN_meet_or_join = T_NN_ops.Make_meet_or_join (E)
-  module T_F_meet_or_join = T_F_ops.Make_meet_or_join (E)
+  module T_V_meet_or_join = T_V.Make_meet_or_join (E)
+  module T_NI_meet_or_join = T_NI.Make_meet_or_join (E)
+  module T_Nf_meet_or_join = T_Nf.Make_meet_or_join (E)
+  module T_N32_meet_or_join = T_N32.Make_meet_or_join (E)
+  module T_N64_meet_or_join = T_N64.Make_meet_or_join (E)
+  module T_NN_meet_or_join = T_NN.Make_meet_or_join (E)
+  module T_F_meet_or_join = T_F.Make_meet_or_join (E)
 
   let meet_or_join env t1 t2 =
     match t1, t2 with

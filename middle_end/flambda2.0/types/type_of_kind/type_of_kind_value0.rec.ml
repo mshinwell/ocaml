@@ -24,15 +24,15 @@ type t =
       immediates : Immediates.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
-  | Boxed_float of Type_of_kind_naked_float.t
-  | Boxed_int32 of Type_of_kind_naked_int32.t
-  | Boxed_int64 of Type_of_kind_naked_int64.t
-  | Boxed_nativeint of Type_of_kind_naked_nativeint.t
+  | Boxed_float of T.Type_of_kind_naked_float.t
+  | Boxed_int32 of T.Type_of_kind_naked_int32.t
+  | Boxed_int64 of T.Type_of_kind_naked_int64.t
+  | Boxed_nativeint of T.Type_of_kind_naked_nativeint.t
   | Closures of {
       by_closure_id : Closures_entry_by_set_of_closures_contents.t;
     }
   | String of String_info.Set.t
-  | Array of { length : Type_of_kind_value.t; }
+  | Array of { length : T.Type_of_kind_value.t; }
 
 let print_with_cache ~cache ppf t =
   match t with
@@ -48,16 +48,16 @@ let print_with_cache ~cache ppf t =
       (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
   | Boxed_float naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
-      (Type_of_kind_naked_float.print_with_cache ~cache) naked_ty
+      (T.Type_of_kind_naked_float.print_with_cache ~cache) naked_ty
   | Boxed_int32 naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_int32@ %a)@]"
-      (Type_of_kind_naked_int32.print_with_cache ~cache) naked_ty
+      (T.Type_of_kind_naked_int32.print_with_cache ~cache) naked_ty
   | Boxed_int64 naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_int64@ %a)@]"
-      (Type_of_kind_naked_int64.print_with_cache ~cache) naked_ty
+      (T.Type_of_kind_naked_int64.print_with_cache ~cache) naked_ty
   | Boxed_nativeint naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_nativeint@ %a)@]"
-      (Type_of_kind_naked_nativeint.print_with_cache ~cache) naked_ty
+      (T.Type_of_kind_naked_nativeint.print_with_cache ~cache) naked_ty
   | Closures { by_closure_id; } ->
     Closures_entry_by_set_of_closures_contents.print_with_cache ~cache
       ppf by_closure_id
@@ -66,7 +66,7 @@ let print_with_cache ~cache ppf t =
       String_info.Set.print str_infos
   | Array { length; } ->
     Format.fprintf ppf "@[<hov 1>(Array@ (length@ %a))@]"
-      (Type_of_kind_value.print_with_cache ~cache) length
+      (T.Type_of_kind_value.print_with_cache ~cache) length
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -95,19 +95,19 @@ let apply_name_permutation t perm =
       Blocks_and_tagged_immediates { blocks; immediates; }
     end
   | Boxed_float ty ->
-    let ty' = Type_of_kind_naked_float.apply_name_permutation ty perm in
+    let ty' = T.Type_of_kind_naked_float.apply_name_permutation ty perm in
     if ty == ty' then t
     else Boxed_float ty'
   | Boxed_int32 ty ->
-    let ty' = Type_of_kind_naked_int32.apply_name_permutation ty perm in
+    let ty' = T.Type_of_kind_naked_int32.apply_name_permutation ty perm in
     if ty == ty' then t
     else Boxed_int32 ty'
   | Boxed_int64 ty ->
-    let ty' = Type_of_kind_naked_int64.apply_name_permutation ty perm in
+    let ty' = T.Type_of_kind_naked_int64.apply_name_permutation ty perm in
     if ty == ty' then t
     else Boxed_int64 ty'
   | Boxed_nativeint ty ->
-    let ty' = Type_of_kind_naked_nativeint.apply_name_permutation ty perm in
+    let ty' = T.Type_of_kind_naked_nativeint.apply_name_permutation ty perm in
     if ty == ty' then t
     else Boxed_nativeint ty'
   | Closures { by_closure_id; } ->
@@ -119,7 +119,7 @@ let apply_name_permutation t perm =
     else Closures { by_closure_id = by_closure_id'; }
   | String _ -> t
   | Array { length; } ->
-    let length' = Type_of_kind_value.apply_name_permutation length perm in
+    let length' = T.Type_of_kind_value.apply_name_permutation length perm in
     if length == length' then t
     else Array { length = length'; }
 
@@ -129,14 +129,14 @@ let free_names t =
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
       (Or_unknown.free_names Immediates.free_names immediates)
-  | Boxed_float ty -> Type_of_kind_naked_float.free_names ty
-  | Boxed_int32 ty -> Type_of_kind_naked_int32.free_names ty
-  | Boxed_int64 ty -> Type_of_kind_naked_int64.free_names ty
-  | Boxed_nativeint ty -> Type_of_kind_naked_nativeint.free_names ty
+  | Boxed_float ty -> T.Type_of_kind_naked_float.free_names ty
+  | Boxed_int32 ty -> T.Type_of_kind_naked_int32.free_names ty
+  | Boxed_int64 ty -> T.Type_of_kind_naked_int64.free_names ty
+  | Boxed_nativeint ty -> T.Type_of_kind_naked_nativeint.free_names ty
   | Closures { by_closure_id; } ->
     Closures_entry_by_set_of_closures_contents.free_names by_closure_id
   | String _ -> Name_occurrences.empty
-  | Array { length; } -> Type_of_kind_value.free_names length
+  | Array { length; } -> T.Type_of_kind_value.free_names length
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with

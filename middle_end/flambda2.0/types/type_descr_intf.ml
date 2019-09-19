@@ -16,30 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module type S_ops = sig
-  type head
-  type descr
-  type typing_env
-  type typing_env_extension
-  type meet_env
-
-  val expand_head : descr -> typing_env -> head Or_unknown_or_bottom.t
-
-  module Make_meet_or_join (E : Lattice_ops_intf.S
-    with type meet_env := meet_env
-    with type typing_env := typing_env
-    with type typing_env_extension := typing_env_extension)
-  : sig
-    val meet_or_join
-       : meet_env
-      -> descr
-      -> descr
-      -> (descr * typing_env_extension) Or_bottom.t
-  end
-end
-
 module type S = sig
-  type flambda_type
   type typing_env
   type typing_env_extension
   type typing_env_level
@@ -97,14 +74,17 @@ module type S = sig
     -> suitable_for:typing_env
     -> typing_env_extension * t
 
-  module Make_operations (S : sig
-    val print : Format.formatter -> flambda_type -> unit
-    val force_to_kind : flambda_type -> t
-    val to_type : t -> flambda_type
-  end) : S_ops
-    with type head := head
-    with type descr := t
-    with type typing_env := typing_env
-    with type typing_env_extension := typing_env_extension
+  val expand_head : t -> typing_env -> head Or_unknown_or_bottom.t
+
+  module Make_meet_or_join (E : Lattice_ops_intf.S
     with type meet_env := meet_env
+    with type typing_env := typing_env
+    with type typing_env_extension := typing_env_extension)
+  : sig
+    val meet_or_join
+       : meet_env
+      -> t
+      -> t
+      -> (t * typing_env_extension) Or_bottom.t
+  end
 end

@@ -5,19 +5,12 @@
     flambda_type0.templ.ml
     type_descr.rec.ml
     type_grammar.rec.ml
-    type_of_kind/type_of_kind_value.rec.ml
     type_of_kind/type_of_kind_value0.rec.ml
-    type_of_kind/type_of_kind_naked_immediate.rec.ml
     type_of_kind/type_of_kind_naked_immediate0.rec.ml
-    type_of_kind/type_of_kind_naked_float.rec.ml
     type_of_kind/type_of_kind_naked_float0.rec.ml
-    type_of_kind/type_of_kind_naked_int32.rec.ml
     type_of_kind/type_of_kind_naked_int32_0.rec.ml
-    type_of_kind/type_of_kind_naked_int64.rec.ml
     type_of_kind/type_of_kind_naked_int64_0.rec.ml
-    type_of_kind/type_of_kind_naked_nativeint.rec.ml
     type_of_kind/type_of_kind_naked_nativeint0.rec.ml
-    type_of_kind/type_of_kind_fabricated.rec.ml
     type_of_kind/type_of_kind_fabricated0.rec.ml
     resolved_type.rec.ml
     derived_structures/blocks.rec.ml
@@ -38,19 +31,12 @@
     generic_structures/trivial_row_like.rec.ml
     type_descr.rec.mli
     type_grammar.rec.mli
-    type_of_kind/type_of_kind_value.rec.mli
     type_of_kind/type_of_kind_value0.rec.mli
-    type_of_kind/type_of_kind_naked_immediate.rec.mli
     type_of_kind/type_of_kind_naked_immediate0.rec.mli
-    type_of_kind/type_of_kind_naked_float.rec.mli
     type_of_kind/type_of_kind_naked_float0.rec.mli
-    type_of_kind/type_of_kind_naked_int32.rec.mli
     type_of_kind/type_of_kind_naked_int32_0.rec.mli
-    type_of_kind/type_of_kind_naked_int64.rec.mli
     type_of_kind/type_of_kind_naked_int64_0.rec.mli
-    type_of_kind/type_of_kind_naked_nativeint.rec.mli
     type_of_kind/type_of_kind_naked_nativeint0.rec.mli
-    type_of_kind/type_of_kind_fabricated.rec.mli
     type_of_kind/type_of_kind_fabricated0.rec.mli
     resolved_type.rec.mli
     derived_structures/blocks.rec.mli
