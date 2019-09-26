@@ -100,7 +100,17 @@ program:
 
 program_body_elt:
   | EFFECT e = effect                     { Define_symbol (Nonrecursive, e) }
-  | DEF recu = recursive def = definition { Define_symbol (recu, def) }
+  | DEF recu = recursive
+        exn_cont = option(exn_continuation)
+        def = definition
+    { let def =
+        match def.computation with
+        | None -> def
+        | Some comput ->
+          { def with computation =
+            Some { comput with exception_cont = exn_cont } }
+      in
+      Define_symbol (recu, def) }
   | LET CODE let_code = let_code          { Let_code let_code }
   | ROOT s = symbol                       { Root s }
 ;
@@ -201,7 +211,7 @@ expr:
      { let handlers = handler :: t in
        Let_cont { recursive; body; handlers } }
   | CCALL LBRACKET func = csymbol RBRACKET args = simple_args ra = return_arity
-    MINUSGREATER r = continuation e = continuation
+    MINUSGREATER r = continuation e = exn_continuation
      { Apply {
           func = Symbol func;
           continuation = r;
@@ -213,8 +223,17 @@ expr:
               return_arity = ra;
             };
        }}
-  | CLOSURE c = separated_nonempty_list(AND, closure) body = expr
-    { Let_closure { closures = c; body } }
+  | APPLY func = name args = simple_args MINUSGREATER
+    r = continuation e = exn_continuation
+     { Apply {
+          func;
+          continuation = r;
+          exn_continuation = e;
+          args = args;
+          call_kind = Function Indirect_unknown_arity;
+       }}
+  | CLOSURE r = recursive c = separated_nonempty_list(AND, closure) body = expr
+    { Let_closure { closures = c; body; recursive = r } }
 ;
 
 closure:
@@ -252,16 +271,18 @@ definition:
       expr = expr
       { let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Location.none); computed_values = v }
+            exception_cont = None; computed_values = v }
         in
         { computation = Some computation; static_structure = static } }
 ;
 
 effect:
-  | c = continuation v = args expr = expr
+  | c = continuation
+    exn_cont = option(exn_continuation)
+    v = args expr = expr
       { let computation =
           { expr; return_cont = c;
-            exception_cont = ("exn", Location.none); computed_values = v }
+            exception_cont = exn_cont; computed_values = v }
         in
         { computation = Some computation; static_structure = [] } }
 ;
@@ -315,10 +336,10 @@ const:
   | c = FLOAT { make_const_float c }
 ;
 
-(* name:
- *   | s = symbol { Symbol s }
- *   | v = variable { Var v }
- * ; *)
+name:
+  | s = symbol { (Symbol s:name) }
+  | v = variable { (Var v:name) }
+;
 
 simple:
   | s = symbol { Symbol s }
