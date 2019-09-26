@@ -224,7 +224,13 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
       let init_env = init_env func_env in
       let return_continuation', env = fresh_cont init_env c.return_cont cont_arity in
       let return_continuation = Continuation.create () in
-      let exn_cont, env = fresh_cont ~sort:Exn env c.exception_cont 1 in
+      let exn_cont, env =
+        match c.exception_cont with
+        | None ->
+          Continuation.create ~sort:Exn (), env
+        | Some exc_cont ->
+          fresh_cont ~sort:Exn env exc_cont 1
+      in
       let main_expr = expr env c.expr in
       let params, penv =
         List.fold_right (fun (var, kind) (params, env) ->

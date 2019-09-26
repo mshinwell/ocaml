@@ -45,10 +45,12 @@ let variable_opt ppf s =
 let continuation ppf (s, _loc) =
   Format.fprintf ppf "%s" s
 
-let exn_continuation ppf = function
+let exn_continuation ppf c =
+  Format.fprintf ppf " * %a" continuation c
+
+let exn_continuationo ppf = function
   | None -> ()
-  | Some c ->
-    Format.fprintf ppf " * %a" continuation c
+  | Some c -> exn_continuation ppf c
 
 let kinded_variable ppf (v, (kind:okind)) =
   match kind with
@@ -255,14 +257,26 @@ let rec expr ppf = function
           return_arity = None;
         };
       continuation = ret;
-      exn_continuation;
+      exn_continuation = ek;
       args;
       func = Symbol s } ->
-    Format.fprintf ppf "@[<hov 2> ccall@,[%a]%a-> %a %a@]"
+    Format.fprintf ppf "@[<hov 2>ccall@,[%a]%a-> %a %a@]"
       csymbol s
       simple_args args
       continuation ret
-      continuation exn_continuation
+      exn_continuation ek
+
+  | Apply {
+      call_kind = Function Indirect_unknown_arity;
+      continuation = ret;
+      exn_continuation = ek;
+      args;
+      func } ->
+    Format.fprintf ppf "@[<hov 2>apply@ %a%a-> %a %a@]"
+      name func
+      simple_args args
+      continuation ret
+      exn_continuation ek
 
   | Let_closure { closures = closure :: rem_closures; body } ->
     let { name; params; closure_vars; ret_cont; exn_cont; ret_arity; expr = e } = closure in
@@ -272,7 +286,7 @@ let rec expr ppf = function
       closed_elts closure_vars
 
       continuation ret_cont
-      exn_continuation exn_cont
+      exn_continuationo exn_cont
       return_arity ret_arity
       expr e
 
@@ -290,7 +304,7 @@ and andclosure ppf l =
       closed_elts closure_vars
 
       continuation ret_cont
-      exn_continuation exn_cont
+      exn_continuationo exn_cont
       return_arity ret_arity
       expr e
   in
@@ -321,13 +335,15 @@ let program_body_elt ppf = function
       recursive recu
       (pp_space_list static_structure) s
   | Define_symbol (Nonrecursive, { computation = Some computation; static_structure = [] }) ->
-    Format.fprintf ppf "@[<v 2>@[<hov 2>effect@ %a%a@]@ %a@]@]"
+    Format.fprintf ppf "@[<v 2>@[<hov 2>effect@ %a%a%a@]@ %a@]@]"
       continuation computation.return_cont
+      exn_continuationo computation.exception_cont
       args computation.computed_values
       expr computation.expr
   | Define_symbol (recu, { computation = Some computation; static_structure = s }) ->
-    Format.fprintf ppf "@[<v 2>@[<h>def%a@]@ @[<v>@[<v 2>@[<hov 2>letk %a%a@]@ {@[<hov>@ %a@ @]}@]@ %a@]@]"
+    Format.fprintf ppf "@[<v 2>@[<h>def%a%a@]@ @[<v>@[<v 2>@[<hov 2>letk %a%a@]@ {@[<hov>@ %a@ @]}@]@ %a@]@]"
       recursive recu
+      exn_continuationo computation.exception_cont
       continuation computation.return_cont
       args computation.computed_values
       (pp_space_list static_structure) s
@@ -338,7 +354,7 @@ let program_body_elt ppf = function
       symbol name
       typed_parameters params
       continuation ret_cont
-      exn_continuation exn_cont
+      exn_continuationo exn_cont
       return_arity ret_arity
       expr e
 

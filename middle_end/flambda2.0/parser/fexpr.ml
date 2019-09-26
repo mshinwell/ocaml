@@ -189,6 +189,7 @@ and closure = {
 }
 
 and let_closure = {
+  recursive : is_recursive;
   closures : closure list;
   body : expr;
 }
@@ -219,7 +220,7 @@ and continuation_handler = {
 type computation = {
   expr : expr;
   return_cont : continuation;
-  exception_cont : continuation;
+  exception_cont : continuation option;
   computed_values : (variable * okind) list;
 }
 
