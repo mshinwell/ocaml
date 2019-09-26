@@ -3,6 +3,7 @@ module Named = Flambda.Named
 module E = Flambda.Expr
 module I = Flambda_kind.Standard_int
 module P = Flambda_primitive
+module K = Flambda_kind
 
 module C = struct
   type t = string
@@ -37,14 +38,23 @@ let init_fenv = {
 
 type env = {
   continuations : (Continuation.t * int) CM.t;
+  exn_continuations : Exn_continuation.t CM.t;
   variables : Variable.t VM.t;
   symbols : Symbol.t SM.t;
 }
 
 let init_env (func_env:func_env) = {
   continuations = CM.empty;
+  exn_continuations = CM.empty;
   variables = VM.empty;
   symbols = func_env.symbols ;
+}
+
+let enter_closure env = {
+  continuations = CM.empty;
+  exn_continuations = CM.empty;
+  variables = VM.empty;
+  symbols = env.symbols;
 }
 
 let fresh_cont env ?sort (c, _loc) arity =
@@ -52,6 +62,13 @@ let fresh_cont env ?sort (c, _loc) arity =
   c',
   { env with
     continuations = CM.add c (c', arity) env.continuations }
+
+let fresh_exn_cont env (c, _loc) =
+  let c' = Continuation.create ~sort:Exn () in
+  let e = Exn_continuation.create ~exn_handler:c' ~extra_args:[] in
+  c', e,
+  { env with
+    exn_continuations = CM.add c e env.exn_continuations }
 
 let fresh_var env (name, _loc) =
   let v = Variable.create name in
@@ -91,6 +108,14 @@ let find_cont env (c, loc) =
   | Some c ->
     c
 
+let find_exn_cont env (c, loc) =
+  match CM.find_opt c env.exn_continuations with
+  | None ->
+    Misc.fatal_errorf "Unbound exn_continuation %s: %a"
+      c Location.print_loc loc
+  | Some c ->
+    c
+
 let find_var env (v, loc) =
   match VM.find_opt v env.variables with
   | None ->
@@ -119,10 +144,25 @@ let simple env (s:Fexpr.simple) : Simple.t =
       | None ->
         Misc.fatal_errorf "Unbound variable %s : %a" v
           Location.print_loc loc
-      | Some var -> Simple.var var
+      | Some var ->
+        Simple.var var
     end
   | Const c ->
     Simple.const (const c)
+  | Symbol sym -> begin
+      Simple.symbol (get_symbol env sym)
+    end
+
+let name env (s:Fexpr.name) : Simple.t =
+  match s with
+  | Var (v, loc) -> begin
+      match VM.find_opt v env.variables with
+      | None ->
+        Misc.fatal_errorf "Unbound variable %s : %a" v
+          Location.print_loc loc
+      | Some var ->
+        Simple.var var
+    end
   | Symbol sym -> begin
       Simple.symbol (get_symbol env sym)
     end
@@ -169,6 +209,11 @@ let convert_static_mutable_flag (flag : Fexpr.mutable_or_immutable)
   | Mutable -> Mutable
   | Immutable -> Immutable
 
+let convert_recursive_flag (flag : Fexpr.is_recursive) : Recursive.t =
+  match flag with
+  | Recursive -> Recursive
+  | Nonrecursive -> Non_recursive
+
 let convert_block_shape ~num_fields =
   List.init num_fields (fun _field : P.Value_kind.t -> Anything)
 
@@ -211,14 +256,13 @@ let value_kind _ = Flambda_kind.value
 let rec expr env (e : Fexpr.expr) : E.t =
   match e with
   | Let { var = Some var; kind = _; defining_expr = d; body } ->
-    let id, env = fresh_var env var in
     let named = defining_expr env d in
+    let id, env = fresh_var env var in
     let body = expr env body in
     let var =
       Var_in_binding_pos.create id Name_occurrence_kind.normal
     in
     E.create_let var named body
-
   | Let_cont
       { recursive; body;
         handlers = [handler] } -> begin
@@ -303,6 +347,144 @@ let rec expr env (e : Fexpr.expr) : E.t =
     Flambda.Expr.create_switch sort
       ~scrutinee:(simple env scrutinee)
       ~arms
+
+  | Let_closure { recursive; closures; body } ->
+
+    let fun_decl (function_declarations, closure_elements, env, closure_vars)
+          ({ name;
+             params;
+             closure_vars = _;
+             ret_cont;
+             exn_cont;
+             ret_arity;
+             expr = closure_expr; } : Fexpr.closure) =
+
+      let closure_env = enter_closure env in
+      let my_closure, closure_env = fresh_var closure_env name in
+      let recursive = convert_recursive_flag recursive in
+      let closure_id = Closure_id.wrap my_closure in
+      let arity =
+        match ret_arity with
+        | None -> 1
+        | Some l -> List.length l
+      in
+
+      (* let closure_env, closure_elements =
+       *   List.fold_left (fun (closure_env, closure_elements) closure_var ->
+       *     let var_within_closure = Var_within_closure.wrap (Variable.create name) in
+       *     let external_var = Simple.var (find_var env closure_var) in
+       *     closure_env,
+       *     Var_within_closure.Map.add var_within_closure external_var map)
+       *     (closure_env, closure_elements)
+       *     closure_vars
+       * in *)
+
+      let _ = closure_elements in
+      let closure_elements = Var_within_closure.Map.empty in (*TODO*)
+
+      let return_continuation, closure_env =
+        fresh_cont closure_env ret_cont arity
+      in
+      let exn_handler, closure_env =
+        match exn_cont with
+        | None ->
+          (* Not bound *)
+          Continuation.create ~sort:Exn (), closure_env
+        | Some exn_cont ->
+          fresh_cont ~sort:Exn closure_env exn_cont 1
+      in
+      let exn_continuation =
+        Exn_continuation.create ~exn_handler ~extra_args:[]
+      in
+      let closure_env, params =
+        List.fold_right
+          (fun ({ param; ty }:Fexpr.typed_parameter)
+            (env, args) ->
+            let var, env = fresh_var env param in
+            let user_visible = true in
+            let param = Variable.with_user_visible var ~user_visible in
+            let param = Kinded_parameter.create (Parameter.wrap param) (value_kind ty) in
+            env, param :: args)
+          params (closure_env, [])
+      in
+      let body = expr closure_env closure_expr in
+
+      let params_and_body =
+        Flambda.Function_params_and_body.create
+          ~return_continuation
+          exn_continuation params ~body ~my_closure
+      in
+
+      let function_declaration =
+        Flambda.Function_declaration.create
+          ~params_and_body
+          ~result_arity:[K.value]
+          ~stub:false
+          ~dbg:Debuginfo.none
+          ~inline:Default_inline
+          ~is_a_functor:false
+          ~recursive
+      in
+
+      let bound_closure_var, env = fresh_var env name in
+      let closure_vars =
+        Closure_id.Map.add closure_id
+          (Var_in_binding_pos.create
+             bound_closure_var
+             Name_occurrence_kind.normal)
+          closure_vars
+      in
+
+      Closure_id.Map.add closure_id function_declaration function_declarations,
+      closure_elements,
+      env,
+      closure_vars
+    in
+
+    let function_declarations, closure_elements, env, closure_vars =
+      List.fold_left fun_decl
+        (Closure_id.Map.empty, Var_within_closure.Map.empty, env, Closure_id.Map.empty)
+        closures
+    in
+    let body = expr env body in
+    let function_decls =
+      Flambda.Function_declarations.create function_declarations
+    in
+    let set_of_closures =
+      Flambda.Set_of_closures.create function_decls ~closure_elements
+    in
+    Flambda.Expr.create_pattern_let
+      (Bindable_let_bound.set_of_closures ~closure_vars)
+      (Flambda.Named.create_set_of_closures set_of_closures)
+      body
+
+  | Apply {
+    func;
+    call_kind = Function Indirect_unknown_arity;
+    continuation;
+    exn_continuation;
+    args; } ->
+    let call_kind =
+      Call_kind.indirect_function_call_unknown_arity ()
+    in
+    let continuation, _arity = find_cont env continuation in
+    let exn_continuation = find_exn_cont env exn_continuation in
+    let apply =
+      Flambda.Apply.create
+        ~callee:(name env func)
+        ~continuation
+        exn_continuation
+        ~args:((List.map (simple env)) args)
+        ~call_kind
+        (Debuginfo.none)
+        ~inline:Default_inline
+        ~inlining_depth:0
+    in
+    Flambda.Expr.create_apply apply
+
+  | Apply _ ->
+    failwith "TODO apply"
+
   | _ ->
     failwith "TODO"
 
@@ -323,7 +505,13 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     let cont_arity = List.length c.computed_values in
     let env = init_env func_env in
     let return_continuation, env = fresh_cont env ~sort:Return c.return_cont cont_arity in
-    let exn_handler, env = fresh_cont ~sort:Exn env c.exception_cont 1 in
+    let exn_handler, env =
+      match c.exception_cont with
+      | None ->
+        Continuation.create ~sort:Exn (), env
+      | Some exc ->
+        fresh_cont ~sort:Exn env exc 1
+    in
     let exn_continuation = Exn_continuation.create ~exn_handler ~extra_args:[] in
     let computation_expr = expr env c.expr in
     let computation : Program_body.Computation.t = {
@@ -348,8 +536,15 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
         let cont_arity = List.length c.computed_values in
         let env = init_env func_env in
         let return_continuation, env = fresh_cont env ~sort:Return c.return_cont cont_arity in
-        let exn_handler, env = fresh_cont ~sort:Exn env c.exception_cont 1 in
-        let exn_continuation = Exn_continuation.create ~exn_handler ~extra_args:[] in
+        let _exn_handler, exn_continuation, env =
+          match c.exception_cont with
+          | None ->
+            let exn_handler = Continuation.create ~sort:Exn () in
+            let exn_continuation = Exn_continuation.create ~exn_handler ~extra_args:[] in
+            exn_handler, exn_continuation, env
+          | Some exc ->
+            fresh_exn_cont env exc
+        in
         let computation_expr = expr env c.expr in
         let env, computed_values =
           List.fold_right (fun (var, _kind) (env, acc) ->
