@@ -60,6 +60,15 @@ val compile_implementation2
   -> Ident.Set.t
   -> unit
 
+(** Compile an implementation from Lambda using the given middle end. *)
+val compile_implementation_flambda
+   : ?toplevel:(string -> bool)
+  -> prefixname:string
+  -> ppf_dump:Format.formatter
+  -> required_globals:Ident.Set.t
+  -> Flambda2.Flambda_static.Program.t
+  -> unit
+
 val compile_phrase :
     ppf_dump:Format.formatter -> Cmm.phrase -> unit
 
