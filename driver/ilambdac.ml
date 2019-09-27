@@ -11,7 +11,6 @@ module Flambda2_backend = struct
     symbol_for_global' Predef.ident_invalid_argument
 
   let closure_symbol _ = failwith "Not yet implemented"
-
   let really_import_approx _ = failwith "Not yet implemented"
   let import_symbol _ = failwith "Not yet implemented"
 
@@ -26,4 +25,13 @@ end
 let flambda2_backend =
   (module Flambda2_backend : Flambda2.Flambda2_backend_intf.S)
 
-let () = Flambda2.Parse_ilambda.go ~backend:flambda2_backend ()
+let () =
+  Clflags.dump_cmm := true;
+  Clflags.keep_asm_file := true;
+  let fl = Flambda2.Parse_ilambda.go ~backend:flambda2_backend () in
+  Asmgen.compile_implementation_flambda
+    ?toplevel:None
+    ~prefixname:"test"
+    ~ppf_dump:Format.std_formatter
+    ~required_globals:Ident.Set.empty
+    fl

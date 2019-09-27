@@ -62,9 +62,9 @@ let parse_ilambda ~backend file =
       let fl2' = Simplify.run ~backend ~round:1 fl2 in
       Format.printf "simplify:@.%a@."
         Flambda_static.Program.print fl2';
-      exit 0
+      fl2'
     | Error e ->
-      match e with
+      begin match e with
       | Parsing_error loc ->
         Format.eprintf
           "%a:@.\
@@ -76,6 +76,8 @@ let parse_ilambda ~backend file =
            Lex error: %a@."
           Location.print_loc loc
           Lex.pp_error error
+      end;
+      exit 1
 
 let parse_flambda ~backend file =
     match parse_program file with
@@ -89,9 +91,9 @@ let parse_flambda ~backend file =
       let fl2' = Simplify.run ~backend ~round:1 fl2 in
       Format.printf "simplify:@.%a@."
         Flambda_static.Program.print fl2';
-      exit 0
+      fl2'
     | Error e ->
-      match e with
+      begin match e with
       | Parsing_error loc ->
         Format.eprintf
           "%a:@.\
@@ -103,6 +105,8 @@ let parse_flambda ~backend file =
            Lex error: %a@."
           Location.print_loc loc
           Lex.pp_error error
+      end;
+      exit 1
 
 let go ~backend () =
   let file = Sys.argv.(1) in
