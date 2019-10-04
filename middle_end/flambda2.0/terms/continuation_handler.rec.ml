@@ -31,18 +31,17 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 1>@<0>%swhere%s@<0>%s %a@<0>%s@<0>%s %a"
+      fprintf ppf "@[<hov 1>@<0>%s%a%s@<0>%s%s%s"
         (Flambda_colours.expr_keyword ())
-        (match recursive with Non_recursive -> "" | Recursive -> " rec")
-        (Flambda_colours.normal ())
         Continuation.print k
+        (match recursive with Non_recursive -> "" | Recursive -> " (rec)")
+        (Flambda_colours.normal ())
         (if stub then " *stub*" else "")
-        (if is_exn_handler then " *exn*" else "")
-        Kinded_parameter.List.print params;
+        (if is_exn_handler then " *exn*" else "");
       if List.length params > 0 then begin
-        fprintf ppf " ";
+        fprintf ppf " %a" Kinded_parameter.List.print params
       end;
-      fprintf ppf "%s=%s@ %a"
+      fprintf ppf "@<0>%s:@<0>%s@ %a"
         (Flambda_colours.elide ())
         (Flambda_colours.normal ())
         (Expr.print_with_cache ~cache) handler;
