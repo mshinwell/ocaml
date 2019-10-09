@@ -537,18 +537,11 @@ and simplify_direct_over_application
   : 'a. DA.t -> Apply.t -> param_arity:Flambda_arity.t
     -> result_arity:Flambda_arity.t -> 'a k
     -> Expr.t * 'a * UA.t
-= fun dacc apply ~param_arity ~result_arity k ->
+= fun dacc apply ~param_arity ~result_arity:_ k ->
   let arity = List.length param_arity in
   let args = Apply.args apply in
   assert (arity < List.length args);
-  let return_params =
-    List.mapi (fun index kind ->
-        let name = Format.sprintf "result%d" index in
-        let var = Variable.create name in
-        Kinded_parameter.create (Parameter.wrap var) kind)
-      result_arity
-  in
-  let _, remaining_args = Misc.Stdlib.List.split_at arity args in
+  let full_app_args, remaining_args = Misc.Stdlib.List.split_at arity args in
   let func_var = Variable.create "full_apply" in
   let perform_over_application =
     Apply.create ~callee:(Simple.var func_var)
@@ -563,18 +556,24 @@ and simplify_direct_over_application
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
     let params_and_handler =
-      Continuation_params_and_handler.create return_params
+      let func_param = KP.create (Parameter.wrap func_var) K.value in
+      Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
     in
     Continuation_handler.create ~params_and_handler
       ~stub:false
       ~is_exn_handler:false
   in
+  let full_apply =
+    Apply.with_continuation_callee_and_args apply
+      after_full_application
+      ~callee:(Apply.callee apply)
+      ~args:full_app_args
+  in
   let expr =
     Let_cont.create_non_recursive after_full_application
       after_full_application_handler
-      ~body:(Expr.create_apply
-        (Apply.with_continuation apply after_full_application))
+      ~body:(Expr.create_apply full_apply)
   in
   simplify_expr dacc expr k
 
