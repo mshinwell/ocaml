@@ -88,9 +88,9 @@ module Make (N : Identifiable.S) = struct
 
   let compose ~second ~first =
     let rec compose ~second ~first =
-      match N.Map.choose_opt second.forwards with
-      | None -> first
-      | Some (n1, n2) ->
+      match N.Map.choose second.forwards with
+      | exception Not_found -> first
+      | n1, n2 ->
         let first = post_swap first n1 n2 in
         let second = pre_swap second n1 n2 in
         compose ~second ~first
