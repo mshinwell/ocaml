@@ -456,7 +456,7 @@ let unary_primitive env dbg f arg =
       C.box_number ~dbg kind arg
   | Select_closure { move_from = c1; move_to = c2} ->
       let diff = (Env.closure_offset env c2) - (Env.closure_offset env c1) in
-      C.field_address arg diff dbg
+      C.infix_field_address ~dbg arg diff
   | Project_var v ->
       C.get_field_gen Asttypes.Immutable arg (Env.env_var_offset env v) dbg
 
@@ -626,9 +626,8 @@ and let_expr env t =
             Closure_id.Map.fold (fun cid v acc ->
                 let v = Var_in_binding_pos.var v in
                 let e =
-                  C.field_address soc_cmm_var
-                    (Env.closure_offset env cid)
-                    Debuginfo.none
+                  C.infix_field_address ~dbg: Debuginfo.none
+                    soc_cmm_var (Env.closure_offset env cid)
                 in
                 let_expr_bind body acc v e effs
               ) closure_vars env in

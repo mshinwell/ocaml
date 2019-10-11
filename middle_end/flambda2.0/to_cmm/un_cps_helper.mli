@@ -94,6 +94,13 @@ val box_int64 : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression
 
 (** {2 Block access} *)
 
+val infix_field_address :
+  dbg:Debuginfo.t -> Cmm.expression -> int -> Cmm.expression
+(** [infix_field_address ptr n dbg] returns an expression for the address
+    of the [n]-th field of the set of closures block pointed to by [ptr].
+    This function assumes that the [n-1]-th field of the block is an infix
+    header, so that the returned address is in fact a correct ocaml value. *)
+
 val block_length :
   ?dbg:Debuginfo.t -> Flambda_primitive.Block_access_kind.t ->
   Cmm.expression -> Cmm.expression

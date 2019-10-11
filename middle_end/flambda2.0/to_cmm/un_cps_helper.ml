@@ -74,6 +74,16 @@ let targetint ?(dbg=Debuginfo.none) t =
   | Int32 i -> int32 ~dbg i
   | Int64 i -> int64 ~dbg i
 
+(* Infix field address.
+   Contrary to regular field addresse, these addresse are valid ocaml values,
+   and can be live at gc points. *)
+
+let infix_field_address ~dbg ptr n =
+  if n = 0 then
+    ptr
+  else
+    Cmm.Cop (Cmm.Caddv, [ptr; int ~dbg (n * Arch.size_addr)], dbg)
+
 (* Sequence *)
 
 let sequence x y =
