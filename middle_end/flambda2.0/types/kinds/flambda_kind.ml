@@ -17,14 +17,12 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type value = private Value
-type empty_naked_immediate = private Naked_immediate
 type empty_naked_float = private Naked_float
 type empty_naked_int32 = private Naked_int32
 type empty_naked_int64 = private Naked_int64
 type empty_naked_nativeint = private Naked_nativeint
 type fabricated = private Fabricated
 
-type naked_immediate = empty_naked_immediate * Immediate.Set.t
 type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
 type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
 type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
@@ -32,7 +30,6 @@ type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
 
 module Naked_number_kind = struct
   type t =
-    | Naked_immediate
     | Naked_float
     | Naked_int32
     | Naked_int64
@@ -40,7 +37,6 @@ module Naked_number_kind = struct
 
   let print ppf t =
     match t with
-    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
     | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
@@ -55,7 +51,6 @@ type t =
 type kind = t
 
 let value = Value
-let naked_immediate = Naked_number Naked_immediate
 let naked_float = Naked_number Naked_float
 let naked_int32 = Naked_number Naked_int32
 let naked_int64 = Naked_number Naked_int64
@@ -89,9 +84,6 @@ include Identifiable.Make (struct
     | Naked_number naked_number_kind ->
       if unicode then begin
         match naked_number_kind with
-        | Naked_immediate ->
-          Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d55a}@<0>%s"
-            colour (Flambda_colours.normal ())
         | Naked_float ->
           Format.fprintf ppf "@<0>%s@<1>\u{2115}@<1>\u{1d557}@<0>%s"
             colour (Flambda_colours.normal ())
@@ -265,7 +257,6 @@ end
 
 module Naked_number = struct
   type 'k t =
-    | Naked_immediate : naked_immediate t
     | Naked_float : naked_float t
     | Naked_int32 : naked_int32 t
     | Naked_int64 : naked_int64 t
@@ -273,7 +264,6 @@ module Naked_number = struct
 
   let print (type a) ppf (t : a t) =
     match t with
-    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
     | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
