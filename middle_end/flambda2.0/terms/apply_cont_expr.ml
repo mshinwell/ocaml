@@ -45,7 +45,7 @@ let print ppf { k; args; trap_action; } =
     | Exn, Some (Pop _), [] -> "raise", None
     | Exn, Some (Pop _), _::_ -> "raise", None
   in
-  Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s@ %a"
+  Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s %a"
     Trap_action.Option.print trap_action
     (Flambda_colours.expr_keyword ())
     name
@@ -54,7 +54,7 @@ let print ppf { k; args; trap_action; } =
   begin match args with
   | [] -> ()
   | args ->
-    Format.fprintf ppf "@ %a" Simple.List.print args
+    Format.fprintf ppf " %a" Simple.List.print args
   end;
   Format.fprintf ppf "@]"
 
