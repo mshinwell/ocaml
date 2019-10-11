@@ -30,8 +30,8 @@ module Make (Descr : sig
   val print : Format.formatter -> t -> unit
 end) = struct
   type t = {
-    descr : Descr.t;
-    delayed_permutation : Name_permutation.t;
+    mutable descr : Descr.t;
+    mutable delayed_permutation : Name_permutation.t;
     free_names : Name_occurrences.t;
   }
 
@@ -42,7 +42,10 @@ end) = struct
     }
 
   let descr t =
-    Descr.apply_name_permutation t.descr t.delayed_permutation
+    let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
+    t.descr <- descr;
+    t.delayed_permutation <- Name_permutation.empty;
+    descr
 
   let apply_name_permutation t perm =
     let delayed_permutation =
@@ -51,7 +54,7 @@ end) = struct
     let free_names =
       Name_occurrences.apply_name_permutation t.free_names perm
     in
-    { t with
+    { descr = t.descr;
       delayed_permutation;
       free_names;
     }
