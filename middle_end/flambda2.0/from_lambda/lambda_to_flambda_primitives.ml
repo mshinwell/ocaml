@@ -811,8 +811,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     (* CR mshinwell: Factor these cases out *)
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_int32, Div),
-          unbox_bint Pint32 arg1, unbox_bint Pint32 arg2);
+        box_bint Pint32
+          (Binary (Int_arith (I.Naked_int32, Div),
+            unbox_bint Pint32 arg1, unbox_bint Pint32 arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
                 Simple
@@ -825,8 +826,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pmodbint { size = Pint32; is_safe = Safe; }, [arg1; arg2] ->
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_int32, Mod),
-          unbox_bint Pint32 arg1, unbox_bint Pint32 arg2);
+        box_bint Pint32
+          (Binary (Int_arith (I.Naked_int32, Mod),
+            unbox_bint Pint32 arg1, unbox_bint Pint32 arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
                 Simple
@@ -839,8 +841,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pdivbint { size = Pint64; is_safe = Safe; }, [arg1; arg2] ->
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_int64, Div),
-          unbox_bint Pint64 arg1, unbox_bint Pint64 arg2);
+        box_bint Pint64
+          (Binary (Int_arith (I.Naked_int64, Div),
+            unbox_bint Pint64 arg1, unbox_bint Pint64 arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
                 Simple
@@ -853,8 +856,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pmodbint { size = Pint64; is_safe = Safe; }, [arg1; arg2] ->
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_int64, Mod),
-          unbox_bint Pint64 arg1, unbox_bint Pint64 arg2);
+        box_bint Pint64
+          (Binary (Int_arith (I.Naked_int64, Mod),
+            unbox_bint Pint64 arg1, unbox_bint Pint64 arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
                 Simple
@@ -867,8 +871,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pdivbint { size = Pnativeint; is_safe = Safe; }, [arg1; arg2] ->
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_nativeint, Div),
-          unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2);
+        box_bint Pnativeint
+          (Binary (Int_arith (I.Naked_nativeint, Mod),
+            unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
                 Simple
@@ -881,8 +886,9 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
   | Pmodbint { size = Pnativeint; is_safe = Safe; }, [arg1; arg2] ->
     Checked {
       primitive =
-        Binary (Int_arith (I.Naked_nativeint, Mod),
-          unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2);
+        box_bint Pnativeint
+          (Binary (Int_arith (I.Naked_nativeint, Mod),
+            unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
                 Simple
