@@ -461,10 +461,27 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
               (* CR pchambart:
                  Int_comp_unsigned assumes that the arguments are naked
                  integers, but it is correct for tagged integers too as
-                 untagging of both arguments doesn't change the result. *)
+                 untagging of both arguments doesn't change the result.
+                 mshinwell: I'm confused.  Why can't
+                 [Int_comp Tagged_immediate] just do the right thing on
+                 tagged immediates? *)
               tagged_immediate_as_naked_nativeint arg2,
               tagged_immediate_as_naked_nativeint
                 (Prim (Unary (String_length String, arg1))));
+    ];
+    failure = Index_out_of_bounds;
+    dbg;
+  }
+
+(* CR mshinwell: Same problems as previous function *)
+let bigstring_ref size arg1 arg2 dbg =
+  Checked {
+    primitive = Binary (String_or_bigstring_load (Bigstring, size), arg1, arg2);
+    validity_conditions = [
+      Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
+              tagged_immediate_as_naked_nativeint arg2,
+              tagged_immediate_as_naked_nativeint
+                (Prim (Unary (Bigarray_length { dimension = 0; }, arg1))));
     ];
     failure = Index_out_of_bounds;
     dbg;
@@ -613,6 +630,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Binary (String_or_bigstring_load (String, Sixteen), str, index);
       validity_conditions = [
+        (* CR mshinwell: use unsigned comparisons as above *)
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
             (Immediate.int (Targetint.OCaml.zero)))));
@@ -1083,6 +1101,18 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Variadic (Bigarray_set (is_safe, num_dimensions, kind, layout), args)
   | Pbigarraydim dimension, [arg] ->
     Unary (Bigarray_length { dimension; }, arg)
+  | Pbigstring_load_16 true, [arg1; arg2] ->
+    Binary (String_or_bigstring_load (Bigstring, Sixteen), arg1, arg2)
+  | Pbigstring_load_16 false, [arg1; arg2] ->
+    bigstring_ref Sixteen arg1 arg2 dbg
+  | Pbigstring_load_32 true, [arg1; arg2] ->
+    Binary (String_or_bigstring_load (Bigstring, Thirty_two), arg1, arg2)
+  | Pbigstring_load_32 false, [arg1; arg2] ->
+    bigstring_ref Thirty_two arg1 arg2 dbg
+  | Pbigstring_load_64 true, [arg1; arg2] ->
+    Binary (String_or_bigstring_load (Bigstring, Sixty_four), arg1, arg2)
+  | Pbigstring_load_64 false, [arg1; arg2] ->
+    bigstring_ref Sixty_four arg1 arg2 dbg
   | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
@@ -1147,6 +1177,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Pmodbint _
     | Psetfloatfield _
     | Pbintcomp _
+    | Pbigstring_load_16 _
+    | Pbigstring_load_32 _
+    | Pbigstring_load_64 _
     ),
     ([] | [_] | _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -1190,9 +1223,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
-    | Pbigstring_load_16 _
-    | Pbigstring_load_32 _
-    | Pbigstring_load_64 _
     | Pbigstring_set_16 _
     | Pbigstring_set_32 _
     | Pbigstring_set_64 _

@@ -266,11 +266,12 @@ type variadic_primitive =
         operations are unsafe.  The downside of doing this is that we lose
         the potential to eliminate the ">= 0" part of the bounds check (we
         are never going to eliminate the other part at present as Bigarrays
-        are not tracked in the Flambda type system).  However the upside is
-        significant: for safe accesses, the code will be improved (since the
-        code for checking the indexes can be combined with the accesses
-        themselves -- see [Cmm_helpers]).  Furthermore, the complexity of
-        expanding the bounds checks does not need to be in the Flambda code. *)
+        are not tracked in the Flambda type system).  However the upsides are
+        significant: for safe accesses, the code will be improved for bigarrays
+        with dimension >= 2 (since the code for checking the indexes can be
+        combined with the accesses themselves -- see [Cmm_helpers]).
+        Furthermore, the complexity of expanding the bounds checks does not
+        need to be in the Flambda code. *)
   | Bigarray_load of is_safe * num_dimensions * bigarray_kind * bigarray_layout
 
 (** The application of a primitive to its arguments. *)
