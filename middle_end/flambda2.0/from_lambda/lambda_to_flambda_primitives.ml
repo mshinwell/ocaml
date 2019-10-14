@@ -50,18 +50,6 @@ let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
       In_range
 *)
 
-
-(* *** Please see the top of flambda_primitive.mli for details on producing
-   the new Duplicate_scannable_block primitive *** *)
-
-
-
-(* CR mshinwell: Moved here from Flambda_kind
-
-
-val of_block_shape : L.block_shape -> num_fields:int -> t
-*)
-
 let convert_block_shape (shape : L.block_shape) ~num_fields =
   match shape with
   | None ->
