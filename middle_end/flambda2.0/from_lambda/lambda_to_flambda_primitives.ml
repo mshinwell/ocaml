@@ -608,6 +608,52 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Unary (Box_number Naked_int64,
       Prim (Binary (String_or_bigstring_load (String, Sixty_four),
         arg1, arg2)))
+  | Pstring_load_16 false, [str; index] ->
+    Checked {
+      primitive =
+        Binary (String_or_bigstring_load (String, Sixteen), str, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length String, str)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pstring_load_32 false, [str; index] ->
+    Checked {
+      primitive =
+        Unary (Box_number Naked_int32,
+          Prim (Binary (String_or_bigstring_load (String, Thirty_two),
+            str, index)));
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length String, str)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pstring_load_64 false, [str; index] ->
+    Checked {
+      primitive =
+        Unary (Box_number Naked_int64,
+          Prim (Binary (String_or_bigstring_load (String, Sixty_four),
+            str, index)));
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (String_length String, str)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
   (* CR mshinwell: factor out *)
   | Pbytes_load_16 false, [bytes; index] ->
     Checked {
@@ -1080,6 +1126,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Pdivfloat | Pfloatcomp _
     | Pstringrefu | Pbytesrefu
     | Pstringrefs | Pbytesrefs
+    | Pstring_load_16 _
+    | Pstring_load_32 _
+    | Pstring_load_64 _
     | Pbytes_load_16 _
     | Pbytes_load_32 _
     | Pbytes_load_64 _
@@ -1141,9 +1190,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
-    | Pstring_load_16 _
-    | Pstring_load_32 _
-    | Pstring_load_64 _
     | Pbigstring_load_16 _
     | Pbigstring_load_32 _
     | Pbigstring_load_64 _
