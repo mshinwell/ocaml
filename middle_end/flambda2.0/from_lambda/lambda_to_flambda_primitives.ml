@@ -193,6 +193,21 @@ let convert_array_kind (kind : L.array_kind)
   | Pintarray -> Array (Value Definitely_immediate)
   | Pfloatarray -> Array Naked_float
 
+let convert_array_kind_to_duplicate_block_kind (kind : L.array_kind)
+      : P.duplicate_block_kind =
+  match kind with
+  | Pgenarray ->
+    Generic_array
+      (P.Generic_array_specialisation.no_specialisation ())
+    (* CR mshinwell: Are these next two cases correct?  Should they be under
+       "generic array"? *)
+  | Paddrarray ->
+    Generic_array (P.Generic_array_specialisation.
+      full_of_arbitrary_values_but_not_floats ())
+  | Pintarray ->
+    Generic_array (P.Generic_array_specialisation.full_of_immediates ())
+  | Pfloatarray -> Full_of_naked_floats { length = None; }
+
 let convert_bigarray_kind (kind : L.bigarray_kind) : P.bigarray_kind =
   match kind with
   | Pbigarray_unknown -> Unknown
@@ -593,9 +608,16 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
        obj, field, value)
   | Parraylength kind, [arg] ->
     Unary (Array_length (convert_array_kind kind), arg)
-  (* | Pduparray (kind, mutability), [arg] -> *)
-  (*   Unary (Duplicate_array (convert_array_kind kind, *)
-  (*                           convert_mutable_flag mutability), arg) *)
+  | Pduparray (kind, mutability), [arg] ->
+    Unary (Duplicate_block {
+      kind = convert_array_kind_to_duplicate_block_kind kind;
+      (* CR mshinwell: Check that [Pduparray] is only applied to immutable
+         arrays *)
+      source_mutability = Immutable;
+      (* CR mshinwell: Check that [mutability] is the destination
+         mutability *)
+      destination_mutability = convert_mutable_flag mutability;
+    }, arg)
   | Pstringlength, [arg] ->
     Unary (String_length String, arg)
   | Pbyteslength, [arg] ->
@@ -1269,9 +1291,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Misc.fatal_errorf "[%a] should have been handled by \
       [Closure_conversion.close_primitive]"
       Printlambda.primitive prim
-
-  | (Pduparray (_, _), _::[])
-    -> Misc.fatal_errorf "TODO again (%a)" Printlambda.primitive prim
 
   | ( 
       Parrayrefu _
