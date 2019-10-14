@@ -354,20 +354,32 @@ let lambda_ba_kind k =
   | Complex32 -> Lambda.Pbigarray_complex32
   | Complex64 -> Lambda.Pbigarray_complex64
 
-let bigarray_load ?(dbg=Debuginfo.none) _dims kind layout = function
+let bigarray_load ?(dbg=Debuginfo.none) (is_safe : Flambda_primitive.is_safe)
+      _dims kind layout = function
   | ba :: args ->
       assert (List.length args = _dims); (* TODO: correct ? *)
       let kind = lambda_ba_kind kind in
       let layout = lambda_ba_layout layout in
-      bigarray_get true kind layout ba args dbg
+      let is_unsafe =
+        match is_safe with
+        | Safe -> false
+        | Unsafe -> true
+      in
+      bigarray_get is_unsafe kind layout ba args dbg
   | _ -> assert false
 
-let bigarray_store ?(dbg=Debuginfo.none) _dims kind layout = function
+let bigarray_store ?(dbg=Debuginfo.none) (is_safe : Flambda_primitive.is_safe)
+      _dims kind layout = function
   | ba :: args ->
       let indexes, value = Misc.split_last args in
       let kind = lambda_ba_kind kind in
       let layout = lambda_ba_layout layout in
-      bigarray_set true kind layout ba indexes value dbg
+      let is_unsafe =
+        match is_safe with
+        | Safe -> false
+        | Unsafe -> true
+      in
+      bigarray_set is_unsafe kind layout ba indexes value dbg
   | _ -> assert false
 
 (* try-with blocks *)

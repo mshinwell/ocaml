@@ -118,8 +118,8 @@ let simplify_variadic_primitive dacc
       | Make_block (make_block_kind, mutable_or_immutable) ->
         simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
           args_with_tys ~result_var:result_var'
-      | Bigarray_set (_num_dims, _kind, _layout)
-      | Bigarray_load (_num_dims, _kind, _layout) ->
+      | Bigarray_set (_is_safe, _num_dims, _kind, _layout)
+      | Bigarray_load (_is_safe, _num_dims, _kind, _layout) ->
         let named = Named.create_prim (Variadic (prim, args)) dbg in
         let kind = P.result_kind_of_variadic_primitive' prim in
         let ty = T.unknown kind in

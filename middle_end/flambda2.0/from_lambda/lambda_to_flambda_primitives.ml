@@ -22,6 +22,7 @@ module P = Flambda_primitive
 module I = Flambda_kind.Standard_int
 module I_or_f = Flambda_kind.Standard_int_or_float
 module K = Flambda_kind
+module L = Lambda
 module VB = Var_in_binding_pos
 
 (* May be useful for compiling out bounds checks:
@@ -58,10 +59,10 @@ let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
 (* CR mshinwell: Moved here from Flambda_kind
 
 
-val of_block_shape : Lambda.block_shape -> num_fields:int -> t
+val of_block_shape : L.block_shape -> num_fields:int -> t
 *)
 
-let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
+let convert_block_shape (shape : L.block_shape) ~num_fields =
   match shape with
   | None ->
     List.init num_fields (fun _field : P.Value_kind.t -> Anything)
@@ -73,7 +74,7 @@ let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
         num_fields
         shape_length
     end;
-    List.map (fun (kind : Lambda.value_kind) : P.Value_kind.t ->
+    List.map (fun (kind : L.value_kind) : P.Value_kind.t ->
         match kind with
         | Pgenval -> Anything
         | Pfloatval | Pboxedintval _ -> Definitely_pointer
@@ -86,7 +87,7 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
   | Mutable -> Mutable
   | Immutable -> Immutable
 
-let convert_integer_comparison_prim (comp : Lambda.integer_comparison)
+let convert_integer_comparison_prim (comp : L.integer_comparison)
       : P.binary_primitive =
   match comp with
   | Ceq -> Phys_equal (K.value, Eq)
@@ -97,7 +98,7 @@ let convert_integer_comparison_prim (comp : Lambda.integer_comparison)
   | Cge -> Int_comp (Tagged_immediate, Signed, Ge)
 
 let convert_boxed_integer_comparison_prim
-      (kind : Lambda.boxed_integer) (comp : Lambda.integer_comparison)
+      (kind : L.boxed_integer) (comp : L.integer_comparison)
       : P.binary_primitive =
   match kind, comp with
   | Pint32, Ceq -> Phys_equal (K.naked_int32, Eq)
@@ -119,7 +120,7 @@ let convert_boxed_integer_comparison_prim
   | Pnativeint, Cle -> Int_comp (Naked_nativeint, Signed, Le)
   | Pnativeint, Cge -> Int_comp (Naked_nativeint, Signed, Ge)
 
-let convert_float_comparison (comp : Lambda.float_comparison) : P.comparison =
+let convert_float_comparison (comp : L.float_comparison) : P.comparison =
   match comp with
   | CFeq -> Eq
   | CFneq -> Neq
@@ -131,28 +132,28 @@ let convert_float_comparison (comp : Lambda.float_comparison) : P.comparison =
     Misc.fatal_error "Negated floating-point comparisons should have been \
       removed by [Prepare_lambda]"
 
-let boxable_number_of_boxed_integer (bint : Lambda.boxed_integer)
+let boxable_number_of_boxed_integer (bint : L.boxed_integer)
   : Flambda_kind.Boxable_number.t =
   match bint with
   | Pnativeint -> Naked_nativeint
   | Pint32 -> Naked_int32
   | Pint64 -> Naked_int64
 
-let standard_int_of_boxed_integer (bint : Lambda.boxed_integer)
+let standard_int_of_boxed_integer (bint : L.boxed_integer)
   : Flambda_kind.Standard_int.t =
   match bint with
   | Pnativeint -> Naked_nativeint
   | Pint32 -> Naked_int32
   | Pint64 -> Naked_int64
 
-let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
+let standard_int_or_float_of_boxed_integer (bint : L.boxed_integer)
   : Flambda_kind.Standard_int_or_float.t =
   match bint with
   | Pnativeint -> Naked_nativeint
   | Pint32 -> Naked_int32
   | Pint64 -> Naked_int64
 
-(* let const_of_boxed_integer (i:int32) (bint : Lambda.boxed_integer) *)
+(* let const_of_boxed_integer (i:int32) (bint : L.boxed_integer) *)
 (*   : Simple.Const.t = *)
 (*   match bint with *)
 (*   | Pnativeint -> Naked_nativeint (Targetint.of_int32 i) *)
@@ -170,10 +171,10 @@ let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
 
 let convert_access_kind i_or_p : P.Block_access_kind.t0 =
   match i_or_p with
-  | Lambda.Immediate -> Value Definitely_immediate
-  | Lambda.Pointer -> Value Anything
+  | L.Immediate -> Value Definitely_immediate
+  | L.Pointer -> Value Anything
 
-let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment)
+let convert_init_or_assign (i_or_a : L.initialization_or_assignment)
    : P.init_or_assign =
   match i_or_a with
   | Assignment -> Assignment
@@ -182,7 +183,7 @@ let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment)
      represented by the static part of expressions in flambda. *)
   | Root_initialization -> assert false
 
-let convert_array_kind (kind : Lambda.array_kind)
+let convert_array_kind (kind : L.array_kind)
    : P.Block_access_kind.t =
   match kind with
   | Pgenarray ->
@@ -191,6 +192,28 @@ let convert_array_kind (kind : Lambda.array_kind)
   | Paddrarray -> Array (Value Anything)
   | Pintarray -> Array (Value Definitely_immediate)
   | Pfloatarray -> Array Naked_float
+
+let convert_bigarray_kind (kind : L.bigarray_kind) : P.bigarray_kind =
+  match kind with
+  | Pbigarray_unknown -> Unknown
+  | Pbigarray_float32 -> Float32
+  | Pbigarray_float64 -> Float64
+  | Pbigarray_sint8 -> Sint8
+  | Pbigarray_uint8 -> Uint8
+  | Pbigarray_sint16 -> Sint16
+  | Pbigarray_uint16 -> Uint16
+  | Pbigarray_int32 -> Int32
+  | Pbigarray_int64 -> Int64
+  | Pbigarray_caml_int -> Int_width_int
+  | Pbigarray_native_int -> Targetint_width_int
+  | Pbigarray_complex32 -> Complex32
+  | Pbigarray_complex64 -> Complex64
+
+let convert_bigarray_layout (layout : L.bigarray_layout) : P.bigarray_layout =
+  match layout with
+  | Pbigarray_unknown_layout -> Unknown
+  | Pbigarray_c_layout -> C
+  | Pbigarray_fortran_layout -> Fortran
 
 [@@@ocaml.warning "-37"]
 
@@ -447,7 +470,7 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
     dbg;
   }
 
-let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
+let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : expr_primitive =
   let args = List.map (fun arg : simple_or_prim -> Simple arg) args in
   match prim, args with
@@ -1001,6 +1024,19 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     Unary (Box_number Naked_nativeint,
       Prim (Unary (Int_arith (Naked_nativeint, Swap_byte_endianness),
         Prim (Unary (Unbox_number Naked_nativeint, arg)))))
+  | Pint_as_pointer, [arg] -> Unary (Int_as_pointer, arg)
+  | Pbigarrayref (unsafe, num_dimensions, kind, layout), args ->
+    let is_safe : P.is_safe = if unsafe then Unsafe else Safe in
+    let kind = convert_bigarray_kind kind in
+    let layout = convert_bigarray_layout layout in
+    Variadic (Bigarray_load (is_safe, num_dimensions, kind, layout), args)
+  | Pbigarrayset (unsafe, num_dimensions, kind, layout), args ->
+    let is_safe : P.is_safe = if unsafe then Unsafe else Safe in
+    let kind = convert_bigarray_kind kind in
+    let layout = convert_bigarray_layout layout in
+    Variadic (Bigarray_set (is_safe, num_dimensions, kind, layout), args)
+  | Pbigarraydim dimension, [arg] ->
+    Unary (Bigarray_length { dimension; }, arg)
   | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
@@ -1029,6 +1065,8 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pbswap16
     | Pbbswap _
     | Pisint | Pflambda_isint
+    | Pint_as_pointer
+    | Pbigarraydim _
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -1103,9 +1141,6 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
-    | Pbigarrayref _
-    | Pbigarrayset _
-    | Pbigarraydim _
     | Pstring_load_16 _
     | Pstring_load_32 _
     | Pstring_load_64 _
@@ -1115,12 +1150,12 @@ let convert_lprim ~backend (prim : Lambda.primitive) (args : Simple.t list)
     | Pbigstring_set_16 _
     | Pbigstring_set_32 _
     | Pbigstring_set_64 _
-    | Pint_as_pointer ), _
+    ), _
     -> Misc.fatal_errorf "TODO (%a)" Printlambda.primitive prim
 
 let convert_and_bind ~backend
       exn_cont ~register_const_string
-      (prim : Lambda.primitive)
+      (prim : L.primitive)
       ~(args : Simple.t list)
       (dbg : Debuginfo.t)
       (cont : Named.t option -> Expr.t) : Expr.t =

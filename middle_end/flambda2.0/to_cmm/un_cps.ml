@@ -486,10 +486,10 @@ let variadic_primitive _env dbg f args =
   match (f : Flambda_primitive.variadic_primitive) with
   | Make_block (kind, _mut) ->
       C.make_block ~dbg kind args
-  | Bigarray_load (dimensions, kind, layout) ->
-      C.bigarray_load ~dbg dimensions kind layout args
-  | Bigarray_set (dimensions, kind, layout) ->
-      C.bigarray_store ~dbg dimensions kind layout args
+  | Bigarray_load (is_safe, dimensions, kind, layout) ->
+      C.bigarray_load ~dbg is_safe dimensions kind layout args
+  | Bigarray_set (is_safe, dimensions, kind, layout) ->
+      C.bigarray_store ~dbg is_safe dimensions kind layout args
 
 let arg_list env l =
   let aux (acc, env') x = let y, env'' = simple env' x in (y :: acc, env'') in

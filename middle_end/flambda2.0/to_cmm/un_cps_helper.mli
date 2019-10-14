@@ -158,7 +158,9 @@ val unbox_number :
 (** {2 Bigarrays} *)
 
 val bigarray_load :
-  ?dbg:Debuginfo.t -> int ->
+  ?dbg:Debuginfo.t ->
+  Flambda_primitive.is_safe ->
+  int ->
   Flambda_primitive.bigarray_kind ->
   Flambda_primitive.bigarray_layout ->
   Cmm.expression list -> Cmm.expression
@@ -168,7 +170,9 @@ val bigarray_load :
     as dimensions. *)
 
 val bigarray_store :
-  ?dbg:Debuginfo.t -> int ->
+  ?dbg:Debuginfo.t ->
+  Flambda_primitive.is_safe ->
+  int ->
   Flambda_primitive.bigarray_kind ->
   Flambda_primitive.bigarray_layout ->
   Cmm.expression list -> Cmm.expression

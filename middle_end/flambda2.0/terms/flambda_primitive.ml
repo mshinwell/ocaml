@@ -273,6 +273,16 @@ let print_equality_comparison ppf op =
   | Eq -> Format.pp_print_string ppf "Eq"
   | Neq -> Format.pp_print_string ppf "Neq"
 
+type is_safe = Safe | Unsafe
+
+let print_is_safe ppf is_safe =
+  match is_safe with
+  | Safe -> Format.pp_print_string ppf "Safe"
+  | Unsafe -> Format.pp_print_string ppf "Unsafe"
+
+let compare_is_safe is_safe1 is_safe2 =
+  Stdlib.compare is_safe1 is_safe2
+
 type bigarray_kind =
   | Unknown
   | Float32 | Float64
@@ -300,35 +310,31 @@ let element_kind_of_bigarray_kind k =
     (* See [copy_two_doubles] in bigarray_stubs.c. *)
     K.value
 
-(*
 let print_bigarray_kind ppf k =
   let fprintf = Format.fprintf in
   match k with
-  | Unknown -> fprintf ppf "unknown"
-  | Float32 -> fprintf ppf "float32"
-  | Float64 -> fprintf ppf "float64"
-  | Sint8 -> fprintf ppf "sint8"
-  | Uint8 -> fprintf ppf "uint8"
-  | Sint16 -> fprintf ppf "sint16"
-  | Uint16 -> fprintf ppf "uint16"
-  | Int32 -> fprintf ppf "int32"
-  | Int64 -> fprintf ppf "int64"
-  | Int_width_int -> fprintf ppf "int_width_int"
-  | Targetint_width_int -> fprintf ppf "targetint_width_int"
-  | Complex32 -> fprintf ppf "complex32"
-  | Complex64 -> fprintf ppf "complex64"
-*)
+  | Unknown -> fprintf ppf "Unknown"
+  | Float32 -> fprintf ppf "Float32"
+  | Float64 -> fprintf ppf "Float64"
+  | Sint8 -> fprintf ppf "Sint8"
+  | Uint8 -> fprintf ppf "Uint8"
+  | Sint16 -> fprintf ppf "Sint16"
+  | Uint16 -> fprintf ppf "Uint16"
+  | Int32 -> fprintf ppf "Int32"
+  | Int64 -> fprintf ppf "Int64"
+  | Int_width_int -> fprintf ppf "Int_width_int"
+  | Targetint_width_int -> fprintf ppf "Targetint_width_int"
+  | Complex32 -> fprintf ppf "Complex32"
+  | Complex64 -> fprintf ppf "Complex64"
 
 type bigarray_layout = Unknown | C | Fortran
 
-(*
 let print_bigarray_layout ppf l =
   let fprintf = Format.fprintf in
   match l with
-  | Unknown -> fprintf ppf "unknown"
+  | Unknown -> fprintf ppf "Unknown"
   | C -> fprintf ppf "C"
-  | Fortran -> fprintf ppf "fortran"
-*)
+  | Fortran -> fprintf ppf "Fortran"
 
 type string_like_value =
   | String
@@ -973,8 +979,8 @@ let ternary_classify_for_printing p =
 
 type variadic_primitive =
   | Make_block of make_block_kind * Effects.mutable_or_immutable
-  | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
-  | Bigarray_load of num_dimensions * bigarray_kind * bigarray_layout
+  | Bigarray_set of is_safe * num_dimensions * bigarray_kind * bigarray_layout
+  | Bigarray_load of is_safe * num_dimensions * bigarray_kind * bigarray_layout
 
 let variadic_primitive_eligible_for_cse p =
   match p with
@@ -995,14 +1001,17 @@ let compare_variadic_primitive p1 p2 =
     let c = compare_make_block_kind kind1 kind2 in
     if c <> 0 then c
     else Stdlib.compare mut1 mut2
-  | Bigarray_set (num_dims1, kind1, layout1),
-      Bigarray_set (num_dims2, kind2, layout2) ->
-    let c = Stdlib.compare num_dims1 num_dims2 in
+  | Bigarray_set (is_safe1, num_dims1, kind1, layout1),
+      Bigarray_set (is_safe2, num_dims2, kind2, layout2) ->
+    let c = compare_is_safe is_safe1 is_safe2 in
     if c <> 0 then c
     else
-      let c = Stdlib.compare kind1 kind2 in
+      let c = Stdlib.compare num_dims1 num_dims2 in
       if c <> 0 then c
-      else Stdlib.compare layout1 layout2
+      else
+        let c = Stdlib.compare kind1 kind2 in
+        if c <> 0 then c
+        else Stdlib.compare layout1 layout2
   | (Make_block _
     | Bigarray_set _
     | Bigarray_load _
@@ -1017,8 +1026,28 @@ let print_variadic_primitive ppf p =
     fprintf ppf "@[(Make_block %a %a)@]"
       print_make_block_kind kind
       Effects.print_mutable_or_immutable mut
-  | Bigarray_set _ -> fprintf ppf "Bigarray_set"
-  | Bigarray_load _ -> fprintf ppf "Bigarray_load"
+  | Bigarray_set (is_safe, num_dimensions, kind, layout) ->
+    fprintf ppf "@[(Bigarray_set \
+        (is_safe@ %a)@ \
+        (num_dimensions@ %d)@ \
+        (kind@ %a)@ \
+        (layout@ %a)\
+        )@]"
+      print_is_safe is_safe
+      num_dimensions
+      print_bigarray_kind kind
+      print_bigarray_layout layout
+  | Bigarray_load (is_safe, num_dimensions, kind, layout) ->
+    fprintf ppf "@[(Bigarray_load \
+        (is_safe@ %a)@ \
+        (num_dimensions@ %d)@ \
+        (kind@ %a)@ \
+        (layout@ %a)\
+        )@]"
+      print_is_safe is_safe
+      num_dimensions
+      print_bigarray_kind kind
+      print_bigarray_layout layout
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
@@ -1034,11 +1063,11 @@ let args_kind_of_variadic_primitive p : arg_kinds =
     Variadic_all_of_kind K.value
   | Make_block (Generic_array Full_of_arbitrary_values_but_not_floats, _) ->
     Variadic_all_of_kind K.value
-  | Bigarray_set (num_dims, kind, _) ->
+  | Bigarray_set (_is_safe, num_dims, kind, _) ->
     let index = List.init num_dims (fun _ -> array_like_thing_index_kind) in
     let new_value = element_kind_of_bigarray_kind kind in
     Variadic ([bigarray_kind] @ index @ [new_value])
-  | Bigarray_load (num_dims, _, _) ->
+  | Bigarray_load (_is_safe, num_dims, _, _) ->
     let index = List.init num_dims (fun _ -> array_like_thing_index_kind) in
     Variadic ([bigarray_kind] @ index)
 
@@ -1046,7 +1075,7 @@ let result_kind_of_variadic_primitive p : result_kind =
   match p with
   | Make_block _ -> Singleton K.value
   | Bigarray_set _ -> Unit
-  | Bigarray_load (_, kind, _) ->
+  | Bigarray_load (_, _, kind, _) ->
     Singleton (element_kind_of_bigarray_kind kind)
 
 let effects_and_coeffects_of_variadic_primitive p =
@@ -1054,11 +1083,11 @@ let effects_and_coeffects_of_variadic_primitive p =
   (* CR mshinwell: Arrays of size zero? *)
   | Make_block (_, mut) ->
     Effects.Only_generative_effects mut, Coeffects.No_coeffects
-  | Bigarray_set (_, _, _) ->
+  | Bigarray_set (_, _, _, _) ->
     writing_to_an_array_like_thing
-  | Bigarray_load (_, (Unknown | Complex32 | Complex64), _) ->
+  | Bigarray_load (_, _, (Unknown | Complex32 | Complex64), _) ->
     Effects.Only_generative_effects Immutable, Coeffects.Has_coeffects
-  | Bigarray_load (_, _, _) ->
+  | Bigarray_load (_, _, _, _) ->
     reading_from_an_array_like_thing
 
 let variadic_classify_for_printing p =
