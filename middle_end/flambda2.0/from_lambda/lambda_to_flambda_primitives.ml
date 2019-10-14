@@ -846,7 +846,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
        careful to update that when we know it is not. This should not
        be an error.
        We need more type propagations to be precise here *)
-(* XXX *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
     Binary (Block_load (Block (Value Anything), Immutable), arg,
@@ -999,6 +998,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     (* CR mshinwell: Review all these cases.  Isn't this supposed to
        produce [Generic_array]? *)
     Binary (Block_load (Array (Value Anything), Mutable), array, index)
+  | Parrayrefu Pfloatarray, [array; index] ->
+    Binary (Block_load (Array Naked_float, Mutable), array, index)
   | Parrayrefs (Pgenarray | Paddrarray | Pintarray), [array; index] ->
     Checked {
       primitive =
@@ -1013,9 +1014,26 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       failure = Index_out_of_bounds;
       dbg;
     }
+  | Parrayrefs Pfloatarray, [array; index] ->
+    Checked {
+      primitive =
+        Binary (Block_load (Array Naked_float, Mutable), array, index);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Array_length (Array Naked_float), array)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
   | Parraysetu (Pgenarray | Paddrarray | Pintarray),
       [array; index; new_value] ->
     Ternary (Block_set (Array (Value Anything), Assignment),
+      array, index, new_value)
+  | Parraysetu Pfloatarray, [array; index; new_value] ->
+    Ternary (Block_set (Array Naked_float, Assignment),
       array, index, new_value)
   | Parraysets (Pgenarray | Paddrarray | Pintarray),
       [array; index; new_value] ->
@@ -1029,6 +1047,21 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
             (Immediate.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array (Value Anything)), array)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Parraysets Pfloatarray, [array; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Block_set (Array Naked_float, Assignment),
+          array, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Array_length (Array Naked_float), array)));
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -1242,6 +1275,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Pbigstring_load_16 _
     | Pbigstring_load_32 _
     | Pbigstring_load_64 _
+    | Parrayrefu (Pgenarray | Paddrarray | Pintarray | Pfloatarray)
+    | Parrayrefs (Pgenarray | Paddrarray | Pintarray | Pfloatarray)
     ),
     ([] | [_] | _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -1252,8 +1287,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   (*   Misc.fatal_errorf "Closure_conversion.convert_primitive: \ *)
   (*                      Wrong arity for %a: %i" *)
   (*     Printlambda.primitive prim (List.length args) *)
-
   | ( Psetfield_computed _ | Pbytessetu | Pbytessets
+    | Parraysetu (Pgenarray | Paddrarray | Pintarray | Pfloatarray)
+    | Parraysets (Pgenarray | Paddrarray | Pintarray | Pfloatarray)
     | Pbytes_set_16 _
     | Pbytes_set_32 _
     | Pbytes_set_64 _
@@ -1274,19 +1310,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Misc.fatal_errorf "[%a] should have been removed by \
       [Prepare_lambda.prepare]"
       Printlambda.primitive prim
-
   | Pgetglobal _, _ ->
     Misc.fatal_errorf "[%a] should have been handled by \
       [Closure_conversion.close_primitive]"
       Printlambda.primitive prim
-
-  | ( 
-      Parrayrefu _
-    | Parraysetu _
-    | Parraysets _
-    | Parrayrefs _
-    ), _
-    -> Misc.fatal_errorf "TODO (%a)" Printlambda.primitive prim
 
 let convert_and_bind ~backend
       exn_cont ~register_const_string
