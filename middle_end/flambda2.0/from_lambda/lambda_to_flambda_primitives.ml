@@ -1030,8 +1030,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Eight),
           bytes, index, new_value);
-      (* CR mshinwell: Should this really be using Signed comparison?
-         (Same elsewhere.) *)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
@@ -1113,6 +1111,60 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Binary (String_or_bigstring_load (Bigstring, Sixty_four), arg1, arg2)
   | Pbigstring_load_64 false, [arg1; arg2] ->
     bigstring_ref Sixty_four arg1 arg2 dbg
+  | Pbigstring_set_16 true, [bigstring; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
+      bigstring, index, new_value)
+  | Pbigstring_set_32 true, [bigstring; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bigstring, Thirty_two),
+      bigstring, index, new_value)
+  | Pbigstring_set_64 true, [bigstring; index; new_value] ->
+    Ternary (Bytes_or_bigstring_set (Bigstring, Sixty_four),
+      bigstring, index, new_value)
+  | Pbigstring_set_16 false, [bigstring; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
+          bigstring, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbigstring_set_32 false, [bigstring; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bigstring, Thirty_two),
+          bigstring, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
+  | Pbigstring_set_64 false, [bigstring; index; new_value] ->
+    Checked {
+      primitive =
+        Ternary (Bytes_or_bigstring_set (Bigstring, Sixty_four),
+          bigstring, index, new_value);
+      validity_conditions = [
+        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
+          Simple (Simple.const (Simple.Const.Tagged_immediate
+            (Immediate.int (Targetint.OCaml.zero)))));
+        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
+          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+      ];
+      failure = Index_out_of_bounds;
+      dbg;
+    }
   | ( Pmodint Unsafe (* CR mshinwell: implement these *)
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _
@@ -1195,6 +1247,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Pbytes_set_16 _
     | Pbytes_set_32 _
     | Pbytes_set_64 _
+    | Pbigstring_set_16 _
+    | Pbigstring_set_32 _
+    | Pbigstring_set_64 _
     ),
     ([] | [_] | [_;_] | _ :: _ :: _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
@@ -1223,9 +1278,6 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Parraysetu _
     | Parraysets _
     | Parrayrefs _
-    | Pbigstring_set_16 _
-    | Pbigstring_set_32 _
-    | Pbigstring_set_64 _
     ), _
     -> Misc.fatal_errorf "TODO (%a)" Printlambda.primitive prim
 
