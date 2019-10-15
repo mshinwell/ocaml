@@ -283,7 +283,7 @@ let rec available_regs (instr : M.instruction)
             avail_after_handlers
         in
         None, avail_after
-      | Iexit nfail ->
+      | Iexit (nfail, _traps) ->
         let avail_before = ok avail_before in
         let avail_at_top_of_handler =
           match Hashtbl.find avail_at_exit nfail with
@@ -296,7 +296,7 @@ let rec available_regs (instr : M.instruction)
         in
         Hashtbl.replace avail_at_exit nfail avail_at_top_of_handler;
         None, unreachable
-      | Itrywith (body, handler) ->
+      | Itrywith (body, Regular, handler) ->
         let saved_avail_at_raise = !avail_at_raise in
         avail_at_raise := unreachable;
         let avail_before = ok avail_before in
@@ -320,6 +320,9 @@ let rec available_regs (instr : M.instruction)
             (available_regs handler ~avail_before:avail_before_handler)
         in
         None, avail_after
+      | Itrywith (_body, Delayed _nfail, _handler) ->
+          (* TODO: handle correctly *)
+          assert false
       | Iraise _ ->
         let avail_before = ok avail_before in
         augment_availability_at_raise avail_before;

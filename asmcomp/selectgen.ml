@@ -855,7 +855,7 @@ method emit_expr (env:environment) exp =
       self#insert env (Icatch (rec_flag, List.map aux l, s_body#extract))
         [||] [||];
       r
-  | Cexit (nfail,args) ->
+  | Cexit (nfail,args,traps) ->
       begin match self#emit_parts_list env args with
         None -> None
       | Some (simple_list, ext_env) ->
@@ -873,16 +873,16 @@ method emit_expr (env:environment) exp =
           Array.iter (fun reg -> assert(reg.typ <> Addr)) src;
           self#insert_moves env src tmp_regs ;
           self#insert_moves env tmp_regs (Array.concat dest_args) ;
-          self#insert env (Iexit nfail) [||] [||];
+          self#insert env (Iexit (nfail, traps)) [||] [||];
           None
       end
-  | Ctrywith(e1, v, e2, _dbg) ->
+  | Ctrywith(e1, kind, v, e2, _dbg) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
       let (r2, s2) = self#emit_sequence (env_add v rv env) e2 in
       let r = join env r1 s1 r2 s2 in
       self#insert env
-        (Itrywith(s1#extract,
+        (Itrywith(s1#extract, kind,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
                              (s2#extract)))
         [||] [||];
@@ -1183,12 +1183,12 @@ method emit_tail (env:environment) exp =
       in
       self#insert env (Icatch(rec_flag, List.map aux handlers, s_body))
         [||] [||]
-  | Ctrywith(e1, v, e2, _dbg) ->
+  | Ctrywith(e1, kind, v, e2, _dbg) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
       let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert env
-        (Itrywith(s1#extract,
+        (Itrywith(s1#extract, kind,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
         [||] [||];
       begin match opt_r1 with

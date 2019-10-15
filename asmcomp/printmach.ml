@@ -220,11 +220,11 @@ let rec instr ppf i =
       in
       aux handlers;
       fprintf ppf "@;<0 -2>endcatch@]"
-  | Iexit i ->
-      fprintf ppf "exit(%d)" i
-  | Itrywith(body, handler) ->
-      fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
-             instr body instr handler
+  | Iexit (i, traps) ->
+      fprintf ppf "exit%a(%d)" Printcmm.trap_action_list traps i
+  | Itrywith(body, kind, handler) ->
+      fprintf ppf "@[<v 2>try%a@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
+             Printcmm.trywith_kind kind instr body instr handler
   | Iraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
   end;

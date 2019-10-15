@@ -353,8 +353,8 @@ method private cse n i =
       in
       {i with desc = Icatch(rec_flag, List.map aux handlers, self#cse n body);
               next = self#cse empty_numbering i.next}
-  | Itrywith(body, handler) ->
-      {i with desc = Itrywith(self#cse n body,
+  | Itrywith(body, kind, handler) ->
+      {i with desc = Itrywith(self#cse n body, kind,
                               self#cse empty_numbering handler);
               next = self#cse empty_numbering i.next}
 
