@@ -136,6 +136,38 @@ let print_specific_operation printreg op ppf arg =
   | Izextend32 ->
       fprintf ppf "zextend32 %a" printreg arg.(0)
 
+(* Register typing on specific operations *)
+
+let infer_specific arg res = function
+  | Ilea _ ->
+      Array.fold_left (fun acc r ->
+          `Constraint (res.(0), r) ::
+          `Bound (r, Cmm.Int) :: acc
+        ) [] arg
+  | Istore_int _ ->
+      [ `Bound (arg.(0), Cmm.Val) ]
+  | Ioffset_loc _ ->
+      [ `Bound (arg.(0), Cmm.Val) ]
+  | Ifloatarithmem _ ->
+      [ `Bound (res.(0), Cmm.Float);
+        `Bound (arg.(0), Cmm.Float);
+        `Bound (arg.(1), Cmm.Val) ]
+  | Ibswap _ ->
+      [ `Bound (arg.(0), Cmm.Int);
+        `Bound (res.(0), Cmm.Int) ]
+  | Isqrtf ->
+      [ `Bound (arg.(0), Cmm.Float);
+        `Bound (res.(0), Cmm.Float) ]
+  | Ifloatsqrtf _ ->
+      [ `Bound (arg.(0), Cmm.Val);
+        `Bound (res.(0), Cmm.Float) ]
+  | Isextend32 ->
+      [ `Bound (arg.(0), Cmm.Int);
+        `Bound (res.(0), Cmm.Int) ]
+  | Izextend32 ->
+      [ `Bound (arg.(0), Cmm.Int);
+        `Bound (res.(0), Cmm.Int) ]
+
 let win64 =
   match Config.system with
   | "win64" | "mingw64" | "cygwin" -> true
