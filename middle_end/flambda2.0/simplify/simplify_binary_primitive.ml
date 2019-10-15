@@ -773,7 +773,7 @@ module Binary_int_eq_comp_int64 =
 module Binary_int_eq_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
 
-let simplify_block_load ~result_kind dacc ~original_term _dbg
+let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
       ~arg1:_ ~arg1_ty:block_ty ~arg2:_ ~arg2_ty:index_ty ~result_var =
   let result_var' = Var_in_binding_pos.var result_var in
   let unchanged () =
@@ -962,9 +962,9 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
         let simplifier =
           match prim with
           | Block_load (Block (Value _), Immutable) ->
-            simplify_block_load ~result_kind:K.value
+            simplify_immutable_block_load ~result_kind:K.value
           | Block_load (Block Naked_float, Immutable) ->
-            simplify_block_load ~result_kind:K.naked_float
+            simplify_immutable_block_load ~result_kind:K.naked_float
           | Int_arith (kind, op) ->
             begin match kind with
             | Tagged_immediate -> Binary_int_arith_tagged_immediate.simplify op
