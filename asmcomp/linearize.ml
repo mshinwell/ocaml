@@ -129,9 +129,6 @@ let is_next_catch n = match !exit_label with
 | (n0,(_,t))::_  when n0=n && t = !try_depth -> true
 | _ -> false
 
-let local_exit k =
-  snd (find_exit_label_try_depth k) = !try_depth
-
 (* Linearize an instruction [i]: add it in front of the continuation [n] *)
 let linear i n contains_calls =
   let rec linear i n =
@@ -159,16 +156,16 @@ let linear i n contains_calls =
             copy_instr (Lcondbranch(test, lbl)) i (linear ifnot n1)
         | _, Iend, Lbranch lbl ->
             copy_instr (Lcondbranch(invert_test test, lbl)) i (linear ifso n1)
-        | Iexit nfail1, Iexit nfail2, _
-              when is_next_catch nfail1 && local_exit nfail2 ->
+        | Iexit (nfail1, []), Iexit (nfail2, []), _
+              when is_next_catch nfail1 ->
             let lbl2 = find_exit_label nfail2 in
             copy_instr
               (Lcondbranch (invert_test test, lbl2)) i (linear ifso n1)
-        | Iexit nfail, _, _ when local_exit nfail ->
+        | Iexit (nfail, []), _, _ ->
             let n2 = linear ifnot n1
             and lbl = find_exit_label nfail in
             copy_instr (Lcondbranch(test, lbl)) i n2
-        | _,  Iexit nfail, _ when local_exit nfail ->
+        | _,  Iexit (nfail, []), _ ->
             let n2 = linear ifso n1 in
             let lbl = find_exit_label nfail in
             copy_instr (Lcondbranch(invert_test test, lbl)) i n2
@@ -232,17 +229,21 @@ let linear i n contains_calls =
         let n3 = linear body (add_branch lbl_end n2) in
         exit_label := previous_exit_label;
         n3
-    | Iexit nfail ->
+    | Iexit (nfail, traps) ->
         let lbl, t = find_exit_label_try_depth nfail in
         assert (i.Mach.next.desc = Mach.Iend);
         let delta_traps = !try_depth - t in
+        (* For now, only support Pop actions *)
+        assert
+          (List.length traps = delta_traps &&
+           List.for_all (function Cmm.Pop -> true | Cmm.Push _ -> false) traps);
         let n1 = adjust_trap_depth delta_traps n in
         let rec loop i tt =
           if t = tt then i
           else loop (cons_instr Lpoptrap i) (tt - 1)
         in
         loop (add_branch lbl n1) !try_depth
-    | Itrywith(body, handler) ->
+    | Itrywith(body, Regular, handler) ->
         let (lbl_join, n1) = get_label (linear i.Mach.next n) in
         let (lbl_handler, n2) =
           get_label (cons_instr Lentertrap (linear handler n1))
@@ -256,6 +257,9 @@ let linear i n contains_calls =
                          (add_branch lbl_join n2))) in
         decr try_depth;
         n3
+    | Itrywith(_body, Delayed _nfail, _handler) ->
+        (* TODO: Handle correctly *)
+        assert false
 
     | Iraise k ->
         copy_instr (Lraise k) i (discard_dead_code n)

@@ -98,8 +98,8 @@ and instruction_desc =
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
   | Icatch of Cmm.rec_flag * (int * instruction) list * instruction
-  | Iexit of int
-  | Itrywith of instruction * instruction
+  | Iexit of int * Cmm.trap_action list
+  | Itrywith of instruction * Cmm.trywith_kind * instruction
   | Iraise of Lambda.raise_kind
 
 type spacetime_part_of_shape =

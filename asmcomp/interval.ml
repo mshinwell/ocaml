@@ -156,7 +156,7 @@ let build_intervals fd =
     | Iexit _ ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction i.next
-    | Itrywith(body, handler) ->
+    | Itrywith(body, _kind, handler) ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction body;
         insert_destroyed_at_raise intervals !pos;

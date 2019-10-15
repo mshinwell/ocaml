@@ -276,7 +276,7 @@ let mk_not dbg cmm =
 
 let create_loop body dbg =
   let cont = Lambda.next_raise_count () in
-  let call_cont = Cexit (cont, []) in
+  let call_cont = Cexit (cont, [], []) in
   let body = Csequence (body, call_cont) in
   Ccatch (Recursive, [cont, [], body, dbg], call_cont)
 
@@ -562,15 +562,15 @@ let rec remove_unit = function
   | Ccatch(rec_flag, handlers, body) ->
       let map_h (n, ids, handler, dbg) = (n, ids, remove_unit handler, dbg) in
       Ccatch(rec_flag, List.map map_h handlers, remove_unit body)
-  | Ctrywith(body, exn, handler, dbg) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler, dbg)
+  | Ctrywith(body, kind, exn, handler, dbg) ->
+      Ctrywith(remove_unit body, kind, exn, remove_unit handler, dbg)
   | Clet(id, c1, c2) ->
       Clet(id, c1, remove_unit c2)
   | Cop(Capply _mty, args, dbg) ->
       Cop(Capply typ_void, args, dbg)
   | Cop(Cextcall(proc, _mty, alloc, label_after), args, dbg) ->
       Cop(Cextcall(proc, typ_void, alloc, label_after), args, dbg)
-  | Cexit (_,_) as c -> c
+  | Cexit (_,_,_) as c -> c
   | Ctuple [] as c -> c
   | c -> Csequence(c, Ctuple [])
 
@@ -1476,7 +1476,7 @@ struct
   let bind arg body = bind "switcher" arg body
 
   let make_catch handler = match handler with
-  | Cexit (i,[]) -> i,fun e -> e
+  | Cexit (i,[],[]) -> i,fun e -> e
   | _ ->
       let dbg = Debuginfo.none in
       let i = Lambda.next_raise_count () in
@@ -1487,12 +1487,12 @@ struct
 *)
       i,
       (fun body -> match body with
-      | Cexit (j,_) ->
+      | Cexit (j,_,_) ->
           if i=j then handler
           else body
       | _ ->  ccatch (i,[],body,handler, dbg))
 
-  let make_exit i = Cexit (i,[])
+  let make_exit i = Cexit (i,[],[])
 
 end
 
@@ -1511,7 +1511,7 @@ module StoreExpForSwitch =
       let make_key index expr =
         let continuation =
           match expr with
-          | Cexit (i,[]) -> Some i
+          | Cexit (i,[],[]) -> Some i
           | _ -> None
         in
         Some (continuation, index)
@@ -1528,7 +1528,7 @@ module StoreExp =
       type t = expression
       type key = int
       let make_key = function
-        | Cexit (i,[]) -> Some i
+        | Cexit (i,[],[]) -> Some i
         | _ -> None
       let compare_key = Stdlib.compare
     end)
@@ -1713,7 +1713,7 @@ let cache_public_method meths tag cache dbg =
            dbg),
         Cifthenelse
           (Cop(Ccmpi Cge, [Cvar li; Cvar hi], dbg),
-           dbg, Cexit (raise_num, []),
+           dbg, Cexit (raise_num, [], []),
            dbg, Ctuple [],
            dbg))))
        dbg,

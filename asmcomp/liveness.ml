@@ -125,11 +125,11 @@ let rec live i finally =
       live_at_exit := live_at_exit_before;
       i.live <- before_body;
       before_body
-  | Iexit nfail ->
+  | Iexit (nfail, _traps) ->
       let this_live = find_live_at_exit nfail in
       i.live <- this_live ;
       this_live
-  | Itrywith(body, handler) ->
+  | Itrywith(body, Regular, handler) ->
       let at_join = live i.next finally in
       let before_handler = live handler at_join in
       let saved_live_at_raise = !live_at_raise in
@@ -138,6 +138,9 @@ let rec live i finally =
       live_at_raise := saved_live_at_raise;
       i.live <- before_body;
       before_body
+  | Itrywith(_body, Delayed _nfail, _handler) ->
+      (* TODO: ensure correct value for live_at_raise *)
+      assert false
   | Iraise _ ->
       i.live <- !live_at_raise;
       Reg.add_set_array !live_at_raise arg

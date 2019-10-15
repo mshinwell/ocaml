@@ -131,13 +131,13 @@ let rec deadcode i =
         exits;
       }
     end
-  | Iexit nfail ->
+  | Iexit (nfail, _traps) ->
       { i;  regs = i.live; exits = Int.Set.singleton nfail; }
-  | Itrywith(body, handler) ->
+  | Itrywith(body, kind, handler) ->
       let body' = deadcode body in
       let handler' = deadcode handler in
       let s = deadcode i.next in
-      { i = {i with desc = Itrywith(body'.i, handler'.i); next = s.i};
+      { i = {i with desc = Itrywith(body'.i, kind, handler'.i); next = s.i};
         regs = i.live;
         exits = Int.Set.union s.exits
                   (Int.Set.union body'.exits handler'.exits);

@@ -234,11 +234,11 @@ let rec reload i before =
       (instr_cons
          (Icatch(rec_flag, new_handlers, new_body)) i.arg i.res new_next,
        finally)
-  | Iexit nfail ->
+  | Iexit (nfail, _traps) ->
       let set = find_reload_at_exit nfail in
       set := Reg.Set.union !set before;
       (i, Reg.Set.empty)
-  | Itrywith(body, handler) ->
+  | Itrywith(body, kind, handler) ->
       let (new_body, after_body) = reload body before in
       (* All registers live at the beginning of the handler are destroyed,
          except the exception bucket *)
@@ -248,7 +248,7 @@ let rec reload i before =
       let (new_handler, after_handler) = reload handler before_handler in
       let (new_next, finally) =
         reload i.next (Reg.Set.union after_body after_handler) in
-      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Itrywith(new_body, kind, new_handler)) i.arg i.res new_next,
        finally)
   | Iraise _ ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
@@ -394,17 +394,20 @@ let rec spill i finally =
       (instr_cons (Icatch(rec_flag, new_handlers, new_body))
          i.arg i.res new_next,
        before)
-  | Iexit nfail ->
+  | Iexit (nfail, _traps) ->
       (i, find_spill_at_exit nfail)
-  | Itrywith(body, handler) ->
+  | Itrywith(body, Regular, handler) ->
       let (new_next, at_join) = spill i.next finally in
       let (new_handler, before_handler) = spill handler at_join in
       let saved_spill_at_raise = !spill_at_raise in
       spill_at_raise := before_handler;
       let (new_body, before_body) = spill body at_join in
       spill_at_raise := saved_spill_at_raise;
-      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Itrywith(new_body, Regular, new_handler)) i.arg i.res new_next,
        before_body)
+  | Itrywith(_body, Delayed _nfail, _handler) ->
+      (* TODO: ensure correct value for spill_at_raise *)
+      assert false
   | Iraise _ ->
       (i, !spill_at_raise)
 
