@@ -1,0 +1,23 @@
+def letk k (a b c) {
+    X = Block 1 (a b c)
+  }
+  let a = Opaque 5555555t in
+  let b = Opaque 2222222t in
+  let c = Opaque 1t in
+  letk ret (a b c) {
+    cont k (a b c)
+  }
+  letk r1 {
+    cont ret (a b b)
+  }
+  letk r2 {
+    cont ret (a a b)
+  }
+  switch c {
+    0 -> r1;
+    1 -> r2;
+  }
+
+def Root = Block 33 (X)
+
+root Root
