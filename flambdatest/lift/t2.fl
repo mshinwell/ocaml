@@ -1,0 +1,11 @@
+def letk ret (a b c d) {
+    X = Block 1 (a b a c d)
+    Y = Block 2 (a a c c d)
+  }
+  let a = Opaque 5555555t in
+  let b = Opaque 2222222t in
+  cont ret (a b b a)
+
+def Root = Block 33 (X Y)
+
+root Root
