@@ -19,6 +19,11 @@
 type t =
   | Unknown of { arity : Flambda_arity.t; }
   | Unreachable of { arity : Flambda_arity.t; }
+  | Apply_cont_with_constant_arg of {
+      cont : Continuation.t;
+      arg : Simple.Const.t;
+      arity : Flambda_arity.t;
+    }
   | Inline of {
       arity : Flambda_arity.t;
       handler : Flambda.Continuation_handler.t;
@@ -29,6 +34,8 @@ let print ppf t =
   match t with
   | Unknown { arity = _; } -> Format.pp_print_string ppf "Unknown"
   | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
+  | Apply_cont_with_constant_arg { cont = _; arg = _; arity = _; } ->
+    Format.pp_print_string ppf "Apply_cont_with_constant_arg _"
   | Inline { arity = _; handler = _; } ->
     Format.pp_print_string ppf "Inline _"
 
@@ -36,4 +43,5 @@ let arity t =
   match t with
   | Unknown { arity; }
   | Unreachable { arity; }
+  | Apply_cont_with_constant_arg { cont = _; arg = _; arity; }
   | Inline { arity; handler = _; } -> arity

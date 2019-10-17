@@ -161,6 +161,15 @@ module type Upwards_env = sig
     -> alias_for:Continuation.t
     -> t
 
+  val add_continuation_apply_cont_with_constant_arg
+     : t
+    -> Continuation.t
+    -> Scope.t
+    -> Flambda_arity.t
+    -> destination_cont:Continuation.t
+    -> destination_arg:Simple.Const.t
+    -> t
+
   val add_continuation_to_inline
      : t
     -> Continuation.t
