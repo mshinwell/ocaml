@@ -360,6 +360,7 @@ end = struct
     match find_continuation t cont with
     | Unknown { arity; }
     | Unreachable { arity; }
+    | Apply_cont_with_constant_arg { cont = _; arg = _; arity; }
     | Inline { arity; _ } -> arity
 
   let add_continuation0 t cont scope cont_in_env =
@@ -410,6 +411,14 @@ end = struct
     { t with
       continuation_aliases;
     }
+
+  let add_continuation_apply_cont_with_constant_arg t cont scope arity
+        ~destination_cont ~destination_arg =
+    add_continuation0 t cont scope (Apply_cont_with_constant_arg {
+      cont = destination_cont;
+      arg = destination_arg;
+      arity;
+    })
 
   let add_continuation_to_inline t cont scope arity handler =
     add_continuation0 t cont scope (Inline { arity; handler; })

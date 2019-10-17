@@ -19,6 +19,11 @@
 type t =
   | Unknown of { arity : Flambda_arity.t; }
   | Unreachable of { arity : Flambda_arity.t; }
+  | Apply_cont_with_constant_arg of {
+      cont : Continuation.t;
+      arg : Simple.Const.t;
+      arity : Flambda_arity.t;
+    }
   | Inline of {
       arity : Flambda_arity.t;
       handler : Flambda.Continuation_handler.t;

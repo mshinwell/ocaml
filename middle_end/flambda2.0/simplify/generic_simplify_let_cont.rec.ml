@@ -117,8 +117,10 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 UE.add_unreachable_continuation uenv cont scope arity
               | Alias_for { arity; alias_for; } ->
                 UE.add_continuation_alias uenv cont arity ~alias_for
-              | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
-                normal_case ~arity
+              | Apply_cont_with_constant_arg
+                  { cont = destination_cont; arg = destination_arg; arity; } ->
+                UE.add_continuation_apply_cont_with_constant_arg uenv cont
+                  scope arity ~destination_cont ~destination_arg
               | Unknown { arity; } -> normal_case ~arity
           in
           let uacc = UA.with_uenv uacc uenv in

@@ -994,6 +994,9 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
          on the basis that there wouldn't be any opportunity to collect any
          backtrace, even if the [Apply_cont] were compiled as "raise". *)
       Expr.create_invalid (), user_data, uacc
+    | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
+      check_arity_against_args ~arity;
+      normal_case ()
     | Inline { arity; handler; } ->
       (* CR mshinwell: With -g, we can end up with continuations that are
          just a sequence of phantom lets then "goto".  These would normally
@@ -1140,8 +1143,10 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
-    let new_let_conts, arms =
-      Discriminant.Map.fold (fun arm (cont, use_id) (new_let_conts, arms) ->
+    let new_let_conts, arms, identity_arms, not_arms =
+      Discriminant.Map.fold
+        (fun arm (cont, use_id)
+             (new_let_conts, arms, identity_arms, not_arms) ->
           let new_let_cont =
             add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id
               Flambda_arity.nullary
@@ -1149,23 +1154,87 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
           match new_let_cont with
           | None ->
             let cont = UE.resolve_continuation_aliases uenv cont in
-            begin match UE.find_continuation uenv cont with
-            | Unreachable _ -> new_let_conts, arms
-            | Unknown _ | Inline _ ->
+            let normal_case ~identity_arms ~not_arms =
               let arms = Discriminant.Map.add arm cont arms in
-              new_let_conts, arms
+              new_let_conts, arms, identity_arms, not_arms
+            in
+            begin match UE.find_continuation uenv cont with
+            | Unreachable _ -> new_let_conts, arms, identity_arms, not_arms
+            | Apply_cont_with_constant_arg { cont; arg; arity = _; } ->
+              begin match arg with
+              | Tagged_immediate arg ->
+                let arm_as_int = Discriminant.to_int arm in
+                let arg_as_int = Immediate.to_targetint arg in
+                if Targetint.OCaml.equal arm_as_int arg_as_int then
+                  let identity_arms =
+                    Discriminant.Map.add arm cont identity_arms
+                  in
+                  normal_case ~identity_arms ~not_arms
+                else if
+                  (Discriminant.equal arm Discriminant.bool_true
+                    && Immediate.equal arg Immediate.bool_false)
+                  || 
+                    (Discriminant.equal arm Discriminant.bool_false
+                      && Immediate.equal arg Immediate.bool_true)
+                then
+                  let not_arms = Discriminant.Map.add arm cont not_arms in
+                  normal_case ~identity_arms ~not_arms
+                else
+                  normal_case ~identity_arms ~not_arms
+              | Naked_float _ | Naked_int32 _ | Naked_int64 _
+              | Naked_nativeint _ -> normal_case ~identity_arms ~not_arms
+              end
+            | Unknown _ | Inline _ -> normal_case ~identity_arms ~not_arms
             end
           | Some ((new_cont, _new_handler) as new_let_cont) ->
             let new_let_conts = new_let_cont :: new_let_conts in
             let arms = Discriminant.Map.add arm new_cont arms in
-            new_let_conts, arms)
+            new_let_conts, arms, identity_arms, not_arms)
         arms
-        ([], Discriminant.Map.empty)
+        ([], Discriminant.Map.empty, Discriminant.Map.empty,
+          Discriminant.Map.empty)
+    in
+    let switch_is_identity =
+      let arm_discrs = Discriminant.Map.keys arms in
+      let identity_arms_args = Discriminant.Map.keys identity_arms in
+      if not (Discriminant.Set.equal arm_discrs identity_arms_args) then
+        None
+      else
+        Discriminant.Map.data identity_arms
+        |> Continuation.Set.of_list
+        |> Continuation.Set.get_singleton
+    in
+    let switch_is_boolean_not =
+      let arm_discrs = Discriminant.Map.keys arms in
+      if not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set) then
+        None
+      else
+        Discriminant.Map.data not_arms
+        |> Continuation.Set.of_list
+        |> Continuation.Set.get_singleton
+    in
+    let body =
+      match switch_is_identity with
+      | Some dest ->
+        let apply_cont = Apply_cont.create dest ~args:[scrutinee] in
+        Expr.create_apply_cont apply_cont
+      | None ->
+        match switch_is_boolean_not with
+        | Some dest ->
+          let not_scrutinee = Variable.create "not_scrutinee" in
+          let apply_cont =
+            Apply_cont.create dest ~args:[Simple.var not_scrutinee]
+          in
+          Expr.create_let (VB.create not_scrutinee NOK.normal)
+            (Named.create_prim (P.Unary (Boolean_not, scrutinee))
+              Debuginfo.none)
+            (Expr.create_apply_cont apply_cont)
+        | None -> Expr.create_switch (Switch.sort switch) ~scrutinee ~arms
     in
     let expr =
       List.fold_left (fun body (new_cont, new_handler) ->
           Let_cont.create_non_recursive new_cont new_handler ~body)
-        (Expr.create_switch (Switch.sort switch) ~scrutinee ~arms)
+        body
         new_let_conts
     in
     expr, user_data, uacc
