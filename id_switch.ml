@@ -8,8 +8,8 @@ type t1 =
   | Y
   | Z
 
-let [@inline always] x t0 =
-  match t0 with
+let [@inline always] x xt0 =
+  match xt0 with
   | A -> X
   | B | C -> Y
 
