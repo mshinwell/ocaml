@@ -856,10 +856,14 @@ let aliases_of_simple0 t ~min_occurrence_kind simple =
   let alias = alias_of_simple t simple name_occurrence_kind in
   Alias.Set.fold (fun alias result ->
       let name_occurrence_kind = Alias.name_occurrence_kind alias in
-      if Name_occurrence_kind.compare name_occurrence_kind
-        min_occurrence_kind < 0
-      then result
-      else Alias.Set_ordered_by_binding_time.add alias result)
+      match
+        Name_occurrence_kind.compare_partial_order name_occurrence_kind
+          min_occurrence_kind
+      with
+      | None -> result
+      | Some c ->
+        if c >= 0 then Alias.Set_ordered_by_binding_time.add alias result
+        else result)
     (Aliases.get_aliases (aliases t) alias)
     Alias.Set_ordered_by_binding_time.empty
 

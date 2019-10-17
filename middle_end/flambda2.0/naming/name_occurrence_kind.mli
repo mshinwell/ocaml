@@ -35,13 +35,17 @@ val is_normal : t -> bool
 
 val is_phantom : t -> bool
 
-val min : t
+val min_in_types : t
+val min_in_terms : t
+
+val can_be_in_terms : t -> bool
 
 include Identifiable.S with type t := t
 
-val all : Set.t
+val compare_total_order : t -> t -> int
+val compare_partial_order : t -> t -> int option
 
-val all_less_than_or_equal_to : t -> Set.t
+val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
 
 type descr = private
   | Normal
@@ -61,4 +65,9 @@ module Or_absent : sig
   val is_present : t -> bool
 
   include Identifiable.S with type t := t
+
+  val compare_total_order : t -> t -> int
+  val compare_partial_order : t -> t -> int option
+
+  val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
 end

@@ -24,10 +24,16 @@ module Make (E : sig
   module Order_within_equiv_class : sig
     type t
     include Identifiable.S with type t := t
+
+    val compare_partial_order : t -> t -> int option
+
+    val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
   end
 
   val order_within_equiv_class : t -> Order_within_equiv_class.t
 end) = struct
+  let _ = E.Order_within_equiv_class.compare
+
   module Aliases_of_canonical_element : sig
     type t
 
@@ -93,8 +99,12 @@ end) = struct
     let find_earliest t ~min_order_within_equiv_class =
       match
         E.Order_within_equiv_class.Map.find_first (fun order ->
-            E.Order_within_equiv_class.compare
-              order min_order_within_equiv_class >= 0)
+            match
+              E.Order_within_equiv_class.compare_partial_order
+                order min_order_within_equiv_class
+            with
+            | None -> false
+            | Some result -> result >= 0)
           t.aliases
       with
       | exception Not_found -> None
@@ -417,15 +427,20 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
   E.print canonical_element
   E.Order_within_equiv_class.print min_order_within_equiv_class;
 *)
-      if E.Order_within_equiv_class.compare
-          (E.order_within_equiv_class canonical_element)
-          min_order_within_equiv_class
-        >= 0
-      then Some canonical_element
-      else
+      let find_earliest () =
         let aliases = get_aliases_of_canonical_element t ~canonical_element in
         Aliases_of_canonical_element.find_earliest aliases
           ~min_order_within_equiv_class
+      in
+      match
+        E.Order_within_equiv_class.compare_partial_order
+          (E.order_within_equiv_class canonical_element)
+          min_order_within_equiv_class
+      with
+      | None -> find_earliest ()
+      | Some c ->
+        if c >= 0 then Some canonical_element
+        else find_earliest ()
 
   let get_aliases t element =
     let t = add_implicitly_bound_canonical_element t element in
