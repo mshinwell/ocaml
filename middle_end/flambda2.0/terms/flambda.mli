@@ -317,6 +317,11 @@ end and Continuation_handler : sig
   type behaviour = private
     | Unreachable of { arity : Flambda_arity.t; }
     | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Apply_cont_with_constant_arg of {
+        cont : Continuation.t;
+        arg : Simple.Const.t;
+        arity : Flambda_arity.t;
+      }
     | Unknown of { arity : Flambda_arity.t; }
 
   val behaviour : t -> behaviour

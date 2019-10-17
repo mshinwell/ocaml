@@ -41,13 +41,24 @@ module Return_cont_handler = struct
   let is_exn_handler _t = false
   let stub _t = false
 
+  (* CR mshinwell: Stop duplicating types of this form *)
   type behaviour =
     | Unreachable of { arity : Flambda_arity.t; }
     | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Apply_cont_with_constant_arg of {
+        cont : Continuation.t;
+        arg : Simple.Const.t;
+        arity : Flambda_arity.t;
+      }
     | Unknown of { arity : Flambda_arity.t; }
 
   (* Silence warning 37. *)
   let _ = Unreachable { arity = []; }
+  let _ = Apply_cont_with_constant_arg {
+    cont = Continuation.create ();
+    arg = Tagged_immediate Immediate.zero;
+    arity = [];
+  }
   let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
 
   let arity t = KP.List.arity t.computed_values
@@ -76,10 +87,20 @@ module Exn_cont_handler = struct
   type behaviour =
     | Unreachable of { arity : Flambda_arity.t; }
     | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+    | Apply_cont_with_constant_arg of {
+        cont : Continuation.t;
+        arg : Simple.Const.t;
+        arity : Flambda_arity.t;
+      }
     | Unknown of { arity : Flambda_arity.t; }
 
   (* Silence warning 37. *)
   let _ = Unreachable { arity = []; }
+  let _ = Apply_cont_with_constant_arg {
+    cont = Continuation.create ();
+    arg = Tagged_immediate Immediate.zero;
+    arity = [];
+  }
   let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
 
   let arity _t = [K.value]
