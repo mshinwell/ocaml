@@ -60,6 +60,7 @@ type make_block_kind =
 type duplicate_block_kind =
   | Full_of_values_known_length of Tag.Scannable.t
   | Full_of_values_unknown_length of Tag.Scannable.t
+  (* CR mshinwell: An "int" case? *)
   | Full_of_naked_floats of { length : Targetint.OCaml.t option; }
   | Generic_array of Generic_array_specialisation.t
 
@@ -195,6 +196,7 @@ type unary_primitive =
   | Is_int
   | Get_tag
   | Array_length of Block_access_kind.t
+    (* XXX Bigarray_length needs layout & total num. of dimensions *)
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)
   | String_length of string_or_bytes

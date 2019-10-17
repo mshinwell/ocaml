@@ -1084,10 +1084,13 @@ let effects_and_coeffects_of_variadic_primitive p =
   | Make_block (_, mut) ->
     Effects.Only_generative_effects mut, Coeffects.No_coeffects
   | Bigarray_set (_, _, _, _) ->
+    (* XXX Need to check the is_safe flag *)
     writing_to_an_array_like_thing
   | Bigarray_load (_, _, (Unknown | Complex32 | Complex64), _) ->
+    (* XXX Need to check the is_safe flag *)
     Effects.Only_generative_effects Immutable, Coeffects.Has_coeffects
   | Bigarray_load (_, _, _, _) ->
+    (* XXX Need to check the is_safe flag *)
     reading_from_an_array_like_thing
 
 let variadic_classify_for_printing p =
