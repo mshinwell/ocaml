@@ -82,7 +82,8 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
 let try_cse dacc prim args ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
   match
-    S.simplify_simples dacc args ~min_occurrence_kind:Name_occurrence_kind.min
+    S.simplify_simples dacc args
+      ~min_occurrence_kind:Name_occurrence_kind.min_in_types
   with
   | Bottom ->
     let kind = P.result_kind_of_variadic_primitive' prim in
@@ -114,11 +115,12 @@ let simplify_variadic_primitive dacc
       invalid (T.bottom kind)
     | Ok args_with_tys ->
       match prim with
-      | Make_block (make_block_kind, mutable_or_immutable) ->
+      | Make_block ((Full_of_values _) as make_block_kind, mutable_or_immutable) ->
         simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
           args_with_tys ~result_var:result_var'
-      | Bigarray_set (_is_safe, _num_dims, _kind, _layout)
-      | Bigarray_load (_is_safe, _num_dims, _kind, _layout) ->
+      | Make_block _
+      | Bigarray_set _ (*(_is_safe, _num_dims, _kind, _layout) *)
+      | Bigarray_load _ -> (* (_is_safe, _num_dims, _kind, _layout) -> *)
         let named = Named.create_prim (Variadic (prim, args)) dbg in
         let kind = P.result_kind_of_variadic_primitive' prim in
         let ty = T.unknown kind in

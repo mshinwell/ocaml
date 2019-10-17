@@ -150,16 +150,32 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
     let declared_occurrence_kind =
       Var_in_binding_pos.occurrence_kind bound_var
     in
-    if Name_occurrence_kind.Or_absent.compare
+(*
+Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a\n%!"
+  Var_in_binding_pos.print bound_var
+  Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
+  Name_occurrence_kind.print declared_occurrence_kind
+  Name_occurrences.print free_names_of_body
+  print body;
+*)
+    begin match
+      Name_occurrence_kind.Or_absent.compare_partial_order
          greatest_occurrence_kind
          (Name_occurrence_kind.Or_absent.present declared_occurrence_kind)
-         > 0
-    then begin
-      Misc.fatal_errorf "[Let]-binding declares variable %a,@ but this \
-          variable has occurrences at a higher kind@ (>= %a)@ in body:@ %a"
-        Var_in_binding_pos.print bound_var
-        Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
-        print body
+    with
+    | None -> ()
+    | Some c ->
+      if c <= 0 then ()
+      else
+        Misc.fatal_errorf "[Let]-binding declares variable %a (mode %a) to \
+            be bound to@ %a,@ but this variable has occurrences at a higher \
+            mode@ (>= %a)@ in the body (free names %a):@ %a"
+          Var_in_binding_pos.print bound_var
+          Name_occurrence_kind.print declared_occurrence_kind
+          Named.print defining_expr
+          Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
+          Name_occurrences.print free_names_of_body
+          print body
     end;
     if not (Named.at_most_generative_effects defining_expr) then begin
       if not (Name_occurrence_kind.is_normal declared_occurrence_kind)
@@ -174,16 +190,19 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
       let has_uses =
         Name_occurrence_kind.Or_absent.is_present greatest_occurrence_kind
       in
-      let uses_are_at_most_phantom =
+      let uses_are_at_most_phantom = (* CR mshinwell: rename? *)
         (* CR mshinwell: This should detect whether there is any
            provenance info associated with the variable.  If there isn't, the
            [Let] can be deleted even if debugging information is being
            generated. *)
-        Name_occurrence_kind.Or_absent.compare
+        match
+          Name_occurrence_kind.Or_absent.compare_partial_order
             greatest_occurrence_kind
             (Name_occurrence_kind.Or_absent.present
-              Name_occurrence_kind.phantom)
-          <= 0
+              Name_occurrence_kind.normal)
+        with
+        | None -> assert false
+        | Some c -> c < 0
       in
       let user_visible =
         Variable.user_visible (Var_in_binding_pos.var bound_var)
@@ -196,14 +215,20 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
         uses_are_at_most_phantom
           && (not (!Clflags.debug && (has_uses || user_visible)))
       in
-      if will_delete_binding then
+      if will_delete_binding then begin
+(*
+Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
+  Var_in_binding_pos.print bound_var
+  Name_occurrences.print free_names_of_body;
+*)
         bound_var, false, Have_deleted defining_expr
-      else
+      end else
         let occurrence_kind =
           match greatest_occurrence_kind with
           | Absent -> Name_occurrence_kind.phantom
           | Present occurrence_kind -> occurrence_kind
         in
+        assert (Name_occurrence_kind.can_be_in_terms occurrence_kind);
         let bound_var =
           Var_in_binding_pos.with_occurrence_kind bound_var occurrence_kind
         in
@@ -223,13 +248,23 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
     let bound_vars = Bindable_let_bound.singleton bound_var in
     let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
     let free_names =
+      let from_defining_expr =
+        Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+          (Named.free_names defining_expr)
+          (Var_in_binding_pos.occurrence_kind bound_var)
+      in
       (* We avoid [Let_expr.free_names] since we already know the free names
          of [body] -- and calling that function would cause an abstraction
          to be opened. *)
-      Name_occurrences.union (Named.free_names defining_expr)
+      Name_occurrences.union from_defining_expr
         (Name_occurrences.remove_var free_names_of_body
           (Var_in_binding_pos.var bound_var))
     in
+(*
+Format.eprintf "Free names %a for new let expr:@ %a\n%!"
+  Name_occurrences.print free_names
+  Let_expr.print let_expr;
+*)
     let t =
       { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
@@ -320,6 +355,7 @@ let create_if_then_else ~scrutinee ~if_true ~if_false =
 
 let bind ~bindings ~body =
   List.fold_left (fun expr (var, (target : Named.t)) ->
+(*
       match target with
       | Simple simple ->
         begin match Simple.descr simple with
@@ -327,6 +363,7 @@ let bind ~bindings ~body =
           begin match Simple.rec_info simple with
           | None ->
             let perm =
+              Can't do this unless the name modes match!
               Name_permutation.add_variable Name_permutation.empty
                 (Var_in_binding_pos.var var) rhs_var
             in
@@ -343,7 +380,7 @@ let bind ~bindings ~body =
           end
         | _ -> create_let var target expr
         end
-      | _ -> create_let var target expr)
+      | _ -> *) create_let var target expr)
     body
     (List.rev bindings)
 

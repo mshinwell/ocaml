@@ -46,7 +46,7 @@ include Identifiable.Make (struct
           let c = Binding_time.compare binding_time1 binding_time2 in
           if c <> 0 then c
           else
-            Name_occurrence_kind.compare name_occurrence_kind1
+            Name_occurrence_kind.compare_total_order name_occurrence_kind1
               name_occurrence_kind2
 
   let equal t1 t2 =

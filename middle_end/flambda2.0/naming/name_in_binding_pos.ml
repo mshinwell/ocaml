@@ -63,7 +63,8 @@ include Identifiable.Make (struct
         { name = name2; occurrence_kind = occurrence_kind2; } =
     let c = Name.compare name1 name2 in
     if c <> 0 then c
-    else Name_occurrence_kind.compare occurrence_kind1 occurrence_kind2
+    else
+      Name_occurrence_kind.compare_total_order occurrence_kind1 occurrence_kind2
 
   let equal t1 t2 =
     compare t1 t2 = 0

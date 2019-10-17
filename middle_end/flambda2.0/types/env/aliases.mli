@@ -30,6 +30,13 @@ module Make (E : sig
   module Order_within_equiv_class : sig
     type t
     include Identifiable.S with type t := t
+
+    (** The total order used by [Set], [Map] etc. must be a linear
+        extension of this partial order.  This enables [find_first] to be
+        used; see the .ml file. *)
+    val compare_partial_order : t -> t -> int option
+
+    val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
   end
 
   val order_within_equiv_class : t -> Order_within_equiv_class.t

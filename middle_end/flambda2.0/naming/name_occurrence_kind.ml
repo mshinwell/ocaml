@@ -18,8 +18,16 @@
 
 type t =
   | Normal
-  | In_types
   | Phantom
+  | In_types
+
+(* Semilattice:
+
+          Normal
+         /      \
+        /        \
+    In_types   Phantom
+*)
 
 type kind = t
 
@@ -37,7 +45,23 @@ let is_phantom t =
   | Phantom -> true
   | In_types | Normal -> false
 
-let min = Phantom
+let min_in_types = In_types
+let min_in_terms = Phantom
+
+let can_be_in_terms t =
+  match t with
+  | Normal | Phantom -> true
+  | In_types -> false
+
+let compare_partial_order t1 t2 =
+  match t1, t2 with
+  | Normal, Normal
+  | Phantom, Phantom
+  | In_types, In_types -> Some 0
+  | Normal, (Phantom | In_types) -> Some 1
+  | (Phantom | In_types), Normal -> Some (-1)
+  | Phantom, In_types
+  | In_types, Phantom -> None
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -53,27 +77,24 @@ include Identifiable.Make (struct
 
   let hash _ = Misc.fatal_error "Name_occurrence_kind.hash not yet implemented"
 
-  let number t =
-    match t with
-    | Normal -> 2
-    | In_types -> 1
-    | Phantom -> 0
-
   let compare t1 t2 =
-    Stdlib.compare (number t1) (number t2)
+    (* We explicitly make this agree with [compare_partial_order], above. *)
+    match t1, t2 with
+    | Normal, Normal
+    | Phantom, Phantom
+    | In_types, In_types -> 0
+    | Normal, (Phantom | In_types) -> 1
+    | (Phantom | In_types), Normal -> -1
+    | Phantom, In_types -> -1
+    | In_types, Phantom -> 1
 
   let equal t1 t2 =
     compare t1 t2 = 0
 end)
 
-let all =
-  Set.of_list [Normal; In_types; Phantom]
+let compare_total_order = compare
 
-let all_less_than_or_equal_to t =
-  match t with
-  | Normal -> Set.of_list [Normal; In_types; Phantom]
-  | In_types -> Set.of_list [In_types; Phantom]
-  | Phantom -> Set.of_list [Phantom]
+let compare _ _ = `Be_explicit_about_total_or_partial_ordering
 
 module Or_absent = struct
   type t =
@@ -105,11 +126,22 @@ module Or_absent = struct
       | Absent, Absent -> 0
       | Absent, Present _ -> -1
       | Present _, Absent -> 1
-      | Present kind1, Present kind2 -> compare kind1 kind2
+      | Present kind1, Present kind2 -> compare_total_order kind1 kind2
 
     let equal t1 t2 =
       compare t1 t2 = 0
   end)
+
+  let compare_total_order = compare
+
+  let compare _ _ = `Be_explicit_about_total_or_partial_ordering
+
+  let compare_partial_order t1 t2 =
+    match t1, t2 with
+    | Absent, Absent -> Some 0
+    | Absent, Present _ -> Some (-1)
+    | Present _, Absent -> Some 1
+    | Present kind1, Present kind2 -> compare_partial_order kind1 kind2
 end
 
 type descr =

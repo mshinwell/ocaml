@@ -346,7 +346,8 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
 let try_cse dacc prim arg ~min_occurrence_kind ~result_var
       : Simplify_primitive_common.cse =
   match
-    S.simplify_simple dacc arg ~min_occurrence_kind:Name_occurrence_kind.min
+    S.simplify_simple dacc arg
+      ~min_occurrence_kind:Name_occurrence_kind.min_in_types
   with
   | Bottom, ty -> Invalid ty
   | Ok arg, _arg_ty ->

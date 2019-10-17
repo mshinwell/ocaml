@@ -213,7 +213,7 @@ module Make (Head : Type_head_intf.S
     | No_alias head -> head
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals simple ->
-      let min_occurrence_kind = Name_occurrence_kind.min in
+      let min_occurrence_kind = Name_occurrence_kind.min_in_types in
       (* We must get the canonical simple with the least occurrence kind,
          since that's the one that is guaranteed not to have an [Equals]
          type. *)

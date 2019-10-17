@@ -29,8 +29,8 @@ let simplify_simple dacc simple ~min_occurrence_kind : _ Or_bottom.t * _ =
   | Bottom, kind -> Bottom, T.bottom kind
   | Ok (Some simple), kind -> Ok simple, T.alias_type_of kind simple
   | Ok None, _kind ->
-    Misc.fatal_errorf "No canonical [Simple] for %a exists at the \
-        requested occurrence kind (%a).  Downwards accumulator:@ %a"
+    Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
+        requested name mode (%a) or one greater.@ Downwards accumulator:@ %a"
       Simple.print simple
       Name_occurrence_kind.print min_occurrence_kind
       DA.print dacc
@@ -45,8 +45,9 @@ let simplify_simples dacc simples ~min_occurrence_kind =
       | Bottom, _kind -> Bottom
       | Ok (Some simple), kind -> Ok (simple, T.alias_type_of kind simple)
       | Ok None, _kind ->
-        Misc.fatal_errorf "No canonical [Simple] for %a exists at the \
-            requested occurrence kind (%a).  Downwards accumulator:@ %a"
+        Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
+            requested name mode (%a) or one greater.@ \
+            Downwards accumulator:@ %a"
           Simple.print simple
           Name_occurrence_kind.print min_occurrence_kind
           DA.print dacc)
