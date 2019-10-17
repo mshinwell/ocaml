@@ -53,7 +53,6 @@ let bint_shift bi prim arg1 arg2 =
 let string_or_bytes_ref kind arg1 arg2 dbg : H.expr_primitive =
   Checked {
     primitive = Binary (String_or_bigstring_load (kind, Eight), arg1, arg2);
-    (* CR mshinwell: This should check >= 0 as well *)
     validity_conditions = [
       Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
               (* CR pchambart:
@@ -62,7 +61,10 @@ let string_or_bytes_ref kind arg1 arg2 dbg : H.expr_primitive =
                  untagging of both arguments doesn't change the result.
                  mshinwell: I'm confused.  Why can't
                  [Int_comp Tagged_immediate] just do the right thing on
-                 tagged immediates? *)
+                 tagged immediates?
+                 Update:
+                 Int_comp Tagged_immediate should do the same as for
+                 Int_comp Naked_nativeint *)
               tagged_immediate_as_naked_nativeint arg2,
               tagged_immediate_as_naked_nativeint
                 (Prim (Unary (String_length String, arg1))));
@@ -193,6 +195,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Unary (Array_length (C.convert_array_kind kind), arg)
   | Pduparray (kind, mutability), [arg] ->
     Unary (Duplicate_block {
+      (* CR mshinwell: fix this next function *)
       kind = C.convert_array_kind_to_duplicate_block_kind kind;
       (* CR mshinwell: Check that [Pduparray] is only applied to immutable
          arrays *)
@@ -202,6 +205,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       destination_mutability = C.convert_mutable_flag mutability;
     }, arg)
   | Pstringlength, [arg] ->
+    (* CR mshinwell: Decide whether things such as String_length should return
+       tagged or untagged integers.  Probably easiest to match Cmm_helpers
+       for now and change individual cases later for better codegen if
+       required. *)
     Unary (String_length String, arg)
   | Pbyteslength, [arg] ->
     Unary (String_length Bytes, arg)
@@ -726,6 +733,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Prim (Unary (Unbox_number Naked_nativeint, arg)))))
   | Pint_as_pointer, [arg] -> Unary (Int_as_pointer, arg)
   | Pbigarrayref (unsafe, num_dimensions, kind, layout), args ->
+    (* CR mshinwell: When num_dimensions = 1 then we could actually
+       put the bounds check in Flambda. *)
     let is_safe : P.is_safe = if unsafe then Unsafe else Safe in
     let kind = C.convert_bigarray_kind kind in
     let layout = C.convert_bigarray_layout layout in
