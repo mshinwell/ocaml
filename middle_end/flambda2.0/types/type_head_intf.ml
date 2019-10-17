@@ -28,7 +28,7 @@ module type S = sig
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  module Make_meet_or_join (E : Lattice_ops_intf.S
+  module Make_meet_or_join (_ : Lattice_ops_intf.S
     with type meet_env := meet_env
     with type typing_env := typing_env
     with type typing_env_extension := typing_env_extension)
