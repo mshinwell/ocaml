@@ -600,7 +600,7 @@ let rec pkey chan  = function
              do_make_if_in
                (Arg.make_const d) arg (mk_ifso ctx) (mk_ifno ctx))
 
-  let rec c_test ctx ({cases=cases ; actions=actions} as s) =
+  let rec c_test ~boolean_like ctx ({cases=cases ; actions=actions} as s) =
     let lcases = Array.length cases in
     assert(lcases > 0) ;
     if lcases = 1 then
@@ -627,29 +627,29 @@ let rec pkey chan  = function
               make_if_eq
                 ctx.arg
                 (low+ctx.off)
-                (c_test ctx {s with cases=inside})
-                (c_test ctx {s with cases=outside})
+                (c_test ~boolean_like ctx {s with cases=inside})
+                (c_test ~boolean_like ctx {s with cases=outside})
             else
               make_if_ne
                 ctx.arg
                 (low+ctx.off)
-                (c_test ctx {s with cases=outside})
-                (c_test ctx {s with cases=inside})
+                (c_test ~boolean_like ctx {s with cases=outside})
+                (c_test ~boolean_like ctx {s with cases=inside})
           end else begin
             if less_tests coutside cinside then
               make_if_in
                 ctx
                 (low+ctx.off)
                 (high-low)
-                (fun ctx -> c_test ctx {s with cases=inside})
-                (fun ctx -> c_test ctx {s with cases=outside})
+                (fun ctx -> c_test ~boolean_like ctx {s with cases=inside})
+                (fun ctx -> c_test ~boolean_like ctx {s with cases=outside})
             else
               make_if_out
                 ctx
                 (low+ctx.off)
                 (high-low)
-                (fun ctx -> c_test ctx {s with cases=outside})
-                (fun ctx -> c_test ctx {s with cases=inside})
+                (fun ctx -> c_test ~boolean_like ctx {s with cases=outside})
+                (fun ctx -> c_test ~boolean_like ctx {s with cases=inside})
           end
       | Sep i ->
           let lim,left,right = coupe cases i in
@@ -659,18 +659,25 @@ let rec pkey chan  = function
           and right = {s with cases=right} in
 
           if i=1 && (lim+ctx.off)=1 && get_low cases 0+ctx.off=0 then
-            (* CR mshinwell (with trefis): This is related to PR#8672. *)
-            make_if_ne (* Arg.make_if *)
-              ctx.arg 0
-              (c_test ctx right) (c_test ctx left)
+            (* CR mshinwell (with trefis): This is related to PR#8672.
+               That PR seems to incorrectly make the assumption that being
+               here means that the scrutinee has range {0, 1}. *)
+            if boolean_like then
+              Arg.make_if
+                ctx.arg
+                (c_test ~boolean_like ctx right) (c_test ~boolean_like ctx left)
+            else
+              make_if_ne
+                ctx.arg 0
+                (c_test ~boolean_like ctx right) (c_test ~boolean_like ctx left)
           else if less_tests cright cleft then
             make_if_lt
               ctx.arg (lim+ctx.off)
-              (c_test ctx left) (c_test ctx right)
+              (c_test ~boolean_like ctx left) (c_test ~boolean_like ctx right)
           else
             make_if_ge
               ctx.arg (lim+ctx.off)
-              (c_test ctx right) (c_test ctx left)
+              (c_test ~boolean_like ctx right) (c_test ~boolean_like ctx left)
 
     end
 
@@ -820,8 +827,18 @@ let rec pkey chan  = function
     {cases = r ; actions = acts}
   ;;
 
+  let is_boolean_like ~cases =
+    Array.length cases = 2
+      && match Array.to_list cases with
+         | [0, 0, _; 1, 1, _]
+         | [1, 1, _; 0, 0, _] -> true
+         | _ -> false
 
+  (* CR mshinwell: Is [cases] guaranteed to be exhaustive?  It needs to be,
+     otherwise it might look as if the scrutinee has range {0, 1} and therefore
+     be "boolean-like" when in fact it is not. *)
   let do_zyva loc (low,high) arg cases actions =
+    let boolean_like = is_boolean_like ~cases in
     let old_ok = !ok_inter in
     ok_inter := (abs low <= inter_limit && abs high <= inter_limit) ;
     if !ok_inter <> old_ok then Hashtbl.clear t ;
@@ -835,7 +852,7 @@ let rec pkey chan  = function
 *)
     let n_clusters,k = comp_clusters s in
     let clusters = make_clusters loc s n_clusters k in
-    c_test {arg=arg ; off=0} clusters
+    c_test ~boolean_like {arg=arg ; off=0} clusters
 
   let abstract_shared actions =
     let handlers = ref (fun x -> x) in
@@ -859,6 +876,7 @@ let rec pkey chan  = function
 
   and test_sequence arg cases actions =
     assert (Array.length cases > 0) ;
+    let boolean_like = is_boolean_like ~cases in
     let actions = actions.act_get_shared () in
     let hs,actions = abstract_shared actions in
     let old_ok = !ok_inter in
@@ -872,7 +890,7 @@ let rec pkey chan  = function
   pcases stderr cases ;
   prerr_endline "" ;
 *)
-    hs (c_test {arg=arg ; off=0} s)
+    hs (c_test ~boolean_like {arg=arg ; off=0} s)
   ;;
 
 end
