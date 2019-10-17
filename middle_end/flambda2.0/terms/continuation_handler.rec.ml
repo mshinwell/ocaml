@@ -132,6 +132,11 @@ let apply_name_permutation
 type behaviour =
   | Unreachable of { arity : Flambda_arity.t; }
   | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
+  | Apply_cont_with_constant_arg of {
+      cont : Continuation.t;
+      arg : Simple.Const.t;
+      arity : Flambda_arity.t;
+    }
   | Unknown of { arity : Flambda_arity.t; }
 
 let behaviour t : behaviour =
@@ -156,7 +161,18 @@ let behaviour t : behaviour =
                 alias_for = Apply_cont.continuation apply_cont;
               }
             else
-              Unknown { arity; }
+              match args with
+              | [simple] ->
+                begin match Simple.descr simple with
+                | Const arg ->
+                  Apply_cont_with_constant_arg {
+                    cont = Apply_cont.continuation apply_cont;
+                    arg;
+                    arity;
+                  }
+                | Name _ | Discriminant _ -> Unknown { arity; }
+                end
+              | _ -> Unknown { arity; }
           end
         | Invalid Treat_as_unreachable -> Unreachable { arity; }
         | _ -> Unknown { arity; })

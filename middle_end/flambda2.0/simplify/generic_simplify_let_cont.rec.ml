@@ -97,15 +97,12 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 (* CR mshinwell: More checks here?  e.g. on the arity and
                    ensuring the aliased continuation is an exn handler too *)
                 UE.add_continuation_alias uenv cont arity ~alias_for
+              | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
+                UE.add_continuation uenv cont scope arity
               | Unreachable { arity; } | Unknown { arity; } ->
                 UE.add_continuation uenv cont scope arity
             else
-              match CHL.behaviour handler with
-              | Unreachable { arity; } ->
-                UE.add_unreachable_continuation uenv cont scope arity
-              | Alias_for { arity; alias_for; } ->
-                UE.add_continuation_alias uenv cont arity ~alias_for
-              | Unknown { arity; } ->
+              let normal_case ~arity =
                 let can_inline =
                   if num_uses <> 1 && not (CHL.stub handler) then None
                   else CHL.real_handler handler
@@ -114,6 +111,15 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 | None -> UE.add_continuation uenv cont scope arity
                 | Some handler ->
                   UE.add_continuation_to_inline uenv cont scope arity handler
+              in
+              match CHL.behaviour handler with
+              | Unreachable { arity; } ->
+                UE.add_unreachable_continuation uenv cont scope arity
+              | Alias_for { arity; alias_for; } ->
+                UE.add_continuation_alias uenv cont arity ~alias_for
+              | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
+                normal_case ~arity
+              | Unknown { arity; } -> normal_case ~arity
           in
           let uacc = UA.with_uenv uacc uenv in
           (handler, uenv_to_return, user_data), uacc))
