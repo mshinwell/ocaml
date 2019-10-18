@@ -66,3 +66,7 @@ val print : Format.formatter -> t -> unit
 
 val compare : t -> t -> int
 (** Comparison function. *)
+
+val join : t -> t -> t
+(** join two effects, effectively computing the maximum of the two
+    given effects. *)

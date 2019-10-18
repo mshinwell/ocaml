@@ -34,3 +34,8 @@ val print : Format.formatter -> t -> unit
 
 val compare : t -> t -> int
 (** Comparison function. *)
+
+val join : t -> t -> t
+(** Join two coeffects. *)
+
+

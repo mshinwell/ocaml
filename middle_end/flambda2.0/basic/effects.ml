@@ -34,6 +34,12 @@ let compare_mutable_or_immutable mut1 mut2 =
   | Immutable, Mutable -> -1
   | Mutable, Immutable -> 1
 
+let join_mutable_or_immutable mut1 mut2 =
+  match mut1, mut2 with
+  | Immutable, Immutable -> Immutable
+  | Mutable, Mutable
+  | Immutable, Mutable
+  | Mutable, Immutable -> Mutable
 
 (* Effects *)
 
@@ -64,4 +70,17 @@ let compare eff1 eff2 =
   | Arbitrary_effects, Arbitrary_effects -> 0
   | Arbitrary_effects, (No_effects | Only_generative_effects _) -> 1
 
+let join eff1 eff2 =
+  match eff1, eff2 with
+  | No_effects, No_effects
+  | No_effects, Only_generative_effects _
+  | No_effects, Arbitrary_effects -> eff2
+  | Only_generative_effects _, No_effects -> eff1
+  | Only_generative_effects mut1,
+    Only_generative_effects mut2 ->
+      Only_generative_effects (join_mutable_or_immutable mut1 mut2)
+  | Only_generative_effects _, Arbitrary_effects -> eff2
+  | Arbitrary_effects, No_effects
+  | Arbitrary_effects, Only_generative_effects _
+  | Arbitrary_effects, Arbitrary_effects -> eff1
 
