@@ -232,8 +232,8 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
              k result_var))
       k_exn
   | Lswitch (scrutinee,
-      ({ sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
-         sw_tags_to_sizes = _; }
+      ({ sw_scrutinee_sort = _; sw_numconsts; sw_consts; sw_numblocks = _;
+         sw_blocks; sw_failaction; sw_tags_to_sizes = _; }
         as switch), _loc) ->
     begin match sw_blocks with
     | [] -> ()
@@ -486,8 +486,8 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
         Prim { prim; args; loc; exn_continuation; },
         Apply_cont (k, None, [result_var]))) k_exn
   | Lswitch (scrutinee,
-      ({ sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
-         sw_tags_to_sizes = _; }
+      ({ sw_scrutinee_sort = _; sw_numconsts; sw_consts; sw_numblocks = _;
+         sw_blocks; sw_failaction; sw_tags_to_sizes = _; }
         as switch), _loc) ->
     begin match sw_blocks with
     | [] -> ()
