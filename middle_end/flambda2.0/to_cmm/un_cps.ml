@@ -269,14 +269,18 @@ let binary_phys_comparison _env dbg kind op x y =
         (op : Flambda_primitive.equality_comparison) with
   (* int64 special case *)
   | Naked_number Naked_int64, Eq when C.arch32 ->
-      C.extcall ~alloc:true "caml_equal" typ_int
-        [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
+      C.untag_int
+        (C.extcall ~alloc:true "caml_equal" typ_int
+          [C.box_int64 ~dbg x; C.box_int64 ~dbg y])
+        dbg
   | Naked_number Naked_int64, Neq when C.arch32 ->
-      C.extcall ~alloc:true "caml_notequal" typ_int
-        [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
+      C.untag_int
+        (C.extcall ~alloc:true "caml_notequal" typ_int
+          [C.box_int64 ~dbg x; C.box_int64 ~dbg y])
+        dbg
   (* General case *)
-  | _, Eq -> C.tag_int (C.eq ~dbg x y) dbg
-  | _, Neq -> C.tag_int (C.neq ~dbg x y) dbg
+  | _, Eq -> C.eq ~dbg x y
+  | _, Neq -> C.neq ~dbg x y
 
 let binary_int_arith_primitive _env dbg kind op x y =
   match (kind : Flambda_kind.Standard_int.t),
@@ -348,6 +352,7 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   match (kind : Flambda_kind.Standard_int.t),
         (signed : Flambda_primitive.signed_or_unsigned),
         (cmp : Flambda_primitive.ordered_comparison) with
+  (* XXX arch32 cases need [untag_int] now. *)
   | Naked_int64, Signed, Lt when C.arch32 ->
       C.extcall ~alloc:true "caml_lessthan" typ_int
         [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
@@ -363,31 +368,31 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   | Naked_int64, Unsigned, (Lt | Le | Gt | Ge) when C.arch32 ->
       todo() (* There are no runtime C functions to do that afaict *)
   (* Tagged integers *)
-  | Tagged_immediate, Signed, Lt -> C.tag_int (C.lt ~dbg x y) dbg
-  | Tagged_immediate, Signed, Le -> C.tag_int (C.le ~dbg x y) dbg
-  | Tagged_immediate, Signed, Gt -> C.tag_int (C.gt ~dbg x y) dbg
-  | Tagged_immediate, Signed, Ge -> C.tag_int (C.ge ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Lt -> C.tag_int (C.ult ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Le -> C.tag_int (C.ule ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Gt -> C.tag_int (C.ugt ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Ge -> C.tag_int (C.uge ~dbg x y) dbg
+  | Tagged_immediate, Signed, Lt -> C.lt ~dbg x y
+  | Tagged_immediate, Signed, Le -> C.le ~dbg x y
+  | Tagged_immediate, Signed, Gt -> C.gt ~dbg x y
+  | Tagged_immediate, Signed, Ge -> C.ge ~dbg x y
+  | Tagged_immediate, Unsigned, Lt -> C.ult ~dbg x y
+  | Tagged_immediate, Unsigned, Le -> C.ule ~dbg x y
+  | Tagged_immediate, Unsigned, Gt -> C.ugt ~dbg x y
+  | Tagged_immediate, Unsigned, Ge -> C.uge ~dbg x y
   (* Naked integers. *)
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Lt ->
-      C.tag_int (C.lt ~dbg x y) dbg
+      C.lt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Le ->
-      C.tag_int (C.le ~dbg x y) dbg
+      C.le ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Gt ->
-      C.tag_int (C.gt ~dbg x y) dbg
+      C.gt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Ge ->
-      C.tag_int (C.ge ~dbg x y) dbg
+      C.ge ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Lt ->
-      C.tag_int (C.ult ~dbg x y) dbg
+      C.ult ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Le ->
-      C.tag_int (C.ule ~dbg x y) dbg
+      C.ule ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Gt ->
-      C.tag_int (C.ugt ~dbg x y) dbg
+      C.ugt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Ge ->
-      C.tag_int (C.uge ~dbg x y) dbg
+      C.uge ~dbg x y
 
 let binary_float_arith_primitive _env dbg op x y =
   match (op : Flambda_primitive.binary_float_arith_op) with
@@ -398,12 +403,12 @@ let binary_float_arith_primitive _env dbg op x y =
 
 let binary_float_comp_primitive _env dbg op x y =
   match (op : Flambda_primitive.comparison) with
-  | Eq -> C.tag_int (C.float_eq ~dbg x y) dbg
-  | Neq -> C.tag_int (C.float_neq ~dbg x y) dbg
-  | Lt -> C.tag_int (C.float_lt ~dbg x y) dbg
-  | Gt -> C.tag_int (C.float_gt ~dbg x y) dbg
-  | Le -> C.tag_int (C.float_le ~dbg x y) dbg
-  | Ge -> C.tag_int (C.float_ge ~dbg x y) dbg
+  | Eq -> C.float_eq ~dbg x y
+  | Neq -> C.float_neq ~dbg x y
+  | Lt -> C.float_lt ~dbg x y
+  | Gt -> C.float_gt ~dbg x y
+  | Le -> C.float_le ~dbg x y
+  | Ge -> C.float_ge ~dbg x y
 
 (* Primitives *)
 

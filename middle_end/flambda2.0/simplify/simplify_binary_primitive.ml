@@ -490,15 +490,16 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let unknown = T.any_tagged_immediate ()
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
   let term imm : Named.t =
     Named.create_simple (Simple.const (Tagged_immediate imm))
@@ -750,17 +751,20 @@ end = struct
   type op = P.equality_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let unknown = T.any_tagged_immediate ()
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
-  let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
+  let term imm =
+    let imm = Immediate.to_targetint' imm in
+    Named.create_simple (Simple.const (Naked_nativeint imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product

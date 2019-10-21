@@ -875,7 +875,7 @@ let result_kind_of_binary_primitive p : result_kind =
   (* CR mshinwell: Change [Phys_equal] to return kind [Fabricated] *)
   | Phys_equal _
   | Int_comp _
-  | Float_comp _ -> Singleton K.value
+  | Float_comp _ -> Singleton K.naked_nativeint
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
