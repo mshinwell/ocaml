@@ -21,12 +21,14 @@ module K = Flambda_kind
 module Sort = struct
   type t =
     | Int
+    | Constructor
     | Tag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
     | Is_int
 
   let to_lowercase_string t =
     match t with
     | Int -> "int"
+    | Constructor -> "ctor"
     | Tag _ -> "tag"
     | Is_int -> "is_int"
 
@@ -78,8 +80,8 @@ let invariant env ({ sort; scrutinee; arms; } as t) =
   let check discr k =
     let discr_sort = Discriminant.sort discr in
     begin match discr_sort, sort with
-    | Int, Int | Tag, Tag _ | Is_int, Is_int -> ()
-    | (Int | Tag | Is_int), _ ->
+    | Int, Int | Constructor, Constructor | Tag, Tag _ | Is_int, Is_int -> ()
+    | (Int | Constructor | Tag | Is_int), _ ->
       Misc.fatal_errorf "[Switch] has arm(s) whose discriminant sort does \
           not match the sort of the whole [Switch]:@ %a"
         print t

@@ -19,7 +19,7 @@
 module Const = struct
   type t =
     | Tagged_immediate of Immediate.t
-    | Constructor of Immediate.t
+    | Tagged_constructor of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
@@ -41,7 +41,7 @@ module Const = struct
       match t1, t2 with
       | Tagged_immediate i1, Tagged_immediate i2 ->
         Immediate.compare i1 i2
-      | Constructor i1, Constructor i2 ->
+      | Tagged_constructor i1, Tagged_constructor i2 ->
         Immediate.compare i1 i2
       | Naked_float f1, Naked_float f2 ->
         Numbers.Float_by_bit_pattern.compare f1 f2
@@ -53,8 +53,8 @@ module Const = struct
         Targetint.compare n1 n2
       | Tagged_immediate _, _ -> -1
       | _, Tagged_immediate _ -> 1
-      | Constructor _, _ -> -1
-      | _, Constructor _ -> 1
+      | Tagged_constructor _, _ -> -1
+      | _, Tagged_constructor _ -> 1
       | Naked_float _, _ -> -1
       | _, Naked_float _ -> 1
       | Naked_int32 _, _ -> -1
@@ -67,7 +67,7 @@ module Const = struct
     let hash t =
       match t with
       | Tagged_immediate n -> Hashtbl.hash (0, Immediate.hash n)
-      | Constructor n -> Hashtbl.hash (1, Immediate.hash n)
+      | Tagged_constructor n -> Hashtbl.hash (1, Immediate.hash n)
       | Naked_float n ->
         Hashtbl.hash (2, Numbers.Float_by_bit_pattern.hash n)
       | Naked_int32 n -> Hashtbl.hash (3, n)
@@ -81,7 +81,7 @@ module Const = struct
           (Flambda_colours.tagged_immediate ())
           Immediate.print i
           (Flambda_colours.normal ())
-      | Constructor i ->
+      | Tagged_constructor i ->
         Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.constructor ())
           Immediate.print i
@@ -114,7 +114,7 @@ module Const = struct
   let kind t =
     let module K = Flambda_kind in
     match t with
-    | Tagged_immediate _ | Constructor _ -> K.value
+    | Tagged_immediate _ | Tagged_constructor _ -> K.value
     | Naked_float _ -> K.naked_float
     | Naked_int32 _ -> K.naked_int32
     | Naked_int64 _ -> K.naked_int64

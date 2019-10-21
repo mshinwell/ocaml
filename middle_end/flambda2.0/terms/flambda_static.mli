@@ -24,8 +24,8 @@ module Of_kind_value : sig
       (** A field containing the address of the given symbol. *)
     | Tagged_immediate of Immediate.t
       (** A field containing the given tagged immediate.  (This isn't used
-          for constructors; use [Constructor] instead.) *)
-    | Constructor of Immediate.t
+          for constructors; use [Tagged_constructor] instead.) *)
+    | Tagged_constructor of Immediate.t
       (** A field containing the given tagged immediate, representing a
           constant constructor. *)
     | Dynamically_computed of Variable.t

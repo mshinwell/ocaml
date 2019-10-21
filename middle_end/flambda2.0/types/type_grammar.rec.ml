@@ -271,6 +271,13 @@ let this_naked_int64 i : t =
 let this_naked_nativeint i : t =
   Naked_nativeint (T_NN.create_equals (Simple.const (Naked_nativeint i)))
 
+let this_untagged_immediate i =
+  this_naked_nativeint (Immediate.to_targetint' i)
+
+(* CR mshinwell: Should we resurrect the [Naked_immediate] kind patch? *)
+let this_untagged_constructor i =
+  this_naked_nativeint (Immediate.to_targetint' i)
+
 let these_naked_floats0 ~no_alias fs =
   match Float.Set.get_singleton fs with
   | Some f when not no_alias -> this_naked_float f
@@ -348,12 +355,12 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
-let this_constructor imm : t =
-  Value (T_V.create_equals (Simple.const (Constructor imm)))
+let this_tagged_constructor imm : t =
+  Value (T_V.create_equals (Simple.const (Tagged_constructor imm)))
 
-let these_constructors0 ~no_alias imms : t =
+let these_tagged_constructors0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
-  | Some imm when not no_alias -> this_constructor imm
+  | Some imm when not no_alias -> this_tagged_constructor imm
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
@@ -364,8 +371,8 @@ let these_constructors0 ~no_alias imms : t =
           blocks = Known (Row_like.For_blocks.create_bottom ());
         })))
 
-let this_constructor_without_alias imm : t =
-  these_constructors0 ~no_alias:true (Immediate.Set.singleton imm)
+let this_tagged_constructor_without_alias imm : t =
+  these_tagged_constructors0 ~no_alias:true (Immediate.Set.singleton imm)
 
 let any_tagged_immediate () : t =
   Value (T_V.create_no_alias (Ok (
@@ -607,7 +614,7 @@ let array_of_length ~length =
 let type_for_const (const : Simple.Const.t) =
   match const with
   | Tagged_immediate i -> this_tagged_immediate i
-  | Constructor i -> this_constructor i
+  | Tagged_constructor i -> this_tagged_constructor i
   | Naked_float f -> this_naked_float f
   | Naked_int32 n -> this_naked_int32 n
   | Naked_int64 n -> this_naked_int64 n

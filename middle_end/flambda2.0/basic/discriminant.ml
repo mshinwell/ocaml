@@ -19,12 +19,14 @@
 module Sort = struct
   type t =
     | Int
+    | Constructor
     | Tag
     | Is_int
 
   let to_lowercase_string t =
     match t with
     | Int -> "int"
+    | Constructor -> "ctor"
     | Tag -> "tag"
     | Is_int -> "is_int"
 
@@ -34,6 +36,7 @@ module Sort = struct
     let print ppf t =
       match t with
       | Int -> Format.fprintf ppf "Int"
+      | Constructor -> Format.fprintf ppf "Constructor"
       | Tag -> Format.fprintf ppf "Tag"
       | Is_int -> Format.fprintf ppf "Is_int"
 

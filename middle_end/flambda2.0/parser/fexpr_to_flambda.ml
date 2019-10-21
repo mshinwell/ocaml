@@ -334,6 +334,7 @@ let rec expr env (e : Fexpr.expr) : E.t =
       let sort : D.Sort.t =
         match sort with
         | Int -> Int
+        | Constructor -> Constructor
         | Tag _ -> Tag
         | Is_int -> Is_int
       in

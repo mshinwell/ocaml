@@ -23,6 +23,7 @@ module Sort : sig
   (* CR mshinwell: Consider adding phantom parameter *)
   type t =
     | Int
+    | Constructor
     | Tag (* CR mshinwell: This should probably have a "size" argument *)
     | Is_int
 

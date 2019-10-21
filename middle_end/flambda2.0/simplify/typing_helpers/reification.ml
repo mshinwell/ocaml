@@ -34,7 +34,7 @@ let create_static_part (to_lift : T.to_lift)
           match field with
           | Symbol sym -> Symbol sym
           | Tagged_immediate imm -> Tagged_immediate imm
-          | Constructor imm -> Constructor imm)
+          | Tagged_constructor imm -> Tagged_constructor imm)
         fields
     in
     Block (tag, Immutable, of_kind_values)

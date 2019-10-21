@@ -92,7 +92,7 @@ module Make
   type symbol_or_tagged_immediate =
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
-    | Constructor of Immediate.t
+    | Tagged_constructor of Immediate.t
 
   let prove_equals_to_symbol_or_tagged_immediate env t
         : symbol_or_tagged_immediate proof =
@@ -107,7 +107,7 @@ module Make
     | Some simple ->
       match Simple.descr simple with
       | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
-      | Const (Constructor imm) -> Proved (Constructor imm)
+      | Const (Tagged_constructor imm) -> Proved (Tagged_constructor imm)
       | Const _ | Discriminant _ ->
         Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
             different from that returned by [kind] (%a):@ %a"
@@ -129,7 +129,7 @@ module Make
           | Name (Symbol sym) -> Proved (Symbol sym)
           | Name (Var _) -> Unknown
           | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
-          | Const (Constructor imm) -> Proved (Constructor imm)
+          | Const (Tagged_constructor imm) -> Proved (Tagged_constructor imm)
           | Const _ | Discriminant _ ->
             let kind = kind t in
             Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
@@ -173,7 +173,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_float f) -> Proved (Float.Set.singleton f)
-    | Const (Tagged_immediate _ | Constructor _ | Naked_int32 _
+    | Const (Tagged_immediate _ | Tagged_constructor _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -193,7 +193,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
-    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
+    | Const (Tagged_immediate _ | Tagged_constructor _ | Naked_float _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -213,7 +213,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
-    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
+    | Const (Tagged_immediate _ | Tagged_constructor _ | Naked_float _
       | Naked_int32 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -233,7 +233,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
+    | Const (Tagged_immediate _ | Tagged_constructor _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -260,7 +260,7 @@ module Make
     in
     match expand_head t env with
     | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
-    | Const (Constructor _ | Naked_float _ | Naked_int32 _
+    | Const (Tagged_constructor _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -291,7 +291,7 @@ module Make
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
     match expand_head t env with
-    | Const (Constructor _) -> Proved true
+    | Const (Tagged_constructor _) -> Proved true
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
@@ -322,7 +322,7 @@ module Make
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
     match expand_head t env with
-    | Const (Constructor _) -> Unknown
+    | Const (Tagged_constructor _) -> Unknown
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
@@ -588,8 +588,8 @@ Format.eprintf "reifying %a\n%!" print t;
                       | Proved (Symbol sym) -> Some (Symbol sym)
                       | Proved (Tagged_immediate sym) ->
                         Some (Tagged_immediate sym)
-                      | Proved (Constructor sym) ->
-                        Some (Constructor sym)
+                      | Proved (Tagged_constructor sym) ->
+                        Some (Tagged_constructor sym)
                       (* CR mshinwell: [Invalid] should propagate up *)
                       | Unknown | Invalid -> None)
                     field_types

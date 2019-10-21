@@ -118,6 +118,7 @@ module Boxable_number : sig
     | Naked_int64
     | Naked_nativeint
     | Untagged_immediate
+    | Untagged_constructor
 
   (** The kind of the _unboxed_ representation of the given [t]. *)
   val to_kind : t -> kind

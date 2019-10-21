@@ -135,6 +135,7 @@ Format.eprintf "Simplifying let on %a: defining expr done. body is:@ %a\n%!"
 Format.eprintf "Simplifying let on %a: body done\n%!"
   Bindable_let_bound.print bound_vars;
 *)
+    (* CR mshinwell: Share with the code for [Switch] below *)
     List.fold_left
       (fun (expr, user_data, uacc)
            (bound_vars, (defining_expr : Reachable.t)) ->
@@ -1068,7 +1069,10 @@ and simplify_switch
             match Discriminant.sort arm, Switch.sort switch with
             | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
-              T.this_tagged_immediate imm
+              T.this_untagged_immediate imm
+            | Constructor, Constructor ->
+              let imm = Immediate.int (Discriminant.to_int arm) in
+              T.this_untagged_constructor imm
             | Is_int, Is_int ->
               T.this_discriminant arm
             | Tag, Tag { tags_to_sizes = _; } ->
@@ -1106,7 +1110,8 @@ and simplify_switch
                   T.immutable_block (Tag.Scannable.to_tag tag) ~fields
 *)
 (*              end*)
-            | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
+            | (Int | Constructor | Is_int | Tag),
+                (Int | Constructor | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
@@ -1162,7 +1167,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
             | Unreachable _ -> new_let_conts, arms, identity_arms, not_arms
             | Apply_cont_with_constant_arg { cont; arg; arity = _; } ->
               begin match arg with
-              | Tagged_immediate arg | Constructor arg ->
+              | Tagged_immediate arg | Tagged_constructor arg ->
                 let arm_as_int = Discriminant.to_int arm in
                 let arg_as_int = Immediate.to_targetint arg in
                 if Targetint.OCaml.equal arm_as_int arg_as_int then
@@ -1213,23 +1218,56 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
-    let body =
+    let create_tagged_scrutinee k =
+      (* CR mshinwell: Does this indicate that we should be using untagged
+         immediates and constructors more widely?  Maybe so; after all, why
+         should they be any different from boxed numbers in this regard? *)
+      let bound_to = Variable.create "tagged_scrutinee" in
+      let bound_vars =
+        Bindable_let_bound.singleton (VB.create bound_to NOK.normal)
+      in
+      let named =
+        Named.create_prim (Unary (Box_number Untagged_constructor, scrutinee))
+          Debuginfo.none
+      in
+      let bindings, _dacc =
+        Simplify_named.simplify_named dacc ~bound_vars named
+      in
+      let body = k ~tagged_scrutinee:(Simple.var bound_to) in
+      List.fold_left
+        (fun (expr, user_data, uacc)
+             (bound_vars, (defining_expr : Reachable.t)) ->
+          match defining_expr with
+          | Invalid _ -> Expr.create_invalid (), user_data, uacc
+          | Reachable defining_expr ->
+            let expr =
+              Expr.create_pattern_let bound_vars defining_expr expr
+            in
+            expr, user_data, uacc)
+        (body, user_data, uacc)
+        (List.rev bindings)
+    in
+    let body, user_data, uacc =
       match switch_is_identity with
       | Some dest ->
-        let apply_cont = Apply_cont.create dest ~args:[scrutinee] in
-        Expr.create_apply_cont apply_cont
+        create_tagged_scrutinee (fun ~tagged_scrutinee ->
+          let apply_cont = Apply_cont.create dest ~args:[tagged_scrutinee] in
+          Expr.create_apply_cont apply_cont)
       | None ->
         match switch_is_boolean_not with
         | Some dest ->
-          let not_scrutinee = Variable.create "not_scrutinee" in
-          let apply_cont =
-            Apply_cont.create dest ~args:[Simple.var not_scrutinee]
-          in
-          Expr.create_let (VB.create not_scrutinee NOK.normal)
-            (Named.create_prim (P.Unary (Boolean_not, scrutinee))
-              Debuginfo.none)
-            (Expr.create_apply_cont apply_cont)
-        | None -> Expr.create_switch (Switch.sort switch) ~scrutinee ~arms
+          create_tagged_scrutinee (fun ~tagged_scrutinee ->
+            let not_scrutinee = Variable.create "not_scrutinee" in
+            let apply_cont =
+              Apply_cont.create dest ~args:[Simple.var not_scrutinee]
+            in
+            Expr.create_let (VB.create not_scrutinee NOK.normal)
+              (Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
+                Debuginfo.none)
+              (Expr.create_apply_cont apply_cont))
+        | None ->
+          let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
+          expr, user_data, uacc
     in
     let expr =
       List.fold_left (fun body (new_cont, new_handler) ->

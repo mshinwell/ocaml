@@ -26,6 +26,7 @@
 module Sort : sig
   type t =
     | Int
+    | Constructor
     | Tag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
     | Is_int
 

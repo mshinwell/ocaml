@@ -133,7 +133,7 @@ let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
 
 let const _env c =
   match (c : Simple.Const.t) with
-  | Tagged_immediate i | Constructor i ->
+  | Tagged_immediate i | Tagged_constructor i ->
       C.targetint (tag_targetint (targetint_of_imm i))
   | Naked_float f ->
       C.float (Numbers.Float_by_bit_pattern.to_float f)
@@ -143,7 +143,7 @@ let const _env c =
 
 let const_static _env c =
   match (c : Simple.Const.t) with
-  | Tagged_immediate i | Constructor i ->
+  | Tagged_immediate i | Tagged_constructor i ->
       [C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))]
   | Naked_float f ->
       [C.cfloat (Numbers.Float_by_bit_pattern.to_float f)]
@@ -879,6 +879,7 @@ and switch_scrutinee env sort s =
   let e =
     match (sort : Switch.Sort.t) with
     | Int -> C.untag_int e Debuginfo.none
+    | Constructor -> e
     | Tag _ -> e (* get_tag already returns untagged integers *)
     | Is_int -> e (* Is_int already returns untagged integers *)
   in
@@ -996,7 +997,7 @@ let static_value _env v =
   match (v : Flambda_static.Of_kind_value.t) with
   | Symbol s -> C.symbol_address (symbol s)
   | Dynamically_computed _ -> C.cint 1n
-  | Tagged_immediate i | Constructor i ->
+  | Tagged_immediate i | Tagged_constructor i ->
       C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))
 
 let or_variable f default v cont =
@@ -1019,7 +1020,7 @@ let rec static_block_updates symb env acc i = function
   | sv :: r ->
       begin match (sv : Flambda_static.Of_kind_value.t) with
       | Symbol _
-      | Tagged_immediate _ | Constructor _ ->
+      | Tagged_immediate _ | Tagged_constructor _ ->
           static_block_updates symb env acc (i + 1) r
       | Dynamically_computed var ->
           let update = make_update env Cmm.Word_val symb var i in

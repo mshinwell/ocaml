@@ -163,7 +163,7 @@ let rec declare_const t (const : Lambda.structured_constant)
   | Const_base (Const_int c) ->
     Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
   | Const_pointer p ->
-    Constructor (Immediate.int (Targetint.OCaml.of_int p)), "ctor"
+    Tagged_constructor (Immediate.int (Targetint.OCaml.of_int p)), "ctor"
   | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
@@ -206,8 +206,8 @@ let close_const t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
     Named.create_simple (Simple.const (Tagged_immediate c)), name
-  | Constructor c, name ->
-    Named.create_simple (Simple.const (Constructor c)), name
+  | Tagged_constructor c, name ->
+    Named.create_simple (Simple.const (Tagged_constructor c)), name
   | Symbol s, name -> Named.create_simple (Simple.symbol s), name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
@@ -494,6 +494,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       let sort : D.Sort.t =
         match sw.sort with
         | Int -> Int
+        | Constructor -> Constructor
         | Tag _ -> Tag
         | Is_int -> Is_int
       in

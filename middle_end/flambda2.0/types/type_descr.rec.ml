@@ -228,7 +228,7 @@ module Make (Head : Type_head_intf.S
           let typ =
             match const with
             | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
-            | Constructor i -> T.this_constructor_without_alias i
+            | Tagged_constructor i -> T.this_tagged_constructor_without_alias i
             | Naked_float f -> T.this_naked_float_without_alias f
             | Naked_int32 i -> T.this_naked_int32_without_alias i
             | Naked_int64 i -> T.this_naked_int64_without_alias i
@@ -241,6 +241,9 @@ module Make (Head : Type_head_intf.S
             | Int ->
               let imm = Immediate.int (Discriminant.to_int discr) in
               T.this_tagged_immediate_without_alias imm
+            | Constructor ->
+              let imm = Immediate.int (Discriminant.to_int discr) in
+              T.this_tagged_constructor_without_alias imm
             | Is_int | Tag -> T.this_discriminant_without_alias discr
           in
           force_to_head ~force_to_kind typ
