@@ -92,21 +92,17 @@ let arity t = t.arity
 let compute_handler_env t
       ~definition_typing_env_with_params_defined:typing_env
       ~params : Continuation_env_and_param_types.t =
-(*
 Format.eprintf "uses for %a\n%!" Continuation.print t.continuation;
-*)
   match t.uses with
   | [] -> No_uses
   | uses ->
     let definition_scope_level = TE.current_scope typing_env in
     let use_envs_with_ids =
       List.map (fun use ->
-(*
           Format.eprintf "For use, parameters: %a, arg types: %a, env:@ %a\n%!"
             Kinded_parameter.List.print params
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
             (U.arg_types use) TE.print (U.typing_env_at_use use);
-*)
           let use_env =
             U.typing_env_at_use use
             |> TE.add_equations_on_params ~params
@@ -123,13 +119,11 @@ Format.eprintf "Unknown at or later than %a\n%!"
       TE.cut_and_n_way_join typing_env use_envs_with_ids
         ~unknown_if_defined_at_or_later_than:(Scope.next definition_scope_level)
     in
-(*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"
   Continuation.print t.continuation
   T.Typing_env_extension.print env_extension;
 Format.eprintf "The extra params and args are:@ %a\n%!"
   Continuation_extra_params_and_args.print extra_params_and_args;
-*)
     let handler_typing_env =
       typing_env
       |> TE.add_definitions_of_params ~params:extra_params_and_args.extra_params

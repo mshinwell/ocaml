@@ -235,6 +235,14 @@ end) = struct
     P.Unary (Unbox_number N.boxable_number_kind, block)
 end
 
+module Immediate_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "immediate"
+  let tag = Tag.zero  (* CR mshinwell: make optional *)
+  let unboxed_kind = K.naked_nativeint
+  let boxable_number_kind = K.Boxable_number.Untagged_immediate
+  let box = T.tag_immediate
+end)
+
 module Float_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "float"
   let tag = Tag.double_tag
@@ -268,12 +276,15 @@ module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
 end)
 
 module Blocks = Make (Block_spec)
+module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
 module Int64s = Make (Int64_spec)
 module Nativeints = Make (Nativeint_spec)
 
 let unboxed_number_decisions = [
+  T.prove_is_a_tagged_immediate, Immediates.unbox_one_parameter,
+    Tag.zero, K.naked_nativeint;
   T.prove_is_a_boxed_float, Floats.unbox_one_parameter,
     Tag.double_tag, K.naked_float;
   T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter,

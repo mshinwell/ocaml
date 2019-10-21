@@ -62,6 +62,9 @@ val any_boxed_int64 : unit -> t
 val any_boxed_nativeint : unit -> t
 
 val any_naked_float : unit -> t
+val any_naked_int32 : unit -> t
+val any_naked_int64 : unit -> t
+val any_naked_nativeint : unit -> t
 
 val this_tagged_immediate : Immediate.t -> t
 val this_tagged_constructor : Immediate.t -> t

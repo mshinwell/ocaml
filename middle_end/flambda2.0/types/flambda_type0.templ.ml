@@ -360,6 +360,17 @@ module Make
         | None -> Unknown
         | Some (tag, size) -> Proved (tag, size)
 
+  let prove_is_a_tagged_immediate env t : _ proof_allowing_kind_mismatch =
+    match expand_head t env with
+    | Const (Tagged_immediate _) -> Proved ()
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Value Unknown -> Unknown
+      | Value (Ok (Tagged_immediate _)) -> Proved ()
+      | Value _ -> Invalid
+      | _ -> Wrong_kind
+
   let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
     match expand_head t env with
     | Const _ | Discriminant _ -> Wrong_kind

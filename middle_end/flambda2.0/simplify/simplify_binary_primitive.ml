@@ -48,6 +48,7 @@ module type Binary_arith_like_sig = sig
   val prover_lhs : (T.t -> Lhs.Set.t T.proof) T.type_accessor
   val prover_rhs : (T.t -> Rhs.Set.t T.proof) T.type_accessor
 
+  val unknown : T.t
   val these : Result.Set.t -> T.t
 
   type op
@@ -116,7 +117,7 @@ end = struct
     let proof2 = N.prover_rhs typing_env arg2_ty in
     let kind = N.result_kind in
     let result_unknown () =
-      let env_extension = TEE.one_equation result (T.unknown kind) in
+      let env_extension = TEE.one_equation result N.unknown in
       Reachable.reachable original_term, env_extension, dacc
     in
     let result_invalid () =
@@ -153,7 +154,7 @@ end = struct
             | Some (Simple simple) -> T.alias_type_of kind simple
             | Some (Exactly _)
             | Some (Prim _)
-            | None -> T.unknown kind
+            | None -> N.unknown
         in
         let env_extension = TEE.one_equation result ty in
         Reachable.reachable named, env_extension, dacc
@@ -251,6 +252,14 @@ end = struct
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
+
+  let unknown =
+    match kind with
+    | Tagged_immediate -> T.any_tagged_immediate ()
+    | Naked_float -> T.any_naked_float ()
+    | Naked_int32 -> T.any_naked_int32 ()
+    | Naked_int64 -> T.any_naked_int64 ()
+    | Naked_nativeint -> T.any_naked_nativeint ()
 
   let these = I.these_unboxed
 
@@ -381,6 +390,14 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = T.prove_equals_tagged_immediates
 
+  let unknown =
+    match kind with
+    | Tagged_immediate -> T.any_tagged_immediate ()
+    | Naked_float -> T.any_naked_float ()
+    | Naked_int32 -> T.any_naked_int32 ()
+    | Naked_int64 -> T.any_naked_int64 ()
+    | Naked_nativeint -> T.any_naked_nativeint ()
+
   let these = I.these_unboxed
 
   let term = I.term_unboxed
@@ -480,6 +497,7 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
+  let unknown = T.any_tagged_immediate ()
   let these = T.these_tagged_immediates
 
   let term imm : Named.t =
@@ -538,6 +556,7 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
+  let unknown = T.any_tagged_immediate ()
   let these = T.these_tagged_immediates
 
   let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
@@ -597,6 +616,7 @@ end = struct
   let prover_lhs = T.prove_naked_floats
   let prover_rhs = T.prove_naked_floats
 
+  let unknown = T.any_naked_float ()
   let these = T.these_naked_floats
 
   let term f =
@@ -685,6 +705,7 @@ end = struct
   let prover_lhs = T.prove_naked_floats
   let prover_rhs = T.prove_naked_floats
 
+  let unknown = T.any_tagged_immediate ()
   let these = T.these_tagged_immediates
 
   let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
@@ -736,6 +757,7 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
+  let unknown = T.any_tagged_immediate ()
   let these = T.these_tagged_immediates
 
   let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
