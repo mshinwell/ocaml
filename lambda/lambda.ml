@@ -529,8 +529,8 @@ let make_key e =
         Lstaticcatch (tr_rec env e1,xs,tr_rec env e2)
     | Ltrywith (e1,x,e2) ->
         Ltrywith (tr_rec env e1,x,tr_rec env e2)
-    | Lifthenelse (cond,ifso,ifnot) ->
-        Lifthenelse (tr_rec env cond,tr_rec env ifso,tr_rec env ifnot)
+    | Lifthenelse (cond,sort,ifso,ifnot) ->
+        Lifthenelse (tr_rec env cond,sort,tr_rec env ifso,tr_rec env ifnot)
     | Lsequence (e1,e2) ->
         Lsequence (tr_rec env e1,tr_rec env e2)
     | Lassign (x,e) ->
@@ -620,7 +620,7 @@ let shallow_iter ~tail ~non_tail:f = function
       tail e1; tail e2
   | Ltrywith(e1, _, e2) ->
       f e1; tail e2
-  | Lifthenelse(e1, e2, e3) ->
+  | Lifthenelse(e1, _sort, e2, e3) ->
       f e1; tail e2; tail e3
   | Lsequence(e1, e2) ->
       f e1; tail e2
@@ -691,7 +691,7 @@ let rec free_variables = function
            param
            (free_variables handler))
         (free_variables body)
-  | Lifthenelse(e1, e2, e3) ->
+  | Lifthenelse(e1, _sort, e2, e3) ->
       Ident.Set.union
         (Ident.Set.union (free_variables e1) (free_variables e2))
         (free_variables e3)
@@ -729,14 +729,14 @@ let next_raise_count () =
 let staticfail = Lstaticraise (0,[])
 
 let rec is_guarded = function
-  | Lifthenelse(_cond, _body, Lstaticraise (0,[])) -> true
+  | Lifthenelse(_cond, _sort, _body, Lstaticraise (0,[])) -> true
   | Llet(_str, _k, _id, _lam, body) -> is_guarded body
   | Levent(lam, _ev) -> is_guarded lam
   | _ -> false
 
 let rec patch_guarded patch = function
-  | Lifthenelse (cond, body, Lstaticraise (0,[])) ->
-      Lifthenelse (cond, body, patch)
+  | Lifthenelse (cond, sort, body, Lstaticraise (0,[])) ->
+      Lifthenelse (cond, sort, body, patch)
   | Llet(str, k, id, lam, body) ->
       Llet (str, k, id, lam, patch_guarded patch body)
   | Levent(lam, ev) ->
@@ -837,7 +837,8 @@ let subst update_env s lam =
                     subst (remove_list params s) handler)
     | Ltrywith(body, exn, handler) ->
         Ltrywith(subst s body, exn, subst (Ident.Map.remove exn s) handler)
-    | Lifthenelse(e1, e2, e3) -> Lifthenelse(subst s e1, subst s e2, subst s e3)
+    | Lifthenelse(e1, sort, e2, e3) ->
+        Lifthenelse(subst s e1, sort, subst s e2, subst s e3)
     | Lsequence(e1, e2) -> Lsequence(subst s e1, subst s e2)
     | Lwhile(e1, e2) -> Lwhile(subst s e1, subst s e2)
     | Lfor(v, lo, hi, dir, body) ->
@@ -900,7 +901,8 @@ let shallow_map f = function
       Lprim (p, List.map f el, loc)
   | Lswitch (e, sw, loc) ->
       Lswitch (f e,
-               { sw_numconsts = sw.sw_numconsts;
+               { sw_scrutinee_sort = sw.sw_scrutinee_sort;
+                 sw_numconsts = sw.sw_numconsts;
                  sw_consts = List.map (fun (n, e) -> (n, f e)) sw.sw_consts;
                  sw_numblocks = sw.sw_numblocks;
                  sw_blocks = List.map (fun (n, e) -> (n, f e)) sw.sw_blocks;
@@ -920,8 +922,8 @@ let shallow_map f = function
       Lstaticcatch (f body, id, f handler)
   | Ltrywith (e1, v, e2) ->
       Ltrywith (f e1, v, f e2)
-  | Lifthenelse (e1, e2, e3) ->
-      Lifthenelse (f e1, f e2, f e3)
+  | Lifthenelse (e1, sort, e2, e3) ->
+      Lifthenelse (f e1, sort, f e2, f e3)
   | Lsequence (e1, e2) ->
       Lsequence (f e1, f e2)
   | Lwhile (e1, e2) ->

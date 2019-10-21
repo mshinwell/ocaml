@@ -408,10 +408,12 @@ and transl_exp0 e =
       end
   | Texp_ifthenelse(cond, ifso, Some ifnot) ->
       Lifthenelse(transl_exp cond,
+                  Int_scrutinee,
                   event_before ifso (transl_exp ifso),
                   event_before ifnot (transl_exp ifnot))
   | Texp_ifthenelse(cond, ifso, None) ->
       Lifthenelse(transl_exp cond,
+                  Int_scrutinee,
                   event_before ifso (transl_exp ifso),
                   lambda_unit)
   | Texp_sequence(expr1, expr2) ->
@@ -492,7 +494,9 @@ and transl_exp0 e =
   | Texp_assert (cond) ->
       if !Clflags.noassert
       then lambda_unit
-      else Lifthenelse (transl_exp cond, lambda_unit, assert_failed e)
+      else
+        Lifthenelse (transl_exp cond, Int_scrutinee, lambda_unit,
+                     assert_failed e)
   | Texp_lazy e ->
       (* when e needs no computation (constants, identifiers, ...), we
          optimize the translation just as Lazy.lazy_from_val would
@@ -588,7 +592,8 @@ and transl_guard guard rhs =
   match guard with
   | None -> expr
   | Some cond ->
-      event_before cond (Lifthenelse(transl_exp cond, expr, staticfail))
+      event_before cond
+        (Lifthenelse(transl_exp cond, Int_scrutinee, expr, staticfail))
 
 and transl_case {c_lhs; c_guard; c_rhs} =
   c_lhs, transl_guard c_guard c_rhs
