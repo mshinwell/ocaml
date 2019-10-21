@@ -33,7 +33,8 @@ let create_static_part (to_lift : T.to_lift)
               : Flambda_static.Of_kind_value.t ->
           match field with
           | Symbol sym -> Symbol sym
-          | Tagged_immediate imm -> Tagged_immediate imm)
+          | Tagged_immediate imm -> Tagged_immediate imm
+          | Constructor imm -> Constructor imm)
         fields
     in
     Block (tag, Immutable, of_kind_values)

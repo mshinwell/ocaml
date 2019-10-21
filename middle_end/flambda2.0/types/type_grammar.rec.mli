@@ -64,6 +64,7 @@ val any_boxed_nativeint : unit -> t
 val any_naked_float : unit -> t
 
 val this_tagged_immediate : Immediate.t -> t
+val this_constructor : Immediate.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
@@ -81,6 +82,7 @@ val this_naked_int64 : Int64.t -> t
 val this_naked_nativeint : Targetint.t -> t
 
 val this_tagged_immediate_without_alias : Immediate.t -> t
+val this_constructor_without_alias : Immediate.t -> t
 val this_naked_float_without_alias : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32_without_alias : Int32.t -> t
 val this_naked_int64_without_alias : Int64.t -> t

@@ -160,9 +160,11 @@ module For_immediates : sig
 
   val is_bottom : t -> bool
 
+(*
   val all : t -> Immediate.Set.t Or_unknown.t
 
   val get_singleton : t -> Immediate.t option
+*)
 
   include Type_structure_intf.S
     with type t := t

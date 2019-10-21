@@ -133,6 +133,7 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     let ty = DE.find_symbol denv sym in
     of_kind_value, ty
   | Tagged_immediate i -> of_kind_value, T.this_tagged_immediate i
+  | Constructor i -> of_kind_value, T.this_constructor i
   | Dynamically_computed var ->
     let min_occurrence_kind = Name_occurrence_kind.normal in
     match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
@@ -145,6 +146,7 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
       | Name (Symbol sym) -> Of_kind_value.Symbol sym, ty
       | Name (Var _) -> of_kind_value, ty
       | Const (Tagged_immediate imm) -> Of_kind_value.Tagged_immediate imm, ty
+      | Const (Constructor imm) -> Of_kind_value.Constructor imm, ty
       | Const (Naked_float _ | Naked_int32 _
           | Naked_int64 _ | Naked_nativeint _)
       | Discriminant _ ->

@@ -1162,7 +1162,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
             | Unreachable _ -> new_let_conts, arms, identity_arms, not_arms
             | Apply_cont_with_constant_arg { cont; arg; arity = _; } ->
               begin match arg with
-              | Tagged_immediate arg ->
+              | Tagged_immediate arg | Constructor arg ->
                 let arm_as_int = Discriminant.to_int arm in
                 let arg_as_int = Immediate.to_targetint arg in
                 if Targetint.OCaml.equal arm_as_int arg_as_int then

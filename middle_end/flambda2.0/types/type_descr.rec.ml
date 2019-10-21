@@ -228,6 +228,7 @@ module Make (Head : Type_head_intf.S
           let typ =
             match const with
             | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
+            | Constructor i -> T.this_constructor_without_alias i
             | Naked_float f -> T.this_naked_float_without_alias f
             | Naked_int32 i -> T.this_naked_int32_without_alias i
             | Naked_int64 i -> T.this_naked_int64_without_alias i

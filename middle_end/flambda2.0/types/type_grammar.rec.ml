@@ -199,7 +199,7 @@ let get_alias t =
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
    a tagged immediate [Simple]), then it should be.  In the tagged immediate
-   case this would mean forbidding Blocks_and_tagged_immediates with only
+   case this would mean forbidding Variant with only
    a single immediate.  Although this state needs to exist during [meet]
    or whenever heads are expanded. *)
 
@@ -245,6 +245,8 @@ let any_naked_int32 () = Naked_int32 (T_N32.unknown ())
 let any_naked_int64 () = Naked_int64 (T_N64.unknown ())
 let any_naked_nativeint () = Naked_nativeint (T_NN.unknown ())
 let any_fabricated () = Fabricated (T_F.unknown ())
+
+let any_untagged_immediate () = any_naked_nativeint ()
 
 let unknown (kind : K.t) =
   match kind with
@@ -346,11 +348,28 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
+let this_constructor imm : t =
+  Value (T_V.create_equals (Simple.const (Constructor imm)))
+
+let these_constructors0 ~no_alias imms : t =
+  match Immediate.Set.get_singleton imms with
+  | Some imm when not no_alias -> this_constructor imm
+  | _ ->
+    if Immediate.Set.is_empty imms then bottom K.value
+    else
+      let immediates = Row_like.For_immediates.create imms in
+      Value (T_V.create_no_alias (
+        Ok (Variant {
+          immediates = Known immediates;
+          blocks = Known (Row_like.For_blocks.create_bottom ());
+        })))
+
+let this_constructor_without_alias imm : t =
+  these_constructors0 ~no_alias:true (Immediate.Set.singleton imm)
+
 let any_tagged_immediate () : t =
-  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
-    immediates = Unknown;
-    blocks = Known (Row_like.For_blocks.create_bottom ());
-  })))
+  Value (T_V.create_no_alias (Ok (
+    Tagged_immediate (any_untagged_immediate ()))))
 
 let this_tagged_immediate imm : t =
   Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
@@ -361,12 +380,9 @@ let these_tagged_immediates0 ~no_alias imms : t =
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
-      let immediates = Row_like.For_immediates.create imms in
-      Value (T_V.create_no_alias (
-        Ok (Blocks_and_tagged_immediates {
-          immediates = Known immediates;
-          blocks = Known (Row_like.For_blocks.create_bottom ());
-        })))
+      let imms = Immediate.set_to_targetint_set' imms in
+      Value (T_V.create_no_alias (Ok (
+        Tagged_immediate (these_naked_nativeints imms))))
 
 let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
@@ -374,13 +390,17 @@ let these_tagged_immediates imms =
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
-let tagged_immediate_alias_to ~untagged_immediate : t =
-  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
-
-  box_float (Naked_float (T_Nf.create_equals (Simple.var naked_float)))
-
 let tag_immediate t : t =
-  Value
+  match t with
+  | Naked_nativeint _ -> Value (T_V.create (Tagged_immediate t))
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Fabricated _ ->
+    Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
+      print t
+
+let tagged_immediate_alias_to ~untagged_immediate : t =
+  tag_immediate (Naked_nativeint (
+    T_NN.create_equals (Simple.var untagged_immediate)))
 
 let this_discriminant discr : t =
   Fabricated (T_F.create_equals (Simple.discriminant discr))
@@ -435,7 +455,7 @@ let immutable_block tag ~fields =
     Misc.fatal_error "Block too long for target"
   | Some _size ->
     Value (T_V.create_no_alias (Ok (
-      Blocks_and_tagged_immediates {
+      Variant {
         immediates = Known (Row_like.For_immediates.create_bottom ());
         blocks = Known (Row_like.For_blocks.create ~field_tys:fields (Closed tag));
       })))
@@ -448,7 +468,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (
-    Blocks_and_tagged_immediates {
+    Variant {
       immediates = Known (Row_like.For_immediates.create_bottom ());
       blocks = Known (Row_like.For_blocks.create ~field_tys Open);
     })))
@@ -587,6 +607,7 @@ let array_of_length ~length =
 let type_for_const (const : Simple.Const.t) =
   match const with
   | Tagged_immediate i -> this_tagged_immediate i
+  | Constructor i -> this_constructor i
   | Naked_float f -> this_naked_float f
   | Naked_int32 n -> this_naked_int32 n
   | Naked_int64 n -> this_naked_int64 n

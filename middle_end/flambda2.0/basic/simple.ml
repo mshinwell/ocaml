@@ -72,7 +72,7 @@ module Const = struct
         Hashtbl.hash (2, Numbers.Float_by_bit_pattern.hash n)
       | Naked_int32 n -> Hashtbl.hash (3, n)
       | Naked_int64 n -> Hashtbl.hash (4, n)
-      | Naked_nativeint n -> Targetint.hash (5, n)
+      | Naked_nativeint n -> Hashtbl.hash (5, Targetint.hash n)
 
     let print ppf (t : t) =
       match t with
@@ -114,7 +114,7 @@ module Const = struct
   let kind t =
     let module K = Flambda_kind in
     match t with
-    | Tagged_immediate _ -> K.value
+    | Tagged_immediate _ | Constructor _ -> K.value
     | Naked_float _ -> K.naked_float
     | Naked_int32 _ -> K.naked_int32
     | Naked_int64 _ -> K.naked_int64

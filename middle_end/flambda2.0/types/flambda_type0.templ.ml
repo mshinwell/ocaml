@@ -92,6 +92,7 @@ module Make
   type symbol_or_tagged_immediate =
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
+    | Constructor of Immediate.t
 
   let prove_equals_to_symbol_or_tagged_immediate env t
         : symbol_or_tagged_immediate proof =
@@ -106,6 +107,7 @@ module Make
     | Some simple ->
       match Simple.descr simple with
       | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
+      | Const (Constructor imm) -> Proved (Constructor imm)
       | Const _ | Discriminant _ ->
         Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
             different from that returned by [kind] (%a):@ %a"
@@ -127,6 +129,7 @@ module Make
           | Name (Symbol sym) -> Proved (Symbol sym)
           | Name (Var _) -> Unknown
           | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
+          | Const (Constructor imm) -> Proved (Constructor imm)
           | Const _ | Discriminant _ ->
             let kind = kind t in
             Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
@@ -162,47 +165,6 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
-  let prove_equals_tagged_immediates env t : _ proof =
-    let wrong_kind () =
-      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
-    in
-    match expand_head t env with
-    | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
-    | Const (Naked_float _ | Naked_int32 _
-      | Naked_int64 _ | Naked_nativeint _)
-    | Discriminant _ -> wrong_kind ()
-    | Resolved resolved ->
-      match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
-        begin match blocks_imms.blocks, blocks_imms.immediates with
-        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
-        | Known blocks, Known imms ->
-          if Row_like.For_blocks.is_bottom blocks then
-            match Row_like.For_immediates.all imms with
-            | Known imms -> Proved imms
-            | Unknown -> Unknown
-          else
-            Invalid
-        end
-      | Value (Ok _) -> Invalid
-      | Value Unknown -> Unknown
-      | Value Bottom -> Invalid
-      | Naked_float _ -> wrong_kind ()
-      | Naked_int32 _ -> wrong_kind ()
-      | Naked_int64 _ -> wrong_kind ()
-      | Naked_nativeint _ -> wrong_kind ()
-      | Fabricated _ -> wrong_kind ()
-
-  let prove_equals_single_tagged_immediate env t : _ proof =
-    match prove_equals_tagged_immediates env t with
-    | Proved imms ->
-      begin match Immediate.Set.get_singleton imms with
-      | Some imm -> Proved imm
-      | None -> Unknown
-      end
-    | Unknown -> Unknown
-    | Invalid -> Invalid
-
   (* CR mshinwell: Try to functorise or otherwise factor out across the
      various number kinds. *)
   let prove_naked_floats env t : _ proof =
@@ -211,7 +173,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_float f) -> Proved (Float.Set.singleton f)
-    | Const (Tagged_immediate _ | Naked_int32 _
+    | Const (Tagged_immediate _ | Constructor _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -231,7 +193,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -251,7 +213,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
       | Naked_int32 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -271,7 +233,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Constructor _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -285,16 +247,55 @@ module Make
       | Naked_int64 _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
+  let prove_equals_untagged_immediates env t : _ proof =
+    match prove_naked_nativeints env t with
+    | Proved is ->
+      Proved (Immediate.set_of_targetint_set' is)
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+
+  let prove_equals_tagged_immediates env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match expand_head t env with
+    | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
+    | Const (Constructor _ | Naked_float _ | Naked_int32 _
+      | Naked_int64 _ | Naked_nativeint _)
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Value (Ok (Tagged_immediate imms)) ->
+        prove_equals_untagged_immediates env imms
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
+
+  let prove_equals_single_tagged_immediate env t : _ proof =
+    match prove_equals_tagged_immediates env t with
+    | Proved imms ->
+      begin match Immediate.Set.get_singleton imms with
+      | Some imm -> Proved imm
+      | None -> Unknown
+      end
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+
   let prove_is_int env t : bool proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
     match expand_head t env with
-    | Const (Tagged_immediate _) -> Proved true
+    | Const (Constructor _) -> Proved true
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
@@ -321,11 +322,11 @@ module Make
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
     match expand_head t env with
-    | Const (Tagged_immediate _) -> Unknown
+    | Const (Constructor _) -> Unknown
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.immediates with
         | Unknown -> Unknown
         | Known _ ->
@@ -409,8 +410,6 @@ module Make
     let result_simple = Simple.var result_var in
     let result_kind = K.naked_float in
     let shape = box_float (alias_type_of result_kind result_simple) in
-Format.eprintf "shape for boxed float proof:@ %a\n%!"
-  print shape;
     match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
     | Bottom -> Invalid
     | Ok env_extension ->
@@ -422,8 +421,6 @@ Format.eprintf "shape for boxed float proof:@ %a\n%!"
       in
       let env = Typing_env.add_env_extension env ~env_extension in
       let t = Typing_env.find env (Name.var result_var) in
-Format.eprintf "result type for boxed float proof:@ %a\n%!"
-  print t;
       prove_naked_floats env t
 
   let prove_boxed_int32s env t : _ proof =
@@ -567,7 +564,7 @@ Format.eprintf "reifying %a\n%!" print t;
           | Some canonical_simple -> Simple canonical_simple
         in
         match resolved with
-        | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        | Value (Ok (Variant blocks_imms)) ->
           begin match blocks_imms.blocks, blocks_imms.immediates with
           | Known blocks, Known imms ->
             if Row_like.For_immediates.is_bottom imms then
@@ -591,6 +588,8 @@ Format.eprintf "reifying %a\n%!" print t;
                       | Proved (Symbol sym) -> Some (Symbol sym)
                       | Proved (Tagged_immediate sym) ->
                         Some (Tagged_immediate sym)
+                      | Proved (Constructor sym) ->
+                        Some (Constructor sym)
                       (* CR mshinwell: [Invalid] should propagate up *)
                       | Unknown | Invalid -> None)
                     field_types

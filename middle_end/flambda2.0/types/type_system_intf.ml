@@ -216,6 +216,7 @@ module type S = sig
   (** Building of types representing tagged / boxed values from specified
       constants. *)
   val this_tagged_immediate : Immediate.t -> t
+  val this_constructor : Immediate.t -> t
   val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
   val this_boxed_int32 : Int32.t -> t
   val this_boxed_int64 : Int64.t -> t
@@ -418,6 +419,7 @@ module type S = sig
   type symbol_or_tagged_immediate = private
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
+    | Constructor of Immediate.t
 
   type to_lift = (* private *) (* CR mshinwell: resurrect *)
     | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
