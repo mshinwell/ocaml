@@ -101,6 +101,9 @@ val box_int32 : t -> t
 val box_int64 : t -> t
 val box_nativeint : t -> t
 
+val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
+val tag_immediate : t -> t
+
 val this_discriminant : Discriminant.t -> t
 val this_discriminant_without_alias : Discriminant.t -> t
 val these_discriminants : Discriminant.Set.t -> t

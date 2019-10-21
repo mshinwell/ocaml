@@ -163,8 +163,7 @@ let rec declare_const t (const : Lambda.structured_constant)
   | Const_base (Const_int c) ->
     Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
   | Const_pointer p ->
-    (* CR mshinwell: This needs to be removed. *)
-    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int p)), "const_ptr"
+    Constructor (Immediate.int (Targetint.OCaml.of_int p)), "ctor"
   | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
@@ -207,6 +206,8 @@ let close_const t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
     Named.create_simple (Simple.const (Tagged_immediate c)), name
+  | Constructor c, name ->
+    Named.create_simple (Simple.const (Constructor c)), name
   | Symbol s, name -> Named.create_simple (Simple.symbol s), name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name

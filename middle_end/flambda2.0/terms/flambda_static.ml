@@ -24,6 +24,7 @@ module Of_kind_value = struct
   type t =
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
+    | Constructor of Immediate.t
     | Dynamically_computed of Variable.t
 
   include Identifiable.Make (struct
@@ -33,13 +34,17 @@ module Of_kind_value = struct
       match t1, t2 with
       | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
       | Tagged_immediate t1, Tagged_immediate t2 -> Immediate.compare t1 t2
-      | Dynamically_computed v1, Dynamically_computed v2 -> Variable.compare v1 v2
-      | Symbol _, Tagged_immediate _ -> -1
-      | Tagged_immediate _, Symbol _ -> 1
-      | Symbol _, Dynamically_computed _ -> -1
-      | Dynamically_computed _, Symbol _ -> 1
-      | Tagged_immediate _, Dynamically_computed _ -> -1
-      | Dynamically_computed _, Tagged_immediate _ -> 1
+      | Constructor t1, Constructor t2 -> Immediate.compare t1 t2
+      | Dynamically_computed v1, Dynamically_computed v2 ->
+        Variable.compare v1 v2
+      | Symbol _,
+          (Tagged_immediate _ | Constructor _ | Dynamically_computed _) -> -1
+      | (Tagged_immediate _ | Constructor _ | Dynamically_computed _),
+          Symbol _ -> 1
+      | Tagged_immediate _, (Constructor _ | Dynamically_computed _) -> -1
+      | (Constructor _ | Dynamically_computed _), Tagged_immediate _ -> 1
+      | Constructor _, Dynamically_computed _ -> -1
+      | Dynamically_computed _, Constructor _ -> 1
 
     let equal t1 t2 =
       compare t1 t2 = 0
@@ -49,12 +54,16 @@ module Of_kind_value = struct
       | Symbol symbol -> Hashtbl.hash (0, Symbol.hash symbol)
       | Tagged_immediate immediate ->
         Hashtbl.hash (1, Immediate.hash immediate)
-      | Dynamically_computed var -> Hashtbl.hash (2, Variable.hash var)
+      | Constructor immediate ->
+        Hashtbl.hash (2, Immediate.hash immediate)
+      | Dynamically_computed var -> Hashtbl.hash (3, Variable.hash var)
 
     let print ppf t =
       match t with
       | Symbol symbol -> Symbol.print ppf symbol
       | Tagged_immediate immediate -> Immediate.print ppf immediate
+      | Constructor immediate ->
+        Format.fprintf ppf "@[(ctor@ %a)@]" Immediate.print immediate
       | Dynamically_computed var -> Variable.print ppf var
 
     let output chan t =
@@ -64,7 +73,7 @@ module Of_kind_value = struct
   let needs_gc_root t =
     match t with
     | Symbol _ | Tagged_immediate _ -> false
-    | Dynamically_computed _ -> true
+    | Constructor _ | Dynamically_computed _ -> true
 
   let free_names t =
     match t with
@@ -72,13 +81,13 @@ module Of_kind_value = struct
       Name_occurrences.singleton_variable var Name_occurrence_kind.normal
     | Symbol sym ->
       Name_occurrences.singleton_symbol sym Name_occurrence_kind.normal
-    | Tagged_immediate _ -> Name_occurrences.empty
+    | Constructor _ | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =
     let module E = Invariant_env in
     match t with
     | Symbol sym -> E.check_symbol_is_bound env sym
-    | Tagged_immediate _ -> ()
+    | Tagged_immediate _ | Constructor _ -> ()
     | Dynamically_computed var ->
       E.check_variable_is_bound_and_of_kind env var K.value
 end

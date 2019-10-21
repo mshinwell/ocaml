@@ -19,6 +19,7 @@
 module Const = struct
   type t =
     | Tagged_immediate of Immediate.t
+    | Constructor of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
@@ -40,6 +41,8 @@ module Const = struct
       match t1, t2 with
       | Tagged_immediate i1, Tagged_immediate i2 ->
         Immediate.compare i1 i2
+      | Constructor i1, Constructor i2 ->
+        Immediate.compare i1 i2
       | Naked_float f1, Naked_float f2 ->
         Numbers.Float_by_bit_pattern.compare f1 f2
       | Naked_int32 n1, Naked_int32 n2 ->
@@ -50,6 +53,8 @@ module Const = struct
         Targetint.compare n1 n2
       | Tagged_immediate _, _ -> -1
       | _, Tagged_immediate _ -> 1
+      | Constructor _, _ -> -1
+      | _, Constructor _ -> 1
       | Naked_float _, _ -> -1
       | _, Naked_float _ -> 1
       | Naked_int32 _, _ -> -1
@@ -61,17 +66,24 @@ module Const = struct
 
     let hash t =
       match t with
-      | Tagged_immediate n -> Immediate.hash n
-      | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
-      | Naked_int32 n -> Hashtbl.hash n
-      | Naked_int64 n -> Hashtbl.hash n
-      | Naked_nativeint n -> Targetint.hash n
+      | Tagged_immediate n -> Hashtbl.hash (0, Immediate.hash n)
+      | Constructor n -> Hashtbl.hash (1, Immediate.hash n)
+      | Naked_float n ->
+        Hashtbl.hash (2, Numbers.Float_by_bit_pattern.hash n)
+      | Naked_int32 n -> Hashtbl.hash (3, n)
+      | Naked_int64 n -> Hashtbl.hash (4, n)
+      | Naked_nativeint n -> Targetint.hash (5, n)
 
     let print ppf (t : t) =
       match t with
       | Tagged_immediate i ->
         Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
+          Immediate.print i
+          (Flambda_colours.normal ())
+      | Constructor i ->
+        Format.fprintf ppf "@<0>%s%a@<0>%s"
+          (Flambda_colours.constructor ())
           Immediate.print i
           (Flambda_colours.normal ())
       | Naked_float f ->

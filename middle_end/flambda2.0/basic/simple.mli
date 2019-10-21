@@ -22,6 +22,7 @@
 module Const : sig
   type t =
     | Tagged_immediate of Immediate.t
+    | Constructor of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t

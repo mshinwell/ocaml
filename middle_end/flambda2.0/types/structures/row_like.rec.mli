@@ -152,10 +152,22 @@ module For_discriminants : sig
 end
 
 module For_immediates : sig
-  include Trivial_row_like_intf.S
-    with module Thing_without_names := Immediate
-    with type typing_env := Typing_env.t
-    with type meet_env := Meet_env.t
-    with type typing_env_extension := Typing_env_extension.t
+  type t
+
+  val create_bottom : unit -> t
+
+  val create : Immediate.Set.t -> t
+
+  val is_bottom : t -> bool
+
+  val all : t -> Immediate.Set.t Or_unknown.t
+
+  val get_singleton : t -> Immediate.t option
+
+  include Type_structure_intf.S
+    with type t := t
     with type flambda_type := Type_grammar.t
+    with type meet_env := Meet_env.t
+    with type typing_env := Typing_env.t
+    with type typing_env_extension := Typing_env_extension.t
 end

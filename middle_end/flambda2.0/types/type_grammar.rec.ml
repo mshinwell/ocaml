@@ -374,6 +374,14 @@ let these_tagged_immediates imms =
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 
+let tagged_immediate_alias_to ~untagged_immediate : t =
+  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
+
+  box_float (Naked_float (T_Nf.create_equals (Simple.var naked_float)))
+
+let tag_immediate t : t =
+  Value
+
 let this_discriminant discr : t =
   Fabricated (T_F.create_equals (Simple.discriminant discr))
 

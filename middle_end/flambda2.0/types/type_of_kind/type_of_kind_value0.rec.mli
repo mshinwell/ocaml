@@ -21,6 +21,7 @@ type t =
       immediates : Row_like.For_immediates.t Or_unknown.t;
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }
+  | 
   | Boxed_float of Type_grammar.t
   | Boxed_int32 of Type_grammar.t
   | Boxed_int64 of Type_grammar.t

@@ -57,6 +57,9 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       T.boxed_int64_alias_to ~naked_int64:result_var, K.naked_int64
     | Naked_nativeint ->
       T.boxed_nativeint_alias_to ~naked_nativeint:result_var, K.naked_nativeint
+    | Untagged_immediate ->
+      T.tagged_immediate_alias_to ~untagged_immediate:result_var,
+        K.naked_nativeint
   in
   Simplify_primitive_common.simplify_projection
     dacc ~original_term ~deconstructing:boxed_number_ty
@@ -70,6 +73,7 @@ let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
     | Naked_int32 -> T.box_int32 naked_number_ty
     | Naked_int64 -> T.box_int64 naked_number_ty
     | Naked_nativeint -> T.box_nativeint naked_number_ty
+    | Untagged_immediate -> T.tag_immediate naked_number_ty
   in
   Reachable.reachable original_term,
     TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
