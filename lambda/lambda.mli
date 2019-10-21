@@ -260,6 +260,10 @@ type function_attribute = {
   stub: bool;
 }
 
+type scrutinee_sort =
+  | Int_scrutinee
+  | Ctor_scrutinee
+
 type lambda =
     Lvar of Ident.t
   | Lconst of structured_constant
@@ -278,7 +282,7 @@ type lambda =
   | Ltrywith of lambda * Ident.t * lambda
 (* Lifthenelse (e, t, f) evaluates t if e evaluates to 0, and
    evaluates f if e evaluates to any other value *)
-  | Lifthenelse of lambda * lambda * lambda
+  | Lifthenelse of lambda * scrutinee_sort * lambda * lambda
   | Lsequence of lambda * lambda
   | Lwhile of lambda * lambda
   | Lfor of Ident.t * lambda * lambda * direction_flag * lambda
@@ -304,7 +308,8 @@ and lambda_apply =
     ap_specialised : specialise_attribute; }
 
 and lambda_switch =
-  { sw_numconsts: int;                  (* Number of integer cases *)
+  { sw_scrutinee_sort : scrutinee_sort;
+    sw_numconsts: int;                  (* Number of integer cases *)
     sw_consts: (int * lambda) list;     (* Integer cases *)
     sw_numblocks: int;                  (* Number of tag block cases *)
     sw_blocks: (lambda_switch_block_key * lambda) list;  (* Tag block cases *)

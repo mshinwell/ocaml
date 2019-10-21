@@ -23,21 +23,26 @@ let stub_hack_prim_name = "*stub*"
 let sw_numblocks_int_switch = -1
 let sw_numblocks_tag_switch = -2
 let sw_numblocks_isint_switch = -3
-let sw_numblocks_constructor_switch = -3
 
+(* CR mshinwell: Remove this horror by propagating right through from
+   matching.ml etc. *)
 let classify_switch (switch : Lambda.lambda_switch) : Flambda.Switch.Sort.t =
-  if switch.sw_numblocks = sw_numblocks_int_switch then Int
-  if switch.sw_numblocks = sw_numblocks_constructor_switch then Constructor
-  else if switch.sw_numblocks = sw_numblocks_tag_switch then
-    Tag { tags_to_sizes = switch.sw_tags_to_sizes; }
-  else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
-  else Misc.fatal_errorf "Prepare_lambda.classify_switch %d" switch.sw_numblocks
+  match switch.sw_scrutinee_sort with
+  | Ctor_scrutinee -> Constructor
+  | Int_scrutinee ->
+    if switch.sw_numblocks = sw_numblocks_int_switch then Int
+    else if switch.sw_numblocks = sw_numblocks_tag_switch then
+      Tag { tags_to_sizes = switch.sw_tags_to_sizes; }
+    else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
+    else
+      Misc.fatal_errorf "Prepare_lambda.classify_switch %d" switch.sw_numblocks
 
 let add_default_argument_wrappers lam =
-  (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
+  (* CR mshinwell: Temporary hack to mark default argument wrappers
      as stubs.  Other possibilities:
      1. Change L.inline_attribute to add another ("stub") case;
-     2. Add a "stub" field to the Lfunction record. *)
+     2. Add a "stub" field to the Lfunction record.
+     Update: let's fix this. *)
   let defs_are_all_functions (defs : (_ * L.lambda) list) =
     List.for_all (function (_, L.Lfunction _) -> true | _ -> false) defs
   in
@@ -367,7 +372,8 @@ let mark_as_recursive_static_catch cont =
   end;
   recursive_static_catches := Numbers.Int.Set.add cont !recursive_static_catches
 
-let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
+let switch_for_if_then_else (sort : Lambda.scrutinee_sort) ~is_int
+      ~cond ~ifso ~ifnot k =
   (* CR mshinwell: What happens if [cond] is something other than
      0 or 1?  Can this ever happen?
      Update: lambda.mli says that it can be something other than 0 or 1.
@@ -376,11 +382,15 @@ let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
      We have some minor adjustments in the frontend that should restrict
      if-then-else to 0 or 1. *)
   let sw_numblocks =
+    (* CR mshinwell: See CR in matching.ml.  We can probably propagate which
+       switches are [Is_int] ones from there using a distinguished
+       [scrutinee_sort]. *)
     if is_int then sw_numblocks_isint_switch
     else sw_numblocks_int_switch
   in
   let switch : Lambda.lambda_switch =
-    { sw_numconsts = 2;
+    { sw_scrutinee_sort = sort;
+      sw_numconsts = 2;
       sw_consts = [0, ifnot; 1, ifso];
       sw_numblocks;
       sw_blocks = [];
@@ -472,7 +482,7 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequor" in
     L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~is_int:false
+        switch_for_if_then_else Int_scrutinee ~is_int:false
           ~cond:(L.Lvar cond)
           ~ifso:(L.Lvar const_true)
           ~ifnot:arg2
@@ -482,7 +492,7 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequand" in
     L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~is_int:false
+        switch_for_if_then_else Int_scrutinee ~is_int:false
           ~cond:(L.Lvar cond)
           ~ifso:arg2
           ~ifnot:(L.Lvar const_false)
@@ -492,7 +502,7 @@ let simplify_primitive (prim : L.primitive) args loc =
   | Pflambda_isint, _ ->
     Misc.fatal_error "[Pflambda_isint] should not exist at this stage"
   | Pisint, [arg] ->
-    switch_for_if_then_else ~is_int:true
+    switch_for_if_then_else Int_scrutinee ~is_int:true
       ~cond:(Lprim (Pflambda_isint, [arg], loc))
       ~ifso:(L.Lconst (Const_base (Const_int 1)))
       ~ifnot:(L.Lconst (Const_base (Const_int 0)))
@@ -591,7 +601,8 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 Some (L.Lstaticraise (failaction_cont, [])), wrap_switch
             in
             let consts_switch : L.lambda_switch =
-              { sw_numconsts = switch.sw_numconsts;
+              { sw_scrutinee_sort = switch.sw_scrutinee_sort;
+                sw_numconsts = switch.sw_numconsts;
                 sw_consts = List.combine const_nums sw_consts;
                 sw_numblocks = sw_numblocks_int_switch;
                 sw_blocks = [];
@@ -619,7 +630,8 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 block_nums
             in
             let blocks_switch : L.lambda_switch =
-              { sw_numconsts = switch.sw_numblocks;
+              { sw_scrutinee_sort = Int_scrutinee;
+                sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
                 sw_numblocks = sw_numblocks_tag_switch;
                 sw_blocks = [];
@@ -637,7 +649,8 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                blocks_switch, loc)
             in
             let isint_switch : L.lambda_switch =
-              { sw_numconsts = 2;
+              { sw_scrutinee_sort = Int_scrutinee;
+                sw_numconsts = 2;
                 sw_consts = [0, blocks_switch; 1, consts_switch];
                 sw_numblocks = sw_numblocks_isint_switch;
                 sw_blocks = [];
@@ -667,11 +680,11 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env body (fun body ->
       prepare env handler (fun handler ->
         k (L.Ltrywith (body, id, handler))))
-  | Lifthenelse (cond, ifso, ifnot) ->
+  | Lifthenelse (cond, sort, ifso, ifnot) ->
     prepare env cond (fun cond ->
       prepare env ifso (fun ifso ->
         prepare env ifnot (fun ifnot ->
-          switch_for_if_then_else ~is_int:false ~cond ~ifso ~ifnot k)))
+          switch_for_if_then_else sort ~is_int:false ~cond ~ifso ~ifnot k)))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create_local "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k
@@ -685,6 +698,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
         (cont, []),
         Llet (Strict, Pgenval, cond_result, cond,
           Lifthenelse (Lvar cond_result,
+            Int_scrutinee,
             Lsequence (
               body,
               Lstaticraise (cont, [])),
@@ -714,6 +728,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
           Lstaticraise (cont, [start]),
           (cont, [ident, Pgenval]),
           Lifthenelse (test,
+            Int_scrutinee,
             Lsequence (
               body,
               Lstaticraise (cont, [next_value_of_counter])),

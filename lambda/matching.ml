@@ -1812,6 +1812,7 @@ let inline_lazy_force_cond arg loc =
                 ( Pintcomp Ceq,
                   [ tag_var; Lconst (Const_base (Const_int Obj.forward_tag)) ],
                   loc ),
+              Int_scrutinee,
               Lprim (Pfield 0, [ varg ], loc),
               Lifthenelse
                 ( (* if (tag == Obj.lazy_tag) then Lazy.force varg else ... *)
@@ -1819,6 +1820,7 @@ let inline_lazy_force_cond arg loc =
                     ( Pintcomp Ceq,
                       [ tag_var; Lconst (Const_base (Const_int Obj.lazy_tag)) ],
                       loc ),
+                  Int_scrutinee,
                   Lapply
                     { ap_should_be_tailcall = false;
                       ap_loc = loc;
@@ -1841,10 +1843,14 @@ let inline_lazy_force_switch arg loc =
       arg,
       Lifthenelse
         ( Lprim (Pisint, [ varg ], loc),
+          Int_scrutinee,
           varg,
           Lswitch
             ( varg,
-              { sw_numconsts = 0;
+              (* CR mshinwell: Should we propagate that this is a Pisint
+                 switch all the way from here? *)
+              { sw_scrutinee_sort = Int_scrutinee;
+                sw_numconsts = 0;
                 sw_consts = [];
                 sw_numblocks = 256;
                 (* PR#6033 - tag ranges from 0 to 255 *)
@@ -2090,6 +2096,7 @@ let make_string_test_sequence loc arg sw d =
                 ( prim_string_notequal,
                   [ arg; Lconst (Const_immstring str) ],
                   loc ),
+              Int_scrutinee,
               k,
               lam ))
         sw d)
@@ -2109,8 +2116,11 @@ let zero_lam = Lconst (Const_base (Const_int 0))
 let tree_way_test loc arg lt eq gt =
   Lifthenelse
     ( Lprim (Pintcomp Clt, [ arg; zero_lam ], loc),
+      (* CR mshinwell: Should we have [Bool_scrutinee]? *)
+      Int_scrutinee,
       lt,
-      Lifthenelse (Lprim (Pintcomp Clt, [ zero_lam; arg ], loc), gt, eq) )
+      Lifthenelse (Lprim (Pintcomp Clt, [ zero_lam; arg ], loc),
+        Int_scrutinee, gt, eq) )
 
 (* Dichotomic tree *)
 
@@ -2204,6 +2214,7 @@ let rec do_tests_fail loc fail tst arg = function
   | (c, act) :: rem ->
       Lifthenelse
         ( Lprim (tst, [ arg; Lconst (Const_base c) ], loc),
+          Int_scrutinee,
           do_tests_fail loc fail tst arg rem,
           act )
 
@@ -2213,6 +2224,7 @@ let rec do_tests_nofail loc tst arg = function
   | (c, act) :: rem ->
       Lifthenelse
         ( Lprim (tst, [ arg; Lconst (Const_base c) ], loc),
+          Int_scrutinee,
           do_tests_nofail loc tst arg rem,
           act )
 
@@ -2234,12 +2246,13 @@ let make_test_sequence loc fail tst lt_tst arg const_lambda_list =
     in
     Lifthenelse
       ( Lprim (lt_tst, [ arg; Lconst (Const_base (fst (List.hd list2))) ], loc),
+        Int_scrutinee,
         make_test_sequence list1,
         make_test_sequence list2 )
   in
   hs (make_test_sequence const_lambda_list)
 
-module SArg = struct
+module SArg_int = struct
   type primitive = Lambda.primitive
 
   let eqint = Pintcomp Ceq
@@ -2279,7 +2292,7 @@ module SArg = struct
 
   let make_isin h arg = Lprim (Pnot, [ make_isout h arg ], Location.none)
 
-  let make_if cond ifso ifnot = Lifthenelse (cond, ifso, ifnot)
+  let make_if cond ifso ifnot = Lifthenelse (cond, Int_scrutinee, ifso, ifnot)
 
   let make_switch loc arg cases acts =
     let l = ref [] in
@@ -2288,7 +2301,76 @@ module SArg = struct
     done;
     Lswitch
       ( arg,
-        { sw_numconsts = Array.length cases;
+        { sw_scrutinee_sort = Int_scrutinee;
+          sw_numconsts = Array.length cases;
+          sw_consts = !l;
+          sw_numblocks = 0;
+          sw_blocks = [];
+          sw_failaction = None;
+          sw_tags_to_sizes = Tag.Scannable.Map.empty;
+        },
+        loc )
+
+  let make_catch = make_catch_delayed
+
+  let make_exit = make_exit
+end
+
+module SArg_ctor = struct
+  type primitive = Lambda.primitive
+
+  let eqint = Pintcomp Ceq
+
+  let neint = Pintcomp Cne
+
+  let leint = Pintcomp Cle
+
+  let ltint = Pintcomp Clt
+
+  let geint = Pintcomp Cge
+
+  let gtint = Pintcomp Cgt
+
+  type act = Lambda.lambda
+
+  let make_prim p args = Lprim (p, args, Location.none)
+
+  let make_offset arg n =
+    match n with
+    | 0 -> arg
+    | _ -> Lprim (Poffsetint n, [ arg ], Location.none)
+
+  let bind arg body =
+    let newvar, newarg =
+      match arg with
+      | Lvar v -> (v, arg)
+      | _ ->
+          let newvar = Ident.create_local "switcher" in
+          (newvar, Lvar newvar)
+    in
+    bind Alias newvar arg (body newarg)
+
+  (* mshinwell: This used to say [Const_int]. Hmm. This shouldn't make any
+     difference, I don't think, as we're not using Const_int / Const_pointer
+     beyond Flambda -- whether registers need GC roots is an inferred
+     property. *)
+  let make_const i = Lconst (Const_pointer i)
+
+  let make_isout h arg = Lprim (Pisout, [ h; arg ], Location.none)
+
+  let make_isin h arg = Lprim (Pnot, [ make_isout h arg ], Location.none)
+
+  let make_if cond ifso ifnot = Lifthenelse (cond, Ctor_scrutinee, ifso, ifnot)
+
+  let make_switch loc arg cases acts =
+    let l = ref [] in
+    for i = Array.length cases - 1 downto 0 do
+      l := (i, acts.(cases.(i))) :: !l
+    done;
+    Lswitch
+      ( arg,
+        { sw_scrutinee_sort = Ctor_scrutinee;
+          sw_numconsts = Array.length cases;
           sw_consts = !l;
           sw_numblocks = 0;
           sw_blocks = [];
@@ -2375,7 +2457,8 @@ let reintroduce_fail sw =
         sw
   | Some _ -> sw
 
-module Switcher = Switch.Make (SArg)
+module Int_switcher = Switch.Make (SArg_int)
+module Ctor_switcher = Switch.Make (SArg_ctor)
 open Switch
 
 let rec last def = function
@@ -2499,9 +2582,13 @@ let as_interval fail low high l =
     | None -> as_interval_nofail l
     | Some act -> as_interval_canfail act low high l )
 
-let call_switcher loc fail arg low high int_lambda_list =
+let call_int_switcher loc fail arg low high int_lambda_list =
   let edges, (cases, actions) = as_interval fail low high int_lambda_list in
-  Switcher.zyva loc edges arg cases actions
+  Int_switcher.zyva loc edges arg cases actions
+
+let call_ctor_switcher loc fail arg low high int_lambda_list =
+  let edges, (cases, actions) = as_interval fail low high int_lambda_list in
+  Ctor_switcher.zyva loc edges arg cases actions
 
 let rec list_as_pat = function
   | [] -> fatal_error "Matching.list_as_pat"
@@ -2603,7 +2690,7 @@ let combine_constant loc arg cst partial ctx def
               | _ -> assert false)
             const_lambda_list
         in
-        call_switcher loc fail arg min_int max_int int_lambda_list
+        call_int_switcher loc fail arg min_int max_int int_lambda_list
     | Const_char _ ->
         let int_lambda_list =
           List.map
@@ -2612,7 +2699,7 @@ let combine_constant loc arg cst partial ctx def
               | _ -> assert false)
             const_lambda_list
         in
-        call_switcher loc fail arg 0 255 int_lambda_list
+        call_int_switcher loc fail arg 0 255 int_lambda_list
     | Const_string _ ->
         (* Note as the bytecode compiler may resort to dichotomic search,
    the clauses of stringswitch  are sorted with duplicates removed.
@@ -2724,7 +2811,8 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
                   (fun (path, act) rem ->
                     let ext = transl_extension_path loc ex_pat.pat_env path in
                     Lifthenelse
-                      (Lprim (Pintcomp Ceq, [ Lvar tag; ext ], loc), act, rem))
+                      (Lprim (Pintcomp Ceq, [ Lvar tag; ext ], loc),
+                      Int_scrutinee, act, rem))
                   nonconsts default
               in
               Llet (Alias, Pgenval, tag, Lprim (Pfield 0, [ arg ], loc), tests)
@@ -2732,7 +2820,8 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
         List.fold_right
           (fun (path, act) rem ->
             let ext = transl_extension_path loc ex_pat.pat_env path in
-            Lifthenelse (Lprim (Pintcomp Ceq, [ arg; ext ], loc), act, rem))
+            Lifthenelse (Lprim (Pintcomp Ceq, [ arg; ext ], loc),
+              Int_scrutinee, act, rem))
           consts nonconst_lambda
       in
       (lambda1, Jumps.union local_jumps total1)
@@ -2760,10 +2849,10 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
               when not Config.flambda ->
                 (* Typically, match on lists, will avoid isint primitive in that
               case *)
-                Lifthenelse (arg, act2, act1)
+                Lifthenelse (arg, Ctor_scrutinee, act2, act1)
             | n, 0, _, [] ->
                 (* The type defines constant constructors only *)
-                call_switcher loc fail_opt arg 0 (n - 1) consts
+                call_ctor_switcher loc fail_opt arg 0 (n - 1) consts
             | n, _, _, _ -> (
                 let act0 =
                   (* = Some act when all non-const constructors match to act *)
@@ -2781,13 +2870,15 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
                 | Some act when not !Clflags.native_code ->
                     Lifthenelse
                       ( Lprim (Pisint, [ arg ], loc),
-                        call_switcher loc fail_opt arg 0 (n - 1) consts,
+                        Int_scrutinee, (* doesn't matter; this is non-Flambda *)
+                        call_ctor_switcher loc fail_opt arg 0 (n - 1) consts,
                         act )
                 | Some _ | None ->
                     (* Emit a switch, as bytecode implements this sophisticated
                       instruction *)
                     let sw =
-                      { sw_numconsts = cstr.cstr_consts;
+                      { sw_scrutinee_sort = Ctor_scrutinee;
+                        sw_numconsts = cstr.cstr_consts;
                         sw_consts = consts;
                         sw_numblocks = cstr.cstr_nonconsts;
                         sw_blocks = nonconsts;
@@ -2805,10 +2896,10 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
 
 let make_test_sequence_variant_constant fail arg int_lambda_list =
   let _, (cases, actions) = as_interval fail min_int max_int int_lambda_list in
-  Switcher.test_sequence arg cases actions
+  Int_switcher.test_sequence arg cases actions
 
 let call_switcher_variant_constant loc fail arg int_lambda_list =
-  call_switcher loc fail arg min_int max_int int_lambda_list
+  call_int_switcher loc fail arg min_int max_int int_lambda_list
 
 let call_switcher_variant_constr loc fail arg int_lambda_list =
   let v = Ident.create_local "variant" in
@@ -2817,7 +2908,7 @@ let call_switcher_variant_constr loc fail arg int_lambda_list =
       Pgenval,
       v,
       Lprim (Pfield 0, [ arg ], loc),
-      call_switcher loc fail (Lvar v) min_int max_int int_lambda_list )
+      call_int_switcher loc fail (Lvar v) min_int max_int int_lambda_list )
 
 let combine_variant loc row arg partial ctx def (tag_lambda_list, total1, _pats)
     =
@@ -2835,7 +2926,7 @@ let combine_variant loc row arg partial ctx def (tag_lambda_list, total1, _pats)
   else
     num_constr := max_int;
   let test_int_or_block arg if_int if_block =
-    Lifthenelse (Lprim (Pisint, [ arg ], loc), if_int, if_block)
+    Lifthenelse (Lprim (Pisint, [ arg ], loc), Int_scrutinee, if_int, if_block)
   in
   let sig_complete = List.length tag_lambda_list = !num_constr
   and one_action = same_actions tag_lambda_list in
@@ -2887,7 +2978,7 @@ let combine_array loc arg kind partial ctx def (len_lambda_list, total1, _pats)
   let lambda1 =
     let newvar = Ident.create_local "len" in
     let switch =
-      call_switcher loc fail (Lvar newvar) 0 max_int len_lambda_list
+      call_int_switcher loc fail (Lvar newvar) 0 max_int len_lambda_list
     in
     bind Alias newvar (Lprim (Parraylength kind, [ arg ], loc)) switch
   in
@@ -3001,14 +3092,16 @@ let rec approx_present v = function
 
 let rec lower_bind v arg lam =
   match lam with
-  | Lifthenelse (cond, ifso, ifnot) -> (
+  | Lifthenelse (cond, sort, ifso, ifnot) -> (
       let pcond = approx_present v cond
       and pso = approx_present v ifso
       and pnot = approx_present v ifnot in
       match (pcond, pso, pnot) with
       | false, false, false -> lam
-      | false, true, false -> Lifthenelse (cond, lower_bind v arg ifso, ifnot)
-      | false, false, true -> Lifthenelse (cond, ifso, lower_bind v arg ifnot)
+      | false, true, false ->
+          Lifthenelse (cond, sort, lower_bind v arg ifso, ifnot)
+      | false, false, true ->
+          Lifthenelse (cond, sort, ifso, lower_bind v arg ifnot)
       | _, _, _ -> bind Alias v arg lam
     )
   | Lswitch (ls, ({ sw_consts = [ (i, act) ]; sw_blocks = [] } as sw), loc)
@@ -3430,8 +3523,8 @@ let simple_for_let loc param pat body =
 let rec map_return f = function
   | Llet (str, k, id, l1, l2) -> Llet (str, k, id, l1, map_return f l2)
   | Lletrec (l1, l2) -> Lletrec (l1, map_return f l2)
-  | Lifthenelse (lcond, lthen, lelse) ->
-      Lifthenelse (lcond, map_return f lthen, map_return f lelse)
+  | Lifthenelse (lcond, sort, lthen, lelse) ->
+      Lifthenelse (lcond, sort, map_return f lthen, map_return f lelse)
   | Lsequence (l1, l2) -> Lsequence (l1, map_return f l2)
   | Levent (l, ev) -> Levent (map_return f l, ev)
   | Ltrywith (l1, id, l2) -> Ltrywith (map_return f l1, id, map_return f l2)
