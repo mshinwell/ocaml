@@ -23,9 +23,11 @@ let stub_hack_prim_name = "*stub*"
 let sw_numblocks_int_switch = -1
 let sw_numblocks_tag_switch = -2
 let sw_numblocks_isint_switch = -3
+let sw_numblocks_constructor_switch = -3
 
 let classify_switch (switch : Lambda.lambda_switch) : Flambda.Switch.Sort.t =
   if switch.sw_numblocks = sw_numblocks_int_switch then Int
+  if switch.sw_numblocks = sw_numblocks_constructor_switch then Constructor
   else if switch.sw_numblocks = sw_numblocks_tag_switch then
     Tag { tags_to_sizes = switch.sw_tags_to_sizes; }
   else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
@@ -367,7 +369,12 @@ let mark_as_recursive_static_catch cont =
 
 let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
   (* CR mshinwell: What happens if [cond] is something other than
-     0 or 1?  Can this ever happen? *)
+     0 or 1?  Can this ever happen?
+     Update: lambda.mli says that it can be something other than 0 or 1.
+     However it isn't clear that this is compatible with this version of
+     Flambda, since we must always know the full set of cases for [Switch].
+     We have some minor adjustments in the frontend that should restrict
+     if-then-else to 0 or 1. *)
   let sw_numblocks =
     if is_int then sw_numblocks_isint_switch
     else sw_numblocks_int_switch

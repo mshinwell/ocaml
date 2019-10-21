@@ -578,8 +578,12 @@ let print_unary_primitive ppf p =
   | Array_length _ -> fprintf ppf "Array_length"
   | Bigarray_length { dimension; } ->
     fprintf ppf "Bigarray_length %a" print_num_dimensions dimension
+  | Unbox_number Untagged_immediate -> fprintf ppf "Untag_immediate"
+  | Unbox_number Untagged_constructor -> fprintf ppf "Untag_constructor"
   | Unbox_number k ->
     fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase_short k
+  | Box_number Untagged_immediate -> fprintf ppf "Tag_immediate"
+  | Box_number Untagged_constructor -> fprintf ppf "Tag_constructor"
   | Box_number k ->
     fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
   | Select_closure { move_from; move_to; } ->
