@@ -518,8 +518,19 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         VB.create untagged_scrutinee Name_occurrence_kind.normal
       in
       let untag =
-        Named.create_prim (Unary (Unbox_number Untagged_constructor, scrutinee))
-          Debuginfo.none
+        match sort with
+        | Int ->
+          Named.create_prim
+            (Unary (Unbox_number Untagged_immediate, scrutinee))
+            Debuginfo.none
+        | Constructor ->
+          (* The problem here is that we can't remove untag/tag pairs due
+             to typing limitations.  Maybe we shouldn't unbox for constructors.
+          *)
+          Named.create_prim
+            (Unary (Unbox_number Untagged_constructor, scrutinee))
+            Debuginfo.none
+        | Tag | Is_int -> Named.create_simple scrutinee
       in
       Expr.create_let untagged_scrutinee' untag
         (Expr.create_switch sw.sort ~scrutinee:(Simple.var untagged_scrutinee)

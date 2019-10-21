@@ -36,7 +36,7 @@ module Sort = struct
     let print ppf t =
       match t with
       | Int -> Format.fprintf ppf "Int"
-      | Constructor -> Format.fprintf ppf "Constructor"
+      | Constructor -> Format.fprintf ppf "Ctor"
       | Tag -> Format.fprintf ppf "Tag"
       | Is_int -> Format.fprintf ppf "Is_int"
 

@@ -1072,6 +1072,9 @@ and simplify_switch
               T.this_untagged_immediate imm
             | Constructor, Constructor ->
               let imm = Immediate.int (Discriminant.to_int arm) in
+              (* CR mshinwell: The typing isn't strong enough to distinguish
+                 these from the untagged-immediate cases.  We should probably
+                 fix this. *)
               T.this_untagged_constructor imm
             | Is_int, Is_int ->
               T.this_discriminant arm

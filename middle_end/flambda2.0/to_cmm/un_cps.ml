@@ -874,8 +874,9 @@ and apply_cont env e =
         expr env body
   end
 
-and switch_scrutinee env sort s =
+and switch_scrutinee env _sort s =
   let e, env, _ = simple env s in
+(* All untagged at the moment
   let e =
     match (sort : Switch.Sort.t) with
     | Int -> C.untag_int e Debuginfo.none
@@ -883,6 +884,7 @@ and switch_scrutinee env sort s =
     | Tag _ -> e (* get_tag already returns untagged integers *)
     | Is_int -> e (* Is_int already returns untagged integers *)
   in
+*)
   e, env
 
 and switch env s =
