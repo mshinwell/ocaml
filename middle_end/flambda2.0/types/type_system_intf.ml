@@ -53,6 +53,12 @@ module type S = sig
     val empty : unit -> t
 
     val one_equation : Name.t -> flambda_type -> t
+
+    val add_cse
+       : t
+      -> Flambda_primitive.Eligible_for_cse.t
+      -> bound_to:Simple.t
+      -> t
   end
 
   module Typing_env : sig

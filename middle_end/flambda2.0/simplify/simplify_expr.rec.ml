@@ -113,39 +113,33 @@ let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
       let apply = Apply.with_continuations apply return_cont exn_cont in
       Expr.create_apply apply)
 
+(* CR mshinwell: Should probably move [Reachable] into the [Flambda] recursive
+   loop and then move this into [Expr].  Maybe this could be tidied up a bit
+   too? *)
+let bind_let_bound ~bindings ~body =
+  List.fold_left
+    (fun expr
+         ((bound : Bindable_let_bound.t), (defining_expr : Reachable.t)) ->
+      match defining_expr with
+      | Invalid _ -> Expr.create_invalid ()
+      | Reachable defining_expr ->
+        match bound with
+        | Singleton var -> Expr.bind ~bindings:[var, defining_expr] ~body:expr
+        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr)
+    body
+    (List.rev bindings)
+
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
-(*
-Format.eprintf "Simplifying let on %a\n%!"
-  Bindable_let_bound.print bound_vars;
-*)
     let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
-(*
-Format.eprintf "Simplifying let on %a: defining expr done. body is:@ %a\n%!"
-  Bindable_let_bound.print bound_vars Expr.print body;
-*)
     let body, user_data, uacc = simplify_expr dacc body k in
-(*
-Format.eprintf "Simplifying let on %a: body done\n%!"
-  Bindable_let_bound.print bound_vars;
-*)
-    (* CR mshinwell: Share with the code for [Switch] below *)
-    List.fold_left
-      (fun (expr, user_data, uacc)
-           (bound_vars, (defining_expr : Reachable.t)) ->
-        match defining_expr with
-        | Invalid _ -> Expr.create_invalid (), user_data, uacc
-        | Reachable defining_expr ->
-          let expr = Expr.create_pattern_let bound_vars defining_expr expr in
-          expr, user_data, uacc)
-      (body, user_data, uacc)
-      (List.rev bindings))
+    bind_let_bound ~bindings ~body, user_data, uacc)
 
 and simplify_one_continuation_handler
   : 'a. DA.t
@@ -1222,9 +1216,6 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         |> Continuation.Set.get_singleton
     in
     let create_tagged_scrutinee k =
-      (* CR mshinwell: Does this indicate that we should be using untagged
-         immediates and constructors more widely?  Maybe so; after all, why
-         should they be any different from boxed numbers in this regard? *)
       let bound_to = Variable.create "tagged_scrutinee" in
       let bound_vars =
         Bindable_let_bound.singleton (VB.create bound_to NOK.normal)
@@ -1242,18 +1233,7 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         Simplify_named.simplify_named dacc ~bound_vars named
       in
       let body = k ~tagged_scrutinee:(Simple.var bound_to) in
-      List.fold_left
-        (fun (expr, user_data, uacc)
-             (bound_vars, (defining_expr : Reachable.t)) ->
-          match defining_expr with
-          | Invalid _ -> Expr.create_invalid (), user_data, uacc
-          | Reachable defining_expr ->
-            let expr =
-              Expr.create_pattern_let bound_vars defining_expr expr
-            in
-            expr, user_data, uacc)
-        (body, user_data, uacc)
-        (List.rev bindings)
+      bind_let_bound ~bindings ~body, user_data, uacc
     in
     let body, user_data, uacc =
       match switch_is_identity with

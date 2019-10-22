@@ -1394,6 +1394,11 @@ module Eligible_for_cse = struct
     if eligible then Some t
     else None
 
+  let create_exn prim =
+    match create prim with
+    | Some t -> t
+    | None -> Misc.fatal_errorf "Primitive %a not eligible for CSE" print prim
+
   let create_is_int ~immediate_or_block =
     Unary (Is_int, Simple.name immediate_or_block)
 

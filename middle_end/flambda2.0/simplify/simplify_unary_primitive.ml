@@ -45,7 +45,7 @@ let simplify_project_var closure_element dacc ~original_term
     ~result_var ~result_kind:K.value
 
 let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
-      dacc ~original_term ~arg:_ ~arg_ty:boxed_number_ty ~result_var =
+      dacc ~original_term ~arg ~arg_ty:boxed_number_ty ~result_var =
   let shape, result_kind =
     let result_var = Var_in_binding_pos.var result_var in
     match boxable_number_kind with
@@ -64,9 +64,20 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       T.tagged_immediate_alias_to ~untagged_immediate:result_var,
         K.naked_nativeint
   in
-  Simplify_primitive_common.simplify_projection
-    dacc ~original_term ~deconstructing:boxed_number_ty
-    ~shape ~result_var ~result_kind
+  let reachable, env_extension, dacc =
+    Simplify_primitive_common.simplify_projection
+      dacc ~original_term ~deconstructing:boxed_number_ty
+      ~shape ~result_var ~result_kind
+  in
+  let box_prim : P.t =
+    Unary (Box_number boxable_number_kind,
+      Simple.var (Var_in_binding_pos.var result_var))
+  in
+  let env_extension =
+    TEE.add_cse env_extension (P.Eligible_for_cse.create_exn box_prim)
+      ~bound_to:arg
+  in
+  reachable, env_extension, dacc
 
 let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
       dacc ~original_term ~arg:_ ~arg_ty:naked_number_ty ~result_var =
