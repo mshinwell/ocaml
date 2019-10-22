@@ -1230,7 +1230,12 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         Bindable_let_bound.singleton (VB.create bound_to NOK.normal)
       in
       let named =
-        Named.create_prim (Unary (Box_number Untagged_constructor, scrutinee))
+        let boxed_kind : K.Boxable_number.t =
+          match Switch.sort switch with
+          | Int | Tag _ | Is_int -> Untagged_immediate
+          | Constructor -> Untagged_constructor
+        in
+        Named.create_prim (Unary (Box_number boxed_kind, scrutinee))
           Debuginfo.none
       in
       let bindings, _dacc =
