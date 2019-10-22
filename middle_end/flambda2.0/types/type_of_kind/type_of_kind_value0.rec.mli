@@ -17,10 +17,13 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type t =
-  | Blocks_and_tagged_immediates of {
-      immediates : Row_like.For_immediates.t Or_unknown.t;
+  | Variant of {
+      is_int : Type_grammar.t;
+      immediates : Type_grammar.t;
+      tag : Type_grammar.t;
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }
+  | Tagged_immediate of Type_grammar.t
   | Boxed_float of Type_grammar.t
   | Boxed_int32 of Type_grammar.t
   | Boxed_int64 of Type_grammar.t

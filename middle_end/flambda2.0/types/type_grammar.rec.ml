@@ -346,14 +346,17 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
+let this_tagged_immediate imm : t =
+  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
+
 let any_tagged_immediate () : t =
   Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+    is_int = this_tagged_immediate Immediate.bool_true;
+    tagged_imm = any_value ();
+    tag = bottom K.fabricated;
     immediates = Unknown;
     blocks = Known (Row_like.For_blocks.create_bottom ());
   })))
-
-let this_tagged_immediate imm : t =
-  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
 
 let these_tagged_immediates0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
