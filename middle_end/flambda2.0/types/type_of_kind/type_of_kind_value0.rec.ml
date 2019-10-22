@@ -20,10 +20,9 @@ module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Blocks = Row_like.For_blocks
-module Immediates = Row_like.For_immediates
 
 type t =
-  | Blocks_and_tagged_immediates of {
+  | Variant of {
       is_int : T.t;
       immediates : T.t;
       tag : T.t;
@@ -41,23 +40,20 @@ type t =
 
 let print_with_cache ~cache ppf t =
   match t with
-  | Blocks_and_tagged_immediates
-      { is_int; tagged_imm; tag; blocks; immediates; } ->
+  | Variant { is_int; immediates; tag; blocks; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
        they're empty. *)
     Format.fprintf ppf
       "@[<hov 1>(Blocks_and_immediates@ \
         @[<hov 1>(is_int@ %a)@]@ \
-        @[<hov 1>(tagged_imm@ %a)@]@ \
+        @[<hov 1>(immediates@ %a)@]@ \
         @[<hov 1>(tag@ %a)@]@ \
-        @[<hov 1>(blocks@ %a)@]@ \
-        @[<hov 1>(immediates@ %a)@]\
+        @[<hov 1>(blocks@ %a)@]\
         )@]"
       (T.print_with_cache ~cache) is_int
-      (T.print_with_cache ~cache) tagged_imm
+      (T.print_with_cache ~cache) immediates
       (T.print_with_cache ~cache) tag
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
-      (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
   | Boxed_float naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
       (T.print_with_cache ~cache) naked_ty
@@ -82,37 +78,30 @@ let print_with_cache ~cache ppf t =
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let apply_name_permutation_blocks_and_tagged_immediates
-      ~is_int ~tagged_imm ~tag blocks immediates perm =
+let apply_name_permutation_variant
+      ~is_int ~immediates ~tag blocks perm =
   let is_int' = T.apply_name_permutation is_int perm in
-  let tagged_imm' = T.apply_name_permutation tagged_imm perm in
+  let immediates' = T.apply_name_permutation immediates perm in
   let tag' = T.apply_name_permutation tag perm in
-  let immediates' =
-    Or_unknown.map immediates ~f:(fun immediates ->
-      Immediates.apply_name_permutation immediates perm)
-  in
   let blocks' =
     Or_unknown.map blocks ~f:(fun blocks ->
       Blocks.apply_name_permutation blocks perm)
   in
-  if is_int == is_int' && tagged_imm == tagged_imm' && tag == tag'
-       && immediates == immediates' && blocks == blocks' then
+  if is_int == is_int' && immediates == immediates' && tag == tag'
+       && blocks == blocks' then
     None
   else
-    Some (is_int', tagged_imm', tag', blocks', immediates')
+    Some (is_int', immediates', tag', blocks')
 
 let apply_name_permutation t perm =
   match t with
-  | Blocks_and_tagged_immediates
-      { is_int; tagged_imm; tag; blocks; immediates; } ->
+  | Variant { is_int; immediates; tag; blocks; } ->
     begin match
-      apply_name_permutation_blocks_and_tagged_immediates
-        ~is_int ~tagged_imm ~tag blocks immediates perm
+      apply_name_permutation_variant ~is_int ~immediates ~tag blocks perm
     with
     | None -> t
-    | Some (is_int, tagged_imm, tag, blocks, immediates) ->
-      Blocks_and_tagged_immediates
-        { is_int; tagged_imm; tag; blocks; immediates; }
+    | Some (is_int, immediates, tag, blocks) ->
+      Variant { is_int; immediates; tag; blocks; }
     end
   | Boxed_float ty ->
     let ty' = T.apply_name_permutation ty perm in
@@ -145,14 +134,12 @@ let apply_name_permutation t perm =
 
 let free_names t =
   match t with
-  | Blocks_and_tagged_immediates
-      { is_int; tagged_imm; tag; blocks; immediates; } ->
+  | Variant { is_int; immediates; tag; blocks; } ->
     Name_occurrences.union_list [
       T.free_names is_int;
-      T.free_names tagged_imm;
+      T.free_names immediates;
       T.free_names tag;
       Or_unknown.free_names Blocks.free_names blocks;
-      Or_unknown.free_names Immediates.free_names immediates;
     ]
   | Boxed_float ty -> T.free_names ty
   | Boxed_int32 ty -> T.free_names ty
@@ -177,7 +164,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
             let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
             Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
-  | Blocks_and_tagged_immediates _
+  | Variant _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -215,20 +202,16 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join_blocks_and_tagged_immediates env
-        ~is_int1 ~tagged_imm1 ~tag1 ~blocks1 ~imms1
-        ~is_int2 ~tagged_imm2 ~tag2 ~blocks2 ~imms2
+  let meet_or_join_variant env
+        ~is_int1 ~immediates1 ~tag1 ~blocks1
+        ~is_int2 ~immediates2 ~tag2 ~blocks2
         : _ Or_bottom.t =
     let is_int = E.switch T.meet T.join env is_int1 is_int2 in
-    let tagged_imm = E.switch T.meet T.join env tagged_imm1 tagged_imm2 in
+    let immediates = E.switch T.meet T.join env immediates1 immediates2 in
     let tag = E.switch T.meet T.join env tag1 tag2 in
     let blocks =
       E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
         env blocks1 blocks2
-    in
-    let imms =
-      E.switch (meet_unknown Immediates.meet) (join_unknown Immediates.join)
-        env imms1 imms2
     in
     match is_int with
     | Bottom -> Bottom
@@ -252,11 +235,11 @@ struct
         E.switch0 TEE.meet join_extensions env
           env_extension1 env_extension2
       in
-      let tagged_imm, env_extension =
-        match tagged_imm with
+      let immediates, env_extension =
+        match immediates with
         | Bottom -> T.bottom K.fabricated, env_extension
-        | Ok (tagged_imm, env_extension') ->
-          tagged_imm, meet_or_join_extensions env_extension env_extension'
+        | Ok (immediates, env_extension') ->
+          immediates, meet_or_join_extensions env_extension env_extension'
       in
       let tag, env_extension =
         match tag with
@@ -264,36 +247,28 @@ struct
         | Ok (tag, env_extension') ->
           tag, meet_or_join_extensions env_extension env_extension'
       in
-      let immediates, env_extension =
-        match immediates with
-        | Bottom -> Immediates.create_bottom (), env_extension
-        | Ok (immediates, env_extension') ->
-          immediates, meet_or_join_extensions env_extension env_extension'
-      in
       let blocks, env_extension =
         match blocks with
         | Bottom -> Blocks.create_bottom ()
         | Ok (blocks, env_extension') ->
           blocks, meet_or_join_extensions env_extension env_extension'
       in
-      Ok (is_int, tagged_imm, tag, blocks, immediates, env_extension)
+      Ok (is_int, immediates, tag, blocks env_extension)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
     match t1, t2 with
-    | Blocks_and_tagged_immediates
-        { is_int = is_int1; tagged_imm = tagged_imm1; tag = tag1;
-          blocks = blocks1; immediates = immediates1; },
-      Blocks_and_tagged_immediates
-        { is_int = is_int2; tagged_imm = tagged_imm2; tag = tag2;
-          blocks = blocks2; immediates = immediates2; } ->
+    | Variant
+        { is_int = is_int1; immediates = immediates1; tag = tag1;
+          blocks = blocks1; },
+      Variant
+        { is_int = is_int2; immediates = immediates2; tag = tag2;
+          blocks = blocks2; } ->
       Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_blocks_and_tagged_immediates env
-          ~is_int1 ~tagged_imm1 ~tag1 ~blocks1 ~imms1
-          ~is_int2 ~tagged_imm2 ~tag2 ~blocks2 ~imms2)
-        ~f:(fun (is_int, tagged_imm, tag, blocks, immediates, env_extension) ->
-          Blocks_and_tagged_immediates
-              { is_int; tagged_imm; tag; blocks; immediates; },
-            env_extension)
+        (meet_or_join_variant env
+          ~is_int1 ~immediates1 ~tag1 ~blocks1
+          ~is_int2 ~immediates2 ~tag2 ~blocks2)
+        ~f:(fun (is_int, immediates, tag, blocks, env_extension) ->
+          Variant { is_int; immediates; tag; blocks; }, env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env n1 n2)
@@ -325,7 +300,7 @@ struct
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
-    | (Blocks_and_tagged_immediates _
+    | (Variant _
         | Boxed_float _
         | Boxed_int32 _
         | Boxed_int64 _

@@ -396,13 +396,10 @@ let this_tagged_immediate imm : t =
   Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
 
 let any_tagged_immediate () : t =
-  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
-    is_int = this_tagged_immediate Immediate.bool_true;
-    tagged_imm = any_value ();
-    tag = bottom K.fabricated;
-    immediates = Unknown;
-    blocks = Known (Row_like.For_blocks.create_bottom ());
-  })))
+  Value (T_V.create_no_alias (Ok (Tagged_immediate (any_naked_immediate ()))))
+
+let these_untagged_immediates imms : t =
+  Naked_immediate (Ok (Row_like.For_immediates.create imms))
 
 let these_tagged_immediates0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
@@ -410,10 +407,11 @@ let these_tagged_immediates0 ~no_alias imms : t =
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
-      let immediates = Row_like.For_immediates.create imms in
       Value (T_V.create_no_alias (
-        Ok (Blocks_and_tagged_immediates {
-          immediates = Known immediates;
+        Ok (Variant {
+          is_int = Value (T_V.create_equals Simple.bool_true);
+          immediates = tag_immediate (these_untagged_immediates imms);
+          tag = bottom K.fabricated;
           blocks = Known (Row_like.For_blocks.create_bottom ());
         })))
 
@@ -467,6 +465,24 @@ let boxed_int64_alias_to ~naked_int64 =
 let boxed_nativeint_alias_to ~naked_nativeint =
   box_nativeint (Naked_nativeint (
     T_NN.create_equals (Simple.var naked_nativeint)))
+
+let variant_is_int ~is_int =
+  Value (T_V.create_no_alias (Ok (
+    Variant {
+      is_int = Value (T_V.create_equals (Simple.var is_int));
+      immediates = unknown K.naked_immediate;
+      tag = unknown K.fabricated;
+      blocks = Unknown;
+    })))
+
+let variant_get_tag ~get_tag =
+  Value (T_V.create_no_alias (Ok (
+    Variant {
+      is_int = unknown K.value;
+      immediates = unknown K.naked_immediate;
+      tag = Fabricated (T_F.create_equals (Simple.var get_tag));
+      blocks = Unknown;
+    })))
 
 let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
