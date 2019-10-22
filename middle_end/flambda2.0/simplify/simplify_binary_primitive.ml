@@ -834,6 +834,10 @@ let simplify_phys_equal (op : P.equality_comparison)
       (kind : K.t) dacc ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var =
   let result = Name.var (Var_in_binding_pos.var result_var) in
+Format.eprintf "phys_equal %a : %a = %a : %a in@ %a\n%!"
+  Simple.print arg1 T.print arg1_ty
+  Simple.print arg2 T.print arg2_ty
+  DA.print dacc;
   begin match kind with
   | Value ->
     let typing_env = DE.typing_env (DA.denv dacc) in
