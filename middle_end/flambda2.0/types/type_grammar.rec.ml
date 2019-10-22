@@ -394,6 +394,12 @@ let these_tagged_immediates0 ~no_alias imms : t =
 let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
 
+let these_tagged_constructors imms =
+  these_tagged_constructors0 ~no_alias:false imms
+
+let these_untagged_immediates imms =
+  these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
 

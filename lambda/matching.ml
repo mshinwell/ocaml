@@ -2360,7 +2360,8 @@ module SArg_ctor = struct
 
   let make_isin h arg = Lprim (Pnot, [ make_isout h arg ], Location.none)
 
-  let make_if cond ifso ifnot = Lifthenelse (cond, Ctor_scrutinee, ifso, ifnot)
+  (* XXX Maybe the sort on Lifthenelse isn't needed *)
+  let make_if cond ifso ifnot = Lifthenelse (cond, Int_scrutinee, ifso, ifnot)
 
   let make_switch loc arg cases acts =
     let l = ref [] in

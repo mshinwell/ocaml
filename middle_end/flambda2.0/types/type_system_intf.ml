@@ -232,6 +232,9 @@ module type S = sig
   val this_boxed_nativeint : Targetint.t -> t
 
   val these_tagged_immediates : Immediate.Set.t -> t
+  (* CR mshinwell: We should add a [Constructor] module to use instead of
+     [Immediate] for constant constructors. *)
+  val these_tagged_constructors : Immediate.Set.t -> t
   val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val these_boxed_int32s : Int32.Set.t -> t
   val these_boxed_int64s : Int64.Set.t -> t
@@ -246,6 +249,7 @@ module type S = sig
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
 
+  val these_untagged_immediates : Immediate.Set.t -> t
   val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val these_naked_int32s : Int32.Set.t -> t
   val these_naked_int64s : Int64.Set.t -> t
@@ -354,6 +358,11 @@ module type S = sig
 
   (* CR mshinwell: Should remove "_equals_" from these names *)
   val prove_equals_tagged_immediates
+     : Typing_env.t
+    -> t
+    -> Immediate.Set.t proof
+
+  val prove_equals_tagged_constructors
      : Typing_env.t
     -> t
     -> Immediate.Set.t proof

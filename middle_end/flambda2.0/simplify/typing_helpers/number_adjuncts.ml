@@ -191,6 +191,59 @@ module For_tagged_immediates : Int_number_kind = struct
     Named.create_simple (Simple.const (Tagged_immediate imm))
 end
 
+module For_tagged_constructors : Int_number_kind = struct
+  module Num = struct
+    include Immediate
+
+    let compare_unsigned _t1 _t2 =
+      (* CR mshinwell: Implement these *)
+      Misc.fatal_error
+        "For_tagged_constructors.compare_unsigned not yet implemented"
+
+    let div _ _ = Misc.fatal_error "[div] not supported for constructors"
+    let mod_ _ _ = Misc.fatal_error "[mod] not supported for constructors"
+
+    let shift_left _ _ =
+      Misc.fatal_error "[shift_left] not supported for constructors"
+
+    let shift_right _ _ =
+      Misc.fatal_error "[shift_right] not supported for constructors"
+
+    let shift_right_logical _ _ =
+      Misc.fatal_error "[shift_right_logical] not supported for constructors"
+
+    let swap_byte_endianness _ =
+      Misc.fatal_error "[swap_byte_endianness] not supported for constructors"
+
+    let to_const t = Simple.Const.Tagged_constructor t
+
+    let to_tagged_immediate t = t
+
+    let to_naked_float _ =
+      Misc.fatal_error "[to_naked_float] not supported for constructors"
+
+    let to_naked_int32 _ =
+      Misc.fatal_error "[to_naked_int32] not supported for constructors"
+
+    let to_naked_int64 _ =
+      Misc.fatal_error "[to_naked_int64] not supported for constructors"
+
+    let to_naked_nativeint _ =
+      Misc.fatal_error "[to_naked_nativeint] not supported for constructors"
+  end
+
+  (* CR mshinwell: Shouldn't there be different kinds too? *)
+  let kind : K.Standard_int_or_float.t = Tagged_immediate
+  let standard_int_kind : K.Standard_int.t = Tagged_immediate
+
+  let unboxed_prover = T.prove_equals_tagged_constructors
+  let this_unboxed = T.this_tagged_constructor
+  let these_unboxed = T.these_tagged_constructors
+
+  let term_unboxed imm =
+    Named.create_simple (Simple.const (Tagged_constructor imm))
+end
+
 module For_floats : Boxable_number_kind = struct
   module Num = struct
     include Float_by_bit_pattern

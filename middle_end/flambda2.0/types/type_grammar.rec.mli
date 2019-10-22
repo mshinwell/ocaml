@@ -75,6 +75,8 @@ val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
 val these_tagged_immediates : Immediate.Set.t -> t
+val these_tagged_constructors : Immediate.Set.t -> t
+val these_untagged_immediates : Immediate.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t

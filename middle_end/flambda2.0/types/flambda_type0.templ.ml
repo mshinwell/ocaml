@@ -276,6 +276,37 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
+  let prove_equals_tagged_constructors env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match expand_head t env with
+    | Const (Tagged_constructor imm) -> Proved (Immediate.Set.singleton imm)
+    | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
+      | Naked_int64 _ | Naked_nativeint _)
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Value (Ok (Variant blocks_imms)) ->
+        begin match blocks_imms.blocks, blocks_imms.immediates with
+        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+        | Known blocks, Known imms ->
+          if Row_like.For_blocks.is_bottom blocks then
+            match Row_like.For_immediates.all imms with
+            | Known imms -> Proved imms
+            | Unknown -> Unknown
+          else
+            Invalid
+        end
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
+
   let prove_equals_single_tagged_immediate env t : _ proof =
     match prove_equals_tagged_immediates env t with
     | Proved imms ->

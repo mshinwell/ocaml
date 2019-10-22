@@ -121,6 +121,7 @@ module type Boxable_int_number_kind = sig
 end
 
 module For_tagged_immediates : Int_number_kind
+module For_tagged_constructors : Int_number_kind
 module For_floats : Boxable_number_kind
 module For_int32s : Boxable_int_number_kind
 module For_int64s : Boxable_int_number_kind

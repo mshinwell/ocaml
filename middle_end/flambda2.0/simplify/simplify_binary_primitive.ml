@@ -550,7 +550,7 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
@@ -699,7 +699,7 @@ end = struct
   type op = P.comparison
 
   let kind = K.Standard_int_or_float.Naked_float
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate denv = DE.float_const_prop denv
 
@@ -783,6 +783,8 @@ end
 
 module Int_ops_for_binary_eq_comp_tagged_immediate =
   Int_ops_for_binary_eq_comp (A.For_tagged_immediates)
+module Int_ops_for_binary_eq_comp_tagged_constructor =
+  Int_ops_for_binary_eq_comp (A.For_tagged_constructors)
 module Int_ops_for_binary_eq_comp_int32 =
   Int_ops_for_binary_eq_comp (A.For_int32s)
 module Int_ops_for_binary_eq_comp_int64 =
@@ -792,6 +794,8 @@ module Int_ops_for_binary_eq_comp_nativeint =
 
 module Binary_int_eq_comp_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_eq_comp_tagged_immediate)
+module Binary_int_eq_comp_tagged_constructor =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_tagged_constructor)
 module Binary_int_eq_comp_int32 =
   Binary_arith_like (Int_ops_for_binary_eq_comp_int32)
 module Binary_int_eq_comp_int64 =
@@ -840,40 +844,47 @@ let simplify_phys_equal (op : P.equality_comparison)
       Binary_int_eq_comp_tagged_immediate.simplify op dacc ~original_term dbg
         ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
     | _, _ ->
-      let physically_equal =
-        false
-        (* CR mshinwell: Resurrect this -- see cps_types branch.
-        T.values_physically_equal arg1_ty arg2_ty
-        *)
-      in
-      let physically_distinct =
-        false
-        (* CR mshinwell: Resurrect this -- see cps_types branch.
-        (* Structural inequality implies physical inequality. *)
-        let env = E.get_typing_environment env in
-        T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
-        *)
-      in
-      let const bool =
-        let env_extension =
-          TEE.one_equation result
-            (T.this_tagged_immediate (Immediate.bool bool))
+      let proof1 = T.prove_equals_tagged_constructors typing_env arg1_ty in
+      let proof2 = T.prove_equals_tagged_constructors typing_env arg2_ty in
+      match proof1, proof2 with
+      | Proved _, Proved _ ->
+        Binary_int_eq_comp_tagged_constructor.simplify op dacc ~original_term
+          dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+      | _, _ ->
+        let physically_equal =
+          false
+          (* CR mshinwell: Resurrect this -- see cps_types branch.
+          T.values_physically_equal arg1_ty arg2_ty
+          *)
         in
-        Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
-          env_extension, dacc
-      in
-      begin match op, physically_equal, physically_distinct with
-      | Eq, true, _ -> const true
-      | Neq, true, _ -> const false
-      | Eq, _, true -> const false
-      | Neq, _, true -> const true
-      | _, _, _ ->
-        let env_extension =
-          TEE.one_equation result
-            (T.these_tagged_immediates Immediate.all_bools)
+        let physically_distinct =
+          false
+          (* CR mshinwell: Resurrect this -- see cps_types branch.
+          (* Structural inequality implies physical inequality. *)
+          let env = E.get_typing_environment env in
+          T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
+          *)
         in
-        Reachable.reachable original_term, env_extension, dacc
-      end
+        let const bool =
+          let env_extension =
+            TEE.one_equation result
+              (T.this_untagged_immediate (Immediate.bool bool))
+          in
+          Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
+            env_extension, dacc
+        in
+        begin match op, physically_equal, physically_distinct with
+        | Eq, true, _ -> const true
+        | Neq, true, _ -> const false
+        | Eq, _, true -> const false
+        | Neq, _, true -> const true
+        | _, _, _ ->
+          let env_extension =
+            TEE.one_equation result
+              (T.these_untagged_immediates Immediate.all_bools)
+          in
+          Reachable.reachable original_term, env_extension, dacc
+        end
     end
   | Naked_number Naked_float ->
     (* CR mshinwell: Should this case be statically disallowed in the type,
