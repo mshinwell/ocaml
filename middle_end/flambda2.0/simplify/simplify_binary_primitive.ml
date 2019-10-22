@@ -849,6 +849,8 @@ let simplify_phys_equal (op : P.equality_comparison)
         Reachable.reachable original_term, env_extension, dacc
       end
     end
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
   | Naked_number Naked_float ->
     (* CR mshinwell: Should this case be statically disallowed in the type,
        to force people to use [Float_comp]? *)

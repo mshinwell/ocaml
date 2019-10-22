@@ -65,6 +65,7 @@ module Make
   let is_bottom env t =
     match expand_head t env with
     | Resolved (Value Bottom)
+    | Resolved (Naked_immediate Bottom)
     | Resolved (Naked_float Bottom)
     | Resolved (Naked_int32 Bottom)
     | Resolved (Naked_int64 Bottom)
@@ -72,6 +73,7 @@ module Make
     | Resolved (Fabricated Bottom) -> true
     | Const _ | Discriminant _
     | Resolved (Value _)
+    | Resolved (Naked_immediate _)
     | Resolved (Naked_float _)
     | Resolved (Naked_int32 _)
     | Resolved (Naked_int64 _)
@@ -156,6 +158,7 @@ module Make
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
@@ -168,7 +171,7 @@ module Make
     in
     match expand_head t env with
     | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
-    | Const (Naked_float _ | Naked_int32 _
+    | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -187,6 +190,7 @@ module Make
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
@@ -211,7 +215,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_float f) -> Proved (Float.Set.singleton f)
-    | Const (Tagged_immediate _ | Naked_int32 _
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -220,6 +224,7 @@ module Make
       | Naked_float Unknown -> Unknown
       | Naked_float Bottom -> Invalid
       | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
       | Naked_nativeint _ -> wrong_kind ()
@@ -231,7 +236,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int64 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -240,6 +245,7 @@ module Make
       | Naked_int32 Unknown -> Unknown
       | Naked_int32 Bottom -> Invalid
       | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
       | Naked_nativeint _ -> wrong_kind ()
@@ -251,7 +257,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_nativeint _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -260,6 +266,7 @@ module Make
       | Naked_int64 Unknown -> Unknown
       | Naked_int64 Bottom -> Invalid
       | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_nativeint _ -> wrong_kind ()
@@ -271,7 +278,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
+    | Const (Tagged_immediate _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
@@ -280,6 +287,7 @@ module Make
       | Naked_nativeint Unknown -> Unknown
       | Naked_nativeint Bottom -> Invalid
       | Value _ -> wrong_kind ()
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
@@ -310,6 +318,7 @@ module Make
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
@@ -340,6 +349,7 @@ module Make
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
       (* CR mshinwell: Here and elsewhere, use or-patterns. *)
+      | Naked_immediate _ -> wrong_kind ()
       | Naked_float _ -> wrong_kind ()
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
@@ -498,7 +508,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     | Discriminant discr -> Proved (Discriminant.Set.singleton discr)
     | Resolved resolved ->
       match resolved with
-      | Value _ | Naked_float _
+      | Value _ | Naked_immediate _ | Naked_float _
       | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _ -> wrong_kind ()
       | Fabricated (Ok (Discriminants discrs)) ->
         begin match Row_like.For_discriminants.all discrs with
@@ -523,7 +533,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
-      | Naked_float _ | Naked_int32 _ | Naked_int64 _
+      | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
       | Naked_nativeint _ | Fabricated _ -> wrong_kind ()
 
   type to_lift =
@@ -610,7 +620,7 @@ Format.eprintf "reifying %a\n%!" print t;
           | _, _ -> try_canonical_simple ()
           end
         | Value Bottom
-        | Naked_float Bottom
+        | Naked_immediate Bottom | Naked_float Bottom
         | Naked_int32 Bottom | Naked_int64 Bottom | Naked_nativeint Bottom
         | Fabricated Bottom -> Invalid
         | _ -> try_canonical_simple ()
