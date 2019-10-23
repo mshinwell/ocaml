@@ -392,6 +392,9 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
+let tag_immediate t : t =
+  Value (T_V.create_no_alias (Ok (Tagged_immediate t)))
+
 let this_tagged_immediate imm : t =
   Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
 

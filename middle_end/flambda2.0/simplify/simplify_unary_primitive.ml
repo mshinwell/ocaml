@@ -77,6 +77,11 @@ let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
 
 let simplify_is_int dacc ~original_term ~arg: _~arg_ty:scrutinee_ty
       ~result_var =
+  Simplify_primitive_common.simplify_projection
+    dacc ~original_term ~deconstructing:scrutinee_ty
+    ~shape:(T.variant_is_int ~is_int:(Var_in_binding_pos.var result_var))
+    ~result_var ~result_kind:K.value
+
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let typing_env = DE.typing_env (DA.denv dacc) in
   let proof = T.prove_is_int typing_env scrutinee_ty in
