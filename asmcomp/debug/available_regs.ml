@@ -226,7 +226,7 @@ let rec available_regs (instr : M.instruction)
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Icatch (recursive, handlers, body) ->
-        List.iter (fun (nfail, _handler) ->
+        List.iter (fun (nfail, _ts, _handler) ->
             (* In case there are nested [Icatch] expressions with the same
                handler numbers, we rely on the [Hashtbl] shadowing
                semantics. *)
@@ -237,7 +237,7 @@ let rec available_regs (instr : M.instruction)
         in
         (* CR-someday mshinwell: Consider potential efficiency speedups
            (see suggestions from @chambart on GPR#856). *)
-        let aux (nfail, handler) (nfail', avail_at_top_of_handler) =
+        let aux (nfail, _ts, handler) (nfail', avail_at_top_of_handler) =
           assert (nfail = nfail');
           available_regs handler ~avail_before:avail_at_top_of_handler
         in
@@ -251,7 +251,7 @@ let rec available_regs (instr : M.instruction)
             List.map2 aux handlers avail_at_top_of_handlers
           in
           let avail_at_top_of_handlers' =
-            List.map (fun (nfail, _handler) ->
+            List.map (fun (nfail, _ts, _handler) ->
                 match Hashtbl.find avail_at_exit nfail with
                 | exception Not_found -> assert false  (* see above *)
                 | avail_at_top_of_handler -> nfail, avail_at_top_of_handler)
@@ -266,14 +266,14 @@ let rec available_regs (instr : M.instruction)
             else fixpoint avail_at_top_of_handlers'
         in
         let init_avail_at_top_of_handlers =
-          List.map (fun (nfail, _handler) ->
+          List.map (fun (nfail, _ts, _handler) ->
               match Hashtbl.find avail_at_exit nfail with
               | exception Not_found -> assert false  (* see above *)
               | avail_at_top_of_handler -> nfail, avail_at_top_of_handler)
             handlers
         in
         let avail_after_handlers = fixpoint init_avail_at_top_of_handlers in
-        List.iter (fun (nfail, _handler) ->
+        List.iter (fun (nfail, _ts, _handler) ->
             Hashtbl.remove avail_at_exit nfail)
           handlers;
         let avail_after =

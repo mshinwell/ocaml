@@ -161,22 +161,25 @@ let rec rename i sub =
                   (subst_regs i.arg sub) [||] new_next,
        sub_next)
   | Icatch(rec_flag, handlers, body) ->
-      let new_subst = List.map (fun (nfail, _) -> nfail, ref None)
-          handlers in
+      let new_subst =
+        List.map (fun (nfail, _, _) -> nfail, ref None) handlers
+      in
       let previous_exit_subst = !exit_subst in
       exit_subst := new_subst @ !exit_subst;
       let (new_body, sub_body) = rename body sub in
       let res =
-        List.map2 (fun (_, handler) (_, new_subst) -> rename handler !new_subst)
-          handlers new_subst in
+        List.map2
+          (fun (_, _, handler) (_, new_subst) -> rename handler !new_subst)
+          handlers new_subst
+      in
       exit_subst := previous_exit_subst;
       let merged_subst =
         List.fold_left (fun acc (_, sub_handler) ->
             merge_substs acc sub_handler i.next)
           sub_body res in
       let (new_next, sub_next) = rename i.next merged_subst in
-      let new_handlers = List.map2 (fun (nfail, _) (handler, _) ->
-          (nfail, handler)) handlers res in
+      let new_handlers = List.map2 (fun (nfail, ts, _) (handler, _) ->
+          (nfail, ts, handler)) handlers res in
       (instr_cons
          (Icatch(rec_flag, new_handlers, new_body)) [||] [||] new_next,
        sub_next)

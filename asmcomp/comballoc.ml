@@ -85,7 +85,10 @@ let rec combine i allocstate =
   | Icatch(rec_flag, handlers, body) ->
       let (newbody, s') = combine body allocstate in
       let newhandlers =
-        List.map (fun (io, handler) -> io, combine_restart handler) handlers in
+        List.map
+          (fun (io, ts, handler) -> io, ts, combine_restart handler)
+          handlers
+      in
       let newnext = combine_restart i.next in
       (instr_cons (Icatch(rec_flag, newhandlers, newbody))
          i.arg i.res newnext, s')

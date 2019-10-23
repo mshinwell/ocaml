@@ -208,7 +208,8 @@ let rec instr ppf i =
   | Icatch(flag, handlers, body) ->
       fprintf ppf "@[<v 2>catch%a@,%a@;<0 -2>with"
         Printcmm.rec_flag flag instr body;
-      let h (nfail, handler) =
+      let h (nfail, _trap_stack, handler) =
+        (* CR vlaviron: print the trap stacks ? *)
         fprintf ppf "(%d)@,%a@;" nfail instr handler in
       let rec aux = function
         | [] -> ()

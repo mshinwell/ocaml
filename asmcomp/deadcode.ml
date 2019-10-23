@@ -83,7 +83,12 @@ let rec deadcode i =
   | Icatch(rec_flag, handlers, body) ->
     let body' = deadcode body in
     let s = deadcode i.next in
-    let handlers' = Int.Map.map deadcode (Int.Map.of_list handlers) in
+    let handlers' =
+      List.fold_left
+        (fun map (nfail, ts, handler) ->
+           Int.Map.add nfail (ts, deadcode handler) map)
+        Int.Map.empty handlers
+    in
     (* Previous passes guarantee that indexes of handlers are unique
        across the entire function and Iexit instructions refer
        to the correctly scoped handlers.
@@ -95,8 +100,8 @@ let rec deadcode i =
         let live_exits = Int.Set.add nfail live_exits in
         match Int.Map.find_opt nfail handlers' with
         | None -> (live_exits, used_handlers)
-        | Some handler ->
-          let used_handlers = (nfail, handler) :: used_handlers in
+        | Some (ts, handler) ->
+          let used_handlers = (nfail, ts, handler) :: used_handlers in
           match rec_flag with
           | Cmm.Nonrecursive -> (live_exits, used_handlers)
           | Cmm.Recursive ->
@@ -106,14 +111,17 @@ let rec deadcode i =
       Int.Set.fold add_live body'.exits (Int.Set.empty, [])
     in
     (* Remove exits that are going out of scope. *)
-    let used_handler_indexes = Int.Set.of_list (List.map fst used_handlers) in
+    let used_handler_indexes =
+      List.fold_left (fun acc (n, _, _) -> Int.Set.add n acc)
+        Int.Set.empty used_handlers
+    in
     let live_exits = Int.Set.diff live_exits used_handler_indexes in
     (* For non-recursive catch, live exits referenced in handlers are free. *)
     let live_exits =
       match rec_flag with
       | Cmm.Recursive -> live_exits
       | Cmm.Nonrecursive ->
-        List.fold_left (fun exits (_,h) -> Int.Set.union h.exits exits)
+        List.fold_left (fun exits (_,_,h) -> Int.Set.union h.exits exits)
           live_exits
           used_handlers
     in
@@ -125,7 +133,7 @@ let rec deadcode i =
         exits;
       }
     | _ ->
-      let handlers = List.map (fun (n,h) -> (n,h.i)) used_handlers in
+      let handlers = List.map (fun (n,ts,h) -> (n,ts,h.i)) used_handlers in
       { i = { i with desc = Icatch(rec_flag, handlers, body'.i); next = s.i };
         regs = i.live;
         exits;

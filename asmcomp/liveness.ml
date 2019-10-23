@@ -91,7 +91,7 @@ let rec live i finally =
       Reg.add_set_array !at_fork arg
   | Icatch(rec_flag, handlers, body) ->
       let at_join = live i.next finally in
-      let aux (nfail,handler) (nfail', before_handler) =
+      let aux (nfail, _ts, handler) (nfail', before_handler) =
         assert(nfail = nfail');
         let before_handler' = live handler at_join in
         nfail, Reg.Set.union before_handler before_handler'
@@ -114,7 +114,7 @@ let rec live i finally =
             else fixpoint before_handlers'
       in
       let init_state =
-        List.map (fun (nfail, _handler) -> nfail, Reg.Set.empty) handlers
+        List.map (fun (nfail, _ts, _handler) -> nfail, Reg.Set.empty) handlers
       in
       let before_handler = fixpoint init_state in
       (* We could use handler.live instead of Reg.Set.empty as the initial

@@ -348,8 +348,8 @@ method private cse n i =
       {i with desc = Iswitch(index, Array.map (self#cse n1) cases);
               next = self#cse empty_numbering i.next}
   | Icatch(rec_flag, handlers, body) ->
-      let aux (nfail, handler) =
-        nfail, self#cse empty_numbering handler
+      let aux (nfail, ts, handler) =
+        nfail, ts, self#cse empty_numbering handler
       in
       {i with desc = Icatch(rec_flag, List.map aux handlers, self#cse n body);
               next = self#cse empty_numbering i.next}
