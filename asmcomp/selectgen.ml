@@ -24,11 +24,16 @@ module Int = Numbers.Int
 module V = Backend_var
 module VP = Backend_var.With_provenance
 
+type trap_stack_info =
+  | Unreachable
+  | Reachable of trap_stack
+
 type environment =
   { vars : (Reg.t array * Backend_var.Provenance.t option) V.Map.t;
-    static_exceptions : Reg.t array list Int.Map.t;
+    static_exceptions : (Reg.t array list * trap_stack_info ref) Int.Map.t;
     (** Which registers must be populated when jumping to the given
         handler. *)
+    trap_stack : trap_stack;
   }
 
 let env_add var regs env =
@@ -37,7 +42,8 @@ let env_add var regs env =
   { env with vars = V.Map.add var (regs, provenance) env.vars }
 
 let env_add_static_exception id v env =
-  { env with static_exceptions = Int.Map.add id v env.static_exceptions }
+  let r = ref Unreachable in
+  { env with static_exceptions = Int.Map.add id (v, r) env.static_exceptions }, r
 
 let env_find id env =
   let regs, _provenance = V.Map.find id env.vars in
@@ -46,9 +52,36 @@ let env_find id env =
 let env_find_static_exception id env =
   Int.Map.find id env.static_exceptions
 
+let env_enter_trywith env kind =
+  match kind with
+  | Regular -> { env with trap_stack = Generic_trap env.trap_stack; }
+  | Delayed _ -> env
+
+let env_set_trap_stack env trap_stack =
+  { env with trap_stack; }
+
+let rec combine_traps trap_stack = function
+  | [] -> trap_stack
+  | (Push t) :: l -> combine_traps (Specific_trap (t, trap_stack)) l
+  | Pop :: l ->
+      begin match trap_stack with
+      | Uncaught -> Misc.fatal_error "Trying to pop a trap from an empty stack"
+      | Generic_trap ts | Specific_trap (_, ts) -> combine_traps ts l
+      end
+
+let set_traps nfail traps_ref base_traps exit_traps =
+  let traps = combine_traps base_traps exit_traps in
+  match !traps_ref with
+  | Unreachable -> traps_ref := Reachable traps
+  | Reachable prev_traps ->
+      if prev_traps <> traps then
+        Misc.fatal_errorf "Mismatching trap stacks for continuation %d" nfail
+      else ()
+
 let env_empty = {
   vars = V.Map.empty;
   static_exceptions = Int.Map.empty;
+  trap_stack = Uncaught;
 }
 
 (* Infer the type of the result of an operation *)
@@ -830,28 +863,52 @@ method emit_expr (env:environment) exp =
             (nfail, ids, rs, e2, dbg))
           handlers
       in
-      let env =
+      let env, handlers_map =
         (* Since the handlers may be recursive, and called from the body,
            the same environment is used for translating both the handlers and
            the body. *)
-        List.fold_left (fun env (nfail, _ids, rs, _e2, _dbg) ->
-            env_add_static_exception nfail rs env)
-          env handlers
+        List.fold_left (fun (env, map) (nfail, ids, rs, e2, dbg) ->
+            let env, r = env_add_static_exception nfail rs env in
+            env, Int.Map.add nfail (r, (ids, rs, e2, dbg)) map)
+          (env, Int.Map.empty) handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
-      let translate_one_handler (nfail, ids, rs, e2, _dbg) =
+      let translate_one_handler nfail (traps_info, (ids, rs, e2, _dbg)) =
         assert(List.length ids = List.length rs);
+        let trap_stack =
+          match !traps_info with
+          | Unreachable -> assert false
+          | Reachable t -> t
+        in
         let new_env =
           List.fold_left (fun env ((id, _typ), r) -> env_add id r env)
-            env (List.combine ids rs)
+            (env_set_trap_stack env trap_stack) (List.combine ids rs)
         in
         let (r, s) = self#emit_sequence new_env e2 in
-        (nfail, (r, s))
+        ((nfail, trap_stack), (r, s))
       in
-      let l = List.map translate_one_handler handlers in
+      let rec build_all_reachable_handlers ~already_built ~not_built =
+        let not_built, to_build =
+          Int.Map.partition (fun _n (r, _) -> !r = Unreachable) not_built
+        in
+        if Int.Map.is_empty to_build then already_built
+        else begin
+          let already_built =
+            Int.Map.fold
+              (fun nfail handler already_built ->
+                 (translate_one_handler nfail handler) :: already_built)
+              to_build already_built
+          in
+          build_all_reachable_handlers ~already_built ~not_built
+        end
+      in
+      let l =
+        build_all_reachable_handlers ~already_built:[] ~not_built:handlers_map
+        (* Note: we're dropping unreachable handlers here *)
+      in
       let a = Array.of_list ((r_body, s_body) :: List.map snd l) in
       let r = join_array env a in
-      let aux (nfail, (_r, s)) = (nfail, s#extract) in
+      let aux ((nfail, ts), (_r, s)) = (nfail, ts, s#extract) in
       self#insert env (Icatch (rec_flag, List.map aux l, s_body#extract))
         [||] [||];
       r
@@ -860,7 +917,7 @@ method emit_expr (env:environment) exp =
         None -> None
       | Some (simple_list, ext_env) ->
           let src = self#emit_tuple ext_env simple_list in
-          let dest_args =
+          let dest_args, trap_stack =
             try env_find_static_exception nfail env
             with Not_found ->
               Misc.fatal_error ("Selection.emit_expr: unbound label "^
@@ -874,10 +931,12 @@ method emit_expr (env:environment) exp =
           self#insert_moves env src tmp_regs ;
           self#insert_moves env tmp_regs (Array.concat dest_args) ;
           self#insert env (Iexit (nfail, traps)) [||] [||];
+          set_traps nfail trap_stack env.trap_stack traps;
           None
       end
   | Ctrywith(e1, kind, v, e2, _dbg) ->
-      let (r1, s1) = self#emit_sequence env e1 in
+      let env_body = env_enter_trywith env kind in
+      let (r1, s1) = self#emit_sequence env_body e1 in
       let rv = self#regs_for typ_val in
       let (r2, s2) = self#emit_sequence (env_add v rv env) e2 in
       let r = join env r1 s1 r2 s2 in
@@ -1168,23 +1227,50 @@ method emit_tail (env:environment) exp =
                 ids in
             (nfail, ids, rs, e2, dbg))
           handlers in
-      let env =
-        List.fold_left (fun env (nfail, _ids, rs, _e2, _dbg) ->
-            env_add_static_exception nfail rs env)
-          env handlers in
+      let env, handlers_map =
+        List.fold_left (fun (env, map) (nfail, ids, rs, e2, dbg) ->
+            let env, r = env_add_static_exception nfail rs env in
+            env, Int.Map.add nfail (r, (ids, rs, e2, dbg)) map)
+          (env, Int.Map.empty) handlers in
       let s_body = self#emit_tail_sequence env e1 in
-      let aux (nfail, ids, rs, e2, _dbg) =
+      let translate_one_handler nfail (trap_info, (ids, rs, e2, _dbg)) =
         assert(List.length ids = List.length rs);
+        let trap_stack =
+          match !trap_info with
+          | Unreachable -> assert false
+          | Reachable t -> t
+        in
         let new_env =
           List.fold_left
             (fun env ((id, _typ),r) -> env_add id r env)
-            env (List.combine ids rs) in
-        nfail, self#emit_tail_sequence new_env e2
+            (env_set_trap_stack env trap_stack) (List.combine ids rs)
+        in
+        nfail, trap_stack, self#emit_tail_sequence new_env e2
       in
-      self#insert env (Icatch(rec_flag, List.map aux handlers, s_body))
+      let rec build_all_reachable_handlers ~already_built ~not_built =
+        let not_built, to_build =
+          Int.Map.partition (fun _n (r, _) -> !r = Unreachable) not_built
+        in
+        if Int.Map.is_empty to_build then already_built
+        else begin
+          let already_built =
+            Int.Map.fold
+              (fun nfail handler already_built ->
+                 (translate_one_handler nfail handler) :: already_built)
+              to_build already_built
+          in
+          build_all_reachable_handlers ~already_built ~not_built
+        end
+      in
+      let new_handlers =
+        build_all_reachable_handlers ~already_built:[] ~not_built:handlers_map
+        (* Note: we're dropping unreachable handlers here *)
+      in
+      self#insert env (Icatch(rec_flag, new_handlers, s_body))
         [||] [||]
   | Ctrywith(e1, kind, v, e2, _dbg) ->
-      let (opt_r1, s1) = self#emit_sequence env e1 in
+      let env_body = env_enter_trywith env kind in
+      let (opt_r1, s1) = self#emit_sequence env_body e1 in
       let rv = self#regs_for typ_val in
       let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert env

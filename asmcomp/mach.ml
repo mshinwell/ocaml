@@ -17,6 +17,11 @@
 
 type label = Cmm.label
 
+type trap_stack =
+  | Uncaught
+  | Generic_trap of trap_stack
+  | Specific_trap of Cmm.trywith_shared_label * trap_stack
+
 type integer_comparison =
     Isigned of Cmm.integer_comparison
   | Iunsigned of Cmm.integer_comparison
@@ -81,7 +86,7 @@ and instruction_desc =
   | Ireturn
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
-  | Icatch of Cmm.rec_flag * (int * instruction) list * instruction
+  | Icatch of Cmm.rec_flag * (int * trap_stack * instruction) list * instruction
   | Iexit of int * Cmm.trap_action list
   | Itrywith of instruction * Cmm.trywith_kind * instruction
   | Iraise of Lambda.raise_kind
@@ -156,7 +161,7 @@ let rec instr_iter f i =
           instr_iter f i.next
       | Icatch(_, handlers, body) ->
           instr_iter f body;
-          List.iter (fun (_n, handler) -> instr_iter f handler) handlers;
+          List.iter (fun (_n, _ts, handler) -> instr_iter f handler) handlers;
           instr_iter f i.next
       | Iexit _ -> ()
       | Itrywith(body, _kind, handler) ->

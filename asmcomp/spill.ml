@@ -200,14 +200,14 @@ let rec reload i before =
        finally)
   | Icatch(rec_flag, handlers, body) ->
       let new_sets = List.map
-          (fun (nfail, _) -> nfail, ref Reg.Set.empty) handlers in
+          (fun (nfail, _, _) -> nfail, ref Reg.Set.empty) handlers in
       let previous_reload_at_exit = !reload_at_exit in
       reload_at_exit := new_sets @ !reload_at_exit ;
       let (new_body, after_body) = reload body before in
       let rec fixpoint () =
         let at_exits = List.map (fun (nfail, set) -> (nfail, !set)) new_sets in
         let res =
-          List.map2 (fun (nfail', handler) (nfail, at_exit) ->
+          List.map2 (fun (nfail', _ts, handler) (nfail, at_exit) ->
               assert(nfail = nfail');
               reload handler at_exit) handlers at_exits in
         match rec_flag with
@@ -229,7 +229,7 @@ let rec reload i before =
           after_body res in
       let (new_next, finally) = reload i.next union in
       let new_handlers = List.map2
-          (fun (nfail, _) (new_handler, _) -> nfail, new_handler)
+          (fun (nfail, ts, _) (new_handler, _) -> nfail, ts, new_handler)
           handlers res in
       (instr_cons
          (Icatch(rec_flag, new_handlers, new_body)) i.arg i.res new_next,
@@ -359,14 +359,14 @@ let rec spill i finally =
       inside_catch := true ;
       let previous_spill_at_exit = !spill_at_exit in
       let spill_at_exit_add at_exits = List.map2
-          (fun (nfail,_) at_exit -> nfail, (ref false, at_exit))
+          (fun (nfail,_,_) at_exit -> nfail, (ref false, at_exit))
           handlers at_exits
       in
       let rec fixpoint at_exits =
         let spill_at_exit_add = spill_at_exit_add at_exits in
         spill_at_exit := spill_at_exit_add @ !spill_at_exit;
         let res =
-          List.map (fun (_, handler) -> spill handler at_join) handlers
+          List.map (fun (_, _, handler) -> spill handler at_join) handlers
         in
         spill_at_exit := previous_spill_at_exit;
         match rec_flag with
@@ -389,7 +389,7 @@ let rec spill i finally =
       let (new_body, before) = spill body at_join in
       spill_at_exit := previous_spill_at_exit;
       let new_handlers = List.map2
-          (fun (nfail, _) (handler, _) -> nfail, handler)
+          (fun (nfail, ts, _) (handler, _) -> nfail, ts, handler)
           handlers res in
       (instr_cons (Icatch(rec_flag, new_handlers, new_body))
          i.arg i.res new_next,
