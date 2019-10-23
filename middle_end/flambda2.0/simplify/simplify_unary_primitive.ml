@@ -82,6 +82,11 @@ let simplify_is_int dacc ~original_term ~arg: _~arg_ty:scrutinee_ty
     ~shape:(T.variant_is_int ~is_int:(Var_in_binding_pos.var result_var))
     ~result_var ~result_kind:K.value
 
+(* Row_like isn't needed for immediates, by the look of it.
+   Don't need Naked_immediate kind, use Naked_nativeint.  However we do add
+   the Tagged_immediate type former at kind Value.  When Variant goes back to
+   being only immediates, we go back to Tagged_immediate (invariant check). *)
+
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let typing_env = DE.typing_env (DA.denv dacc) in
   let proof = T.prove_is_int typing_env scrutinee_ty in
