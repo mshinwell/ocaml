@@ -387,6 +387,17 @@ module For_blocks = struct
     | Open tag -> create_at_least (tag, size) product
     | Closed tag -> create_exactly tag size product
 
+  let create_blocks_with_these_tags tags =
+    let at_least =
+      Tag.Set.fold (fun tag at_least ->
+          Tag_or_unknown_and_size.Map.add (Known tag, Targetint.OCaml.zero)
+            (Product.Int_indexed.create Int.Map.empty)
+            at_least)
+        tags
+        Tag_or_unknown_and_size.Map.empty
+    in
+    create_at_least_multiple at_least
+
   let all_tags_and_sizes t : _ Or_unknown.t =
     match all_tags_and_indexes t with
     | Unknown -> Unknown

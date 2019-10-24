@@ -97,6 +97,8 @@ module For_blocks : sig
 
   val create : field_tys:Type_grammar.t list -> open_or_closed -> t
 
+  val create_blocks_with_these_tags : Tag.Set.t -> t
+
   val all_tags : t -> Tag.Set.t Or_unknown.t
 
   val all_tags_and_sizes : t -> Targetint.OCaml.t Tag.Map.t Or_unknown.t

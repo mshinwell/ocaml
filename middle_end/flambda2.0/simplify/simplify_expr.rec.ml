@@ -1073,8 +1073,7 @@ and simplify_switch
           in
           assert (K.equal (T.kind shape) K.naked_nativeint);
           match T.meet typing_env_at_use scrutinee_ty shape with
-          | Bottom ->
-            arms, dacc
+          | Bottom -> arms, dacc
           | Ok (_meet_ty, env_extension) ->
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
@@ -1200,8 +1199,9 @@ and simplify_switch
         | None ->
           let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
           if Simple.is_const scrutinee then begin
-            Misc.fatal_errorf "[Switch] with constant scrutinee should have \
-                been simplified away:@ %a"
+            Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
+                should have been simplified away:@ %a"
+              T.print scrutinee_ty
               Expr.print expr
           end;
           expr, user_data, uacc

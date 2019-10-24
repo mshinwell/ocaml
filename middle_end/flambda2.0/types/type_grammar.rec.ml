@@ -431,6 +431,15 @@ let boxed_nativeint_alias_to ~naked_nativeint =
   box_nativeint (Naked_nativeint (
     T_NN.create_equals (Simple.var naked_nativeint)))
 
+let blocks_with_these_tags tags =
+  let blocks =
+    Row_like.For_blocks.create_blocks_with_these_tags tags
+  in
+  Value (T_V.create_no_alias (Ok (Variant {
+    immediates = Known (bottom K.naked_nativeint);
+    blocks = Known blocks;
+  })))
+
 let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
   match Targetint.OCaml.of_int_option (List.length fields) with
