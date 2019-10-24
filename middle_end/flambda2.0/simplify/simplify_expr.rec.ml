@@ -1078,17 +1078,11 @@ and simplify_switch
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
-(*
-Format.eprintf "scrutinee_ty %a shape %a\n%!"
-  T.print scrutinee_ty T.print shape;
-*)
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom -> arms, dacc
           | Ok (_meet_ty, env_extension) ->
-(*
-Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
-  T.print scrutinee_ty T.print shape T.print _meet_ty;
-*)
+Format.eprintf "scrutinee_ty %a shape %a meet_ty %a extension %a\n%!"
+  T.print scrutinee_ty T.print shape T.print _meet_ty TEE.print env_extension;
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
             in

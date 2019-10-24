@@ -75,20 +75,12 @@ let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
     TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
     dacc
 
-let simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty
+let simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty:_
       ~result_var ~make_shape =
+  (* CR mshinwell: Check [scrutinee_ty] (e.g. its kind)? *)
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  match
-    T.meet (DE.typing_env (DA.denv dacc)) scrutinee_ty (make_shape scrutinee)
-  with
-  | Ok (scrutinee_ty, env_extension) ->
-    let env_extension =
-      TEE.add_or_replace_equation env_extension name scrutinee_ty
-    in
-    Reachable.reachable original_term, env_extension, dacc
-  | Bottom -> 
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+  let env_extension = TEE.one_equation name (make_shape scrutinee) in
+  Reachable.reachable original_term, env_extension, dacc
 
 let simplify_is_int dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
       ~result_var =
