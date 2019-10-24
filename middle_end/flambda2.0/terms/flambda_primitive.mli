@@ -363,6 +363,7 @@ module Eligible_for_cse : sig
   include Contains_names.S with type t := t
 
   val create : primitive_application -> t option
+  val create_exn : primitive_application -> t
 
   val create_is_int : immediate_or_block:Name.t -> t
   val create_get_tag : block:Name.t -> t

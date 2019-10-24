@@ -162,47 +162,6 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
-  let prove_equals_tagged_immediates env t : _ proof =
-    let wrong_kind () =
-      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
-    in
-    match expand_head t env with
-    | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
-    | Const (Naked_float _ | Naked_int32 _
-      | Naked_int64 _ | Naked_nativeint _)
-    | Discriminant _ -> wrong_kind ()
-    | Resolved resolved ->
-      match resolved with
-      | Value (Ok (Variant blocks_imms)) ->
-        begin match blocks_imms.blocks, blocks_imms.immediates with
-        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
-        | Known blocks, Known imms ->
-          if Row_like.For_blocks.is_bottom blocks then
-            match Row_like.For_immediates.all imms with
-            | Known imms -> Proved imms
-            | Unknown -> Unknown
-          else
-            Invalid
-        end
-      | Value (Ok _) -> Invalid
-      | Value Unknown -> Unknown
-      | Value Bottom -> Invalid
-      | Naked_float _ -> wrong_kind ()
-      | Naked_int32 _ -> wrong_kind ()
-      | Naked_int64 _ -> wrong_kind ()
-      | Naked_nativeint _ -> wrong_kind ()
-      | Fabricated _ -> wrong_kind ()
-
-  let prove_equals_single_tagged_immediate env t : _ proof =
-    match prove_equals_tagged_immediates env t with
-    | Proved imms ->
-      begin match Immediate.Set.get_singleton imms with
-      | Some imm -> Proved imm
-      | None -> Unknown
-      end
-    | Unknown -> Unknown
-    | Invalid -> Invalid
-
   (* CR mshinwell: Try to functorise or otherwise factor out across the
      various number kinds. *)
   let prove_naked_floats env t : _ proof =
@@ -271,8 +230,7 @@ module Make
     in
     match expand_head t env with
     | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _
-      | Naked_int32 _ | Naked_int64 _)
+    | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _)
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
@@ -284,6 +242,49 @@ module Make
       | Naked_int32 _ -> wrong_kind ()
       | Naked_int64 _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
+
+  let prove_equals_untagged_immediates env t : _ proof =
+    match prove_naked_nativeints env t with
+    | Proved is -> Proved (Immediate.set_of_targetint_set' is)
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+
+  let prove_equals_tagged_immediates env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match expand_head t env with
+    | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
+    | Const (Naked_float _ | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _)
+    | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Value (Ok (Variant blocks_imms)) ->
+        begin match blocks_imms.blocks, blocks_imms.immediates with
+        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+        | Known blocks, Known imms ->
+          if not (Row_like.For_blocks.is_bottom blocks)
+          then Proved Immediate.Set.empty
+          else prove_equals_untagged_immediates env imms
+        end
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
+
+  let prove_equals_single_tagged_immediate env t : _ proof =
+    match prove_equals_tagged_immediates env t with
+    | Proved imms ->
+      begin match Immediate.Set.get_singleton imms with
+      | Some imm -> Proved imm
+      | None -> Unknown
+      end
+    | Unknown -> Unknown
+    | Invalid -> Invalid
 
   let prove_is_int env t : bool proof =
     let wrong_kind () =
@@ -301,10 +302,10 @@ module Make
           (* CR mshinwell: Should we tighten things up by causing fatal errors
              in cases such as [blocks] and [imms] both being bottom? *)
           if Row_like.For_blocks.is_bottom blocks then
-            if Row_like.For_immediates.is_bottom imms then Invalid
+            if is_bottom env imms then Invalid
             else Proved true
           else
-            if Row_like.For_immediates.is_bottom imms then Proved false
+            if is_bottom env imms then Proved false
             else Unknown
         end
       | Value (Ok _) -> Invalid
@@ -329,7 +330,7 @@ module Make
         begin match blocks_imms.immediates with
         | Unknown -> Unknown
         | Known imms ->
-          if not (Row_like.For_immediates.is_bottom imms) then
+          if not (is_bottom env imms) then
             Invalid
           else
             match blocks_imms.blocks with
@@ -394,6 +395,24 @@ module Make
         match Tag.Map.get_singleton tags_to_sizes with
         | None -> Unknown
         | Some (tag, size) -> Proved (tag, size)
+
+  let prove_is_a_tagged_immediate env t : _ proof_allowing_kind_mismatch =
+    match expand_head t env with
+    | Const (Tagged_immediate _) -> Proved ()
+    | Const _ | Discriminant _ -> Wrong_kind
+    | Resolved resolved ->
+      match resolved with
+      | Value Unknown -> Unknown
+      | Value (Ok (Variant { blocks; immediates; })) ->
+        begin match blocks, immediates with
+        | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+        | Known blocks, Known imms ->
+          if Row_like.For_blocks.is_bottom blocks && not (is_bottom env imms)
+          then Proved ()
+          else Invalid
+        end
+      | Value _ -> Invalid
+      | _ -> Wrong_kind
 
   let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
     match expand_head t env with
@@ -628,7 +647,7 @@ Format.eprintf "reifying %a\n%!" print t;
         | Value (Ok (Variant blocks_imms)) ->
           begin match blocks_imms.blocks, blocks_imms.immediates with
           | Known blocks, Known imms ->
-            if Row_like.For_immediates.is_bottom imms then
+            if is_bottom env imms then
               begin match Row_like.For_blocks.get_singleton blocks with
               | None -> try_canonical_simple ()
               | Some ((tag, size), field_types) ->

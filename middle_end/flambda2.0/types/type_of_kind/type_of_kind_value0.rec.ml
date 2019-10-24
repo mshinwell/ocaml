@@ -75,7 +75,7 @@ let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 let apply_name_permutation_variant blocks immediates perm =
   let immediates' =
     Or_unknown.map immediates ~f:(fun immediates ->
-      Immediates.apply_name_permutation immediates perm)
+      T.apply_name_permutation immediates perm)
   in
   let blocks' =
     Or_unknown.map blocks ~f:(fun blocks ->
@@ -130,7 +130,7 @@ let free_names t =
   | Variant { blocks; immediates; } ->
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
-      (Or_unknown.free_names Immediates.free_names immediates)
+      (Or_unknown.free_names T.free_names immediates)
   | Boxed_float ty -> T.free_names ty
   | Boxed_int32 ty -> T.free_names ty
   | Boxed_int64 ty -> T.free_names ty
@@ -199,13 +199,12 @@ struct
         env blocks1 blocks2
     in
     let imms =
-      E.switch (meet_unknown Immediates.meet) (join_unknown Immediates.join)
-        env imms1 imms2
+      E.switch (meet_unknown T.meet) (join_unknown T.join) env imms1 imms2
     in
     match blocks, imms with
     | Bottom, Bottom -> Bottom
     | Ok (blocks, env_extension), Bottom ->
-      let immediates : _ Or_unknown.t = Known (Immediates.create_bottom ()) in
+      let immediates : _ Or_unknown.t = Known (T.bottom K.naked_nativeint) in
       Ok (blocks, immediates, env_extension)
     | Bottom, Ok (immediates, env_extension) ->
       let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in
@@ -237,8 +236,7 @@ struct
     | Variant { blocks = blocks1; immediates = imms1; },
       Variant { blocks = blocks2; immediates = imms2; } ->
       Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_variant env
-          ~blocks1 ~imms1 ~blocks2 ~imms2)
+        (meet_or_join_variant env ~blocks1 ~imms1 ~blocks2 ~imms2)
         ~f:(fun (blocks, immediates, env_extension) ->
           Variant { blocks; immediates; }, env_extension)
     | Boxed_float n1, Boxed_float n2 ->

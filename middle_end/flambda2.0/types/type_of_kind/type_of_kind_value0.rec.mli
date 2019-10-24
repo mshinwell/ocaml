@@ -19,6 +19,8 @@
 type t =
   | Variant of {
       immediates : Type_grammar.t Or_unknown.t;
+      (** For [Known immediates], then [immediates] is of kind
+          [Naked_nativeint]. *)
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }
   | Boxed_float of Type_grammar.t

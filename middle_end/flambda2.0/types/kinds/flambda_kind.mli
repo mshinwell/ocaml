@@ -106,6 +106,8 @@ module Standard_int_or_float : sig
   include Identifiable.S with type t := t
 end
 
+(* CR mshinwell: If the tagging/untagging experiment works, this and various
+   other things need renaming, to accommodate untagging. *)
 module Boxable_number : sig
   (** These kinds are those of the numbers for which a tailored boxed
       representation exists. *)
@@ -115,6 +117,7 @@ module Boxable_number : sig
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
+    | Untagged_immediate
 
   (** The kind of the _unboxed_ representation of the given [t]. *)
   val to_kind : t -> kind

@@ -214,13 +214,14 @@ module Boxable_number = struct
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
+    | Untagged_immediate
 
   let to_kind t : kind =
     match t with
     | Naked_float -> Naked_number Naked_float
     | Naked_int32 -> Naked_number Naked_int32
     | Naked_int64 -> Naked_number Naked_int64
-    | Naked_nativeint -> Naked_number Naked_nativeint
+    | Naked_nativeint | Untagged_immediate -> Naked_number Naked_nativeint
 
   include Identifiable.Make (struct
     type nonrec t = t
@@ -231,6 +232,7 @@ module Boxable_number = struct
       | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
       | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
       | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
+      | Untagged_immediate -> Format.pp_print_string ppf "Untagged_immediate"
 
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
@@ -246,6 +248,7 @@ module Boxable_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
+    | Untagged_immediate -> Format.pp_print_string ppf "untagged_immediate"
 
   let print_lowercase_short ppf t =
     match t with
@@ -253,6 +256,7 @@ module Boxable_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "int32"
     | Naked_int64 -> Format.pp_print_string ppf "int64"
     | Naked_nativeint -> Format.pp_print_string ppf "nativeint"
+    | Untagged_immediate -> Format.pp_print_string ppf "untagged_imm"
 end
 
 module Naked_number = struct

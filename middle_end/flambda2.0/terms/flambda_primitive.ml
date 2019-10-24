@@ -578,8 +578,10 @@ let print_unary_primitive ppf p =
   | Array_length _ -> fprintf ppf "Array_length"
   | Bigarray_length { dimension; } ->
     fprintf ppf "Bigarray_length %a" print_num_dimensions dimension
+  | Unbox_number Untagged_immediate -> fprintf ppf "Untag_imm"
   | Unbox_number k ->
     fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase_short k
+  | Box_number Untagged_immediate -> fprintf ppf "Tag_imm"
   | Box_number k ->
     fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
   | Select_closure { move_from; move_to; } ->
@@ -871,7 +873,7 @@ let result_kind_of_binary_primitive p : result_kind =
   (* CR mshinwell: Change [Phys_equal] to return kind [Fabricated] *)
   | Phys_equal _
   | Int_comp _
-  | Float_comp _ -> Singleton K.value
+  | Float_comp _ -> Singleton K.naked_nativeint
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
@@ -1389,6 +1391,11 @@ module Eligible_for_cse = struct
     end;
     if eligible then Some t
     else None
+
+  let create_exn prim =
+    match create prim with
+    | Some t -> t
+    | None -> Misc.fatal_errorf "Primitive %a not eligible for CSE" print prim
 
   let create_is_int ~immediate_or_block =
     Unary (Is_int, Simple.name immediate_or_block)

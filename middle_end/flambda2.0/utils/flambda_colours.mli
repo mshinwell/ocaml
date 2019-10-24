@@ -22,6 +22,7 @@ val prim_neither : unit -> string
 
 val naked_number : unit -> string
 val tagged_immediate : unit -> string
+val constructor : unit -> string
 
 val kind : unit -> string
 

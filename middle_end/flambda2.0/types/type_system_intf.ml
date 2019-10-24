@@ -55,6 +55,12 @@ module type S = sig
     val one_equation : Name.t -> flambda_type -> t
 
     val add_or_replace_equation : t -> Name.t -> flambda_type -> t
+
+    val add_cse
+       : t
+      -> Flambda_primitive.Eligible_for_cse.t
+      -> bound_to:Simple.t
+      -> t
   end
 
   module Typing_env : sig
@@ -214,6 +220,9 @@ module type S = sig
   val any_boxed_nativeint : unit -> t
 
   val any_naked_float : unit -> t
+  val any_naked_int32 : unit -> t
+  val any_naked_int64 : unit -> t
+  val any_naked_nativeint : unit -> t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
@@ -231,11 +240,13 @@ module type S = sig
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
+  val this_untagged_immediate : Immediate.t -> t
   val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
   val this_naked_int32 : Int32.t -> t
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
 
+  val these_untagged_immediates : Immediate.Set.t -> t
   val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val these_naked_int32s : Int32.Set.t -> t
   val these_naked_int64s : Int64.Set.t -> t
@@ -250,6 +261,9 @@ module type S = sig
   val box_int32 : t -> t
   val box_int64 : t -> t
   val box_nativeint : t -> t
+
+  val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
+  val tag_immediate : t -> t
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
@@ -371,6 +385,11 @@ module type S = sig
   val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 
   val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
+
+  val prove_is_a_tagged_immediate
+     : Typing_env.t
+    -> t
+    -> unit proof_allowing_kind_mismatch
 
   val prove_is_a_boxed_float
      : Typing_env.t

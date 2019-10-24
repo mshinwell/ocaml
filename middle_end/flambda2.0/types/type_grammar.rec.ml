@@ -346,6 +346,12 @@ let box_nativeint (t : t) : t =
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
+let these_untagged_immediates imms =
+  these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+
+let this_untagged_immediate imm =
+  these_untagged_immediates (Immediate.Set.singleton imm)
+
 let any_tagged_immediate () : t =
   Value (T_V.create_no_alias (Ok (Variant {
     immediates = Unknown;
@@ -361,10 +367,9 @@ let these_tagged_immediates0 ~no_alias imms : t =
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
-      let immediates = Row_like.For_immediates.create imms in
       Value (T_V.create_no_alias (
         Ok (Variant {
-          immediates = Known immediates;
+          immediates = Known (these_untagged_immediates imms);
           blocks = Known (Row_like.For_blocks.create_bottom ());
         })))
 
@@ -373,6 +378,23 @@ let these_tagged_immediates imms =
 
 let this_tagged_immediate_without_alias imm =
   these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
+
+let tag_immediate t : t =
+  match t with
+  | Naked_nativeint _ ->
+    Value (T_V.create_no_alias (
+      Ok (Variant {
+        immediates = Known t;
+        blocks = Known (Row_like.For_blocks.create_bottom ());
+      })))
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Fabricated _ ->
+    Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
+      print t
+
+let tagged_immediate_alias_to ~untagged_immediate : t =
+  tag_immediate (Naked_nativeint (
+    T_NN.create_equals (Simple.var untagged_immediate)))
 
 let this_discriminant discr : t =
   Fabricated (T_F.create_equals (Simple.discriminant discr))
@@ -396,7 +418,7 @@ let this_discriminant_without_alias discr : t =
 
 let any_block () : t =
   Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (Row_like.For_immediates.create_bottom ());
+    immediates = Known (bottom K.naked_nativeint);
     blocks = Unknown;
   })))
 
@@ -405,7 +427,7 @@ let any_block_with_tag tag : t =
     Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
   in
   Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (Row_like.For_immediates.create_bottom ());
+    immediates = Known (bottom K.naked_nativeint);
     blocks = Known blocks;
   })))
 
@@ -467,7 +489,7 @@ let immutable_block tag ~fields =
   | Some _size ->
     Value (T_V.create_no_alias (Ok (
       Variant {
-        immediates = Known (Row_like.For_immediates.create_bottom ());
+        immediates = Known (bottom K.naked_nativeint);
         blocks = Known (Row_like.For_blocks.create ~field_tys:fields (Closed tag));
       })))
 
@@ -480,7 +502,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   in
   Value (T_V.create_no_alias (Ok (
     Variant {
-      immediates = Known (Row_like.For_immediates.create_bottom ());
+      immediates = Known (bottom K.naked_nativeint);
       blocks = Known (Row_like.For_blocks.create ~field_tys (Open Unknown));
     })))
 
