@@ -26,8 +26,6 @@ type t =
       immediates : T.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
-  | Is_int of T.t
-  | Get_tag of T.t
   | Boxed_float of T.t
   | Boxed_int32 of T.t
   | Boxed_int64 of T.t
@@ -50,12 +48,6 @@ let print_with_cache ~cache ppf t =
         )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
       (Or_unknown.print (T.print_with_cache ~cache)) immediates
-  | Is_int typ ->
-    Format.fprintf ppf "@[<hov 1>(Is_int@ %a)@]"
-      T.print typ
-  | Get_tag typ ->
-    Format.fprintf ppf "@[<hov 1>(Get_tag@ %a)@]"
-      T.print typ
   | Boxed_float naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
       (T.print_with_cache ~cache) naked_ty
@@ -104,14 +96,6 @@ let apply_name_permutation t perm =
     | Some (blocks, immediates) ->
       Variant { blocks; immediates; }
     end
-  | Is_int typ ->
-    let typ' = T.apply_name_permutation typ perm in
-    if typ == typ' then t
-    else Is_int typ'
-  | Get_tag typ ->
-    let typ' = T.apply_name_permutation typ perm in
-    if typ == typ' then t
-    else Get_tag typ'
   | Boxed_float ty ->
     let ty' = T.apply_name_permutation ty perm in
     if ty == ty' then t
@@ -147,7 +131,6 @@ let free_names t =
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
       (Or_unknown.free_names T.free_names immediates)
-  | Is_int ty | Get_tag ty -> T.free_names ty
   | Boxed_float ty -> T.free_names ty
   | Boxed_int32 ty -> T.free_names ty
   | Boxed_int64 ty -> T.free_names ty
@@ -172,8 +155,6 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
             Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Variant _
-  | Is_int _
-  | Get_tag _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -258,12 +239,6 @@ struct
         (meet_or_join_variant env ~blocks1 ~imms1 ~blocks2 ~imms2)
         ~f:(fun (blocks, immediates, env_extension) ->
           Variant { blocks; immediates; }, env_extension)
-    | Is_int typ1, Is_int typ2 ->
-      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env typ1 typ2)
-        ~f:(fun (typ, env_extension) -> Is_int typ, env_extension)
-    | Get_tag typ1, Get_tag typ2 ->
-      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env typ1 typ2)
-        ~f:(fun (typ, env_extension) -> Get_tag typ, env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env n1 n2)
@@ -296,8 +271,6 @@ struct
         (E.switch T.meet T.join env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
     | (Variant _
-        | Is_int _  (* CR mshinwell: For Is_int / Get_tag, is this right? *)
-        | Get_tag _
         | Boxed_float _
         | Boxed_int32 _
         | Boxed_int64 _

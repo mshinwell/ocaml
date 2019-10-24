@@ -16,7 +16,10 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = Targetint.Set.t
+type t =
+  | Ints of Targetint.Set.t
+  | Is_int of Type_grammar.t
+  | Get_tag of Type_grammar.t
 
 include Type_head_intf.S
   with type t := t

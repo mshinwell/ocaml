@@ -216,24 +216,6 @@ module Make
       | Naked_int32 _ -> wrong_kind ()
       | Naked_nativeint _ -> wrong_kind ()
 
-  let prove_naked_nativeints env t : _ proof =
-    let wrong_kind () =
-      Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
-    in
-    match expand_head t env with
-    | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
-    | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
-      | Naked_int64 _) -> wrong_kind ()
-    | Resolved resolved ->
-      match resolved with
-      | Naked_nativeint (Ok is) -> Proved is
-      | Naked_nativeint Unknown -> Unknown
-      | Naked_nativeint Bottom -> Invalid
-      | Value _ -> wrong_kind ()
-      | Naked_float _ -> wrong_kind ()
-      | Naked_int32 _ -> wrong_kind ()
-      | Naked_int64 _ -> wrong_kind ()
-
   let prove_is_int env t : bool proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
@@ -296,6 +278,47 @@ module Make
       | Naked_int64 _ -> wrong_kind ()
       | Naked_nativeint _ -> wrong_kind ()
 
+  let prove_naked_nativeints env t : _ proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
+    in
+    match expand_head t env with
+    | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
+    | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
+      | Naked_int64 _) -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Naked_nativeint (Ok (Ints is)) -> Proved is
+      | Naked_nativeint (Ok (Is_int scrutinee_ty)) ->
+        begin match prove_is_int env scrutinee_ty with
+        | Proved true ->
+          (* CR mshinwell: Add bool_true / bool_false to Targetint *)
+          Proved (Targetint.Set.singleton Targetint.one)
+        | Proved false ->
+          Proved (Targetint.Set.singleton Targetint.zero)
+        | Unknown -> Unknown
+        | Invalid -> Invalid
+        end
+      | Naked_nativeint (Ok (Get_tag block_ty)) ->
+        begin match prove_tags_must_be_a_block env block_ty with
+        | Proved tags ->
+          let is =
+            Tag.Set.fold (fun tag is ->
+                Targetint.Set.add (Tag.to_targetint tag) is)
+              tags
+              Targetint.Set.empty
+          in
+          Proved is
+        | Unknown -> Unknown
+        | Invalid -> Invalid
+        end
+      | Naked_nativeint Unknown -> Unknown
+      | Naked_nativeint Bottom -> Invalid
+      | Value _ -> wrong_kind ()
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+
   let prove_equals_untagged_immediates env t : Immediate.Set.t proof =
     match prove_naked_nativeints env t with
     | Proved is -> Proved (Immediate.set_of_targetint_set' is)
@@ -319,28 +342,6 @@ module Make
           if not (Row_like.For_blocks.is_bottom blocks)
           then Proved Immediate.Set.empty
           else prove_equals_untagged_immediates env imms
-        end
-      | Value (Ok (Is_int scrutinee_ty)) ->
-        begin match prove_is_int env scrutinee_ty with
-        | Proved true ->
-          Proved (Immediate.Set.singleton Immediate.bool_true)
-        | Proved false ->
-          Proved (Immediate.Set.singleton Immediate.bool_false)
-        | Unknown -> Unknown
-        | Invalid -> Invalid
-        end
-      | Value (Ok (Get_tag block_ty)) ->
-        begin match prove_tags_must_be_a_block env block_ty with
-        | Proved tags ->
-          let imms =
-            Tag.Set.fold (fun tag imms ->
-                Immediate.Set.add (Immediate.tag tag) imms)
-              tags
-              Immediate.Set.empty
-          in
-          Proved imms
-        | Unknown -> Unknown
-        | Invalid -> Invalid
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
@@ -668,27 +669,26 @@ Format.eprintf "reifying %a\n%!" print t;
           end
         (* CR mshinwell: share code with [prove_equals_tagged_immediates],
            above *)
-        | Value (Ok (Is_int scrutinee_ty)) ->
+        | Naked_nativeint (Ok (Is_int scrutinee_ty)) ->
           begin match prove_is_int env scrutinee_ty with
           | Proved true -> Simple Simple.untagged_const_true
           | Proved false -> Simple Simple.untagged_const_false
           | Unknown -> try_canonical_simple ()
           | Invalid -> Invalid
           end
-        | Value (Ok (Get_tag block_ty)) ->
+        | Naked_nativeint (Ok (Get_tag block_ty)) ->
           begin match prove_tags_must_be_a_block env block_ty with
           | Proved tags ->
-            let imms =
-              Tag.Set.fold (fun tag imms ->
-                  Immediate.Set.add (Immediate.tag tag) imms)
+            let is =
+              Tag.Set.fold (fun tag is ->
+                  Targetint.Set.add (Tag.to_targetint tag) is)
                 tags
-                Immediate.Set.empty
+                Targetint.Set.empty
             in
-            begin match Immediate.Set.get_singleton imms with
+            begin match Targetint.Set.get_singleton is with
             | None -> try_canonical_simple ()
-            | Some imm ->
-              let imm = Immediate.to_targetint' imm in
-              Simple (Simple.const (Naked_nativeint imm))
+            | Some i ->
+              Simple (Simple.const (Naked_nativeint i))
             end
           | Unknown -> try_canonical_simple ()
           | Invalid -> Invalid

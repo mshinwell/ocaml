@@ -267,7 +267,7 @@ let these_naked_nativeints0 ~no_alias is =
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
     if Targetint.Set.is_empty is then bottom K.naked_nativeint
-    else Naked_nativeint (T_NN.create_no_alias (Ok is))
+    else Naked_nativeint (T_NN.create_no_alias (Ok (Ints is)))
 
 let this_naked_float_without_alias f =
   these_naked_floats0 ~no_alias:true (Float.Set.singleton f)
@@ -383,16 +383,16 @@ let any_block_with_tag tag : t =
   })))
 
 let is_int_for_scrutinee ~scrutinee : t =
-  Value (T_V.create (Is_int (alias_type_of K.value scrutinee)))
+  Naked_nativeint (T_NN.create (Is_int (alias_type_of K.value scrutinee)))
 
 let get_tag_for_block ~block : t =
-  Value (T_V.create (Get_tag (alias_type_of K.value block)))
+  Naked_nativeint (T_NN.create (Get_tag (alias_type_of K.value block)))
 
 let is_int ~is_int : t =
   if Discriminant.equal is_int Discriminant.is_int_false then
-    Value (T_V.create (Is_int (any_block ())))
+    Naked_nativeint (T_NN.create (Is_int (any_block ())))
   else if Discriminant.equal is_int Discriminant.is_int_true then
-    Value (T_V.create (Is_int (any_tagged_immediate ())))
+    Naked_nativeint (T_NN.create (Is_int (any_tagged_immediate ())))
   else
     Misc.fatal_errorf "Invalid discriminant %a (must be [is_int_false] or \
         [is_int_true])"
@@ -401,7 +401,7 @@ let is_int ~is_int : t =
 let get_tag ~tag : t =
   match Discriminant.to_tag tag with
   | Some tag ->
-    Value (T_V.create (Get_tag (any_block_with_tag tag)))
+    Naked_nativeint (T_NN.create (Get_tag (any_block_with_tag tag)))
   | None ->
     Misc.fatal_errorf "Invalid discriminant %a (must be a valid tag)"
       Discriminant.print tag
