@@ -164,17 +164,28 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     if Rec_info.is_initial rec_info then Ok t
     else Bottom
 
-let meet_unknown meet_contents env
+let meet_unknown meet_contents ~contents_is_bottom env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
     : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
   match or_unknown1, or_unknown2 with
   | Unknown, Unknown -> Ok (Unknown, TEE.empty ())
+  (* CR mshinwell: Think about the next two cases more *)
+  | Known contents, _ when contents_is_bottom contents -> Bottom
+  | _, Known contents when contents_is_bottom contents -> Bottom
   | _, Unknown -> Ok (or_unknown1, TEE.empty ())
   | Unknown, _ -> Ok (or_unknown2, TEE.empty ())
   | Known contents1, Known contents2 ->
-    Or_bottom.map (meet_contents env contents1 contents2)
-      ~f:(fun (contents, env_extension) ->
-        Or_unknown.Known contents, env_extension)
+    let result =
+      Or_bottom.map (meet_contents env contents1 contents2)
+        ~f:(fun (contents, env_extension) ->
+          Or_unknown.Known contents, env_extension)
+    in
+    match result with
+    | Bottom | Ok (Unknown, _) -> result
+    | Ok (Known contents, _env_extension) ->
+      (* XXX Why isn't [meet_contents] returning bottom? *)
+      if contents_is_bottom contents then Bottom
+      else result
 
 let join_unknown join_contents env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
@@ -195,11 +206,26 @@ struct
   let meet_or_join_variant env
         ~blocks1 ~imms1 ~blocks2 ~imms2 : _ Or_bottom.t =
     let blocks =
-      E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
+      E.switch (meet_unknown Blocks.meet ~contents_is_bottom:Blocks.is_bottom)
+        (join_unknown Blocks.join)
         env blocks1 blocks2
     in
+    let blocks : _ Or_bottom.t =
+      (* XXX Clean this up *)
+      match blocks with
+      | Bottom | Ok (Or_unknown.Unknown, _) -> blocks
+      | Ok (Or_unknown.Known blocks', _) ->
+        if Blocks.is_bottom blocks' then Bottom else blocks
+    in
     let imms =
-      E.switch (meet_unknown T.meet) (join_unknown T.join) env imms1 imms2
+      E.switch (meet_unknown T.meet ~contents_is_bottom:T.is_obviously_bottom)
+        (join_unknown T.join) env imms1 imms2
+    in
+    let imms : _ Or_bottom.t =
+      match imms with
+      | Bottom | Ok (Or_unknown.Unknown, _) -> Bottom
+      | Ok (Or_unknown.Known imms', _) ->
+        if T.is_obviously_bottom imms' then Bottom else imms
     in
     match blocks, imms with
     | Bottom, Bottom -> Bottom
@@ -210,6 +236,14 @@ struct
       let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in
       Ok (blocks, immediates, env_extension)
     | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
+      begin match (blocks : _ Or_unknown.t) with
+      | Unknown -> ()
+      | Known blocks -> assert (not (Blocks.is_bottom blocks));
+      end;
+      begin match (immediates : _ Or_unknown.t) with
+      | Unknown -> ()
+      | Known imms -> assert (not (T.is_obviously_bottom imms));
+      end;
       let env_extension =
         (* XXX *)
         let left_env = Meet_env.env env in

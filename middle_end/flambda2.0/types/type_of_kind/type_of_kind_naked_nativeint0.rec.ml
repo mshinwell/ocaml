@@ -73,6 +73,8 @@ struct
       TE.print (Meet_env.env env)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
+    Format.eprintf "NN meet_or_join %a and %a\n%!"
+      print t1 print t2 (*Typing_env.print (Meet_env.env env)*);
     match t1, t2 with
     | Ints is1, Ints is2 ->
       let is = E.Targetint.Set.union_or_inter is1 is2 in
@@ -93,9 +95,19 @@ struct
           else if TI.equal is_int TI.one then T.any_tagged_immediate ()
           else bad_meet_or_join env t1 t2
         in
+        Format.eprintf "Is_int %a with shape %a\n%!"
+          T.print ty T.print shape;
+        let result =
         Or_bottom_or_absorbing.of_or_bottom
           (E.switch T.meet T.join env ty shape)
-          ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
+          ~f:(fun (ty, _env_extension) ->
+            Is_int ty)
+        in
+        Format.eprintf "result:@ %a\n" (Or_bottom_or_absorbing.print print) result;
+        Or_bottom_or_absorbing.of_or_bottom
+          (E.switch T.meet T.join env ty shape)
+          ~f:(fun (ty, env_extension) ->
+            Is_int ty, env_extension)
       | _::_ -> bad_meet_or_join env t1 t2
       end
     | Ints tags, Get_tag ty | Get_tag ty, Ints tags ->
@@ -111,5 +123,5 @@ struct
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env ty shape)
         ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
-    | (Is_int _ | Get_tag _), _ -> Absorbing
+    | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) -> Absorbing
 end

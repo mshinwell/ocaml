@@ -380,8 +380,9 @@ module Make (Head : Type_head_intf.S
           env_extension
           |> add_equation env simple (to_type (create_no_alias head))
         in
-        (* XXX Not sure we want to return [Equals] when it's Bottom *)
-        create_equals simple, env_extension
+        match head with
+        | Bottom -> bottom (), env_extension
+        | _ -> create_equals simple, env_extension
 
     let join ~force_to_kind ~to_type typing_env t1 t2 =
       let canonical_simple1, head1, canonical_simple2, head2 =
