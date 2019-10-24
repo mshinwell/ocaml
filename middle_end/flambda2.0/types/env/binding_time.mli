@@ -18,7 +18,7 @@ type t
 
 include Identifiable.S with type t := t
 
-val consts_and_discriminants : t
+val consts_and_discriminants : t (* CR mshinwell: rename *)
 val symbols : t
 
 val earliest_var : t

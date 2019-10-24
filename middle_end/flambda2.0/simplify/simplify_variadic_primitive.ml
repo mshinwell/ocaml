@@ -52,8 +52,7 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
           end;
           match Simple.descr arg with
           | Const _ -> arg_ty
-          | Name name -> T.alias_type_of K.value (Simple.name name)
-          | Discriminant _ -> assert false  (* CR mshinwell: proper error! *) )
+          | Name name -> T.alias_type_of K.value (Simple.name name))
         args_with_tys value_kinds
     in
     if !found_bottom then begin

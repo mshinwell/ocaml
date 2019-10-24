@@ -102,7 +102,6 @@ let invariant env t =
         let var = VB.var var in
         match Simple.descr simple with
         | Const const -> E.add_variable env var (T.kind_for_const const)
-        | Discriminant _ -> E.add_variable env var K.fabricated
         | Name name -> E.add_variable env var (E.kind_of_name env name)
     in
     Expr.invariant env body)

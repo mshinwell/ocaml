@@ -26,6 +26,13 @@ module K = Flambda_kind
 module L = Lambda
 module P = Flambda_primitive
 
+let tag_int (arg : H.expr_primitive) : H.expr_primitive =
+  Unary (Box_number Untagged_immediate, Prim arg)
+(*
+let untag_int (arg : H.simple_or_prim) : H.simple_or_prim =
+  Prim (Unary (Unbox_number Untagged_immediate, arg))
+*)
+
 let box_float (arg : H.expr_primitive) : H.expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
 let unbox_float (arg : H.simple_or_prim) : H.simple_or_prim =
@@ -36,10 +43,7 @@ let unbox_bint bi (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number (C.boxable_number_of_boxed_integer bi), arg))
 
 let tagged_immediate_as_naked_nativeint (arg : H.simple_or_prim)
-      : H.simple_or_prim =
-  arg
-  (* CR mshinwell: fix this! 
-  failwith "TODO add a primitive for that" *)
+      : H.simple_or_prim = arg  (* XXX *)
 
 let bint_binary_prim bi prim arg1 arg2 =
   box_bint bi
@@ -152,11 +156,12 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pnot, [arg] ->
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->
-    Binary (C.convert_integer_comparison_prim comp, arg1, arg2)
+    tag_int (Binary (C.convert_integer_comparison_prim comp, arg1, arg2))
   | Pbintcomp (kind, comp), [arg1; arg2] ->
     let arg1 = unbox_bint kind arg1 in
     let arg2 = unbox_bint kind arg2 in
-    Binary (C.convert_boxed_integer_comparison_prim kind comp, arg1, arg2)
+    tag_int (Binary (
+      C.convert_boxed_integer_comparison_prim kind comp, arg1, arg2))
   | Pintoffloat, [arg] ->
     let src = K.Standard_int_or_float.Naked_float in
     let dst = K.Standard_int_or_float.Tagged_immediate in
@@ -178,8 +183,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pdivfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Div, unbox_float arg1, unbox_float arg2))
   | Pfloatcomp comp, [arg1; arg2] ->
-    Binary (Float_comp (C.convert_float_comparison comp),
-            unbox_float arg1, unbox_float arg2)
+    tag_int (Binary (Float_comp (C.convert_float_comparison comp),
+      unbox_float arg1, unbox_float arg2))
   | Pfield_computed, [obj; field] ->
     Binary (Block_load (
       Block (Value Anything), Mutable), obj, field)
@@ -394,9 +399,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pgettag, [arg] ->
     Unary (Get_tag, arg)
   | Pisout, [arg1; arg2] ->
-    Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
-            tagged_immediate_as_naked_nativeint arg1,
-            tagged_immediate_as_naked_nativeint arg2)
+    tag_int (
+      Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
+              tagged_immediate_as_naked_nativeint arg1,
+              tagged_immediate_as_naked_nativeint arg2))
   | Pbintofint bi, [arg] ->
     let dst = C.standard_int_or_float_of_boxed_integer bi in
     Unary (

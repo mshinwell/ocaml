@@ -38,22 +38,24 @@ module Make (Head : Type_head_intf.S
       match t with
       | No_alias Unknown ->
         if !Clflags.flambda2_unicode then
-          Format.fprintf ppf "%s\u{22a4}%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+            colour (Flambda_colours.normal ())
         else
-          Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%sT@<0>%s" colour (Flambda_colours.normal ())
       | No_alias Bottom ->
         if !Clflags.flambda2_unicode then
-          Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
+            colour (Flambda_colours.normal ())
         else
-          Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s_|_@<0>%s" colour (Flambda_colours.normal ())
       | No_alias (Ok head) -> Head.print_with_cache ~cache ppf head
       | Equals simple ->
-        Format.fprintf ppf "@[(%s=%s %a)@]"
+        Format.fprintf ppf "@[(@<0>%s=@<0>%s %a)@]"
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Simple.print simple
       | Type export_id ->
-        Format.fprintf ppf "@[(%s=export_id%s %a)@]"
+        Format.fprintf ppf "@[(@<0>%s=export_id@<0>%s %a)@]"
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Export_id.print export_id
@@ -234,15 +236,6 @@ module Make (Head : Type_head_intf.S
             | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
           in
           force_to_head ~force_to_kind typ
-        | Discriminant discr ->
-          let typ =
-            match Discriminant.sort discr with
-            | Int ->
-              let imm = Immediate.int (Discriminant.to_int discr) in
-              T.this_tagged_immediate_without_alias imm
-            | Is_int | Tag -> T.this_discriminant_without_alias discr
-          in
-          force_to_head ~force_to_kind typ
         | Name name ->
           let t = force_to_kind (TE.find env name) in
           match descr t with
@@ -275,7 +268,7 @@ module Make (Head : Type_head_intf.S
     match Simple.descr simple with
     (* CR mshinwell: Does this need to use some kind of [meet_equation]? *)
     | Name name -> TEE.add_or_replace_equation env_extension name ty
-    | Const _ | Discriminant _ -> env_extension
+    | Const _ -> env_extension
 
   let all_aliases_of env simple_opt =
     match simple_opt with
@@ -360,10 +353,7 @@ module Make (Head : Type_head_intf.S
         | Const const1, Const const2
             when not (Simple.Const.equal const1 const2) ->
           bottom (), TEE.empty ()
-        | Discriminant discriminant1, Discriminant discriminant2
-            when not (Discriminant.equal discriminant1 discriminant2) ->
-          bottom (), TEE.empty ()
-        | (Const _ | Discriminant _ | Name _), _ ->
+        | (Const _ | Name _), _ ->
           let head, env_extension =
             let env = Meet_env.now_meeting env simple1 simple2 in
             meet_head_or_unknown_or_bottom env head1 head2
@@ -390,8 +380,9 @@ module Make (Head : Type_head_intf.S
           env_extension
           |> add_equation env simple (to_type (create_no_alias head))
         in
-        (* XXX Not sure we want to return [Equals] when it's Bottom *)
-        create_equals simple, env_extension
+        match head with
+        | Bottom -> bottom (), env_extension
+        | _ -> create_equals simple, env_extension
 
     let join ~force_to_kind ~to_type typing_env t1 t2 =
       let canonical_simple1, head1, canonical_simple2, head2 =

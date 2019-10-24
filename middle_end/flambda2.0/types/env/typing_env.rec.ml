@@ -139,12 +139,10 @@ module One_level = struct
   }
 
   let print_with_cache ~cache:_ ppf
-        { scope; level; just_after_level = _; } =
+        { scope = _; level; just_after_level = _; } =
     Format.fprintf ppf "@[<hov 1>\
-        @[<hov 1>(scope@ %a)@]@ \
         @[<hov 1>(level@ %a)@]\
         @]"
-      Scope.print scope
       Typing_env_level.print level
 
   let create scope level ~just_after_level =
@@ -182,6 +180,7 @@ let is_empty t =
     && Symbol.Map.is_empty t.defined_symbols
 
 (* CR mshinwell: Should print name occurrence kinds *)
+(* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
          defined_symbols;
@@ -189,19 +188,17 @@ let print_with_cache ~cache ppf
   if is_empty t then
     Format.pp_print_string ppf "Empty"
   else
+    let levels =
+      Scope.Map.add (One_level.scope current_level) current_level prev_levels
+    in
     Printing_cache.with_cache cache ppf "env" t (fun ppf () ->
       Format.fprintf ppf
         "@[<hov 1>(\
-            @[<hov 1>(prev_levels@ %a)@]@ \
-            @[<hov 1>(current_level@ %a)@]@ \
-            @[<hov 1>(defined_symbols@ %a)@]@ \
-            @[<hov 1>(aliases@ %a)@]\
+            @[<hov 1>(levels@ %a)@]@ \
+            @[<hov 1>(defined_symbols@ %a)@]\
             )@]"
-        (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
-        (One_level.print_with_cache ~cache) current_level
-        (Symbol.Map.print K.print) defined_symbols
-        Aliases.print
-        (Cached.aliases (One_level.just_after_level current_level)))
+        (Scope.Map.print (One_level.print_with_cache ~cache)) levels
+        (Symbol.Map.print K.print) defined_symbols)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -335,7 +332,7 @@ let mem t name =
 let mem_simple t simple =
   match Simple.descr simple with
   | Name name -> mem t name
-  | Const _ | Discriminant _ -> true
+  | Const _ -> true
 
 let with_current_level t ~current_level =
   let t = { t with current_level; } in
@@ -411,8 +408,6 @@ let alias_of_simple t simple =
     | Const const ->
       Type_grammar.kind_for_const const,
         Binding_time.consts_and_discriminants
-    | Discriminant _ ->
-      K.fabricated, Binding_time.consts_and_discriminants
     | Name name ->
       let ty, binding_time = find_with_binding_time t name in
       Type_grammar.kind ty, binding_time
@@ -522,7 +517,7 @@ Format.eprintf "Adding equation %a : %a from:\n%s\n%!"
           Type_grammar.print ty
           print t
       end
-    | Const _ | Discriminant _ -> ()
+    | Const _ -> ()
   end;
   (*
 Format.eprintf "Trying to add equation %a = %a\n%!"
@@ -545,7 +540,7 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
       let alias_of =
         let name_occurrence_kind =
           match Simple.descr alias_of with
-          | Const _ | Discriminant _ -> Name_occurrence_kind.normal
+          | Const _ -> Name_occurrence_kind.normal
           | Name alias_of -> find_name_occurrence_kind t alias_of
         in
         alias_of_simple t alias_of name_occurrence_kind
@@ -596,7 +591,7 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
 *)
         meet_ty, add_env_extension t ~env_extension
       end
-    | Name _ | Const _ | Discriminant _ -> ty, t
+    | Name _ | Const _ -> ty, t
   in
   let ty =
     match rec_info with
@@ -612,7 +607,7 @@ Format.eprintf "Now really adding equation %a = %a\n%!"
   Type_grammar.print ty;
 *)
   match Simple.descr simple with
-  | Const _ | Discriminant _ -> t
+  | Const _ -> t
   | Name name -> add_equation0 t aliases name name_occurrence_kind ty
 
 and add_env_extension_from_level t level : t =
@@ -789,14 +784,14 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids
 
 let find_name_occurrence_kind_of_simple t simple =
   match Simple.descr simple with
-  | Const _ | Discriminant _ -> Name_occurrence_kind.normal
+  | Const _ -> Name_occurrence_kind.normal
   | Name name -> find_name_occurrence_kind t name
 
 let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
   let newer_rec_info =
     let newer_rec_info = Simple.rec_info simple in
     match Simple.descr simple with
-    | Const _ | Discriminant _ -> newer_rec_info
+    | Const _ -> newer_rec_info
     | Name name ->
       let ty = find t name in
       match Type_grammar.get_alias ty with
@@ -832,7 +827,7 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
     | Some simple ->
       let rec_info = Simple.rec_info simple in
       match Simple.descr simple with
-      | Const _ | Discriminant _ -> Ok (Some (simple, rec_info)), kind
+      | Const _ -> Ok (Some (simple, rec_info)), kind
       | Name name ->
         (* CR mshinwell: Do we have to return [Bottom]? *)
         let ty = find t name in
@@ -887,7 +882,7 @@ let earliest_alias_of_simple_satisfying t ~min_occurrence_kind ~allowed_vars
     Alias.Set_ordered_by_binding_time.filter (fun alias ->
         match Simple.descr (Alias.simple alias) with
         | Name (Var var) -> Variable.Set.mem var allowed_vars
-        | Name (Symbol _) | Const _ | Discriminant _ -> true)
+        | Name (Symbol _) | Const _ -> true)
       (aliases_of_simple0 t ~min_occurrence_kind simple)
   in
   Option.map Alias.simple

@@ -511,7 +511,21 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             (D.Map.of_list arms)
       in
       let scrutinee = Simple.name (Env.find_name env scrutinee) in
-      Expr.create_switch sw.sort ~scrutinee ~arms
+      let untagged_scrutinee = Variable.create "untagged" in
+      let untagged_scrutinee' =
+        VB.create untagged_scrutinee Name_occurrence_kind.normal
+      in
+      let untag =
+        match sort with
+        | Int ->
+          Named.create_prim
+            (Unary (Unbox_number Untagged_immediate, scrutinee))
+            Debuginfo.none
+        | Tag | Is_int -> Named.create_simple scrutinee
+      in
+      Expr.create_let untagged_scrutinee' untag
+        (Expr.create_switch sw.sort ~scrutinee:(Simple.var untagged_scrutinee)
+          ~arms)
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =

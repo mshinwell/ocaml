@@ -146,8 +146,7 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
       | Name (Var _) -> of_kind_value, ty
       | Const (Tagged_immediate imm) -> Of_kind_value.Tagged_immediate imm, ty
       | Const (Naked_float _ | Naked_int32 _
-          | Naked_int64 _ | Naked_nativeint _)
-      | Discriminant _ ->
+          | Naked_int64 _ | Naked_nativeint _) ->
         (* CR mshinwell: This should be "invalid" and propagate up *)
         of_kind_value, ty
 
@@ -221,7 +220,7 @@ let simplify_static_part_of_kind_value dacc
     Block (tag, is_mutable, fields), dacc
   | Fabricated_block var ->
     DE.check_variable_is_bound (DA.denv dacc) var;
-    let dacc = bind_result_sym (T.any_fabricated ()) in
+    let dacc = bind_result_sym (T.any_value ()) in
     static_part, dacc
   (* CR mshinwell: Need to reify to change Equals types into new terms *)
   | Boxed_float or_var ->

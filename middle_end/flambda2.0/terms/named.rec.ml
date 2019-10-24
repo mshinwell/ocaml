@@ -130,7 +130,6 @@ let dummy_value (kind : K.t) : t =
       Simple.const (Naked_int64 Int64.zero)
     | Naked_number Naked_nativeint ->
       Simple.const (Naked_nativeint Targetint.zero)
-    | Fabricated ->
-      Simple.discriminant Discriminant.zero
+    | Fabricated -> Misc.fatal_error "[Fabricated] kind not expected here"
   in
   Simple simple

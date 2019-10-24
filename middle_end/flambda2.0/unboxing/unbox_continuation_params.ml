@@ -22,6 +22,8 @@ open! Simplify_import
 let max_unboxing_depth = 1
 
 module type Unboxing_spec = sig
+  val var_name : string
+
   val make_boxed_value : Tag.t -> fields:T.t list -> T.t
 
   val make_boxed_value_with_size_at_least
@@ -155,7 +157,7 @@ module Make (U : Unboxing_spec) = struct
         extra_params_and_args ~unbox_value tag size kind =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
-        let name = Printf.sprintf "unboxed%d" index in
+        let name = Printf.sprintf "%s%d" U.var_name index in
         let var = Variable.create name in
         KP.create (Parameter.wrap var) kind)
     in
@@ -203,6 +205,8 @@ module Make (U : Unboxing_spec) = struct
 end
 
 module Block_spec : Unboxing_spec = struct
+  let var_name = "unboxed"
+
   let make_boxed_value = T.immutable_block
   let make_boxed_value_with_size_at_least = T.immutable_block_with_size_at_least
 
@@ -212,6 +216,8 @@ end
 
 module Make_unboxed_number_spec (N : sig
   val name : string
+  val var_name : string
+
   val tag : Tag.t
 
   val unboxed_kind : K.t
@@ -219,6 +225,8 @@ module Make_unboxed_number_spec (N : sig
 
   val box : T.t -> T.t
 end) = struct
+  let var_name = N.var_name
+
   let make_boxed_value tag ~fields =
     assert (Tag.equal tag N.tag);
     match fields with
@@ -235,8 +243,18 @@ end) = struct
     P.Unary (Unbox_number N.boxable_number_kind, block)
 end
 
+module Immediate_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+  let name = "immediate"
+  let var_name = "untagged_imm"
+  let tag = Tag.zero  (* CR mshinwell: make optional *)
+  let unboxed_kind = K.naked_nativeint
+  let boxable_number_kind = K.Boxable_number.Untagged_immediate
+  let box = T.tag_immediate
+end)
+
 module Float_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "float"
+  let var_name = "unboxed_float"
   let tag = Tag.double_tag
   let unboxed_kind = K.naked_float
   let boxable_number_kind = K.Boxable_number.Naked_float
@@ -245,6 +263,7 @@ end)
 
 module Int32_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "int32"
+  let var_name = "unboxed_int32"
   let tag = Tag.custom_tag
   let unboxed_kind = K.naked_int32
   let boxable_number_kind = K.Boxable_number.Naked_int32
@@ -253,6 +272,7 @@ end)
 
 module Int64_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "int64"
+  let var_name = "unboxed_int64"
   let tag = Tag.custom_tag
   let unboxed_kind = K.naked_int64
   let boxable_number_kind = K.Boxable_number.Naked_int64
@@ -261,6 +281,7 @@ end)
 
 module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "nativeint"
+  let var_name = "unboxed_nativeint"
   let tag = Tag.custom_tag
   let unboxed_kind = K.naked_nativeint
   let boxable_number_kind = K.Boxable_number.Naked_nativeint
@@ -268,12 +289,15 @@ module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
 end)
 
 module Blocks = Make (Block_spec)
+module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
 module Int64s = Make (Int64_spec)
 module Nativeints = Make (Nativeint_spec)
 
 let unboxed_number_decisions = [
+  T.prove_is_a_tagged_immediate, Immediates.unbox_one_parameter,
+    Tag.zero, K.naked_nativeint;
   T.prove_is_a_boxed_float, Floats.unbox_one_parameter,
     Tag.double_tag, K.naked_float;
   T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter,

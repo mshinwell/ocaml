@@ -107,9 +107,6 @@ module Program_body : sig
         } -> Flambda_kind.fabricated t
         (** A binding of possibly multiple symbols to the individual closures
             within a set of closures. *)
-        (* CR mshinwell: The GADT index should maybe not be on "kind", since
-           we don't have a concept of "set of closures as kind Fabricated"
-           any more. *)
 
     val print : Format.formatter -> _ t -> unit
 

@@ -113,38 +113,33 @@ let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
       let apply = Apply.with_continuations apply return_cont exn_cont in
       Expr.create_apply apply)
 
+(* CR mshinwell: Should probably move [Reachable] into the [Flambda] recursive
+   loop and then move this into [Expr].  Maybe this could be tidied up a bit
+   too? *)
+let bind_let_bound ~bindings ~body =
+  List.fold_left
+    (fun expr
+         ((bound : Bindable_let_bound.t), (defining_expr : Reachable.t)) ->
+      match defining_expr with
+      | Invalid _ -> Expr.create_invalid ()
+      | Reachable defining_expr ->
+        match bound with
+        | Singleton var -> Expr.bind ~bindings:[var, defining_expr] ~body:expr
+        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr)
+    body
+    (List.rev bindings)
+
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
-(*
-Format.eprintf "Simplifying let on %a\n%!"
-  Bindable_let_bound.print bound_vars;
-*)
     let bindings, dacc =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
-(*
-Format.eprintf "Simplifying let on %a: defining expr done. body is:@ %a\n%!"
-  Bindable_let_bound.print bound_vars Expr.print body;
-*)
     let body, user_data, uacc = simplify_expr dacc body k in
-(*
-Format.eprintf "Simplifying let on %a: body done\n%!"
-  Bindable_let_bound.print bound_vars;
-*)
-    List.fold_left
-      (fun (expr, user_data, uacc)
-           (bound_vars, (defining_expr : Reachable.t)) ->
-        match defining_expr with
-        | Invalid _ -> Expr.create_invalid (), user_data, uacc
-        | Reachable defining_expr ->
-          let expr = Expr.create_pattern_let bound_vars defining_expr expr in
-          expr, user_data, uacc)
-      (body, user_data, uacc)
-      (List.rev bindings))
+    bind_let_bound ~bindings ~body, user_data, uacc)
 
 and simplify_one_continuation_handler
   : 'a. DA.t
@@ -1057,9 +1052,17 @@ and simplify_switch
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
   in
+  (*
+  Format.eprintf "Simplifying Switch, env@ %a@ %a\n%!"
+    TE.print (DE.typing_env (DA.denv dacc)) Switch_expr.print switch;
+    *)
   match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
+  (*
+    Format.eprintf "Simplified scrutinee is %a : %a\n%!"
+      Simple.print scrutinee T.print scrutinee_ty;
+      *)
     let arms = Switch.arms switch in
     let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
@@ -1068,70 +1071,34 @@ and simplify_switch
             match Discriminant.sort arm, Switch.sort switch with
             | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
-              T.this_tagged_immediate imm
-            | Is_int, Is_int ->
-              T.this_discriminant arm
-            | Tag, Tag { tags_to_sizes = _; } ->
-              let _tag =
-                match Discriminant.to_tag arm with
-                | None -> None
-                | Some tag -> Tag.Scannable.of_tag tag
-              in
-              (* XXX We need to match on tags >= No_scan_tag
-              begin match tag with
-              | None ->
-                Misc.fatal_errorf "Arm %a of this [Switch] cannot be \
-                    converted to [Tag.Scannable.t]:@ %a"
-                  Discriminant.print arm
-                  Switch.print switch
-              | Some _tag ->
-              *)
-              (* CR mshinwell: Decide what to do about [tags_to_sizes] *)
-              (*
-                match Tag.Scannable.Map.find tag tags_to_sizes with
-                | exception Not_found ->
-                  Misc.fatal_errorf "Arm %a of this [Switch] is not listed \
-                      in the [tags_to_sizes] map:@ %a"
-                    Discriminant.print arm
-                    Switch.print switch
-                | _size ->*)
-                  (* CR mshinwell: Should [Tag] switches actually not be
-                     working on the output of [Get_tag], and instead take
-                     the block?  Otherwise we're not going to learn what the
-                     block tag is from the [Switch]. *)
-                  T.this_discriminant arm
-(*
-                  let size = Targetint.OCaml.to_int size in
-                  let fields = List.init size (fun _ -> T.any_value ()) in
-                  T.immutable_block (Tag.Scannable.to_tag tag) ~fields
-*)
-(*              end*)
+              T.this_untagged_immediate imm
+            | Is_int, Is_int -> T.is_int ~is_int:arm
+              (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
+            | Tag, Tag { tags_to_sizes = _; } -> T.get_tag ~tag:arm
             | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
-(*
-Format.eprintf "scrutinee_ty %a shape %a\n%!"
-  T.print scrutinee_ty T.print shape;
-*)
+          assert (K.equal (T.kind shape) K.naked_nativeint);
+          (*
+          Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
+            Discriminant.print arm T.print scrutinee_ty T.print shape;
+            *)
           match T.meet typing_env_at_use scrutinee_ty shape with
-          | Bottom -> arms, dacc
+          | Bottom ->
+          (*
+            Format.eprintf "Switch arm %a is bottom\n%!" Discriminant.print arm;
+            *)
+            arms, dacc
           | Ok (_meet_ty, env_extension) ->
-(*
-Format.eprintf "scrutinee_ty %a shape %a meet_ty %a\n%!"
-  T.print scrutinee_ty T.print shape T.print _meet_ty;
-*)
+         (* 
+            Format.eprintf "Switch arm %a : %a is kept\n%!"
+              Discriminant.print arm T.print meet_ty;
+              *)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
             in
             let dacc, id =
-(*
-Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
-  Simple.print scrutinee
-  Discriminant.print arm
-  Continuation.print cont
-  TE.print typing_env_at_use;
- *)
               DA.record_continuation_use dacc cont Normal
                 ~typing_env_at_use
                 ~arg_types:[]
@@ -1196,8 +1163,8 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     in
     let switch_is_identity =
       let arm_discrs = Discriminant.Map.keys arms in
-      let identity_arms_args = Discriminant.Map.keys identity_arms in
-      if not (Discriminant.Set.equal arm_discrs identity_arms_args) then
+      let identity_arms_discrs = Discriminant.Map.keys identity_arms in
+      if not (Discriminant.Set.equal arm_discrs identity_arms_discrs) then
         None
       else
         Discriminant.Map.data identity_arms
@@ -1206,30 +1173,60 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     in
     let switch_is_boolean_not =
       let arm_discrs = Discriminant.Map.keys arms in
-      if not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set) then
+      let not_arms_discrs = Discriminant.Map.keys not_arms in
+      if (not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set))
+        || (not (Discriminant.Set.equal arm_discrs not_arms_discrs))
+      then
         None
       else
         Discriminant.Map.data not_arms
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
-    let body =
+    let create_tagged_scrutinee k =
+      let bound_to = Variable.create "tagged_scrutinee" in
+      let bound_vars =
+        Bindable_let_bound.singleton (VB.create bound_to NOK.normal)
+      in
+      let named =
+        Named.create_prim (Unary (Box_number Untagged_immediate, scrutinee))
+          Debuginfo.none
+      in
+      let bindings, _dacc =
+        Simplify_named.simplify_named dacc ~bound_vars named
+      in
+      let body = k ~tagged_scrutinee:(Simple.var bound_to) in
+      bind_let_bound ~bindings ~body, user_data, uacc
+    in
+    let body, user_data, uacc =
       match switch_is_identity with
       | Some dest ->
-        let apply_cont = Apply_cont.create dest ~args:[scrutinee] in
-        Expr.create_apply_cont apply_cont
+        create_tagged_scrutinee (fun ~tagged_scrutinee ->
+          let apply_cont = Apply_cont.create dest ~args:[tagged_scrutinee] in
+          Expr.create_apply_cont apply_cont)
       | None ->
         match switch_is_boolean_not with
         | Some dest ->
-          let not_scrutinee = Variable.create "not_scrutinee" in
-          let apply_cont =
-            Apply_cont.create dest ~args:[Simple.var not_scrutinee]
-          in
-          Expr.create_let (VB.create not_scrutinee NOK.normal)
-            (Named.create_prim (P.Unary (Boolean_not, scrutinee))
-              Debuginfo.none)
-            (Expr.create_apply_cont apply_cont)
-        | None -> Expr.create_switch (Switch.sort switch) ~scrutinee ~arms
+          create_tagged_scrutinee (fun ~tagged_scrutinee ->
+            let not_scrutinee = Variable.create "not_scrutinee" in
+            let apply_cont =
+              Apply_cont.create dest ~args:[Simple.var not_scrutinee]
+            in
+            Expr.create_let (VB.create not_scrutinee NOK.normal)
+              (Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
+                Debuginfo.none)
+              (Expr.create_apply_cont apply_cont))
+        | None ->
+          let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
+          if Simple.is_const scrutinee
+            && Discriminant.Map.cardinal arms > 1
+          then begin
+            Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
+                should have been simplified away:@ %a"
+              T.print scrutinee_ty
+              Expr.print expr
+          end;
+          expr, user_data, uacc
     in
     let expr =
       List.fold_left (fun body (new_cont, new_handler) ->

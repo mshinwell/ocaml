@@ -27,6 +27,9 @@ module Const = struct
   let const_true = Tagged_immediate (Immediate.bool_true)
   let const_false = Tagged_immediate (Immediate.bool_false)
 
+  let untagged_const_true = Naked_nativeint Targetint.one
+  let untagged_const_false = Naked_nativeint Targetint.zero
+
   let const_int i = Tagged_immediate (Immediate.int i) 
 
   let const_zero = const_int Targetint.OCaml.zero
@@ -115,7 +118,6 @@ type t =
   | Name of Name.t
   | Rec_name of Name.t * Rec_info.t
   | Const of Const.t
-  | Discriminant of Discriminant.t
 
 let name name = Name name
 let var var = Name (Name.var var)
@@ -130,16 +132,22 @@ let const_int i = Const (Const.const_int i)
 let const_true = Const Const.const_true
 let const_false = Const Const.const_false
 
+let untagged_const_true = Const Const.untagged_const_true
+let untagged_const_false = Const Const.untagged_const_false
+
 let const_zero = Const Const.const_zero
 let const_one = Const Const.const_one
 
 let unit = Const Const.const_unit
 
-let discriminant t = Discriminant t
-
 let is_var t =
   match t with
   | Name (Var _) | Rec_name (Var _, _) -> true
+  | _ -> false
+
+let is_const t =
+  match t with
+  | Const _ -> true
   | _ -> false
 
 let is_symbol t =
@@ -152,7 +160,7 @@ let merge_rec_info t ~newer_rec_info =
   | None -> Some t
   | Some newer_rec_info ->
     match t with
-    | Const _ | Discriminant _ -> None
+    | Const _ -> None
     | Name name -> Some (Rec_name (name, newer_rec_info))
     | Rec_name (name, older_rec_info) ->
       let t =
@@ -163,17 +171,17 @@ let merge_rec_info t ~newer_rec_info =
 let rec_info t =
   match t with
   | Rec_name (_, rec_info) -> Some rec_info
-  | Name _ | Const _ | Discriminant _ -> None
+  | Name _ | Const _ -> None
 
 let without_rec_info t =
   match t with
   | Rec_name (name, _rec_info) -> Name name
-  | Name _ | Const _ | Discriminant _ -> t
+  | Name _ | Const _ -> t
 
 let must_be_var t =
   match t with
   | Name (Var var) | Rec_name (Var var, _) -> Some var
-  | Name _ | Rec_name (_, _) | Const _ | Discriminant _ -> None
+  | Name _ | Rec_name (_, _) | Const _ -> None
 
 let allowed t ~allowed =
   match must_be_var t with
@@ -196,7 +204,7 @@ let map_name t ~f =
     let name' = f name in
     if name == name' then t
     else Rec_name (name', rec_info)
-  | Const _ | Discriminant _ -> t
+  | Const _ -> t
 
 let map_var t ~f =
   match t with
@@ -208,7 +216,7 @@ let map_var t ~f =
     let name' = Name.map_var name ~f in
     if name == name' then t
     else Rec_name (name', rec_info)
-  | Const _ | Discriminant _ -> t
+  | Const _ -> t
 
 let map_symbol t ~f =
   match t with
@@ -220,19 +228,19 @@ let map_symbol t ~f =
     let name' = Name.map_symbol name ~f in
     if name == name' then t
     else Rec_name (name', rec_info)
-  | Const _ | Discriminant _ -> t
+  | Const _ -> t
 
 let free_names t =
   match t with
   | Name name | Rec_name (name, _) ->
     Name_occurrences.singleton_name name Name_occurrence_kind.normal
-  | Const _ | Discriminant _ -> Name_occurrences.empty
+  | Const _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
   | Name name | Rec_name (name, _) ->
     Name_occurrences.singleton_name name Name_occurrence_kind.in_types
-  | Const _ | Discriminant _ -> Name_occurrences.empty
+  | Const _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =
   match t with
@@ -244,7 +252,7 @@ let apply_name_permutation t perm =
     let name' = Name_permutation.apply_name perm name in
     if name == name' then t
     else Rec_name (name', rec_info)
-  | Const _ | Discriminant _ -> t
+  | Const _ -> t
 
 module T0 = Identifiable.Make (struct
   type nonrec t = t
@@ -259,13 +267,10 @@ module T0 = Identifiable.Make (struct
         if c <> 0 then c
         else Rec_info.compare rec_info1 rec_info2
       | Const c1, Const c2 -> Const.compare c1 c2
-      | Discriminant t1, Discriminant t2 -> Discriminant.compare t1 t2
       | Name _, _ -> -1
       | Rec_name _, Name _ -> 1
       | Rec_name _, _ -> -1
       | Const _, (Name _ | Rec_name _) -> 1
-      | Const _, _ -> -1
-      | Discriminant _, _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
@@ -275,7 +280,6 @@ module T0 = Identifiable.Make (struct
     | Rec_name (name, rec_info) ->
       Hashtbl.hash (1, (Name.hash name, Rec_info.hash rec_info))
     | Const c -> Hashtbl.hash (2, Const.hash c)
-    | Discriminant t -> Hashtbl.hash (3, Discriminant.hash t)
 
   let print ppf t =
     match t with
@@ -285,7 +289,6 @@ module T0 = Identifiable.Make (struct
         Name.print name
         Rec_info.print rec_info
     | Const c -> Const.print ppf c
-    | Discriminant t -> Discriminant.print ppf t
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
@@ -379,16 +382,13 @@ end
 type descr =
   | Name of Name.t
   | Const of Const.t
-  | Discriminant of Discriminant.t
 
 let descr (t : t) : descr =
   match t with
   | Name name | Rec_name (name, _) -> Name name
   | Const const -> Const const
-  | Discriminant discr -> Discriminant discr
 
 let of_descr (descr : descr) : t =
   match descr with
   | Name name -> Name name
   | Const const -> Const const
-  | Discriminant discr -> Discriminant discr

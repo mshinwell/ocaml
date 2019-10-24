@@ -52,7 +52,7 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
   if Variable.Map.is_empty defined_vars then
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(equations@ @[<hov 1>%a@])@])@ \
+        @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         @]"
       print_equations equations
@@ -61,7 +61,7 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
     Format.fprintf ppf
       "@[<hov 1>(\
         @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-        @[<hov 1>(equations@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         )@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Variable.print)
@@ -141,7 +141,7 @@ let free_names { defined_vars; equations; cse; } =
   Flambda_primitive.Eligible_for_cse.Map.fold
     (fun prim (bound_to : Simple.t) acc ->
       match Simple.descr bound_to with
-      | Const _ | Discriminant _ -> acc
+      | Const _ -> acc
       | Name name ->
         let free_in_prim =
           Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
@@ -191,7 +191,7 @@ let check_equation t name ty =
           Type_grammar.print ty
           print t
       end
-    | Const _ | Discriminant _ -> ()
+    | Const _ -> ()
 
 let one_equation name ty =
   check_equation (empty ()) name ty;
@@ -455,7 +455,7 @@ Format.eprintf "Checking primitive %a\n%!" EP.print prim;
                       Name.print name
                       Typing_env.print env
                   end;
-                | Const _ | Discriminant _ -> () (* CR mshinwell: add more *)
+                | Const _ -> () (* CR mshinwell: add more *)
                 end;
                 let rhs_kinds =
                   Apply_cont_rewrite_id.Map.add id rhs_kind rhs_kinds

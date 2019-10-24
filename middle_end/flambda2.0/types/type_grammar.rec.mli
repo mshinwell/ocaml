@@ -25,7 +25,6 @@ type t = private
   | Naked_int32 of Type_of_kind_naked_int32.t
   | Naked_int64 of Type_of_kind_naked_int64.t
   | Naked_nativeint of Type_of_kind_naked_nativeint.t
-  | Fabricated of Type_of_kind_fabricated.t
 
 val print : Format.formatter -> t -> unit
 
@@ -51,8 +50,6 @@ val unknown_like : t -> t
 
 val any_value : unit -> t
 
-val any_fabricated : unit -> t
-
 val any_tagged_immediate : unit -> t
 val any_tagged_bool : unit -> t
 
@@ -62,6 +59,9 @@ val any_boxed_int64 : unit -> t
 val any_boxed_nativeint : unit -> t
 
 val any_naked_float : unit -> t
+val any_naked_int32 : unit -> t
+val any_naked_int64 : unit -> t
+val any_naked_nativeint : unit -> t
 
 val this_tagged_immediate : Immediate.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
@@ -70,11 +70,13 @@ val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
 val these_tagged_immediates : Immediate.Set.t -> t
+val these_untagged_immediates : Immediate.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
 val these_boxed_nativeints : Targetint.Set.t -> t
 
+val this_untagged_immediate : Immediate.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
@@ -101,9 +103,18 @@ val box_int32 : t -> t
 val box_int64 : t -> t
 val box_nativeint : t -> t
 
-val this_discriminant : Discriminant.t -> t
-val this_discriminant_without_alias : Discriminant.t -> t
-val these_discriminants : Discriminant.Set.t -> t
+val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
+val tag_immediate : t -> t
+
+val any_block : unit -> t
+
+val is_int_for_scrutinee : scrutinee:Simple.t -> t
+val get_tag_for_block : block:Simple.t -> t
+
+val is_int : is_int:Discriminant.t -> t
+val get_tag : tag:Discriminant.t -> t
+
+val blocks_with_these_tags : Tag.Set.t -> t
 
 val immutable_block : Tag.t -> fields:t list -> t
 

@@ -131,6 +131,7 @@ let char value = {
 let tag tag = int (TO.of_int (Tag.to_int tag))
 
 let to_targetint t = t.value
+let to_targetint' t = Targetint.OCaml.to_targetint t.value
 
 let map t ~f =
   { value = f t.value;
@@ -142,8 +143,20 @@ let set_to_targetint_set (set : Set.t) : TO.Set.t =
     set
     TO.Set.empty
 
+let set_to_targetint_set' (set : Set.t) : Targetint.Set.t =
+  Set.fold (fun t targetints ->
+      Targetint.Set.add (TO.to_targetint t.value) targetints)
+    set
+    Targetint.Set.empty
+
 let set_of_targetint_set (tis : TO.Set.t) : Set.t =
   TO.Set.fold (fun i set -> Set.add (int i) set)
+    tis
+    Set.empty
+
+let set_of_targetint_set' (tis : Targetint.Set.t) : Set.t =
+  Targetint.Set.fold (fun i set ->
+      Set.add (int (TO.of_targetint i)) set)
     tis
     Set.empty
 

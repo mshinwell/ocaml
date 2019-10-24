@@ -44,15 +44,28 @@ struct
     at_least : Maps_to.t Tag_or_unknown_and_index.Map.t;
   }
 
-  let print_with_cache ~cache ppf ({ known; at_least } : t) =
-    Format.fprintf ppf 
-      "@[<hov 1>(\
-         @[<hov 1>(known@ %a)@]@ \
-         @[<hov 1>(at_least@ %a)@]\
-         )@]"
-      (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
-      (Tag_or_unknown_and_index.Map.print (Maps_to.print_with_cache ~cache))
-      at_least
+  let is_bottom { known; at_least; } =
+    Tag_and_index.Map.is_empty known
+      && Tag_or_unknown_and_index.Map.is_empty at_least
+
+  let print_with_cache ~cache ppf (({ known; at_least } as t) : t) =
+    if is_bottom t then
+      (* CR mshinwell: factor out (also in [Type_descr]) *)
+      let colour = Flambda_colours.top_or_bottom_type () in
+      if !Clflags.flambda2_unicode then
+        Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
+          colour (Flambda_colours.normal ())
+      else
+        Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
+    else
+      Format.fprintf ppf 
+        "@[<hov 1>(\
+           @[<hov 1>(known@ %a)@]@ \
+           @[<hov 1>(at_least@ %a)@]\
+           )@]"
+        (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
+        (Tag_or_unknown_and_index.Map.print (Maps_to.print_with_cache ~cache))
+        at_least
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -202,16 +215,36 @@ Format.eprintf "RL meet is returning bottom\n%!";
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
 
-  let is_bottom { known; at_least; } =
-    Tag_and_index.Map.is_empty known
-      && Tag_or_unknown_and_index.Map.is_empty at_least
-
   let known t = t.known
   let at_least t = t.at_least
 
   let get_singleton { known; at_least; } =
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
+
+  let all_tags { known; at_least; } : _ Or_unknown.t =
+    let from_at_least =
+      Tag_or_unknown_and_index.Map.fold
+        (fun ((tag_or_unk : _ Or_unknown.t), _index) _ from_at_least ->
+          match from_at_least with
+          | None -> None
+          | Some from_at_least ->
+            match tag_or_unk with
+            | Unknown -> None
+            | Known tag -> Some (Tag.Set.add tag from_at_least))
+        at_least
+        (Some Tag.Set.empty)
+    in
+    match from_at_least with
+    | None -> Unknown
+    | Some tags ->
+      let tags =
+        Tag_and_index.Set.fold (fun (tag, _index) tags ->
+            Tag.Set.add tag tags)
+          (Tag_and_index.Map.keys known)
+          tags
+      in
+      Known tags
 
   let all_tags_and_indexes { known; at_least; } : _ Or_unknown.t =
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
@@ -344,15 +377,26 @@ module For_blocks = struct
   include Make (Tag) (Targetint_ocaml_index) (Tag_and_size)
     (Tag_or_unknown_and_size) (Product.Int_indexed)
 
-  type open_or_closed = Open | Closed of Tag.t
+  type open_or_closed = Open of Tag.t Or_unknown.t | Closed of Tag.t
 
   let create ~field_tys (open_or_closed : open_or_closed) =
     let fields = List.mapi (fun index ty -> index, ty) field_tys in
     let product = Product.Int_indexed.create (Int.Map.of_list fields) in
     let size = Targetint.OCaml.of_int (List.length field_tys) in
     match open_or_closed with
-    | Open -> create_at_least (Unknown, size) product
+    | Open tag -> create_at_least (tag, size) product
     | Closed tag -> create_exactly tag size product
+
+  let create_blocks_with_these_tags tags =
+    let at_least =
+      Tag.Set.fold (fun tag at_least ->
+          Tag_or_unknown_and_size.Map.add (Known tag, Targetint.OCaml.zero)
+            (Product.Int_indexed.create Int.Map.empty)
+            at_least)
+        tags
+        Tag_or_unknown_and_size.Map.empty
+    in
+    create_at_least_multiple at_least
 
   let all_tags_and_sizes t : _ Or_unknown.t =
     match all_tags_and_indexes t with
