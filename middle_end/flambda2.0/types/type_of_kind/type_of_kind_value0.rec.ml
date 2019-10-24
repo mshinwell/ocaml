@@ -20,11 +20,10 @@ module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Blocks = Row_like.For_blocks
-module Immediates = Row_like.For_immediates
 
 type t =
   | Variant of {
-      immediates : Immediates.t Or_unknown.t;
+      immediates : T.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
   | Boxed_float of T.t
@@ -48,7 +47,7 @@ let print_with_cache ~cache ppf t =
         @[<hov 1>(tagged_imms@ %a)@]\
         )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
-      (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
+      (Or_unknown.print (T.print_with_cache ~cache)) immediates
   | Boxed_float naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
       (T.print_with_cache ~cache) naked_ty

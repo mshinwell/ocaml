@@ -18,7 +18,7 @@
 
 type t =
   | Variant of {
-      immediates : Row_like.For_immediates.t Or_unknown.t;
+      immediates : Type_grammar.t Or_unknown.t;
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }
   | Boxed_float of Type_grammar.t
