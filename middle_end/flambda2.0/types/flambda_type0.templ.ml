@@ -316,6 +316,36 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
+  let prove_tags env t : Tag.Set.t proof =
+    let wrong_kind () =
+      Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
+    in
+    match expand_head t env with
+    | Const (Tagged_immediate _) -> Unknown
+    | Const _ | Discriminant _ -> wrong_kind ()
+    | Resolved resolved ->
+      match resolved with
+      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        begin match blocks_imms.immediates with
+        | Unknown -> Unknown
+        | Known _ ->
+          match blocks_imms.blocks with
+          | Unknown -> Unknown
+          | Known blocks ->
+            match Row_like.For_blocks.all_tags blocks with
+            | Unknown -> Unknown
+            | Known tags -> Proved tags
+        end
+      | Value (Ok _) -> Invalid
+      | Value Unknown -> Unknown
+      | Value Bottom -> Invalid
+      (* CR mshinwell: Here and elsewhere, use or-patterns. *)
+      | Naked_float _ -> wrong_kind ()
+      | Naked_int32 _ -> wrong_kind ()
+      | Naked_int64 _ -> wrong_kind ()
+      | Naked_nativeint _ -> wrong_kind ()
+      | Fabricated _ -> wrong_kind ()
+
   let prove_tags_and_sizes env t : Targetint.OCaml.t Tag.Map.t proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
@@ -504,6 +534,28 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
         begin match Row_like.For_discriminants.all discrs with
         | Known discrs -> Proved discrs
         | Unknown -> Unknown
+        end
+      | Fabricated (Ok (Is_int scrutinee_ty)) ->
+        begin match prove_is_int env scrutinee_ty with
+        | Proved true ->
+          Proved (Discriminant.Set.singleton Discriminant.bool_true)
+        | Proved false ->
+          Proved (Discriminant.Set.singleton Discriminant.bool_false)
+        | Unknown -> Unknown
+        | Invalid -> Invalid
+        end
+      | Fabricated (Ok (Get_tag block_ty)) ->
+        begin match prove_tags env block_ty with
+        | Proved tags ->
+          let discrs =
+            Tag.Set.fold (fun tag discrs ->
+                Discriminant.Set.add (Discriminant.of_tag tag) discrs)
+              tags
+              Discriminant.Set.empty
+          in
+          Proved discrs
+        | Unknown -> Unknown
+        | Invalid -> Invalid
         end
       | Fabricated Unknown -> Unknown
       | Fabricated Bottom -> Invalid

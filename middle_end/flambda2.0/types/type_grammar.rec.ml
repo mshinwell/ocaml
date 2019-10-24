@@ -394,6 +394,45 @@ let these_discriminants discrs =
 let this_discriminant_without_alias discr : t =
   these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
 
+let any_block () : t =
+  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+    immediates = Known (Row_like.For_immediates.create_bottom ());
+    blocks = Unknown;
+  })))
+
+let any_block_with_tag tag : t =
+  let blocks =
+    Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
+  in
+  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+    immediates = Known (Row_like.For_immediates.create_bottom ());
+    blocks = Known blocks;
+  })))
+
+let is_int_for_scrutinee ~scrutinee : t =
+  Fabricated (T_F.create (Is_int (alias_type_of K.value scrutinee)))
+
+let get_tag_for_block ~block : t =
+  Fabricated (T_F.create (Get_tag (alias_type_of K.value block)))
+
+let is_int ~is_int : t =
+  if Discriminant.equal is_int Discriminant.is_int_false then
+    Fabricated (T_F.create (Is_int (any_block ())))
+  else if Discriminant.equal is_int Discriminant.is_int_true then
+    Fabricated (T_F.create (Is_int (any_tagged_immediate ())))
+  else
+    Misc.fatal_errorf "Invalid discriminant %a (must be [is_int_false] or \
+        [is_int_true])"
+      Discriminant.print is_int
+
+let get_tag ~tag : t =
+  match Discriminant.to_tag tag with
+  | Some tag ->
+    Fabricated (T_F.create (Get_tag (any_block_with_tag tag)))
+  | None ->
+    Misc.fatal_errorf "Invalid discriminant %a (must be a valid tag)"
+      Discriminant.print tag
+
 let any_tagged_bool () = these_tagged_immediates Immediate.all_bools
 
 let this_boxed_float f = box_float (this_naked_float f)
@@ -442,7 +481,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   Value (T_V.create_no_alias (Ok (
     Blocks_and_tagged_immediates {
       immediates = Known (Row_like.For_immediates.create_bottom ());
-      blocks = Known (Row_like.For_blocks.create ~field_tys Open);
+      blocks = Known (Row_like.For_blocks.create ~field_tys (Open Unknown));
     })))
 
 let this_immutable_string str =

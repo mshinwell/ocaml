@@ -16,14 +16,24 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module T = Type_grammar
+
 type t =
   | Discriminants of Row_like.For_discriminants.t
+  | Is_int of T.t
+  | Get_tag of T.t
 
 let print_with_cache ~cache ppf t =
   match t with
   | Discriminants discriminants ->
     Format.fprintf ppf "@[<hov 1>(Discriminants@ %a)@]"
       (Row_like.For_discriminants.print_with_cache ~cache) discriminants
+  | Is_int typ ->
+    Format.fprintf ppf "@[<hov 1>(Is_int@ %a)@]"
+      T.print typ
+  | Get_tag typ ->
+    Format.fprintf ppf "@[<hov 1>(Get_tag@ %a)@]"
+      T.print typ
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -33,10 +43,19 @@ let apply_name_permutation t perm =
     let discrs' = Row_like.For_discriminants.apply_name_permutation discrs perm in
     if discrs == discrs' then t
     else Discriminants discrs'
+  | Is_int typ ->
+    let typ' = T.apply_name_permutation typ perm in
+    if typ == typ' then t
+    else Is_int typ'
+  | Get_tag typ ->
+    let typ' = T.apply_name_permutation typ perm in
+    if typ == typ' then t
+    else Get_tag typ'
 
 let free_names t =
   match t with
   | Discriminants discrs -> Row_like.For_discriminants.free_names discrs
+  | Is_int typ | Get_tag typ -> T.free_names typ
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t
@@ -48,11 +67,18 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join env t1 t2 =
+  let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
     match t1, t2 with
     | Discriminants discrs1, Discriminants discrs2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch Row_like.For_discriminants.meet
           Row_like.For_discriminants.join env discrs1 discrs2)
         ~f:(fun (discrs, env_extension) -> Discriminants discrs, env_extension)
+    | Is_int typ1, Is_int typ2 ->
+      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env typ1 typ2)
+        ~f:(fun (typ, env_extension) -> Is_int typ, env_extension)
+    | Get_tag typ1, Get_tag typ2 ->
+      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env typ1 typ2)
+        ~f:(fun (typ, env_extension) -> Get_tag typ, env_extension)
+    | (Discriminants _ | Is_int _ | Get_tag _), _ -> Absorbing
 end

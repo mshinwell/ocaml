@@ -53,6 +53,8 @@ module type S = sig
     val empty : unit -> t
 
     val one_equation : Name.t -> flambda_type -> t
+
+    val add_or_replace_equation : t -> Name.t -> flambda_type -> t
   end
 
   module Typing_env : sig
@@ -256,6 +258,12 @@ module type S = sig
   val this_discriminant : Discriminant.t -> t
 
   val these_discriminants : Discriminant.Set.t -> t
+
+  val is_int_for_scrutinee : scrutinee:Simple.t -> t
+  val get_tag_for_block : block:Simple.t -> t
+
+  val is_int : is_int:Discriminant.t -> t
+  val get_tag : tag:Discriminant.t -> t
 
   (* CR mshinwell: decide on exact strategy for mutable blocks *)
 

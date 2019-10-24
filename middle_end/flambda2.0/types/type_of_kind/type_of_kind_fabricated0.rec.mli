@@ -28,6 +28,8 @@ type t =
         - a block tag, as returned by the [Get_tag] primitive; or
         - a constant constructor which has undergone a kind-cast to kind
           [Fabricated] using the [Discriminant_of_int] primitive. *)
+  | Is_int of Type_grammar.t
+  | Get_tag of Type_grammar.t
 
 include Type_head_intf.S
   with type t := t

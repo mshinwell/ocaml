@@ -1070,42 +1070,10 @@ and simplify_switch
               let imm = Immediate.int (Discriminant.to_int arm) in
               T.this_tagged_immediate imm
             | Is_int, Is_int ->
-              T.this_discriminant arm
+              T.is_int ~is_int:arm
             | Tag, Tag { tags_to_sizes = _; } ->
-              let _tag =
-                match Discriminant.to_tag arm with
-                | None -> None
-                | Some tag -> Tag.Scannable.of_tag tag
-              in
-              (* XXX We need to match on tags >= No_scan_tag
-              begin match tag with
-              | None ->
-                Misc.fatal_errorf "Arm %a of this [Switch] cannot be \
-                    converted to [Tag.Scannable.t]:@ %a"
-                  Discriminant.print arm
-                  Switch.print switch
-              | Some _tag ->
-              *)
-              (* CR mshinwell: Decide what to do about [tags_to_sizes] *)
-              (*
-                match Tag.Scannable.Map.find tag tags_to_sizes with
-                | exception Not_found ->
-                  Misc.fatal_errorf "Arm %a of this [Switch] is not listed \
-                      in the [tags_to_sizes] map:@ %a"
-                    Discriminant.print arm
-                    Switch.print switch
-                | _size ->*)
-                  (* CR mshinwell: Should [Tag] switches actually not be
-                     working on the output of [Get_tag], and instead take
-                     the block?  Otherwise we're not going to learn what the
-                     block tag is from the [Switch]. *)
-                  T.this_discriminant arm
-(*
-                  let size = Targetint.OCaml.to_int size in
-                  let fields = List.init size (fun _ -> T.any_value ()) in
-                  T.immutable_block (Tag.Scannable.to_tag tag) ~fields
-*)
-(*              end*)
+              (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
+              T.get_tag ~tag:arm
             | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch

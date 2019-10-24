@@ -105,6 +105,12 @@ val this_discriminant : Discriminant.t -> t
 val this_discriminant_without_alias : Discriminant.t -> t
 val these_discriminants : Discriminant.Set.t -> t
 
+val is_int_for_scrutinee : scrutinee:Simple.t -> t
+val get_tag_for_block : block:Simple.t -> t
+
+val is_int : is_int:Discriminant.t -> t
+val get_tag : tag:Discriminant.t -> t
+
 val immutable_block : Tag.t -> fields:t list -> t
 
 val immutable_block_with_size_at_least

@@ -213,6 +213,30 @@ Format.eprintf "RL meet is returning bottom\n%!";
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
 
+  let all_tags { known; at_least; } : _ Or_unknown.t =
+    let from_at_least =
+      Tag_or_unknown_and_index.Map.fold
+        (fun ((tag_or_unk : _ Or_unknown.t), _index) _ from_at_least ->
+          match from_at_least with
+          | None -> None
+          | Some from_at_least ->
+            match tag_or_unk with
+            | Unknown -> None
+            | Known tag -> Some (Tag.Set.add tag from_at_least))
+        at_least
+        (Some Tag.Set.empty)
+    in
+    match from_at_least with
+    | None -> Unknown
+    | Some tags ->
+      let tags =
+        Tag_and_index.Set.fold (fun (tag, _index) tags ->
+            Tag.Set.add tag tags)
+          (Tag_and_index.Map.keys known)
+          tags
+      in
+      Known tags
+
   let all_tags_and_indexes { known; at_least; } : _ Or_unknown.t =
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
     else Known (Tag_and_index.Map.keys known)
@@ -344,14 +368,14 @@ module For_blocks = struct
   include Make (Tag) (Targetint_ocaml_index) (Tag_and_size)
     (Tag_or_unknown_and_size) (Product.Int_indexed)
 
-  type open_or_closed = Open | Closed of Tag.t
+  type open_or_closed = Open of Tag.t Or_unknown.t | Closed of Tag.t
 
   let create ~field_tys (open_or_closed : open_or_closed) =
     let fields = List.mapi (fun index ty -> index, ty) field_tys in
     let product = Product.Int_indexed.create (Int.Map.of_list fields) in
     let size = Targetint.OCaml.of_int (List.length field_tys) in
     match open_or_closed with
-    | Open -> create_at_least (Unknown, size) product
+    | Open tag -> create_at_least (tag, size) product
     | Closed tag -> create_exactly tag size product
 
   let all_tags_and_sizes t : _ Or_unknown.t =
