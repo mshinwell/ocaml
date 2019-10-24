@@ -86,10 +86,10 @@ let create_name kind name binding_time name_occurrence_kind =
 
 let defined_earlier t ~than =
   match Simple.descr t.simple, Simple.descr than.simple with
-  | (Const _ | Discriminant _), (Const _ | Discriminant _) ->
+  | Const _, Const _ ->
     Simple.compare t.simple than.simple < 0
-  | (Const _ | Discriminant _), Name _ -> true
-  | Name _, (Const _ | Discriminant _) -> false
+  | Const _, Name _ -> true
+  | Name _, Const _ -> false
   | Name name1, Name name2 ->
     if Name.equal name1 name2 then
       false
@@ -115,7 +115,7 @@ let name t =
 
 let implicitly_bound_and_canonical t =
   match Simple.descr t.simple with
-  | Const _ | Discriminant _ -> true
+  | Const _ -> true
   | Name _ -> false
 
 module Order_within_equiv_class = Name_occurrence_kind

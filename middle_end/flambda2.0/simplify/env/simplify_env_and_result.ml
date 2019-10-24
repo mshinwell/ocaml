@@ -266,7 +266,7 @@ end = struct
     match Simple.descr simple with
     | Name name -> check_name_is_bound t name
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
-    | Const _ | Discriminant _ -> ()
+    | Const _ -> ()
 
   let add_inlined_debuginfo' t dbg =
     Debuginfo.concat t.inlined_debuginfo dbg

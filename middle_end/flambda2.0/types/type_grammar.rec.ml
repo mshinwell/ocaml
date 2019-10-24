@@ -23,7 +23,6 @@ module T_Nf = Type_of_kind_naked_float
 module T_N32 = Type_of_kind_naked_int32
 module T_N64 = Type_of_kind_naked_int64
 module T_NN = Type_of_kind_naked_nativeint
-module T_F = Type_of_kind_fabricated
 
 type t =
   | Value of T_V.t
@@ -31,7 +30,6 @@ type t =
   | Naked_int32 of T_N32.t
   | Naked_int64 of T_N64.t
   | Naked_nativeint of T_NN.t
-  | Fabricated of T_F.t
 
 let print_with_cache ~cache ppf (t : Type_grammar.t) =
   match t with
@@ -50,9 +48,6 @@ let print_with_cache ~cache ppf (t : Type_grammar.t) =
   | Naked_nativeint ty ->
     Format.fprintf ppf "@[<hov 1>(Naked_nativeint@ %a)@]"
       (T_NN.print_with_cache ~cache) ty
-  | Fabricated ty ->
-    Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
-      (T_F.print_with_cache ~cache) ty
 
 let print ppf t =
   let cache : Printing_cache.t = Printing_cache.create () in
@@ -62,14 +57,14 @@ let force_to_kind_value t =
   match t with
   | Value ty -> ty
   | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a" print t
 
 let force_to_kind_naked_float t =
   match t with
   | Naked_float ty -> ty
   | Value _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_float]):@ %a"
       print t
@@ -78,7 +73,7 @@ let force_to_kind_naked_int32 t =
   match t with
   | Naked_int32 ty -> ty
   | Value _ | Naked_float _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_int32]):@ %a"
       print t
@@ -87,7 +82,7 @@ let force_to_kind_naked_int64 t =
   match t with
   | Naked_int64 ty -> ty
   | Value _ | Naked_float _ | Naked_int32 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Int64]):@ %a"
       print t
@@ -96,17 +91,9 @@ let force_to_kind_naked_nativeint t =
   match t with
   | Naked_nativeint ty -> ty
   | Value _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Fabricated _ ->
+  | Naked_int64 _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
-      print t
-
-let force_to_kind_fabricated t =
-  match t with
-  | Fabricated ty -> ty
-  | Value _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Naked_nativeint _ ->
-    Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
       print t
 
 let apply_name_permutation t perm =
@@ -131,10 +118,6 @@ let apply_name_permutation t perm =
     let ty' = T_NN.apply_name_permutation ty perm in
     if ty == ty' then t
     else Naked_nativeint ty'
-  | Fabricated ty ->
-    let ty' = T_F.apply_name_permutation ty perm in
-    if ty == ty' then t
-    else Fabricated ty'
 
 let free_names t =
   match t with
@@ -143,7 +126,6 @@ let free_names t =
   | Naked_int32 ty -> T_N32.free_names ty
   | Naked_int64 ty -> T_N64.free_names ty
   | Naked_nativeint ty -> T_NN.free_names ty
-  | Fabricated ty -> T_F.free_names ty
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
@@ -172,11 +154,6 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     | Ok ty -> Ok (Naked_nativeint ty)
     | Bottom -> Bottom
     end
-  | Fabricated ty ->
-    begin match T_F.apply_rec_info ty rec_info with
-    | Ok ty -> Ok (Fabricated ty)
-    | Bottom -> Bottom
-    end
 
 let kind t =
   match t with
@@ -185,7 +162,6 @@ let kind t =
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
   | Naked_nativeint _ -> K.naked_nativeint
-  | Fabricated _ -> K.fabricated
 
 let get_alias t =
   match t with
@@ -194,7 +170,6 @@ let get_alias t =
   | Naked_int32 ty -> T_N32.get_alias ty
   | Naked_int64 ty -> T_N64.get_alias ty
   | Naked_nativeint ty -> T_NN.get_alias ty
-  | Fabricated ty -> T_F.get_alias ty
 
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
@@ -210,7 +185,6 @@ let is_obviously_bottom (t : t) =
   | Naked_int32 ty -> T_N32.is_obviously_bottom ty
   | Naked_int64 ty -> T_N64.is_obviously_bottom ty
   | Naked_nativeint ty -> T_NN.is_obviously_bottom ty
-  | Fabricated ty -> T_F.is_obviously_bottom ty
 
 let alias_type_of (kind : K.t) name : t =
   match kind with
@@ -219,14 +193,13 @@ let alias_type_of (kind : K.t) name : t =
   | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
   | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
   | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
-  | Fabricated -> Fabricated (T_F.create_equals name)
+  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
 
 let bottom_value () = Value (T_V.bottom ())
 let bottom_naked_float () = Naked_float (T_Nf.bottom ())
 let bottom_naked_int32 () = Naked_int32 (T_N32.bottom ())
 let bottom_naked_int64 () = Naked_int64 (T_N64.bottom ())
 let bottom_naked_nativeint () = Naked_nativeint (T_NN.bottom ())
-let bottom_fabricated () = Fabricated (T_F.bottom ())
 
 let bottom (kind : K.t) =
   match kind with
@@ -235,7 +208,7 @@ let bottom (kind : K.t) =
   | Naked_number Naked_int32 -> bottom_naked_int32 ()
   | Naked_number Naked_int64 -> bottom_naked_int64 ()
   | Naked_number Naked_nativeint -> bottom_naked_nativeint ()
-  | Fabricated -> bottom_fabricated ()
+  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
 
 let bottom_like t = bottom (kind t)
 
@@ -244,7 +217,6 @@ let any_naked_float () = Naked_float (T_Nf.unknown ())
 let any_naked_int32 () = Naked_int32 (T_N32.unknown ())
 let any_naked_int64 () = Naked_int64 (T_N64.unknown ())
 let any_naked_nativeint () = Naked_nativeint (T_NN.unknown ())
-let any_fabricated () = Fabricated (T_F.unknown ())
 
 let unknown (kind : K.t) =
   match kind with
@@ -253,7 +225,7 @@ let unknown (kind : K.t) =
   | Naked_number Naked_int32 -> any_naked_int32 ()
   | Naked_number Naked_int64 -> any_naked_int64 ()
   | Naked_number Naked_nativeint -> any_naked_nativeint ()
-  | Fabricated -> any_fabricated ()
+  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
 
 let unknown_like t = unknown (kind t)
 
@@ -318,7 +290,7 @@ let box_float (t : t) : t =
   match t with
   | Naked_float _ -> Value (T_V.create (Boxed_float t))
   | Value _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
       print t
 
@@ -326,7 +298,7 @@ let box_int32 (t : t) : t =
   match t with
   | Naked_int32 _ -> Value (T_V.create (Boxed_int32 t))
   | Value _ | Naked_float _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
       print t
 
@@ -334,7 +306,7 @@ let box_int64 (t : t) : t =
   match t with
   | Naked_int64 _ -> Value (T_V.create (Boxed_int64 t))
   | Value _ | Naked_float _ | Naked_int32 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
       print t
 
@@ -342,7 +314,7 @@ let box_nativeint (t : t) : t =
   match t with
   | Naked_nativeint _ -> Value (T_V.create (Boxed_nativeint t))
   | Value _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Fabricated _ ->
+  | Naked_int64 _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
@@ -387,34 +359,13 @@ let tag_immediate t : t =
         immediates = Known t;
         blocks = Known (Row_like.For_blocks.create_bottom ());
       })))
-  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Fabricated _ ->
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _ ->
     Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
       print t
 
 let tagged_immediate_alias_to ~untagged_immediate : t =
   tag_immediate (Naked_nativeint (
     T_NN.create_equals (Simple.var untagged_immediate)))
-
-let this_discriminant discr : t =
-  Fabricated (T_F.create_equals (Simple.discriminant discr))
-
-(* CR mshinwell: Same code pattern as the tagged immediates cases above,
-   factor out. *)
-let these_discriminants0 ~no_alias discrs : t =
-  match Discriminant.Set.get_singleton discrs with
-  | Some discr when not no_alias -> this_discriminant discr
-  | _ ->
-    if Discriminant.Set.is_empty discrs then bottom K.fabricated
-    else
-      let discrs = Row_like.For_discriminants.create discrs in
-      Fabricated (T_F.create (Discriminants discrs))
-
-let these_discriminants discrs =
-  these_discriminants0 ~no_alias:false discrs
-
-let this_discriminant_without_alias discr : t =
-  these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
 
 let any_block () : t =
   Value (T_V.create_no_alias (Ok (Variant {
@@ -432,16 +383,16 @@ let any_block_with_tag tag : t =
   })))
 
 let is_int_for_scrutinee ~scrutinee : t =
-  Fabricated (T_F.create (Is_int (alias_type_of K.value scrutinee)))
+  Value (T_V.create (Is_int (alias_type_of K.value scrutinee)))
 
 let get_tag_for_block ~block : t =
-  Fabricated (T_F.create (Get_tag (alias_type_of K.value block)))
+  Value (T_V.create (Get_tag (alias_type_of K.value block)))
 
 let is_int ~is_int : t =
   if Discriminant.equal is_int Discriminant.is_int_false then
-    Fabricated (T_F.create (Is_int (any_block ())))
+    Value (T_V.create (Is_int (any_block ())))
   else if Discriminant.equal is_int Discriminant.is_int_true then
-    Fabricated (T_F.create (Is_int (any_tagged_immediate ())))
+    Value (T_V.create (Is_int (any_tagged_immediate ())))
   else
     Misc.fatal_errorf "Invalid discriminant %a (must be [is_int_false] or \
         [is_int_true])"
@@ -450,7 +401,7 @@ let is_int ~is_int : t =
 let get_tag ~tag : t =
   match Discriminant.to_tag tag with
   | Some tag ->
-    Fabricated (T_F.create (Get_tag (any_block_with_tag tag)))
+    Value (T_V.create (Get_tag (any_block_with_tag tag)))
   | None ->
     Misc.fatal_errorf "Invalid discriminant %a (must be a valid tag)"
       Discriminant.print tag
@@ -680,12 +631,6 @@ let make_suitable_for_environment0 t env ~suitable_for level =
     in
     if ty == ty' then level, t
     else level, Naked_nativeint ty'
-  | Fabricated ty ->
-    let level, ty' =
-      T_F.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Fabricated ty'
 
 let make_suitable_for_environment t env ~suitable_for ~bind_to =
   match t with
@@ -704,9 +649,6 @@ let make_suitable_for_environment t env ~suitable_for ~bind_to =
   | Naked_nativeint ty ->
     T_NN.make_suitable_for_environment ty env ~suitable_for ~bind_to
       ~to_type:(fun ty -> Naked_nativeint ty)
-  | Fabricated ty ->
-    T_F.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Fabricated ty)
 
 let expand_head t env : Resolved_type.t =
   match t with
@@ -735,11 +677,6 @@ let expand_head t env : Resolved_type.t =
       T_NN.expand_head ~force_to_kind:force_to_kind_naked_nativeint ty env
     in
     Resolved (Naked_nativeint head)
-  | Fabricated ty ->
-    let head =
-      T_F.expand_head ~force_to_kind:force_to_kind_fabricated ty env
-    in
-    Resolved (Fabricated head)
 
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
@@ -801,18 +738,8 @@ struct
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
       | Bottom -> bottom_naked_nativeint (), TEE.empty ()
       end
-    | Fabricated ty1, Fabricated ty2 ->
-      let module T_F_meet_or_join = T_F.Make_meet_or_join (E) in
-      begin match
-        T_F_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_fabricated
-          ~to_type:(fun ty -> Fabricated ty)
-      with
-      | Ok (ty, env_extension) -> Fabricated ty, env_extension
-      | Bottom -> bottom_fabricated (), TEE.empty ()
-      end
     | (Value _ | Naked_float _ | Naked_int32 _
-        | Naked_int64 _ | Naked_nativeint _ | Fabricated _), _ ->
+        | Naked_int64 _ | Naked_nativeint _), _ ->
       Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
         (E.name ())
         print t1

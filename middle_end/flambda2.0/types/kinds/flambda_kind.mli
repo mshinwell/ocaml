@@ -60,6 +60,8 @@ val naked_float : t
 val naked_int32 : t
 val naked_int64 : t
 val naked_nativeint : t
+(* CR mshinwell: Fabricated kinds are only used in Flambda_static now.  Make
+   a separate type. *)
 val fabricated : t
 
 val is_value : t -> bool

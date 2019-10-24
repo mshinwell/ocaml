@@ -209,8 +209,6 @@ module type S = sig
 
   val any_value : unit -> t
 
-  val any_fabricated : unit -> t
-
   val any_tagged_immediate : unit -> t
   val any_tagged_bool : unit -> t
 
@@ -264,14 +262,6 @@ module type S = sig
 
   val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
   val tag_immediate : t -> t
-
-  (** Building of types corresponding to values that did not exist at
-      source level. *)
-
-  (** The given discriminant. *)
-  val this_discriminant : Discriminant.t -> t
-
-  val these_discriminants : Discriminant.Set.t -> t
 
   val is_int_for_scrutinee : scrutinee:Simple.t -> t
   val get_tag_for_block : block:Simple.t -> t
@@ -369,11 +359,6 @@ module type S = sig
      : Typing_env.t
     -> t
     -> Immediate.t proof
-
-  val prove_equals_discriminants
-     : Typing_env.t
-    -> t
-    -> Discriminant.Set.t proof
 
   val prove_naked_floats
      : Typing_env.t

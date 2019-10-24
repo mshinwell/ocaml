@@ -25,7 +25,6 @@ type t = private
   | Naked_int32 of Type_of_kind_naked_int32.t
   | Naked_int64 of Type_of_kind_naked_int64.t
   | Naked_nativeint of Type_of_kind_naked_nativeint.t
-  | Fabricated of Type_of_kind_fabricated.t
 
 val print : Format.formatter -> t -> unit
 
@@ -50,8 +49,6 @@ val unknown : Flambda_kind.t -> t
 val unknown_like : t -> t
 
 val any_value : unit -> t
-
-val any_fabricated : unit -> t
 
 val any_tagged_immediate : unit -> t
 val any_tagged_bool : unit -> t
@@ -108,10 +105,6 @@ val box_nativeint : t -> t
 
 val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
 val tag_immediate : t -> t
-
-val this_discriminant : Discriminant.t -> t
-val this_discriminant_without_alias : Discriminant.t -> t
-val these_discriminants : Discriminant.Set.t -> t
 
 val is_int_for_scrutinee : scrutinee:Simple.t -> t
 val get_tag_for_block : block:Simple.t -> t

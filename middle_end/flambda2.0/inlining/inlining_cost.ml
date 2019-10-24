@@ -115,7 +115,7 @@ let smaller' expr ~than:threshold =
     | Simple simple ->
       begin match Simple.descr simple with
       | Name _ -> ()
-      | Const _  | Discriminant _ -> incr size
+      | Const _ -> incr size
       end
     | Set_of_closures set_of_closures ->
       let func_decls = Set_of_closures.function_decls set_of_closures in

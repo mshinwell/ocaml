@@ -236,15 +236,6 @@ module Make (Head : Type_head_intf.S
             | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
           in
           force_to_head ~force_to_kind typ
-        | Discriminant discr ->
-          let typ =
-            match Discriminant.sort discr with
-            | Int ->
-              let imm = Immediate.int (Discriminant.to_int discr) in
-              T.this_tagged_immediate_without_alias imm
-            | Is_int | Tag -> T.this_discriminant_without_alias discr
-          in
-          force_to_head ~force_to_kind typ
         | Name name ->
           let t = force_to_kind (TE.find env name) in
           match descr t with
@@ -277,7 +268,7 @@ module Make (Head : Type_head_intf.S
     match Simple.descr simple with
     (* CR mshinwell: Does this need to use some kind of [meet_equation]? *)
     | Name name -> TEE.add_or_replace_equation env_extension name ty
-    | Const _ | Discriminant _ -> env_extension
+    | Const _ -> env_extension
 
   let all_aliases_of env simple_opt =
     match simple_opt with
@@ -362,10 +353,7 @@ module Make (Head : Type_head_intf.S
         | Const const1, Const const2
             when not (Simple.Const.equal const1 const2) ->
           bottom (), TEE.empty ()
-        | Discriminant discriminant1, Discriminant discriminant2
-            when not (Discriminant.equal discriminant1 discriminant2) ->
-          bottom (), TEE.empty ()
-        | (Const _ | Discriminant _ | Name _), _ ->
+        | (Const _ | Name _), _ ->
           let head, env_extension =
             let env = Meet_env.now_meeting env simple1 simple2 in
             meet_head_or_unknown_or_bottom env head1 head2

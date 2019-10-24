@@ -894,9 +894,7 @@ let simplify_phys_equal (op : P.equality_comparison)
   | Naked_number Naked_nativeint ->
     Binary_int_eq_comp_nativeint.simplify op dacc ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Fabricated ->
-    Misc.fatal_errorf "Bad kind for equality comparison: %a"
-      K.print kind
+  | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
   end
 
 let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var

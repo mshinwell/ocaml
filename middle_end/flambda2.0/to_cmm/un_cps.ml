@@ -155,15 +155,6 @@ let const_static _env c =
   | Naked_nativeint t ->
       [C.cint (nativeint_of_targetint t)]
 
-(* Discriminants *)
-
-let discriminant _env d =
-  C.targetint (Targetint.OCaml.to_targetint (Discriminant.to_int d))
-
-let discriminant_static _env d =
-  C.cint (nativeint_of_targetint
-            (Targetint.OCaml.to_targetint (Discriminant.to_int d)))
-
 (* Function symbol *)
 
 let function_name s =
@@ -179,13 +170,11 @@ let simple env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name env n
   | Const c -> const env c, env, Ece.pure
-  | Discriminant d -> discriminant env d, env, Ece.pure
 
 let simple_static env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name_static env n
   | Const c -> `Data (const_static env c)
-  | Discriminant d -> `Data [discriminant_static env d]
 
 (* Arithmetic primitives *)
 
@@ -528,11 +517,11 @@ let prim env dbg p =
 let machtype_of_kind k =
   match (k  : Flambda_kind.t) with
   | Value -> typ_val
-  | Fabricated -> typ_val (* TODO: correct ? *)
   | Naked_number Naked_float -> typ_float
   | Naked_number Naked_int64 -> typ_int64
   | Naked_number (Naked_int32 | Naked_nativeint) ->
       typ_int
+  | Fabricated -> assert false
 
 let machtype_of_kinded_parameter p =
   machtype_of_kind (Kinded_parameter.kind p)

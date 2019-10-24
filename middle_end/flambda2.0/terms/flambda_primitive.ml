@@ -143,7 +143,6 @@ module Block_access_kind = struct
   type t0 =
     | Value of Value_kind.t
     | Naked_float
-    | Fabricated of Value_kind.t
 
   type t =
     | Block of t0
@@ -154,7 +153,6 @@ module Block_access_kind = struct
     match t with
     | Block (Value _) | Array (Value _) -> K.value
     | Block Naked_float | Array Naked_float -> K.naked_float
-    | Block (Fabricated _) | Array (Fabricated _) -> K.fabricated
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Stdlib.compare t0_1 t0_2
@@ -177,8 +175,6 @@ module Block_access_kind = struct
     | Value kind ->
       Format.fprintf ppf "@[(Value %a)@]" Value_kind.print kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
-    | Fabricated kind ->
-      Format.fprintf ppf "@[(Fabricated %a)@]" Value_kind.print kind
 
   let print ppf kind =
     match kind with
@@ -615,9 +611,9 @@ let arg_kind_of_unary_primitive p =
 let result_kind_of_unary_primitive p : result_kind =
   match p with
   | Duplicate_block _ -> Singleton K.value
-  | Is_int -> Singleton K.fabricated
+  | Is_int -> Singleton K.naked_nativeint
   | String_length _ -> Singleton K.value
-  | Get_tag -> Singleton K.fabricated
+  | Get_tag -> Singleton K.naked_nativeint
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
@@ -870,7 +866,6 @@ let result_kind_of_binary_primitive p : result_kind =
   | Int_arith (kind, _)
   | Int_shift (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Float_arith _ -> Singleton K.naked_float
-  (* CR mshinwell: Change [Phys_equal] to return kind [Fabricated] *)
   | Phys_equal _
   | Int_comp _
   | Float_comp _ -> Singleton K.naked_nativeint

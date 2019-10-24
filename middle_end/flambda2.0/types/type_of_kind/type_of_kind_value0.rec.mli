@@ -23,6 +23,8 @@ type t =
           [Naked_nativeint]. *)
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }
+  | Is_int of Type_grammar.t
+  | Get_tag of Type_grammar.t
   | Boxed_float of Type_grammar.t
   | Boxed_int32 of Type_grammar.t
   | Boxed_int64 of Type_grammar.t

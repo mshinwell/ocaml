@@ -170,7 +170,7 @@ let behaviour t : behaviour =
                     arg;
                     arity;
                   }
-                | Name _ | Discriminant _ -> Unknown { arity; }
+                | Name _ -> Unknown { arity; }
                 end
               | _ -> Unknown { arity; }
           end
