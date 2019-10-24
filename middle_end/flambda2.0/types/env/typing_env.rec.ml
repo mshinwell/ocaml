@@ -139,12 +139,10 @@ module One_level = struct
   }
 
   let print_with_cache ~cache:_ ppf
-        { scope; level; just_after_level = _; } =
+        { scope = _; level; just_after_level = _; } =
     Format.fprintf ppf "@[<hov 1>\
-        @[<hov 1>(scope@ %a)@]@ \
         @[<hov 1>(level@ %a)@]\
         @]"
-      Scope.print scope
       Typing_env_level.print level
 
   let create scope level ~just_after_level =
