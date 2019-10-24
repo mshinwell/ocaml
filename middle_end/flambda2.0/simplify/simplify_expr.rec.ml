@@ -1052,13 +1052,17 @@ and simplify_switch
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
   in
+  (*
   Format.eprintf "Simplifying Switch, env@ %a@ %a\n%!"
     TE.print (DE.typing_env (DA.denv dacc)) Switch_expr.print switch;
+    *)
   match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
+  (*
     Format.eprintf "Simplified scrutinee is %a : %a\n%!"
       Simple.print scrutinee T.print scrutinee_ty;
+      *)
     let arms = Switch.arms switch in
     let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
@@ -1076,15 +1080,21 @@ and simplify_switch
                 Switch.print switch
           in
           assert (K.equal (T.kind shape) K.naked_nativeint);
+          (*
           Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
             Discriminant.print arm T.print scrutinee_ty T.print shape;
+            *)
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom ->
+          (*
             Format.eprintf "Switch arm %a is bottom\n%!" Discriminant.print arm;
+            *)
             arms, dacc
-          | Ok (meet_ty, env_extension) ->
+          | Ok (_meet_ty, env_extension) ->
+         (* 
             Format.eprintf "Switch arm %a : %a is kept\n%!"
               Discriminant.print arm T.print meet_ty;
+              *)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
             in

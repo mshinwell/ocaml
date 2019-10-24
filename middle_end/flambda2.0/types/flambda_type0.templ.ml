@@ -657,8 +657,10 @@ Format.eprintf "reifying %a\n%!" print t;
                 begin match Immediate.Set.get_singleton imms with
                 | None -> try_canonical_simple ()
                 | Some imm ->
+                (*
                   Format.eprintf "Type %a reifies to tagged imm %a\n%!"
                     print t Immediate.print imm;
+                    *)
                   Simple (Simple.const (Tagged_immediate imm))
                 end
               | Unknown -> try_canonical_simple ()
