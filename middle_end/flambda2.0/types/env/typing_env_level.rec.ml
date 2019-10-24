@@ -52,7 +52,7 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
   if Variable.Map.is_empty defined_vars then
     Format.fprintf ppf
       "@[<hov 1>(\
-        @[<hov 1>(equations@ @[<hov 1>%a@])@])@ \
+        @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         @]"
       print_equations equations
@@ -61,7 +61,7 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
     Format.fprintf ppf
       "@[<hov 1>(\
         @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-        @[<hov 1>(equations@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]\
         )@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Variable.print)
