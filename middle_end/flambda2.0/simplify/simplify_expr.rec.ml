@@ -1055,10 +1055,6 @@ and simplify_switch
   match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
-(*
-Format.eprintf "scrutinee_ty %a in env@ %a\n%!"
-  T.print scrutinee_ty TE.print (DE.typing_env (DA.denv dacc));
-*)
     let arms = Switch.arms switch in
     let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
@@ -1068,43 +1064,21 @@ Format.eprintf "scrutinee_ty %a in env@ %a\n%!"
             | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
               T.this_untagged_immediate imm
-            | Is_int, Is_int -> (*T.this_discriminant arm*)
-              T.is_int ~is_int:arm
-            | Tag, Tag { tags_to_sizes = _; } ->
-(*
-              T.this_discriminant arm
-*)
+            | Is_int, Is_int -> T.is_int ~is_int:arm
               (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
-              T.get_tag ~tag:arm
+            | Tag, Tag { tags_to_sizes = _; } -> T.get_tag ~tag:arm
             | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom ->
-(*
-Format.eprintf "Arm %a being discarded\n%!" Discriminant.print arm;
-*)
             arms, dacc
           | Ok (_meet_ty, env_extension) ->
-(*
-Format.eprintf "Arm %a being kept\n%!" Discriminant.print arm;
-*)
-(*
-Format.eprintf "scrutinee_ty %a shape %a meet_ty %a extension %a\n%!"
-  T.print scrutinee_ty T.print shape T.print _meet_ty TEE.print env_extension;
-*)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
             in
             let dacc, id =
-(*
-Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
-  Simple.print scrutinee
-  Discriminant.print arm
-  Continuation.print cont
-  TE.print typing_env_at_use;
- *)
               DA.record_continuation_use dacc cont Normal
                 ~typing_env_at_use
                 ~arg_types:[]
@@ -1167,12 +1141,6 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         ([], Discriminant.Map.empty, Discriminant.Map.empty,
           Discriminant.Map.empty)
     in
-(*
-Format.eprintf "Arms: %a.@ Identity arms: %a@ Not arms: %a\n%!"
-  (Discriminant.Map.print Continuation.print) arms
-  Discriminant.Set.print (Discriminant.Map.keys identity_arms)
-  Discriminant.Set.print (Discriminant.Map.keys not_arms);
-*)
     let switch_is_identity =
       let arm_discrs = Discriminant.Map.keys arms in
       let identity_arms_discrs = Discriminant.Map.keys identity_arms in
@@ -1186,9 +1154,6 @@ Format.eprintf "Arms: %a.@ Identity arms: %a@ Not arms: %a\n%!"
     let switch_is_boolean_not =
       let arm_discrs = Discriminant.Map.keys arms in
       let not_arms_discrs = Discriminant.Map.keys not_arms in
-(*
-Format.eprintf "arm_discrs for not:@ %a\n\n%!" Discriminant.Set.print arm_discrs;
-*)
       if (not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set))
         || (not (Discriminant.Set.equal arm_discrs not_arms_discrs))
       then
