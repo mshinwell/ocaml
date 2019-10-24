@@ -61,6 +61,12 @@ val lub_component
   -> machtype_component
   -> machtype_component
 
+(** Greatest lower bound of two [machtype_component]s. *)
+val glb_component
+   : machtype_component
+  -> machtype_component
+  -> machtype_component
+
 (** Returns [true] iff the first supplied [machtype_component] is greater than
     or equal to the second under the relation used by [lub_component]. *)
 val ge_component

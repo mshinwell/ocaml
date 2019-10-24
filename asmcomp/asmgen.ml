@@ -73,6 +73,8 @@ let compile_fundecl ~ppf_dump fd_cmm =
   fd_cmm
   ++ Profile.record ~accumulate:true "selection" Selection.fundecl
   ++ pass_dump_if ppf_dump dump_selection "After instruction selection"
+  ++ Profile.record ~accumulate:true "regtype" Regtype.fundecl
+(*++ pass_dump_if ppf_dump (ref false) "After register typing"*)
   ++ Profile.record ~accumulate:true "comballoc" Comballoc.fundecl
   ++ pass_dump_if ppf_dump dump_combine "After allocation combining"
   ++ Profile.record ~accumulate:true "cse" CSE.fundecl
