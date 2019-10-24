@@ -91,6 +91,8 @@ val to_name : t -> (Rec_info.t option * Name.t) option
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
+val is_const : t -> bool
+
 val is_symbol : t -> bool
 
 val is_var : t -> bool

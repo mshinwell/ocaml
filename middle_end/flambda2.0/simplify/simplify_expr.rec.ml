@@ -1071,6 +1071,7 @@ and simplify_switch
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
+          assert (K.equal (T.kind shape) K.naked_nativeint);
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom ->
             arms, dacc
@@ -1198,6 +1199,11 @@ and simplify_switch
               (Expr.create_apply_cont apply_cont))
         | None ->
           let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
+          if Simple.is_const scrutinee then begin
+            Misc.fatal_errorf "[Switch] with constant scrutinee should have \
+                been simplified away:@ %a"
+              Expr.print expr
+          end;
           expr, user_data, uacc
     in
     let expr =

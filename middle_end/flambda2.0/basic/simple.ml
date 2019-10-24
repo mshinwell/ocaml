@@ -145,6 +145,11 @@ let is_var t =
   | Name (Var _) | Rec_name (Var _, _) -> true
   | _ -> false
 
+let is_const t =
+  match t with
+  | Const _ -> true
+  | _ -> false
+
 let is_symbol t =
   match t with
   | Name (Symbol _) | Rec_name (Symbol _, _) -> true
