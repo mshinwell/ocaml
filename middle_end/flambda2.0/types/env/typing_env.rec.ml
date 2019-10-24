@@ -182,6 +182,7 @@ let is_empty t =
     && Symbol.Map.is_empty t.defined_symbols
 
 (* CR mshinwell: Should print name occurrence kinds *)
+(* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
          defined_symbols;
@@ -189,19 +190,17 @@ let print_with_cache ~cache ppf
   if is_empty t then
     Format.pp_print_string ppf "Empty"
   else
+    let levels =
+      Scope.Map.add (One_level.scope current_level) current_level prev_levels
+    in
     Printing_cache.with_cache cache ppf "env" t (fun ppf () ->
       Format.fprintf ppf
         "@[<hov 1>(\
-            @[<hov 1>(prev_levels@ %a)@]@ \
-            @[<hov 1>(current_level@ %a)@]@ \
-            @[<hov 1>(defined_symbols@ %a)@]@ \
-            @[<hov 1>(aliases@ %a)@]\
+            @[<hov 1>(levels@ %a)@]@ \
+            @[<hov 1>(defined_symbols@ %a)@]\
             )@]"
-        (Scope.Map.print (One_level.print_with_cache ~cache)) prev_levels
-        (One_level.print_with_cache ~cache) current_level
-        (Symbol.Map.print K.print) defined_symbols
-        Aliases.print
-        (Cached.aliases (One_level.just_after_level current_level)))
+        (Scope.Map.print (One_level.print_with_cache ~cache)) levels
+        (Symbol.Map.print K.print) defined_symbols)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
