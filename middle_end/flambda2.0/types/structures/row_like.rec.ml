@@ -44,15 +44,28 @@ struct
     at_least : Maps_to.t Tag_or_unknown_and_index.Map.t;
   }
 
-  let print_with_cache ~cache ppf ({ known; at_least } : t) =
-    Format.fprintf ppf 
-      "@[<hov 1>(\
-         @[<hov 1>(known@ %a)@]@ \
-         @[<hov 1>(at_least@ %a)@]\
-         )@]"
-      (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
-      (Tag_or_unknown_and_index.Map.print (Maps_to.print_with_cache ~cache))
-      at_least
+  let is_bottom { known; at_least; } =
+    Tag_and_index.Map.is_empty known
+      && Tag_or_unknown_and_index.Map.is_empty at_least
+
+  let print_with_cache ~cache ppf (({ known; at_least } as t) : t) =
+    if is_bottom t then
+      (* CR mshinwell: factor out (also in [Type_descr]) *)
+      let colour = Flambda_colours.top_or_bottom_type () in
+      if !Clflags.flambda2_unicode then
+        Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
+          colour (Flambda_colours.normal ())
+      else
+        Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
+    else
+      Format.fprintf ppf 
+        "@[<hov 1>(\
+           @[<hov 1>(known@ %a)@]@ \
+           @[<hov 1>(at_least@ %a)@]\
+           )@]"
+        (Tag_and_index.Map.print (Maps_to.print_with_cache ~cache)) known
+        (Tag_or_unknown_and_index.Map.print (Maps_to.print_with_cache ~cache))
+        at_least
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -201,10 +214,6 @@ Format.eprintf "RL meet is returning bottom\n%!";
     match Join.meet_or_join (Meet_env.create env) t1 t2 with
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
-
-  let is_bottom { known; at_least; } =
-    Tag_and_index.Map.is_empty known
-      && Tag_or_unknown_and_index.Map.is_empty at_least
 
   let known t = t.known
   let at_least t = t.at_least

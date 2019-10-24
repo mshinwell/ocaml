@@ -1069,20 +1069,27 @@ and simplify_switch
             | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
               T.this_tagged_immediate imm
-            | Is_int, Is_int ->
+            | Is_int, Is_int -> (*T.this_discriminant arm*)
               T.is_int ~is_int:arm
             | Tag, Tag { tags_to_sizes = _; } ->
+(*
+              T.this_discriminant arm
+*)
               (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
               T.get_tag ~tag:arm
             | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
+Format.eprintf "scrutinee_ty %a in env@ %a\n%!"
+  T.print scrutinee_ty TE.print typing_env_at_use;
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom -> arms, dacc
           | Ok (_meet_ty, env_extension) ->
+(*
 Format.eprintf "scrutinee_ty %a shape %a meet_ty %a extension %a\n%!"
   T.print scrutinee_ty T.print shape T.print _meet_ty TEE.print env_extension;
+*)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
             in

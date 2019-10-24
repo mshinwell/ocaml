@@ -316,7 +316,7 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
       | Fabricated _ -> wrong_kind ()
 
-  let prove_tags env t : Tag.Set.t proof =
+  let prove_tags_must_be_a_block env t : Tag.Set.t proof =
     let wrong_kind () =
       Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
     in
@@ -328,13 +328,16 @@ module Make
       | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.immediates with
         | Unknown -> Unknown
-        | Known _ ->
-          match blocks_imms.blocks with
-          | Unknown -> Unknown
-          | Known blocks ->
-            match Row_like.For_blocks.all_tags blocks with
+        | Known imms ->
+          if not (Row_like.For_immediates.is_bottom imms) then
+            Invalid
+          else
+            match blocks_imms.blocks with
             | Unknown -> Unknown
-            | Known tags -> Proved tags
+            | Known blocks ->
+              match Row_like.For_blocks.all_tags blocks with
+              | Unknown -> Unknown
+              | Known tags -> Proved tags
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
@@ -357,6 +360,9 @@ module Make
       match resolved with
       | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
         begin match blocks_imms.immediates with
+        (* CR mshinwell: Care.  Should this return [Unknown] or [Invalid] if
+           there is the possibility of the type representing a tagged
+           immediate? *)
         | Unknown -> Unknown
         | Known _ ->
           match blocks_imms.blocks with
@@ -545,7 +551,7 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
         | Invalid -> Invalid
         end
       | Fabricated (Ok (Get_tag block_ty)) ->
-        begin match prove_tags env block_ty with
+        begin match prove_tags_must_be_a_block env block_ty with
         | Proved tags ->
           let discrs =
             Tag.Set.fold (fun tag discrs ->
@@ -660,6 +666,41 @@ Format.eprintf "reifying %a\n%!" print t;
             else
               try_canonical_simple ()
           | _, _ -> try_canonical_simple ()
+          end
+        (* CR mshinwell: share code with [prove_equals_discriminants], above *)
+        | Fabricated (Ok (Discriminants discrs)) ->
+          begin match Row_like.For_discriminants.all discrs with
+          | Known discrs ->
+            begin match Discriminant.Set.get_singleton discrs with
+            | None -> try_canonical_simple ()
+            | Some discr -> Simple (Simple.discriminant discr)
+            end
+          | Unknown -> try_canonical_simple ()
+          end
+        | Fabricated (Ok (Is_int scrutinee_ty)) ->
+          begin match prove_is_int env scrutinee_ty with
+          | Proved true ->
+            Simple (Simple.discriminant Discriminant.is_int_true)
+          | Proved false ->
+            Simple (Simple.discriminant Discriminant.is_int_false)
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
+          end
+        | Fabricated (Ok (Get_tag block_ty)) ->
+          begin match prove_tags_must_be_a_block env block_ty with
+          | Proved tags ->
+            let discrs =
+              Tag.Set.fold (fun tag discrs ->
+                  Discriminant.Set.add (Discriminant.of_tag tag) discrs)
+                tags
+                Discriminant.Set.empty
+            in
+            begin match Discriminant.Set.get_singleton discrs with
+            | None -> try_canonical_simple ()
+            | Some discr -> Simple (Simple.discriminant discr)
+            end
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
           end
         | Value Bottom
         | Naked_float Bottom

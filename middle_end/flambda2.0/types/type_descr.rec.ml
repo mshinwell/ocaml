@@ -38,22 +38,24 @@ module Make (Head : Type_head_intf.S
       match t with
       | No_alias Unknown ->
         if !Clflags.flambda2_unicode then
-          Format.fprintf ppf "%s\u{22a4}%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+            colour (Flambda_colours.normal ())
         else
-          Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%sT@<0>%s" colour (Flambda_colours.normal ())
       | No_alias Bottom ->
         if !Clflags.flambda2_unicode then
-          Format.fprintf ppf "%s\u{22a5}%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
+            colour (Flambda_colours.normal ())
         else
-          Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
+          Format.fprintf ppf "@<0>%s_|_@<0>%s" colour (Flambda_colours.normal ())
       | No_alias (Ok head) -> Head.print_with_cache ~cache ppf head
       | Equals simple ->
-        Format.fprintf ppf "@[(%s=%s %a)@]"
+        Format.fprintf ppf "@[(@<0>%s=@<0>%s %a)@]"
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Simple.print simple
       | Type export_id ->
-        Format.fprintf ppf "@[(%s=export_id%s %a)@]"
+        Format.fprintf ppf "@[(@<0>%s=export_id@<0>%s %a)@]"
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Export_id.print export_id
