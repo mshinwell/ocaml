@@ -616,6 +616,8 @@ Format.eprintf "result type for boxed float proof:@ %a\n%!"
     | Cannot_reify
     | Invalid
 
+  (* CR mshinwell: Think more to identify all the cases that should be
+     in this function. *)
   let reify env ~min_occurrence_kind t : reification_result =
 (*
 Format.eprintf "reifying %a\n%!" print t;
@@ -682,6 +684,18 @@ Format.eprintf "reifying %a\n%!" print t;
                 else
                   try_canonical_simple ()
               end
+            else if Row_like.For_blocks.is_bottom blocks then
+              match prove_equals_untagged_immediates env imms with
+              | Proved imms ->
+                begin match Immediate.Set.get_singleton imms with
+                | None -> try_canonical_simple ()
+                | Some imm ->
+                  Format.eprintf "Type %a reifies to tagged imm %a\n%!"
+                    print t Immediate.print imm;
+                  Simple (Simple.const (Tagged_immediate imm))
+                end
+              | Unknown -> try_canonical_simple ()
+              | Invalid -> Invalid
             else
               try_canonical_simple ()
           | _, _ -> try_canonical_simple ()
