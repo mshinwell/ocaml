@@ -80,5 +80,7 @@ struct
     | Get_tag typ1, Get_tag typ2 ->
       Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env typ1 typ2)
         ~f:(fun (typ, env_extension) -> Get_tag typ, env_extension)
-    | (Discriminants _ | Is_int _ | Get_tag _), _ -> Absorbing
+    | (Discriminants _ | Is_int _ | Get_tag _), _ ->
+      (* CR mshinwell: Unsure this is correct for meet. *)
+      Absorbing
 end

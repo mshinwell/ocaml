@@ -1060,6 +1060,10 @@ and simplify_switch
   match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
+(*
+Format.eprintf "scrutinee_ty %a in env@ %a\n%!"
+  T.print scrutinee_ty TE.print (DE.typing_env (DA.denv dacc));
+*)
     let arms = Switch.arms switch in
     let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
@@ -1081,11 +1085,16 @@ and simplify_switch
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
-Format.eprintf "scrutinee_ty %a in env@ %a\n%!"
-  T.print scrutinee_ty TE.print typing_env_at_use;
           match T.meet typing_env_at_use scrutinee_ty shape with
-          | Bottom -> arms, dacc
+          | Bottom ->
+(*
+Format.eprintf "Arm %a being discarded\n%!" Discriminant.print arm;
+*)
+            arms, dacc
           | Ok (_meet_ty, env_extension) ->
+(*
+Format.eprintf "Arm %a being kept\n%!" Discriminant.print arm;
+*)
 (*
 Format.eprintf "scrutinee_ty %a shape %a meet_ty %a extension %a\n%!"
   T.print scrutinee_ty T.print shape T.print _meet_ty TEE.print env_extension;
@@ -1163,10 +1172,16 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
         ([], Discriminant.Map.empty, Discriminant.Map.empty,
           Discriminant.Map.empty)
     in
+(*
+Format.eprintf "Arms: %a.@ Identity arms: %a@ Not arms: %a\n%!"
+  (Discriminant.Map.print Continuation.print) arms
+  Discriminant.Set.print (Discriminant.Map.keys identity_arms)
+  Discriminant.Set.print (Discriminant.Map.keys not_arms);
+*)
     let switch_is_identity =
       let arm_discrs = Discriminant.Map.keys arms in
-      let identity_arms_args = Discriminant.Map.keys identity_arms in
-      if not (Discriminant.Set.equal arm_discrs identity_arms_args) then
+      let identity_arms_discrs = Discriminant.Map.keys identity_arms in
+      if not (Discriminant.Set.equal arm_discrs identity_arms_discrs) then
         None
       else
         Discriminant.Map.data identity_arms
@@ -1175,7 +1190,13 @@ Format.eprintf "Switch on %a, arm %a, target %a, typing_env_at_use@ %a\n%!"
     in
     let switch_is_boolean_not =
       let arm_discrs = Discriminant.Map.keys arms in
-      if not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set) then
+      let not_arms_discrs = Discriminant.Map.keys not_arms in
+(*
+Format.eprintf "arm_discrs for not:@ %a\n\n%!" Discriminant.Set.print arm_discrs;
+*)
+      if (not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set))
+        || (not (Discriminant.Set.equal arm_discrs not_arms_discrs))
+      then
         None
       else
         Discriminant.Map.data not_arms
