@@ -173,7 +173,7 @@ module Make
     | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
@@ -294,7 +294,7 @@ module Make
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
@@ -325,7 +325,7 @@ module Make
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.immediates with
         | Unknown -> Unknown
         | Known imms ->
@@ -358,7 +358,7 @@ module Make
     | Const _ | Discriminant _ -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+      | Value (Ok (Variant blocks_imms)) ->
         begin match blocks_imms.immediates with
         (* CR mshinwell: Care.  Should this return [Unknown] or [Invalid] if
            there is the possibility of the type representing a tagged
@@ -625,7 +625,7 @@ Format.eprintf "reifying %a\n%!" print t;
           | Some canonical_simple -> Simple canonical_simple
         in
         match resolved with
-        | Value (Ok (Blocks_and_tagged_immediates blocks_imms)) ->
+        | Value (Ok (Variant blocks_imms)) ->
           begin match blocks_imms.blocks, blocks_imms.immediates with
           | Known blocks, Known imms ->
             if Row_like.For_immediates.is_bottom imms then

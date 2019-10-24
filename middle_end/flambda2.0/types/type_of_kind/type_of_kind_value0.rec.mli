@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type t =
-  | Blocks_and_tagged_immediates of {
+  | Variant of {
       immediates : Row_like.For_immediates.t Or_unknown.t;
       blocks : Row_like.For_blocks.t Or_unknown.t;
     }

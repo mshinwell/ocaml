@@ -199,7 +199,7 @@ let get_alias t =
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
    a tagged immediate [Simple]), then it should be.  In the tagged immediate
-   case this would mean forbidding Blocks_and_tagged_immediates with only
+   case this would mean forbidding Variant with only
    a single immediate.  Although this state needs to exist during [meet]
    or whenever heads are expanded. *)
 
@@ -347,7 +347,7 @@ let box_nativeint (t : t) : t =
       print t
 
 let any_tagged_immediate () : t =
-  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+  Value (T_V.create_no_alias (Ok (Variant {
     immediates = Unknown;
     blocks = Known (Row_like.For_blocks.create_bottom ());
   })))
@@ -363,7 +363,7 @@ let these_tagged_immediates0 ~no_alias imms : t =
     else
       let immediates = Row_like.For_immediates.create imms in
       Value (T_V.create_no_alias (
-        Ok (Blocks_and_tagged_immediates {
+        Ok (Variant {
           immediates = Known immediates;
           blocks = Known (Row_like.For_blocks.create_bottom ());
         })))
@@ -395,7 +395,7 @@ let this_discriminant_without_alias discr : t =
   these_discriminants0 ~no_alias:true (Discriminant.Set.singleton discr)
 
 let any_block () : t =
-  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+  Value (T_V.create_no_alias (Ok (Variant {
     immediates = Known (Row_like.For_immediates.create_bottom ());
     blocks = Unknown;
   })))
@@ -404,7 +404,7 @@ let any_block_with_tag tag : t =
   let blocks =
     Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
   in
-  Value (T_V.create_no_alias (Ok (Blocks_and_tagged_immediates {
+  Value (T_V.create_no_alias (Ok (Variant {
     immediates = Known (Row_like.For_immediates.create_bottom ());
     blocks = Known blocks;
   })))
@@ -466,7 +466,7 @@ let immutable_block tag ~fields =
     Misc.fatal_error "Block too long for target"
   | Some _size ->
     Value (T_V.create_no_alias (Ok (
-      Blocks_and_tagged_immediates {
+      Variant {
         immediates = Known (Row_like.For_immediates.create_bottom ());
         blocks = Known (Row_like.For_blocks.create ~field_tys:fields (Closed tag));
       })))
@@ -479,7 +479,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (
-    Blocks_and_tagged_immediates {
+    Variant {
       immediates = Known (Row_like.For_immediates.create_bottom ());
       blocks = Known (Row_like.For_blocks.create ~field_tys (Open Unknown));
     })))

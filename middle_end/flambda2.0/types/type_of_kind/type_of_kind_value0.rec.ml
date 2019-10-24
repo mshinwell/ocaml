@@ -23,7 +23,7 @@ module Blocks = Row_like.For_blocks
 module Immediates = Row_like.For_immediates
 
 type t =
-  | Blocks_and_tagged_immediates of {
+  | Variant of {
       immediates : Immediates.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
@@ -39,13 +39,13 @@ type t =
 
 let print_with_cache ~cache ppf t =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
        they're empty. *)
     Format.fprintf ppf
-      "@[<hov 1>(Blocks_and_immediates@ \
+      "@[<hov 1>(Variant@ \
         @[<hov 1>(blocks@ %a)@]@ \
-        @[<hov 1>(immediates@ %a)@]\
+        @[<hov 1>(tagged_imms@ %a)@]\
         )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
       (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
@@ -73,7 +73,7 @@ let print_with_cache ~cache ppf t =
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm =
+let apply_name_permutation_variant blocks immediates perm =
   let immediates' =
     Or_unknown.map immediates ~f:(fun immediates ->
       Immediates.apply_name_permutation immediates perm)
@@ -89,13 +89,13 @@ let apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm =
 
 let apply_name_permutation t perm =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     begin match
-      apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm
+      apply_name_permutation_variant blocks immediates perm
     with
     | None -> t
     | Some (blocks, immediates) ->
-      Blocks_and_tagged_immediates { blocks; immediates; }
+      Variant { blocks; immediates; }
     end
   | Boxed_float ty ->
     let ty' = T.apply_name_permutation ty perm in
@@ -128,7 +128,7 @@ let apply_name_permutation t perm =
 
 let free_names t =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
       (Or_unknown.free_names Immediates.free_names immediates)
@@ -155,7 +155,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
             let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
             Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
-  | Blocks_and_tagged_immediates _
+  | Variant _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -193,7 +193,7 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join_blocks_and_tagged_immediates env
+  let meet_or_join_variant env
         ~blocks1 ~imms1 ~blocks2 ~imms2 : _ Or_bottom.t =
     let blocks =
       E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
@@ -235,13 +235,13 @@ struct
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
     match t1, t2 with
-    | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
-      Blocks_and_tagged_immediates { blocks = blocks2; immediates = imms2; } ->
+    | Variant { blocks = blocks1; immediates = imms1; },
+      Variant { blocks = blocks2; immediates = imms2; } ->
       Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_blocks_and_tagged_immediates env
+        (meet_or_join_variant env
           ~blocks1 ~imms1 ~blocks2 ~imms2)
         ~f:(fun (blocks, immediates, env_extension) ->
-          Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
+          Variant { blocks; immediates; }, env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env n1 n2)
@@ -273,7 +273,7 @@ struct
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
-    | (Blocks_and_tagged_immediates _
+    | (Variant _
         | Boxed_float _
         | Boxed_int32 _
         | Boxed_int64 _
