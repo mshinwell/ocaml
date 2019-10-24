@@ -141,7 +141,6 @@ let print_specific_operation printreg op ppf arg =
 let infer_specific arg res = function
   | Ilea _ ->
       Array.fold_left (fun acc r ->
-          `Constraint (res.(0), r) ::
           `Bound (r, Cmm.Int) :: acc
         ) [] arg
   | Istore_int _ ->
@@ -161,7 +160,7 @@ let infer_specific arg res = function
   | Ifloatsqrtf _ ->
       [ `Bound (arg.(0), Cmm.Val);
         `Bound (res.(0), Cmm.Float) ]
-  | Isextend32 ->
+  | Isextend32 | Izextend32 ->
       [ `Bound (arg.(0), Cmm.Int);
         `Bound (res.(0), Cmm.Int) ]
   | Izextend32 ->

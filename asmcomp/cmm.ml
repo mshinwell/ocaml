@@ -61,6 +61,23 @@ let lub_component comp1 comp2 =
     (* Float unboxing code must be sure to avoid this case. *)
     assert false
 
+let glb_component comp1 comp2 =
+  match comp1, comp2 with
+  | Int, Int -> Int
+  | Int, Val -> Int
+  | Int, Addr -> Int
+  | Val, Int -> Int
+  | Val, Val -> Val
+  | Val, Addr -> Val
+  | Addr, Int -> Int
+  | Addr, Addr -> Addr
+  | Addr, Val -> Val
+  | Float, Float -> Float
+  | (Int | Addr | Val), Float
+  | Float, (Int | Addr | Val) ->
+    (* Float unboxing code must be sure to avoid this case. *)
+      assert false
+
 let ge_component comp1 comp2 =
   match comp1, comp2 with
   | Int, Int -> true

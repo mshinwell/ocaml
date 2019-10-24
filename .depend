@@ -1930,10 +1930,12 @@ asmcomp/afl_instrument.cmi : \
     asmcomp/cmm.cmi
 asmcomp/arch.cmo : \
     utils/config.cmi \
-    utils/clflags.cmi
+    utils/clflags.cmi \
+    asmcomp/cmm.cmi
 asmcomp/arch.cmx : \
     utils/config.cmx \
-    utils/clflags.cmx
+    utils/clflags.cmx \
+    asmcomp/cmm.cmx
 asmcomp/asmgen.cmo : \
     lambda/translmod.cmi \
     asmcomp/split.cmi \
