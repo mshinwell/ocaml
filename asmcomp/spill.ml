@@ -271,55 +271,73 @@ let rec reload i before =
 (* CR mshinwell for pchambart: Try to test the new algorithms for dealing
    with Icatch. *)
 
-let spill_at_exit = ref []
-let find_spill_at_exit k =
+type spill_env =
+  { at_exit : (int * (bool ref * Reg.Set.t)) list;
+    at_raise : Reg.Set.t;
+    last_regular_trywith_handler : Reg.Set.t;
+    loop : bool;
+    arm : bool;
+    catch : bool;
+  }
+
+let initial_env =
+  { at_exit = [];
+    at_raise = Reg.Set.empty;
+    last_regular_trywith_handler = Reg.Set.empty;
+    loop = false;
+    arm = false;
+    catch = false;
+  }
+
+let find_spill_at_exit env k =
   try
-    let used, set = List.assoc k !spill_at_exit in
+    let used, set = List.assoc k env.at_exit in
     used := true;
     set
   with
   | Not_found -> Misc.fatal_error "Spill.find_spill_at_exit"
 
-let spill_at_raise = ref Reg.Set.empty
-let inside_loop = ref false
-and inside_arm = ref false
-and inside_catch = ref false
+let at_raise_from_trap_stack env ts =
+  match ts with
+  | Uncaught -> Reg.Set.empty
+  | Generic_trap _ -> env.last_regular_trywith_handler
+  | Specific_trap (nfail, _) -> find_spill_at_exit env nfail
 
 let add_spills regset i =
   Reg.Set.fold
     (fun r i -> instr_cons (Iop Ispill) [|r|] [|spill_reg r|] i)
     regset i
 
-let rec spill i finally =
+let rec spill env i finally =
   match i.desc with
     Iend ->
       (i, finally)
   | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (i, Reg.Set.empty)
   | Iop Ireload ->
-      let (new_next, after) = spill i.next finally in
+      let (new_next, after) = spill env i.next finally in
       let before1 = Reg.diff_set_array after i.res in
       (instr_cons i.desc i.arg i.res new_next,
        Reg.add_set_array before1 i.res)
   | Iop _ ->
-      let (new_next, after) = spill i.next finally in
+      let (new_next, after) = spill env i.next finally in
       let before1 = Reg.diff_set_array after i.res in
       let before =
         match i.desc with
           Iop Icall_ind _ | Iop(Icall_imm _) | Iop(Iextcall _) | Iop(Ialloc _)
         | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm((Icheckbound _), _)) ->
-            Reg.Set.union before1 !spill_at_raise
+            Reg.Set.union before1 env.at_raise
         | _ ->
             before1 in
       (instr_cons_debug i.desc i.arg i.res i.dbg
                   (add_spills (Reg.inter_set_array after i.res) new_next),
        before)
   | Iifthenelse(test, ifso, ifnot) ->
-      let (new_next, at_join) = spill i.next finally in
-      let (new_ifso, before_ifso) = spill ifso at_join in
-      let (new_ifnot, before_ifnot) = spill ifnot at_join in
+      let (new_next, at_join) = spill env i.next finally in
+      let (new_ifso, before_ifso) = spill env ifso at_join in
+      let (new_ifnot, before_ifnot) = spill env ifnot at_join in
       if
-        !inside_loop || !inside_arm || !inside_catch
+        env.loop || env.arm || env.catch
       then
         (instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
                      i.arg i.res new_next,
@@ -339,36 +357,39 @@ let rec spill i finally =
                        spill_ifnot_branch)
       end
   | Iswitch(index, cases) ->
-      let (new_next, at_join) = spill i.next finally in
-      let saved_inside_arm = !inside_arm in
-      inside_arm := true ;
+      let (new_next, at_join) = spill env i.next finally in
+      let env = { env with arm = true; } in
       let before = ref Reg.Set.empty in
       let new_cases =
         Array.map
           (fun c ->
-            let (new_c, before_c) = spill c at_join in
+            let (new_c, before_c) = spill env c at_join in
             before := Reg.Set.union !before before_c;
             new_c)
           cases in
-      inside_arm := saved_inside_arm ;
       (instr_cons (Iswitch(index, new_cases)) i.arg i.res new_next,
        !before)
   | Icatch(rec_flag, handlers, body) ->
-      let (new_next, at_join) = spill i.next finally in
-      let saved_inside_catch = !inside_catch in
-      inside_catch := true ;
-      let previous_spill_at_exit = !spill_at_exit in
+      let (new_next, at_join) = spill env i.next finally in
       let spill_at_exit_add at_exits = List.map2
           (fun (nfail,_,_) at_exit -> nfail, (ref false, at_exit))
           handlers at_exits
       in
       let rec fixpoint at_exits =
         let spill_at_exit_add = spill_at_exit_add at_exits in
-        spill_at_exit := spill_at_exit_add @ !spill_at_exit;
+        let new_at_exit = spill_at_exit_add @ env.at_exit in
         let res =
-          List.map (fun (_, _, handler) -> spill handler at_join) handlers
+          List.map
+            (fun (_, ts, handler) ->
+               let env =
+                 { env with at_exit = new_at_exit;
+                            at_raise = at_raise_from_trap_stack env ts;
+                            catch = true;
+                 }
+               in
+               spill env handler at_join)
+            handlers
         in
-        spill_at_exit := previous_spill_at_exit;
         match rec_flag with
         | Cmm.Nonrecursive ->
             res
@@ -383,11 +404,9 @@ let rec spill i finally =
             else fixpoint (List.map snd res)
       in
       let res = fixpoint (List.map (fun _ -> Reg.Set.empty) handlers) in
-      inside_catch := saved_inside_catch ;
       let spill_at_exit_add = spill_at_exit_add (List.map snd res) in
-      spill_at_exit := spill_at_exit_add @ !spill_at_exit;
-      let (new_body, before) = spill body at_join in
-      spill_at_exit := previous_spill_at_exit;
+      let env_body = { env with at_exit = spill_at_exit_add @ env.at_exit; } in
+      let (new_body, before) = spill env_body body at_join in
       let new_handlers = List.map2
           (fun (nfail, ts, _) (handler, _) -> nfail, ts, handler)
           handlers res in
@@ -395,21 +414,26 @@ let rec spill i finally =
          i.arg i.res new_next,
        before)
   | Iexit (nfail, _traps) ->
-      (i, find_spill_at_exit nfail)
-  | Itrywith(body, Regular, handler) ->
-      let (new_next, at_join) = spill i.next finally in
-      let (new_handler, before_handler) = spill handler at_join in
-      let saved_spill_at_raise = !spill_at_raise in
-      spill_at_raise := before_handler;
-      let (new_body, before_body) = spill body at_join in
-      spill_at_raise := saved_spill_at_raise;
-      (instr_cons (Itrywith(new_body, Regular, new_handler)) i.arg i.res new_next,
+      (i, find_spill_at_exit env nfail)
+  | Itrywith(body, kind, handler) ->
+      let (new_next, at_join) = spill env i.next finally in
+      let (new_handler, before_handler) = spill env handler at_join in
+      let env_body =
+        match kind with
+        | Regular ->
+            { env with at_raise = before_handler;
+                       last_regular_trywith_handler = before_handler;
+            }
+        | Delayed nfail ->
+            { env with at_exit =
+                         (nfail, (ref false, before_handler)) :: env.at_exit;
+            }
+      in
+      let (new_body, before_body) = spill env_body body at_join in
+      (instr_cons (Itrywith(new_body, kind, new_handler)) i.arg i.res new_next,
        before_body)
-  | Itrywith(_body, Delayed _nfail, _handler) ->
-      (* TODO: ensure correct value for spill_at_raise *)
-      assert false
   | Iraise _ ->
-      (i, !spill_at_raise)
+      (i, env.at_raise)
 
 (* Entry point *)
 
@@ -423,7 +447,7 @@ let fundecl f =
   reset ();
 
   let (body1, _) = reload f.fun_body Reg.Set.empty in
-  let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
+  let (body2, tospill_at_entry) = spill initial_env body1 Reg.Set.empty in
   let new_body =
     add_spills (Reg.inter_set_array tospill_at_entry f.fun_args) body2 in
   spill_env := Reg.Map.empty;
