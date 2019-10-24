@@ -37,6 +37,12 @@ val one_equation : Name.t -> Type_grammar.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
+val add_cse
+   : t
+  -> Flambda_primitive.Eligible_for_cse.t
+  -> bound_to:Simple.t
+  -> t
+
 val meet : Meet_env.t -> t -> t -> t
 
 val n_way_join

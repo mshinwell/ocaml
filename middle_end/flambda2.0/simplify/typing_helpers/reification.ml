@@ -109,6 +109,13 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to =
       (* It is possible that the only [Simple] that [reify] could return is
          in fact [bound_to] -- for example when all other aliases are of
          an unsuitable occurrence kind. *)
+      let dacc =
+        if Simple.equal simple (Simple.var bound_to) then dacc
+        else
+          let ty = T.alias_type_of (T.kind ty) simple in
+          let denv = DE.add_equation_on_variable denv bound_to ty in
+          DA.with_denv dacc denv
+      in
       if Simple.equal (Simple.var bound_to) simple then term, dacc, ty
       else Reachable.reachable (Named.create_simple simple), dacc, ty
     | Cannot_reify -> term, dacc, ty

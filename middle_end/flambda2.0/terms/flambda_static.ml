@@ -94,6 +94,8 @@ module Static_part = struct
     | Block : Tag.Scannable.t * mutable_or_immutable
               * (Of_kind_value.t list) -> K.value t
     | Fabricated_block : Variable.t -> K.value t
+      (* CR mshinwell: This used to say K.fabricated.  Use a different
+         index from [K.t]? *)
     | Set_of_closures : Flambda.Set_of_closures.t -> K.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
                     -> K.value t

@@ -96,7 +96,7 @@ let sequence x y =
 
 let primitive_boxed_int_of_boxable_number b =
   match (b : Flambda_kind.Boxable_number.t) with
-  | Naked_float -> assert false
+  | Naked_float | Untagged_immediate -> assert false
   | Naked_int32 -> Primitive.Pint32
   | Naked_int64 -> Primitive.Pint64
   | Naked_nativeint -> Primitive.Pnativeint
@@ -104,6 +104,7 @@ let primitive_boxed_int_of_boxable_number b =
 let unbox_number ?(dbg=Debuginfo.none) kind arg =
   match (kind : Flambda_kind.Boxable_number.t) with
   | Naked_float -> unbox_float dbg arg
+  | Untagged_immediate -> untag_int arg dbg
   | _ ->
       let primitive_kind = primitive_boxed_int_of_boxable_number kind in
       unbox_int dbg primitive_kind arg
@@ -111,6 +112,7 @@ let unbox_number ?(dbg=Debuginfo.none) kind arg =
 let box_number ?(dbg=Debuginfo.none) kind arg =
   match (kind : Flambda_kind.Boxable_number.t) with
   | Naked_float -> box_float dbg arg
+  | Untagged_immediate -> tag_int arg dbg
   | _ ->
       let primitive_kind = primitive_boxed_int_of_boxable_number kind in
       box_int_gen dbg primitive_kind arg

@@ -45,7 +45,7 @@ let simplify_project_var closure_element dacc ~original_term
     ~result_var ~result_kind:K.value
 
 let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
-      dacc ~original_term ~arg:_ ~arg_ty:boxed_number_ty ~result_var =
+      dacc ~original_term ~arg ~arg_ty:boxed_number_ty ~result_var =
   let shape, result_kind =
     let result_var = Var_in_binding_pos.var result_var in
     match boxable_number_kind with
@@ -57,10 +57,24 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       T.boxed_int64_alias_to ~naked_int64:result_var, K.naked_int64
     | Naked_nativeint ->
       T.boxed_nativeint_alias_to ~naked_nativeint:result_var, K.naked_nativeint
+    | Untagged_immediate ->
+      T.tagged_immediate_alias_to ~untagged_immediate:result_var,
+        K.naked_nativeint
   in
-  Simplify_primitive_common.simplify_projection
-    dacc ~original_term ~deconstructing:boxed_number_ty
-    ~shape ~result_var ~result_kind
+  let reachable, env_extension, dacc =
+    Simplify_primitive_common.simplify_projection
+      dacc ~original_term ~deconstructing:boxed_number_ty
+      ~shape ~result_var ~result_kind
+  in
+  let box_prim : P.t =
+    Unary (Box_number boxable_number_kind,
+      Simple.var (Var_in_binding_pos.var result_var))
+  in
+  let env_extension =
+    TEE.add_cse env_extension (P.Eligible_for_cse.create_exn box_prim)
+      ~bound_to:arg
+  in
+  reachable, env_extension, dacc
 
 let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
       dacc ~original_term ~arg:_ ~arg_ty:naked_number_ty ~result_var =
@@ -70,54 +84,28 @@ let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
     | Naked_int32 -> T.box_int32 naked_number_ty
     | Naked_int64 -> T.box_int64 naked_number_ty
     | Naked_nativeint -> T.box_nativeint naked_number_ty
+    | Untagged_immediate -> T.tag_immediate naked_number_ty
   in
   Reachable.reachable original_term,
     TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
     dacc
 
-let simplify_is_int dacc ~original_term ~arg: _~arg_ty:scrutinee_ty
-      ~result_var =
+let simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty:_
+      ~result_var ~make_shape =
+  (* CR mshinwell: Check [scrutinee_ty] (e.g. its kind)? *)
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  let proof = T.prove_is_int typing_env scrutinee_ty in
-  let proved discriminant =
-    let ty = T.this_discriminant discriminant in
-    let env_extension = TEE.one_equation name ty in
-    Reachable.reachable original_term, env_extension, dacc
-  in
-  match proof with
-  | Proved true -> proved Discriminant.is_int_true
-  | Proved false -> proved Discriminant.is_int_false
-  | Unknown ->
-    let ty = T.these_discriminants Discriminant.all_is_int_set in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid ->
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+  let env_extension = TEE.one_equation name (make_shape scrutinee) in
+  Reachable.reachable original_term, env_extension, dacc
 
-let simplify_get_tag dacc ~original_term ~arg:_ ~arg_ty:block_ty ~result_var =
-  let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
-  let type_for_tags tags_to_sizes =
-    let discrs =
-      Tag.Map.fold (fun tag _size discrs ->
-          let discr = Discriminant.of_tag tag in
-          Discriminant.Set.add discr discrs)
-        tags_to_sizes
-        Discriminant.Set.empty
-    in
-    T.these_discriminants discrs
-  in
-  match T.prove_tags_and_sizes typing_env block_ty with
-  | Proved tags ->
-    let ty = type_for_tags tags in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Unknown ->
-    let ty = T.unknown K.fabricated in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
-  | Invalid ->
-    let ty = T.bottom K.fabricated in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+let simplify_is_int dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
+      ~result_var =
+  simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty
+    ~result_var ~make_shape:(fun scrutinee -> T.is_int_for_scrutinee ~scrutinee)
+
+let simplify_get_tag dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
+      ~result_var =
+  simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty
+    ~result_var ~make_shape:(fun block -> T.get_tag_for_block ~block)
 
 let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
       ~result_var =

@@ -66,6 +66,14 @@ let add_or_replace_equation { abst; } name ty =
   in
   { abst; }
 
+let add_cse { abst; } prim ~bound_to =
+  let abst =
+    A.pattern_match abst ~f:(fun _defined_names level ->
+      let level = Typing_env_level.add_cse level prim ~bound_to in
+      A.create (Typing_env_level.defined_vars_in_order' level) level)
+  in
+  { abst; }
+
 let meet env (t1 : t) (t2 : t) : t =
   let abst =
     A.pattern_match t1.abst ~f:(fun _ level_1 ->

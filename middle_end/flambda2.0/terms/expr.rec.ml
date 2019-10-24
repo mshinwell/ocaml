@@ -330,7 +330,14 @@ let bind ~bindings ~body =
               Name_permutation.add_variable Name_permutation.empty
                 (Var_in_binding_pos.var var) rhs_var
             in
-            (* CR mshinwell: Think more about this. *)
+            (* CR mshinwell: Think more about this.
+               This is still leaving some let-bindings behind when it
+               shouldn't need to, e.g.
+                 let bar = foo in
+                 switch foo ...
+               seems to be turning into
+                 let bar = foo in
+                 switch bar *)
             create_let var target (apply_name_permutation expr perm)
           | Some _ -> create_let var target expr
           end

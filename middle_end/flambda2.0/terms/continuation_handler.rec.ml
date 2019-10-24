@@ -31,9 +31,11 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 1>@<0>%s%a%s@<0>%s%s%s"
-        (Flambda_colours.expr_keyword ())
+      fprintf ppf "@[<hov 0>@<0>%s%a@<0>%s@<0>%s%s@<0>%s%s%s"
+        (Flambda_colours.continuation_definition ())
         Continuation.print k
+        (Flambda_colours.normal ())
+        (Flambda_colours.expr_keyword ())
         (match recursive with Non_recursive -> "" | Recursive -> " (rec)")
         (Flambda_colours.normal ())
         (if stub then " *stub*" else "")
@@ -170,7 +172,7 @@ let behaviour t : behaviour =
                     arg;
                     arity;
                   }
-                | Name _ | Discriminant _ -> Unknown { arity; }
+                | Name _ -> Unknown { arity; }
                 end
               | _ -> Unknown { arity; }
           end

@@ -74,8 +74,6 @@ module Block_access_kind : sig
   type t0 =
     | Value of Value_kind.t
     | Naked_float
-    (* CR mshinwell: What was [Fabricated] for? *)
-    | Fabricated of Value_kind.t
 
   type t =
     | Block of t0
@@ -363,6 +361,7 @@ module Eligible_for_cse : sig
   include Contains_names.S with type t := t
 
   val create : primitive_application -> t option
+  val create_exn : primitive_application -> t
 
   val create_is_int : immediate_or_block:Name.t -> t
   val create_get_tag : block:Name.t -> t

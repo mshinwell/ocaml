@@ -31,6 +31,8 @@ type expr_primitive =
       * simple_or_prim * simple_or_prim * simple_or_prim
   | Variadic of Flambda_primitive.variadic_primitive * (simple_or_prim list)
   | Checked of { validity_conditions : expr_primitive list;
+                 (** The [validity_conditions] return untagged immediates
+                     representing boolean values. *)
                  primitive : expr_primitive;
                  failure : failure; (* Predefined exception *)
                  dbg : Debuginfo.t }

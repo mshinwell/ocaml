@@ -50,11 +50,15 @@ val tag : Tag.t -> t
 
 val map : t -> f:(Targetint.OCaml.t -> Targetint.OCaml.t) -> t
 
+(* CR mshinwell: bad names *)
 val to_targetint : t -> Targetint.OCaml.t
+val to_targetint' : t -> Targetint.t
 
 val set_to_targetint_set : Set.t -> Targetint.OCaml.Set.t
+val set_to_targetint_set' : Set.t -> Targetint.Set.t
 
 val set_of_targetint_set : Targetint.OCaml.Set.t -> Set.t
+val set_of_targetint_set' : Targetint.Set.t -> Set.t
 
 val neg : t -> t
 val add : t -> t -> t

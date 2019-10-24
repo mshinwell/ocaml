@@ -155,15 +155,6 @@ let const_static _env c =
   | Naked_nativeint t ->
       [C.cint (nativeint_of_targetint t)]
 
-(* Discriminants *)
-
-let discriminant _env d =
-  C.targetint (Targetint.OCaml.to_targetint (Discriminant.to_int d))
-
-let discriminant_static _env d =
-  C.cint (nativeint_of_targetint
-            (Targetint.OCaml.to_targetint (Discriminant.to_int d)))
-
 (* Function symbol *)
 
 let function_name s =
@@ -179,13 +170,11 @@ let simple env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name env n
   | Const c -> const env c, env, Ece.pure
-  | Discriminant d -> discriminant env d, env, Ece.pure
 
 let simple_static env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name_static env n
   | Const c -> `Data (const_static env c)
-  | Discriminant d -> `Data [discriminant_static env d]
 
 (* Arithmetic primitives *)
 
@@ -269,14 +258,18 @@ let binary_phys_comparison _env dbg kind op x y =
         (op : Flambda_primitive.equality_comparison) with
   (* int64 special case *)
   | Naked_number Naked_int64, Eq when C.arch32 ->
-      C.extcall ~alloc:true "caml_equal" typ_int
-        [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
+      C.untag_int
+        (C.extcall ~alloc:true "caml_equal" typ_int
+          [C.box_int64 ~dbg x; C.box_int64 ~dbg y])
+        dbg
   | Naked_number Naked_int64, Neq when C.arch32 ->
-      C.extcall ~alloc:true "caml_notequal" typ_int
-        [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
+      C.untag_int
+        (C.extcall ~alloc:true "caml_notequal" typ_int
+          [C.box_int64 ~dbg x; C.box_int64 ~dbg y])
+        dbg
   (* General case *)
-  | _, Eq -> C.tag_int (C.eq ~dbg x y) dbg
-  | _, Neq -> C.tag_int (C.neq ~dbg x y) dbg
+  | _, Eq -> C.eq ~dbg x y
+  | _, Neq -> C.neq ~dbg x y
 
 let binary_int_arith_primitive _env dbg kind op x y =
   match (kind : Flambda_kind.Standard_int.t),
@@ -348,6 +341,7 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   match (kind : Flambda_kind.Standard_int.t),
         (signed : Flambda_primitive.signed_or_unsigned),
         (cmp : Flambda_primitive.ordered_comparison) with
+  (* XXX arch32 cases need [untag_int] now. *)
   | Naked_int64, Signed, Lt when C.arch32 ->
       C.extcall ~alloc:true "caml_lessthan" typ_int
         [C.box_int64 ~dbg x; C.box_int64 ~dbg y]
@@ -363,31 +357,31 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   | Naked_int64, Unsigned, (Lt | Le | Gt | Ge) when C.arch32 ->
       todo() (* There are no runtime C functions to do that afaict *)
   (* Tagged integers *)
-  | Tagged_immediate, Signed, Lt -> C.tag_int (C.lt ~dbg x y) dbg
-  | Tagged_immediate, Signed, Le -> C.tag_int (C.le ~dbg x y) dbg
-  | Tagged_immediate, Signed, Gt -> C.tag_int (C.gt ~dbg x y) dbg
-  | Tagged_immediate, Signed, Ge -> C.tag_int (C.ge ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Lt -> C.tag_int (C.ult ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Le -> C.tag_int (C.ule ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Gt -> C.tag_int (C.ugt ~dbg x y) dbg
-  | Tagged_immediate, Unsigned, Ge -> C.tag_int (C.uge ~dbg x y) dbg
+  | Tagged_immediate, Signed, Lt -> C.lt ~dbg x y
+  | Tagged_immediate, Signed, Le -> C.le ~dbg x y
+  | Tagged_immediate, Signed, Gt -> C.gt ~dbg x y
+  | Tagged_immediate, Signed, Ge -> C.ge ~dbg x y
+  | Tagged_immediate, Unsigned, Lt -> C.ult ~dbg x y
+  | Tagged_immediate, Unsigned, Le -> C.ule ~dbg x y
+  | Tagged_immediate, Unsigned, Gt -> C.ugt ~dbg x y
+  | Tagged_immediate, Unsigned, Ge -> C.uge ~dbg x y
   (* Naked integers. *)
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Lt ->
-      C.tag_int (C.lt ~dbg x y) dbg
+      C.lt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Le ->
-      C.tag_int (C.le ~dbg x y) dbg
+      C.le ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Gt ->
-      C.tag_int (C.gt ~dbg x y) dbg
+      C.gt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Ge ->
-      C.tag_int (C.ge ~dbg x y) dbg
+      C.ge ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Lt ->
-      C.tag_int (C.ult ~dbg x y) dbg
+      C.ult ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Le ->
-      C.tag_int (C.ule ~dbg x y) dbg
+      C.ule ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Gt ->
-      C.tag_int (C.ugt ~dbg x y) dbg
+      C.ugt ~dbg x y
   | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Ge ->
-      C.tag_int (C.uge ~dbg x y) dbg
+      C.uge ~dbg x y
 
 let binary_float_arith_primitive _env dbg op x y =
   match (op : Flambda_primitive.binary_float_arith_op) with
@@ -398,12 +392,12 @@ let binary_float_arith_primitive _env dbg op x y =
 
 let binary_float_comp_primitive _env dbg op x y =
   match (op : Flambda_primitive.comparison) with
-  | Eq -> C.tag_int (C.float_eq ~dbg x y) dbg
-  | Neq -> C.tag_int (C.float_neq ~dbg x y) dbg
-  | Lt -> C.tag_int (C.float_lt ~dbg x y) dbg
-  | Gt -> C.tag_int (C.float_gt ~dbg x y) dbg
-  | Le -> C.tag_int (C.float_le ~dbg x y) dbg
-  | Ge -> C.tag_int (C.float_ge ~dbg x y) dbg
+  | Eq -> C.float_eq ~dbg x y
+  | Neq -> C.float_neq ~dbg x y
+  | Lt -> C.float_lt ~dbg x y
+  | Gt -> C.float_gt ~dbg x y
+  | Le -> C.float_le ~dbg x y
+  | Ge -> C.float_ge ~dbg x y
 
 (* Primitives *)
 
@@ -523,11 +517,11 @@ let prim env dbg p =
 let machtype_of_kind k =
   match (k  : Flambda_kind.t) with
   | Value -> typ_val
-  | Fabricated -> typ_val (* TODO: correct ? *)
   | Naked_number Naked_float -> typ_float
   | Naked_number Naked_int64 -> typ_int64
   | Naked_number (Naked_int32 | Naked_nativeint) ->
       typ_int
+  | Fabricated -> assert false
 
 let machtype_of_kinded_parameter p =
   machtype_of_kind (Kinded_parameter.kind p)
@@ -725,6 +719,9 @@ and apply_expr env e =
   let wrap, env = Env.flush_delayed_lets env in
   wrap (wrap_cont env effs (wrap_exn env call e) e)
 
+(* CR mshinwell: I've seen (e.g. in List.map) calls to [caml_apply1], which
+   I don't think should exist.  You can just directly call through the
+   first word of the closure. *)
 and apply_call env e =
   let f = Apply_expr.callee e in
   let dbg = Apply_expr.dbg e in
@@ -874,14 +871,17 @@ and apply_cont env e =
         expr env body
   end
 
-and switch_scrutinee env sort s =
+and switch_scrutinee env _sort s =
   let e, env, _ = simple env s in
+(* All untagged at the moment
   let e =
     match (sort : Switch.Sort.t) with
     | Int -> C.untag_int e Debuginfo.none
+    
     | Tag _ -> e (* get_tag already returns untagged integers *)
     | Is_int -> e (* Is_int already returns untagged integers *)
   in
+*)
   e, env
 
 and switch env s =

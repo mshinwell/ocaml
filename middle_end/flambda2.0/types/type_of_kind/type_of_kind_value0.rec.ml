@@ -20,11 +20,11 @@ module T = Type_grammar
 module TEE = Typing_env_extension
 
 module Blocks = Row_like.For_blocks
-module Immediates = Row_like.For_immediates
 
 type t =
-  | Blocks_and_tagged_immediates of {
-      immediates : Immediates.t Or_unknown.t;
+  | Variant of {
+      (* CR mshinwell: Introduce an abstraction for this *)
+      immediates : T.t Or_unknown.t;
       blocks : Blocks.t Or_unknown.t;
     }
   | Boxed_float of T.t
@@ -39,16 +39,16 @@ type t =
 
 let print_with_cache ~cache ppf t =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     (* CR mshinwell: Improve so that we elide blocks and/or immediates when
        they're empty. *)
     Format.fprintf ppf
-      "@[<hov 1>(Blocks_and_immediates@ \
+      "@[<hov 1>(Variant@ \
         @[<hov 1>(blocks@ %a)@]@ \
-        @[<hov 1>(immediates@ %a)@]\
+        @[<hov 1>(tagged_imms@ %a)@]\
         )@]"
       (Or_unknown.print (Blocks.print_with_cache ~cache)) blocks
-      (Or_unknown.print (Immediates.print_with_cache ~cache)) immediates
+      (Or_unknown.print (T.print_with_cache ~cache)) immediates
   | Boxed_float naked_ty ->
     Format.fprintf ppf "@[<hov 1>(Boxed_float@ %a)@]"
       (T.print_with_cache ~cache) naked_ty
@@ -73,10 +73,10 @@ let print_with_cache ~cache ppf t =
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm =
+let apply_name_permutation_variant blocks immediates perm =
   let immediates' =
     Or_unknown.map immediates ~f:(fun immediates ->
-      Immediates.apply_name_permutation immediates perm)
+      T.apply_name_permutation immediates perm)
   in
   let blocks' =
     Or_unknown.map blocks ~f:(fun blocks ->
@@ -89,13 +89,13 @@ let apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm =
 
 let apply_name_permutation t perm =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     begin match
-      apply_name_permutation_blocks_and_tagged_immediates blocks immediates perm
+      apply_name_permutation_variant blocks immediates perm
     with
     | None -> t
     | Some (blocks, immediates) ->
-      Blocks_and_tagged_immediates { blocks; immediates; }
+      Variant { blocks; immediates; }
     end
   | Boxed_float ty ->
     let ty' = T.apply_name_permutation ty perm in
@@ -128,10 +128,10 @@ let apply_name_permutation t perm =
 
 let free_names t =
   match t with
-  | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  | Variant { blocks; immediates; } ->
     Name_occurrences.union
       (Or_unknown.free_names Blocks.free_names blocks)
-      (Or_unknown.free_names Immediates.free_names immediates)
+      (Or_unknown.free_names T.free_names immediates)
   | Boxed_float ty -> T.free_names ty
   | Boxed_int32 ty -> T.free_names ty
   | Boxed_int64 ty -> T.free_names ty
@@ -155,7 +155,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
             let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
             Ok (Inlinable { function_decl; rec_info; })))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
-  | Blocks_and_tagged_immediates _
+  | Variant _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -165,17 +165,28 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     if Rec_info.is_initial rec_info then Ok t
     else Bottom
 
-let meet_unknown meet_contents env
+let meet_unknown meet_contents ~contents_is_bottom env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
     : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =
   match or_unknown1, or_unknown2 with
   | Unknown, Unknown -> Ok (Unknown, TEE.empty ())
+  (* CR mshinwell: Think about the next two cases more *)
+  | Known contents, _ when contents_is_bottom contents -> Bottom
+  | _, Known contents when contents_is_bottom contents -> Bottom
   | _, Unknown -> Ok (or_unknown1, TEE.empty ())
   | Unknown, _ -> Ok (or_unknown2, TEE.empty ())
   | Known contents1, Known contents2 ->
-    Or_bottom.map (meet_contents env contents1 contents2)
-      ~f:(fun (contents, env_extension) ->
-        Or_unknown.Known contents, env_extension)
+    let result =
+      Or_bottom.map (meet_contents env contents1 contents2)
+        ~f:(fun (contents, env_extension) ->
+          Or_unknown.Known contents, env_extension)
+    in
+    match result with
+    | Bottom | Ok (Unknown, _) -> result
+    | Ok (Known contents, _env_extension) ->
+      (* XXX Why isn't [meet_contents] returning bottom? *)
+      if contents_is_bottom contents then Bottom
+      else result
 
 let join_unknown join_contents env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
@@ -193,25 +204,47 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join_blocks_and_tagged_immediates env
+  let meet_or_join_variant env
         ~blocks1 ~imms1 ~blocks2 ~imms2 : _ Or_bottom.t =
     let blocks =
-      E.switch (meet_unknown Blocks.meet) (join_unknown Blocks.join)
+      E.switch (meet_unknown Blocks.meet ~contents_is_bottom:Blocks.is_bottom)
+        (join_unknown Blocks.join)
         env blocks1 blocks2
     in
+    let blocks : _ Or_bottom.t =
+      (* XXX Clean this up *)
+      match blocks with
+      | Bottom | Ok (Or_unknown.Unknown, _) -> blocks
+      | Ok (Or_unknown.Known blocks', _) ->
+        if Blocks.is_bottom blocks' then Bottom else blocks
+    in
     let imms =
-      E.switch (meet_unknown Immediates.meet) (join_unknown Immediates.join)
-        env imms1 imms2
+      E.switch (meet_unknown T.meet ~contents_is_bottom:T.is_obviously_bottom)
+        (join_unknown T.join) env imms1 imms2
+    in
+    let imms : _ Or_bottom.t =
+      match imms with
+      | Bottom | Ok (Or_unknown.Unknown, _) -> imms
+      | Ok (Or_unknown.Known imms', _) ->
+        if T.is_obviously_bottom imms' then Bottom else imms
     in
     match blocks, imms with
     | Bottom, Bottom -> Bottom
     | Ok (blocks, env_extension), Bottom ->
-      let immediates : _ Or_unknown.t = Known (Immediates.create_bottom ()) in
+      let immediates : _ Or_unknown.t = Known (T.bottom K.naked_nativeint) in
       Ok (blocks, immediates, env_extension)
     | Bottom, Ok (immediates, env_extension) ->
       let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in
       Ok (blocks, immediates, env_extension)
     | Ok (blocks, env_extension1), Ok (immediates, env_extension2) ->
+      begin match (blocks : _ Or_unknown.t) with
+      | Unknown -> ()
+      | Known blocks -> assert (not (Blocks.is_bottom blocks));
+      end;
+      begin match (immediates : _ Or_unknown.t) with
+      | Unknown -> ()
+      | Known imms -> assert (not (T.is_obviously_bottom imms));
+      end;
       let env_extension =
         (* XXX *)
         let left_env = Meet_env.env env in
@@ -235,13 +268,12 @@ struct
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
     match t1, t2 with
-    | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
-      Blocks_and_tagged_immediates { blocks = blocks2; immediates = imms2; } ->
+    | Variant { blocks = blocks1; immediates = imms1; },
+      Variant { blocks = blocks2; immediates = imms2; } ->
       Or_bottom_or_absorbing.of_or_bottom
-        (meet_or_join_blocks_and_tagged_immediates env
-          ~blocks1 ~imms1 ~blocks2 ~imms2)
+        (meet_or_join_variant env ~blocks1 ~imms1 ~blocks2 ~imms2)
         ~f:(fun (blocks, immediates, env_extension) ->
-          Blocks_and_tagged_immediates { blocks; immediates; }, env_extension)
+          Variant { blocks; immediates; }, env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env n1 n2)
@@ -273,7 +305,7 @@ struct
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
-    | (Blocks_and_tagged_immediates _
+    | (Variant _
         | Boxed_float _
         | Boxed_int32 _
         | Boxed_int64 _

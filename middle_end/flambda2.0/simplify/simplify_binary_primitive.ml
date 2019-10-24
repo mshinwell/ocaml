@@ -48,6 +48,7 @@ module type Binary_arith_like_sig = sig
   val prover_lhs : (T.t -> Lhs.Set.t T.proof) T.type_accessor
   val prover_rhs : (T.t -> Rhs.Set.t T.proof) T.type_accessor
 
+  val unknown : T.t
   val these : Result.Set.t -> T.t
 
   type op
@@ -116,7 +117,7 @@ end = struct
     let proof2 = N.prover_rhs typing_env arg2_ty in
     let kind = N.result_kind in
     let result_unknown () =
-      let env_extension = TEE.one_equation result (T.unknown kind) in
+      let env_extension = TEE.one_equation result N.unknown in
       Reachable.reachable original_term, env_extension, dacc
     in
     let result_invalid () =
@@ -153,7 +154,7 @@ end = struct
             | Some (Simple simple) -> T.alias_type_of kind simple
             | Some (Exactly _)
             | Some (Prim _)
-            | None -> T.unknown kind
+            | None -> N.unknown
         in
         let env_extension = TEE.one_equation result ty in
         Reachable.reachable named, env_extension, dacc
@@ -251,6 +252,14 @@ end = struct
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
+
+  let unknown =
+    match kind with
+    | Tagged_immediate -> T.any_tagged_immediate ()
+    | Naked_float -> T.any_naked_float ()
+    | Naked_int32 -> T.any_naked_int32 ()
+    | Naked_int64 -> T.any_naked_int64 ()
+    | Naked_nativeint -> T.any_naked_nativeint ()
 
   let these = I.these_unboxed
 
@@ -381,6 +390,14 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = T.prove_equals_tagged_immediates
 
+  let unknown =
+    match kind with
+    | Tagged_immediate -> T.any_tagged_immediate ()
+    | Naked_float -> T.any_naked_float ()
+    | Naked_int32 -> T.any_naked_int32 ()
+    | Naked_int64 -> T.any_naked_int64 ()
+    | Naked_nativeint -> T.any_naked_nativeint ()
+
   let these = I.these_unboxed
 
   let term = I.term_unboxed
@@ -473,17 +490,20 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
   let term imm : Named.t =
-    Named.create_simple (Simple.const (Tagged_immediate imm))
+    let n = Immediate.to_targetint' imm in
+    Named.create_simple (Simple.const (Naked_nativeint n))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -531,16 +551,20 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
-  let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
+  let term imm : Named.t =
+    let n = Immediate.to_targetint' imm in
+    Named.create_simple (Simple.const (Naked_nativeint n))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -597,6 +621,7 @@ end = struct
   let prover_lhs = T.prove_naked_floats
   let prover_rhs = T.prove_naked_floats
 
+  let unknown = T.any_naked_float ()
   let these = T.these_naked_floats
 
   let term f =
@@ -678,16 +703,20 @@ end = struct
   type op = P.comparison
 
   let kind = K.Standard_int_or_float.Naked_float
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate denv = DE.float_const_prop denv
 
   let prover_lhs = T.prove_naked_floats
   let prover_rhs = T.prove_naked_floats
 
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
-  let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
+  let term imm =
+    let imm = Immediate.to_targetint' imm in
+    Named.create_simple (Simple.const (Naked_nativeint imm))
 
   module Pair = F.Pair
   let cross_product = F.cross_product
@@ -729,16 +758,20 @@ end = struct
   type op = P.equality_comparison
 
   let kind = I.kind
-  let result_kind = K.value
+  let result_kind = K.naked_nativeint
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let these = T.these_tagged_immediates
+  let unknown = T.any_naked_nativeint ()
+  let these imms =
+    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
 
-  let term imm = Named.create_simple (Simple.const (Tagged_immediate imm))
+  let term imm =
+    let imm = Immediate.to_targetint' imm in
+    Named.create_simple (Simple.const (Naked_nativeint imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -831,7 +864,7 @@ let simplify_phys_equal (op : P.equality_comparison)
       let const bool =
         let env_extension =
           TEE.one_equation result
-            (T.this_tagged_immediate (Immediate.bool bool))
+            (T.this_untagged_immediate (Immediate.bool bool))
         in
         Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
           env_extension, dacc
@@ -844,7 +877,7 @@ let simplify_phys_equal (op : P.equality_comparison)
       | _, _, _ ->
         let env_extension =
           TEE.one_equation result
-            (T.these_tagged_immediates Immediate.all_bools)
+            (T.these_untagged_immediates Immediate.all_bools)
         in
         Reachable.reachable original_term, env_extension, dacc
       end
@@ -868,9 +901,7 @@ let simplify_phys_equal (op : P.equality_comparison)
   | Naked_number Naked_nativeint ->
     Binary_int_eq_comp_nativeint.simplify op dacc ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Fabricated ->
-    Misc.fatal_errorf "Bad kind for equality comparison: %a"
-      K.print kind
+  | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
   end
 
 let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var

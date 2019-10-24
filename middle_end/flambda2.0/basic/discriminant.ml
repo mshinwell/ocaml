@@ -105,10 +105,9 @@ include Identifiable.Make (struct
 
   let hash { sort; int; } = Hashtbl.hash (Sort.hash sort, int)
 
-  let print ppf { sort; int; } =
-    Format.fprintf ppf "@[%s(%a %a)%s@]"
+  let print ppf { sort = _; int; } =
+    Format.fprintf ppf "@[@<0>%s%a@<0>%s@]"
       (Flambda_colours.discriminant ())
-      Sort.print sort
       Targetint.OCaml.print int
       (Flambda_colours.normal ())
 

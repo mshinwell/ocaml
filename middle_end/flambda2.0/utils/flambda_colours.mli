@@ -22,6 +22,7 @@ val prim_neither : unit -> string
 
 val naked_number : unit -> string
 val tagged_immediate : unit -> string
+val constructor : unit -> string
 
 val kind : unit -> string
 
@@ -44,6 +45,7 @@ val static_keyword : unit -> string
 val static_part : unit -> string
 
 val continuation : unit -> string
+val continuation_definition : unit -> string
 
 val name_abstraction : unit -> string
 

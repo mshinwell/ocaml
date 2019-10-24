@@ -37,7 +37,6 @@ type t
 type descr = private
   | Name of Name.t
   | Const of Const.t
-  | Discriminant of Discriminant.t
 
 val descr : t -> descr
 
@@ -68,10 +67,13 @@ val const_int : Targetint.OCaml.t -> t
 val const_bool : bool -> t
 
 (** The constant representating boolean true. *)
+(* CR mshinwell: fix naming *)
 val const_true : t
+val untagged_const_true : t
 
 (** The constant representating boolean false. *)
 val const_false : t
+val untagged_const_false : t
 
 (** The constant representating the number zero of type "int". *)
 val const_zero : t
@@ -81,9 +83,6 @@ val const_one : t
 (** The constant representing the unit value. *)
 val unit : t
 
-(** The given switch discriminant as a simple. *)
-val discriminant : Discriminant.t -> t
-
 val map_name : t -> f:(Name.t -> Name.t) -> t
 
 val to_name : t -> (Rec_info.t option * Name.t) option
@@ -91,6 +90,8 @@ val to_name : t -> (Rec_info.t option * Name.t) option
 (* CR mshinwell: remove these next two? *)
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
+
+val is_const : t -> bool
 
 val is_symbol : t -> bool
 

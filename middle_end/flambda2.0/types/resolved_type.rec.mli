@@ -22,9 +22,7 @@ type resolved_t =
   | Naked_int32 of Type_of_kind_naked_int32_0.t Or_unknown_or_bottom.t
   | Naked_int64 of Type_of_kind_naked_int64_0.t Or_unknown_or_bottom.t
   | Naked_nativeint of Type_of_kind_naked_nativeint0.t Or_unknown_or_bottom.t
-  | Fabricated of Type_of_kind_fabricated0.t Or_unknown_or_bottom.t
 
 type t =
   | Const of Simple.Const.t
-  | Discriminant of Discriminant.t
   | Resolved of resolved_t
