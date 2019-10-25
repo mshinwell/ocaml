@@ -23,6 +23,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Remove [Sort]. *)
+
 module Sort : sig
   type t =
     | Int

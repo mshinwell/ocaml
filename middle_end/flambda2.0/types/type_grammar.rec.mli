@@ -114,9 +114,6 @@ val any_block : unit -> t
 val is_int_for_scrutinee : scrutinee:Simple.t -> t
 val get_tag_for_block : block:Simple.t -> t
 
-val is_int : is_int:Discriminant.t -> t
-val get_tag : tag:Discriminant.t -> t
-
 val blocks_with_these_tags : Tag.Set.t -> t
 
 val immutable_block : Tag.t -> fields:t list -> t

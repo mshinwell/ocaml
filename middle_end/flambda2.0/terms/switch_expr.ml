@@ -55,11 +55,10 @@ let print_arms ppf arms =
         Continuation.print l)
     arms
 
-let print ppf { sort; scrutinee; arms; } =
+let print ppf { sort = _; scrutinee; arms; } =
   fprintf ppf
-    "@[<v 0>(@<0>%sswitch_%a@<0>%s %a@ @[<v 0>%a@])@]"
+    "@[<v 0>(@<0>%sswitch@<0>%s %a@ @[<v 0>%a@])@]"
     (Flambda_colours.expr_keyword ())
-    Sort.print sort
     (Flambda_colours.normal ())
     Simple.print scrutinee
     print_arms arms
