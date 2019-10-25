@@ -217,6 +217,7 @@ module type S = sig
   val any_boxed_int64 : unit -> t
   val any_boxed_nativeint : unit -> t
 
+  val any_naked_immediate : unit -> t
   val any_naked_float : unit -> t
   val any_naked_int32 : unit -> t
   val any_naked_int64 : unit -> t
@@ -238,13 +239,13 @@ module type S = sig
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
-  val this_untagged_immediate : Immediate.t -> t
+  val this_naked_immediate : Immediate.t -> t
   val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
   val this_naked_int32 : Int32.t -> t
   val this_naked_int64 : Int64.t -> t
   val this_naked_nativeint : Targetint.t -> t
 
-  val these_untagged_immediates : Immediate.Set.t -> t
+  val these_naked_immediates : Immediate.Set.t -> t
   val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val these_naked_int32s : Int32.Set.t -> t
   val these_naked_int64s : Int64.Set.t -> t
@@ -260,7 +261,7 @@ module type S = sig
   val box_int64 : t -> t
   val box_nativeint : t -> t
 
-  val tagged_immediate_alias_to : untagged_immediate:Variable.t -> t
+  val tagged_immediate_alias_to : naked_immediate:Variable.t -> t
   val tag_immediate : t -> t
 
   val is_int_for_scrutinee : scrutinee:Simple.t -> t

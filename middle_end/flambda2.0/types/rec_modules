@@ -22,4 +22,3 @@ env/meet_env.rec.ml
 structures/lattice_ops.rec.ml
 structures/product.rec.ml
 structures/row_like.rec.ml
-structures/trivial_row_like.rec.ml

@@ -231,7 +231,7 @@ struct
     match blocks, imms with
     | Bottom, Bottom -> Bottom
     | Ok (blocks, env_extension), Bottom ->
-      let immediates : _ Or_unknown.t = Known (T.bottom K.naked_nativeint) in
+      let immediates : _ Or_unknown.t = Known (T.bottom K.naked_immediate) in
       Ok (blocks, immediates, env_extension)
     | Bottom, Ok (immediates, env_extension) ->
       let blocks : _ Or_unknown.t = Known (Blocks.create_bottom ()) in

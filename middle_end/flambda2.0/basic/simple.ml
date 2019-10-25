@@ -18,6 +18,7 @@
 
 module Const = struct
   type t =
+    | Naked_immediate of Immediate.t
     | Tagged_immediate of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
@@ -27,8 +28,8 @@ module Const = struct
   let const_true = Tagged_immediate (Immediate.bool_true)
   let const_false = Tagged_immediate (Immediate.bool_false)
 
-  let untagged_const_true = Naked_nativeint Targetint.one
-  let untagged_const_false = Naked_nativeint Targetint.zero
+  let untagged_const_true = Naked_immediate Immediate.bool_true
+  let untagged_const_false = Naked_immediate Immediate.bool_false
 
   let const_int i = Tagged_immediate (Immediate.int i) 
 
@@ -41,6 +42,8 @@ module Const = struct
 
     let compare t1 t2 =
       match t1, t2 with
+      | Naked_immediate i1, Naked_immediate i2 ->
+        Immediate.compare i1 i2
       | Tagged_immediate i1, Tagged_immediate i2 ->
         Immediate.compare i1 i2
       | Naked_float f1, Naked_float f2 ->
@@ -51,6 +54,8 @@ module Const = struct
         Int64.compare n1 n2
       | Naked_nativeint n1, Naked_nativeint n2 ->
         Targetint.compare n1 n2
+      | Naked_immediate _, _ -> -1
+      | _, Naked_immediate _ -> 1
       | Tagged_immediate _, _ -> -1
       | _, Tagged_immediate _ -> 1
       | Naked_float _, _ -> -1
@@ -64,6 +69,7 @@ module Const = struct
 
     let hash t =
       match t with
+      | Naked_immediate n -> Immediate.hash n
       | Tagged_immediate n -> Immediate.hash n
       | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
       | Naked_int32 n -> Hashtbl.hash n
@@ -72,6 +78,11 @@ module Const = struct
 
     let print ppf (t : t) =
       match t with
+      | Naked_immediate i ->
+        Format.fprintf ppf "@<0>%s#%a@<0>%s"
+          (Flambda_colours.naked_number ())
+          Immediate.print i
+          (Flambda_colours.normal ())
       | Tagged_immediate i ->
         Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
@@ -105,6 +116,7 @@ module Const = struct
   let kind t =
     let module K = Flambda_kind in
     match t with
+    | Naked_immediate _ -> K.naked_immediate
     | Tagged_immediate _ -> K.value
     | Naked_float _ -> K.naked_float
     | Naked_int32 _ -> K.naked_int32

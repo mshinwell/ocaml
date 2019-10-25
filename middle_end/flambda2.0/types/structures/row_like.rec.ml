@@ -215,9 +215,6 @@ Format.eprintf "RL meet is returning bottom\n%!";
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
 
-  let known t = t.known
-  let at_least t = t.at_least
-
   let get_singleton { known; at_least; } =
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then None
     else Tag_and_index.Map.get_singleton known
@@ -314,60 +311,6 @@ Format.eprintf "RL meet is returning bottom\n%!";
       }
 end
 
-module Make_trivial (Thing : Identifiable.S) = struct
-  module Thing_and_unit = struct
-    type t = Thing.t * unit
-    include Identifiable.Make_pair (Thing) (Unit)
-  end
-
-  module Thing_or_unknown = Or_unknown.Lift (Thing)
-
-  module Thing_or_unknown_and_unit = struct
-    type t = Thing.t Or_unknown.t * unit
-    include Identifiable.Make_pair (Thing_or_unknown) (Unit)
-  end
-
-  module Unit_maps_to = struct
-    include Unit
-
-    let print_with_cache ~cache:_ ppf () = print ppf ()
-    let meet _env () () = Or_bottom.Ok ((), TEE.empty ())
-    let join _env () () = ()
-    let create_bottom () = ()
-    let widen () ~to_match:() = ()
-  end
-
-  include Make (Thing) (Unit) (Thing_and_unit)
-    (Thing_or_unknown_and_unit) (Unit_maps_to)
-
-  let create things =
-    let things =
-      Thing.Set.fold (fun thing result ->
-          Thing_and_unit.Map.add (thing, ()) () result)
-        things
-        Thing_and_unit.Map.empty
-    in
-    create_exactly_multiple things
-
-  let all t : _ Or_unknown.t =
-    let indexes = at_least t in
-    let known = known t in
-    if not (Thing_or_unknown_and_unit.Map.is_empty indexes) then Unknown
-    else
-      let things =
-        Thing_and_unit.Set.fold (fun (thing, ()) things ->
-            Thing.Set.add thing things)
-          (Thing_and_unit.Map.keys known)
-          Thing.Set.empty
-      in
-      Known things
-
-  let get_singleton t =
-    match get_singleton t with
-    | None -> None
-    | Some ((thing, ()), ()) -> Some thing
-end
-
 module Targetint_ocaml_index = struct
   include Targetint.OCaml
   let subset t1 t2 = Stdlib.(<=) (compare t1 t2) 0
@@ -425,7 +368,3 @@ module For_closures_entry_by_set_of_closures_contents = struct
     map_maps_to t ~f:(fun closures_entry ->
       Closures_entry.map_function_decl_types closures_entry ~f)
 end
-
-module For_discriminants = Make_trivial (Discriminant)
-
-module For_immediates = Make_trivial (Immediate)

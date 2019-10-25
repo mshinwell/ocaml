@@ -129,6 +129,10 @@ let const (c:Fexpr.const) : Simple.Const.t =
   | Tagged_immediate i ->
     let i = Targetint.of_string i in
     Tagged_immediate (Immediate.int (Targetint.OCaml.of_targetint i))
+  | Naked_immediate i ->
+    let i = Targetint.of_string i in
+    Naked_immediate (Immediate.int (Targetint.OCaml.of_targetint i))
+
   (*
    * | Naked_float of Numbers.Float_by_bit_pattern.t
    * | Naked_int32 of Int32.t

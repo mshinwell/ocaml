@@ -611,9 +611,9 @@ let arg_kind_of_unary_primitive p =
 let result_kind_of_unary_primitive p : result_kind =
   match p with
   | Duplicate_block _ -> Singleton K.value
-  | Is_int -> Singleton K.naked_nativeint
+  | Is_int -> Singleton K.naked_immediate
   | String_length _ -> Singleton K.value
-  | Get_tag -> Singleton K.naked_nativeint
+  | Get_tag -> Singleton K.naked_immediate
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
@@ -868,7 +868,7 @@ let result_kind_of_binary_primitive p : result_kind =
   | Float_arith _ -> Singleton K.naked_float
   | Phys_equal _
   | Int_comp _
-  | Float_comp _ -> Singleton K.naked_nativeint
+  | Float_comp _ -> Singleton K.naked_immediate
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with

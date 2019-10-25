@@ -19,6 +19,7 @@
 module TEE = Typing_env_extension
 
 module T_V = Type_of_kind_value
+module T_NI = Type_of_kind_naked_immediate
 module T_Nf = Type_of_kind_naked_float
 module T_N32 = Type_of_kind_naked_int32
 module T_N64 = Type_of_kind_naked_int64
@@ -26,6 +27,7 @@ module T_NN = Type_of_kind_naked_nativeint
 
 type t =
   | Value of T_V.t
+  | Naked_immediate of T_NI.t
   | Naked_float of T_Nf.t
   | Naked_int32 of T_N32.t
   | Naked_int64 of T_N64.t
@@ -36,6 +38,9 @@ let print_with_cache ~cache ppf (t : Type_grammar.t) =
   | Value ty ->
     Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
       (T_V.print_with_cache ~cache) ty
+  | Naked_immediate ty ->
+    Format.fprintf ppf "@[<hov 1>(Naked_immediate@ %a)@]"
+      (T_NI.print_with_cache ~cache) ty
   | Naked_float ty ->
     Format.fprintf ppf "@[<hov 1>(Naked_float@ %a)@]"
       (T_Nf.print_with_cache ~cache) ty
@@ -56,14 +61,23 @@ let print ppf t =
 let force_to_kind_value t =
   match t with
   | Value ty -> ty
-  | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a" print t
+
+let force_to_kind_naked_immediate t =
+  match t with
+  | Naked_immediate ty -> ty
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ ->
+    Misc.fatal_errorf
+      "Type has wrong kind (expected [Naked_immediate]):@ %a"
+      print t
 
 let force_to_kind_naked_float t =
   match t with
   | Naked_float ty -> ty
-  | Value _ | Naked_int32 _ | Naked_int64 _
+  | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_float]):@ %a"
@@ -72,7 +86,7 @@ let force_to_kind_naked_float t =
 let force_to_kind_naked_int32 t =
   match t with
   | Naked_int32 ty -> ty
-  | Value _ | Naked_float _ | Naked_int64 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_int32]):@ %a"
@@ -81,7 +95,7 @@ let force_to_kind_naked_int32 t =
 let force_to_kind_naked_int64 t =
   match t with
   | Naked_int64 ty -> ty
-  | Value _ | Naked_float _ | Naked_int32 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Int64]):@ %a"
@@ -90,7 +104,7 @@ let force_to_kind_naked_int64 t =
 let force_to_kind_naked_nativeint t =
   match t with
   | Naked_nativeint ty -> ty
-  | Value _ | Naked_float _ | Naked_int32 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_int64 _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
@@ -102,6 +116,10 @@ let apply_name_permutation t perm =
     let ty' = T_V.apply_name_permutation ty perm in
     if ty == ty' then t
     else Value ty'
+  | Naked_immediate ty ->
+    let ty' = T_NI.apply_name_permutation ty perm in
+    if ty == ty' then t
+    else Naked_immediate ty'
   | Naked_float ty ->
     let ty' = T_Nf.apply_name_permutation ty perm in
     if ty == ty' then t
@@ -122,6 +140,7 @@ let apply_name_permutation t perm =
 let free_names t =
   match t with
   | Value ty -> T_V.free_names ty
+  | Naked_immediate ty -> T_NI.free_names ty
   | Naked_float ty -> T_Nf.free_names ty
   | Naked_int32 ty -> T_N32.free_names ty
   | Naked_int64 ty -> T_N64.free_names ty
@@ -132,6 +151,11 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
   | Value ty ->
     begin match T_V.apply_rec_info ty rec_info with
     | Ok ty -> Ok (Value ty)
+    | Bottom -> Bottom
+    end
+  | Naked_immediate ty ->
+    begin match T_NI.apply_rec_info ty rec_info with
+    | Ok ty -> Ok (Naked_immediate ty)
     | Bottom -> Bottom
     end
   | Naked_float ty ->
@@ -158,6 +182,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
 let kind t =
   match t with
   | Value _ -> K.value
+  | Naked_immediate _ -> K.naked_immediate
   | Naked_float _ -> K.naked_float
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
@@ -166,6 +191,7 @@ let kind t =
 let get_alias t =
   match t with
   | Value ty -> T_V.get_alias ty
+  | Naked_immediate ty -> T_NI.get_alias ty
   | Naked_float ty -> T_Nf.get_alias ty
   | Naked_int32 ty -> T_N32.get_alias ty
   | Naked_int64 ty -> T_N64.get_alias ty
@@ -181,6 +207,7 @@ let get_alias t =
 let is_obviously_bottom (t : t) =
   match t with
   | Value ty -> T_V.is_obviously_bottom ty
+  | Naked_immediate ty -> T_NI.is_obviously_bottom ty
   | Naked_float ty -> T_Nf.is_obviously_bottom ty
   | Naked_int32 ty -> T_N32.is_obviously_bottom ty
   | Naked_int64 ty -> T_N64.is_obviously_bottom ty
@@ -189,6 +216,7 @@ let is_obviously_bottom (t : t) =
 let alias_type_of (kind : K.t) name : t =
   match kind with
   | Value -> Value (T_V.create_equals name)
+  | Naked_number Naked_immediate -> Naked_immediate (T_NI.create_equals name)
   | Naked_number Naked_float -> Naked_float (T_Nf.create_equals name)
   | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
   | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
@@ -196,6 +224,7 @@ let alias_type_of (kind : K.t) name : t =
   | Fabricated -> Misc.fatal_error "Fabricated not expected here"
 
 let bottom_value () = Value (T_V.bottom ())
+let bottom_naked_immediate () = Naked_immediate (T_NI.bottom ())
 let bottom_naked_float () = Naked_float (T_Nf.bottom ())
 let bottom_naked_int32 () = Naked_int32 (T_N32.bottom ())
 let bottom_naked_int64 () = Naked_int64 (T_N64.bottom ())
@@ -204,6 +233,7 @@ let bottom_naked_nativeint () = Naked_nativeint (T_NN.bottom ())
 let bottom (kind : K.t) =
   match kind with
   | Value -> bottom_value ()
+  | Naked_number Naked_immediate -> bottom_naked_immediate ()
   | Naked_number Naked_float -> bottom_naked_float ()
   | Naked_number Naked_int32 -> bottom_naked_int32 ()
   | Naked_number Naked_int64 -> bottom_naked_int64 ()
@@ -213,6 +243,7 @@ let bottom (kind : K.t) =
 let bottom_like t = bottom (kind t)
 
 let any_value () = Value (T_V.unknown ())
+let any_naked_immediate () = Naked_immediate (T_NI.unknown ())
 let any_naked_float () = Naked_float (T_Nf.unknown ())
 let any_naked_int32 () = Naked_int32 (T_N32.unknown ())
 let any_naked_int64 () = Naked_int64 (T_N64.unknown ())
@@ -221,6 +252,7 @@ let any_naked_nativeint () = Naked_nativeint (T_NN.unknown ())
 let unknown (kind : K.t) =
   match kind with
   | Value -> any_value ()
+  | Naked_number Naked_immediate -> any_naked_immediate ()
   | Naked_number Naked_float -> any_naked_float ()
   | Naked_number Naked_int32 -> any_naked_int32 ()
   | Naked_number Naked_int64 -> any_naked_int64 ()
@@ -228,6 +260,9 @@ let unknown (kind : K.t) =
   | Fabricated -> Misc.fatal_error "Fabricated not expected here"
 
 let unknown_like t = unknown (kind t)
+
+let this_naked_immediate i : t =
+  Naked_immediate (T_NI.create_equals (Simple.const (Naked_immediate i)))
 
 let this_naked_float f : t =
   Naked_float (T_Nf.create_equals (Simple.const (Naked_float f)))
@@ -240,6 +275,13 @@ let this_naked_int64 i : t =
 
 let this_naked_nativeint i : t =
   Naked_nativeint (T_NN.create_equals (Simple.const (Naked_nativeint i)))
+
+let these_naked_immediates0 ~no_alias is =
+  match Immediate.Set.get_singleton is with
+  | Some i when not no_alias -> this_naked_immediate i
+  | _ ->
+    if Immediate.Set.is_empty is then bottom K.naked_immediate
+    else Naked_immediate (T_NI.create_no_alias (Ok (Naked_immediates is)))
 
 let these_naked_floats0 ~no_alias fs =
   match Float.Set.get_singleton fs with
@@ -267,7 +309,10 @@ let these_naked_nativeints0 ~no_alias is =
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
     if Targetint.Set.is_empty is then bottom K.naked_nativeint
-    else Naked_nativeint (T_NN.create_no_alias (Ok (Ints is)))
+    else Naked_nativeint (T_NN.create_no_alias (Ok is))
+
+let this_naked_immediate_without_alias i =
+  these_naked_immediates0 ~no_alias:true (Immediate.Set.singleton i)
 
 let this_naked_float_without_alias f =
   these_naked_floats0 ~no_alias:true (Float.Set.singleton f)
@@ -281,6 +326,7 @@ let this_naked_int64_without_alias i =
 let this_naked_nativeint_without_alias i =
   these_naked_nativeints0 ~no_alias:true (Targetint.Set.singleton i)
 
+let these_naked_immediates is = these_naked_immediates0 ~no_alias:false is
 let these_naked_floats fs = these_naked_floats0 ~no_alias:false fs
 let these_naked_int32s is = these_naked_int32s0 ~no_alias:false is
 let these_naked_int64s is = these_naked_int64s0 ~no_alias:false is
@@ -289,7 +335,7 @@ let these_naked_nativeints is = these_naked_nativeints0 ~no_alias:false is
 let box_float (t : t) : t =
   match t with
   | Naked_float _ -> Value (T_V.create (Boxed_float t))
-  | Value _ | Naked_int32 _ | Naked_int64 _
+  | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
       print t
@@ -297,7 +343,7 @@ let box_float (t : t) : t =
 let box_int32 (t : t) : t =
   match t with
   | Naked_int32 _ -> Value (T_V.create (Boxed_int32 t))
-  | Value _ | Naked_float _ | Naked_int64 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
       print t
@@ -305,7 +351,7 @@ let box_int32 (t : t) : t =
 let box_int64 (t : t) : t =
   match t with
   | Naked_int64 _ -> Value (T_V.create (Boxed_int64 t))
-  | Value _ | Naked_float _ | Naked_int32 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
       print t
@@ -313,16 +359,10 @@ let box_int64 (t : t) : t =
 let box_nativeint (t : t) : t =
   match t with
   | Naked_nativeint _ -> Value (T_V.create (Boxed_nativeint t))
-  | Value _ | Naked_float _ | Naked_int32 _
+  | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
   | Naked_int64 _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
-
-let these_untagged_immediates imms =
-  these_naked_nativeints (Immediate.set_to_targetint_set' imms)
-
-let this_untagged_immediate imm =
-  these_untagged_immediates (Immediate.Set.singleton imm)
 
 let any_tagged_immediate () : t =
   Value (T_V.create_no_alias (Ok (Variant {
@@ -341,7 +381,7 @@ let these_tagged_immediates0 ~no_alias imms : t =
     else
       Value (T_V.create_no_alias (
         Ok (Variant {
-          immediates = Known (these_untagged_immediates imms);
+          immediates = Known (these_naked_immediates imms);
           blocks = Known (Row_like.For_blocks.create_bottom ());
         })))
 
@@ -353,23 +393,24 @@ let this_tagged_immediate_without_alias imm =
 
 let tag_immediate t : t =
   match t with
-  | Naked_nativeint _ ->
+  | Naked_immediate _ ->
     Value (T_V.create_no_alias (
       Ok (Variant {
         immediates = Known t;
         blocks = Known (Row_like.For_blocks.create_bottom ());
       })))
-  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _ ->
+  | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
       print t
 
-let tagged_immediate_alias_to ~untagged_immediate : t =
-  tag_immediate (Naked_nativeint (
-    T_NN.create_equals (Simple.var untagged_immediate)))
+let tagged_immediate_alias_to ~naked_immediate : t =
+  tag_immediate (Naked_immediate (
+    T_NI.create_equals (Simple.var naked_immediate)))
 
 let any_block () : t =
   Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_nativeint);
+    immediates = Known (bottom K.naked_immediate);
     blocks = Unknown;
   })))
 
@@ -378,21 +419,21 @@ let any_block_with_tag tag : t =
     Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
   in
   Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_nativeint);
+    immediates = Known (bottom K.naked_immediate);
     blocks = Known blocks;
   })))
 
 let is_int_for_scrutinee ~scrutinee : t =
-  Naked_nativeint (T_NN.create (Is_int (alias_type_of K.value scrutinee)))
+  Naked_immediate (T_NI.create (Is_int (alias_type_of K.value scrutinee)))
 
 let get_tag_for_block ~block : t =
-  Naked_nativeint (T_NN.create (Get_tag (alias_type_of K.value block)))
+  Naked_immediate (T_NI.create (Get_tag (alias_type_of K.value block)))
 
 let is_int ~is_int : t =
   if Discriminant.equal is_int Discriminant.is_int_false then
-    Naked_nativeint (T_NN.create (Is_int (any_block ())))
+    Naked_immediate (T_NI.create (Is_int (any_block ())))
   else if Discriminant.equal is_int Discriminant.is_int_true then
-    Naked_nativeint (T_NN.create (Is_int (any_tagged_immediate ())))
+    Naked_immediate (T_NI.create (Is_int (any_tagged_immediate ())))
   else
     Misc.fatal_errorf "Invalid discriminant %a (must be [is_int_false] or \
         [is_int_true])"
@@ -401,7 +442,7 @@ let is_int ~is_int : t =
 let get_tag ~tag : t =
   match Discriminant.to_tag tag with
   | Some tag ->
-    Naked_nativeint (T_NN.create (Get_tag (any_block_with_tag tag)))
+    Naked_immediate (T_NI.create (Get_tag (any_block_with_tag tag)))
   | None ->
     Misc.fatal_errorf "Invalid discriminant %a (must be a valid tag)"
       Discriminant.print tag
@@ -436,7 +477,7 @@ let blocks_with_these_tags tags =
     Row_like.For_blocks.create_blocks_with_these_tags tags
   in
   Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_nativeint);
+    immediates = Known (bottom K.naked_immediate);
     blocks = Known blocks;
   })))
 
@@ -449,7 +490,7 @@ let immutable_block tag ~fields =
   | Some _size ->
     Value (T_V.create_no_alias (Ok (
       Variant {
-        immediates = Known (bottom K.naked_nativeint);
+        immediates = Known (bottom K.naked_immediate);
         blocks = Known (Row_like.For_blocks.create ~field_tys:fields (Closed tag));
       })))
 
@@ -462,7 +503,7 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   in
   Value (T_V.create_no_alias (Ok (
     Variant {
-      immediates = Known (bottom K.naked_nativeint);
+      immediates = Known (bottom K.naked_immediate);
       blocks = Known (Row_like.For_blocks.create ~field_tys (Open Unknown));
     })))
 
@@ -599,6 +640,7 @@ let array_of_length ~length =
 
 let type_for_const (const : Simple.Const.t) =
   match const with
+  | Naked_immediate i -> this_naked_immediate i
   | Tagged_immediate i -> this_tagged_immediate i
   | Naked_float f -> this_naked_float f
   | Naked_int32 n -> this_naked_int32 n
@@ -616,6 +658,12 @@ let make_suitable_for_environment0 t env ~suitable_for level =
     in
     if ty == ty' then level, t
     else level, Value ty'
+  | Naked_immediate ty ->
+    let level, ty' =
+      T_NI.make_suitable_for_environment0 ty env ~suitable_for level
+    in
+    if ty == ty' then level, t
+    else level, Naked_immediate ty'
   | Naked_float ty ->
     let level, ty' =
       T_Nf.make_suitable_for_environment0 ty env ~suitable_for level
@@ -646,6 +694,9 @@ let make_suitable_for_environment t env ~suitable_for ~bind_to =
   | Value ty ->
     T_V.make_suitable_for_environment ty env ~suitable_for ~bind_to
       ~to_type:(fun ty -> Value ty)
+  | Naked_immediate ty ->
+    T_NI.make_suitable_for_environment ty env ~suitable_for ~bind_to
+      ~to_type:(fun ty -> Naked_immediate ty)
   | Naked_float ty ->
     T_Nf.make_suitable_for_environment ty env ~suitable_for ~bind_to
       ~to_type:(fun ty -> Naked_float ty)
@@ -666,6 +717,11 @@ let expand_head t env : Resolved_type.t =
       T_V.expand_head ~force_to_kind:force_to_kind_value ty env
     in
     Resolved (Value head)
+  | Naked_immediate ty ->
+    let head =
+      T_NI.expand_head ~force_to_kind:force_to_kind_naked_immediate ty env
+    in
+    Resolved (Naked_immediate head)
   | Naked_float ty ->
     let head =
       T_Nf.expand_head ~force_to_kind:force_to_kind_naked_float ty env
@@ -707,6 +763,16 @@ struct
       | Ok (ty, env_extension) -> Value ty, env_extension
       | Bottom -> bottom_value (), TEE.empty ()
       end
+    | Naked_immediate ty1, Naked_immediate ty2 ->
+      let module T_NI_meet_or_join = T_NI.Make_meet_or_join (E) in
+      begin match
+        T_NI_meet_or_join.meet_or_join env ty1 ty2
+          ~force_to_kind:force_to_kind_naked_immediate
+          ~to_type:(fun ty -> Naked_immediate ty)
+      with
+      | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
+      | Bottom -> bottom_naked_immediate (), TEE.empty ()
+      end
     | Naked_float ty1, Naked_float ty2 ->
       let module T_Nf_meet_or_join = T_Nf.Make_meet_or_join (E) in
       begin match
@@ -747,7 +813,7 @@ struct
       | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
       | Bottom -> bottom_naked_nativeint (), TEE.empty ()
       end
-    | (Value _ | Naked_float _ | Naked_int32 _
+    | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
         | Naked_int64 _ | Naked_nativeint _), _ ->
       Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"
         (E.name ())

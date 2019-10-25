@@ -43,7 +43,7 @@ let kind_of_primitive_native_repr (repr : Primitive.native_repr) =
   | Unboxed_integer Pnativeint -> K.naked_nativeint
   | Unboxed_integer Pint32 -> K.naked_int32
   | Unboxed_integer Pint64 -> K.naked_int64
-  | Untagged_int -> K.naked_nativeint
+  | Untagged_int -> K.naked_immediate
 
 let method_kind (kind : L.meth_kind) : Call_kind.method_kind =
   match kind with
