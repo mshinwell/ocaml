@@ -145,7 +145,7 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
       | Name (Symbol sym) -> Of_kind_value.Symbol sym, ty
       | Name (Var _) -> of_kind_value, ty
       | Const (Tagged_immediate imm) -> Of_kind_value.Tagged_immediate imm, ty
-      | Const (Naked_float _ | Naked_int32 _
+      | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
           | Naked_int64 _ | Naked_nativeint _) ->
         (* CR mshinwell: This should be "invalid" and propagate up *)
         of_kind_value, ty

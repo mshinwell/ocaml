@@ -58,8 +58,8 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
     | Naked_nativeint ->
       T.boxed_nativeint_alias_to ~naked_nativeint:result_var, K.naked_nativeint
     | Untagged_immediate ->
-      T.tagged_immediate_alias_to ~untagged_immediate:result_var,
-        K.naked_nativeint
+      T.tagged_immediate_alias_to ~naked_immediate:result_var,
+        K.naked_immediate
   in
   let reachable, env_extension, dacc =
     Simplify_primitive_common.simplify_projection

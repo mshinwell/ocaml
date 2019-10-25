@@ -490,20 +490,18 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.naked_nativeint
+  let result_kind = K.naked_immediate
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let unknown = T.any_naked_nativeint ()
-  let these imms =
-    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+  let unknown = T.any_naked_immediate ()
+  let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    let n = Immediate.to_targetint' imm in
-    Named.create_simple (Simple.const (Naked_nativeint n))
+    Named.create_simple (Simple.const (Naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -551,20 +549,18 @@ end = struct
   type op = P.ordered_comparison
 
   let kind = I.kind
-  let result_kind = K.naked_nativeint
+  let result_kind = K.naked_immediate
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let unknown = T.any_naked_nativeint ()
-  let these imms =
-    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+  let unknown = T.any_naked_immediate ()
+  let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    let n = Immediate.to_targetint' imm in
-    Named.create_simple (Simple.const (Naked_nativeint n))
+    Named.create_simple (Simple.const (Naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -703,20 +699,18 @@ end = struct
   type op = P.comparison
 
   let kind = K.Standard_int_or_float.Naked_float
-  let result_kind = K.naked_nativeint
+  let result_kind = K.naked_immediate
 
   let ok_to_evaluate denv = DE.float_const_prop denv
 
   let prover_lhs = T.prove_naked_floats
   let prover_rhs = T.prove_naked_floats
 
-  let unknown = T.any_naked_nativeint ()
-  let these imms =
-    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+  let unknown = T.any_naked_immediate ()
+  let these = T.these_naked_immediates
 
-  let term imm =
-    let imm = Immediate.to_targetint' imm in
-    Named.create_simple (Simple.const (Naked_nativeint imm))
+  let term imm : Named.t =
+    Named.create_simple (Simple.const (Naked_immediate imm))
 
   module Pair = F.Pair
   let cross_product = F.cross_product
@@ -758,20 +752,18 @@ end = struct
   type op = P.equality_comparison
 
   let kind = I.kind
-  let result_kind = K.naked_nativeint
+  let result_kind = K.naked_immediate
 
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let unknown = T.any_naked_nativeint ()
-  let these imms =
-    T.these_naked_nativeints (Immediate.set_to_targetint_set' imms)
+  let unknown = T.any_naked_immediate ()
+  let these = T.these_naked_immediates
 
-  let term imm =
-    let imm = Immediate.to_targetint' imm in
-    Named.create_simple (Simple.const (Naked_nativeint imm))
+  let term imm : Named.t =
+    Named.create_simple (Simple.const (Naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -864,7 +856,7 @@ let simplify_phys_equal (op : P.equality_comparison)
       let const bool =
         let env_extension =
           TEE.one_equation result
-            (T.this_untagged_immediate (Immediate.bool bool))
+            (T.this_naked_immediate (Immediate.bool bool))
         in
         Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
           env_extension, dacc
@@ -877,11 +869,13 @@ let simplify_phys_equal (op : P.equality_comparison)
       | _, _, _ ->
         let env_extension =
           TEE.one_equation result
-            (T.these_untagged_immediates Immediate.all_bools)
+            (T.these_naked_immediates Immediate.all_bools)
         in
         Reachable.reachable original_term, env_extension, dacc
       end
     end
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
   | Naked_number Naked_float ->
     (* CR mshinwell: Should this case be statically disallowed in the type,
        to force people to use [Float_comp]? *)

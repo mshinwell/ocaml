@@ -27,7 +27,6 @@
     structures/lattice_ops.rec.ml
     structures/product.rec.ml
     structures/row_like.rec.ml
-    structures/trivial_row_like.rec.ml
     type_descr.rec.mli
     type_grammar.rec.mli
     type_of_kind/boilerplate/type_of_kind_value.rec.mli
@@ -52,7 +51,6 @@
     structures/lattice_ops.rec.mli
     structures/product.rec.mli
     structures/row_like.rec.mli
-    structures/trivial_row_like.rec.mli
   )
   (action (run ../scripts/assemble_rec_modules.sh
                flambda_type0.templ.ml

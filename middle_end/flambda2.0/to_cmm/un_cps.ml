@@ -133,6 +133,8 @@ let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
 
 let const _env c =
   match (c : Simple.Const.t) with
+  | Naked_immediate i ->
+      C.targetint (targetint_of_imm i)
   | Tagged_immediate i ->
       C.targetint (tag_targetint (targetint_of_imm i))
   | Naked_float f ->
@@ -143,6 +145,8 @@ let const _env c =
 
 let const_static _env c =
   match (c : Simple.Const.t) with
+  | Naked_immediate i ->
+      [C.cint (nativeint_of_targetint (targetint_of_imm i))]
   | Tagged_immediate i ->
       [C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))]
   | Naked_float f ->
@@ -519,7 +523,7 @@ let machtype_of_kind k =
   | Value -> typ_val
   | Naked_number Naked_float -> typ_float
   | Naked_number Naked_int64 -> typ_int64
-  | Naked_number (Naked_int32 | Naked_nativeint) ->
+  | Naked_number (Naked_immediate | Naked_int32 | Naked_nativeint) ->
       typ_int
   | Fabricated -> assert false
 

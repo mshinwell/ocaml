@@ -19,6 +19,7 @@
 (** Kinds of Flambda types. *)
 
 (** Empty and known-distinct types. *)
+type empty_naked_immediate = private Naked_immediate
 type empty_naked_float = private Naked_float
 type empty_naked_int32 = private Naked_int32
 type empty_naked_int64 = private Naked_int64
@@ -26,6 +27,7 @@ type empty_naked_nativeint = private Naked_nativeint
 
 (** GADT indexes. *)
 type value = private Value
+type naked_immediate = empty_naked_immediate * Immediate.Set.t
 type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
 type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
 type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
@@ -34,6 +36,7 @@ type fabricated = private Fabricated
 
 module Naked_number_kind : sig
   type t =
+    | Naked_immediate
     | Naked_float
     | Naked_int32
     | Naked_int64
@@ -56,6 +59,7 @@ type kind = t
 
 (** Constructors for the various kinds. *)
 val value : t
+val naked_immediate : t
 val naked_float : t
 val naked_int32 : t
 val naked_int64 : t
@@ -135,6 +139,7 @@ end
     of types, to introduce constraints. *)
 module Naked_number : sig
   type _ t =
+    | Naked_immediate : naked_immediate t
     | Naked_float : naked_float t
     | Naked_int32 : naked_int32 t
     | Naked_int64 : naked_int64 t

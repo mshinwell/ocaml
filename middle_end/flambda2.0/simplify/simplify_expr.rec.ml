@@ -1071,7 +1071,7 @@ and simplify_switch
             match Discriminant.sort arm, Switch.sort switch with
             | Int, Int ->
               let imm = Immediate.int (Discriminant.to_int arm) in
-              T.this_untagged_immediate imm
+              T.this_naked_immediate imm
             | Is_int, Is_int -> T.is_int ~is_int:arm
               (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
             | Tag, Tag { tags_to_sizes = _; } -> T.get_tag ~tag:arm
@@ -1079,7 +1079,7 @@ and simplify_switch
               Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
                 Switch.print switch
           in
-          assert (K.equal (T.kind shape) K.naked_nativeint);
+          assert (K.equal (T.kind shape) K.naked_immediate);
           (*
           Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
             Discriminant.print arm T.print scrutinee_ty T.print shape;
@@ -1148,8 +1148,9 @@ and simplify_switch
                   normal_case ~identity_arms ~not_arms
                 else
                   normal_case ~identity_arms ~not_arms
-              | Naked_float _ | Naked_int32 _ | Naked_int64 _
-              | Naked_nativeint _ -> normal_case ~identity_arms ~not_arms
+              | Naked_immediate _ | Naked_float _ | Naked_int32 _
+              | Naked_int64 _ | Naked_nativeint _ ->
+                normal_case ~identity_arms ~not_arms
               end
             | Unknown _ | Inline _ -> normal_case ~identity_arms ~not_arms
             end

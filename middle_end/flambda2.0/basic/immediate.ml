@@ -133,6 +133,8 @@ let tag tag = int (TO.of_int (Tag.to_int tag))
 let to_targetint t = t.value
 let to_targetint' t = Targetint.OCaml.to_targetint t.value
 
+let to_tag t = Tag.create_from_targetint (to_targetint t)
+
 let map t ~f =
   { value = f t.value;
     print_as_char = t.print_as_char;

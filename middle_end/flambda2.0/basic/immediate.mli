@@ -47,6 +47,7 @@ val int : Targetint.OCaml.t -> t
 val char : char -> t
 
 val tag : Tag.t -> t
+val to_tag : t -> Tag.t option
 
 val map : t -> f:(Targetint.OCaml.t -> Targetint.OCaml.t) -> t
 

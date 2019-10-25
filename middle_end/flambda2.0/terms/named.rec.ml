@@ -85,6 +85,8 @@ let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
   let simple = Simple.name name in
   match kind with
   | Value -> Simple simple, kind
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet supported"
   | Naked_number Naked_float ->
     Prim (Unary (Box_number Naked_float, simple), dbg), K.value
   | Naked_number Naked_int32 ->
@@ -100,6 +102,8 @@ let unbox_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
   let simple = Simple.name name in
   match kind with
   | Value -> Simple simple, kind
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet supported"
   | Naked_number Naked_float ->
     Prim (Unary (Unbox_number Naked_float, simple), dbg), K.naked_float
   | Naked_number Naked_int32 ->
@@ -122,6 +126,8 @@ let dummy_value (kind : K.t) : t =
   let simple = 
     match kind with
     | Value -> Simple.const_zero
+    | Naked_number Naked_immediate ->
+      Simple.const (Naked_immediate Immediate.zero)
     | Naked_number Naked_float ->
       Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
     | Naked_number Naked_int32 ->

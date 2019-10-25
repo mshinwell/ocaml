@@ -21,6 +21,11 @@
 
 module Const : sig
   type t =
+    | Naked_immediate of Immediate.t
+      (** [Naked_immediate] is similar to [Naked_nativeint], but represents
+          integers of width [n - 1] bits, where [n] is the native machine
+          width. (By contrast, [Naked_nativeint] represents integers of
+          width [n] bits.) *)
     | Tagged_immediate of Immediate.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t

@@ -255,8 +255,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
           | Unboxed_integer Pnativeint -> Some (P.Unbox_number Naked_nativeint)
           | Unboxed_integer Pint32 -> Some (P.Unbox_number Naked_int32)
           | Unboxed_integer Pint64 -> Some (P.Unbox_number Naked_int64)
-          | Untagged_int ->
-            Some (P.Num_conv { src = Tagged_immediate; dst = Naked_nativeint; })
+          | Untagged_int -> Some (P.Unbox_number Untagged_immediate)
         in
         match unbox_arg with
         | None -> (fun args -> call (arg :: args))
@@ -285,8 +284,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       | Unboxed_integer Pnativeint -> Some (P.Box_number Naked_nativeint)
       | Unboxed_integer Pint32 -> Some (P.Box_number Naked_int32)
       | Unboxed_integer Pint64 -> Some (P.Box_number Naked_int64)
-      | Untagged_int ->
-        Some (P.Num_conv { src = Naked_nativeint; dst = Tagged_immediate; })
+      | Untagged_int -> Some (P.Box_number Untagged_immediate)
     in
     match box_return_value with
     | None -> body, let_bound_var

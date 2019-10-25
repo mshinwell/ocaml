@@ -247,7 +247,7 @@ module Immediate_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let name = "immediate"
   let var_name = "untagged_imm"
   let tag = Tag.zero  (* CR mshinwell: make optional *)
-  let unboxed_kind = K.naked_nativeint
+  let unboxed_kind = K.naked_immediate
   let boxable_number_kind = K.Boxable_number.Untagged_immediate
   let box = T.tag_immediate
 end)
@@ -297,7 +297,7 @@ module Nativeints = Make (Nativeint_spec)
 
 let unboxed_number_decisions = [
   T.prove_is_a_tagged_immediate, Immediates.unbox_one_parameter,
-    Tag.zero, K.naked_nativeint;
+    Tag.zero, K.naked_immediate;
   T.prove_is_a_boxed_float, Floats.unbox_one_parameter,
     Tag.double_tag, K.naked_float;
   T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter,
