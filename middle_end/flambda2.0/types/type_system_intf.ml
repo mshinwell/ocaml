@@ -267,9 +267,6 @@ module type S = sig
   val is_int_for_scrutinee : scrutinee:Simple.t -> t
   val get_tag_for_block : block:Simple.t -> t
 
-  val is_int : is_int:Discriminant.t -> t
-  val get_tag : tag:Discriminant.t -> t
-
   (* CR mshinwell: decide on exact strategy for mutable blocks *)
 
   (** The type of an immutable block with a known tag, size and field types. *)

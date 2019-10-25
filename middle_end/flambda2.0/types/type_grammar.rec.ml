@@ -414,6 +414,7 @@ let any_block () : t =
     blocks = Unknown;
   })))
 
+(*
 let any_block_with_tag tag : t =
   let blocks =
     Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
@@ -422,30 +423,13 @@ let any_block_with_tag tag : t =
     immediates = Known (bottom K.naked_immediate);
     blocks = Known blocks;
   })))
+*)
 
 let is_int_for_scrutinee ~scrutinee : t =
   Naked_immediate (T_NI.create (Is_int (alias_type_of K.value scrutinee)))
 
 let get_tag_for_block ~block : t =
   Naked_immediate (T_NI.create (Get_tag (alias_type_of K.value block)))
-
-let is_int ~is_int : t =
-  if Discriminant.equal is_int Discriminant.is_int_false then
-    Naked_immediate (T_NI.create (Is_int (any_block ())))
-  else if Discriminant.equal is_int Discriminant.is_int_true then
-    Naked_immediate (T_NI.create (Is_int (any_tagged_immediate ())))
-  else
-    Misc.fatal_errorf "Invalid discriminant %a (must be [is_int_false] or \
-        [is_int_true])"
-      Discriminant.print is_int
-
-let get_tag ~tag : t =
-  match Discriminant.to_tag tag with
-  | Some tag ->
-    Naked_immediate (T_NI.create (Get_tag (any_block_with_tag tag)))
-  | None ->
-    Misc.fatal_errorf "Invalid discriminant %a (must be a valid tag)"
-      Discriminant.print tag
 
 let any_tagged_bool () = these_tagged_immediates Immediate.all_bools
 

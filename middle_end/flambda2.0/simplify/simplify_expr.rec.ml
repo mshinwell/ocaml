@@ -1068,18 +1068,9 @@ and simplify_switch
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
       Discriminant.Map.fold (fun arm cont (arms, dacc) ->
           let shape =
-            match Discriminant.sort arm, Switch.sort switch with
-            | Int, Int ->
-              let imm = Immediate.int (Discriminant.to_int arm) in
-              T.this_naked_immediate imm
-            | Is_int, Is_int -> T.is_int ~is_int:arm
-              (* CR mshinwell: We don't seem to need [tags_to_sizes] *)
-            | Tag, Tag { tags_to_sizes = _; } -> T.get_tag ~tag:arm
-            | (Int | Is_int | Tag), (Int | Is_int | Tag _) ->
-              Misc.fatal_errorf "[Switch.invariant] should have failed:@ %a"
-                Switch.print switch
+            let imm = Immediate.int (Discriminant.to_int arm) in
+            T.this_naked_immediate imm
           in
-          assert (K.equal (T.kind shape) K.naked_immediate);
           (*
           Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
             Discriminant.print arm T.print scrutinee_ty T.print shape;
