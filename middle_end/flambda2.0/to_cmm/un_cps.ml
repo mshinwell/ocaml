@@ -675,13 +675,17 @@ and let_cont env = function
 and let_cont_inline env k h body =
   let args, handler = continuation_handler_split h in
   let env_handler, vars = var_list env args in
-  let handler_cmm = expr env_handler handler in
   let types = List.map snd vars in
-  let id, env_body = Env.add_inline_cont env types k args handler in
-  C.ccatch
-    ~rec_flag:false
-    ~body:(expr env_body body)
-    ~handlers:[C.handler id vars handler_cmm]
+  let id, used_as_jump, env_body = Env.add_inline_cont env types k args handler in
+  let body = expr env_body body in
+  match !used_as_jump with
+  | false -> body
+  | true ->
+      let handler_cmm = expr env_handler handler in
+      C.ccatch
+        ~rec_flag:false
+        ~body
+        ~handlers:[C.handler id vars handler_cmm]
 
 and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in

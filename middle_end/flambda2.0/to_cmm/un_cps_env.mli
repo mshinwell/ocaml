@@ -73,7 +73,9 @@ type cont =
   | Inline of { handler_params: Kinded_parameter.t list;
                 handler_body: Flambda.Expr.t;
                 types: Cmm.machtype list;
-                cont: int; }
+                cont: int;
+                used_as_jump: bool ref;
+              }
   (** Inline the continuation.
       When inlining is not possible, generate a jump *)
 (** Translation information for continuations. A continuation may either
@@ -84,9 +86,11 @@ val add_jump_cont : t -> Cmm.machtype list -> Continuation.t -> int * t
 
 val add_inline_cont :
   t -> Cmm.machtype list -> Continuation.t -> Kinded_parameter.t list
-  -> Flambda.Expr.t -> int * t
+  -> Flambda.Expr.t -> int * bool ref * t
 (** Bind the given continuation as an inline continuation, bound over
-    the given variables. *)
+    the given variables.
+    Returns the Cmm continuation id, a reference that will be set to true if
+    a catch handler is needed, and the environment. *)
 
 val get_k : t -> Continuation.t -> cont
 (** Return the binding for a given continuation. Will fail

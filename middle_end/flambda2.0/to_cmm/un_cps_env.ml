@@ -23,7 +23,9 @@ type cont =
   | Inline of { handler_params: Kinded_parameter.t list;
                 handler_body: Flambda.Expr.t;
                 types: Cmm.machtype list;
-                cont: int; }
+                cont: int;
+                used_as_jump: bool ref;
+              }
 
 (* Delayed let-bindings. Let bindings are delayed in stages in order
    to allow for potential reordering and inlining of variables that are bound
@@ -172,15 +174,17 @@ let add_jump_cont env types k =
 
 let add_inline_cont env types k vars e =
   let cont = new_jump_id () in
+  let used_as_jump = ref false in
   let info =
     Inline { handler_params = vars;
              handler_body = e;
              types;
              cont;
+             used_as_jump;
            }
   in
   let conts = Continuation.Map.add k info env.conts in
-  cont, { env with conts }
+  cont, used_as_jump, { env with conts }
 
 (* Offsets *)
 
