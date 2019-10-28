@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Miscellaneous utility functions used by the simplifier. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val simplify_projection
@@ -38,3 +40,30 @@ val try_cse
   -> min_occurrence_kind:Name_occurrence_kind.t
   -> result_var:Variable.t
   -> cse
+
+val add_wrapper_for_fixed_arity_continuation0
+   : Upwards_acc.t
+  -> Continuation.t
+  -> use_id:Apply_cont_rewrite_id.t
+  -> Flambda_arity.t
+  -> (Continuation.t * Flambda.Continuation_handler.t) option
+
+val add_wrapper_for_fixed_arity_continuation
+   : Upwards_acc.t
+  -> Continuation.t
+  -> use_id:Apply_cont_rewrite_id.t
+  -> Flambda_arity.t
+  -> around:(Continuation.t -> Flambda.Expr.t)
+  -> Flambda.Expr.t
+
+val add_wrapper_for_fixed_arity_apply
+   : Upwards_acc.t
+  -> use_id:Apply_cont_rewrite_id.t
+  -> Flambda_arity.t
+  -> Apply_expr.t
+  -> Flambda.Expr.t
+
+val bind_let_bound
+   : bindings:((Bindable_let_bound.t * Reachable.t) list)
+  -> body:Flambda.Expr.t
+  -> Flambda.Expr.t

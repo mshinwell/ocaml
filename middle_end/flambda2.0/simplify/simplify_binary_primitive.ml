@@ -819,7 +819,7 @@ let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
     let n =
       Targetint.OCaml.add (Immediate.to_targetint index) Targetint.OCaml.one
     in
-    Simplify_primitive_common.simplify_projection
+    Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
       ~shape:(T.immutable_block_with_size_at_least ~n
         ~field_n_minus_one:result_var')
@@ -899,7 +899,7 @@ let simplify_phys_equal (op : P.equality_comparison)
   end
 
 let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
-      : Simplify_primitive_common.cse =
+      : Simplify_common.cse =
   match
     S.simplify_simple dacc arg1
       ~min_occurrence_kind:Name_occurrence_kind.min_in_types
@@ -916,7 +916,7 @@ let try_cse dacc prim arg1 arg2 ~min_occurrence_kind ~result_var
       let result_kind =
         P.result_kind_of_binary_primitive' prim
       in
-      Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
+      Simplify_common.try_cse dacc ~original_prim ~result_kind
         ~min_occurrence_kind ~result_var
 
 (* CR mshinwell: This needs enhancing a bit. *)

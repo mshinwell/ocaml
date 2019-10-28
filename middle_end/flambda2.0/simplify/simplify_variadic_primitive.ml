@@ -80,7 +80,7 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
   | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
 
 let try_cse dacc prim args ~min_occurrence_kind ~result_var
-      : Simplify_primitive_common.cse =
+      : Simplify_common.cse =
   match
     S.simplify_simples dacc args
       ~min_occurrence_kind:Name_occurrence_kind.min_in_types
@@ -94,7 +94,7 @@ let try_cse dacc prim args ~min_occurrence_kind ~result_var
     let result_kind =
       P.result_kind_of_variadic_primitive' prim
     in
-    Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
+    Simplify_common.try_cse dacc ~original_prim ~result_kind
       ~min_occurrence_kind ~result_var
 
 let simplify_variadic_primitive dacc

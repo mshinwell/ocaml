@@ -31,14 +31,14 @@ let simplify_select_closure ~move_from ~move_to
     |> Closure_id.Map.add move_from closure
     |> Closure_id.Map.add move_to result
   in
-  Simplify_primitive_common.simplify_projection
+  Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
 
 let simplify_project_var closure_element dacc ~original_term
       ~arg:_ ~arg_ty:closure_ty ~result_var =
-  Simplify_primitive_common.simplify_projection
+  Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.closure_with_at_least_this_closure_var closure_element
       ~closure_element_var:(Var_in_binding_pos.var result_var))
@@ -62,7 +62,7 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
         K.naked_immediate
   in
   let reachable, env_extension, dacc =
-    Simplify_primitive_common.simplify_projection
+    Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:boxed_number_ty
       ~shape ~result_var ~result_kind
   in
@@ -110,7 +110,7 @@ let simplify_get_tag dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
 let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
       ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
-  Simplify_primitive_common.simplify_projection
+  Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:array_ty
     ~shape:(T.array_of_length ~length:(T.alias_type_of K.value result))
     ~result_var ~result_kind:K.value
@@ -344,7 +344,7 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
   | Invalid -> result_invalid ()
 
 let try_cse dacc prim arg ~min_occurrence_kind ~result_var
-      : Simplify_primitive_common.cse =
+      : Simplify_common.cse =
   match
     S.simplify_simple dacc arg
       ~min_occurrence_kind:Name_occurrence_kind.min_in_types
@@ -353,7 +353,7 @@ let try_cse dacc prim arg ~min_occurrence_kind ~result_var
   | Ok arg, _arg_ty ->
     let original_prim : P.t = Unary (prim, arg) in
     let result_kind = P.result_kind_of_unary_primitive' prim in
-    Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
+    Simplify_common.try_cse dacc ~original_prim ~result_kind
       ~min_occurrence_kind ~result_var
 
 let simplify_unary_primitive dacc (prim : P.unary_primitive)
