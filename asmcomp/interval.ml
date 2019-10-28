@@ -150,13 +150,13 @@ let build_intervals fd =
         walk_instruction i.next
     | Icatch(_, handlers, body) ->
         insert_destroyed_at_oper intervals i !pos;
-        List.iter (fun (_, i) -> walk_instruction i) handlers;
+        List.iter (fun (_, _, i) -> walk_instruction i) handlers;
         walk_instruction body;
         walk_instruction i.next
     | Iexit _ ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction i.next
-    | Itrywith(body, handler) ->
+    | Itrywith(body, _kind, handler) ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction body;
         insert_destroyed_at_raise intervals !pos;

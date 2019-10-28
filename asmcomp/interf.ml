@@ -107,11 +107,11 @@ let build_graph fundecl =
         interf i.next
     | Icatch(_rec_flag, handlers, body) ->
         interf body;
-        List.iter (fun (_, handler) -> interf handler) handlers;
+        List.iter (fun (_, _, handler) -> interf handler) handlers;
         interf i.next
     | Iexit _ ->
         ()
-    | Itrywith(body, handler) ->
+    | Itrywith(body, _kind, handler) ->
         add_interf_set Proc.destroyed_at_raise handler.live;
         interf body; interf handler; interf i.next
     | Iraise _ -> () in
@@ -184,11 +184,11 @@ let build_graph fundecl =
               if weight < 1000 then 8 * weight else weight
           | Cmm.Nonrecursive ->
               weight in
-        List.iter (fun (_nfail, handler) -> prefer weight_h handler) handlers;
+        List.iter (fun (_nfail, _ts, handler) -> prefer weight_h handler) handlers;
         prefer weight i.next
     | Iexit _ ->
         ()
-    | Itrywith(body, handler) ->
+    | Itrywith(body, _kind, handler) ->
         prefer weight body; prefer weight handler; prefer weight i.next
     | Iraise _ -> ()
   in

@@ -21,6 +21,14 @@
     behaviour should be checked. *)
 type label = Cmm.label
 
+type trap_stack =
+  | Uncaught
+  (** Exceptions escape the current function *)
+  | Generic_trap of trap_stack
+  (** Current handler is a regular Trywith *)
+  | Specific_trap of Cmm.trywith_shared_label * trap_stack
+  (** Current handler is a delayed/shared Trywith *)
+
 type integer_comparison =
     Isigned of Cmm.integer_comparison
   | Iunsigned of Cmm.integer_comparison
@@ -97,9 +105,9 @@ and instruction_desc =
   | Ireturn
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
-  | Icatch of Cmm.rec_flag * (int * instruction) list * instruction
-  | Iexit of int
-  | Itrywith of instruction * instruction
+  | Icatch of Cmm.rec_flag * (int * trap_stack * instruction) list * instruction
+  | Iexit of int * Cmm.trap_action list
+  | Itrywith of instruction * Cmm.trywith_kind * instruction
   | Iraise of Lambda.raise_kind
 
 type spacetime_part_of_shape =

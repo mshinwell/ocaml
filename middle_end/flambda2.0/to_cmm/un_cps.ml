@@ -653,7 +653,9 @@ and let_expr_aux env v e body =
   expr env body
 
 and decide_inline_cont h k num_free_occurrences =
-  Continuation_handler.stub h || cont_has_one_occurrence k num_free_occurrences
+  not (Continuation_handler.is_exn_handler h)
+  && (Continuation_handler.stub h
+      || cont_has_one_occurrence k num_free_occurrences)
 
 and let_cont env = function
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
@@ -672,16 +674,37 @@ and let_cont env = function
 
 and let_cont_inline env k h body =
   let args, handler = continuation_handler_split h in
-  let env = Env.add_inline_cont env k args handler in
-  expr env body
+  let env_handler, vars = var_list env args in
+  let handler_cmm = expr env_handler handler in
+  let types = List.map snd vars in
+  let id, env_body = Env.add_inline_cont env types k args handler in
+  C.ccatch
+    ~rec_flag:false
+    ~body:(expr env_body body)
+    ~handlers:[C.handler id vars handler_cmm]
 
 and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in
   let id, env = Env.add_jump_cont env (List.map snd vars) k in
-  C.ccatch
-    ~rec_flag:false
-    ~body:(expr env body)
-    ~handlers:[C.handler id vars handle]
+  if Continuation_handler.is_exn_handler h then
+    let exn_var =
+      match vars with
+      | [(v, _)] -> v
+      | _ -> Misc.fatal_errorf
+               "Exception continuation %a should have one argument"
+               Continuation.print k
+    in
+    C.trywith
+      ~dbg:Debuginfo.none
+      ~kind:(Delayed id)
+      ~body:(expr env body)
+      ~exn_var
+      ~handler:handle
+  else
+    C.ccatch
+      ~rec_flag:false
+      ~body:(expr env body)
+      ~handlers:[C.handler id vars handle]
 
 and let_cont_rec env conts body =
   let wrap, env = Env.flush_delayed_lets env in
@@ -721,7 +744,7 @@ and continuation_handler env h =
 and apply_expr env e =
   let call, env, effs = apply_call env e in
   let wrap, env = Env.flush_delayed_lets env in
-  wrap (wrap_cont env effs (wrap_exn env call e) e)
+  wrap (wrap_cont env effs call e)
 
 (* CR mshinwell: I've seen (e.g. in List.map) calls to [caml_apply1], which
    I don't think should exist.  You can just directly call through the
@@ -773,17 +796,17 @@ and wrap_cont env effs res e =
     res
   else begin
     match Env.get_k env k with
-    | Jump ([], id) ->
+    | Jump { types = []; cont; } ->
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.sequence res (C.cexit id []))
-    | Jump ([_], id) ->
+        wrap (C.sequence res (C.cexit cont [] []))
+    | Jump { types = [_]; cont; } ->
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.cexit id [res])
-    | Inline ([], body) ->
+        wrap (C.cexit cont [res] [])
+    | Inline { handler_params = []; handler_body = body; _ } ->
         let var = Variable.create "*apply_res*" in
         let env = let_expr_bind body env var res effs in
         expr env body
-    | Inline ([v], body) ->
+    | Inline { handler_params = [v]; handler_body = body; _ } ->
         let var = Kinded_parameter.var v in
         let env = let_expr_bind body env var res effs in
         expr env body
@@ -796,42 +819,10 @@ and wrap_cont env effs res e =
           "Multi-arguments continuation across function calls are not yet supported"
   end
 
-and wrap_exn env res e =
-  let k_exn = Apply_expr.exn_continuation e in
-  let k_exn = Exn_continuation.exn_handler k_exn in
-  if Continuation.equal (Env.exn_cont env) k_exn then
-    res
-  else begin
-    match Env.get_k env k_exn with
-    | Jump ([_], id) ->
-        let v = Backend_var.create_local "exn_var" in
-        let exn_var = Backend_var.With_provenance.create v in
-        C.trywith
-          ~dbg:Debuginfo.none
-          ~body:res ~exn_var
-          ~handler:(C.cexit id [C.var v])
-    (* CR mshinwell: This will need to support exception continuations
-       with any number of parameters (including zero).  For the moment I've
-       stopped the simplifier from deleting parameters of exception
-       continuations, but this will still go wrong if it adds some (e.g. as
-       a result of mutable variable conversion). *)
-    | Inline ([v], h) ->
-        let var = Kinded_parameter.var v in
-        let env, exn_var = Env.create_variable env var in
-        let handler = expr env h in
-        C.trywith ~dbg:Debuginfo.none ~body:res ~exn_var ~handler
-    | Jump _
-    | Inline _ ->
-        Misc.fatal_errorf
-          "Exception continuation %a should take exactly one argument:@ %a"
-          Continuation.print k_exn
-          Apply_expr.print e
-  end
-
 and apply_cont env e =
   let k = Apply_cont_expr.continuation e in
   let args = Apply_cont_expr.args e in
-  if Continuation.equal (Env.exn_cont env) k then begin
+  if (* Continuation.equal (Env.exn_cont env) k *) Continuation.is_exn k then begin
     match args with
     | [res] ->
         let exn, env, _ = simple env res in
@@ -857,22 +848,31 @@ and apply_cont env e =
           "Multi-arguments continuation across function calls are not yet supported"
   end else begin
     match Env.get_k env k with
-    | Jump (tys, id) ->
-        (* The provided args should match the types in tys *)
-        assert (List.compare_lengths tys args = 0);
-        let args, env, _ = arg_list env args in
-        let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.cexit id args)
-    | Inline (l, body) ->
-        if not (List.length args = List.length l) then
+    | Inline { handler_params; handler_body; _ }
+      when Apply_cont_expr.trap_action e = None ->
+        if not (List.length args = List.length handler_params) then
           Misc.fatal_errorf
             "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
             Continuation.print k Apply_cont_expr.print e
-            (List.length l) Apply_cont_expr.print e;
-        let vars = List.map Kinded_parameter.var l in
+            (List.length handler_params) Apply_cont_expr.print e;
+        let vars = List.map Kinded_parameter.var handler_params in
         let args = List.map Named.create_simple args in
-        let env = List.fold_left2 (let_expr_env body) env vars args in
-        expr env body
+        let env = List.fold_left2 (let_expr_env handler_body) env vars args in
+        expr env handler_body
+    | Jump { types; cont; } | Inline { types; cont; _ } ->
+        (* The provided args should match the types in tys *)
+        assert (List.compare_lengths types args = 0);
+        let trap_actions =
+          match Apply_cont_expr.trap_action e with
+          | None -> []
+          | Some (Pop _) -> [Cmm.Pop]
+          | Some (Push { exn_handler; }) ->
+              let cont = Env.get_jump_id env exn_handler in
+              [Cmm.Push cont]
+        in
+        let args, env, _ = arg_list env args in
+        let wrap, _ = Env.flush_delayed_lets env in
+        wrap (C.cexit cont args trap_actions)
   end
 
 and switch_scrutinee env _sort s =
@@ -895,8 +895,9 @@ and switch env s =
     Discriminant.Map.fold (fun d k (ints, exprs) ->
       let i = Targetint.OCaml.to_int (Discriminant.to_int d) in
       let e = match Env.get_k env k with
-        | Jump ([], id) -> C.cexit id []
-        | Inline ([], body) -> expr env body
+        | Jump { types = []; cont; } -> C.cexit cont [] []
+        | Inline { handler_params = []; handler_body; _ } ->
+            expr env handler_body
         | Jump _
         | Inline _ ->
             Misc.fatal_errorf

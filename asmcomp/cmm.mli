@@ -112,6 +112,24 @@ type phantom_defining_expr =
   (** The phantom-let-bound variable points at a block with the given
       structure. *)
 
+type trywith_shared_label = int (* Same as Ccatch handlers *)
+
+type trap_action =
+  | Push of trywith_shared_label
+  (** Add the corresponding handler to the trap stack. *)
+  | Pop
+  (** Remove the last handler from the trap stack. *)
+
+type trywith_kind =
+  | Regular
+  (** Regular trywith: an uncaught exception from the body will always be
+      handled by this handler. *)
+  | Delayed of trywith_shared_label
+  (** The body starts with the previous exception handler, and only after going
+      throguh an explicit Push-annotated Cexit will this handler become active.
+      This allows for sharing a single handler in several places, or having
+      multiple entry and exit points to a single trywith block. *)
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -174,9 +192,9 @@ and expression =
         * (int * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list
-  | Ctrywith of expression * Backend_var.With_provenance.t * expression
-      * Debuginfo.t
+  | Cexit of int * expression list * trap_action list
+  | Ctrywith of expression * trywith_kind * Backend_var.With_provenance.t
+      * expression * Debuginfo.t
 
 type codegen_option =
   | Reduce_code_size

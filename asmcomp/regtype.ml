@@ -159,10 +159,11 @@ let rec instruction_desc env i args res = function
   | Iswitch (_, a) ->
       Array.fold_left instruction env a
   | Icatch (_, l, body) ->
-      List.fold_left instruction (instruction env body) (List.map snd l)
+      let h (_n, _ts, handler) = handler in
+      List.fold_left instruction (instruction env body) (List.map h l)
   | Iexit _ ->
       env
-  | Itrywith (e, f) ->
+  | Itrywith (e, _, f) ->
       instruction (instruction env e) f
   | Iraise _ ->
       env
