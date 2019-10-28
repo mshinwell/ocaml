@@ -286,12 +286,12 @@ and simplify_recursive_let_cont_handlers
               let (cont_uses_env, _apply_cont_rewrite_id) :
                 Continuation_uses_env.t * Apply_cont_rewrite_id.t =
                 (* We don't know anything, it's like it was called
-                    with any argument ! *)
+                   with an arbitrary argument! *)
                 CUE.record_continuation_use cont_uses_env
                   cont
                   Normal (* Maybe simpler ? *)
                   ~typing_env_at_use:(
-                    (* not usefull as we will have only top *)
+                    (* not useful as we will have only top *)
                     DE.typing_env definition_denv
                   )
                   ~arg_types
