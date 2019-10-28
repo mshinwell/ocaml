@@ -607,7 +607,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
        produce [Generic_array]? *)
     Binary (Block_load (Array (Value Anything), Mutable), array, index)
   | Parrayrefu Pfloatarray, [array; index] ->
-    Binary (Block_load (Array Naked_float, Mutable), array, index)
+    box_float (Binary (Block_load (Array Naked_float, Mutable), array, index))
   | Parrayrefs (Pgenarray | Paddrarray | Pintarray), [array; index] ->
     Checked {
       primitive =
@@ -625,7 +625,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Parrayrefs Pfloatarray, [array; index] ->
     Checked {
       primitive =
-        Binary (Block_load (Array Naked_float, Mutable), array, index);
+       box_float (
+         Binary (Block_load (Array Naked_float, Mutable), array, index));
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
