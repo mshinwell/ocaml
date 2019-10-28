@@ -395,9 +395,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   (*   Binary (Bit_test, arg1, arg2) *)
 
   | Pflambda_isint, [arg] ->
-    Unary (Is_int, arg)
+    tag_int (Unary (Is_int, arg))
   | Pgettag, [arg] ->
-    Unary (Get_tag, arg)
+    tag_int (Unary (Get_tag, arg))
   | Pisout, [arg1; arg2] ->
     tag_int (
       Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),

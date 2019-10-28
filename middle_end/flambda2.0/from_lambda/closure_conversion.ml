@@ -487,26 +487,21 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     if List.length sw.consts < 1 then
       Expr.create_invalid ()
     else
-      let module D = Discriminant in
-      let sort : D.Sort.t =
-        match sw.sort with
-        | Int -> Int
-        | Tag _ -> Tag
-        | Is_int -> Is_int
-      in
       let arms =
-        List.map (fun (case, arm) -> D.of_int_exn sort case, arm) sw.consts
+        List.map (fun (case, arm) ->
+            Immediate.int (Targetint.OCaml.of_int case), arm)
+          sw.consts
       in
       let arms =
         match sw.failaction with
-        | None -> D.Map.of_list arms
+        | None -> Immediate.Map.of_list arms
         | Some default ->
           Numbers.Int.Set.fold (fun case cases ->
-              let case = D.of_int_exn sort case in
-              if D.Map.mem case cases then cases
-              else D.Map.add case default cases)
+              let case = Immediate.int (Targetint.OCaml.of_int case) in
+              if Immediate.Map.mem case cases then cases
+              else Immediate.Map.add case default cases)
             (Numbers.Int.zero_to_n (sw.numconsts - 1))
-            (D.Map.of_list arms)
+            (Immediate.Map.of_list arms)
       in
       let scrutinee = Simple.name (Env.find_name env scrutinee) in
       let untagged_scrutinee = Variable.create "untagged" in
@@ -514,16 +509,12 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         VB.create untagged_scrutinee Name_occurrence_kind.normal
       in
       let untag =
-        match sort with
-        | Int ->
-          Named.create_prim
-            (Unary (Unbox_number Untagged_immediate, scrutinee))
-            Debuginfo.none
-        | Tag | Is_int -> Named.create_simple scrutinee
+        Named.create_prim
+          (Unary (Unbox_number Untagged_immediate, scrutinee))
+          Debuginfo.none
       in
       Expr.create_let untagged_scrutinee' untag
-        (Expr.create_switch sw.sort ~scrutinee:(Simple.var untagged_scrutinee)
-          ~arms)
+        (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =

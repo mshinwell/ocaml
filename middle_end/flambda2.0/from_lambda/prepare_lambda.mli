@@ -25,5 +25,3 @@ val run
   -> Lambda.lambda * Numbers.Int.Set.t
 
 val stub_hack_prim_name : string
-
-val classify_switch : Lambda.lambda_switch -> Flambda.Switch.Sort.t

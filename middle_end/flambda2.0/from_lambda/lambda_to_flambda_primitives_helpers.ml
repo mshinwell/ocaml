@@ -227,11 +227,10 @@ let rec bind_rec ~backend exn_cont
                 (Prim expr_primitive) dbg
                 (fun prim_result ->
                   (Expr.create_switch
-                    Int
                     ~scrutinee:prim_result
-                    ~arms:(Discriminant.Map.of_list [
-                      Discriminant.bool_true, condition_passed_cont;
-                      Discriminant.bool_false, failure_cont;
+                    ~arms:(Immediate.Map.of_list [
+                      Immediate.bool_true, condition_passed_cont;
+                      Immediate.bool_false, failure_cont;
                     ])))))
         (Expr.create_apply_cont (Apply_cont.create primitive_cont ~args:[]))
         validity_conditions

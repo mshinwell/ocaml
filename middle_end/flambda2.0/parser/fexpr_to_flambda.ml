@@ -318,37 +318,16 @@ let rec expr env (e : Fexpr.expr) : E.t =
     let apply_cont = Flambda.Apply_cont.create c ~args in
     E.create_apply_cont apply_cont
 
-  | Switch { scrutinee; sort; cases } ->
-    let sort : Flambda.Switch.Sort.t =
-      match sort with
-      | Int -> Int
-      | Is_int -> Is_int
-      | Tag { tags_to_sizes } ->
-        Tag {
-          tags_to_sizes =
-            List.fold_left (fun acc (tag, size) ->
-              Tag.Scannable.Map.add
-                (Tag.Scannable.create_exn tag)
-                (Targetint.OCaml.of_int size) acc)
-              Tag.Scannable.Map.empty tags_to_sizes;
-        }
-    in
+  | Switch { scrutinee; cases } ->
     let arms =
-      let module D = Discriminant in
-      let sort : D.Sort.t =
-        match sort with
-        | Int -> Int
-        | Tag _ -> Tag
-        | Is_int -> Is_int
-      in
-      D.Map.of_list
+      Immediate.Map.of_list
         (List.map (fun (case, (arm, _loc)) ->
            let c, arity = CM.find arm env.continuations in
            assert(arity = 0);
-           D.of_int_exn sort case, c)
+           Immediate.int (Targetint.OCaml.of_int case), c)
            cases)
     in
-    Flambda.Expr.create_switch sort
+    Flambda.Expr.create_switch
       ~scrutinee:(simple env scrutinee)
       ~arms
 

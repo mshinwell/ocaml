@@ -24,7 +24,6 @@ module I = Ilambda
 module L = Lambda
 
 type proto_switch = {
-  sort : Flambda.Switch.Sort.t;
   numconsts : int;
   consts : (int * L.lambda) list;
   failaction : L.lambda option;
@@ -232,9 +231,8 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
              k result_var))
       k_exn
   | Lswitch (scrutinee,
-      ({ sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
-         sw_tags_to_sizes = _; }
-        as switch), _loc) ->
+      { sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
+        sw_tags_to_sizes = _; }, _loc) ->
     begin match sw_blocks with
     | [] -> ()
     | _ -> Misc.fatal_error "Lswitch `block' cases are forbidden"
@@ -243,8 +241,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let result_var = Ident.create_local "switch_result" in
     let after = k result_var in
     let proto_switch : proto_switch =
-      { sort = Prepare_lambda.classify_switch switch;
-        numconsts = sw_numconsts;
+      { numconsts = sw_numconsts;
         consts = sw_consts;
         failaction = sw_failaction;
       }
@@ -486,16 +483,14 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
         Prim { prim; args; loc; exn_continuation; },
         Apply_cont (k, None, [result_var]))) k_exn
   | Lswitch (scrutinee,
-      ({ sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
-         sw_tags_to_sizes = _; }
-        as switch), _loc) ->
+      { sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
+        sw_tags_to_sizes = _; }, _loc) ->
     begin match sw_blocks with
     | [] -> ()
     | _ -> Misc.fatal_error "Lswitch `block' cases are forbidden"
     end;
     let proto_switch : proto_switch =
-      { sort = Prepare_lambda.classify_switch switch;
-        numconsts = sw_numconsts;
+      { numconsts = sw_numconsts;
         consts = sw_consts;
         failaction = sw_failaction;
       }
@@ -668,8 +663,7 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
       Some cont, Some (cont, failaction)
   in
   let switch : Ilambda.switch =
-    { sort = switch.sort;
-      numconsts = switch.numconsts;
+    { numconsts = switch.numconsts;
       consts = List.combine const_nums const_conts;
       failaction = failaction_cont;
     }
