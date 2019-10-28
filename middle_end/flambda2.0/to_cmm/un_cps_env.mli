@@ -66,11 +66,16 @@ val flush_delayed_lets : t -> (Cmm.expression -> Cmm.expression) * t
 (** {2 Continuation bindings} *)
 
 type cont =
-  | Jump of Cmm.machtype list * int
-  (** Static jump, with the given id. The list of machtypes represent
-      the types of arguments expected by the catch handler. *)
-  | Inline of Kinded_parameter.t list * Flambda.Expr.t
-  (** Inline the continuation. *)
+  | Jump of { types: Cmm.machtype list; cont: int; }
+  (** Static jump, with the given cmm continuation.
+      The list of machtypes represent the types of arguments expected by the
+      catch handler. *)
+  | Inline of { handler_params: Kinded_parameter.t list;
+                handler_body: Flambda.Expr.t;
+                types: Cmm.machtype list;
+                cont: int; }
+  (** Inline the continuation.
+      When inlining is not possible, generate a jump *)
 (** Translation information for continuations. A continuation may either
     be translated as a static jump, or inlined at its call site. *)
 
@@ -78,7 +83,8 @@ val add_jump_cont : t -> Cmm.machtype list -> Continuation.t -> int * t
 (** Bind the given continuation to a jump, creating a fresh jump id for it. *)
 
 val add_inline_cont :
-  t -> Continuation.t -> Kinded_parameter.t list -> Flambda.Expr.t -> t
+  t -> Cmm.machtype list -> Continuation.t -> Kinded_parameter.t list
+  -> Flambda.Expr.t -> int * t
 (** Bind the given continuation as an inline continuation, bound over
     the given variables. *)
 
