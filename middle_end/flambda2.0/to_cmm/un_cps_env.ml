@@ -19,8 +19,11 @@
    - by inlining the continuation's body at the call site. *)
 
 type cont =
-  | Jump of Cmm.machtype list * int
-  | Inline of Kinded_parameter.t list * Flambda.Expr.t
+  | Jump of { types: Cmm.machtype list; cont: int; }
+  | Inline of { handler_params: Kinded_parameter.t list;
+                handler_body: Flambda.Expr.t;
+                types: Cmm.machtype list;
+                cont: int; }
 
 (* Delayed let-bindings. Let bindings are delayed in stages in order
    to allow for potential reordering and inlining of variables that are bound
@@ -146,10 +149,8 @@ let get_variable env v =
 
 let get_jump_id env k =
   match Continuation.Map.find k env.conts with
-  | Jump (_, id) -> id
-  | Inline _ ->
-      Misc.fatal_errorf "Expected continuation %a to be bound to a jump"
-        Continuation.print k
+  | Jump { cont; _ }
+  | Inline { cont; _ } -> cont
   | exception Not_found ->
       Misc.fatal_errorf "Continuation %a not found in env"
         Continuation.print k
@@ -164,14 +165,22 @@ let get_k env k =
 
 let new_jump_id = Lambda.next_raise_count
 
-let add_jump_cont env tys k =
-  let id = new_jump_id () in
-  let conts = Continuation.Map.add k (Jump (tys, id)) env.conts in
-  id, { env with conts }
+let add_jump_cont env types k =
+  let cont = new_jump_id () in
+  let conts = Continuation.Map.add k (Jump { types; cont; }) env.conts in
+  cont, { env with conts }
 
-let add_inline_cont env k vars e =
-  let conts = Continuation.Map.add k (Inline (vars, e)) env.conts in
-  { env with conts }
+let add_inline_cont env types k vars e =
+  let cont = new_jump_id () in
+  let info =
+    Inline { handler_params = vars;
+             handler_body = e;
+             types;
+             cont;
+           }
+  in
+  let conts = Continuation.Map.add k info env.conts in
+  cont, { env with conts }
 
 (* Offsets *)
 

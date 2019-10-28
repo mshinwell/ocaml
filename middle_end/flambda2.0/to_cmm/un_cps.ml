@@ -674,8 +674,14 @@ and let_cont env = function
 
 and let_cont_inline env k h body =
   let args, handler = continuation_handler_split h in
-  let env = Env.add_inline_cont env k args handler in
-  expr env body
+  let env_handler, vars = var_list env args in
+  let handler_cmm = expr env_handler handler in
+  let types = List.map snd vars in
+  let id, env_body = Env.add_inline_cont env types k args handler in
+  C.ccatch
+    ~rec_flag:false
+    ~body:(expr env_body body)
+    ~handlers:[C.handler id vars handler_cmm]
 
 and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in
@@ -790,17 +796,17 @@ and wrap_cont env effs res e =
     res
   else begin
     match Env.get_k env k with
-    | Jump ([], id) ->
+    | Jump { types = []; cont; } ->
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.sequence res (C.cexit id [] []))
-    | Jump ([_], id) ->
+        wrap (C.sequence res (C.cexit cont [] []))
+    | Jump { types = [_]; cont; } ->
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.cexit id [res] [])
-    | Inline ([], body) ->
+        wrap (C.cexit cont [res] [])
+    | Inline { handler_params = []; handler_body = body; _ } ->
         let var = Variable.create "*apply_res*" in
         let env = let_expr_bind body env var res effs in
         expr env body
-    | Inline ([v], body) ->
+    | Inline { handler_params = [v]; handler_body = body; _ } ->
         let var = Kinded_parameter.var v in
         let env = let_expr_bind body env var res effs in
         expr env body
@@ -816,7 +822,7 @@ and wrap_cont env effs res e =
 and apply_cont env e =
   let k = Apply_cont_expr.continuation e in
   let args = Apply_cont_expr.args e in
-  if Continuation.equal (Env.exn_cont env) k then begin
+  if (* Continuation.equal (Env.exn_cont env) k *) Continuation.is_exn k then begin
     match args with
     | [res] ->
         let exn, env, _ = simple env res in
@@ -842,9 +848,20 @@ and apply_cont env e =
           "Multi-arguments continuation across function calls are not yet supported"
   end else begin
     match Env.get_k env k with
-    | Jump (tys, id) ->
+    | Inline { handler_params; handler_body; _ }
+      when Apply_cont_expr.trap_action e = None ->
+        if not (List.length args = List.length handler_params) then
+          Misc.fatal_errorf
+            "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
+            Continuation.print k Apply_cont_expr.print e
+            (List.length handler_params) Apply_cont_expr.print e;
+        let vars = List.map Kinded_parameter.var handler_params in
+        let args = List.map Named.create_simple args in
+        let env = List.fold_left2 (let_expr_env handler_body) env vars args in
+        expr env handler_body
+    | Jump { types; cont; } | Inline { types; cont; _ } ->
         (* The provided args should match the types in tys *)
-        assert (List.compare_lengths tys args = 0);
+        assert (List.compare_lengths types args = 0);
         let trap_actions =
           match Apply_cont_expr.trap_action e with
           | None -> []
@@ -855,17 +872,7 @@ and apply_cont env e =
         in
         let args, env, _ = arg_list env args in
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.cexit id args trap_actions)
-    | Inline (l, body) ->
-        if not (List.length args = List.length l) then
-          Misc.fatal_errorf
-            "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
-            Continuation.print k Apply_cont_expr.print e
-            (List.length l) Apply_cont_expr.print e;
-        let vars = List.map Kinded_parameter.var l in
-        let args = List.map Named.create_simple args in
-        let env = List.fold_left2 (let_expr_env body) env vars args in
-        expr env body
+        wrap (C.cexit cont args trap_actions)
   end
 
 and switch_scrutinee env _sort s =
@@ -888,8 +895,9 @@ and switch env s =
     Discriminant.Map.fold (fun d k (ints, exprs) ->
       let i = Targetint.OCaml.to_int (Discriminant.to_int d) in
       let e = match Env.get_k env k with
-        | Jump ([], id) -> C.cexit id [] []
-        | Inline ([], body) -> expr env body
+        | Jump { types = []; cont; } -> C.cexit cont [] []
+        | Inline { handler_params = []; handler_body; _ } ->
+            expr env handler_body
         | Jump _
         | Inline _ ->
             Misc.fatal_errorf
