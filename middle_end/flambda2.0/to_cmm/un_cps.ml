@@ -851,6 +851,21 @@ and apply_cont env e =
           Continuation.print k Apply_cont_expr.print e
           "Multi-arguments continuation across function calls are not yet supported"
   end else begin
+    let make_jump types cont =
+      (* The provided args should match the types in tys *)
+      assert (List.compare_lengths types args = 0);
+      let trap_actions =
+        match Apply_cont_expr.trap_action e with
+        | None -> []
+        | Some (Pop _) -> [Cmm.Pop]
+        | Some (Push { exn_handler; }) ->
+            let cont = Env.get_jump_id env exn_handler in
+            [Cmm.Push cont]
+      in
+      let args, env, _ = arg_list env args in
+      let wrap, _ = Env.flush_delayed_lets env in
+      wrap (C.cexit cont args trap_actions)
+    in
     match Env.get_k env k with
     | Inline { handler_params; handler_body; _ }
       when Apply_cont_expr.trap_action e = None ->
@@ -863,20 +878,10 @@ and apply_cont env e =
         let args = List.map Named.create_simple args in
         let env = List.fold_left2 (let_expr_env handler_body) env vars args in
         expr env handler_body
-    | Jump { types; cont; } | Inline { types; cont; _ } ->
-        (* The provided args should match the types in tys *)
-        assert (List.compare_lengths types args = 0);
-        let trap_actions =
-          match Apply_cont_expr.trap_action e with
-          | None -> []
-          | Some (Pop _) -> [Cmm.Pop]
-          | Some (Push { exn_handler; }) ->
-              let cont = Env.get_jump_id env exn_handler in
-              [Cmm.Push cont]
-        in
-        let args, env, _ = arg_list env args in
-        let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.cexit cont args trap_actions)
+    | Jump { types; cont; } -> make_jump types cont
+    | Inline { types; cont; used_as_jump; _ } ->
+        used_as_jump := true;
+        make_jump types cont
   end
 
 and switch env s =
