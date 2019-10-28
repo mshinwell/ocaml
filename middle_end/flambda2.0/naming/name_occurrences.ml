@@ -160,7 +160,8 @@ end = struct
             let count2 = Option.value count2 ~default:0 in
             let count = count1 + count2 in
             assert (count >= 0);
-            Some count)
+            if count = 0 then None
+            else Some count)
           t1.by_kind t2.by_kind
       in
       assert (not (Kind.Map.is_empty by_kind));
