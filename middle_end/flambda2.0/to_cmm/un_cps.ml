@@ -879,25 +879,12 @@ and apply_cont env e =
         wrap (C.cexit cont args trap_actions)
   end
 
-and switch_scrutinee env _sort s =
-  let e, env, _ = simple env s in
-(* All untagged at the moment
-  let e =
-    match (sort : Switch.Sort.t) with
-    | Int -> C.untag_int e Debuginfo.none
-    
-    | Tag _ -> e (* get_tag already returns untagged integers *)
-    | Is_int -> e (* Is_int already returns untagged integers *)
-  in
-*)
-  e, env
-
 and switch env s =
-  let e, env = switch_scrutinee env (Switch.sort s) (Switch.scrutinee s) in
+  let e, env, _ = simple env (Switch.scrutinee s) in
   let wrap, env = Env.flush_delayed_lets env in
   let ints, exprs =
-    Discriminant.Map.fold (fun d k (ints, exprs) ->
-      let i = Targetint.OCaml.to_int (Discriminant.to_int d) in
+    Immediate.Map.fold (fun d k (ints, exprs) ->
+      let i = Targetint.OCaml.to_int (Immediate.to_targetint d) in
       let e = match Env.get_k env k with
         | Jump { types = []; cont; } -> C.cexit cont [] []
         | Inline { handler_params = []; handler_body; _ } ->
@@ -933,8 +920,8 @@ and switch env s =
         (* The transl_switch_clambda expects an index array such that
            index.(i) is the index in [cases] of the expression to
            execute when [e] matches [i]. *)
-        let d, _ = Discriminant.Map.max_binding (Switch.arms s) in
-        let n = Targetint.OCaml.to_int (Discriminant.to_int d) in
+        let d, _ = Immediate.Map.max_binding (Switch.arms s) in
+        let n = Targetint.OCaml.to_int (Immediate.to_targetint d) in
         let index = Array.make (n + 2) c in
         Array.iteri (fun i j -> index.(j) <- i) ints;
         wrap (C.transl_switch_clambda Location.none e index cases)

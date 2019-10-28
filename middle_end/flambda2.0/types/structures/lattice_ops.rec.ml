@@ -44,7 +44,6 @@ module For_meet = struct
   module Closure_id = Make (Closure_id)
   module Var_within_closure = Make (Var_within_closure)
   module Tag = Make (Tag)
-  module Discriminant = Make (Discriminant)
 
   let switch_no_bottom meet _join meet_env thing1 thing2 =
     meet meet_env thing1 thing2
@@ -81,7 +80,6 @@ module For_join = struct
   module Closure_id = Make (Closure_id)
   module Var_within_closure = Make (Var_within_closure)
   module Tag = Make (Tag)
-  module Discriminant = Make (Discriminant)
 
   let switch_no_bottom _meet join meet_env thing1 thing2 =
     join (Meet_env.env meet_env) thing1 thing2, TEE.empty ()

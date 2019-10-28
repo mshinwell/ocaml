@@ -102,7 +102,6 @@ and apply_kind =
   | Method of { kind : Lambda.meth_kind; obj : Ident.t; }
 
 and switch = {
-  sort : Flambda.Switch.Sort.t;
   numconsts : int;
   consts : (int * Continuation.t) list;
   failaction : Continuation.t option;
@@ -232,9 +231,8 @@ and print ppf (t : t) =
         fprintf ppf "@[<hv 1>default:@ apply_cont %a@]" Continuation.print l
       end in
     fprintf ppf
-      "@[<1>(@[<v 1>%s<%a> %a@ @[<v 0>%a@]@])@]"
+      "@[<1>(@[<v 1>%s %a@ @[<v 0>%a@]@])@]"
       (match sw.failaction with None -> "switch*" | _ -> "switch")
-      Flambda.Switch.Sort.print sw.sort
       Ident.print arg
       switch sw
   | Let_cont _ ->

@@ -318,40 +318,40 @@ type switch_creation_result =
   | Have_deleted_comparison_and_branch
   | Nothing_deleted
 
-let create_switch0 sort ~scrutinee ~arms : t * switch_creation_result =
-  if Discriminant.Map.cardinal arms < 1 then
+let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
+  if Immediate.Map.cardinal arms < 1 then
     create_invalid (), Have_deleted_comparison_and_branch
   else
     let change_to_goto k =
       create_apply_cont (Apply_cont.goto k),
         Have_deleted_comparison_but_not_branch
     in
-    match Discriminant.Map.get_singleton arms with
+    match Immediate.Map.get_singleton arms with
     | Some (_discriminant, k) -> change_to_goto k
     | None ->
       (* CR mshinwell: We should do a partial invariant check here (one
          which doesn't require [Invariant_env.t]. *)
       let destinations =
-        Continuation.Set.of_list (Discriminant.Map.data arms)
+        Continuation.Set.of_list (Immediate.Map.data arms)
       in
       match Continuation.Set.get_singleton destinations with
       | Some k -> change_to_goto k
       | None ->
-        let switch = Switch.create sort ~scrutinee ~arms in
+        let switch = Switch.create ~scrutinee ~arms in
         create (Switch switch), Nothing_deleted
 
-let create_switch sort ~scrutinee ~arms =
-  let expr, _ = create_switch0 sort ~scrutinee ~arms in
+let create_switch ~scrutinee ~arms =
+  let expr, _ = create_switch0 ~scrutinee ~arms in
   expr
 
 let create_if_then_else ~scrutinee ~if_true ~if_false =
   let arms =
-    Discriminant.Map.of_list [
-      Discriminant.bool_true, if_true;
-      Discriminant.bool_false, if_false;
+    Immediate.Map.of_list [
+      Immediate.bool_true, if_true;
+      Immediate.bool_false, if_false;
     ]
   in
-  create_switch Int ~scrutinee ~arms
+  create_switch ~scrutinee ~arms
 
 let bind ~bindings ~body =
   List.fold_left (fun expr (var, (target : Named.t)) ->

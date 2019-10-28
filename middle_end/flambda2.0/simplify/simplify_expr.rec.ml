@@ -1066,25 +1066,25 @@ and simplify_switch
     let arms = Switch.arms switch in
     let arms, dacc =
       let typing_env_at_use = DE.typing_env (DA.denv dacc) in
-      Discriminant.Map.fold (fun arm cont (arms, dacc) ->
+      Immediate.Map.fold (fun arm cont (arms, dacc) ->
           let shape =
-            let imm = Immediate.int (Discriminant.to_int arm) in
+            let imm = Immediate.int (Immediate.to_targetint arm) in
             T.this_naked_immediate imm
           in
           (*
           Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
-            Discriminant.print arm T.print scrutinee_ty T.print shape;
+            Immediate.print arm T.print scrutinee_ty T.print shape;
             *)
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom ->
           (*
-            Format.eprintf "Switch arm %a is bottom\n%!" Discriminant.print arm;
+            Format.eprintf "Switch arm %a is bottom\n%!" Immediate.print arm;
             *)
             arms, dacc
           | Ok (_meet_ty, env_extension) ->
          (* 
             Format.eprintf "Switch arm %a : %a is kept\n%!"
-              Discriminant.print arm T.print meet_ty;
+              Immediate.print arm T.print meet_ty;
               *)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use ~env_extension
@@ -1094,15 +1094,15 @@ and simplify_switch
                 ~typing_env_at_use
                 ~arg_types:[]
             in
-            let arms = Discriminant.Map.add arm (cont, id) arms in
+            let arms = Immediate.Map.add arm (cont, id) arms in
             arms, dacc)
         arms
-        (Discriminant.Map.empty, dacc)
+        (Immediate.Map.empty, dacc)
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let uenv = UA.uenv uacc in
     let new_let_conts, arms, identity_arms, not_arms =
-      Discriminant.Map.fold
+      Immediate.Map.fold
         (fun arm (cont, use_id)
              (new_let_conts, arms, identity_arms, not_arms) ->
           let new_let_cont =
@@ -1113,7 +1113,7 @@ and simplify_switch
           | None ->
             let cont = UE.resolve_continuation_aliases uenv cont in
             let normal_case ~identity_arms ~not_arms =
-              let arms = Discriminant.Map.add arm cont arms in
+              let arms = Immediate.Map.add arm cont arms in
               new_let_conts, arms, identity_arms, not_arms
             in
             begin match UE.find_continuation uenv cont with
@@ -1121,21 +1121,19 @@ and simplify_switch
             | Apply_cont_with_constant_arg { cont; arg; arity = _; } ->
               begin match arg with
               | Tagged_immediate arg ->
-                let arm_as_int = Discriminant.to_int arm in
-                let arg_as_int = Immediate.to_targetint arg in
-                if Targetint.OCaml.equal arm_as_int arg_as_int then
+                if Immediate.equal arm arg then
                   let identity_arms =
-                    Discriminant.Map.add arm cont identity_arms
+                    Immediate.Map.add arm cont identity_arms
                   in
                   normal_case ~identity_arms ~not_arms
                 else if
-                  (Discriminant.equal arm Discriminant.bool_true
+                  (Immediate.equal arm Immediate.bool_true
                     && Immediate.equal arg Immediate.bool_false)
                   || 
-                    (Discriminant.equal arm Discriminant.bool_false
+                    (Immediate.equal arm Immediate.bool_false
                       && Immediate.equal arg Immediate.bool_true)
                 then
-                  let not_arms = Discriminant.Map.add arm cont not_arms in
+                  let not_arms = Immediate.Map.add arm cont not_arms in
                   normal_case ~identity_arms ~not_arms
                 else
                   normal_case ~identity_arms ~not_arms
@@ -1147,31 +1145,31 @@ and simplify_switch
             end
           | Some ((new_cont, _new_handler) as new_let_cont) ->
             let new_let_conts = new_let_cont :: new_let_conts in
-            let arms = Discriminant.Map.add arm new_cont arms in
+            let arms = Immediate.Map.add arm new_cont arms in
             new_let_conts, arms, identity_arms, not_arms)
         arms
-        ([], Discriminant.Map.empty, Discriminant.Map.empty,
-          Discriminant.Map.empty)
+        ([], Immediate.Map.empty, Immediate.Map.empty,
+          Immediate.Map.empty)
     in
     let switch_is_identity =
-      let arm_discrs = Discriminant.Map.keys arms in
-      let identity_arms_discrs = Discriminant.Map.keys identity_arms in
-      if not (Discriminant.Set.equal arm_discrs identity_arms_discrs) then
+      let arm_discrs = Immediate.Map.keys arms in
+      let identity_arms_discrs = Immediate.Map.keys identity_arms in
+      if not (Immediate.Set.equal arm_discrs identity_arms_discrs) then
         None
       else
-        Discriminant.Map.data identity_arms
+        Immediate.Map.data identity_arms
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
     let switch_is_boolean_not =
-      let arm_discrs = Discriminant.Map.keys arms in
-      let not_arms_discrs = Discriminant.Map.keys not_arms in
-      if (not (Discriminant.Set.equal arm_discrs Discriminant.all_bools_set))
-        || (not (Discriminant.Set.equal arm_discrs not_arms_discrs))
+      let arm_discrs = Immediate.Map.keys arms in
+      let not_arms_discrs = Immediate.Map.keys not_arms in
+      if (not (Immediate.Set.equal arm_discrs Immediate.all_bools))
+        || (not (Immediate.Set.equal arm_discrs not_arms_discrs))
       then
         None
       else
-        Discriminant.Map.data not_arms
+        Immediate.Map.data not_arms
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
@@ -1209,9 +1207,9 @@ and simplify_switch
                 Debuginfo.none)
               (Expr.create_apply_cont apply_cont))
         | None ->
-          let expr = Expr.create_switch (Switch.sort switch) ~scrutinee ~arms in
+          let expr = Expr.create_switch ~scrutinee ~arms in
           if Simple.is_const scrutinee
-            && Discriminant.Map.cardinal arms > 1
+            && Immediate.Map.cardinal arms > 1
           then begin
             Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
                 should have been simplified away:@ %a"

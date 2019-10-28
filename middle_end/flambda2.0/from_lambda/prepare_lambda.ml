@@ -20,17 +20,6 @@ module L = Lambda
 
 let stub_hack_prim_name = "*stub*"
 
-let sw_numblocks_int_switch = -1
-let sw_numblocks_tag_switch = -2
-let sw_numblocks_isint_switch = -3
-
-let classify_switch (switch : Lambda.lambda_switch) : Flambda.Switch.Sort.t =
-  if switch.sw_numblocks = sw_numblocks_int_switch then Int
-  else if switch.sw_numblocks = sw_numblocks_tag_switch then
-    Tag { tags_to_sizes = switch.sw_tags_to_sizes; }
-  else if switch.sw_numblocks = sw_numblocks_isint_switch then Is_int
-  else Misc.fatal_errorf "Prepare_lambda.classify_switch %d" switch.sw_numblocks
-
 let add_default_argument_wrappers lam =
   (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
      as stubs.  Other possibilities:
@@ -365,17 +354,13 @@ let mark_as_recursive_static_catch cont =
   end;
   recursive_static_catches := Numbers.Int.Set.add cont !recursive_static_catches
 
-let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
-  (* CR mshinwell: What happens if [cond] is something other than
-     0 or 1?  Can this ever happen? *)
-  let sw_numblocks =
-    if is_int then sw_numblocks_isint_switch
-    else sw_numblocks_int_switch
-  in
+let switch_for_if_then_else ~cond ~ifso ~ifnot k =
+  (* CR mshinwell: We need to make sure that [cond] is {0, 1}-valued.
+     The frontend should have been fixed on this branch for this. *)
   let switch : Lambda.lambda_switch =
     { sw_numconsts = 2;
       sw_consts = [0, ifnot; 1, ifso];
-      sw_numblocks;
+      sw_numblocks = 0;
       sw_blocks = [];
       sw_failaction = None;
       sw_tags_to_sizes = Tag.Scannable.Map.empty;
@@ -385,7 +370,7 @@ let switch_for_if_then_else ~is_int ~cond ~ifso ~ifnot k =
 
 let simplify_primitive (prim : L.primitive) args loc =
   match prim, args with
-  (*
+  (* CR mshinwell: What is happening to this?
   | (Pdivint Safe | Pmodint Safe
       | Pdivbint { is_safe = Safe; size = _; }
       | Pmodbint { is_safe = Safe; size = _; }),
@@ -465,7 +450,7 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequor" in
     L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~is_int:false
+        switch_for_if_then_else
           ~cond:(L.Lvar cond)
           ~ifso:(L.Lvar const_true)
           ~ifnot:arg2
@@ -475,7 +460,7 @@ let simplify_primitive (prim : L.primitive) args loc =
     let cond = Ident.create_local "cond_sequand" in
     L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
       (L.Llet (Strict, Pgenval, cond, arg1,
-        switch_for_if_then_else ~is_int:false
+        switch_for_if_then_else
           ~cond:(L.Lvar cond)
           ~ifso:arg2
           ~ifnot:(L.Lvar const_false)
@@ -485,7 +470,7 @@ let simplify_primitive (prim : L.primitive) args loc =
   | Pflambda_isint, _ ->
     Misc.fatal_error "[Pflambda_isint] should not exist at this stage"
   | Pisint, [arg] ->
-    switch_for_if_then_else ~is_int:true
+    switch_for_if_then_else
       ~cond:(Lprim (Pflambda_isint, [arg], loc))
       ~ifso:(L.Lconst (Const_base (Const_int 1)))
       ~ifnot:(L.Lconst (Const_base (Const_int 0)))
@@ -586,7 +571,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let consts_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numconsts;
                 sw_consts = List.combine const_nums sw_consts;
-                sw_numblocks = sw_numblocks_int_switch;
+                sw_numblocks = 0;
                 sw_blocks = [];
                 sw_failaction;
                 sw_tags_to_sizes = Tag.Scannable.Map.empty;
@@ -614,7 +599,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
-                sw_numblocks = sw_numblocks_tag_switch;
+                sw_numblocks = 0;
                 sw_blocks = [];
                 sw_failaction;
                 (* XXX What about the size for the failaction? ... *)
@@ -632,7 +617,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let isint_switch : L.lambda_switch =
               { sw_numconsts = 2;
                 sw_consts = [0, blocks_switch; 1, consts_switch];
-                sw_numblocks = sw_numblocks_isint_switch;
+                sw_numblocks = 0;
                 sw_blocks = [];
                 sw_failaction = None;
                 sw_tags_to_sizes = Tag.Scannable.Map.empty;
@@ -664,7 +649,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env cond (fun cond ->
       prepare env ifso (fun ifso ->
         prepare env ifnot (fun ifnot ->
-          switch_for_if_then_else ~is_int:false ~cond ~ifso ~ifnot k)))
+          switch_for_if_then_else ~cond ~ifso ~ifnot k)))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create_local "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k

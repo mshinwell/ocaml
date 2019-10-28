@@ -97,17 +97,15 @@ module rec Expr : sig
   (** Create a [Switch] expression, save that zero-arm switches are converted
       to [Invalid], and one-arm switches to [Apply_cont]. *)
   val create_switch0
-     : Switch.Sort.t
-    -> scrutinee:Simple.t
-    -> arms:Continuation.t Discriminant.Map.t
+     : scrutinee:Simple.t
+    -> arms:Continuation.t Immediate.Map.t
     -> Expr.t * switch_creation_result
 
   (** Like [create_switch0], but for use when the caller isn't interested in
       whether something got deleted. *)
   val create_switch
-     : Switch.Sort.t
-    -> scrutinee:Simple.t
-    -> arms:Continuation.t Discriminant.Map.t
+     : scrutinee:Simple.t
+    -> arms:Continuation.t Immediate.Map.t
     -> Expr.t
 
   (** Build a [Switch] corresponding to a traditional if-then-else. *)
