@@ -1026,11 +1026,8 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
             (* We can't easily call [simplify_expr] on the inlined body since
                [dacc] isn't the correct accumulator and environment any more.
                However there's no need to simplify the inlined body except to
-               make use of parameter-to-argument bindings. What we do here will
-               clean up most [Let] bindings of the form "<Name> = <Name>"; but
-               we have to put up with the fact that any bindings of the form
-               "<Name> = <non-Name Simple>" will remain. [Flambda_to_cmm]
-               (or any subsequent round of [Simplify]) will clean these up. *)
+               make use of parameter-to-argument bindings; we just leave them
+               for a subsequent round of [Simplify] or [Un_cps] to clean up. *)
             let params_and_args =
               assert (List.compare_lengths params args = 0);
               List.map (fun (param, arg) ->
