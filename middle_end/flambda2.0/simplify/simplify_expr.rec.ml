@@ -50,85 +50,6 @@ end
 
 module Simplify_let_cont = Generic_simplify_let_cont.Make (Continuation_handler)
 
-let add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity =
-  let uenv = UA.uenv uacc in
-  let original_cont = cont in
-  let cont = UE.resolve_continuation_aliases uenv cont in
-  match UE.find_apply_cont_rewrite uenv original_cont with
-  | None -> None
-  | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
-    let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite in
-    if not (Flambda_arity.equal arity arity_in_rewrite) then begin
-      Misc.fatal_errorf "Arity %a provided to fixed-arity-wrapper \
-          addition function does not match arity %a in rewrite:@ %a"
-        Flambda_arity.print arity
-        Flambda_arity.print arity_in_rewrite
-        Apply_cont_rewrite.print rewrite
-    end;
-    None
-  | Some rewrite ->
-    let params = List.map (fun _kind -> Variable.create "param") arity in
-    let kinded_params =
-      List.map2 (fun param kind -> KP.create (Parameter.wrap param) kind)
-        params arity
-    in
-    let args = List.map (fun param -> Simple.var param) params in
-    let apply_cont_expr, _apply_cont, _extra_args =
-      Apply_cont_rewrite.rewrite_use rewrite use_id
-        (Apply_cont.create cont ~args)
-    in
-    let new_cont = Continuation.create () in
-    let new_handler =
-      let params_and_handler =
-        Continuation_params_and_handler.create kinded_params
-          ~handler:apply_cont_expr
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
-        ~is_exn_handler:false
-    in
-    Some (new_cont, new_handler)
-
-let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
-  let new_let_cont =
-    add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity
-  in
-  match new_let_cont with
-  | None -> around cont
-  | Some (new_cont, new_handler) ->
-    Let_cont.create_non_recursive new_cont new_handler
-      ~body:(around new_cont)
-
-let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
-  let cont = Apply.continuation apply in
-  add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity
-    ~around:(fun return_cont ->
-      let return_cont =
-        UE.resolve_continuation_aliases (UA.uenv uacc) return_cont
-      in
-      let exn_cont =
-        UE.resolve_exn_continuation_aliases (UA.uenv uacc)
-          (Apply.exn_continuation apply)
-      in
-      let apply = Apply.with_continuations apply return_cont exn_cont in
-      Expr.create_apply apply)
-
-(* CR mshinwell: Should probably move [Reachable] into the [Flambda] recursive
-   loop and then move this into [Expr].  Maybe this could be tidied up a bit
-   too? *)
-let bind_let_bound ~bindings ~body =
-  List.fold_left
-    (fun expr
-         ((bound : Bindable_let_bound.t), (defining_expr : Reachable.t)) ->
-      match defining_expr with
-      | Invalid _ -> Expr.create_invalid ()
-      | Reachable defining_expr ->
-        match bound with
-        | Singleton var -> Expr.bind ~bindings:[var, defining_expr] ~body:expr
-        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr)
-    body
-    (List.rev bindings)
-
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
@@ -139,7 +60,7 @@ let rec simplify_let
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
     let body, user_data, uacc = simplify_expr dacc body k in
-    bind_let_bound ~bindings ~body, user_data, uacc)
+    Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc)
 
 and simplify_one_continuation_handler
   : 'a. DA.t
@@ -393,7 +314,8 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     let expr =
-      add_wrapper_for_fixed_arity_apply uacc ~use_id result_arity apply
+      Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
+        result_arity apply
     in
     expr, user_data, uacc
 
@@ -686,7 +608,7 @@ and simplify_function_call_where_callee's_type_unavailable
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let apply = Apply.with_call_kind apply call_kind in
   let expr =
-    add_wrapper_for_fixed_arity_apply uacc ~use_id
+    Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
   in
   expr, user_data, uacc
@@ -826,7 +748,7 @@ and simplify_method_call
      cases like this too) *)
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   let expr =
-    add_wrapper_for_fixed_arity_apply uacc ~use_id
+    Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.create [K.value]) apply
   in
   expr, user_data, uacc
@@ -880,7 +802,8 @@ and simplify_c_call
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
      called before building of any term that contains a continuation *)
   let expr =
-    add_wrapper_for_fixed_arity_apply uacc ~use_id return_arity apply
+    Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
+      return_arity apply
   in
   expr, user_data, uacc
 
@@ -1103,8 +1026,8 @@ and simplify_switch
         (fun arm (cont, use_id)
              (new_let_conts, arms, identity_arms, not_arms) ->
           let new_let_cont =
-            add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id
-              Flambda_arity.nullary
+            Simplify_common.add_wrapper_for_fixed_arity_continuation0 uacc cont
+              ~use_id Flambda_arity.nullary
           in
           match new_let_cont with
           | None ->
@@ -1183,7 +1106,7 @@ and simplify_switch
         Simplify_named.simplify_named dacc ~bound_vars named
       in
       let body = k ~tagged_scrutinee:(Simple.var bound_to) in
-      bind_let_bound ~bindings ~body, user_data, uacc
+      Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
     in
     let body, user_data, uacc =
       match switch_is_identity with

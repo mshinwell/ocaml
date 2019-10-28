@@ -19,7 +19,7 @@
 open! Simplify_import
 
 let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
-      : Simplify_primitive_common.cse =
+      : Simplify_common.cse =
   match
     S.simplify_simple dacc arg1
       ~min_occurrence_kind:Name_occurrence_kind.min_in_types
@@ -44,7 +44,7 @@ let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
         let result_kind =
           P.result_kind_of_ternary_primitive' prim
         in
-        Simplify_primitive_common.try_cse dacc ~original_prim ~result_kind
+        Simplify_common.try_cse dacc ~original_prim ~result_kind
           ~min_occurrence_kind ~result_var
 
 let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
