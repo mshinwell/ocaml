@@ -162,9 +162,7 @@ let get_k env k =
         Continuation.print k
   | res -> res
 
-let new_jump_id =
-  let i = ref 0 in
-  (fun () -> incr i; !i)
+let new_jump_id = Lambda.next_raise_count
 
 let add_jump_cont env tys k =
   let id = new_jump_id () in
