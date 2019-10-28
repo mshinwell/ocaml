@@ -38,14 +38,14 @@ let print ppf t =
   let fprintf = Format.fprintf in
   match t with
   | Push { exn_handler; } ->
-    fprintf ppf "%spush%s %a %sthen%s "
+    fprintf ppf "%spush_trap%s %a %sthen%s "
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       Continuation.print exn_handler
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
   | Pop { exn_handler; raise_kind; } ->
-    fprintf ppf "%spop%s%s %a %sthen%s "
+    fprintf ppf "%spop_trap%s%s %a %sthen%s "
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (raise_kind_option_to_string raise_kind)
