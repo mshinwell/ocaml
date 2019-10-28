@@ -211,6 +211,7 @@ val store :
 
 val trywith :
   ?dbg:Debuginfo.t ->
+  kind:Cmm.trywith_kind ->
   body:Cmm.expression ->
   exn_var:Backend_var.With_provenance.t ->
   handler:Cmm.expression ->
@@ -232,7 +233,7 @@ val handler :
 (** [handler id vars body] creates a static handler for exit number [id],
     binding variables [vars] in [body]. *)
 
-val cexit : int -> Cmm.expression list -> Cmm.expression
+val cexit : int -> Cmm.expression list -> Cmm.trap_action list -> Cmm.expression
 (** [cexit id args] creates the cmm expression for static to a static handler with
     exit number [id], with arguments [args]. *)
 

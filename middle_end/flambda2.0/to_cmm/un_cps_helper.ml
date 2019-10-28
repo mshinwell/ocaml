@@ -386,8 +386,8 @@ let bigarray_store ?(dbg=Debuginfo.none) (is_safe : Flambda_primitive.is_safe)
 
 (* try-with blocks *)
 
-let trywith ?(dbg=Debuginfo.none) ~body ~exn_var ~handler =
-  Cmm.Ctrywith (body, exn_var, handler, dbg)
+let trywith ?(dbg=Debuginfo.none) ~kind ~body ~exn_var ~handler =
+  Cmm.Ctrywith (body, kind, exn_var, handler, dbg)
 
 
 (* Static jumps *)
@@ -402,8 +402,8 @@ type static_handler =
 let handler ?(dbg=Debuginfo.none) id vars body =
   (id, vars, body, dbg)
 
-let cexit id args =
-  Cmm.Cexit (id, args)
+let cexit id args trap_actions =
+  Cmm.Cexit (id, args, trap_actions)
 
 let ccatch ~rec_flag ~handlers ~body =
   let rec_flag = if rec_flag then Cmm.Recursive else Cmm.Nonrecursive in
