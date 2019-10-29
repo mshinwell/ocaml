@@ -156,7 +156,7 @@ end = struct
     let typing_env =
       let sym =
         Name_in_binding_pos.create (Name.symbol sym)
-          Name_occurrence_kind.normal
+          Name_mode.normal
       in
       TE.add_definition t.typing_env sym kind
     in
@@ -165,7 +165,7 @@ end = struct
   let add_symbol t sym ty =
     let typing_env =
       let sym = Name.symbol sym in
-      let sym' = Name_in_binding_pos.create sym Name_occurrence_kind.normal in
+      let sym' = Name_in_binding_pos.create sym Name_mode.normal in
       TE.add_equation
         (TE.add_definition t.typing_env sym' (T.kind ty))
         sym ty
@@ -201,7 +201,7 @@ end = struct
   let define_parameters t ~params =
     List.fold_left (fun t param ->
         let var =
-          Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
+          Var_in_binding_pos.create (KP.var param) Name_mode.normal
         in
         define_variable t var (KP.kind param))
       t
@@ -216,7 +216,7 @@ end = struct
     end;
     List.fold_left2 (fun t param param_type ->
         let var =
-          Var_in_binding_pos.create (KP.var param) Name_occurrence_kind.normal
+          Var_in_binding_pos.create (KP.var param) Name_mode.normal
         in
         add_variable t var param_type)
       t

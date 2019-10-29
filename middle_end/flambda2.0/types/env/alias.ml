@@ -18,7 +18,7 @@ type t = {
   simple : Simple.t;
   kind : Flambda_kind.t;
   binding_time : Binding_time.t;
-  name_occurrence_kind : Name_occurrence_kind.t;
+  name_mode : Name_mode.t;
 }
 
 type elt = t
@@ -30,11 +30,11 @@ include Identifiable.Make (struct
     if t1 == t2 then 0
     else
       let { simple = simple1; kind = kind1; binding_time = binding_time1;
-            name_occurrence_kind = name_occurrence_kind1; } =
+            name_mode = name_mode1; } =
         t1
       in
       let { simple = simple2; kind = kind2; binding_time = binding_time2;
-            name_occurrence_kind = name_occurrence_kind2; } =
+            name_mode = name_mode2; } =
         t2
       in
       let c = Simple.compare simple1 simple2 in
@@ -46,43 +46,42 @@ include Identifiable.Make (struct
           let c = Binding_time.compare binding_time1 binding_time2 in
           if c <> 0 then c
           else
-            Name_occurrence_kind.compare_total_order name_occurrence_kind1
-              name_occurrence_kind2
+            Name_mode.compare_total_order name_mode1
+              name_mode2
 
   let equal t1 t2 =
     compare t1 t2 = 0
 
-  let hash { simple; kind; binding_time; name_occurrence_kind; } =
+  let hash { simple; kind; binding_time; name_mode; } =
     Hashtbl.hash (Simple.hash simple,
       Flambda_kind.hash kind,
       Binding_time.hash binding_time,
-      Name_occurrence_kind.hash name_occurrence_kind)
+      Name_mode.hash name_mode)
 
-  let print ppf { simple; kind; binding_time; name_occurrence_kind; } =
+  let print ppf { simple; kind; binding_time; name_mode; } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(simple@ %a)@]@ \
-        @[<hov 1>(kind@ %a)@]@ \
+        @[<hov 1>(%a :: %a)@]@ \
         @[<hov 1>(binding_time@ %a)@]@ \
-        @[<hov 1>(name_occurrence_kind@ %a)@]\
+        @[<hov 1>(mode@ %a)@]\
         )@]"
       Simple.print simple
       Flambda_kind.print kind
       Binding_time.print binding_time
-      Name_occurrence_kind.print name_occurrence_kind
+      Name_mode.print name_mode
 
   let output _ _ = Misc.fatal_error "Not yet implemented"
 end)
 
-let create kind simple binding_time name_occurrence_kind =
+let create kind simple binding_time name_mode =
   let simple = Simple.without_rec_info simple in
   { simple;
     kind;
     binding_time;
-    name_occurrence_kind;
+    name_mode;
   }
 
-let create_name kind name binding_time name_occurrence_kind =
-  create kind (Simple.name name) binding_time name_occurrence_kind
+let create_name kind name binding_time name_mode =
+  create kind (Simple.name name) binding_time name_mode
 
 let defined_earlier t ~than =
   match Simple.descr t.simple, Simple.descr than.simple with
@@ -106,7 +105,7 @@ let defined_earlier t ~than =
 
 let simple t = t.simple
 let kind t = t.kind
-let name_occurrence_kind t = t.name_occurrence_kind
+let name_mode t = t.name_mode
 
 let name t =
   match Simple.descr t.simple with
@@ -118,9 +117,9 @@ let implicitly_bound_and_canonical t =
   | Const _ -> true
   | Name _ -> false
 
-module Order_within_equiv_class = Name_occurrence_kind
+module Order_within_equiv_class = Name_mode
 
-let order_within_equiv_class t = t.name_occurrence_kind
+let order_within_equiv_class t = t.name_mode
 
 module Set_ordered_by_binding_time = Stdlib.Set.Make (struct
   type nonrec t = t

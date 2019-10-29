@@ -95,7 +95,7 @@ let tupled_function_call_stub
       }
     in
     let unboxed_version_var =
-      Var_in_binding_pos.create unboxed_version_var Name_occurrence_kind.normal
+      Var_in_binding_pos.create unboxed_version_var Name_mode.normal
     in
     Expr.create_let unboxed_version_var
       (Named.create_prim (Unary (move, Simple.var my_closure)) dbg)
@@ -112,7 +112,7 @@ let tupled_function_call_stub
               Simple.const (Tagged_immediate pos)))
             dbg
         in
-        let param = VB.create param Name_occurrence_kind.normal in
+        let param = VB.create param Name_mode.normal in
         let expr = Expr.create_let param defining_expr body in
         pos + 1, expr)
       (0, body_with_closure_bound)
@@ -263,7 +263,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
           (fun args ->
              let unboxed_arg = Variable.create "unboxed" in
              let unboxed_arg' =
-               VB.create unboxed_arg Name_occurrence_kind.normal
+               VB.create unboxed_arg Name_mode.normal
              in
              Expr.create_let unboxed_arg'
                (Named.create_prim (Unary (named, arg)) dbg)
@@ -289,7 +289,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     match box_return_value with
     | None -> body, let_bound_var
     | Some box_return_value ->
-      let let_bound_var' = VB.create let_bound_var Name_occurrence_kind.normal in
+      let let_bound_var' = VB.create let_bound_var Name_mode.normal in
       let handler_param = Variable.rename let_bound_var in
       let body =
         Flambda.Expr.create_let let_bound_var'
@@ -390,7 +390,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       match defining_expr with
       | None -> body
       | Some defining_expr ->
-        let var = VB.create var Name_occurrence_kind.normal in
+        let var = VB.create var Name_mode.normal in
         Expr.create_let var defining_expr body
     in
     close_named t env ~let_bound_var:var defining_expr cont
@@ -506,7 +506,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       let scrutinee = Simple.name (Env.find_name env scrutinee) in
       let untagged_scrutinee = Variable.create "untagged" in
       let untagged_scrutinee' =
-        VB.create untagged_scrutinee Name_occurrence_kind.normal
+        VB.create untagged_scrutinee Name_mode.normal
       in
       let untag =
         Named.create_prim
@@ -572,7 +572,7 @@ and close_let_rec t env ~defs ~body =
     List.fold_left (fun closure_vars decl ->
         let closure_var =
           VB.create (Env.find_var env (Function_decl.let_rec_ident decl))
-            Name_occurrence_kind.normal
+            Name_mode.normal
         in
         let closure_id = Function_decl.closure_id decl in
         Closure_id.Map.add closure_id closure_var closure_vars)
@@ -592,7 +592,7 @@ and close_let_rec t env ~defs ~body =
   let closure_vars =
     Closure_id.Set.fold (fun closure_id closure_vars ->
         let closure_var =
-          VB.create (Variable.create "generated") Name_occurrence_kind.normal
+          VB.create (Variable.create "generated") Name_mode.normal
         in
         Closure_id.Map.add closure_id closure_var closure_vars)
       generated_closures
@@ -741,7 +741,7 @@ and close_one_function t ~external_env ~by_closure_id decl
               move_to = closure_id;
             }
           in
-          let var = VB.create var Name_occurrence_kind.normal in
+          let var = VB.create var Name_mode.normal in
           Expr.create_let var
             (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
             body)
@@ -752,7 +752,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     Variable.Map.fold (fun var var_within_closure body ->
         if not (Variable.Set.mem var free_vars_of_body) then body
         else
-          let var = VB.create var Name_occurrence_kind.normal in
+          let var = VB.create var Name_mode.normal in
           Expr.create_let var
             (Named.create_prim
               (Unary (Project_var var_within_closure, my_closure'))
@@ -825,7 +825,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       Flambda.Expr.create_apply_cont apply_cont
     in
     List.fold_left (fun body (pos, var) ->
-        let var = VB.create var Name_occurrence_kind.normal in
+        let var = VB.create var Name_mode.normal in
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
         Expr.create_let var
           (Named.create_prim

@@ -99,8 +99,7 @@ struct
         in
         Or_bottom_or_absorbing.of_or_bottom
           (E.switch T.meet T.join env ty shape)
-          ~f:(fun (ty, env_extension) ->
-            Is_int ty, env_extension)
+          ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
       | _::_ -> bad_meet_or_join env t1 t2
       end
     | Naked_immediates tags, Get_tag ty | Get_tag ty, Naked_immediates tags ->
@@ -115,6 +114,6 @@ struct
       let shape = T.blocks_with_these_tags tags in
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env ty shape)
-        ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
+        ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
     | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) -> Absorbing
 end

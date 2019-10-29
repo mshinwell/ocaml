@@ -36,6 +36,10 @@ val defined_vars_in_order : t -> (Variable.t * Flambda_kind.t) list
 
 val defined_vars_in_order' : t -> Variable.t list
 
+val defined_names : t -> Name.Set.t
+
+val defines_name_but_no_equations : t -> Name.t -> bool
+
 val equations : t -> Type_grammar.t Name.Map.t
 
 val one_equation : Name.t -> Type_grammar.t -> t

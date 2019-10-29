@@ -18,20 +18,20 @@
 
 type t = {
   var : Variable.t;
-  occurrence_kind : Name_occurrence_kind.t;
+  name_mode : Name_mode.t;
 }
 
-let create var occurrence_kind =
+let create var name_mode =
   { var;
-    occurrence_kind;
+    name_mode;
   }
 
 let var t = t.var
 let simple t = Simple.var (var t)
-let occurrence_kind t = t.occurrence_kind
+let name_mode t = t.name_mode
 
 let with_var t var = { t with var; }
-let with_occurrence_kind t occurrence_kind = { t with occurrence_kind; }
+let with_name_mode t name_mode = { t with name_mode; }
 
 let rename t = with_var t (Variable.rename t.var)
 
@@ -39,23 +39,23 @@ let apply_name_permutation t perm =
   with_var t (Name_permutation.apply_variable perm t.var)
 
 let free_names t =
-  Name_occurrences.singleton_variable t.var t.occurrence_kind
+  Name_occurrences.singleton_variable t.var t.name_mode
 
 include Identifiable.Make (struct
   type nonrec t = t
 
 (*
-  let print ppf { var; occurrence_kind; } =
+  let print ppf { var; name_mode; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(var@ %a)@]@ \
-        @[<hov 1>(occurrence_kind@ %a)@]\
+        @[<hov 1>(name_mode@ %a)@]\
         )@]"
       Variable.print var
-      Name_occurrence_kind.print occurrence_kind
+      Name_mode.print name_mode
 *)
 
-  let print ppf { var; occurrence_kind; } =
-    match Name_occurrence_kind.descr occurrence_kind with
+  let print ppf { var; name_mode; } =
+    match Name_mode.descr name_mode with
     | Normal -> Variable.print ppf var
     | In_types -> Format.fprintf ppf "@[%a\u{1d749}@]" Variable.print var
     | Phantom -> Variable.print ppf var
@@ -64,12 +64,12 @@ include Identifiable.Make (struct
 *)
 
   let compare
-        { var = var1; occurrence_kind = occurrence_kind1; }
-        { var = var2; occurrence_kind = occurrence_kind2; } =
+        { var = var1; name_mode = name_mode1; }
+        { var = var2; name_mode = name_mode2; } =
     let c = Variable.compare var1 var2 in
     if c <> 0 then c
     else
-      Name_occurrence_kind.compare_total_order occurrence_kind1 occurrence_kind2
+      Name_mode.compare_total_order name_mode1 name_mode2
 
   let equal t1 t2 =
     compare t1 t2 = 0

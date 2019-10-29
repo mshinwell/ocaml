@@ -18,57 +18,48 @@
 
 open! Simplify_import
 
-let try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind ~result_var
+let try_cse dacc prim arg1 arg2 arg3 ~min_name_mode ~result_var
       : Simplify_common.cse =
-  match
-    S.simplify_simple dacc arg1
-      ~min_occurrence_kind:Name_occurrence_kind.min_in_types
-  with
-  | Bottom, ty -> Invalid ty
+  let result_kind = P.result_kind_of_ternary_primitive' prim in
+  match S.simplify_simple dacc arg1 ~min_name_mode:Name_mode.min_in_types with
+  | Bottom, _arg1_ty -> Invalid (T.bottom result_kind)
   | Ok arg1, _arg1_ty ->
-    match
-      S.simplify_simple dacc arg2
-        ~min_occurrence_kind:Name_occurrence_kind.min_in_types
-    with
-    | Bottom, ty -> Invalid ty
+    match S.simplify_simple dacc arg2 ~min_name_mode:Name_mode.min_in_types with
+    | Bottom, _arg2_ty -> Invalid (T.bottom result_kind)
     | Ok arg2, _arg2_ty ->
       match
-        S.simplify_simple dacc arg3
-          ~min_occurrence_kind:Name_occurrence_kind.min_in_types
+        S.simplify_simple dacc arg3 ~min_name_mode:Name_mode.min_in_types
       with
-      | Bottom, ty -> Invalid ty
+      | Bottom, _arg3_ty -> Invalid (T.bottom result_kind)
       | Ok arg3, _arg3_ty ->
         let original_prim : P.t =
           Ternary (prim, arg1, arg2, arg3)
         in
-        let result_kind =
-          P.result_kind_of_ternary_primitive' prim
-        in
         Simplify_common.try_cse dacc ~original_prim ~result_kind
-          ~min_occurrence_kind ~result_var
+          ~min_name_mode ~result_var
 
 let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
       arg1 arg2 arg3 dbg ~result_var =
-  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
   match
-    try_cse dacc prim arg1 arg2 arg3 ~min_occurrence_kind
+    try_cse dacc prim arg1 arg2 arg3 ~min_name_mode
       ~result_var:result_var'
   with
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
-    match S.simplify_simple dacc arg1 ~min_occurrence_kind with
+    match S.simplify_simple dacc arg1 ~min_name_mode with
     | Bottom, ty -> invalid ty
     | Ok arg1, _arg1_ty ->
-      match S.simplify_simple dacc arg2 ~min_occurrence_kind with
+      match S.simplify_simple dacc arg2 ~min_name_mode with
       | Bottom, ty -> invalid ty
       | Ok arg2, _arg2_ty ->
-        match S.simplify_simple dacc arg3 ~min_occurrence_kind with
+        match S.simplify_simple dacc arg3 ~min_name_mode with
         | Bottom, ty -> invalid ty
         | Ok arg3, _arg3_ty ->
           match prim with

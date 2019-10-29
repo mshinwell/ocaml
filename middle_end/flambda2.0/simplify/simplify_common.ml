@@ -31,7 +31,7 @@ type cse =
   | Applied of (Reachable.t * TEE.t * DA.t)
   | Not_applied of DA.t
 
-let apply_cse dacc ~original_prim ~min_occurrence_kind =
+let apply_cse dacc ~original_prim ~min_name_mode =
   match P.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
@@ -40,15 +40,15 @@ let apply_cse dacc ~original_prim ~min_occurrence_kind =
     | None ->
       None
     | Some simple ->
-      match TE.get_canonical_simple typing_env ~min_occurrence_kind simple with
+      match TE.get_canonical_simple typing_env ~min_name_mode simple with
       | Bottom | Ok None -> None
       | Ok (Some simple) ->
         Some simple
 
-let try_cse dacc ~original_prim ~result_kind ~min_occurrence_kind
+let try_cse dacc ~original_prim ~result_kind ~min_name_mode
       ~result_var : cse =
   (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
-  match apply_cse dacc ~original_prim ~min_occurrence_kind with
+  match apply_cse dacc ~original_prim ~min_name_mode with
   | Some replace_with ->
     let named = Named.create_simple replace_with in
     let ty = T.alias_type_of result_kind replace_with in

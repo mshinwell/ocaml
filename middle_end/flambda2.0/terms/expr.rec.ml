@@ -143,25 +143,25 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
   (* CR mshinwell: [let_creation_result] should really be some kind of
      "benefit" type. *)
   let bound_var, keep_binding, let_creation_result =
-    let greatest_occurrence_kind =
-      Name_occurrences.greatest_occurrence_kind_var free_names_of_body
+    let greatest_name_mode =
+      Name_occurrences.greatest_name_mode_var free_names_of_body
         (Var_in_binding_pos.var bound_var)
     in
-    let declared_occurrence_kind =
-      Var_in_binding_pos.occurrence_kind bound_var
+    let declared_name_mode =
+      Var_in_binding_pos.name_mode bound_var
     in
 (*
 Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a\n%!"
   Var_in_binding_pos.print bound_var
-  Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
-  Name_occurrence_kind.print declared_occurrence_kind
+  Name_mode.Or_absent.print greatest_name_mode
+  Name_mode.print declared_name_mode
   Name_occurrences.print free_names_of_body
   print body;
 *)
     begin match
-      Name_occurrence_kind.Or_absent.compare_partial_order
-         greatest_occurrence_kind
-         (Name_occurrence_kind.Or_absent.present declared_occurrence_kind)
+      Name_mode.Or_absent.compare_partial_order
+         greatest_name_mode
+         (Name_mode.Or_absent.present declared_name_mode)
     with
     | None -> ()
     | Some c ->
@@ -171,14 +171,14 @@ Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a
             be bound to@ %a,@ but this variable has occurrences at a higher \
             mode@ (>= %a)@ in the body (free names %a):@ %a"
           Var_in_binding_pos.print bound_var
-          Name_occurrence_kind.print declared_occurrence_kind
+          Name_mode.print declared_name_mode
           Named.print defining_expr
-          Name_occurrence_kind.Or_absent.print greatest_occurrence_kind
+          Name_mode.Or_absent.print greatest_name_mode
           Name_occurrences.print free_names_of_body
           print body
     end;
     if not (Named.at_most_generative_effects defining_expr) then begin
-      if not (Name_occurrence_kind.is_normal declared_occurrence_kind)
+      if not (Name_mode.is_normal declared_name_mode)
       then begin
         Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
             a primitive that has more than generative effects:@ %a@ =@ %a"
@@ -188,7 +188,7 @@ Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a
       bound_var, true, Nothing_deleted
     end else begin
       let has_uses =
-        Name_occurrence_kind.Or_absent.is_present greatest_occurrence_kind
+        Name_mode.Or_absent.is_present greatest_name_mode
       in
       let uses_are_at_most_phantom = (* CR mshinwell: rename? *)
         (* CR mshinwell: This should detect whether there is any
@@ -196,10 +196,10 @@ Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a
            [Let] can be deleted even if debugging information is being
            generated. *)
         match
-          Name_occurrence_kind.Or_absent.compare_partial_order
-            greatest_occurrence_kind
-            (Name_occurrence_kind.Or_absent.present
-              Name_occurrence_kind.normal)
+          Name_mode.Or_absent.compare_partial_order
+            greatest_name_mode
+            (Name_mode.Or_absent.present
+              Name_mode.normal)
         with
         | None -> assert false
         | Some c -> c < 0
@@ -223,16 +223,16 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
 *)
         bound_var, false, Have_deleted defining_expr
       end else
-        let occurrence_kind =
-          match greatest_occurrence_kind with
-          | Absent -> Name_occurrence_kind.phantom
-          | Present occurrence_kind -> occurrence_kind
+        let name_mode =
+          match greatest_name_mode with
+          | Absent -> Name_mode.phantom
+          | Present name_mode -> name_mode
         in
-        assert (Name_occurrence_kind.can_be_in_terms occurrence_kind);
+        assert (Name_mode.can_be_in_terms name_mode);
         let bound_var =
-          Var_in_binding_pos.with_occurrence_kind bound_var occurrence_kind
+          Var_in_binding_pos.with_name_mode bound_var name_mode
         in
-        if Name_occurrence_kind.is_normal occurrence_kind then
+        if Name_mode.is_normal name_mode then
           bound_var, true, Nothing_deleted
         else
           bound_var, true, Have_deleted defining_expr
@@ -251,7 +251,7 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
       let from_defining_expr =
         Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
           (Named.free_names defining_expr)
-          (Var_in_binding_pos.occurrence_kind bound_var)
+          (Var_in_binding_pos.name_mode bound_var)
       in
       (* We avoid [Let_expr.free_names] since we already know the free names
          of [body] -- and calling that function would cause an abstraction
@@ -388,7 +388,7 @@ let bind_parameters ~bindings ~body =
   let bindings =
     List.map (fun (bind, target) ->
         let var =
-          Var_in_binding_pos.create (KP.var bind) Name_occurrence_kind.normal
+          Var_in_binding_pos.create (KP.var bind) Name_mode.normal
         in
         var, target)
       bindings

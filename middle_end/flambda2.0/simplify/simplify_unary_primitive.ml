@@ -78,6 +78,8 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
 
 let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
       dacc ~original_term ~arg:_ ~arg_ty:naked_number_ty ~result_var =
+  (* CR mshinwell: This should check the kind of [naked_number_ty] (or
+     the creation functions used below should). *)
   let ty =
     match boxable_number_kind with
     | Naked_float -> T.box_float naked_number_ty
@@ -346,32 +348,28 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
-let try_cse dacc prim arg ~min_occurrence_kind ~result_var
-      : Simplify_common.cse =
-  match
-    S.simplify_simple dacc arg
-      ~min_occurrence_kind:Name_occurrence_kind.min_in_types
-  with
-  | Bottom, ty -> Invalid ty
+let try_cse dacc prim arg ~min_name_mode ~result_var : Simplify_common.cse =
+  let result_kind = P.result_kind_of_unary_primitive' prim in
+  match S.simplify_simple dacc arg ~min_name_mode:Name_mode.min_in_types with
+  | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
   | Ok arg, _arg_ty ->
     let original_prim : P.t = Unary (prim, arg) in
-    let result_kind = P.result_kind_of_unary_primitive' prim in
     Simplify_common.try_cse dacc ~original_prim ~result_kind
-      ~min_occurrence_kind ~result_var
+      ~min_name_mode ~result_var
 
 let simplify_unary_primitive dacc (prim : P.unary_primitive)
       arg dbg ~result_var =
-  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
-  match try_cse dacc prim arg ~min_occurrence_kind ~result_var:result_var' with
+  match try_cse dacc prim arg ~min_name_mode ~result_var:result_var' with
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
-    match S.simplify_simple dacc arg ~min_occurrence_kind with
+    match S.simplify_simple dacc arg ~min_name_mode with
     | Bottom, ty -> invalid ty
     | Ok arg, arg_ty ->
       let original_prim : P.t = Unary (prim, arg) in

@@ -21,12 +21,40 @@ module TEE = Typing_env_extension
 
 module Blocks = Row_like.For_blocks
 
+module Variant : sig
+  type t = private {
+    immediates : Type_grammar.t Or_unknown.t;
+    blocks : Row_like.For_blocks.t Or_unknown.t;
+  }
+
+  val create
+     : immediates:Type_grammar.t Or_unknown.t
+    -> blocks:Row_like.For_blocks.t Or_unknown.t
+    -> t
+end = struct
+  type t = {
+    immediates : Type_grammar.t Or_unknown.t;
+    blocks : Row_like.For_blocks.t Or_unknown.t;
+  }
+
+  (* CR mshinwell: This can now return [Or_bottom.t] *)
+  let create ~immediates ~blocks =
+    begin match immediates with
+    | Or_unknown.Unknown -> ()
+    | Or_unknown.Known immediates ->
+      if not (K.equal (T.kind immediates) K.naked_immediate) then begin
+        Misc.fatal_errorf "Cannot create [immediates] with type that is not \
+            of kind [Naked_immediate]:@ %a"
+          T.print immediates
+      end
+    end;
+    { immediates; blocks; }
+end
+
 type t =
-  | Variant of {
-      (* CR mshinwell: Introduce an abstraction for this *)
-      immediates : T.t Or_unknown.t;
-      blocks : Blocks.t Or_unknown.t;
-    }
+  | Variant of Variant.t
+  (* CR mshinwell: Add constructors for the following too so we can check
+     they aren't bottom? *)
   | Boxed_float of T.t
   | Boxed_int32 of T.t
   | Boxed_int64 of T.t
@@ -95,7 +123,7 @@ let apply_name_permutation t perm =
     with
     | None -> t
     | Some (blocks, immediates) ->
-      Variant { blocks; immediates; }
+      Variant (Variant.create ~blocks ~immediates)
     end
   | Boxed_float ty ->
     let ty' = T.apply_name_permutation ty perm in
@@ -192,7 +220,6 @@ let join_unknown join_contents env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
     : _ Or_unknown.t =
   match or_unknown1, or_unknown2 with
-  | Unknown, Unknown
   | _, Unknown
   | Unknown, _ -> Unknown
   | Known contents1, Known contents2 ->
@@ -273,7 +300,7 @@ struct
       Or_bottom_or_absorbing.of_or_bottom
         (meet_or_join_variant env ~blocks1 ~imms1 ~blocks2 ~imms2)
         ~f:(fun (blocks, immediates, env_extension) ->
-          Variant { blocks; immediates; }, env_extension)
+          Variant (Variant.create ~blocks ~immediates), env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
         (E.switch T.meet T.join env n1 n2)

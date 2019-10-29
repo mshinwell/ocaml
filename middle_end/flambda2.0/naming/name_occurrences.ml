@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Kind = Name_occurrence_kind
+module Kind = Name_mode
 
 module Num_occurrences : sig
   type t =
@@ -72,7 +72,7 @@ end) : sig
 
   val count : t -> N.t -> Num_occurrences.t
 
-  val greatest_occurrence_kind : t -> N.t -> Kind.Or_absent.t
+  val greatest_name_mode : t -> N.t -> Kind.Or_absent.t
 
   val downgrade_occurrences_at_strictly_greater_kind : t -> Kind.t -> t
 end = struct
@@ -246,7 +246,7 @@ end = struct
       else if num_occurrences = 1 then One
       else More_than_one
 
-  let greatest_occurrence_kind t name : Kind.Or_absent.t =
+  let greatest_name_mode t name : Kind.Or_absent.t =
     match N.Map.find name t with
     | exception Not_found -> Kind.Or_absent.absent
     | for_one_name ->
@@ -458,8 +458,8 @@ let only_contains_symbols { variables; continuations; symbols; } =
     && For_continuations.is_empty continuations
     && For_symbols.is_empty symbols
 
-let greatest_occurrence_kind_var t var =
-  For_variables.greatest_occurrence_kind t.variables var
+let greatest_name_mode_var t var =
+  For_variables.greatest_name_mode t.variables var
 
 let downgrade_occurrences_at_strictly_greater_kind
       { variables; continuations; symbols; } max_kind =

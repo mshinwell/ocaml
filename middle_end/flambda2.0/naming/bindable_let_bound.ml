@@ -17,7 +17,7 @@
 type t =
   | Singleton of Var_in_binding_pos.t
   | Set_of_closures of {
-      name_occurrence_kind : Name_occurrence_kind.t;
+      name_mode : Name_mode.t;
       closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
     }
 
@@ -32,7 +32,7 @@ include Identifiable.Make (struct
   let print ppf t =
     match t with
     | Singleton var -> Var_in_binding_pos.print ppf var
-    | Set_of_closures { name_occurrence_kind = _; closure_vars; } ->
+    | Set_of_closures { name_mode = _; closure_vars; } ->
       Format.fprintf ppf "@[<hov 1>(%a)@]"
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           print_closure_binding)
@@ -43,11 +43,11 @@ include Identifiable.Make (struct
     | Singleton var1, Singleton var2 -> Var_in_binding_pos.compare var1 var2
     | Singleton _, Set_of_closures _ -> -1
     | Set_of_closures _, Singleton _ -> 1
-    | Set_of_closures { name_occurrence_kind = _;
+    | Set_of_closures { name_mode = _;
                         closure_vars = closure_vars1; },
-        Set_of_closures { name_occurrence_kind = _;
+        Set_of_closures { name_mode = _;
                           closure_vars = closure_vars2; } ->
-      (* The [name_occurrence_kind]s are uniquely determined by the
+      (* The [name_mode]s are uniquely determined by the
          [closure_vars], so we don't need to compare them. *)
       Closure_id.Map.compare Var_in_binding_pos.compare
         closure_vars1 closure_vars2
@@ -66,12 +66,12 @@ let free_names t =
   match t with
   | Singleton var ->
     let var = Var_in_binding_pos.var var in
-    Name_occurrences.singleton_variable var Name_occurrence_kind.normal
-  | Set_of_closures { name_occurrence_kind = _; closure_vars; } ->
+    Name_occurrences.singleton_variable var Name_mode.normal
+  | Set_of_closures { name_mode = _; closure_vars; } ->
     Closure_id.Map.fold (fun _closure_id var free_names ->
         let var = Var_in_binding_pos.var var in
         Name_occurrences.add_variable free_names var
-          Name_occurrence_kind.normal)
+          Name_mode.normal)
       closure_vars
       Name_occurrences.empty
 
@@ -81,23 +81,23 @@ let apply_name_permutation t perm =
     let var' = Var_in_binding_pos.apply_name_permutation var perm in
     if var == var' then t
     else Singleton var'
-  | Set_of_closures { name_occurrence_kind; closure_vars; } ->
+  | Set_of_closures { name_mode; closure_vars; } ->
     let closure_vars' =
       Closure_id.Map.map_sharing (fun var ->
           Var_in_binding_pos.apply_name_permutation var perm)
         closure_vars
     in
     if closure_vars == closure_vars' then t
-    else Set_of_closures { name_occurrence_kind; closure_vars = closure_vars'; }
+    else Set_of_closures { name_mode; closure_vars = closure_vars'; }
 
 let rename t =
   match t with
   | Singleton var -> Singleton (Var_in_binding_pos.rename var)
-  | Set_of_closures { name_occurrence_kind; closure_vars; } ->
+  | Set_of_closures { name_mode; closure_vars; } ->
     let closure_vars =
       Closure_id.Map.map (fun var -> Var_in_binding_pos.rename var) closure_vars
     in
-    Set_of_closures { name_occurrence_kind; closure_vars; }
+    Set_of_closures { name_mode; closure_vars; }
 
 let add_to_name_permutation t1 t2 perm =
   match t1, t2 with
@@ -105,8 +105,8 @@ let add_to_name_permutation t1 t2 perm =
     Name_permutation.add_variable perm
       (Var_in_binding_pos.var var1)
       (Var_in_binding_pos.var var2)
-  | Set_of_closures { name_occurrence_kind = _; closure_vars = closure_vars1; },
-      Set_of_closures { name_occurrence_kind = _; 
+  | Set_of_closures { name_mode = _; closure_vars = closure_vars1; },
+      Set_of_closures { name_mode = _; 
         closure_vars = closure_vars2; } ->
     let perm =
       Closure_id.Map.fold2_stop_on_key_mismatch
@@ -141,29 +141,29 @@ let add_occurrence_in_terms t occs =
 let singleton var = Singleton var
 
 let set_of_closures ~closure_vars =
-  let name_occurrence_kinds =
-    Closure_id.Map.fold (fun _closure_id var name_occurrence_kinds ->
-        Name_occurrence_kind.Set.add (Var_in_binding_pos.occurrence_kind var)
-          name_occurrence_kinds)
+  let name_modes =
+    Closure_id.Map.fold (fun _closure_id var name_modes ->
+        Name_mode.Set.add (Var_in_binding_pos.name_mode var)
+          name_modes)
       closure_vars
-      Name_occurrence_kind.Set.empty
+      Name_mode.Set.empty
   in
-  match Name_occurrence_kind.Set.elements name_occurrence_kinds with
+  match Name_mode.Set.elements name_modes with
   | [] -> Misc.fatal_error "No closure IDs provided"
-  | [name_occurrence_kind] ->
+  | [name_mode] ->
     (* CR mshinwell: Check there are no duplicates in [closure_vars] *)
     Set_of_closures {
-      name_occurrence_kind;
+      name_mode;
       closure_vars;
     }
   | _ ->
     Misc.fatal_errorf "Inconsistent name occurrence kinds:@ %a"
       (Closure_id.Map.print Var_in_binding_pos.print) closure_vars
 
-let name_occurrence_kind t =
+let name_mode t =
   match t with
-  | Singleton var -> Var_in_binding_pos.occurrence_kind var
-  | Set_of_closures { name_occurrence_kind; _ } -> name_occurrence_kind
+  | Singleton var -> Var_in_binding_pos.name_mode var
+  | Set_of_closures { name_mode; _ } -> name_mode
 
 let must_be_singleton t =
   match t with

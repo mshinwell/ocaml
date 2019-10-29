@@ -35,7 +35,7 @@ let inline dacc ~callee ~args function_decl
          about [Rec_info] *)
       let canonical_callee =
         T.Typing_env.get_canonical_simple typing_env callee
-          ~min_occurrence_kind:Name_occurrence_kind.normal
+          ~min_name_mode:Name_mode.normal
       in
       match canonical_callee with
       | Bottom -> dacc, Expr.create_invalid ()
@@ -80,7 +80,7 @@ let inline dacc ~callee ~args function_decl
             Expr.apply_name_permutation
               (Expr.bind_parameters_to_simples ~bind:params ~target:args
                 (Expr.create_let
-                  (VB.create my_closure Name_occurrence_kind.normal)
+                  (VB.create my_closure Name_mode.normal)
                   (Named.create_simple callee)
                   body))
               perm

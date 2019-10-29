@@ -40,8 +40,7 @@ module Make (U : Unboxing_spec) = struct
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
     let field_name =
-      Name_in_binding_pos.create (Name.var field_var)
-        Name_occurrence_kind.in_types
+      Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     let shape =
       U.make_boxed_value_with_size_at_least
@@ -56,7 +55,7 @@ module Make (U : Unboxing_spec) = struct
            (extra_args, field_types_by_id) ->
         let env_extension =
           let result_var =
-            Var_in_binding_pos.create field_var Name_occurrence_kind.normal
+            Var_in_binding_pos.create field_var Name_mode.normal
           in
           T.meet_shape typing_env_at_use arg_type_at_use
             ~shape ~result_var ~result_kind:param_kind
@@ -88,7 +87,7 @@ module Make (U : Unboxing_spec) = struct
           | Some extra_args ->
             let canonical_simple, kind' =
               TE.get_canonical_simple_with_kind typing_env_at_use
-                ~min_occurrence_kind:Name_occurrence_kind.normal
+                ~min_name_mode:Name_mode.normal
                 field
             in
             assert (Flambda_kind.equal param_kind kind');

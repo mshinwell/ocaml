@@ -18,17 +18,17 @@
 
 type t
 
-val create : Variable.t -> Name_occurrence_kind.t -> t
+val create : Variable.t -> Name_mode.t -> t
 
 val var : t -> Variable.t
 
 val simple : t -> Simple.t
 
-val occurrence_kind : t -> Name_occurrence_kind.t
+val name_mode : t -> Name_mode.t
 
 val rename : t -> t
 
-val with_occurrence_kind : t -> Name_occurrence_kind.t -> t
+val with_name_mode : t -> Name_mode.t -> t
 
 include Identifiable.S with type t := t
 include Contains_names.S with type t := t

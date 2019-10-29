@@ -1231,10 +1231,10 @@ let definition offsets (d : Flambda_static.Program_body.Definition.t) =
 
 let is_var_used v e =
   let free_names = Expr.free_names e in
-  let occurrence = Name_occurrences.greatest_occurrence_kind_var free_names v in
-  match (occurrence : Name_occurrence_kind.Or_absent.t) with
+  let occurrence = Name_occurrences.greatest_name_mode_var free_names v in
+  match (occurrence : Name_mode.Or_absent.t) with
   | Absent -> false
-  | Present k -> Name_occurrence_kind.is_normal k
+  | Present k -> Name_mode.is_normal k
 
 let function_args vars my_closure body =
   if is_var_used my_closure body then begin

@@ -39,7 +39,7 @@ val simplify_set_of_closures0
 
 val type_closure_elements_and_make_lifting_decision
    : Downwards_acc.t
-  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> min_name_mode:Name_mode.t
   -> Flambda.Set_of_closures.t
   -> bool * Simple.t Var_within_closure.Map.t
        * Flambda_type.t Var_within_closure.Map.t

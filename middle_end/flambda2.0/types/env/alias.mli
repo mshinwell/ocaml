@@ -21,14 +21,14 @@ val create
    : Flambda_kind.t
   -> Simple.t
   -> Binding_time.t
-  -> Name_occurrence_kind.t
+  -> Name_mode.t
   -> t
 
 val create_name
    : Flambda_kind.t
   -> Name.t
   -> Binding_time.t
-  -> Name_occurrence_kind.t
+  -> Name_mode.t
   -> t
 
 val defined_earlier : t -> than:t -> bool
@@ -39,10 +39,10 @@ val kind : t -> Flambda_kind.t
 
 val implicitly_bound_and_canonical : t -> bool
 
-val name_occurrence_kind : t -> Name_occurrence_kind.t
+val name_mode : t -> Name_mode.t
 
 module Order_within_equiv_class
-  : module type of struct include Name_occurrence_kind end
+  : module type of struct include Name_mode end
 
 val order_within_equiv_class : t -> Order_within_equiv_class.t
 

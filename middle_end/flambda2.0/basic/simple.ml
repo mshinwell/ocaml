@@ -245,13 +245,13 @@ let map_symbol t ~f =
 let free_names t =
   match t with
   | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.normal
+    Name_occurrences.singleton_name name Name_mode.normal
   | Const _ -> Name_occurrences.empty
 
 let free_names_in_types t =
   match t with
   | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_occurrence_kind.in_types
+    Name_occurrences.singleton_name name Name_mode.in_types
   | Const _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =

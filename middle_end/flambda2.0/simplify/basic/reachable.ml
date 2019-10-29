@@ -34,3 +34,8 @@ let print ppf t =
   match t with
   | Reachable named -> Named.print ppf named
   | Invalid sem -> Invalid_term_semantics.print ppf sem
+
+let is_invalid t =
+  match t with
+  | Reachable _ -> false
+  | Invalid _ -> true

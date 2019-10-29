@@ -55,6 +55,7 @@ module type S = sig
   val get_alias : t -> Simple.t option
 
   val is_obviously_bottom : t -> bool
+  val is_obviously_unknown : t -> bool
 
   (* CR mshinwell: Try to use [Type_structure_intf] or similar *)
 

@@ -86,7 +86,7 @@ Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
   Reachable.reachable term, dacc, var_ty
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to =
-  let occ_kind = Var_in_binding_pos.occurrence_kind bound_to in
+  let occ_kind = Var_in_binding_pos.name_mode bound_to in
   let bound_to = Var_in_binding_pos.var bound_to in
   let denv = DA.denv dacc in
   let ty = DE.find_variable denv bound_to in
@@ -96,9 +96,9 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to =
     let denv = DE.add_equation_on_variable denv bound_to ty in
     Reachable.invalid (), DA.with_denv dacc denv, ty
   | Reachable _ ->
-    match T.reify (DE.typing_env denv) ~min_occurrence_kind:occ_kind ty with
+    match T.reify (DE.typing_env denv) ~min_name_mode:occ_kind ty with
     | Lift to_lift ->
-      if Name_occurrence_kind.is_normal occ_kind then
+      if Name_mode.is_normal occ_kind then
         let static_part = create_static_part to_lift in
         lift dacc ty ~bound_to static_part
       else
