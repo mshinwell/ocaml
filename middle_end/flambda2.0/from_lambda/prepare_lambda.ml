@@ -476,7 +476,10 @@ let simplify_primitive (prim : L.primitive) args loc =
       ~ifnot:(L.Lconst (Const_base (Const_int 0)))
       (fun lam -> lam)
   | (Pidentity | Pbytes_to_string | Pbytes_of_string), [arg] -> arg
-  | Pignore, [_arg] -> L.Lconst (Const_base (Const_int 0))
+  | Pignore, [arg] ->
+    let ident = Ident.create_local "ignore" in
+    let result = L.Lconst (Const_base (Const_int 0)) in
+    L.Llet (Strict, Pgenval, ident, arg, result)
   | Pdirapply, [funct; arg]
   | Prevapply, [arg; funct] ->
     let apply : L.lambda_apply =
