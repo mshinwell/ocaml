@@ -60,20 +60,32 @@ end)
 
 include Self
 
+let next_stamp = ref 0
+
+let get_next_stamp () =
+  let stamp = !next_stamp in
+  incr next_stamp;
+  stamp
+
 let in_compilation_unit t cu =
   Compilation_unit.equal cu t.compilation_unit
 
 let get_compilation_unit t = t.compilation_unit
 
-let unique_name t =
+let to_string t =
   t.name ^ "_" ^ (string_of_int t.name_stamp)
+
+let rename t =
+  { t with
+    name_stamp = get_next_stamp ();
+  }
 
 let unwrap t =
   Variable.create ~current_compilation_unit:t.compilation_unit
-    (unique_name t)
+    (to_string t)
 
 let wrap var =
   { compilation_unit = Variable.get_compilation_unit var;
     name = Variable.raw_name var;
-    name_stamp = Variable.raw_name_stamp var;
+    name_stamp = get_next_stamp ();
   }

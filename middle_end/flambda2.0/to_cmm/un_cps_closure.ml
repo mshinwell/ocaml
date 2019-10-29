@@ -680,7 +680,7 @@ let compute_offsets program =
 let closure_name id =
   let compunit = Closure_id.get_compilation_unit id in
   let name = Compilation_unit.get_linkage_name compunit in
-  Format.asprintf "%a__%s" Linkage_name.print name (Closure_id.unique_name id)
+  Format.asprintf "%a__%s" Linkage_name.print name (Closure_id.to_string id)
 
 let closure_id_name o id =
   match o with
