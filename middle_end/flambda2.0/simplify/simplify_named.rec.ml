@@ -274,8 +274,13 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let closure_symbols =
     Closure_id.Map.mapi (fun closure_id _func_decl ->
-        Symbol.create (Compilation_unit.get_current_exn ())
-          (Linkage_name.create (Closure_id.unique_name closure_id)))
+        let name =
+          closure_id
+          |> Closure_id.rename
+          |> Closure_id.to_string
+          |> Linkage_name.create 
+        in
+        Symbol.create (Compilation_unit.get_current_exn ()) name)
       (Function_declarations.funs function_decls)
   in
   let _set_of_closures, dacc, static_structure_types, static_structure =

@@ -169,16 +169,12 @@ let continuation t = t.k
 let args t = t.args
 let trap_action t = t.trap_action
 
-let free_names { k; args; trap_action; } =
-  let trap_action_free_names =
-    match trap_action with
-    | None -> Name_occurrences.empty
-    | Some trap_action -> Trap_action.free_names trap_action
-  in
+let free_names { k; args; trap_action = _; } =
+  (* Continuations in the trap action don't count as free occurrences, since
+     they're not actually "uses". *)
   Name_occurrences.union_list [
     Name_occurrences.singleton_continuation k;
     Simple.List.free_names args;
-    trap_action_free_names;
   ]
 
 let apply_name_permutation ({ k; args; trap_action; } as t) perm =
@@ -225,3 +221,6 @@ let is_goto t k =
 let to_goto t =
   if no_args t && Option.is_none (trap_action t) then Some (continuation t)
   else None
+
+let clear_trap_action t =
+  { t with trap_action = None; }
