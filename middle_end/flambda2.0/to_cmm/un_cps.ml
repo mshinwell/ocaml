@@ -405,14 +405,6 @@ let binary_float_comp_primitive _env dbg op x y =
 
 (* Primitives *)
 
-let ba_dimension_offset layout total_dim dim =
-  match (layout : Lambda.bigarray_layout) with
-  | Pbigarray_fortran_layout -> 4 + dim
-  | Pbigarray_c_layout -> 5 + total_dim - dim
-  | Pbigarray_unknown_layout ->
-      Misc.fatal_errorf
-        "Unknown bigarray layout, cannot compute dimension offset"
-
 let unary_primitive env dbg f arg =
   match (f : Flambda_primitive.unary_primitive) with
   | Duplicate_block _ ->
@@ -424,9 +416,8 @@ let unary_primitive env dbg f arg =
   | Array_length block_access_kind ->
       C.block_length ~dbg block_access_kind arg
   | Bigarray_length { dimension } ->
-      (* TODO: need the bigarray layout here !! + check the dimension offset computation *)
-      let dim_ofs = ba_dimension_offset (todo()) (todo()) dimension in
-      C.load ~dbg Cmm.Word_int Asttypes.Mutable (C.field_address arg dim_ofs dbg)
+      C.load ~dbg Cmm.Word_int Asttypes.Mutable
+        (C.field_address arg (4 + dimension) dbg)
   | String_length _ ->
       C.string_length arg dbg
   | Int_as_pointer ->
